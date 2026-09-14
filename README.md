@@ -79,45 +79,43 @@ Preferences are saved in the project's local `.pr-review/settings.yml`. Server f
 and `--model` override saved values for that run. The dialog also shows project configuration;
 edit `pr-review.config.yml` to change it. See the [configuration reference](docs/reference.md).
 
-## Generate and review
+## Suggested workflow: author generates, reviewers review
 
-In Claude Code or Codex, ask:
+Each PR author should generate a canvas and attach its zip to the **PR description** before
+requesting review. After the project setup above, run the installed skill in Claude Code or Codex:
 
 ```text
 /pr-review-canvas 123
 ```
 
-**123 is the GitHub pull request number** in your project's repository; replace it with yours.
-The skill reads the PR, writes and validates a canvas, then gives you a review URL and a zip.
-Open **http://localhost:3010/review/123** to explore the layers and diffs. You can mark layers
-reviewed and post comments or a review to GitHub.
+Replace **123** with your PR number. The skill reads the PR, generates and validates the canvas,
+then returns a local review URL and the exported zip's path. Open the URL to check the canvas,
+then drag the zip into the PR description in GitHub and save it. Generating and exporting take
+one skill invocation; attaching the file is a manual browser step.
 
-## Share the canvas in a PR comment
+Reviewers start `pr-review serve` in their own clone and open the PR number. The tool finds and
+imports the attachment automatically. They can explore layers and diffs, ask AI Chat questions,
+mark layers reviewed, and preview and post comments or a review to GitHub. Attachments in PR
+comments are also supported, but keeping the current zip in the description makes it easy to find.
 
-**The shared canvas lives in a zip attached to a GitHub PR comment.** The skill exports it
-for you. To export an existing canvas yourself, run:
+### Export an existing canvas
 
 ```bash
 pr-review export --pr 123
 ```
 
-The command prints the zip's absolute path. Drag that file into a PR comment in your browser
-and submit it. **There is currently no command to upload the zip or post the attachment**;
-`export` creates the file locally. The CLI's `publish` command also saves locally.
-
-Reviewers run the server in their own clone and open the PR number; the tool finds and imports
-the attachment automatically. PR description attachments work too.
+The command prints the zip's absolute path. Both `export` and `publish` save locally; neither
+uploads an attachment to GitHub.
 
 The zip contains `manifest.json` and `review.json`: the PR description, file/hunk metadata,
-and generated review notes. Review these before sharing, since they can contain private
-information. Each reviewer gets the source diffs from their own clone; local chat history
-stays on its owner's machine.
+and generated review notes. Check these before sharing, since they can contain private
+information. Each reviewer gets source diffs from their own clone; chat history stays local.
 
 ## Update an outdated canvas
 
 After pushing new commits, run `/pr-review-canvas 123` again. To rewrite a canvas for the
-same commit, run `/pr-review-canvas 123 --force`. Attach the new zip in a new PR comment,
-or replace the old attachment by editing its comment. Reviewers click **refresh**.
+same commit, run `/pr-review-canvas 123 --force`. Replace the zip in the PR description.
+Reviewers click **refresh**.
 
 When the saved canvas describes a different PR head, **Canvas is outdated** appears at
 the top. You can still read the older canvas, with its commit and distance shown; posting

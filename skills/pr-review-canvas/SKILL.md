@@ -116,7 +116,7 @@ command prints one JSON line with the absolute `path` of the zip.
 Report the `reviewUrl` from publish and the zip path from export:
 
 > The canvas is ready at <reviewUrl> (start the server with `pr-review serve` if it is not running).
-> Drag this file into the PR comment so other reviewers get the canvas without
+> Drag this file into the PR description so other reviewers get the canvas without
 > generating it again: <path>
 
 The tool exports locally; attaching the zip to GitHub is the human's step. For a `--base/--head` run,
@@ -153,5 +153,5 @@ say the canvas is stored for `<headSha>`, that the zip has no PR number yet, and
 
 After new commits, run this skill again for the PR number. Add `--force` to regenerate a canvas
 for the same commit. Export the new zip and ask the user to replace the attachment in their PR
-comment (or post a new comment). Reviewers click **refresh** to load it. A canvas for a different
+description. Reviewers click **refresh** to load it. A canvas for a different
 PR head shows **Canvas is outdated**; an older canvas remains readable with posting disabled.
