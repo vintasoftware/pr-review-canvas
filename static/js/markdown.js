@@ -37,10 +37,16 @@ const ALLOWED_TAGS = [
   'hr',
   'del',
   'input',
+  'img',
+  'details',
+  'summary',
+  'kbd',
+  'sup',
+  'sub',
 ]
 // `type`, `checked`, and `disabled` are for GFM task-list checkboxes. No `class`: model text must
 // not be able to style itself as a command.
-const ALLOWED_ATTR = ['href', 'type', 'checked', 'disabled']
+const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'type', 'checked', 'disabled', 'open']
 const ALLOWED_URI = /^(?:https?:|#)/i
 
 const marked = new Marked({
@@ -53,6 +59,8 @@ const marked = new Marked({
     },
   },
 })
+
+const githubMarked = new Marked({ gfm: true, breaks: false })
 
 /** Model text never outranks the page's own headings: h1→h3, h2→h4, h3→h5, h4-h6→h6. */
 const DEMOTE = { H1: 'h3', H2: 'h4', H3: 'h5', H4: 'h6', H5: 'h6', H6: 'h6' }
@@ -142,23 +150,35 @@ function decorateLinks(root) {
 /**
  * One markdown text, without mermaid blocks.
  * @param {string} src markdown
- * @param {{ paths?: ReadonlySet<string> }} opts
+ * @param {{ paths?: ReadonlySet<string>, github?: boolean }} opts
  * @returns {string} sanitized HTML
  */
 function renderProse(src, opts) {
-  const raw = marked.parse(src, { async: false })
+  const raw = (opts.github ? githubMarked : marked).parse(src, { async: false })
   // marked's renderer escapes raw HTML, and the sanitizer is still the boundary: nothing from
   // `raw` reaches a DOM tree before DOMPurify has parsed and filtered it.
   const root = document.createElement('div')
   root.append(
     DOMPurify.sanitize(raw, {
       ALLOWED_TAGS,
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'style', 'form'],
       ALLOWED_ATTR,
       ALLOWED_URI_REGEXP: ALLOWED_URI,
       KEEP_CONTENT: true,
       RETURN_DOM_FRAGMENT: true,
     })
   )
+  for (const element of root.querySelectorAll('*')) {
+    if (!ALLOWED_TAGS.includes(element.tagName.toLowerCase())) element.remove()
+  }
+  for (const img of root.querySelectorAll('img')) {
+    if (!/^https:\/\/(?:avatars\.githubusercontent\.com|user-images\.githubusercontent\.com|private-user-images\.githubusercontent\.com|github\.com|camo\.githubusercontent\.com)\//i.test(img.getAttribute('src') ?? '')) img.remove()
+    else { img.loading = 'lazy'; img.referrerPolicy = 'no-referrer' }
+  }
+  for (const input of root.querySelectorAll('input')) {
+    input.type = 'checkbox'
+    input.disabled = true
+  }
   demoteHeadings(root)
   linkifyPaths(root, opts.paths ?? new Set())
   decorateLinks(root)
@@ -186,7 +206,7 @@ function linkDefinitions(src) {
  * description and a GitHub comment are text from anyone, and the validator counts and measures
  * diagrams only in the two fields the model writes them in.
  * @param {string} src markdown
- * @param {{ paths?: ReadonlySet<string>, diagrams?: boolean }} [opts] `paths` linkifies `path:line`
+ * @param {{ paths?: ReadonlySet<string>, diagrams?: boolean, github?: boolean }} [opts] `paths` linkifies `path:line`
  * @returns {string} sanitized HTML
  */
 export function renderMarkdown(src, opts = {}) {

@@ -136,3 +136,11 @@ describe('renderMarkdown', () => {
     expect(html).toContain('<table>')
   })
 })
+
+it('renders safe GitHub HTML and images while removing active content', () => {
+  document.body.innerHTML = renderMarkdown('<details><summary>Details</summary><p>Hello</p></details>\n\n![screenshot](https://user-images.githubusercontent.com/image.png)\n\n<script>alert(1)</script><img src="javascript:bad" onerror="bad()"><iframe></iframe>', { github: true })
+  expect(document.querySelector('summary')?.textContent).toBe('Details')
+  expect(document.querySelector('img')?.getAttribute('src')).toBe('https://user-images.githubusercontent.com/image.png')
+  expect(document.querySelectorAll('img')).toHaveLength(1)
+  expect(document.querySelector('script, iframe, [onerror]')).toBeNull()
+})

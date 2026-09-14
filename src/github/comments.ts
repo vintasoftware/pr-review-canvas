@@ -6,7 +6,7 @@ import { fetchResolvedCommentIds } from './threads.js'
 
 const GhReviewCommentSchema = z.object({
   id: z.number().int(),
-  user: z.object({ login: z.string() }).nullable(),
+  user: z.object({ login: z.string(), avatar_url: z.string().optional() }).nullable(),
   body: z.string(),
   path: z.string(),
   line: z.number().int().nullable().optional(),
@@ -22,7 +22,7 @@ const GhReviewCommentSchema = z.object({
 
 const GhIssueCommentSchema = z.object({
   id: z.number().int(),
-  user: z.object({ login: z.string() }).nullable(),
+  user: z.object({ login: z.string(), avatar_url: z.string().optional() }).nullable(),
   body: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().optional(),
@@ -35,6 +35,7 @@ export function mapReviewComment(raw: unknown, resolvedIds: ReadonlySet<number>)
   const out: ReviewComment = {
     id: c.id,
     author: c.user?.login ?? 'ghost',
+    ...(c.user?.avatar_url ? { avatarUrl: c.user.avatar_url } : {}),
     body: c.body,
     path: c.path,
     line,
@@ -62,6 +63,7 @@ export function mapIssueComment(raw: unknown): IssueComment {
   return {
     id: c.id,
     author: c.user?.login ?? 'ghost',
+    ...(c.user?.avatar_url ? { avatarUrl: c.user.avatar_url } : {}),
     body: c.body ?? '',
     createdAt: c.created_at,
     updatedAt: c.updated_at ?? c.created_at,
@@ -107,6 +109,13 @@ export async function fetchComments(
     fetchAllPages(gh, `${base}/pulls/${number}/comments`),
     fetchAllPages(gh, `${base}/issues/${number}/comments`),
   ])
+  const reviews = (await fetchAllPages(gh, `${base}/pulls/${number}/reviews`)).flatMap(raw => {
+    const review = GhIssueCommentSchema.omit({ created_at: true }).extend({
+      submitted_at: z.string().nullable().optional(), state: z.string(),
+    }).parse(raw)
+    if (!review.submitted_at || review.state === 'PENDING') return []
+    return [{ ...mapIssueComment({ ...review, created_at: review.submitted_at }), state: review.state }]
+  })
   let resolvedIds: Set<number>
   try {
     resolvedIds = await fetchResolvedCommentIds(gh, repo, number)
@@ -117,7 +126,7 @@ export async function fetchComments(
   const reviewComments = reviewRaw.map(c => mapReviewComment(c, resolvedIds))
   const issueComments = issueRaw.map(mapIssueComment)
   return {
-    payload: { fetchedAt: now().toISOString(), headSha, reviewComments, issueComments },
+    payload: { fetchedAt: now().toISOString(), headSha, reviewComments, issueComments, reviews },
     warnings,
   }
 }

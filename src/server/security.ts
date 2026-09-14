@@ -63,7 +63,7 @@ export function contentSecurityPolicy(nonce: string): string {
     "default-src 'none'",
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
+    "img-src 'self' data: https://avatars.githubusercontent.com https://user-images.githubusercontent.com https://private-user-images.githubusercontent.com https://github.com https://camo.githubusercontent.com",
     "font-src 'self'",
     "connect-src 'self'",
     "form-action 'self'",

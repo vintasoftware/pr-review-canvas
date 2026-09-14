@@ -80,6 +80,7 @@ function ghWithBody(body: string) {
     routes: {
       'repos/acme/widgets/pulls/42': { kind: 'json' as const, body: { ...GH_PULL, body } },
       'repos/acme/widgets/pulls/42/comments': { kind: 'json' as const, body: GH_REVIEW_COMMENTS },
+      'repos/acme/widgets/pulls/42/reviews': { kind: 'json' as const, body: [] },
       'repos/acme/widgets/issues/42/comments': { kind: 'json' as const, body: GH_ISSUE_COMMENTS },
     },
     graphql: [GH_THREADS_PAGE, GH_THREADS_PAGE, GH_THREADS_PAGE, GH_THREADS_PAGE],

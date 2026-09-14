@@ -438,8 +438,9 @@ Verified against acpx 0.13.2 while building this:
   route with a foreign origin and expects 403.
 - Every answer carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`;
   `/api/*` adds `Cache-Control: no-store`, so PR text and comments stay out of caches.
-- HTML pages carry a Content-Security-Policy: `default-src 'none'`, scripts and styles and images
-  from this origin only, `data:` images, and no frame, object, or base URI. The two inline script
+- HTML pages carry a Content-Security-Policy: `default-src 'none'`, scripts and styles
+  from this origin only, local and `data:` images, GitHub avatar and attachment images, and no
+  frame, object, or base URI. External image hosts remain blocked. The two inline script
   blocks the shell needs (the import map and the bootstrap JSON) carry a per-response nonce; the page
   runs no inline script of its own, there is no inline event handler anywhere, and the form is a plain
   GET that the server redirects. Inline **styles** are allowed because the page sets dynamic values

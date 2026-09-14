@@ -336,6 +336,7 @@ export function ghFor42(extra: FakeGhOptions = {}): FakeGh {
       user: ghJson(GH_USER),
       'repos/acme/widgets/pulls/42': ghJson(GH_PULL),
       'repos/acme/widgets/pulls/42/comments': ghJson(GH_REVIEW_COMMENTS),
+      'repos/acme/widgets/pulls/42/reviews': { kind: 'json' as const, body: [] },
       'repos/acme/widgets/issues/42/comments': ghJson(GH_ISSUE_COMMENTS),
       ...extra.routes,
     },

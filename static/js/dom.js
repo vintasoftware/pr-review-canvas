@@ -134,3 +134,12 @@ export async function copyToClipboard(text, clipboard) {
   }
   await target.writeText(text)
 }
+
+/** @param {{ author: string, avatarUrl?: string | undefined }} comment */
+export function avatarHtml(comment) {
+  const url = comment.avatarUrl
+  if (url && /^https:\/\/avatars\.githubusercontent\.com\//i.test(url)) {
+    return `<img class="av" src="${esc(url)}" alt="${esc(comment.author)} avatar" width="24" height="24" loading="lazy" referrerpolicy="no-referrer">`
+  }
+  return `<span class="av" aria-hidden="true">${esc(initials(comment.author))}</span>`
+}

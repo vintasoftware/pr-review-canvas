@@ -2,8 +2,9 @@
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').IssueComment} IssueComment */
 
+import { commentHtml } from './diff-decorations.js'
 import { viewCommentHtml } from './comment-link.js'
-import { detailsSummaryHtml, esc, initials, timeAgo } from './dom.js'
+import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
 import { dismissedListHtml, postedUrls, sevsumHtml } from './points.js'
 
@@ -22,9 +23,9 @@ export function summaryHtml(summary, paths) {
  */
 export function issueCommentHtml(c, now) {
   return (
-    `<div class="cmt"><span class="av" aria-hidden="true">${esc(initials(c.author))}</span>` +
+    `<div class="cmt">${avatarHtml(c)}` +
     `<span class="who"><b>${esc(c.author)}</b> <span class="muted">${esc(timeAgo(c.createdAt, now))}</span> ${viewCommentHtml(c.url)}</span>` +
-    `<div class="prose">${renderMarkdown(c.body)}</div></div>`
+    `<div class="prose">${renderMarkdown(c.body, { github: true })}</div></div>`
   )
 }
 
@@ -63,7 +64,7 @@ export function renderOverview(bundle, ctx) {
   const active = artifact ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
   const description = bundle.pr.body.trim()
-    ? `<details class="pr-desc">${detailsSummaryHtml('<span>PR description (from GitHub)</span>', 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths })}</div></details>`
+    ? `<details class="pr-desc">${detailsSummaryHtml('<span>PR description (from GitHub)</span>', 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
     : '<div class="pr-desc body muted">No PR description.</div>'
   return (
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
@@ -71,6 +72,8 @@ export function renderOverview(bundle, ctx) {
     `<div class="body">${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
+    (bundle.comments.reviews ?? []).map(review => `<div class="body"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('') +
+    (bundle.comments.reviewComments.length ? `<details class="body all-review-comments">${detailsSummaryHtml(`<span>All review comments · ${bundle.comments.reviewComments.length}</span>`, 'Toggle all review comments')}${bundle.comments.reviewComments.map(c => `<div><p class="muted small">${esc(c.path)}${c.line ? `:${c.line}` : ''}${c.outdated ? ' · outdated' : ''}${c.resolved ? ' · resolved' : ''}</p>${commentHtml(c, ctx.now)}</div>`).join('')}</details>` : '') +
     (artifact
       ? dismissedListHtml(artifact.points, bundle.state, {
           paths: ctx.paths,

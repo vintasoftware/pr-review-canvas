@@ -4,6 +4,7 @@ import { SideSchema } from './review-artifact.js'
 export const ReviewCommentSchema = z.object({
   id: z.number().int(),
   author: z.string(),
+  avatarUrl: z.string().optional(),
   body: z.string(),
   path: z.string(),
   line: z.number().int().nullable(),
@@ -24,6 +25,7 @@ export type ReviewComment = z.infer<typeof ReviewCommentSchema>
 export const IssueCommentSchema = z.object({
   id: z.number().int(),
   author: z.string(),
+  avatarUrl: z.string().optional(),
   body: z.string(),
   createdAt: z.string(),
   /** When the comment was last edited, which is its creation time until someone edits it. */
@@ -32,11 +34,14 @@ export const IssueCommentSchema = z.object({
 })
 export type IssueComment = z.infer<typeof IssueCommentSchema>
 
+export const ReviewSummarySchema = IssueCommentSchema.extend({ state: z.string() })
+
 export const CommentsPayloadSchema = z.object({
   fetchedAt: z.string(),
   headSha: z.string(),
   reviewComments: z.array(ReviewCommentSchema),
   issueComments: z.array(IssueCommentSchema),
+  reviews: z.array(ReviewSummarySchema).optional(),
 })
 export type CommentsPayload = z.infer<typeof CommentsPayloadSchema>
 

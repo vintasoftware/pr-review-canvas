@@ -468,3 +468,6 @@ details[open] > summary .chev {
 .deferred .hint {
   margin: 0;
 }
+
+.prose img { max-width: 100%; height: auto; }
+img.av { object-fit: cover; border-radius: 50%; }

@@ -7,7 +7,7 @@
 /** @typedef {import('./threads.js').Thread} Thread */
 import { findRow, nearestRow } from './anchors.js'
 import { viewCommentHtml } from './comment-link.js'
-import { esc, fragment, initials, timeAgo } from './dom.js'
+import { esc, fragment, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
 import { pointRowHtml } from './points.js'
 
@@ -77,9 +77,9 @@ export function insertPointRow(card, key, p, ctx) {
  */
 export function commentHtml(c, now) {
   return (
-    `<div class="cmt"><span class="av" aria-hidden="true">${esc(initials(c.author))}</span>` +
+    `<div class="cmt">${avatarHtml(c)}` +
     `<span class="who"><b>${esc(c.author)}</b> <span class="muted">${esc(timeAgo(c.createdAt, now))}</span> ${viewCommentHtml(c.url)}</span>` +
-    `<div class="prose">${renderMarkdown(c.body)}</div></div>`
+    `<div class="prose">${renderMarkdown(c.body, { github: true })}</div></div>`
   )
 }
 

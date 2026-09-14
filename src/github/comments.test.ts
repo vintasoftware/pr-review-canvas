@@ -104,7 +104,8 @@ describe('fetchResolvedCommentIds', () => {
 describe('fetchComments', () => {
   const routes = {
     'repos/acme/widgets/pulls/42/comments': ghJson(GH_REVIEW_COMMENTS),
-    'repos/acme/widgets/issues/42/comments': ghJson(GH_ISSUE_COMMENTS),
+    'repos/acme/widgets/pulls/42/reviews': { kind: 'json' as const, body: [] },
+      'repos/acme/widgets/issues/42/comments': ghJson(GH_ISSUE_COMMENTS),
   }
 
   it('returns both comment kinds with the resolved flag joined in', async () => {
@@ -122,6 +123,7 @@ describe('fetchComments', () => {
     expect(gh.calls.filter(c => c.kind === 'api').map(c => c.params)).toEqual([
       { per_page: '100', page: '1' },
       { per_page: '100', page: '1' },
+      { per_page: '100', page: '1' },
     ])
   })
 
@@ -137,7 +139,8 @@ describe('fetchComments', () => {
     const gh = createFakeGh({
       routes: {
         'repos/acme/widgets/pulls/42/comments': ghHandler(({ page = '' }) => pages[page] ?? []),
-        'repos/acme/widgets/issues/42/comments': ghJson([]),
+        'repos/acme/widgets/pulls/42/reviews': { kind: 'json' as const, body: [] },
+      'repos/acme/widgets/issues/42/comments': ghJson([]),
       },
       graphql: [GH_THREADS_PAGE],
     })
@@ -163,4 +166,18 @@ describe('fetchComments', () => {
     const gh = createFakeGh({ routes: {}, graphql: [GH_THREADS_PAGE] })
     await expect(fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)).rejects.toBeInstanceOf(GitHubApiError)
   })
+})
+
+ it('fetches submitted reviews and preserves avatars', async () => {
+  const gh = createFakeGh({ routes: {
+    'repos/acme/widgets/pulls/42/comments': ghJson([]),
+    'repos/acme/widgets/issues/42/comments': ghJson([]),
+    'repos/acme/widgets/pulls/42/reviews': ghJson([
+      { id: 8, user: { login: 'reviewer', avatar_url: 'https://avatars.githubusercontent.com/u/1' }, body: '**Looks good**', submitted_at: '2026-09-10T10:00:00Z', state: 'APPROVED', html_url: 'https://github.com/review/8' },
+      { id: 9, user: null, body: 'draft', state: 'PENDING', html_url: 'https://github.com/review/9' },
+    ]),
+  }, graphql: [GH_THREADS_PAGE] })
+  const { payload } = await fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)
+  expect(payload.reviews).toHaveLength(1)
+  expect(payload.reviews?.[0]).toMatchObject({ state: 'APPROVED', avatarUrl: 'https://avatars.githubusercontent.com/u/1', body: '**Looks good**' })
 })
