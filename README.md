@@ -62,6 +62,23 @@ pr-review serve
 Open **http://localhost:3010**, enter a PR number, and leave the terminal running while you
 review. Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
 
+## Settings
+
+Use the header's **skin** button to choose Terminal or GitHub styling, and **theme** to choose
+Light, Dark, or Auto (your system preference).
+
+For AI Chat, open **settings** in the header:
+
+- **Agent:** Claude Code or Codex. Switching agents starts a new thread and keeps earlier threads.
+- **Model:** enter a model ID, or leave it blank to use the agent's default.
+- **Chat timeout:** seconds allowed for a reply; default 600, allowed range 30–3600.
+- **Max turns:** limit the agent's steps per reply (1–100), or leave blank for its default.
+- **Test agent:** send a small request to check that the selected agent can respond. Then **save** your settings.
+
+Preferences are saved in the project's local `.pr-review/settings.yml`. Server flags `--agent`
+and `--model` override saved values for that run. The dialog also shows project configuration;
+edit `pr-review.config.yml` to change it. See the [configuration reference](docs/reference.md).
+
 ## Generate and review
 
 In Claude Code or Codex, ask:
