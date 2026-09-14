@@ -67,13 +67,13 @@ export function renderHeader(bundle, opts) {
     '<header class="hdr">' +
     `<div class="hdr-bar"><div class="brand"><span class="box">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
     '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
-    `<button class="cmd" type="button" id="regenerate" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
-    `<button class="cmd" type="button" id="export-zip"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
-    '<button class="cmd" type="button" id="refresh">refresh</button>' +
-    `<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog"${bundle.chat.enabled || bundle.chat.acpx ? '' : ' disabled title="acpx is not installed"'}>settings</button>` +
-    '<button class="cmd" type="button" data-act="help" aria-haspopup="dialog">help</button>' +
-    `<button class="cmd" type="button" id="skin-toggle">${esc(skinLabel(opts.skin))}</button>` +
-    `<button class="cmd" type="button" id="theme-toggle">${esc(themeLabel(opts.theme))}</button>` +
+    `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for this PR" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
+    `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on GitHub"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
+    '<button class="cmd" type="button" id="refresh" title="Fetch the latest PR, comments, and shared canvas from GitHub">refresh</button>' +
+    `<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog"${bundle.chat.enabled || bundle.chat.acpx ? ' title="Configure the AI chat agent, model, and limits"' : ' disabled title="acpx is not installed"'}>settings</button>` +
+    '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
+    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal and GitHub styling">${esc(skinLabel(opts.skin))}</button>` +
+    `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
     '</div></div>' +
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
@@ -95,13 +95,13 @@ export function progressHtml(artifact, state) {
   const p = progressSummary(artifact, state)
   const blocked = approveBlockedReason(artifact, state)
   const approve =
-    `<button class="cmd" type="button" id="approve" data-act="signoff" data-event="APPROVE" data-needs-post` +
-    `${blocked === null ? '' : ` disabled data-disabled-reason="${esc(blocked)}" title="${esc(blocked)}"`}>approve on github</button>`
+    `<button class="cmd" type="button" id="approve" data-tooltip="Write and preview an approving review on GitHub" data-act="signoff" data-event="APPROVE" data-needs-post` +
+    `${blocked === null ? ' title="Write and preview an approving review on GitHub"' : ` disabled data-disabled-reason="${esc(blocked)}" title="${esc(blocked)}"`}>approve on github</button>`
   return (
     `<div class="progress"><div class="pline" role="progressbar" aria-valuenow="${p.done}" aria-valuemin="0" aria-valuemax="${p.total}" aria-label="Layers reviewed"><span style="width:${p.percent}%"></span></div>` +
     `<span class="ptext">${p.done} of ${p.total} layers reviewed</span></div>` +
     `<div class="signoff">${approve}` +
-    '<button class="cmd" type="button" id="request-changes" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>' +
+    '<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on GitHub" title="Write and preview a review requesting changes on GitHub" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>' +
     '<span class="capability-note" role="status"></span></div>'
   )
 }

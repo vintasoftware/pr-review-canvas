@@ -173,7 +173,12 @@ export function applyCapabilityGating(root, capabilities) {
       el.removeAttribute('data-post-blocked')
       el.disabled = own !== null
       if (own === null) {
-        el.removeAttribute('title')
+        const tooltip = el.getAttribute('data-tooltip')
+        if (tooltip) {
+          el.title = tooltip
+        } else {
+          el.removeAttribute('title')
+        }
       } else {
         el.title = own
       }
@@ -201,7 +206,12 @@ export function setDisabledReason(el, reason) {
     el.removeAttribute('data-disabled-reason')
     if (!el.hasAttribute('data-post-blocked')) {
       el.disabled = false
-      el.removeAttribute('title')
+      const tooltip = el.getAttribute('data-tooltip')
+      if (tooltip) {
+        el.title = tooltip
+      } else {
+        el.removeAttribute('title')
+      }
     }
     return
   }
