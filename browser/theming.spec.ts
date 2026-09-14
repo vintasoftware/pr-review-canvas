@@ -22,7 +22,7 @@ async function readLook(page: Page) {
       pageBg: getComputedStyle(root).backgroundColor,
       cardRadius: style('section.layer')?.borderTopLeftRadius ?? null,
       cardHeaderBg: style('section.layer > .layer-h')?.backgroundColor ?? null,
-      addedLineBg: style('tr.add:not(.folded) > td')?.backgroundColor ?? null,
+      addedLineBg: style('tr.add:not(.folded) > td.code')?.backgroundColor ?? null,
       stripeHeight: style('.stripe')?.height ?? null,
       commandBracket: (() => {
         const el = at('.hdr-actions .cmd')
@@ -110,7 +110,7 @@ test('lets the query pick the look for one load of a page that runs no app modul
   await expect(root).toHaveAttribute('data-skin', 'github')
   await expect(root).toHaveAttribute('data-theme', 'dark')
   await expect(panel).toHaveCSS('border-top-left-radius', '6px')
-  await expect(panel).toHaveCSS('background-color', 'rgb(34, 39, 46)')
+  await expect(panel).toHaveCSS('background-color', 'rgb(33, 40, 48)')
 
   // Nothing was saved, so the next load is the default again.
   await page.goto(`${origin}/`)
@@ -147,9 +147,9 @@ const COMBINATIONS = [
   {
     skin: 'github',
     theme: 'dark',
-    pageBg: 'rgb(34, 39, 46)',
-    cardHeaderBg: 'rgb(45, 51, 59)',
-    addedLineBg: 'rgba(87, 171, 90, 0.15)',
+    pageBg: 'rgb(33, 40, 48)',
+    cardHeaderBg: 'rgb(38, 44, 54)',
+    addedLineBg: 'rgb(38, 56, 52)',
     cardRadius: '6px',
   },
 ] as const
@@ -203,3 +203,20 @@ for (const skin of ['terminal', 'github'] as const) {
     await expect(card).toBeVisible()
   })
 }
+
+test('matches the GitHub dark screenshot palette', async ({ page, reviewUrl }, testInfo) => {
+  await page.goto(`${reviewUrl}?skin=github&theme=dark`)
+  await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(33, 40, 48)')
+  await expect(page.locator('html')).toHaveCSS('color', 'rgb(209, 215, 224)')
+  await expect(page.locator('.hdr-bar')).toHaveCSS('background-color', 'rgb(21, 27, 35)')
+  await expect(page.locator('.file-h').first()).toHaveCSS('background-color', 'rgb(38, 44, 54)')
+  await expect(page.locator('section.layer').first()).toHaveCSS('border-top-color', 'rgb(61, 68, 77)')
+  await expect(page.locator('.hdr-actions .cmd').first()).toHaveCSS('background-color', 'rgb(42, 49, 60)')
+  await expect(page.locator('tr.add:not(.folded) > .code').first()).toHaveCSS('background-color', 'rgb(38, 56, 52)')
+  await expect(page.locator('tr.add:not(.folded) > .ln').first()).toHaveCSS('background-color', 'rgb(49, 80, 61)')
+  await expect(page.locator('tr.add:not(.folded) > .ln').first()).toHaveCSS('color', 'rgb(209, 215, 224)')
+  await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('background-color', 'rgb(37, 49, 66)')
+  await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('color', 'rgb(145, 152, 161)')
+  await page.screenshot({ path: testInfo.outputPath('github-dark.png'), fullPage: true })
+})

@@ -16,16 +16,16 @@
 
   /* Structure. `--ink` is the border color the component files draw with, and `--shadow` is the
      offset drop shadow: transparent turns every hard shadow off at once. */
-  --ink: light-dark(#d1d9e0, #444c56);
-  --line: light-dark(#d1d9e0, #444c56);
+  --ink: light-dark(#d1d9e0, #3d444d);
+  --line: light-dark(#d1d9e0, #3d444d);
   --shadow: transparent;
 
-  --bg: light-dark(#ffffff, #22272e);
-  --panel: light-dark(#ffffff, #22272e);
-  --panel-2: light-dark(#f6f8fa, #2d333b);
-  --fg: light-dark(#1f2328, #adbac7);
-  --fg-muted: light-dark(#59636e, #768390);
-  --fg-dim: light-dark(#818b98, #545d68);
+  --bg: light-dark(#ffffff, #212830);
+  --panel: light-dark(#ffffff, #212830);
+  --panel-2: light-dark(#f6f8fa, #262c36);
+  --fg: light-dark(#1f2328, #d1d7e0);
+  --fg-muted: light-dark(#59636e, #9198a1);
+  --fg-dim: light-dark(#818b98, #9198a1);
 
   --accent: light-dark(#0969da, #539bf5);
   --accent-bg: light-dark(#ddf4ff, rgba(65, 132, 228, 0.15));
@@ -40,25 +40,25 @@
   --sev-blocker: light-dark(#cf222e, #e5534b);
   --sev-major: light-dark(#bf8700, #c69026);
   --sev-minor: light-dark(#818b98, #636e7b);
-  --sq-mark: light-dark(#ffffff, #22272e);
+  --sq-mark: light-dark(#ffffff, #212830);
 
-  --add-bg: light-dark(#e6ffec, rgba(87, 171, 90, 0.15));
+  --add-bg: light-dark(#e6ffec, #263834);
   --add-w: light-dark(#abf2bc, rgba(87, 171, 90, 0.4));
   --del-bg: light-dark(#ffebe9, rgba(229, 83, 75, 0.15));
   --del-w: light-dark(#ffc1c0, rgba(229, 83, 75, 0.4));
   --mv-bg: light-dark(#fbefff, rgba(152, 110, 226, 0.1));
-  --hunk-bg: light-dark(#ddf4ff, rgba(65, 132, 228, 0.15));
+  --hunk-bg: light-dark(#ddf4ff, #253142);
 
   /* Buttons. GitHub's default button is a filled box with a hairline; the primary one is green. */
-  --btn-bg: light-dark(#f6f8fa, #373e47);
-  --btn-bg-hover: light-dark(#eff2f5, #444c56);
+  --btn-bg: light-dark(#f6f8fa, #2a313c);
+  --btn-bg-hover: light-dark(#eff2f5, #3d444d);
   --btn-primary: light-dark(#1f883d, #347d39);
   --btn-primary-hover: light-dark(#1a7f37, #46954a);
   --btn-primary-fg: #ffffff;
   --drop-shadow: light-dark(0 8px 24px rgba(66, 74, 83, 0.24), 0 8px 24px rgba(28, 33, 40, 0.85));
 
   /* Syntax tokens: GitHub's own light and dark code colors. */
-  --syn-comment: light-dark(#59636e, #768390);
+  --syn-comment: light-dark(#59636e, #9198a1);
   --syn-keyword: light-dark(#cf222e, #f47067);
   --syn-string: light-dark(#0a3069, #96d0ff);
   --syn-number: light-dark(#0550ae, #6cb6ff);
@@ -70,6 +70,10 @@
 }
 
 /* ---- Header ---- */
+[data-skin="github"] .hdr-bar {
+  background: light-dark(#ffffff, #151b23);
+}
+
 [data-skin="github"] .brand {
   text-transform: none;
   letter-spacing: normal;
@@ -259,7 +263,19 @@
   background: var(--panel-2);
 }
 [data-skin="github"] tr.hunk td {
-  color: light-dark(#0550ae, #539bf5);
+  color: light-dark(#0550ae, #9198a1);
+}
+
+[data-skin="github"] .diff .ln {
+  border-right-color: light-dark(#d1d9e0, transparent);
+}
+[data-skin="github"] tr.add .ln {
+  background: light-dark(#e6ffec, #31503d);
+  color: light-dark(#818b98, #d1d7e0);
+}
+[data-skin="github"] tr.del .ln {
+  background: light-dark(#ffebe9, rgba(229, 83, 75, 0.3));
+  color: light-dark(#818b98, #d1d7e0);
 }
 
 /* ---- Boxes, menus, and overlays ---- */
