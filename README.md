@@ -35,6 +35,20 @@ does not appear. Repeat this setup for each project you want to review.
 canvas directory, and whether the skill is installed. It prints a JSON report with a result for
 each check and suggested fixes for failures. Exit code `0` means all checks passed.
 
+### Optional: AI Chat
+
+To ask questions about a PR inside the canvas, install `acpx` globally:
+
+```bash
+npm install -g acpx
+acpx --version
+```
+
+Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
+the review server, then choose your agent in **settings**. The chat uses that agent's account.
+`doctor` checks the core setup; it does not check `acpx` or your agent's login.
+You can review canvases without installing `acpx`.
+
 ## Run
 
 Start the server from the project you want to review:
@@ -57,8 +71,7 @@ In Claude Code or Codex, ask:
 **123 is the GitHub pull request number** in your project's repository; replace it with yours.
 The skill reads the PR, writes and validates a canvas, then gives you a review URL and a zip.
 Open **http://localhost:3010/review/123** to explore the layers and diffs. You can mark layers
-reviewed and post comments or a review to GitHub. AI chat additionally needs `acpx` and a
-signed-in Claude Code or Codex CLI.
+reviewed and post comments or a review to GitHub.
 
 ## Share the canvas in a PR comment
 
