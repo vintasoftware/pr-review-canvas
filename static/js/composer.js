@@ -4,6 +4,7 @@
 /** @typedef {import('./contract-types.js').Side} Side */
 /** @typedef {import('./contract-types.js').PostCommentInput} PostCommentInput */
 import { cssEscape } from './anchors.js'
+import { renderMarkdown } from './markdown.js'
 import { esc } from './dom.js'
 
 /**
@@ -47,6 +48,7 @@ export function composerHtml(opts) {
   return (
     `<div class="composer-box" id="${esc(opts.id)}"${dataAttributes(opts)}>` +
     `<label class="sr" for="${esc(opts.id)}-t">${esc(opts.label)}</label>` +
+    previewControlsHtml() +
     `<textarea id="${esc(opts.id)}-t" rows="3" placeholder="${esc(opts.label)}">${esc(opts.body ?? '')}</textarea>` +
     '<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>post to github</button>' +
     '<button class="cmd" type="button" data-act="composer-cancel">cancel</button></div></div>'
@@ -208,4 +210,22 @@ export function setDisabledReason(el, reason) {
   if (!el.hasAttribute('data-post-blocked')) {
     el.title = reason
   }
+}
+
+export function previewControlsHtml() {
+  return '<div class="preview-controls" role="group" aria-label="Markdown editor"><button class="cmd" type="button" data-act="markdown-write" aria-pressed="true">Write</button><button class="cmd" type="button" data-act="markdown-preview" aria-pressed="false">Preview</button></div><div class="markdown-preview prose" hidden></div>'
+}
+
+/** @param {HTMLElement} button @param {boolean} preview */
+export function toggleMarkdownPreview(button, preview) {
+  const host = button.closest('.composer-box, .signoff-dialog')
+  const textarea = host?.querySelector('textarea')
+  const output = host?.querySelector('.markdown-preview')
+  if (!(textarea instanceof HTMLTextAreaElement) || !(output instanceof HTMLElement)) return
+  if (preview) output.innerHTML = textarea.value.trim() ? renderMarkdown(textarea.value, { github: true }) : '<p class="muted">Nothing to preview.</p>'
+  textarea.hidden = preview
+  output.hidden = !preview
+  host?.querySelector('[data-act="markdown-write"]')?.setAttribute('aria-pressed', String(!preview))
+  host?.querySelector('[data-act="markdown-preview"]')?.setAttribute('aria-pressed', String(preview))
+  if (!preview) textarea.focus()
 }

@@ -50,6 +50,8 @@ describe('composerHtml', () => {
     expect(box.hasAttribute('data-start-line')).toBe(false)
     expect(box.querySelector('label')?.getAttribute('for')).toBe('c1-t')
     expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
+      'markdown-write',
+      'markdown-preview',
       'composer-post',
       'composer-cancel',
     ])

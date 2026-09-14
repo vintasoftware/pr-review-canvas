@@ -1,3 +1,4 @@
+import { toggleMarkdownPreview } from './composer.js'
 // @ts-check
 // Everything the reader can do on the review screen, wired once. One delegated click handler,
 // one change handler, one pointer pair for line selection, and one key handler; each command
@@ -588,6 +589,8 @@ export function wireReview(root, session, opts = {}) {
         postFromComposer(el, box)
       }
     },
+    'markdown-preview': el => toggleMarkdownPreview(el, true),
+    'markdown-write': el => toggleMarkdownPreview(el, false),
     'composer-cancel': () => {
       closeComposers(root)
     },

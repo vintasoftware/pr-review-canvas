@@ -54,3 +54,18 @@ test('replaces point posting buttons with comment links across dismissal and rel
   await expect(card.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
   await expect(card.locator('[data-act="point-post"]')).toHaveCount(0)
 })
+
+test('previews Markdown and preserves the comment draft', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  await page.locator('[data-act="pr-comment"]').click()
+  const editor = page.locator('.conversation .composer-box')
+  await editor.locator('textarea').fill('**Ready**\n\n- [x] checked\n\n<details><summary>Evidence</summary>Tests pass</details>')
+  await editor.locator('[data-act="markdown-preview"]').click()
+  await expect(editor.locator('textarea')).toBeHidden()
+  await expect(editor.locator('.markdown-preview strong')).toHaveText('Ready')
+  await expect(editor.locator('.markdown-preview input')).toBeChecked()
+  await expect(editor.locator('.markdown-preview summary')).toHaveText('Evidence')
+  await editor.locator('[data-act="markdown-write"]').click()
+  await expect(editor.locator('textarea')).toBeVisible()
+  await expect(editor.locator('textarea')).toHaveValue(/\*\*Ready\*\*/)
+})
