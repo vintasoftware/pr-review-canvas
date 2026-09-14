@@ -274,6 +274,7 @@ export function wireChat(options) {
   /** @type {string | null} */
   let activeThread = null
   let streaming = false
+  let stopActivity = () => {}
   /** The turn in flight, so taking the pane down stops its request too. */
   /** @type {AbortController | null} */
   let inFlight = null
@@ -501,7 +502,19 @@ export function wireChat(options) {
     appendTurn('user', renderMarkdown(message, { paths }))
     dispatch({ type: 'send' })
     scrollToBottom('follow')
-    const answer = appendTurn('assistant', '<span class="muted">…</span>')
+    const answer = appendTurn('assistant', '')
+    const activity = document.createElement('p')
+    activity.className = 'muted small chat-activity'
+    activity.setAttribute('aria-live', 'off')
+    answer.turn.append(activity)
+    const started = Date.now()
+    const updateActivity = () => {
+      const elapsed = Date.now() - started
+      activity.textContent = `Preparing answer${'.'.repeat(Math.floor(elapsed / 400) % 3 + 1)} · ${Math.floor(elapsed / 1000)}s`
+    }
+    updateActivity()
+    const timer = setInterval(updateActivity, 400)
+    stopActivity = () => clearInterval(timer)
     const turnKey = answer.turn.id
     setStreaming(true)
     let text = ''
@@ -544,6 +557,9 @@ export function wireChat(options) {
       )
     } finally {
       inFlight = null
+      stopActivity()
+      activity.textContent = `Elapsed: ${Math.floor((Date.now() - started) / 1000)}s`
+      if (frame !== 0) { cancelFrame(frame); frame = 0 }
       setStreaming(false)
       answer.body.innerHTML = text === '' ? '<span class="muted">no answer</span>' : renderAnswer(text, turnKey)
       if (scroll.pinned) {
@@ -727,6 +743,7 @@ export function wireChat(options) {
       void runCommand(sendButton, send, { pendingLabel: 'sending…' })
     },
     stop() {
+      stopActivity()
       inFlight?.abort()
       inFlight = null
       if (frame !== 0) {
