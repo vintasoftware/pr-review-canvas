@@ -14,7 +14,7 @@ Arguments: `<pr-number> [--force]` or `--base <ref> --head <ref> [--force]`. `--
 a canvas that already exists for the head commit: prepare removes the old `model.json` and any
 other leftovers from the canvas directory, keeping `derived/`, `publish.log` (the attempts history),
 and the published `review.json` + `manifest.json` (the page keeps showing the old canvas until your
-publish replaces it), so you start a fresh `model.json`. Run every `pnpm pr-review` command from the
+publish replaces it), so you start a fresh `model.json`. Run every `pr-review` command from the
 repository root.
 
 ## Flow
@@ -22,9 +22,9 @@ repository root.
 ### 1. Prepare
 
 ```bash
-pnpm pr-review prepare --pr <n> [--force]
+pr-review prepare --pr <n> [--force]
 # or, before a PR exists:
-pnpm pr-review prepare --base <ref> --head <ref> [--force]
+pr-review prepare --base <ref> --head <ref> [--force]
 ```
 
 Progress goes to stderr. The last stdout line is JSON:
@@ -36,7 +36,7 @@ Progress goes to stderr. The last stdout line is JSON:
 - `status: "exists"` means a canvas already exists for this head. Stop and tell the user:
   "canvas already exists for <headSha>; run with --force to regenerate".
 - A line of the form `{ "error": { "code", "message", "hint" } }` means prepare failed. Report the
-  code, message, and hint verbatim and stop. `pnpm pr-review doctor` names which of git, origin,
+  code, message, and hint verbatim and stop. `pr-review doctor` names which of git, origin,
   `gh`, the data dir, and the skill install is missing.
 
 ### 2. Read the task
@@ -56,7 +56,7 @@ Use a file-writing tool that can write to the canvas directory reported by prepa
 ### 4. Check before publishing
 
 ```bash
-pnpm pr-review validate <canvasDir>/model.json --canvas <canvasDir> --human --fix
+pr-review validate <canvasDir>/model.json --canvas <canvasDir> --human --fix
 ```
 
 Same checks the publish step runs. It prints `ok: model.json passes against <n> files`, or one
@@ -76,7 +76,7 @@ a reader sees, which you cannot count reliably while writing.
 ### 5. Publish
 
 ```bash
-pnpm pr-review publish <canvasDir> --agent <your agent id> --model <model id if you know it> --harness <claude-code|codex|other>
+pr-review publish <canvasDir> --agent <your agent id> --model <model id if you know it> --harness <claude-code|codex|other>
 ```
 
 - `--agent`: a free-text id of the agent product you are: `claude`, `codex`, `gemini`, ...
@@ -105,7 +105,7 @@ prepare again; pass `--allow-stale` only when the user asks for the canvas of th
 ### 6. Export the zip
 
 ```bash
-pnpm pr-review export --head <headSha> [--pr <n>]
+pr-review export --head <headSha> [--pr <n>]
 ```
 
 Pass `--pr <n>` when the run had a PR number, so the file name and the manifest carry it. The
@@ -115,13 +115,13 @@ command prints one JSON line with the absolute `path` of the zip.
 
 Report the `reviewUrl` from publish and the zip path from export:
 
-> The canvas is ready at <reviewUrl> (start the server with `pnpm exec pr-review serve` if it is not running).
+> The canvas is ready at <reviewUrl> (start the server with `pr-review serve` if it is not running).
 > Drag this file into the PR comment so other reviewers get the canvas without
 > generating it again: <path>
 
-GitHub has no attachment API, so attaching the file is the human's step. For a `--base/--head` run,
+The tool exports locally; attaching the zip to GitHub is the human's step. For a `--base/--head` run,
 say the canvas is stored for `<headSha>`, that the zip has no PR number yet, and that
-`pnpm pr-review export --pr <n>` re-exports it once the pull request exists.
+`pr-review export --pr <n>` re-exports it once the pull request exists.
 
 ## Rules the validator enforces (and models tend to break)
 

@@ -20,29 +20,28 @@ See [the README](../README.md) for installation and sharing a canvas.
 Check all of it at once:
 
 ```bash
-pnpm pr-review doctor
+pr-review doctor
 ```
 
 ## Run
 
 ```bash
-pnpm exec pr-review serve                          # serve http://localhost:3010 for this repository
-pnpm exec pr-review serve --port 3011           # another port
-pnpm dev      # same, from the package
+pr-review serve                    # http://localhost:3010 for this repository
+pr-review serve --port 3011        # another port
 ```
 
 Open `http://localhost:3010/review/<pr-number>`, or type the number on the home page. The server
 fetches `pull/<n>/head` and the base branch into `refs/pr/<n>/*`, so the PR is never checked out.
 
-Both commands run under `tsx watch`: editing anything under `src/` restarts the server, and the
-next request serves the new code. Files under `static/` are read per request and need no restart.
+For development, run `pnpm dev` from the tool checkout. It uses `tsx watch`: editing `src/`
+restarts the server. Files under `static/` are read per request and need no restart.
 The data directory is excluded from the watch, so publishing a canvas never restarts the server.
 
 To look at the page with a canvas without generating one, serve the committed fixture for PR #278
 of this repository:
 
 ```bash
-pnpm exec pr-review serve --fixture-canvas __fixtures__/pr-278/review.json
+pr-review serve --fixture-canvas __fixtures__/pr-278/review.json
 # then open http://localhost:3010/review/278
 ```
 
@@ -83,12 +82,12 @@ The header's `[ refresh ]` command re-asks GitHub for the pull request, its comm
 zip attached to it, instead of answering from the server's caches. It is the same thing as
 `?refresh=1` on the bundle route. Ctrl-C stops the server and closes its open connections.
 
-### Install as a devDependency elsewhere
+### Install globally
 
 ```bash
-pnpm add -D link:/absolute/path/to/pr-review-canvas
-pnpm pr-review install-skill                                # links into .claude/skills and .agents/skills
-pnpm pr-review install-skill --codex-dir ~/.codex/skills    # user-wide for Codex instead
+npm install -g git+ssh://git@github.com/vintasoftware/pr-review-canvas.git
+pr-review install-skill                                # links into .claude/skills and .agents/skills
+pr-review install-skill --codex-dir ~/.codex/skills    # user-wide for Codex instead
 ```
 
 `install-skill` symlinks `skills/pr-review-canvas` (copies on Windows) and is idempotent; it refuses
@@ -189,16 +188,16 @@ to run in your own coding harness:
 
 The skill drives three CLI commands and writes one file:
 
-1. `pnpm pr-review prepare --pr <n>` fetches the PR, builds `derived/`, and writes `prompt.md` (the
+1. `pr-review prepare --pr <n>` fetches the PR, builds `derived/`, and writes `prompt.md` (the
    task: manifest with hunk ids, diffs, layering and length rules, the rulebook, the JSON schema) and
    `context.json` (what `publish` checks against) into the canvas directory.
 2. The agent reads them and writes `<canvasDir>/model.json`.
-3. `pnpm pr-review publish <canvasDir> --agent <id> --harness claude-code|codex|other` validates the
+3. `pr-review publish <canvasDir> --agent <id> --harness claude-code|codex|other` validates the
    file, prints one line per problem and exits 5 when it fails, or normalizes it into `review.json`
    and indexes the canvas. The page, which polls while it shows the empty state, flips to the review
    without a reload.
 
-Before a PR exists: `pnpm pr-review prepare --base origin/main --head HEAD`. The canvas is stored by
+Before a PR exists: `pr-review prepare --base origin/main --head HEAD`. The canvas is stored by
 head SHA and found once the PR is opened.
 
 ### Large pull requests
@@ -246,17 +245,16 @@ in `prs/<n>/state.json`. They are personal: a shared zip never carries them.
 The PR opener generates the canvas once and attaches the zip to the pull request, so every other
 reviewer reads it without paying for a generation.
 
-1. `pnpm pr-review export --pr <n>` writes
+1. `pr-review export --pr <n>` writes
    `pr-review-canvas-<owner>-<repo>-pr<n>-<sha7>.zip` and prints its absolute path. Before the pull
    request exists, `--head <ref>` writes the same zip without the `pr<n>` part.
-2. Drag that file into the PR description or a comment in the browser. GitHub has no attachment
-   API, so this step is manual. `pnpm pr-review export --pr <n>` re-exports with the number once
-   the PR exists.
+2. Drag that file into the PR description or a comment in the browser. The tool exports locally;
+   attaching the zip is manual. `pr-review export --pr <n>` re-exports with the number once the PR exists.
 3. Another reviewer opens `http://localhost:3010/review/<n>`. The server finds the links in the PR
    text, takes the one named for this head, then the newest one attached to this PR, and imports
    it; when that file cannot be read it tries the next two before giving up.
 4. When the download fails, the page shows the link, the reason, a `[ fetch again ]` command, and
-   a drop zone that takes the file by hand. `pnpm pr-review import <zip> --pr <n>` does the same
+   a drop zone that takes the file by hand. `pr-review import <zip> --pr <n>` does the same
    from a terminal.
 
 A canvas is stored under its head sha, so a canvas for an older commit shows as **stale**: the page
@@ -428,7 +426,7 @@ Verified against acpx 0.13.2 while building this:
   runner therefore drops `_meta` from every line and the auth line entirely before anything is
   written to `events.ndjson`.
 - When the provider rejects acpx's bundled Claude binary, export
-  `CLAUDE_CODE_EXECUTABLE="$(command -v claude)"` before `pnpm exec pr-review serve`; the runner passes the
+  `CLAUDE_CODE_EXECUTABLE="$(command -v claude)"` before `pr-review serve`; the runner passes the
   environment through.
 
 ## Security model
@@ -491,7 +489,7 @@ Verified against acpx 0.13.2 while building this:
 | `SIGNOFF_INCOMPLETE` | Mark every layer outside Other reviewed for the current head |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN` | Open the page as `localhost` or `127.0.0.1`, and drive it from the page itself |
 
-`pnpm pr-review doctor` answers most of the first rows in one line, including whether the data dir
+`pr-review doctor` answers most of the first rows in one line, including whether the data dir
 is writable and the skill is installed. `GET /api/health` reports the four checks a running server
 can answer for itself: git, origin, `gh`, and `gh` auth.
 

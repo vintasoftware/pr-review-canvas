@@ -72,7 +72,7 @@ async function checkSkill(repoRoot: string | null, exists: DoctorDeps['exists'])
     return {
       ok: false,
       detail: `${SKILL_NAME} is in neither ${CLAUDE_SKILLS_DIR} nor ${CODEX_SKILLS_DIR}`,
-      hint: 'run `pnpm pr-review install-skill`',
+      hint: 'run `pr-review install-skill`',
     }
   }
   return { ok: true, detail: found.join(', ') }

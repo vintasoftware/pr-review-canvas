@@ -118,7 +118,7 @@ describe('runDoctorChecks', () => {
     expect(report.checks.skill).toEqual({
       ok: false,
       detail: `${SKILL_NAME} is in neither ${CLAUDE_SKILLS_DIR} nor ${CODEX_SKILLS_DIR}`,
-      hint: 'run `pnpm pr-review install-skill`',
+      hint: 'run `pr-review install-skill`',
     })
   })
 
