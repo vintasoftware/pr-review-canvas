@@ -101,6 +101,9 @@ main > * {
   margin-left: auto;
   margin-right: auto;
 }
+#overview {
+  max-width: none;
+}
 main.home {
   padding: var(--main-pad);
   max-width: 100%;
