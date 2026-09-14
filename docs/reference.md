@@ -148,7 +148,7 @@ on failure; progress goes to stderr. `--repo <dir>` and `--data-dir <dir>` work 
 | Command | What it does |
 |---|---|
 | `serve [--port] [--repo] [--data-dir] [--fixture-canvas]` | The review server |
-| `doctor` | Runs every health check (`git`, `origin`, `gh`, `ghAuth`, data dir writable, skill installed) and prints one JSON line; exit 1 when a check fails |
+| `doctor [--all-checks]` | Checks `git`, `origin`, `gh`, `ghAuth`, data directory access, and the skill. `--all-checks` also runs `acpx --version`. Prints one JSON line; exit 1 when any requested check fails |
 | `prepare (--pr <n> \| --base <ref> --head <ref>) [--force]` | Prints `{ canvasDir, headSha, mergeBaseSha, promptPath, contextPath, status }`, `status` being `prepared` or `exists` |
 | `validate <model.json\|review.json> --canvas <dir> [--human] [--fix]` | Prints the validation report as one JSON line (`--human`: one line per problem); exit 5 when not ok. `--fix` first shortens over-cap titles in place, dropping the explainer after the first `:` or `—`, and reports each one; prose is never cut, but an over-cap field names where the cap falls in its own text |
 | `publish <canvasDir> --agent <id> [--model <id>] --harness <id> [--allow-stale]` | Prints `{ status: 'published', headSha, reviewJsonPath, attempts, reviewUrl? }`; refuses with `CANVAS_STALE` when the PR head moved |

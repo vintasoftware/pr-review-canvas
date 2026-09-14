@@ -17,6 +17,7 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     }),
     gh: createFakeGh(),
     version: '0.0.0-test',
+    acpxVersion: async () => '0.13.2',
     exists: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md'),
     ...over,
   }
@@ -25,7 +26,9 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
 describe('runDoctorChecks', () => {
   it('reports every check green on a working setup', async () => {
     const dataDir = await makeTempDir()
-    const report = await runDoctorChecks(deps({ dataDirOverride: dataDir }))
+    const acpxVersion = vi.fn(async () => null)
+    const report = await runDoctorChecks(deps({ dataDirOverride: dataDir, acpxVersion }))
+    expect(acpxVersion).not.toHaveBeenCalled()
     expect(report).toEqual({
       ok: true,
       version: '0.0.0-test',
@@ -177,6 +180,62 @@ describe('pr-review doctor', () => {
     expect(code).toBe(0)
     expect(lines).toHaveLength(1)
     expect(JSON.parse(lines[0] ?? '')).toMatchObject({ ok: true, version: '0.0.0-test' })
+  })
+
+  it.each([
+    { version: '0.13.2', check: { ok: true, detail: '0.13.2' }, exit: 0 },
+    ...[null, '', '   '].map(version => ({
+      version,
+      check: {
+        ok: false,
+        detail: 'acpx is missing or could not report its version',
+        hint: 'install with `npm install -g acpx` and check `acpx --version`',
+      },
+      exit: 1,
+    })),
+  ])('checks acpx with --all-checks when its version is $version', async ({ version, check, exit }) => {
+    const dependencies = deps({ dataDirOverride: await makeTempDir(), acpxVersion: vi.fn(async () => version) })
+    const core = await runDoctorChecks(dependencies)
+    const code = await runDoctor(dependencies, ['--all-checks'], io)
+    expect(code).toBe(exit)
+    expect(lines.map(line => JSON.parse(line))).toEqual([
+      { ...core, ok: exit === 0, checks: { ...core.checks, acpx: check } },
+    ])
+    expect(dependencies.acpxVersion).toHaveBeenCalledOnce()
+  })
+
+  it('reports a failed acpx process as a check failure', async () => {
+    const dependencies = deps({
+      dataDirOverride: await makeTempDir(),
+      acpxVersion: async () => {
+        throw new Error('process timed out')
+      },
+    })
+    const core = await runDoctorChecks(dependencies)
+    expect(await runDoctor(dependencies, ['--all-checks'], io)).toBe(1)
+    expect(lines.map(line => JSON.parse(line))).toEqual([
+      {
+        ...core,
+        ok: false,
+        checks: {
+          ...core.checks,
+          acpx: {
+            ok: false,
+            detail: 'process timed out',
+            hint: 'install with `npm install -g acpx` and check `acpx --version`',
+          },
+        },
+      },
+    ])
+  })
+
+  it('keeps core failures when acpx is installed', async () => {
+    const dependencies = deps({ dataDirOverride: await makeTempDir(), exists: async () => false })
+    const core = await runDoctorChecks(dependencies)
+    expect(await runDoctor(dependencies, ['--all-checks'], io)).toBe(1)
+    expect(lines.map(line => JSON.parse(line))).toEqual([
+      { ...core, ok: false, checks: { ...core.checks, acpx: { ok: true, detail: '0.13.2' } } },
+    ])
   })
 
   it('exits 1 when a check fails, and refuses an unknown flag', async () => {

@@ -21,13 +21,14 @@ export interface DoctorCheck {
 export interface DoctorReport {
   ok: boolean
   version: string
-  checks: Record<DoctorCheckName, DoctorCheck>
+  checks: Record<DoctorCheckName, DoctorCheck> & { acpx?: DoctorCheck }
 }
 
 export interface DoctorDeps {
   git: Git
   gh: GitHubClient
   version: string
+  acpxVersion: () => Promise<string | null>
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
   dataDirOverride?: string | undefined
   /** Answers whether a file can be read; the skill check asks for the SKILL.md inside. */
@@ -78,8 +79,20 @@ async function checkSkill(repoRoot: string | null, exists: DoctorDeps['exists'])
   return { ok: true, detail: found.join(', ') }
 }
 
-/** Runs every check. Each failure carries the hint that fixes it. */
-export async function runDoctorChecks(deps: DoctorDeps): Promise<DoctorReport> {
+async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {
+  const hint = 'install with `npm install -g acpx` and check `acpx --version`'
+  try {
+    const version = (await deps.acpxVersion())?.trim()
+    return version
+      ? { ok: true, detail: version }
+      : { ok: false, detail: 'acpx is missing or could not report its version', hint }
+  } catch (err) {
+    return { ok: false, detail: message(err), hint }
+  }
+}
+
+/** Runs core checks and, with allChecks, checks acpx for AI Chat. */
+export async function runDoctorChecks(deps: DoctorDeps, options: { allChecks?: boolean } = {}): Promise<DoctorReport> {
   let repoRoot: string | null = null
   let git: DoctorCheck
   try {
@@ -118,6 +131,9 @@ export async function runDoctorChecks(deps: DoctorDeps): Promise<DoctorReport> {
   }
 
   const skill = await checkSkill(repoRoot, deps.exists)
-  const checks = { git, origin, gh, ghAuth, dataDir, skill }
-  return { ok: DOCTOR_CHECKS.every(name => checks[name].ok), version: deps.version, checks }
+  const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill }
+  if (options.allChecks) {
+    checks.acpx = await checkAcpx(deps)
+  }
+  return { ok: Object.values(checks).every(check => check.ok), version: deps.version, checks }
 }

@@ -287,8 +287,8 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
  * read the code instead of the JSON.
  */
 export async function runDoctor(deps: DoctorDeps, argv: string[], io: CliIo): Promise<number> {
-  parseArgs({ args: argv, options: {}, strict: true })
-  const report = await runDoctorChecks(deps)
+  const { values } = parseArgs({ args: argv, options: { 'all-checks': { type: 'boolean' } }, strict: true })
+  const report = await runDoctorChecks(deps, { allChecks: values['all-checks'] === true })
   printJson(io, report)
   return report.ok ? EXIT.ok : EXIT.error
 }

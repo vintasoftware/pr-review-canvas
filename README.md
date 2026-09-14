@@ -42,11 +42,13 @@ To ask questions about a PR inside the canvas, install `acpx` globally:
 ```bash
 npm install -g acpx
 acpx --version
+pr-review doctor --all-checks
 ```
 
 Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
 the review server, then choose your agent in **settings**. The chat uses that agent's account.
-`doctor` checks the core setup; it does not check `acpx` or your agent's login.
+`doctor --all-checks` also checks that `acpx` runs and reports its version. A failed check
+returns exit code `1` with an installation hint. Agent login is checked when you use chat.
 You can review canvases without installing `acpx`.
 
 ## Run
