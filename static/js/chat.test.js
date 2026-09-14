@@ -1321,3 +1321,34 @@ describe('what the fourth review round found', () => {
     expect(log.scrollTop).toBe(400)
   })
 })
+
+it('animates preparation, tracks elapsed time, and collapses updated tool calls', async () => {
+  let finish = () => {}
+  const { root, chat } = mount({ streamChat: async (_pr, _input, opts) => {
+    opts.onEvent({ event: 'tool', data: { id: '1', title: 'Read src/app.ts', status: 'pending' } })
+    opts.onEvent({ event: 'tool', data: { id: '1', title: 'tool', status: 'completed' } })
+    await new Promise(resolve => { finish = () => resolve(undefined) })
+    opts.onEvent({ event: 'chunk', data: { text: 'Answer' } })
+  } })
+  await flush()
+  vi.useFakeTimers()
+  const box = /** @type {HTMLTextAreaElement} */ (el(root, 'textarea'))
+  box.value = 'Explain'
+  el(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }))
+  expect(el(root, '.chat-activity').textContent).toBe('Preparing answer. · 0s')
+  await vi.advanceTimersByTimeAsync(800)
+  expect(el(root, '.chat-activity').textContent).toBe('Preparing answer... · 0s')
+  await vi.advanceTimersByTimeAsync(400)
+  expect(el(root, '.chat-activity').textContent).toBe('Preparing answer. · 1s')
+  const calls = /** @type {HTMLDetailsElement} */ (el(root, '.chat-tool-calls'))
+  expect(el(calls, 'summary').textContent).toContain('Read src/app.ts · completed (1 tool calls)')
+  expect(calls.querySelectorAll('li')).toHaveLength(1)
+  calls.open = true
+  finish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(calls.open).toBe(false)
+  expect(el(calls, 'summary').textContent).toBe('1 tool calls')
+  expect(el(root, '.chat-activity').textContent).toBe('Elapsed: 1s')
+  chat.stop()
+  vi.useRealTimers()
+})

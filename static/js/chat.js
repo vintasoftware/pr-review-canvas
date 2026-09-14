@@ -515,6 +515,11 @@ export function wireChat(options) {
     updateActivity()
     const timer = setInterval(updateActivity, 400)
     stopActivity = () => clearInterval(timer)
+    const toolDetails = document.createElement('details')
+    toolDetails.className = 'chat-tool-calls muted small'
+    toolDetails.hidden = true
+    answer.turn.append(toolDetails)
+    const tools = new Map()
     const turnKey = answer.turn.id
     setStreaming(true)
     let text = ''
@@ -532,6 +537,17 @@ export function wireChat(options) {
             if (event.event === 'turn' && typeof thread === 'string') {
               activeThread = thread
               void refreshThreads()
+              return
+            }
+            if (event.event === 'tool') {
+              const id = String(field('id') ?? '')
+              const previous = tools.get(id)
+              const title = String(field('title') ?? 'tool')
+              tools.delete(id)
+              tools.set(id, { title: title === 'tool' && previous ? previous.title : title, status: String(field('status') ?? 'pending') })
+              toolDetails.hidden = false
+              const latest = tools.get(id)
+              toolDetails.innerHTML = `<summary>${esc(latest.title)} · ${esc(latest.status)} (${tools.size} tool calls)</summary><ul>${[...tools.values()].map(t => `<li>${esc(t.title)} · ${esc(t.status)}</li>`).join('')}</ul>`
               return
             }
             const chunk = field('text')
@@ -558,6 +574,9 @@ export function wireChat(options) {
     } finally {
       inFlight = null
       stopActivity()
+      toolDetails.open = false
+      const toolSummary = toolDetails.querySelector('summary')
+      if (toolSummary) toolSummary.textContent = `${tools.size} tool calls`
       activity.textContent = `Elapsed: ${Math.floor((Date.now() - started) / 1000)}s`
       if (frame !== 0) { cancelFrame(frame); frame = 0 }
       setStreaming(false)
