@@ -1,0 +1,340 @@
+/* ---- GitHub skin ----
+   Loaded last so it repaints the terminal skin without the component files knowing about it.
+   Everything here hangs off `[data-skin="github"]` on <html>, and every color goes through
+   light-dark(), so the light/dark theme keeps working the same way in both skins.
+
+   What changes: Primer colors, rounded corners, hairline borders, real buttons in place of the
+   [ bracket ] commands, and softer spacing. What does not change: where anything sits on the
+   page. Rules here only repaint and re-space.
+
+   Dark is GitHub's "dark dimmed": a softer grey-blue ground rather than the near-black one. */
+
+:root[data-skin="github"] {
+  --r: 6px;
+  --gap: 16px;
+  --main-pad: 16px 16px 40px;
+
+  /* Structure. `--ink` is the border color the component files draw with, and `--shadow` is the
+     offset drop shadow: transparent turns every hard shadow off at once. */
+  --ink: light-dark(#d1d9e0, #444c56);
+  --line: light-dark(#d1d9e0, #444c56);
+  --shadow: transparent;
+
+  --bg: light-dark(#ffffff, #22272e);
+  --panel: light-dark(#ffffff, #22272e);
+  --panel-2: light-dark(#f6f8fa, #2d333b);
+  --fg: light-dark(#1f2328, #adbac7);
+  --fg-muted: light-dark(#59636e, #768390);
+  --fg-dim: light-dark(#818b98, #545d68);
+
+  --accent: light-dark(#0969da, #539bf5);
+  --accent-bg: light-dark(#ddf4ff, rgba(65, 132, 228, 0.15));
+  --purple: light-dark(#8250df, #986ee2);
+  --annot-bg: light-dark(#fbefff, rgba(152, 110, 226, 0.15));
+  --ok: light-dark(#1a7f37, #57ab5a);
+  --bad: light-dark(#d1242f, #e5534b);
+  --warn: light-dark(#9a6700, #c69026);
+  --warn-bg: light-dark(#fff8c5, rgba(174, 124, 20, 0.15));
+  --progress: light-dark(#1f883d, #57ab5a);
+
+  --sev-blocker: light-dark(#cf222e, #e5534b);
+  --sev-major: light-dark(#bf8700, #c69026);
+  --sev-minor: light-dark(#818b98, #636e7b);
+  --sq-mark: light-dark(#ffffff, #22272e);
+
+  --add-bg: light-dark(#e6ffec, rgba(87, 171, 90, 0.15));
+  --add-w: light-dark(#abf2bc, rgba(87, 171, 90, 0.4));
+  --del-bg: light-dark(#ffebe9, rgba(229, 83, 75, 0.15));
+  --del-w: light-dark(#ffc1c0, rgba(229, 83, 75, 0.4));
+  --mv-bg: light-dark(#fbefff, rgba(152, 110, 226, 0.1));
+  --hunk-bg: light-dark(#ddf4ff, rgba(65, 132, 228, 0.15));
+
+  /* Buttons. GitHub's default button is a filled box with a hairline; the primary one is green. */
+  --btn-bg: light-dark(#f6f8fa, #373e47);
+  --btn-bg-hover: light-dark(#eff2f5, #444c56);
+  --btn-primary: light-dark(#1f883d, #347d39);
+  --btn-primary-hover: light-dark(#1a7f37, #46954a);
+  --btn-primary-fg: #ffffff;
+  --drop-shadow: light-dark(0 8px 24px rgba(66, 74, 83, 0.24), 0 8px 24px rgba(28, 33, 40, 0.85));
+
+  /* Syntax tokens: GitHub's own light and dark code colors. */
+  --syn-comment: light-dark(#59636e, #768390);
+  --syn-keyword: light-dark(#cf222e, #f47067);
+  --syn-string: light-dark(#0a3069, #96d0ff);
+  --syn-number: light-dark(#0550ae, #6cb6ff);
+  --syn-title: light-dark(#8250df, #dcbdfb);
+  --syn-type: light-dark(#953800, #f69d50);
+  --syn-attr: light-dark(#0550ae, #6cb6ff);
+  --syn-tag: light-dark(#116329, #8ddb8c);
+  --syn-meta: light-dark(#0550ae, #6cb6ff);
+}
+
+/* ---- Header ---- */
+[data-skin="github"] .brand {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 14px;
+  align-items: center;
+}
+[data-skin="github"] .brand .box {
+  border-width: 1px;
+  border-radius: var(--r);
+  background: var(--panel-2);
+  padding: 3px 8px;
+}
+/* The rainbow bar becomes the hairline that runs under GitHub's page header. */
+[data-skin="github"] .stripe {
+  height: 1px;
+  background: var(--ink);
+}
+[data-skin="github"] .hdr-actions {
+  gap: 8px;
+  align-items: center;
+}
+[data-skin="github"] .hdr-title {
+  padding-bottom: 16px;
+}
+
+/* ---- Commands ---- */
+[data-skin="github"] .cmd::before,
+[data-skin="github"] .cmd::after {
+  content: none;
+}
+[data-skin="github"] .cmd {
+  font-weight: 500;
+}
+/* The header's commands read as GitHub's toolbar buttons; commands inside the page stay links. */
+[data-skin="github"] .hdr-actions .cmd {
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--btn-bg);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 20px;
+}
+[data-skin="github"] .hdr-actions .cmd:hover {
+  background: var(--btn-bg-hover);
+  text-decoration: none;
+}
+[data-skin="github"] .hdr-actions .cmd:disabled,
+[data-skin="github"] .hdr-actions .cmd[aria-disabled="true"] {
+  color: var(--fg-dim);
+}
+[data-skin="github"] .cmd.fill,
+[data-skin="github"] .cmd.big {
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: var(--btn-primary);
+  color: var(--btn-primary-fg);
+  box-shadow: none;
+  padding: 5px 16px;
+}
+[data-skin="github"] .cmd.big {
+  padding: 8px 20px;
+  font-size: 14px;
+}
+[data-skin="github"] .cmd.fill:hover,
+[data-skin="github"] .cmd.big:hover,
+[data-skin="github"] .cmd.fill:active {
+  background: var(--btn-primary-hover);
+  transform: none;
+  box-shadow: none;
+}
+[data-skin="github"] .chat-composer .cmd.fill {
+  box-shadow: none;
+}
+
+/* ---- Pills: GitHub's rounded labels, with the state ones filled ---- */
+[data-skin="github"] .pill {
+  border-radius: 2em;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 20px;
+  border-color: var(--line);
+}
+[data-skin="github"] .pill.open,
+[data-skin="github"] .pill.merged,
+[data-skin="github"] .pill.closed,
+[data-skin="github"] .pill.draft {
+  border-color: transparent;
+  color: #ffffff;
+}
+[data-skin="github"] .pill.open {
+  background: light-dark(#1f883d, #347d39);
+}
+[data-skin="github"] .pill.merged {
+  background: light-dark(#8250df, #8256d0);
+}
+[data-skin="github"] .pill.closed {
+  background: light-dark(#cf222e, #c93c37);
+}
+[data-skin="github"] .pill.draft {
+  background: light-dark(#6e7781, #636e7b);
+}
+[data-skin="github"] .pill.risk,
+[data-skin="github"] .pill.kind,
+[data-skin="github"] .pill.agent {
+  background: var(--panel-2);
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+[data-skin="github"] .pill.test-tag {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: transparent;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 11px;
+}
+
+/* ---- Cards ---- */
+[data-skin="github"] .panel,
+[data-skin="github"] .layer,
+[data-skin="github"] .diagram {
+  border-radius: var(--r);
+}
+[data-skin="github"] .panel-h,
+[data-skin="github"] .layer-h,
+[data-skin="github"] .diagram-h {
+  border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0;
+}
+[data-skin="github"] .chev {
+  color: var(--fg-muted);
+}
+[data-skin="github"] .summary h3,
+[data-skin="github"] .judgment .lbl,
+[data-skin="github"] .role,
+[data-skin="github"] .diff th {
+  text-transform: none;
+  letter-spacing: normal;
+}
+[data-skin="github"] .summary h3 {
+  font-size: 14px;
+  color: var(--fg);
+}
+[data-skin="github"] .prose ul {
+  list-style: disc;
+}
+[data-skin="github"] .sq {
+  border-radius: 2px;
+}
+[data-skin="github"] .sevsum > .legend {
+  border-radius: var(--r);
+  box-shadow: var(--drop-shadow);
+}
+/* GitHub draws progress as a filled track rather than a hairline. */
+[data-skin="github"] .pline {
+  background: var(--line);
+  border-radius: var(--r);
+}
+[data-skin="github"] .pline span {
+  border-radius: var(--r);
+}
+
+/* ---- Rail ---- */
+[data-skin="github"] .tree a {
+  margin: 0 8px;
+  padding: 6px 8px;
+  border-radius: var(--r);
+}
+[data-skin="github"] .tree .layers a {
+  padding-left: 20px;
+}
+[data-skin="github"] .tree a[aria-current] {
+  background: var(--accent-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ---- Diff ---- */
+[data-skin="github"] .plus {
+  border: 0;
+  border-radius: var(--r);
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-skin="github"] .av {
+  border-radius: 50%;
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+[data-skin="github"] tr.hunk td {
+  color: light-dark(#0550ae, #539bf5);
+}
+
+/* ---- Boxes, menus, and overlays ---- */
+[data-skin="github"] code,
+[data-skin="github"] .snip,
+[data-skin="github"] .ctx-chip,
+[data-skin="github"] .diagram-src,
+[data-skin="github"] .cmdbox code,
+[data-skin="github"] .notice,
+[data-skin="github"] .callout,
+[data-skin="github"] .stale-bar,
+[data-skin="github"] .proposed,
+[data-skin="github"] .proposed-invalid,
+[data-skin="github"] .drop,
+[data-skin="github"] .prose pre,
+[data-skin="github"] dialog.settings .panel-ro {
+  border-radius: var(--r);
+}
+[data-skin="github"] code {
+  border: 0;
+  background: light-dark(rgba(129, 139, 152, 0.2), rgba(99, 110, 123, 0.4));
+  padding: 0.2em 0.4em;
+}
+[data-skin="github"] .cmdbox code,
+[data-skin="github"] .diagram-src {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+[data-skin="github"] .drop {
+  border-width: 1px;
+  background: var(--panel-2);
+}
+[data-skin="github"] .drop:hover,
+[data-skin="github"] .drop.over {
+  transform: none;
+  background: var(--accent-bg);
+}
+[data-skin="github"] .proposed,
+[data-skin="github"] .cmd.unseen,
+[data-skin="github"] .qq-menu {
+  border-width: 1px;
+}
+[data-skin="github"] .cmd.unseen,
+[data-skin="github"] .qq-menu,
+[data-skin="github"] .toast {
+  border-radius: var(--r);
+  box-shadow: var(--drop-shadow);
+}
+[data-skin="github"] select,
+[data-skin="github"] input,
+[data-skin="github"] textarea,
+[data-skin="github"] .composer-box textarea,
+[data-skin="github"] dialog.signoff-dialog textarea {
+  border-width: 1px;
+  border-color: var(--line);
+  border-radius: var(--r);
+  padding: 5px 12px;
+}
+[data-skin="github"] dialog {
+  border-width: 1px;
+  border-color: var(--line);
+  border-radius: 12px;
+  box-shadow: var(--drop-shadow);
+}
+[data-skin="github"] dialog::backdrop {
+  background: rgba(28, 33, 40, 0.6);
+}
+
+@media (max-width: 1000px) {
+  /* The rail is a strip of chips at this width; the current one is underlined, not filled. */
+  [data-skin="github"] .tree a {
+    margin: 0;
+    border-radius: var(--r);
+  }
+  [data-skin="github"] .tree a[aria-current] {
+    box-shadow: inset 0 -3px 0 var(--accent);
+  }
+}

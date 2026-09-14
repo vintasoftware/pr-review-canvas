@@ -1,0 +1,470 @@
+/* ---- Panels, layers, cards ---- */
+.panel,
+.layer {
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  box-shadow: 2px 2px 0 var(--shadow);
+  margin-bottom: var(--gap);
+  border-radius: var(--r);
+}
+.panel-h,
+.layer-h {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--panel-2);
+}
+.layer-h h2 {
+  font-size: 18px;
+  margin-right: auto;
+}
+.layer-h h2 .lbl {
+  margin-bottom: 4px;
+}
+.layer-h .risks {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+.layer-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+/* The `>` chevron before a layer or file title is its collapse toggle. It points right when the card
+   is closed and turns down while it is open; the reduced-motion rule below removes the turn. */
+.chev {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  margin: 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.12s ease-out;
+}
+.chev[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+.body {
+  padding: 14px 16px;
+}
+.lbl.sub {
+  padding: 12px 16px 8px;
+  border-top: 1px solid var(--ink);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+}
+.summary,
+.rationale,
+.prose {
+  max-width: 100ch;
+}
+.summary {
+  font-size: 15px;
+  line-height: 1.55;
+}
+/* A diagram sits in its own card under a header that closes it. */
+.diagram {
+  margin-top: 14px;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  box-shadow: 2px 2px 0 var(--shadow);
+  border-radius: var(--r);
+}
+.diagram-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.diagram-h .lbl {
+  flex: 1 1 auto;
+}
+/* A wide drawing scrolls sideways inside the card instead of shrinking. */
+.diagram-body {
+  padding: 12px;
+  overflow-x: auto;
+}
+.diagram-body svg {
+  display: block;
+  max-width: none;
+  height: auto;
+}
+/* A node the model linked: clicking it jumps to the code it stands for. */
+.diagram-body [data-link] {
+  cursor: pointer;
+}
+.diagram-body [data-link]:hover {
+  filter: brightness(1.15);
+}
+.diagram-body [data-link]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.diagram-src {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.diagram-body p.muted {
+  margin: 0;
+}
+.judgment {
+  margin-top: 14px;
+}
+.judgment .lbl {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  margin: 14px 0 6px;
+}
+.prose h3:first-child {
+  margin-top: 0;
+}
+.prose h3 {
+  font-size: 15px;
+}
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-size: 14px;
+}
+.prose ul,
+.prose ol {
+  padding-left: 22px;
+  margin: 0 0 0.6em;
+}
+.prose ul {
+  list-style: square;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li {
+  margin: 2px 0;
+}
+.prose blockquote {
+  margin: 0 0 0.6em;
+  padding: 2px 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--fg-muted);
+}
+.prose table {
+  border-collapse: collapse;
+  margin: 0 0 0.6em;
+}
+.prose th,
+.prose td {
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  text-align: left;
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.prose pre {
+  margin: 0 0 0.6em;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.prose pre code {
+  background: none;
+  border: 0;
+}
+.prose a.loc {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+.summary h3 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  margin: 18px 0 6px;
+}
+.summary h3:first-child {
+  margin-top: 0;
+}
+
+.sevsum {
+  position: relative;
+  display: inline-flex;
+  gap: 14px;
+  align-items: center;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 2px 4px;
+}
+.sevsum > span,
+.sevsum > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sevsum > a {
+  color: inherit;
+  text-decoration: none;
+}
+.sevsum > a:hover {
+  text-decoration: underline;
+}
+.sq {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--ink);
+  background: var(--sc);
+  vertical-align: -1px;
+}
+.sq.blocker,
+.sq.decide {
+  --sc: var(--sev-blocker);
+}
+.sq.major,
+.sq.check {
+  --sc: var(--sev-major);
+  background: radial-gradient(circle, var(--sq-mark) 0 2px, var(--sc) 2.5px);
+}
+.sq.minor,
+.sq.fyi {
+  --sc: var(--sev-minor);
+  background: transparent;
+}
+.sevsum > .legend {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  display: none;
+  z-index: 4;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--shadow);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 12px;
+}
+.legend span:last-child {
+  margin-right: 0;
+}
+.sevsum:hover > .legend,
+.sevsum:focus > .legend,
+.sevsum:focus-within > .legend {
+  display: block;
+}
+
+.findings li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  align-items: start;
+}
+.findings li:first-child {
+  border-top: 0;
+}
+.findings > li > .sq {
+  margin-top: 5px;
+}
+.findings p {
+  max-width: 100ch;
+}
+.f-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.f-title .loc {
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.findings .tbtns {
+  margin-top: 6px;
+}
+.pr-desc {
+  border-top: 1px solid var(--ink);
+}
+/* A <details> summary reads like a card header: the chevron before the title is its toggle. The row
+   itself keeps the default cursor and no hover background; the native <details> handles the click. */
+summary {
+  list-style: none;
+  padding: 10px 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary h2 {
+  display: inline;
+}
+details[open] > summary .chev {
+  transform: rotate(90deg);
+}
+.plain li {
+  padding: 4px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+/* test map */
+.testmap {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.testmap th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  padding: 4px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.testmap td {
+  padding: 5px 16px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.testmap tr:last-child td {
+  border-bottom: 0;
+}
+.testmap .st {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.testmap .st.covered {
+  color: var(--ok);
+}
+.testmap .st.missing {
+  color: var(--bad);
+}
+.testmap .st.not-needed {
+  color: var(--fg-muted);
+}
+.layer-end {
+  padding: 4px 16px 16px;
+}
+
+/* file cards sit flush left under the layer's "Files" sub-header: a hairline between files and the
+   chevron before each path show the nesting; only the layer section carries the panel border and shadow */
+.file {
+  background: var(--panel);
+  min-width: 0;
+}
+.file + .file {
+  border-top: 1px solid var(--line);
+}
+.files {
+  padding-bottom: 8px;
+}
+.file-h {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+.file-h .path {
+  font-size: 12px;
+  font-weight: 700;
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.file-h .path .old {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.file-h .status {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.file-h .tbtns {
+  margin-left: auto;
+}
+.note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  align-items: baseline;
+}
+.note p {
+  max-width: 100ch;
+}
+.more-hunks {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  border-top: 1px solid var(--line);
+}
+.unavailable {
+  padding: 12px 14px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.deferred {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+  padding: 12px 14px;
+}
+.deferred .hint {
+  margin: 0;
+}

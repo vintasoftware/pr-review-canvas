@@ -1,0 +1,58 @@
+# Copy to <repo root>/pr-review.config.yml. Every key is optional.
+version: 1
+
+# Markdown reference for project standards. The generation mode controls how the generator uses it.
+# rulebook: docs/CODE_REVIEW.md
+
+# Default layer taxonomy, in review order. Ids are referenced by `defaultLayerId` in a canvas.
+layers:
+  - id: contracts
+    title: Contracts and schemas
+    description: Types, schemas, and the shapes two modules must agree on.
+  - id: data-access
+    title: Data access
+    description: Queries, repositories, migrations, storage.
+  - id: mappers
+    title: Mappers and DTOs
+    description: Code that turns records into view models and back.
+  - id: hooks-state
+    title: Hooks and state
+    description: Hooks, query definitions, stores, state machines.
+  - id: views
+    title: Views
+    description: Components, screens, styles, copy.
+  - id: routes-wiring
+    title: Routes and wiring
+    description: Route files, providers, shells, entry points.
+  - id: policy-config
+    title: Policy and config
+    description: Access policies, environment variables, feature flags, CI, deployment, docs.
+  - id: mechanical
+    title: Mechanical changes
+    description: Renames, lockfiles, generated files, formatting, moved code.
+
+# Blast radius tags. Glob patterns against changed paths; the label shows in the header and the rail.
+highRisk:
+  - pattern: '**/migrations/**'
+    label: schema
+  - pattern: '**/*auth*'
+    label: auth
+
+generation:
+  mode: strict          # strict: quality review; surfacing: walkthrough that audits as it reads
+  maxRepairRounds: 3      # publish retries the skill may make after a failed validation
+  inlineDiffMaxLines: 1500 # diffs longer than this are read per file instead of inlined in the prompt
+  smallPrHunks: 10         # at most this many hunks: one layer unless concerns differ, fewer annotations
+  # caps:                  # override the text caps (characters)
+  #   summary: 1800
+  #   rationale: 300
+  #   diagram: 1500       # mermaid source, counted raw
+
+# Which paths count as tests, for the layering rules and the `test` pill on a file card.
+# Defaults to the JavaScript and TypeScript conventions below; name your own for other languages
+# (Python: '**/test_*.py', '**/tests/**'; Go: '**/*_test.go').
+tests:
+  patterns: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**']
+
+chat:
+  enabled: true            # false removes the chat pane and its routes

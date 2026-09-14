@@ -1,0 +1,2378 @@
+{
+  "version": 1,
+  "pr": {
+    "number": 278,
+    "title": "feat(shl-server): harden updates, cleanup, and audit lifecycle",
+    "body": "## Description\n\nHardens the SHL server's file lifecycle and closes the verified concurrency and rollout gaps identified against FHIRsmith:\n\n- Adds authenticated `PUT /api/shl/:id` support for long-term links using immutable storage generations and compare-and-swap publication.\n- Revalidates SHL activity and the selected file generation after manifest construction. If one concurrent update occurs, the server rebuilds once from the current generation; a second change returns an opaque error without recording a successful access.\n- Makes replacement publication conditional on the SHL still being active, so an upload that overlaps expiry, invalidation, lockout, or storage cleanup cannot publish afterward. Competing active writers retain the existing `409` response.\n- Keeps `expiresAt` synchronized with `payload.exp` in PostgreSQL, including writes from an older application version during a rolling deployment, and backfills mismatched rows without changing retained manifests or recipient history.\n- Adds claimed, retryable cleanup for expired SHLs, superseded generations, and abandoned uploads. Failed cleanup work becomes eligible again after 12 hours so the next daily run can retry despite modest schedule jitter.\n- Retains database audit records while encrypted storage objects are reclaimed, records client IPs consistently for recipient audit entries, and adds response security headers without blocking cross-origin SHL viewers.\n- Clarifies the schema-readiness workflow notice when its check fails.\n\n## Card/Context\n\nFollow-up to the SHL export work in #127, #128, #130, and #132. The initial gap analysis compared this server with FHIRsmith's SHL implementation.\n\nVHL/GDHCN COSE signing and multi-file/multi-content-type payloads remain separate scope. Permanent fencing or reconciliation for uploads paused beyond 24 hours, readers paused during manifest construction for more than one hour, deployment-retirement flags, preview database isolation, and new cleanup backlog controls are also outside this focused pass.\n\n## Self QA Video or Screenshots (if applicable)\n\nNot applicable; this PR changes API, storage lifecycle, migration, and deployment-check behavior without a production UI change.\n\n## How to Test\n\n```bash\npnpm test\npnpm validate\npnpm -F @vinta-bb/shl-server test\npnpm -F @vinta-bb/shl-server test:integration\npnpm -F @vinta-bb/shl-server build\npnpm -F @vinta-bb/shl-server verify:esm\n```\n\nVerified locally on the final commit:\n\n- All 276 SHL unit tests pass.\n- All 17 real-Postgres integration tests pass, including populated-schema migration/backfill and conditional publication coverage.\n- All 23 full-monorepo test tasks pass.\n- Repository validation, the SHL production build, and the plain-Node ESM smoke check pass.\n\nFor a manual update check, create a long-term SHL, resolve its manifest, update it with `PUT /api/shl/:id`, and resolve the same SHL URI again. The second manifest should use the new encrypted generation.\n\nFor cleanup, call `POST /api/jobs/cleanup-expired?dryRun=true` with the service token before running the non-dry request.\n\n## Additional Notes\n\n- Set `CRON_SECRET` on the shl-server Vercel project to enable the daily cleanup cron. The GET cron route returns `404` while it is unset; authenticated operator POST cleanup remains available.\n- Superseded files are retained for two hours, which includes the one-hour manifest-construction assumption plus one hour of slack. Incomplete uploads become cleanup candidates after 24 hours, so upload/publication is assumed to finish within that window; arbitrarily paused work requires separate controls.\n- Expired SHL database rows and recipient audit records are retained; cleanup removes encrypted storage objects only.\n- The database trigger covers old-writer overlap during deployment while current application writes continue to set `expiresAt` explicitly.\n- No dependency versions were changed.\n\n## Author Checklist\n\n- [x] I have performed a self-review of my own code.\n- [x] I have added or updated **tests** that cover my code changes.\n- [x] I have added or updated **docs** that cover my code changes.\n- [ ] I have added or updated **AI resources (plans, skills, etc.)** that cover my code changes.\n- [ ] I have reviewed my code using the `/thermo-nuclear-code-quality-review` AI skill.\n- [ ] I have reviewed the comments using the `/deslop-comments` AI skill.\n- [ ] Changes touching PHI paths (FHIR reads/writes, logging, error reporting, auth): I have had an agent review whether PHI can reach logs, telemetry, or error reports, and its findings are posted on this PR. Not applicable otherwise.\n\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n  * Added support for updating long-term SHLs through `PUT /api/shl/:id`.\n  * Added authenticated cleanup endpoints for expired links and deferred file deletion, including scheduled daily cleanup.\n  * Expired, invalidated, or cleaned-up links are no longer accessible.\n  * Recipient access records can include client IP addresses.\n  * Added stronger security headers and centralized service-token, origin, and cron authentication.\n\n* **Documentation**\n  * Expanded deployment and SHL configuration guidance, including cleanup, authentication, migrations, and storage lifecycle behavior.\n\n* **Bug Fixes**\n  * Improved manifest consistency during concurrent updates and expiration changes.\n\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->",
+    "author": "fjsj",
+    "url": "https://github.com/vintasoftware/building-blocks/pull/278",
+    "state": "open",
+    "draft": false,
+    "updatedAt": "2026-09-14T17:31:26Z",
+    "baseRef": "main",
+    "headRef": "feat/shl-server-lifecycle-hardening",
+    "headSha": "b8d1e6bf717aeab6c113cc9855e79fb49355760a",
+    "mergeBaseSha": "9e6ca022addd13d87e8eb75ffcd0d70aa36f6d67",
+    "additions": 3507,
+    "deletions": 941,
+    "changedFiles": 42,
+    "repo": {
+      "owner": "vintasoftware",
+      "name": "building-blocks"
+    }
+  },
+  "files": [
+    {
+      "path": ".env.example",
+      "key": "_env_example",
+      "status": "modified",
+      "additions": 12,
+      "deletions": 7,
+      "hunks": [
+        {
+          "id": "_env_example#1",
+          "header": "@@ -86,11 +86,11 @@ SHL_SERVER_URL=http://localhost:3030",
+          "oldStart": 86,
+          "oldLines": 11,
+          "newStart": 86,
+          "newLines": 11
+        },
+        {
+          "id": "_env_example#2",
+          "header": "@@ -110,13 +110,18 @@ SHL_SERVER_SERVICE_TOKEN=dev-shl-service-token-change-me",
+          "oldStart": 110,
+          "oldLines": 13,
+          "newStart": 110,
+          "newLines": 18
+        },
+        {
+          "id": "_env_example#3",
+          "header": "@@ -215,4 +220,4 @@ VINTA_SCHEDULE_API_URL=https://your-vinta-schedule-instance.com",
+          "oldStart": 215,
+          "oldLines": 4,
+          "newStart": 220,
+          "newLines": 4
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/vercel-deploy-reusable.yml",
+      "key": "_github_workflows_vercel_deploy_reusable_yml",
+      "status": "modified",
+      "additions": 28,
+      "deletions": 3,
+      "lang": "yaml",
+      "hunks": [
+        {
+          "id": "_github_workflows_vercel_deploy_reusable_yml#1",
+          "header": "@@ -211,22 +211,47 @@ jobs:",
+          "oldStart": 211,
+          "oldLines": 22,
+          "newStart": 211,
+          "newLines": 47
+        }
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "key": "AGENTS_md",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 2,
+      "lang": "markdown",
+      "hunks": [
+        {
+          "id": "AGENTS_md#1",
+          "header": "@@ -386,9 +386,10 @@ SHL_SERVER_SUPABASE_SERVICE_ROLE_KEY # shl-server only — Supabase service role",
+          "oldStart": 386,
+          "oldLines": 9,
+          "newStart": 386,
+          "newLines": 10
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/README.md",
+      "key": "apps_shl_server_README_md",
+      "status": "modified",
+      "additions": 76,
+      "deletions": 13,
+      "lang": "markdown",
+      "hunks": [
+        {
+          "id": "apps_shl_server_README_md#1",
+          "header": "@@ -75,7 +75,7 @@ Create a new SHL from a FHIR bundle. Returns the SHL URI and internal id.",
+          "oldStart": 75,
+          "oldLines": 7,
+          "newStart": 75,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#2",
+          "header": "@@ -85,7 +85,7 @@ Create a new SHL from a FHIR bundle. Returns the SHL URI and internal id.",
+          "oldStart": 85,
+          "oldLines": 7,
+          "newStart": 85,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#3",
+          "header": "@@ -120,6 +120,7 @@ Returns the manifest JSON per the [SHL spec](http://spec.smarthealth.link/); fil",
+          "oldStart": 120,
+          "oldLines": 6,
+          "newStart": 120,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#4",
+          "header": "@@ -139,6 +140,49 @@ Returns the raw JWE ciphertext with `Content-Type: application/jose`. The viewer",
+          "oldStart": 139,
+          "oldLines": 6,
+          "newStart": 140,
+          "newLines": 49
+        },
+        {
+          "id": "apps_shl_server_README_md#5",
+          "header": "@@ -206,8 +250,9 @@ For local dev, set the variables in the **repo root `.env`** — the monorepo's",
+          "oldStart": 206,
+          "oldLines": 8,
+          "newStart": 250,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_README_md#6",
+          "header": "@@ -240,7 +285,7 @@ After starting Postgres, apply the schema:",
+          "oldStart": 240,
+          "oldLines": 7,
+          "newStart": 285,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#7",
+          "header": "@@ -287,6 +332,7 @@ Set these in your deployment platform (Vercel, Fly.io, etc):",
+          "oldStart": 287,
+          "oldLines": 6,
+          "newStart": 332,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#8",
+          "header": "@@ -297,7 +343,7 @@ After deploying the app:",
+          "oldStart": 297,
+          "oldLines": 7,
+          "newStart": 343,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#9",
+          "header": "@@ -340,7 +386,7 @@ Notes:",
+          "oldStart": 340,
+          "oldLines": 7,
+          "newStart": 386,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_README_md#10",
+          "header": "@@ -391,17 +437,33 @@ The manifest endpoint returns short-lived Supabase signed URLs (valid for ~1 hou",
+          "oldStart": 391,
+          "oldLines": 17,
+          "newStart": 437,
+          "newLines": 33
+        },
+        {
+          "id": "apps_shl_server_README_md#11",
+          "header": "@@ -411,11 +473,12 @@ See `prisma/schema.prisma` for the full schema. Key tables:",
+          "oldStart": 411,
+          "oldLines": 11,
+          "newStart": 473,
+          "newLines": 12
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/prisma/migrations/20260707000000_shl_lifecycle_audit/migration.sql",
+      "key": "apps_shl_server_prisma_migrations_20260707000000_shl_lifecycle_audit_migration_sql",
+      "status": "added",
+      "additions": 42,
+      "deletions": 0,
+      "lang": "sql",
+      "hunks": [
+        {
+          "id": "apps_shl_server_prisma_migrations_20260707000000_shl_lifecycle_audit_migration_sql#1",
+          "header": "@@ -0,0 +1,42 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 42
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/prisma/migrations/20260914000000_sync_shl_expiry/migration.sql",
+      "key": "apps_shl_server_prisma_migrations_20260914000000_sync_shl_expiry_migration_sql",
+      "status": "added",
+      "additions": 35,
+      "deletions": 0,
+      "lang": "sql",
+      "hunks": [
+        {
+          "id": "apps_shl_server_prisma_migrations_20260914000000_sync_shl_expiry_migration_sql#1",
+          "header": "@@ -0,0 +1,35 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 35
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/prisma/schema.prisma",
+      "key": "apps_shl_server_prisma_schema_prisma",
+      "status": "modified",
+      "additions": 33,
+      "deletions": 0,
+      "lang": "prisma",
+      "hunks": [
+        {
+          "id": "apps_shl_server_prisma_schema_prisma#1",
+          "header": "@@ -19,11 +19,26 @@ model Shl {",
+          "oldStart": 19,
+          "oldLines": 11,
+          "newStart": 19,
+          "newLines": 26
+        },
+        {
+          "id": "apps_shl_server_prisma_schema_prisma#2",
+          "header": "@@ -73,6 +88,7 @@ model Recipient {",
+          "oldStart": 73,
+          "oldLines": 6,
+          "newStart": 88,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_prisma_schema_prisma#3",
+          "header": "@@ -81,3 +97,20 @@ model Recipient {",
+          "oldStart": 81,
+          "oldLines": 3,
+          "newStart": 97,
+          "newLines": 20
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/app.test.ts",
+      "key": "apps_shl_server_src___tests___app_test_ts",
+      "status": "modified",
+      "additions": 45,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___app_test_ts#1",
+          "header": "@@ -110,4 +110,49 @@ describe('app wiring', () => {",
+          "oldStart": 110,
+          "oldLines": 4,
+          "newStart": 110,
+          "newLines": 49
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/cleanup.test.ts",
+      "key": "apps_shl_server_src___tests___cleanup_test_ts",
+      "status": "added",
+      "additions": 479,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___cleanup_test_ts#1",
+          "header": "@@ -0,0 +1,479 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 479
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/config.test.ts",
+      "key": "apps_shl_server_src___tests___config_test_ts",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 8,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___config_test_ts#1",
+          "header": "@@ -11,7 +11,7 @@",
+          "oldStart": 11,
+          "oldLines": 7,
+          "newStart": 11,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___config_test_ts#2",
+          "header": "@@ -133,10 +133,10 @@ describe('getMaxFailedAttempts', () => {",
+          "oldStart": 133,
+          "oldLines": 10,
+          "newStart": 133,
+          "newLines": 10
+        },
+        {
+          "id": "apps_shl_server_src___tests___config_test_ts#3",
+          "header": "@@ -144,7 +144,7 @@ describe('getAllowedCreationOrigins', () => {",
+          "oldStart": 144,
+          "oldLines": 7,
+          "newStart": 144,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___config_test_ts#4",
+          "header": "@@ -152,24 +152,24 @@ describe('getAllowedCreationOrigins', () => {",
+          "oldStart": 152,
+          "oldLines": 24,
+          "newStart": 152,
+          "newLines": 24
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/db.integration.test.ts",
+      "key": "apps_shl_server_src___tests___db_integration_test_ts",
+      "status": "modified",
+      "additions": 325,
+      "deletions": 26,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___db_integration_test_ts#1",
+          "header": "@@ -6,7 +6,9 @@",
+          "oldStart": 6,
+          "oldLines": 7,
+          "newStart": 6,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_src___tests___db_integration_test_ts#2",
+          "header": "@@ -18,24 +20,86 @@",
+          "oldStart": 18,
+          "oldLines": 24,
+          "newStart": 20,
+          "newLines": 86
+        },
+        {
+          "id": "apps_shl_server_src___tests___db_integration_test_ts#3",
+          "header": "@@ -49,43 +113,278 @@ describe('db integration (Docker Postgres, real Prisma client)', () => {",
+          "oldStart": 49,
+          "oldLines": 43,
+          "newStart": 113,
+          "newLines": 278
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/describe.test.ts",
+      "key": "apps_shl_server_src___tests___describe_test_ts",
+      "status": "modified",
+      "additions": 45,
+      "deletions": 183,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#1",
+          "header": "@@ -5,165 +5,28 @@",
+          "oldStart": 5,
+          "oldLines": 165,
+          "newStart": 5,
+          "newLines": 28
+        },
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#2",
+          "header": "@@ -184,32 +47,6 @@ function getDescribeHandler(): HandlerFn {",
+          "oldStart": 184,
+          "oldLines": 32,
+          "newStart": 47,
+          "newLines": 6
+        },
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#3",
+          "header": "@@ -274,10 +111,7 @@ describe('POST /api/shl/:id/describe', () => {",
+          "oldStart": 274,
+          "oldLines": 10,
+          "newStart": 111,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#4",
+          "header": "@@ -411,8 +245,8 @@ describe('POST /api/shl/:id/describe', () => {",
+          "oldStart": 411,
+          "oldLines": 8,
+          "newStart": 245,
+          "newLines": 8
+        },
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#5",
+          "header": "@@ -423,10 +257,9 @@ describe('POST /api/shl/:id/describe', () => {",
+          "oldStart": 423,
+          "oldLines": 10,
+          "newStart": 257,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#6",
+          "header": "@@ -444,6 +277,35 @@ describe('POST /api/shl/:id/describe', () => {",
+          "oldStart": 444,
+          "oldLines": 6,
+          "newStart": 277,
+          "newLines": 35
+        },
+        {
+          "id": "apps_shl_server_src___tests___describe_test_ts#7",
+          "header": "@@ -496,9 +358,9 @@ describe('POST /api/shl/:id/describe', () => {",
+          "oldStart": 496,
+          "oldLines": 9,
+          "newStart": 358,
+          "newLines": 9
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/file-endpoint.test.ts",
+      "key": "apps_shl_server_src___tests___file_endpoint_test_ts",
+      "status": "modified",
+      "additions": 9,
+      "deletions": 176,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___file_endpoint_test_ts#1",
+          "header": "@@ -5,161 +5,29 @@",
+          "oldStart": 5,
+          "oldLines": 161,
+          "newStart": 5,
+          "newLines": 29
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_endpoint_test_ts#2",
+          "header": "@@ -190,38 +58,6 @@ function getFileHandler(method: 'GET' | 'OPTIONS'): HandlerFn {",
+          "oldStart": 190,
+          "oldLines": 38,
+          "newStart": 58,
+          "newLines": 6
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_endpoint_test_ts#3",
+          "header": "@@ -306,10 +142,7 @@ describe('GET /api/files/:fileId', () => {",
+          "oldStart": 306,
+          "oldLines": 10,
+          "newStart": 142,
+          "newLines": 7
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/file-handlers.test.ts",
+      "key": "apps_shl_server_src___tests___file_handlers_test_ts",
+      "status": "modified",
+      "additions": 103,
+      "deletions": 9,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#1",
+          "header": "@@ -18,6 +18,7 @@ describe('file-handlers', () => {",
+          "oldStart": 18,
+          "oldLines": 6,
+          "newStart": 18,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#2",
+          "header": "@@ -28,7 +29,7 @@ describe('file-handlers', () => {",
+          "oldStart": 28,
+          "oldLines": 7,
+          "newStart": 29,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#3",
+          "header": "@@ -40,6 +41,12 @@ describe('file-handlers', () => {",
+          "oldStart": 40,
+          "oldLines": 6,
+          "newStart": 41,
+          "newLines": 12
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#4",
+          "header": "@@ -61,6 +68,7 @@ describe('file-handlers', () => {",
+          "oldStart": 61,
+          "oldLines": 6,
+          "newStart": 68,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#5",
+          "header": "@@ -68,18 +76,47 @@ describe('file-handlers', () => {",
+          "oldStart": 68,
+          "oldLines": 18,
+          "newStart": 76,
+          "newLines": 47
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#6",
+          "header": "@@ -142,7 +179,6 @@ describe('file-handlers', () => {",
+          "oldStart": 142,
+          "oldLines": 7,
+          "newStart": 179,
+          "newLines": 6
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#7",
+          "header": "@@ -168,6 +204,34 @@ describe('file-handlers', () => {",
+          "oldStart": 168,
+          "oldLines": 6,
+          "newStart": 204,
+          "newLines": 34
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#8",
+          "header": "@@ -188,6 +252,27 @@ describe('local file handlers (SHL_SERVER_STORAGE=local)', () => {",
+          "oldStart": 188,
+          "oldLines": 6,
+          "newStart": 252,
+          "newLines": 27
+        },
+        {
+          "id": "apps_shl_server_src___tests___file_handlers_test_ts#9",
+          "header": "@@ -198,6 +283,15 @@ describe('local file handlers (SHL_SERVER_STORAGE=local)', () => {",
+          "oldStart": 198,
+          "oldLines": 6,
+          "newStart": 283,
+          "newLines": 15
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/helpers/mock-db.ts",
+      "key": "apps_shl_server_src___tests___helpers_mock_db_ts",
+      "status": "added",
+      "additions": 319,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___helpers_mock_db_ts#1",
+          "header": "@@ -0,0 +1,319 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 319
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/helpers/mock-supabase.ts",
+      "key": "apps_shl_server_src___tests___helpers_mock_supabase_ts",
+      "status": "added",
+      "additions": 61,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___helpers_mock_supabase_ts#1",
+          "header": "@@ -0,0 +1,61 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 61
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/helpers/test-env.ts",
+      "key": "apps_shl_server_src___tests___helpers_test_env_ts",
+      "status": "added",
+      "additions": 20,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___helpers_test_env_ts#1",
+          "header": "@@ -0,0 +1,20 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 20
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/manifest.test.ts",
+      "key": "apps_shl_server_src___tests___manifest_test_ts",
+      "status": "modified",
+      "additions": 230,
+      "deletions": 193,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#1",
+          "header": "@@ -5,7 +5,7 @@",
+          "oldStart": 5,
+          "oldLines": 7,
+          "newStart": 5,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#2",
+          "header": "@@ -13,156 +13,22 @@",
+          "oldStart": 13,
+          "oldLines": 156,
+          "newStart": 13,
+          "newLines": 22
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#3",
+          "header": "@@ -186,32 +52,6 @@ function getManifestHandler(method: 'POST' | 'OPTIONS'): HandlerFn {",
+          "oldStart": 186,
+          "oldLines": 32,
+          "newStart": 52,
+          "newLines": 6
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#4",
+          "header": "@@ -220,7 +60,13 @@ const sampleBundle = {",
+          "oldStart": 220,
+          "oldLines": 7,
+          "newStart": 60,
+          "newLines": 13
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#5",
+          "header": "@@ -230,7 +76,7 @@ async function createShl(passcode?: string): Promise<{ shlUri: string; id: strin",
+          "oldStart": 230,
+          "oldLines": 7,
+          "newStart": 76,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#6",
+          "header": "@@ -252,6 +98,62 @@ async function createShl(passcode?: string): Promise<{ shlUri: string; id: strin",
+          "oldStart": 252,
+          "oldLines": 6,
+          "newStart": 98,
+          "newLines": 62
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#7",
+          "header": "@@ -272,11 +174,8 @@ async function callManifestPost(entropy: string, body: unknown): Promise<Respons",
+          "oldStart": 272,
+          "oldLines": 11,
+          "newStart": 174,
+          "newLines": 8
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#8",
+          "header": "@@ -312,6 +211,34 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 312,
+          "oldLines": 6,
+          "newStart": 211,
+          "newLines": 34
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#9",
+          "header": "@@ -325,12 +252,108 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 325,
+          "oldLines": 12,
+          "newStart": 252,
+          "newLines": 108
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#10",
+          "header": "@@ -376,7 +399,7 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 376,
+          "oldLines": 7,
+          "newStart": 399,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#11",
+          "header": "@@ -400,7 +423,7 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 400,
+          "oldLines": 7,
+          "newStart": 423,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#12",
+          "header": "@@ -408,25 +431,29 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 408,
+          "oldLines": 25,
+          "newStart": 431,
+          "newLines": 29
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#13",
+          "header": "@@ -446,7 +473,7 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 446,
+          "oldLines": 7,
+          "newStart": 473,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___manifest_test_ts#14",
+          "header": "@@ -484,16 +511,26 @@ describe('POST /api/manifests/:entropy/manifest.json', () => {",
+          "oldStart": 484,
+          "oldLines": 16,
+          "newStart": 511,
+          "newLines": 26
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/migration.integration.test.ts",
+      "key": "apps_shl_server_src___tests___migration_integration_test_ts",
+      "status": "added",
+      "additions": 157,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___migration_integration_test_ts#1",
+          "header": "@@ -0,0 +1,157 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 157
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/shl.test.ts",
+      "key": "apps_shl_server_src___tests___shl_test_ts",
+      "status": "modified",
+      "additions": 59,
+      "deletions": 3,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#1",
+          "header": "@@ -30,6 +30,10 @@ const mockPrisma = vi.hoisted(() => ({",
+          "oldStart": 30,
+          "oldLines": 6,
+          "newStart": 30,
+          "newLines": 10
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#2",
+          "header": "@@ -40,6 +44,7 @@ const mockPrisma = vi.hoisted(() => ({",
+          "oldStart": 40,
+          "oldLines": 6,
+          "newStart": 44,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#3",
+          "header": "@@ -129,6 +134,12 @@ function setupSupabaseMock(): void {",
+          "oldStart": 129,
+          "oldLines": 6,
+          "newStart": 134,
+          "newLines": 12
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#4",
+          "header": "@@ -147,6 +158,8 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 147,
+          "oldLines": 6,
+          "newStart": 158,
+          "newLines": 8
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#5",
+          "header": "@@ -314,13 +327,13 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 314,
+          "oldLines": 13,
+          "newStart": 327,
+          "newLines": 13
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#6",
+          "header": "@@ -342,6 +355,47 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 342,
+          "oldLines": 6,
+          "newStart": 355,
+          "newLines": 47
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#7",
+          "header": "@@ -353,6 +407,7 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 353,
+          "oldLines": 6,
+          "newStart": 407,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#8",
+          "header": "@@ -362,6 +417,7 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 362,
+          "oldLines": 6,
+          "newStart": 417,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#9",
+          "header": "@@ -512,7 +568,7 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 512,
+          "oldLines": 7,
+          "newStart": 568,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src___tests___shl_test_ts#10",
+          "header": "@@ -520,7 +576,7 @@ describe('POST /api/shl handler', () => {",
+          "oldStart": 520,
+          "oldLines": 7,
+          "newStart": 576,
+          "newLines": 7
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/__tests__/update.test.ts",
+      "key": "apps_shl_server_src___tests___update_test_ts",
+      "status": "added",
+      "additions": 420,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src___tests___update_test_ts#1",
+          "header": "@@ -0,0 +1,420 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 420
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/api/cleanup.ts",
+      "key": "apps_shl_server_src_api_cleanup_ts",
+      "status": "added",
+      "additions": 247,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_api_cleanup_ts#1",
+          "header": "@@ -0,0 +1,247 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 247
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/api/describe.ts",
+      "key": "apps_shl_server_src_api_describe_ts",
+      "status": "modified",
+      "additions": 20,
+      "deletions": 35,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_api_describe_ts#1",
+          "header": "@@ -1,9 +1,9 @@",
+          "oldStart": 1,
+          "oldLines": 9,
+          "newStart": 1,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_src_api_describe_ts#2",
+          "header": "@@ -25,19 +25,9 @@ import { getPasscode, incrementFailedAttempts, loadShlById } from '../storage.js",
+          "oldStart": 25,
+          "oldLines": 19,
+          "newStart": 25,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_src_api_describe_ts#3",
+          "header": "@@ -52,33 +42,28 @@ export async function describeShl(request: Request, id: string | undefined): Pro",
+          "oldStart": 52,
+          "oldLines": 33,
+          "newStart": 42,
+          "newLines": 28
+        },
+        {
+          "id": "apps_shl_server_src_api_describe_ts#4",
+          "header": "@@ -101,7 +86,7 @@ export async function describeShl(request: Request, id: string | undefined): Pro",
+          "oldStart": 101,
+          "oldLines": 7,
+          "newStart": 86,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src_api_describe_ts#5",
+          "header": "@@ -113,7 +98,7 @@ export async function describeShl(request: Request, id: string | undefined): Pro",
+          "oldStart": 113,
+          "oldLines": 7,
+          "newStart": 98,
+          "newLines": 7
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/api/manifest.ts",
+      "key": "apps_shl_server_src_api_manifest_ts",
+      "status": "modified",
+      "additions": 40,
+      "deletions": 42,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_api_manifest_ts#1",
+          "header": "@@ -1,16 +1,11 @@",
+          "oldStart": 1,
+          "oldLines": 16,
+          "newStart": 1,
+          "newLines": 11
+        },
+        {
+          "id": "apps_shl_server_src_api_manifest_ts#2",
+          "header": "@@ -28,6 +23,13 @@ function isValidEntropy(entropy: string): boolean {",
+          "oldStart": 28,
+          "oldLines": 6,
+          "newStart": 23,
+          "newLines": 13
+        },
+        {
+          "id": "apps_shl_server_src_api_manifest_ts#3",
+          "header": "@@ -73,8 +75,9 @@ export async function postManifest(request: Request, entropy: string | undefined",
+          "oldStart": 73,
+          "oldLines": 8,
+          "newStart": 75,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_src_api_manifest_ts#4",
+          "header": "@@ -82,29 +85,9 @@ export async function postManifest(request: Request, entropy: string | undefined",
+          "oldStart": 82,
+          "oldLines": 29,
+          "newStart": 85,
+          "newLines": 9
+        },
+        {
+          "id": "apps_shl_server_src_api_manifest_ts#5",
+          "header": "@@ -135,22 +118,37 @@ export async function postManifest(request: Request, entropy: string | undefined",
+          "oldStart": 135,
+          "oldLines": 22,
+          "newStart": 118,
+          "newLines": 37
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/api/shl.ts",
+      "key": "apps_shl_server_src_api_shl_ts",
+      "status": "modified",
+      "additions": 12,
+      "deletions": 44,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_api_shl_ts#1",
+          "header": "@@ -1,11 +1,11 @@",
+          "oldStart": 1,
+          "oldLines": 11,
+          "newStart": 1,
+          "newLines": 11
+        },
+        {
+          "id": "apps_shl_server_src_api_shl_ts#2",
+          "header": "@@ -34,39 +34,11 @@ function buildFlag(passcode: boolean, longTerm: boolean): SHLFlag | undefined {",
+          "oldStart": 34,
+          "oldLines": 39,
+          "newStart": 34,
+          "newLines": 11
+        },
+        {
+          "id": "apps_shl_server_src_api_shl_ts#3",
+          "header": "@@ -78,7 +50,6 @@ export async function createShl(request: Request): Promise<Response> {",
+          "oldStart": 78,
+          "oldLines": 7,
+          "newStart": 50,
+          "newLines": 6
+        },
+        {
+          "id": "apps_shl_server_src_api_shl_ts#4",
+          "header": "@@ -92,14 +63,11 @@ export async function createShl(request: Request): Promise<Response> {",
+          "oldStart": 92,
+          "oldLines": 14,
+          "newStart": 63,
+          "newLines": 11
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/api/update.ts",
+      "key": "apps_shl_server_src_api_update_ts",
+      "status": "added",
+      "additions": 85,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_api_update_ts#1",
+          "header": "@@ -0,0 +1,85 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 85
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/app.ts",
+      "key": "apps_shl_server_src_app_ts",
+      "status": "modified",
+      "additions": 21,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_app_ts#1",
+          "header": "@@ -1,10 +1,13 @@",
+          "oldStart": 1,
+          "oldLines": 10,
+          "newStart": 1,
+          "newLines": 13
+        },
+        {
+          "id": "apps_shl_server_src_app_ts#2",
+          "header": "@@ -23,6 +26,19 @@ import { createShl } from './api/shl.js'",
+          "oldStart": 23,
+          "oldLines": 6,
+          "newStart": 26,
+          "newLines": 19
+        },
+        {
+          "id": "apps_shl_server_src_app_ts#3",
+          "header": "@@ -36,8 +52,13 @@ app.get('/api/health', () => getHealth())",
+          "oldStart": 36,
+          "oldLines": 8,
+          "newStart": 52,
+          "newLines": 13
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/cleanup-storage.ts",
+      "key": "apps_shl_server_src_cleanup_storage_ts",
+      "status": "added",
+      "additions": 153,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_cleanup_storage_ts#1",
+          "header": "@@ -0,0 +1,153 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 153
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/client-ip.ts",
+      "key": "apps_shl_server_src_client_ip_ts",
+      "status": "added",
+      "additions": 28,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_client_ip_ts#1",
+          "header": "@@ -0,0 +1,28 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 28
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/config.ts",
+      "key": "apps_shl_server_src_config_ts",
+      "status": "modified",
+      "additions": 16,
+      "deletions": 3,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_config_ts#1",
+          "header": "@@ -101,6 +101,19 @@ export function getServiceToken(): string {",
+          "oldStart": 101,
+          "oldLines": 6,
+          "newStart": 101,
+          "newLines": 19
+        },
+        {
+          "id": "apps_shl_server_src_config_ts#2",
+          "header": "@@ -118,15 +131,15 @@ export function getMaxFailedAttempts(): number {",
+          "oldStart": 118,
+          "oldLines": 15,
+          "newStart": 131,
+          "newLines": 15
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/file-handlers.ts",
+      "key": "apps_shl_server_src_file_handlers_ts",
+      "status": "modified",
+      "additions": 56,
+      "deletions": 20,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_file_handlers_ts#1",
+          "header": "@@ -13,11 +13,30 @@ import {",
+          "oldStart": 13,
+          "oldLines": 11,
+          "newStart": 13,
+          "newLines": 30
+        },
+        {
+          "id": "apps_shl_server_src_file_handlers_ts#2",
+          "header": "@@ -28,29 +47,31 @@ export interface FileHandlers {",
+          "oldStart": 28,
+          "oldLines": 29,
+          "newStart": 47,
+          "newLines": 31
+        },
+        {
+          "id": "apps_shl_server_src_file_handlers_ts#3",
+          "header": "@@ -78,7 +99,18 @@ export function createFileHandlers(supabaseUrl: string, supabaseServiceKey: stri",
+          "oldStart": 78,
+          "oldLines": 7,
+          "newStart": 99,
+          "newLines": 18
+        },
+        {
+          "id": "apps_shl_server_src_file_handlers_ts#4",
+          "header": "@@ -87,19 +119,23 @@ export function createFileHandlers(supabaseUrl: string, supabaseServiceKey: stri",
+          "oldStart": 87,
+          "oldLines": 19,
+          "newStart": 119,
+          "newLines": 23
+        },
+        {
+          "id": "apps_shl_server_src_file_handlers_ts#5",
+          "header": "@@ -107,14 +143,14 @@ export function createLocalFileHandlers(baseUrl: string, filesDir: string): File",
+          "oldStart": 107,
+          "oldLines": 14,
+          "newStart": 143,
+          "newLines": 14
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/file-retention.ts",
+      "key": "apps_shl_server_src_file_retention_ts",
+      "status": "added",
+      "additions": 22,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_file_retention_ts#1",
+          "header": "@@ -0,0 +1,22 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 22
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/rate-limit.ts",
+      "key": "apps_shl_server_src_rate_limit_ts",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 18,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_rate_limit_ts#1",
+          "header": "@@ -27,6 +27,7 @@ import {",
+          "oldStart": 27,
+          "oldLines": 6,
+          "newStart": 27,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src_rate_limit_ts#2",
+          "header": "@@ -82,26 +83,12 @@ function getLimiter(): RateLimiterAbstract {",
+          "oldStart": 82,
+          "oldLines": 26,
+          "newStart": 83,
+          "newLines": 12
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/request-schemas.ts",
+      "key": "apps_shl_server_src_request_schemas_ts",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_request_schemas_ts#1",
+          "header": "@@ -32,6 +32,11 @@ export const createShlBodySchema = z.object({",
+          "oldStart": 32,
+          "oldLines": 6,
+          "newStart": 32,
+          "newLines": 11
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/service-auth.ts",
+      "key": "apps_shl_server_src_service_auth_ts",
+      "status": "modified",
+      "additions": 78,
+      "deletions": 11,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_service_auth_ts#1",
+          "header": "@@ -1,29 +1,96 @@",
+          "oldStart": 1,
+          "oldLines": 29,
+          "newStart": 1,
+          "newLines": 96
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/storage.ts",
+      "key": "apps_shl_server_src_storage_ts",
+      "status": "modified",
+      "additions": 129,
+      "deletions": 129,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_storage_ts#1",
+          "header": "@@ -1,67 +1,80 @@",
+          "oldStart": 1,
+          "oldLines": 67,
+          "newStart": 1,
+          "newLines": 80
+        },
+        {
+          "id": "apps_shl_server_src_storage_ts#2",
+          "header": "@@ -72,7 +85,7 @@ export async function createSHLWithManifest(",
+          "oldStart": 72,
+          "oldLines": 7,
+          "newStart": 85,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_src_storage_ts#3",
+          "header": "@@ -91,110 +104,57 @@ export async function createSHLWithManifest(",
+          "oldStart": 91,
+          "oldLines": 110,
+          "newStart": 104,
+          "newLines": 57
+        },
+        {
+          "id": "apps_shl_server_src_storage_ts#4",
+          "header": "@@ -209,17 +169,12 @@ export async function incrementFailedAttempts(",
+          "oldStart": 209,
+          "oldLines": 17,
+          "newStart": 169,
+          "newLines": 12
+        },
+        {
+          "id": "apps_shl_server_src_storage_ts#5",
+          "header": "@@ -227,11 +182,56 @@ export async function incrementFailedAttempts(",
+          "oldStart": 227,
+          "oldLines": 11,
+          "newStart": 182,
+          "newLines": 56
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/tracked-file-upload.test.ts",
+      "key": "apps_shl_server_src_tracked_file_upload_test_ts",
+      "status": "added",
+      "additions": 27,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_tracked_file_upload_test_ts#1",
+          "header": "@@ -0,0 +1,27 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 27
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/src/tracked-file-upload.ts",
+      "key": "apps_shl_server_src_tracked_file_upload_ts",
+      "status": "added",
+      "additions": 14,
+      "deletions": 0,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_src_tracked_file_upload_ts#1",
+          "header": "@@ -0,0 +1,14 @@",
+          "oldStart": 0,
+          "oldLines": 0,
+          "newStart": 1,
+          "newLines": 14
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/vercel.json",
+      "key": "apps_shl_server_vercel_json",
+      "status": "modified",
+      "additions": 12,
+      "deletions": 1,
+      "lang": "json",
+      "hunks": [
+        {
+          "id": "apps_shl_server_vercel_json#1",
+          "header": "@@ -1,4 +1,15 @@",
+          "oldStart": 1,
+          "oldLines": 4,
+          "newStart": 1,
+          "newLines": 15
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/vitest.config.ts",
+      "key": "apps_shl_server_vitest_config_ts",
+      "status": "modified",
+      "additions": 9,
+      "deletions": 4,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_vitest_config_ts#1",
+          "header": "@@ -33,17 +33,22 @@ export default mergeConfig(",
+          "oldStart": 33,
+          "oldLines": 17,
+          "newStart": 33,
+          "newLines": 22
+        }
+      ]
+    },
+    {
+      "path": "apps/shl-server/vitest.integration.global-setup.ts",
+      "key": "apps_shl_server_vitest_integration_global_setup_ts",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 4,
+      "lang": "typescript",
+      "hunks": [
+        {
+          "id": "apps_shl_server_vitest_integration_global_setup_ts#1",
+          "header": "@@ -9,7 +9,7 @@ const appRoot = path.dirname(fileURLToPath(import.meta.url))",
+          "oldStart": 9,
+          "oldLines": 7,
+          "newStart": 9,
+          "newLines": 7
+        },
+        {
+          "id": "apps_shl_server_vitest_integration_global_setup_ts#2",
+          "header": "@@ -50,9 +50,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {",
+          "oldStart": 50,
+          "oldLines": 9,
+          "newStart": 50,
+          "newLines": 10
+        },
+        {
+          "id": "apps_shl_server_vitest_integration_global_setup_ts#3",
+          "header": "@@ -60,7 +61,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {",
+          "oldStart": 60,
+          "oldLines": 7,
+          "newStart": 61,
+          "newLines": 7
+        }
+      ]
+    },
+    {
+      "path": "docs/DEPLOYMENT.md",
+      "key": "docs_DEPLOYMENT_md",
+      "status": "modified",
+      "additions": 14,
+      "deletions": 7,
+      "lang": "markdown",
+      "hunks": [
+        {
+          "id": "docs_DEPLOYMENT_md#1",
+          "header": "@@ -34,9 +34,11 @@ Both entry workflows call the reusable workflow with `secrets: inherit` and a",
+          "oldStart": 34,
+          "oldLines": 9,
+          "newStart": 34,
+          "newLines": 11
+        },
+        {
+          "id": "docs_DEPLOYMENT_md#2",
+          "header": "@@ -114,8 +116,12 @@ migrations against the Supabase Postgres before promoting the new build:",
+          "oldStart": 114,
+          "oldLines": 8,
+          "newStart": 116,
+          "newLines": 12
+        },
+        {
+          "id": "docs_DEPLOYMENT_md#3",
+          "header": "@@ -264,8 +270,9 @@ this table is the deploy-time checklist.",
+          "oldStart": 264,
+          "oldLines": 8,
+          "newStart": 270,
+          "newLines": 9
+        }
+      ]
+    }
+  ],
+  "summary": "A long-term SHL can now be updated in place, and the storage objects behind every link finally have a lifecycle that ends.\n\n`PUT /api/shl/:id` re-encrypts a new bundle with the link's existing key, writes it as a new immutable object, and swaps it into the manifest with a compare-and-swap, so the shlink URI already shared with a patient keeps working across the change. [The manifest endpoint](#layer:manifest) rebuilds once when an update lands mid-request, and records a recipient only for the generation it actually returned.\n\nEvery upload is recorded in the database before its object is written, and the transaction that publishes it consumes that record. An object is therefore owned by publication or by cleanup, never by both. A daily cron reclaims three kinds of object: the blobs of links expired past a 30-day grace period, the objects an update replaced, and uploads that were never published. Database rows stay for audit; only blobs are deleted.\n\nRead [the schema](#layer:schema) first, then [the storage lifecycle](#layer:storage-lifecycle) — the endpoints are thin over those queries.",
+  "risk": [
+    {
+      "label": "schema",
+      "source": "config"
+    },
+    {
+      "label": "auth",
+      "source": "config"
+    },
+    {
+      "label": "CI",
+      "source": "config"
+    }
+  ],
+  "layers": [
+    {
+      "key": "schema",
+      "title": "Schema and migrations",
+      "rationale": "Two migrations and the columns they add. `expiresAt` copies `payload.exp` into an indexed column so cleanup can query expiry, and the four lifecycle columns record what a cleanup run has claimed and finished. Read the trigger migration last.",
+      "kind": "layer",
+      "defaultLayerId": "contracts",
+      "tests": [
+        {
+          "behavior": "The backfill sets expiresAt from payload.exp on rows that already existed, leaving manifests and recipients untouched",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/migration.integration.test.ts",
+          "note": "Inserts past, future and open-ended rows before applying the lifecycle migration, so the backfill runs against representative data rather than an empty schema."
+        },
+        {
+          "behavior": "The trigger keeps expiresAt in step with a payload written by an older app version and with a later update",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/migration.integration.test.ts"
+        }
+      ],
+      "id": "layer-1",
+      "risk": [
+        {
+          "label": "schema",
+          "source": "config"
+        }
+      ],
+      "files": [
+        {
+          "path": "apps/shl-server/prisma/schema.prisma",
+          "hunks": [
+            "apps_shl_server_prisma_schema_prisma#1",
+            "apps_shl_server_prisma_schema_prisma#2",
+            "apps_shl_server_prisma_schema_prisma#3"
+          ],
+          "note": "`Shl` gains expiry plus three cleanup columns, `Recipient` gains an IP, and `PendingFileDeletion` is the queue of objects waiting to be reclaimed.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 40,
+              "endLine": 41,
+              "text": "Both indexes serve the cleanup job: one for expiry, one for the four-column candidate scan. The composite index is named explicitly because the generated name would exceed Postgres's 63-character identifier limit."
+            },
+            {
+              "side": "new",
+              "startLine": 103,
+              "endLine": 107,
+              "text": "`storagePath` is unique, so one object can be queued once. `deleteAfter` carries either the abandoned-upload deadline or the superseded-file deadline; the queue does not need to know which."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/prisma/migrations/20260707000000_shl_lifecycle_audit/migration.sql",
+          "hunks": ["apps_shl_server_prisma_migrations_20260707000000_shl_lifecycle_audit_migration_sql#1"],
+          "note": "Adds the columns, the two indexes, and the queue table, then backfills expiry once from the payload.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/prisma/migrations/20260914000000_sync_shl_expiry/migration.sql",
+          "hunks": ["apps_shl_server_prisma_migrations_20260914000000_sync_shl_expiry_migration_sql#1"],
+          "note": "A trigger derives `expiresAt` from the payload on every insert and on every payload update, and a corrective pass repairs rows the one-time backfill could not cover.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 19,
+              "endLine": 21,
+              "text": "`UPDATE OF payload` means an update that leaves the payload alone does not re-derive expiry. That is what lets the corrective pass below write `expiresAt` directly without the trigger undoing it."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/migration.integration.test.ts",
+          "hunks": ["apps_shl_server_src___tests___migration_integration_test_ts#1"],
+          "note": "Applies the real migration files in order against an ephemeral schema, with rows already in the table. Excluded from `pnpm test`.",
+          "annotations": [],
+          "isTest": true
+        }
+      ]
+    },
+    {
+      "key": "storage-lifecycle",
+      "title": "Storage lifecycle",
+      "rationale": "Where a storage object's life is decided: the three retention windows, the queries that stage, publish and swap objects, and the claim queries a cleanup run uses. [file-retention.ts](#file:apps/shl-server/src/file-retention.ts) holds the constants every other window is measured against.",
+      "kind": "layer",
+      "defaultLayerId": "data-access",
+      "diagram": {
+        "mermaid": "stateDiagram-v2\n  [*] --> staged: upload recorded\n  staged --> published: publish transaction\n  staged --> reclaimed: never published, 24h\n  published --> superseded: an update swaps it out\n  superseded --> reclaimed: 2h retention\n  published --> reclaimed: link expired, 30d",
+        "links": {
+          "staged": "#hunk:apps/shl-server/src/storage.ts#1",
+          "published": "#file:apps/shl-server/src/tracked-file-upload.ts",
+          "superseded": "#hunk:apps/shl-server/src/storage.ts#5",
+          "reclaimed": "#file:apps/shl-server/src/cleanup-storage.ts"
+        }
+      },
+      "tests": [
+        {
+          "behavior": "An upload cleanup has claimed cannot be published, and neither can an object never recorded as an upload",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/db.integration.test.ts"
+        },
+        {
+          "behavior": "swapManifestFile publishes once under two interleaved writers, and refuses to publish after the link becomes inactive",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/db.integration.test.ts"
+        },
+        {
+          "behavior": "A failed cleanup claim is released and retried only after the backoff, and a stale claim can be taken over",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/db.integration.test.ts",
+          "note": "Covered for both expired SHLs and pending file deletions."
+        },
+        {
+          "behavior": "The upload hook runs before the object is written, for both the Supabase and the local-disk handlers",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/file-handlers.test.ts"
+        },
+        {
+          "behavior": "getTrackedFileHandlers wires stageUploadedFile as the before-upload hook",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/tracked-file-upload.test.ts"
+        }
+      ],
+      "id": "layer-2",
+      "risk": [],
+      "files": [
+        {
+          "path": "apps/shl-server/src/file-retention.ts",
+          "hunks": ["apps_shl_server_src_file_retention_ts#1"],
+          "note": "The three windows, in one file so the relationship between them is visible at a glance.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/storage.ts",
+          "hunks": [
+            "apps_shl_server_src_storage_ts#1",
+            "apps_shl_server_src_storage_ts#2",
+            "apps_shl_server_src_storage_ts#3",
+            "apps_shl_server_src_storage_ts#4",
+            "apps_shl_server_src_storage_ts#5"
+          ],
+          "note": "The request-path queries. `loadShlById` and `getPasscode` are gone: `loadActiveShl` answers both callers in one query and applies the active filter, so an expired or locked-out link cannot leak through a second read.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 25,
+              "endLine": 33,
+              "text": "One definition of active, reused by the loader and by the publication check in `swapManifestFile`. A link is active when its storage is intact, it has not expired, and it is not locked out."
+            },
+            {
+              "side": "new",
+              "startLine": 59,
+              "endLine": 62,
+              "text": "The fence between publication and cleanup. Deleting the upload record requires it to be unclaimed, so once a cleanup run claims the object the publishing transaction throws instead of putting a doomed object into a manifest."
+            },
+            {
+              "side": "new",
+              "startLine": 223,
+              "endLine": 229,
+              "text": "A zero-row update is ambiguous, so the link is re-read to tell the two cases apart: still active means another writer won the swap (409), gone means the link expired or was cleaned during the upload (404)."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/cleanup-storage.ts",
+          "hunks": ["apps_shl_server_src_cleanup_storage_ts#1"],
+          "note": "The cleanup job's queries, kept out of [storage.ts](#file:apps/shl-server/src/storage.ts) so the request path and the batch job do not share a file. Both halves follow the same claim / release / complete shape.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 34,
+              "endLine": 43,
+              "text": "Two ways a row becomes available: nobody holds it and its last attempt is old enough to retry, or the claim on it is older than the stale-claim timeout, which means the run that took it died."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/tracked-file-upload.ts",
+          "hunks": ["apps_shl_server_src_tracked_file_upload_ts#1"],
+          "note": "The one place that pairs the file handlers with upload tracking. The cleanup job builds handlers without it, since it only deletes.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/file-handlers.ts",
+          "hunks": [
+            "apps_shl_server_src_file_handlers_ts#1",
+            "apps_shl_server_src_file_handlers_ts#2",
+            "apps_shl_server_src_file_handlers_ts#3",
+            "apps_shl_server_src_file_handlers_ts#4",
+            "apps_shl_server_src_file_handlers_ts#5"
+          ],
+          "note": "Gains an optional `beforeUpload` hook. Both handler flavours share `uploadNewFile`, so the hook cannot be wired into one and forgotten in the other.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 105,
+              "endLine": 107,
+              "text": "Why a retry after a partial cleanup failure converges: Supabase reports success for an object that is already gone, so the second attempt does not need to tell the two cases apart."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/tracked-file-upload.test.ts",
+          "hunks": ["apps_shl_server_src_tracked_file_upload_test_ts#1"],
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/file-handlers.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___file_handlers_test_ts#1",
+            "apps_shl_server_src___tests___file_handlers_test_ts#2",
+            "apps_shl_server_src___tests___file_handlers_test_ts#3",
+            "apps_shl_server_src___tests___file_handlers_test_ts#4",
+            "apps_shl_server_src___tests___file_handlers_test_ts#5",
+            "apps_shl_server_src___tests___file_handlers_test_ts#6",
+            "apps_shl_server_src___tests___file_handlers_test_ts#7",
+            "apps_shl_server_src___tests___file_handlers_test_ts#8",
+            "apps_shl_server_src___tests___file_handlers_test_ts#9"
+          ],
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/db.integration.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___db_integration_test_ts#1",
+            "apps_shl_server_src___tests___db_integration_test_ts#2",
+            "apps_shl_server_src___tests___db_integration_test_ts#3"
+          ],
+          "note": "The compare-and-swap and claim behaviour is only meaningful against real Postgres, so it is asserted here rather than against the fake. Excluded from `pnpm test`.",
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/helpers/mock-db.ts",
+          "hunks": ["apps_shl_server_src___tests___helpers_mock_db_ts#1"],
+          "note": "An in-memory stand-in for the Prisma client, extracted so the endpoint suites stop each declaring their own.",
+          "annotations": [],
+          "collapsed": true,
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/helpers/mock-supabase.ts",
+          "hunks": ["apps_shl_server_src___tests___helpers_mock_supabase_ts#1"],
+          "annotations": [],
+          "collapsed": true,
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/helpers/test-env.ts",
+          "hunks": ["apps_shl_server_src___tests___helpers_test_env_ts#1"],
+          "annotations": [],
+          "collapsed": true,
+          "isTest": true
+        }
+      ]
+    },
+    {
+      "key": "auth-gates",
+      "title": "Service credentials and request gates",
+      "rationale": "The two service credentials, the Origin allowlist, and the one forwarded-header parser the rate limiter and the audit trail now share. `requireServiceAuth` and `requireAllowedOrigin` replace the copy of that code each endpoint carried.",
+      "kind": "layer",
+      "tests": [
+        {
+          "behavior": "getCronSecret returns undefined when CRON_SECRET is unset or blank",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/config.test.ts"
+        },
+        {
+          "behavior": "The Origin allowlist is required in production and falls back to the two local ports in dev",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/config.test.ts"
+        },
+        {
+          "behavior": "The client IP recorded on a Recipient row is the first x-forwarded-for hop, and null when the header is absent",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/manifest.test.ts",
+          "note": "The parser has no test of its own; it is asserted through the endpoint that stores its result."
+        }
+      ],
+      "id": "layer-3",
+      "risk": [
+        {
+          "label": "auth",
+          "source": "config"
+        }
+      ],
+      "files": [
+        {
+          "path": "apps/shl-server/src/service-auth.ts",
+          "hunks": ["apps_shl_server_src_service_auth_ts#1"],
+          "note": "`verifyBearerToken` is the shared comparison; the three exported gates differ only in which secret they check and what they return when it fails.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 57,
+              "endLine": 70,
+              "text": "The gates return a `Response` or null rather than a boolean, so a handler can write `requireServiceAuth(request) ?? requireAllowedOrigin(request)` and keep the status codes out of the endpoint."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/client-ip.ts",
+          "hunks": ["apps_shl_server_src_client_ip_ts#1"],
+          "note": "One parser for the forwarded headers, so a rate-limit bucket and an audit row can never disagree about who the client is.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/config.ts",
+          "hunks": ["apps_shl_server_src_config_ts#1", "apps_shl_server_src_config_ts#2"],
+          "note": "Adds `getCronSecret`, and renames `getAllowedCreationOrigins` to `getAllowedOrigins` now that update uses it too.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/rate-limit.ts",
+          "hunks": ["apps_shl_server_src_rate_limit_ts#1", "apps_shl_server_src_rate_limit_ts#2"],
+          "note": "Loses its own copy of the header parsing and the trust-model comment, both of which now live in client-ip.ts.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/request-schemas.ts",
+          "hunks": ["apps_shl_server_src_request_schemas_ts#1"],
+          "note": "The update body reuses the same bundle schema the create body validates.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/config.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___config_test_ts#1",
+            "apps_shl_server_src___tests___config_test_ts#2",
+            "apps_shl_server_src___tests___config_test_ts#3",
+            "apps_shl_server_src___tests___config_test_ts#4"
+          ],
+          "annotations": [],
+          "collapsed": true,
+          "isTest": true
+        }
+      ]
+    },
+    {
+      "key": "update-endpoint",
+      "title": "Update, create, and describe",
+      "rationale": "The new `PUT /api/shl/:id` and the two endpoints it shares its gates and its loader with. Read [api/update.ts](#file:apps/shl-server/src/api/update.ts) first: it is the only caller of `swapManifestFile`, and create and describe change mostly by deleting code it now shares.",
+      "kind": "layer",
+      "tests": [
+        {
+          "behavior": "A long-term link publishes a replacement object and queues the previous one for delayed deletion",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/update.test.ts"
+        },
+        {
+          "behavior": "A short-lived link is refused with 409, an expired one with 404, and a manifest with no FHIR file answers 500",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/update.test.ts"
+        },
+        {
+          "behavior": "A failed upload, a lost swap, and a link that expires mid-upload all leave the live content unchanged",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/update.test.ts"
+        },
+        {
+          "behavior": "Two interleaved writers: only one publishes, and the loser's upload is queued for cleanup",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/update.test.ts"
+        },
+        {
+          "behavior": "Create records every upload before writing it and consumes the records in the publishing transaction",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/shl.test.ts"
+        },
+        {
+          "behavior": "Describe answers inputsMatch:false for an inactive link without doing passcode work",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/describe.test.ts"
+        }
+      ],
+      "id": "layer-4",
+      "risk": [],
+      "files": [
+        {
+          "path": "apps/shl-server/src/api/update.ts",
+          "hunks": ["apps_shl_server_src_api_update_ts#1"],
+          "note": "Upload first, publish second. Nothing the reader can see changes until the compare-and-swap succeeds.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 62,
+              "endLine": 69,
+              "text": "The builder starts empty and is used only to encrypt and upload, not to describe the link. Its single file is the replacement; the live manifest is never rebuilt from it."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/api/shl.ts",
+          "hunks": [
+            "apps_shl_server_src_api_shl_ts#1",
+            "apps_shl_server_src_api_shl_ts#2",
+            "apps_shl_server_src_api_shl_ts#3",
+            "apps_shl_server_src_api_shl_ts#4"
+          ],
+          "note": "Thirty lines of inline token and origin handling collapse into the two shared gates, and the handlers it builds now record their uploads.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/api/describe.ts",
+          "hunks": [
+            "apps_shl_server_src_api_describe_ts#1",
+            "apps_shl_server_src_api_describe_ts#2",
+            "apps_shl_server_src_api_describe_ts#3",
+            "apps_shl_server_src_api_describe_ts#4",
+            "apps_shl_server_src_api_describe_ts#5"
+          ],
+          "note": "Two reads become one `loadActiveShl`, and the flag string is parsed by the library's own payload model instead of by substring checks.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/update.test.ts",
+          "hunks": ["apps_shl_server_src___tests___update_test_ts#1"],
+          "note": "The failure cases are the interesting half: each one asserts what is left behind in storage and in the queue, not only the status code.",
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/shl.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___shl_test_ts#1",
+            "apps_shl_server_src___tests___shl_test_ts#2",
+            "apps_shl_server_src___tests___shl_test_ts#3",
+            "apps_shl_server_src___tests___shl_test_ts#4",
+            "apps_shl_server_src___tests___shl_test_ts#5",
+            "apps_shl_server_src___tests___shl_test_ts#6",
+            "apps_shl_server_src___tests___shl_test_ts#7",
+            "apps_shl_server_src___tests___shl_test_ts#8",
+            "apps_shl_server_src___tests___shl_test_ts#9",
+            "apps_shl_server_src___tests___shl_test_ts#10"
+          ],
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/describe.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___describe_test_ts#1",
+            "apps_shl_server_src___tests___describe_test_ts#2",
+            "apps_shl_server_src___tests___describe_test_ts#3",
+            "apps_shl_server_src___tests___describe_test_ts#4",
+            "apps_shl_server_src___tests___describe_test_ts#5",
+            "apps_shl_server_src___tests___describe_test_ts#6",
+            "apps_shl_server_src___tests___describe_test_ts#7"
+          ],
+          "note": "Mostly the move to the shared mock-db and test-env helpers; the assertions it keeps are unchanged.",
+          "annotations": [],
+          "collapsed": true,
+          "isTest": true
+        }
+      ]
+    },
+    {
+      "key": "manifest",
+      "title": "Manifest resolution",
+      "rationale": "How a manifest is resolved now that content can change under a reader. The build loop runs at most twice, and a recipient is recorded only when the generation it built is still the current one.",
+      "kind": "layer",
+      "tests": [
+        {
+          "behavior": "A manifest built against a generation an update replaced is rebuilt once from the current generation",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/manifest.test.ts"
+        },
+        {
+          "behavior": "A second concurrent change answers 500 and records no recipient",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/manifest.test.ts"
+        },
+        {
+          "behavior": "A link that expires or is cleaned during the build answers 404 instead of returning the manifest",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/manifest.test.ts"
+        }
+      ],
+      "id": "layer-5",
+      "risk": [],
+      "files": [
+        {
+          "path": "apps/shl-server/src/api/manifest.ts",
+          "hunks": [
+            "apps_shl_server_src_api_manifest_ts#1",
+            "apps_shl_server_src_api_manifest_ts#2",
+            "apps_shl_server_src_api_manifest_ts#3",
+            "apps_shl_server_src_api_manifest_ts#4",
+            "apps_shl_server_src_api_manifest_ts#5"
+          ],
+          "note": "Building a manifest signs a URL per file, which takes long enough for an update to land in between. The revalidation loop is the answer to that window.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 26,
+              "endLine": 31,
+              "text": "A generation is identified by its storage paths in order. An update writes a new random path, so a changed path is exactly the case where the signed URLs just built point at content that is on its way out."
+            },
+            {
+              "side": "new",
+              "startLine": 138,
+              "endLine": 145,
+              "text": "The recipient row is written only on the branch that returns a manifest, so a discarded build leaves no trace in the audit trail."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/manifest.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___manifest_test_ts#1",
+            "apps_shl_server_src___tests___manifest_test_ts#2",
+            "apps_shl_server_src___tests___manifest_test_ts#3",
+            "apps_shl_server_src___tests___manifest_test_ts#4",
+            "apps_shl_server_src___tests___manifest_test_ts#5",
+            "apps_shl_server_src___tests___manifest_test_ts#6",
+            "apps_shl_server_src___tests___manifest_test_ts#7",
+            "apps_shl_server_src___tests___manifest_test_ts#8",
+            "apps_shl_server_src___tests___manifest_test_ts#9",
+            "apps_shl_server_src___tests___manifest_test_ts#10",
+            "apps_shl_server_src___tests___manifest_test_ts#11",
+            "apps_shl_server_src___tests___manifest_test_ts#12",
+            "apps_shl_server_src___tests___manifest_test_ts#13",
+            "apps_shl_server_src___tests___manifest_test_ts#14"
+          ],
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/file-endpoint.test.ts",
+          "hunks": [
+            "apps_shl_server_src___tests___file_endpoint_test_ts#1",
+            "apps_shl_server_src___tests___file_endpoint_test_ts#2",
+            "apps_shl_server_src___tests___file_endpoint_test_ts#3"
+          ],
+          "note": "The move to the shared helpers; its assertions are unchanged.",
+          "annotations": [],
+          "collapsed": true,
+          "isTest": true
+        }
+      ]
+    },
+    {
+      "key": "cleanup-job",
+      "title": "Cleanup job and routing",
+      "rationale": "The job that reclaims storage, and the routes that reach it. One handler serves both an operator POST and the Vercel cron GET, and each route accepts only its own credential.",
+      "kind": "layer",
+      "tests": [
+        {
+          "behavior": "A storage failure releases the claim, leaves the row unstamped, and the run answers 500",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/cleanup.test.ts"
+        },
+        {
+          "behavior": "One persistently failing item does not stop the healthy items in the same batch",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/cleanup.test.ts"
+        },
+        {
+          "behavior": "dryRun reports candidates without touching storage or the database",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/cleanup.test.ts"
+        },
+        {
+          "behavior": "The cron GET is 404 without CRON_SECRET and refuses the service token; the POST refuses the cron secret",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/cleanup.test.ts"
+        },
+        {
+          "behavior": "Security headers are set on API and HTML responses without clobbering the manifest CORS preflight",
+          "status": "covered",
+          "testPath": "apps/shl-server/src/__tests__/app.test.ts"
+        }
+      ],
+      "id": "layer-6",
+      "risk": [],
+      "files": [
+        {
+          "path": "apps/shl-server/src/api/cleanup.ts",
+          "hunks": ["apps_shl_server_src_api_cleanup_ts#1"],
+          "note": "Both kinds of work run through the same claim / work / release shape, so only the queries differ between an expired link and a queued object.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 96,
+              "endLine": 104,
+              "text": "Storage first, database last. An object removed before the row is stamped is retried harmlessly; a row stamped before the object is removed would strand the object forever."
+            },
+            {
+              "side": "new",
+              "startLine": 131,
+              "endLine": 133,
+              "text": "`allSettled` over a slice, not over everything: a rejected item is counted and logged while the rest of its batch still settles."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/app.ts",
+          "hunks": ["apps_shl_server_src_app_ts#1", "apps_shl_server_src_app_ts#2", "apps_shl_server_src_app_ts#3"],
+          "note": "Three new routes plus `secureHeaders` on everything, and the cron route [vercel.json](#file:apps/shl-server/vercel.json) calls. The two deviations from Hono's defaults are explained above the middleware.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 36,
+              "endLine": 39,
+              "text": "Cross-origin resource policy is relaxed on purpose: the manifest and file endpoints exist to be fetched by SHL viewers on other origins, whose authentication is the passcode and the entropy URL rather than the origin."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/cleanup.test.ts",
+          "hunks": ["apps_shl_server_src___tests___cleanup_test_ts#1"],
+          "note": "Covers the concurrency cases by hand: a claim taken by another run, a claim taken over mid-flight, and a release that itself fails.",
+          "annotations": [],
+          "isTest": true
+        },
+        {
+          "path": "apps/shl-server/src/__tests__/app.test.ts",
+          "hunks": ["apps_shl_server_src___tests___app_test_ts#1"],
+          "annotations": [],
+          "isTest": true
+        }
+      ]
+    },
+    {
+      "key": "deploy",
+      "title": "Deployment, env, and docs",
+      "rationale": "Env vars, the cron entry, and the preview gate. The shl-server preview shares its database with production, so it now deploys only when that database already has every migration in the branch.",
+      "kind": "layer",
+      "defaultLayerId": "policy-config",
+      "tests": [
+        {
+          "behavior": "The preview schema gate and the cron schedule are deployment behaviour, checked by running them",
+          "status": "not-needed",
+          "note": "A workflow step and a vercel.json entry have no seam a unit test could reach; both are exercised by the manual checks on this canvas."
+        }
+      ],
+      "id": "layer-7",
+      "risk": [
+        {
+          "label": "CI",
+          "source": "config"
+        }
+      ],
+      "files": [
+        {
+          "path": ".env.example",
+          "hunks": ["_env_example#1", "_env_example#2", "_env_example#3"],
+          "note": "Adds `CRON_SECRET` as an optional production var; leaving it unset keeps the cron route disabled.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": ".github/workflows/vercel-deploy-reusable.yml",
+          "hunks": ["_github_workflows_vercel_deploy_reusable_yml#1"],
+          "note": "A readiness check gates the shl-server preview only. The other app previews keep their old condition; the [cron entry](#file:apps/shl-server/vercel.json) is unaffected.",
+          "annotations": [
+            {
+              "side": "new",
+              "startLine": 218,
+              "endLine": 231,
+              "text": "`prisma migrate status` exits non-zero when the database is behind the branch, which turns into `ready=false` and a notice rather than a failed job — a PR that adds a migration gets no SHL preview instead of a red build."
+            }
+          ],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/vercel.json",
+          "hunks": ["apps_shl_server_vercel_json#1"],
+          "note": "Declares the daily 03:00 UTC cron that hits the GET cleanup route.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/README.md",
+          "hunks": [
+            "apps_shl_server_README_md#1",
+            "apps_shl_server_README_md#2",
+            "apps_shl_server_README_md#3",
+            "apps_shl_server_README_md#4",
+            "apps_shl_server_README_md#5",
+            "apps_shl_server_README_md#6",
+            "apps_shl_server_README_md#7",
+            "apps_shl_server_README_md#8",
+            "apps_shl_server_README_md#9",
+            "apps_shl_server_README_md#10",
+            "apps_shl_server_README_md#11"
+          ],
+          "note": "Documents the update endpoint, the cleanup job and its credentials, and the storage lifecycle the constants define.",
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "docs/DEPLOYMENT.md",
+          "hunks": ["docs_DEPLOYMENT_md#1", "docs_DEPLOYMENT_md#2", "docs_DEPLOYMENT_md#3"],
+          "annotations": [],
+          "isTest": false
+        },
+        {
+          "path": "AGENTS.md",
+          "hunks": ["AGENTS_md#1"],
+          "annotations": [],
+          "isTest": false
+        }
+      ]
+    },
+    {
+      "key": "other",
+      "title": "Other",
+      "rationale": "Test runner configuration for the integration suites.",
+      "kind": "other",
+      "tests": [],
+      "id": "layer-8",
+      "risk": [],
+      "files": [
+        {
+          "path": "apps/shl-server/vitest.config.ts",
+          "hunks": ["apps_shl_server_vitest_config_ts#1"],
+          "note": "Adds cleanup-storage.ts to the coverage exclusions, alongside the other modules the integration suite covers.",
+          "annotations": [],
+          "collapsed": true,
+          "isTest": false
+        },
+        {
+          "path": "apps/shl-server/vitest.integration.global-setup.ts",
+          "hunks": [
+            "apps_shl_server_vitest_integration_global_setup_ts#1",
+            "apps_shl_server_vitest_integration_global_setup_ts#2",
+            "apps_shl_server_vitest_integration_global_setup_ts#3"
+          ],
+          "annotations": [],
+          "collapsed": true,
+          "isTest": false
+        }
+      ]
+    }
+  ],
+  "points": [
+    {
+      "kind": "decision",
+      "level": "decide",
+      "title": "One daily run reclaims at most 100 expired links and 100 queued objects",
+      "path": "apps/shl-server/src/api/cleanup.ts",
+      "line": 25,
+      "body": "`CLEANUP_BATCH_LIMIT` is 100 per kind and the cron in [vercel.json](#file:apps/shl-server/vercel.json) runs once a day, so the job reclaims at most 100 expired links and 100 queued objects every 24 hours. Above that rate the backlog grows and never drains, with no alarm other than a steady scan count.\n\nThe PR puts backlog controls out of scope, a fair line for a template. Worth agreeing on the ceiling for the first real engagement: the number is invisible until it is too small, because the run keeps answering 200 while falling behind. Two cheap moves: raise the limit toward the 300-second function budget, or add a second cron slot.",
+      "fingerprint": "c8d8924def7516ad9ec8ddb5777a18f1f9b48b80",
+      "origin": "model",
+      "layerId": "layer-6",
+      "id": "p-1"
+    },
+    {
+      "kind": "risk",
+      "level": "check",
+      "title": "Confirm the preview gate's database secret and that a skipped SHL preview is acceptable",
+      "path": ".github/workflows/vercel-deploy-reusable.yml",
+      "line": 218,
+      "body": "Preview and production share one shl-server database, so this step skips the SHL preview while that database is behind the branch. Two things to confirm by hand.\n\nRun `prisma migrate status` against the value in the `SHL_SERVER_POSTGRES_URL` secret and check it answers rather than hanging. It must be the session pooler on port 5432: the transaction pooler on 6543 hangs on the advisory lock Prisma takes, and the direct host is IPv6-only from GitHub Actions. A hang burns the 10-minute timeout every time.\n\nThen agree that a PR carrying a migration gets no SHL preview until production has it.",
+      "fingerprint": "0c1299844454b8617fda6ffcf0ab0ebfa4d20006",
+      "origin": "model",
+      "layerId": "layer-7",
+      "id": "p-2"
+    },
+    {
+      "kind": "risk",
+      "level": "check",
+      "title": "Run the two integration suites by hand — CI does not",
+      "path": "apps/shl-server/src/__tests__/migration.integration.test.ts",
+      "line": 26,
+      "body": "The evidence for the parts of this PR hardest to reason about — the backfill against populated rows, the expiry trigger, the compare-and-swap, and the claim/retry/takeover behaviour — lives in [migration.integration.test.ts](#file:apps/shl-server/src/__tests__/migration.integration.test.ts) and [db.integration.test.ts](#file:apps/shl-server/src/__tests__/db.integration.test.ts). Both are excluded from `pnpm test` and from CI, so a green pipeline says nothing about any of it.\n\nRun them before merging:\n\n```\ndocker compose up -d postgres\npnpm -F @vinta-bb/shl-server test:integration\n```\n\nExpect every test to pass, and watch the migration test report the future-exp link's manifest and recipient rows unchanged.",
+      "fingerprint": "05782fd547fa2175bd84f22795335c9c3e8702ed",
+      "origin": "model",
+      "layerId": "layer-1",
+      "id": "p-3"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "A database trigger is the authoritative writer for expiresAt",
+      "path": "apps/shl-server/prisma/migrations/20260914000000_sync_shl_expiry/migration.sql",
+      "line": 18,
+      "body": "`expiresAt` is a copy of `payload.exp` in an indexed column, so cleanup can find expired links without reading JSON. Two things write it: the application in [createSHLWithManifest](#hunk:apps/shl-server/src/storage.ts#1), and this `BEFORE INSERT OR UPDATE OF payload` trigger. The trigger assigns unconditionally, so it always wins.\n\nThat is what makes a rolling deployment safe — an older app version that knows nothing about the column still gets a correct value. The consequence to remember: an update that touches `payload` re-derives `expiresAt` and discards any value set by hand. To change a link's expiry, change `payload.exp`.",
+      "fingerprint": "d7f9b5302fc599932feab09b9b0d161932417c42",
+      "origin": "model",
+      "layerId": "layer-1",
+      "id": "p-4"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "A partly failed cleanup run keeps its progress and still answers 500",
+      "path": "apps/shl-server/src/api/cleanup.ts",
+      "line": 213,
+      "body": "Items are cleaned independently, so a run that fails on some has already committed the rest. The response still carries a 500 when `errors` is non-zero, which turns the Vercel cron run red and puts the tally in front of an operator.\n\nThe failed items are not lost: their claim is released and `attemptedAt` stays set, so the next run after `CLEANUP_RETRY_HOURS` picks them up. The 12-hour backoff is shorter than the daily cron interval, so a failed item is eligible at the next run even with schedule jitter, and newer items do not queue behind it.",
+      "fingerprint": "f8346b2a26eab2593c7ef281e2d8439cd55c3907",
+      "origin": "model",
+      "layerId": "layer-6",
+      "id": "p-5"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "The manifest endpoint rebuilds once, then gives up rather than return a stale generation",
+      "path": "apps/shl-server/src/api/manifest.ts",
+      "line": 122,
+      "body": "Building a manifest signs one URL per file, long enough for an update to land in between. After the build the endpoint re-reads the link: the same storage paths mean the signed URLs still describe live content, so the manifest is returned and a recipient row is written. A changed generation means it rebuilds once from the current one.\n\nA second change during the retry answers 500 and records no recipient — a failed read must not enter the audit trail as a successful access. The cost is an extra read per request, and a 500 for a reader unlucky twice. Retrying succeeds.",
+      "fingerprint": "89facb5fbddcfc6d82a68d470f16e5ac56876851",
+      "origin": "model",
+      "layerId": "layer-5",
+      "id": "p-6"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "An update uploads a new object and swaps it in, and each failure has its own answer",
+      "path": "apps/shl-server/src/api/update.ts",
+      "line": 71,
+      "body": "The replacement bundle is written to a new random storage path, and only then does [swapManifestFile](#hunk:apps/shl-server/src/storage.ts#5) point the manifest at it. Nothing a reader can fetch changes until that statement commits, so a failed upload costs only an orphan cleanup takes.\n\nThe three failure answers are deliberate. 404 means the link went inactive mid-request. 409 means a lost race, safe to retry. A manifest with no FHIR file — corrupt state, since creation always writes one — throws to a logged 500 rather than 404: a 404 would tell the intake app the link is gone and invite a replacement URI the patient never receives.",
+      "fingerprint": "271ba8631257806793df0dc4900cda0506a8e20a",
+      "origin": "model",
+      "layerId": "layer-4",
+      "id": "p-7"
+    },
+    {
+      "kind": "debt",
+      "level": "fyi",
+      "title": "The two cleanup halves are the same four-step shape written twice",
+      "path": "apps/shl-server/src/cleanup-storage.ts",
+      "line": 102,
+      "body": "Expired links and queued objects each get their own `retryable…Where`, `find…`, `claim…`, `release…` and `complete/mark…`. The two sets differ only in the model and the column names.\n\nKeeping them apart is the right call for two: a generic helper over two Prisma delegates with different column names buys indirection rather than clarity, and `withClaim` in [the job](#hunk:apps/shl-server/src/api/cleanup.ts#1) already shares the part with real logic in it. Worth remembering that a third kind of reclaimable object is where copying stops paying.",
+      "fingerprint": "5f68b695c9a23029028f38e363be4eaaf8d042e0",
+      "origin": "model",
+      "layerId": "layer-2",
+      "id": "p-8"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "One forwarded-header parser now feeds both the rate limiter and the audit trail",
+      "path": "apps/shl-server/src/client-ip.ts",
+      "line": 6,
+      "body": "`getClientIp` is the single reader of `x-forwarded-for` and `x-real-ip`. [The rate limiter](#file:apps/shl-server/src/rate-limit.ts) used to carry its own copy; now the audit row and the rate-limit bucket cannot disagree about who the client is.\n\nThe trust model is written at the top of the file and is worth knowing: it takes the leftmost hop, which is only trustworthy because Vercel overwrites the header at the edge. A self-hosted deployment behind a proxy that appends instead would make that value client-controlled, letting a caller rotate their rate-limit bucket and write a chosen IP into the audit trail.",
+      "fingerprint": "dd1ab99d7aa2e0ac3f5af7592b9819ee6327109b",
+      "origin": "model",
+      "layerId": "layer-3",
+      "id": "p-9"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "Each route takes only its own credential, and an unset CRON_SECRET hides the cron route",
+      "path": "apps/shl-server/src/config.ts",
+      "line": 112,
+      "body": "There are now two server-to-server secrets. `SHL_SERVER_SERVICE_TOKEN` authenticates the intake app and operator cleanup; `CRON_SECRET` authenticates Vercel's cron GET, the only shape Vercel can send. Neither is accepted on the other's route, so a leaked cron secret cannot create or update links.\n\n`CRON_SECRET` is optional. While it is unset the GET route answers 404, not 401 — a disabled cron route is indistinguishable from an unknown path, and scheduled cleanup does not run until the var is set on the Vercel project. Operator POST cleanup keeps working throughout.",
+      "fingerprint": "daa50d0e1ed4e9fbc6e0500ee5be65a50704fa2c",
+      "origin": "model",
+      "layerId": "layer-3",
+      "id": "p-10"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "Two hours of superseded-file retention is one hour of signed URL plus one hour of slack",
+      "path": "apps/shl-server/src/file-retention.ts",
+      "line": 11,
+      "body": "`SIGNED_FILE_URL_TTL_SECONDS` is one hour, so a manifest handed out just before a swap can carry a URL for the old object that stays valid for an hour after it. `SUPERSEDED_FILE_RETENTION_MS` is two hours, so the object outlives that URL with an hour to spare for the manifest request itself.\n\nThe pair has to move together: raising the URL TTL without raising the retention would hand a viewer a URL for an object cleanup is about to delete, and the viewer would see a fetch failure rather than stale content. Both constants live in this one file for that reason.",
+      "fingerprint": "56a432700319ac9d3c9c184a53889775982706d4",
+      "origin": "model",
+      "layerId": "layer-2",
+      "id": "p-11"
+    },
+    {
+      "kind": "decision",
+      "level": "fyi",
+      "title": "An upload is recorded before it is written, so cleanup cannot delete what a manifest names",
+      "path": "apps/shl-server/src/storage.ts",
+      "line": 58,
+      "body": "[stageUploadedFile](#hunk:apps/shl-server/src/storage.ts#1) writes a `pending_file_deletions` row before the object reaches storage, and the publishing transaction deletes that row with `claimedAt: null` in the filter. If a cleanup run has already claimed it, the delete matches nothing, `consumeUploadRecord` throws, and the whole transaction rolls back.\n\nThat ordering is the guarantee: an object named by a manifest is never one a cleanup run is midway through deleting. The cost is a database write on the hot path of every create and update, and a queue row that outlives the request when publication fails.",
+      "fingerprint": "a2bcce93790d8ddbbfb6a041162b4e000848822f",
+      "origin": "model",
+      "layerId": "layer-2",
+      "id": "p-12"
+    }
+  ],
+  "generatedAt": "2026-09-14T20:00:22.847Z",
+  "generator": {
+    "agent": "claude",
+    "harness": "claude-code",
+    "attempts": 3,
+    "model": "claude-opus-5"
+  },
+  "source": "local"
+}

@@ -1,0 +1,80 @@
+/* ---- Responsive ---- */
+@media (max-width: 1360px) {
+  .layout {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    background: linear-gradient(var(--ink), var(--ink)) calc(var(--rail-w) - 1px) 0 / 1px 100% no-repeat;
+  }
+  .chat {
+    grid-column: 2;
+    position: static;
+    align-self: auto;
+    height: auto;
+    border-top: 2px solid var(--ink);
+    padding: 0;
+  }
+  .transcript {
+    max-height: 50vh;
+  }
+  .handle {
+    display: none;
+  }
+}
+@media (max-width: 1000px) {
+  .chat {
+    grid-column: 1 / -1;
+  }
+  .layout,
+  .layout.no-chat {
+    grid-template-columns: minmax(0, 1fr);
+    background: none;
+  }
+  .rail {
+    position: static;
+    max-height: none;
+    border-bottom: 1px solid var(--ink);
+    padding: 8px 0 6px;
+  }
+  .tree {
+    display: flex;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 0 8px;
+  }
+  .tree .grp,
+  .tree .layers {
+    display: contents;
+  }
+  .tree li {
+    flex: 0 0 auto;
+  }
+  .tree .m,
+  .grp-lbl {
+    display: none;
+  }
+  .tree a,
+  .tree a:not(:has(.dot)) {
+    grid-template-areas: "d n t";
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    border: 1px solid var(--ink);
+    padding: 5px 10px;
+    box-shadow: 1px 1px 0 var(--shadow);
+  }
+  .tree .layers a {
+    padding-left: 10px;
+  }
+  .tree .dot {
+    margin-top: 0;
+  }
+  .tree a[aria-current] {
+    box-shadow: inset 0 -3px 0 var(--ink);
+  }
+  main {
+    padding: 12px 12px 32px;
+  }
+  .hdr-bar,
+  .hdr-title {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

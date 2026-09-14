@@ -1,0 +1,223 @@
+/* PR review canvas. Tokens and component rules follow ai-plans/assets/pr-review-canvas/design-reference.html;
+   the diff table keeps the prior-art rules (moved-code tints, hljs tokens). Both themes through light-dark(). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light dark;
+  --fs: 14px;
+  --lh: 1.5;
+  --rail-w: 240px;
+  --chat-w: 340px;
+  --main-pad: 20px 20px 40px;
+  --gap: 20px;
+  --r: 0;
+  --s1: var(--v1);
+  --s2: var(--v2);
+  --s3: var(--v3);
+  --s4: var(--v4);
+  --s5: var(--v5);
+  --s6: var(--v6);
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --v1: light-dark(#ffd43b, #ffe066);
+  --v2: light-dark(#ffa94d, #ffc078);
+  --v3: light-dark(#f783ac, #faa2c1);
+  --v4: light-dark(#da77f2, #e599f7);
+  --v5: light-dark(#9775fa, #b197fc);
+  --v6: light-dark(#748ffc, #91a7ff);
+  --stripe-y: linear-gradient(180deg, var(--v1) 0 1px, var(--v2) 1px 2px, var(--v3) 2px 3px, var(--v4) 3px 4px, var(--v5) 4px 5px, var(--v6) 5px 6px);
+
+  --bg: light-dark(#ffffff, #1e1f2b);
+  --panel: light-dark(#ffffff, #282a3a);
+  --panel-2: light-dark(#f3f3f3, #303341);
+  --ink: light-dark(#3a3739, #eaf2f1);
+  --shadow: light-dark(#3a3739, #696d77);
+  --line: light-dark(#dddddd, #3a3d4b);
+  --line-strong: var(--ink);
+  --fg: light-dark(#3a3739, #eaf2f1);
+  --fg-muted: light-dark(#565554, #a4a8b3);
+  --fg-dim: var(--fg-muted);
+  --accent: light-dark(#3b5bdb, #91a7ff);
+  --accent-bg: light-dark(#edf2ff, rgba(145, 167, 255, 0.14));
+  --purple: light-dark(#8b4dff, #c39ac9);
+  --annot-bg: light-dark(#f3f0ff, rgba(195, 154, 201, 0.14));
+  --ok: light-dark(#0c7411, #bad761);
+  --bad: light-dark(#c40400, #ff657a);
+  --warn: light-dark(#caa512, #ffd76d);
+  --warn-bg: var(--annot-bg);
+  --sev-blocker: light-dark(#db0400, #ff657a);
+  --sev-major: var(--warn);
+  --sev-minor: light-dark(#808080, #696d77);
+  --sq-mark: light-dark(#3a3739, #1e1f2b);
+  /* Added and deleted lines carry GitHub's light tints in both skins, so a diff reads the same
+     here as it does on the pull request. */
+  --add-bg: light-dark(#e6ffec, rgba(186, 215, 97, 0.14));
+  --add-w: light-dark(#abf2bc, rgba(186, 215, 97, 0.4));
+  --del-bg: light-dark(#ffebe9, rgba(255, 101, 122, 0.14));
+  --del-w: light-dark(#ffc1c0, rgba(255, 101, 122, 0.42));
+  --mv-bg: light-dark(rgba(139, 77, 255, 0.07), rgba(195, 154, 201, 0.1));
+  --hunk-bg: var(--accent-bg);
+  --focus: var(--accent);
+  --progress: light-dark(#0f8a15, #bad761);
+
+  /* Syntax tokens: Monokai Light (light) and Monokai Pro Octagon (dark), both ≥ 4.5:1 on the panel. */
+  --syn-comment: light-dark(#75715e, #888d94);
+  --syn-keyword: light-dark(#a626a4, #ff657a);
+  --syn-string: light-dark(#986801, #ffd76d);
+  --syn-number: light-dark(#8b4dff, #c39ac9);
+  --syn-title: light-dark(#0b6a2f, #bad761);
+  --syn-type: light-dark(#0b5cad, #9cd1bb);
+  --syn-attr: light-dark(#0b6a2f, #ffd76d);
+  --syn-tag: light-dark(#c40400, #ff657a);
+  --syn-meta: light-dark(#3b5bdb, #91a7ff);
+}
+
+/* The server writes `data-theme` for every load. `auto` matches neither rule, which leaves the
+   `color-scheme: light dark` above to follow the operating system. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+html {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: var(--fs);
+  line-height: var(--lh);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+h1 {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+h2 {
+  font-size: 16px;
+}
+h3 {
+  font-size: 14px;
+}
+p {
+  margin: 0 0 0.6em;
+}
+p:last-child {
+  margin-bottom: 0;
+}
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+code,
+pre,
+.mono,
+.path,
+.loc,
+.snip {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+code {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 0 4px;
+  font-size: 0.9em;
+}
+pre {
+  margin: 0;
+  overflow-x: auto;
+}
+pre code {
+  display: block;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 20px;
+}
+b,
+strong {
+  font-weight: 600;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.skip {
+  position: absolute;
+  left: -999px;
+  top: 8px;
+  z-index: 100;
+  background: var(--panel);
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+}
+.skip:focus {
+  left: 8px;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+.muted {
+  color: var(--fg-muted);
+}
+.ok {
+  color: var(--ok);
+}
+.bad {
+  color: var(--bad);
+}
+.small {
+  font-size: 11px;
+}
+.lbl {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+.loading {
+  padding: 40px 20px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* The hidden attribute takes priority over component layout styles. */
+[hidden]:not([hidden="until-found"]) {
+  display: none !important;
+}

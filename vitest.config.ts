@@ -1,0 +1,43 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vitest/config'
+
+const appRoot = path.dirname(fileURLToPath(import.meta.url))
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      // The browser gets these names from the import map in the page shell (see src/server/html.ts).
+      hljs: path.resolve(appRoot, 'node_modules/@highlightjs/cdn-assets/es/highlight.min.js'),
+    },
+  },
+  test: {
+    name: 'pr-review',
+    globals: true,
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'static/js/**/*.test.js'],
+    setupFiles: ['./vitest.setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts', 'static/js/**/*.js'],
+      exclude: [
+        'src/cli.ts',
+        'src/server/node-server.ts',
+        'src/server/html.ts',
+        'static/js/app.js',
+        'static/vendor/**',
+        'src/**/*.test.ts',
+        'static/js/**/*.test.js',
+        'static/js/**/*.d.ts',
+        'src/**/*.d.ts',
+      ],
+      reporter: ['text'],
+      thresholds: {
+        lines: 95,
+        branches: 95,
+        functions: 95,
+        statements: 95,
+      },
+    },
+  },
+})

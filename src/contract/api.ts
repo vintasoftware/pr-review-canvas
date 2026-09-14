@@ -1,0 +1,190 @@
+import type { z } from 'zod'
+import type { CanvasManifest } from './canvas-manifest.js'
+import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js'
+import type { SharedCanvasInfoSchema } from './discovery.js'
+import type { FileEntry, Pr, ReviewArtifact } from './review-artifact.js'
+import type { PrState } from './state.js'
+
+export const ERROR_CODES = [
+  'BAD_REQUEST',
+  'NOT_FOUND',
+  'FORBIDDEN_HOST',
+  'CROSS_ORIGIN',
+  'NOT_A_REPO',
+  'NO_ORIGIN',
+  'GIT_ERROR',
+  'GH_MISSING',
+  'GH_UNAUTHENTICATED',
+  'GITHUB_API_ERROR',
+  'PR_NOT_FOUND',
+  'CANVAS_NOT_FOUND',
+  'CANVAS_INVALID',
+  'CANVAS_REPO_MISMATCH',
+  'CANVAS_TOO_LARGE',
+  'CANVAS_STALE',
+  'MODEL_INVALID',
+  'SKILL_DIR_EXISTS',
+  'COMMENT_FORBIDDEN',
+  'COMMENT_LINE_NOT_IN_DIFF',
+  'SIGNOFF_INCOMPLETE',
+  'CHAT_BUSY',
+  'NOT_IMPLEMENTED',
+  'INTERNAL',
+] as const
+export type ErrorCode = (typeof ERROR_CODES)[number]
+
+export interface ErrorEnvelope {
+  /** `issues` names what a rejected file got wrong, one line each, never its content. */
+  error: { code: ErrorCode; message: string; hint?: string; issues?: string[] }
+}
+
+export type BundleStatus = 'missing' | 'ready' | 'stale' | 'error'
+
+export interface Capabilities {
+  canComment: boolean | 'unknown'
+  tokenKind: string
+  login: string | null
+  reason?: string
+  hint?: string
+}
+
+export interface CanvasInfo {
+  headSha: string
+  source: 'local' | 'import' | 'fixture'
+  manifest: CanvasManifest | null
+  importedAt?: string
+}
+
+/** How a canvas for another commit relates to the PR head: behind it, or off a discarded branch. */
+export type CanvasRelation = 'ancestor' | 'unrelated'
+
+export interface StaleInfo {
+  canvasHeadSha: string
+  currentHeadSha: string
+  relation: CanvasRelation
+  commitsBehind?: number
+}
+
+/** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */
+export interface ImportResult {
+  status: 'ready' | 'stale' | 'exists'
+  headSha: string
+  currentHeadSha: string
+  relation?: CanvasRelation
+  commitsBehind?: number
+  /** True when the diffs of this canvas can be rebuilt from the local clone. */
+  derivable: boolean
+  warnings: string[]
+}
+
+/** The answer of `POST /shared-canvas/fetch`. */
+export interface SharedCanvasFetchResponse {
+  imported: boolean
+  status: 'ready' | 'stale' | 'missing'
+  sharedCanvas: SharedCanvasInfo | null
+  warnings: string[]
+}
+
+/** A canvas zip found on the pull request. Shaped by the schema the discovery cache stores. */
+export type SharedCanvasInfo = z.infer<typeof SharedCanvasInfoSchema>
+
+export interface PrBundle {
+  status: BundleStatus
+  pr: Pr
+  files: FileEntry[]
+  derivable: boolean
+  artifact?: ReviewArtifact
+  canvas?: CanvasInfo
+  stale?: StaleInfo
+  sharedCanvas?: SharedCanvasInfo
+  skillCommand: string
+  comments: CommentsPayload
+  state: PrState
+  capabilities: Capabilities
+  /** From the project config plus the acpx check; the client hides the pane when either says no. */
+  chat: ChatStatus
+  /** More than 400 files or 50 000 changed lines: the page says the canvas was capped. */
+  largePr: boolean
+  error?: ErrorEnvelope['error']
+  warnings: string[]
+}
+
+/** Every answer of a state route, so the page can replace its copy of the state in one step. */
+export interface StateResponse {
+  prNumber: number
+  state: PrState
+}
+
+export type PostCommentResponse = (
+  | { kind: 'review'; comment: ReviewComment }
+  | { kind: 'issue'; comment: IssueComment }
+) & { state: PrState }
+
+/** The review GitHub created, as the page shows it: a link and its state. */
+export interface ReviewSummary {
+  id: number
+  state: string
+  url: string
+  submittedAt: string | null
+}
+
+/** What the sign-off dialog shows before anything is posted. */
+export interface ReviewBodyResponse {
+  headSha: string
+  body: string
+  /** The titles of the layers that still need a look; approve is refused while this is not empty. */
+  unreviewed: string[]
+}
+
+export interface PostReviewResponse {
+  review: ReviewSummary
+}
+
+export interface PatchesResponse {
+  headSha: string
+  patches: Record<string, string>
+}
+
+export interface ContextResponse {
+  path: string
+  side: 'new' | 'old'
+  from: number
+  to: number
+  lines: string[]
+}
+
+export interface HealthCheck {
+  ok: boolean
+  detail?: string
+}
+
+export interface HealthResponse {
+  ok: boolean
+  version: string
+  checks: {
+    git: HealthCheck
+    origin: HealthCheck
+    gh: HealthCheck
+    ghAuth: HealthCheck
+    /** Chat only; absent when the project config turns chat off. */
+    acpx?: HealthCheck
+    agentInstalled?: HealthCheck
+    agentAuth?: HealthCheck
+  }
+  repo: { owner: string; name: string } | null
+  dataDir: string
+  chat: ChatStatus
+}
+
+/** What the page needs to decide whether to draw the AI Chat pane, and what to say when it cannot. */
+export interface ChatStatus {
+  enabled: boolean
+  /** False when acpx is not on PATH: the pane is hidden and a banner says why. */
+  acpx: boolean
+  agent?: string
+  model?: string | null
+}
+
+export interface HomeData {
+  recentPrs: Array<{ number: number; title: string; updatedAt: string }>
+}

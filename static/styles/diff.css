@@ -1,0 +1,258 @@
+/* ---- Diff table ---- */
+.diff-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.diff {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 4;
+}
+.diff td,
+.diff th {
+  padding: 0 10px;
+  vertical-align: top;
+  white-space: pre;
+  text-align: left;
+}
+.diff th {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+  padding: 3px 10px;
+}
+.diff .ln {
+  width: 1%;
+  min-width: 3.4em;
+  text-align: right;
+  color: var(--fg-dim);
+  border-right: 1px solid var(--line);
+  user-select: none;
+}
+.diff .gut {
+  width: 1%;
+  padding: 0 2px;
+}
+.diff .code {
+  width: 100%;
+}
+.diff + .diff {
+  border-top: 1px solid var(--ink);
+}
+.plus {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--ink);
+  background: var(--accent);
+  color: var(--panel);
+  font: 700 13px/16px var(--sans);
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  box-shadow: 1px 1px 0 var(--shadow);
+}
+tr:hover .plus,
+.plus:focus-visible {
+  opacity: 1;
+}
+.plus:disabled {
+  cursor: not-allowed;
+}
+tr.add td {
+  background: var(--add-bg);
+}
+tr.del td {
+  background: var(--del-bg);
+}
+.wa {
+  background: var(--add-w);
+}
+.wd {
+  background: var(--del-w);
+}
+tr.hunk td {
+  background: var(--hunk-bg);
+  color: var(--accent);
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+tr.hunk .ln {
+  border-right-color: transparent;
+}
+tr.ann td.ln:first-child {
+  box-shadow: inset 4px 0 0 var(--purple);
+}
+tr.is-target td {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.diff .x {
+  white-space: normal;
+  font-family: var(--sans);
+  font-size: var(--fs);
+  padding: 10px 14px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  line-height: var(--lh);
+}
+tr.annot .x {
+  background: var(--annot-bg);
+  box-shadow: inset 4px 0 0 var(--purple);
+}
+tr.ifind .x {
+  background: var(--panel);
+  box-shadow: inset 4px 0 0 var(--sev-major);
+}
+tr.ifind.decide .x {
+  box-shadow: inset 4px 0 0 var(--sev-blocker);
+}
+tr.ifind.fyi .x {
+  box-shadow: inset 4px 0 0 var(--sev-minor);
+}
+tr.thread .x {
+  background: var(--panel-2);
+}
+tr.thread.resolved .x,
+tr.thread.hidden-thread .x {
+  padding: 6px 14px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+tr.is-approx .x::before {
+  content: "near line ";
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.x .lbl {
+  margin-bottom: 3px;
+}
+.x p {
+  margin: 0 0 6px;
+  max-width: 100ch;
+}
+.x .sq {
+  margin-right: 8px;
+}
+.x .f-title {
+  font-size: 14px;
+}
+tr.more td {
+  font-family: var(--sans);
+  white-space: normal;
+  color: var(--fg-muted);
+  padding: 6px 14px;
+  background: var(--panel-2);
+  border-top: 1px solid var(--line);
+}
+tr.folded {
+  display: none;
+}
+tr.folded.shown,
+tr.folded[data-code-fold] {
+  display: table-row;
+}
+/* The summary of a moved block: the one place a move is painted, so neither end reads as new code. */
+tr.more.fold.move td {
+  background: var(--mv-bg);
+  box-shadow: inset 4px 0 0 var(--purple);
+}
+tr.move-from .ln,
+tr.move-to .ln {
+  color: var(--purple);
+}
+.cmt {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 0 10px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.cmt:last-of-type {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.av {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  grid-row: span 2;
+  background: var(--panel);
+  box-shadow: 1px 1px 0 var(--shadow);
+  text-transform: uppercase;
+}
+.who {
+  font-size: 0.92em;
+}
+.cmt .prose {
+  font-size: 13px;
+}
+
+/* highlight.js tokens, one palette for added, deleted, and context rows */
+.diff .hljs-comment,
+.diff .hljs-quote {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.diff .hljs-keyword,
+.diff .hljs-selector-tag,
+.diff .hljs-literal,
+.diff .hljs-doctag {
+  color: var(--syn-keyword);
+}
+.diff .hljs-string,
+.diff .hljs-regexp,
+.diff .hljs-addition {
+  color: var(--syn-string);
+}
+.diff .hljs-number,
+.diff .hljs-built_in,
+.diff .hljs-symbol {
+  color: var(--syn-number);
+}
+.diff .hljs-title,
+.diff .hljs-title.function_,
+.diff .hljs-section {
+  color: var(--syn-title);
+}
+.diff .hljs-title.class_,
+.diff .hljs-type,
+.diff .hljs-class {
+  color: var(--syn-type);
+}
+.diff .hljs-attr,
+.diff .hljs-attribute,
+.diff .hljs-property,
+.diff .hljs-selector-class,
+.diff .hljs-selector-id {
+  color: var(--syn-attr);
+}
+.diff .hljs-tag,
+.diff .hljs-name,
+.diff .hljs-deletion {
+  color: var(--syn-tag);
+}
+.diff .hljs-meta,
+.diff .hljs-link,
+.diff .hljs-bullet {
+  color: var(--syn-meta);
+}
+.diff .hljs-emphasis {
+  font-style: italic;
+}
+.diff .hljs-strong {
+  font-weight: 600;
+}

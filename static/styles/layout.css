@@ -1,0 +1,120 @@
+/* ---- Layout: rail | main | AI chat, column lines painted once ---- */
+.layout {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--chat-w);
+  flex: 1;
+  align-items: start;
+  background:
+    linear-gradient(var(--ink), var(--ink)) calc(var(--rail-w) - 1px) 0 / 1px 100% no-repeat,
+    linear-gradient(var(--ink), var(--ink)) calc(100% - var(--chat-w)) 0 / 1px 100% no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 100% 0 / 1px 100% no-repeat;
+}
+.layout.no-chat {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  background: linear-gradient(var(--ink), var(--ink)) calc(var(--rail-w) - 1px) 0 / 1px 100% no-repeat;
+}
+.rail,
+.chat {
+  position: sticky;
+  top: 0;
+}
+/* Sticky positioning also anchors the pane's resize handle. */
+.rail {
+  max-height: 100vh;
+  overflow: auto;
+  padding: 14px 1px 16px 0;
+}
+.grp-lbl {
+  padding: 14px 14px 6px;
+}
+.tree a {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "d n t"
+    "d n m";
+  column-gap: 8px;
+  padding: 6px 14px 6px 12px;
+  color: var(--fg);
+  text-decoration: none;
+  align-items: start;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.tree a:not(:has(.dot)) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "t"
+    "m";
+}
+.tree a:hover {
+  background: var(--panel-2);
+}
+.tree a[aria-current] {
+  background: var(--panel-2);
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+.tree a[aria-current] .t {
+  font-weight: 600;
+}
+.tree .n {
+  grid-area: n;
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding-top: 1px;
+}
+.tree .t {
+  grid-area: t;
+  font-weight: 500;
+}
+.tree .m {
+  grid-area: m;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.tree .dot {
+  grid-area: d;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--dc, var(--fg-dim));
+  margin-top: 4px;
+}
+.tree .dot.on {
+  background: var(--dc);
+}
+.tree .dot.half {
+  background: radial-gradient(circle, var(--dc) 0 1.5px, transparent 2px);
+}
+.tree .layers a {
+  padding-left: 24px;
+}
+.tree .other a {
+  color: var(--fg-muted);
+}
+main {
+  min-width: 0;
+  padding: var(--main-pad);
+}
+main > * {
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+main.home {
+  padding: var(--main-pad);
+  max-width: 100%;
+}
+main.home > * {
+  max-width: 720px;
+}
+.home-form {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.home-form label {
+  display: grid;
+  gap: 4px;
+}

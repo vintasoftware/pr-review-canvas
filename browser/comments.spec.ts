@@ -1,0 +1,56 @@
+import { expect, test } from './fixtures.js'
+
+const postedUrl = 'https://github.com/acme/widgets/pull/42#discussion_r5001'
+
+test('opens the editor below the code line and links to the posted comment', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  const file = page.locator('article.file[data-path="src/app.ts"]').first()
+  await file.scrollIntoViewIfNeeded()
+  const line = file.locator('#L-src_app_ts-new-4')
+  await line.locator('.plus').click()
+  const editor = file.locator('tr.composer')
+  await expect(editor).toHaveCSS('display', 'table-row')
+  const code = await line.locator('td.code').boundingBox()
+  const textarea = editor.locator('textarea')
+  const bounds = await textarea.boundingBox()
+  if (code === null || bounds === null) {
+    throw new Error('missing code or editor')
+  }
+  expect(bounds.y).toBeGreaterThanOrEqual(code.y + code.height)
+  expect(bounds.x).toBeGreaterThanOrEqual(code.x)
+  expect(bounds.width).toBeGreaterThan(code.width * 0.8)
+  const screenshot = test.info().outputPath('inline-comment-editor.png')
+  await page.screenshot({ path: screenshot })
+  await test.info().attach('inline-comment-editor', { path: screenshot, contentType: 'image/png' })
+  await textarea.fill('Check this return value.')
+  await editor.locator('[data-act="composer-post"]').click()
+  await expect(editor).toHaveCount(0)
+  const link = file.locator('tr.thread[data-thread="5001"]').getByRole('link', { name: /view comment/ })
+  await expect(link).toHaveAttribute('href', postedUrl)
+  await page.reload()
+  await file.scrollIntoViewIfNeeded()
+  await expect(link).toHaveAttribute('href', postedUrl)
+})
+
+test('replaces point posting buttons with comment links across dismissal and reload', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  await card.locator('[data-act="point-post"]').click()
+  await expect(card.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
+  await expect(card.locator('[data-act="point-post"]')).toHaveCount(0)
+  const file = page.locator('article.file[data-path="src/app.ts"]').first()
+  await file.scrollIntoViewIfNeeded()
+  const inline = file.locator('tr.ifind[data-fingerprint="fp-1"]')
+  await expect(inline.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
+
+  await card.locator('[data-act="point-dismiss"]').click()
+  await expect(page.locator('.toast')).toHaveText('attention point dismissed')
+  const dismissed = page.locator('.dismissed-list')
+  await dismissed.locator('[data-act="show-dismissed"]').click()
+  await expect(dismissed.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
+  await dismissed.locator('[data-act="point-restore"]').click()
+  await expect(page.locator('.toast')).toHaveText('attention point restored')
+  await page.reload()
+  await expect(card.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
+  await expect(card.locator('[data-act="point-post"]')).toHaveCount(0)
+})

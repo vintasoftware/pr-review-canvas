@@ -1,0 +1,140 @@
+/* ---- AI Chat ---- */
+.chat {
+  padding: 0 1px;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  height: 100vh;
+  background: transparent;
+}
+.handle {
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  color: var(--fg-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+.handle::before {
+  content: "";
+  width: 4px;
+  height: 36px;
+  border-left: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+}
+.handle:hover,
+.handle:focus-visible {
+  color: var(--fg);
+  background: var(--panel-2);
+}
+.chat-h {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--panel-2);
+}
+.chat-h h2 {
+  margin-right: auto;
+}
+.chat-h select {
+  padding: 3px 6px;
+  font-size: 13px;
+  flex: 1 1 120px;
+  min-width: 0;
+  width: 0;
+}
+select,
+input,
+textarea {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  padding: 5px 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+select:disabled,
+input:disabled,
+textarea:disabled {
+  color: var(--fg-muted);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+.ctx-line {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--line);
+  margin: 0;
+}
+.transcript {
+  padding: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  /* Reaching the top or bottom of the transcript stops there; the page behind stays put. */
+  overscroll-behavior: contain;
+}
+.transcript .empty {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.turn {
+  margin-bottom: 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+.turn.a {
+  border-left-color: var(--purple);
+}
+.role {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+.turn.a .role {
+  color: var(--accent);
+}
+.snip {
+  border: 1px solid var(--ink);
+  background: var(--panel-2);
+  font-size: 12px;
+  line-height: 20px;
+  padding: 6px 10px;
+  margin: 6px 0 8px;
+  white-space: pre;
+}
+.chat-composer {
+  padding: 12px 14px;
+  border-top: 1px solid var(--ink);
+  background: var(--panel-2);
+  display: grid;
+  gap: 8px;
+}
+textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 64px;
+}
+.chat-composer .cmd.fill {
+  padding: 4px 10px;
+  box-shadow: 2px 2px 0 var(--shadow);
+}

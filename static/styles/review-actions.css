@@ -1,0 +1,124 @@
+/* Selection, comments, sign-off, dismissed points, and notifications. */
+tr.is-selected td {
+  background: var(--accent-bg);
+}
+tr.is-selected .ln {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+tr.sel-bar .x {
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+tr.sel-bar .lbl {
+  margin: 0;
+}
+.composer-box {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+.composer-box textarea {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: var(--fs);
+  line-height: var(--lh);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--ink);
+  padding: 8px 10px;
+  resize: vertical;
+}
+.composer-box textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.composer-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+tr.composer .x {
+  background: var(--panel-2);
+}
+.cmt.pending {
+  opacity: 0.6;
+}
+.dismissed-list {
+  padding: 0 20px 16px;
+}
+.dismissed-line {
+  margin: 0;
+  font-size: 12px;
+}
+.findings.dismissed li {
+  opacity: 0.75;
+}
+.is-focused {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--shadow);
+  padding: 8px 12px;
+  font-size: 12px;
+  max-width: 340px;
+}
+.toast:empty {
+  display: none;
+}
+dialog.signoff-dialog[open] {
+  display: grid;
+  gap: 12px;
+}
+dialog.signoff-dialog {
+  max-width: 720px;
+  padding: 20px;
+}
+dialog.signoff-dialog textarea {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--ink);
+  padding: 10px 12px;
+  resize: vertical;
+}
+dialog.signoff-dialog .signoff-result:empty {
+  display: none;
+}
+dialog.help {
+  max-width: 520px;
+}
+table.keys {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+table.keys td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+table.keys td:first-child {
+  width: 96px;
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

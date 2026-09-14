@@ -1,0 +1,949 @@
+// @ts-check
+// Everything the reader can do on the review screen, wired once. One delegated click handler,
+// one change handler, one pointer pair for line selection, and one key handler; each command
+// carries a `data-act` that names what it does.
+/** @typedef {import('./contract-types.js').Point} Point */
+/** @typedef {import('./contract-types.js').PrState} PrState */
+/** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
+/** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
+/** @typedef {import('./selection.js').Selection} Selection */
+import { cssEscape, findRow } from './anchors.js'
+import { fetchReviewBody } from './api.js'
+import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
+import { setFoldShown } from './code-folds.js'
+import { runCommand, runControl, showCommandError } from './commands.js'
+import { replacePostButton } from './comment-link.js'
+import {
+  applyCapabilityGating,
+  closeComposers,
+  composerHtml,
+  composerInput,
+  composerRowHtml,
+  focusComposer,
+} from './composer.js'
+import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
+import { flash, scrollIntoViewSafe } from './dom.js'
+import { refreshProgress } from './header.js'
+import { keyAction, openHelpDialog } from './keyboard.js'
+import { pointAnchorId, sanitizeKey } from './keys.js'
+import { getRenderContext, pathSet, setCardRenderedHook, setRenderContext, updateRenderState } from './layers.js'
+import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from './nav.js'
+import { issueCommentHtml } from './overview.js'
+import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
+import { layerProgress } from './progress.js'
+import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
+import { fillSignoffDialog, openSignoffDialog, showSignoffError, showSignoffResult, signoffBody } from './signoff.js'
+
+/** @typedef {NonNullable<ReturnType<typeof import('./chat.js').wireChat>>} ChatHandle */
+
+const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
+
+/** @type {WeakMap<Element, ReturnType<typeof setTimeout>>} */
+const toastTimers = new WeakMap()
+
+/**
+ * The first element of an HTML string built by this app's renderers.
+ * @param {Document} doc
+ * @param {string} html
+ * @returns {Element | null}
+ */
+export function nodeFrom(doc, html) {
+  const template = doc.createElement('template')
+  template.innerHTML = html
+  return template.content.firstElementChild
+}
+
+/**
+ * The row of an HTML string that is a `<tr>`, which needs a table around it to parse.
+ * @param {Document} doc
+ * @param {string} html
+ * @returns {HTMLTableRowElement | null}
+ */
+export function rowFrom(doc, html) {
+  return nodeFrom(doc, `<table><tbody>${html}</tbody></table>`)?.querySelector('tr') ?? null
+}
+
+/**
+ * The one place the page says what just happened. Screen readers get it through `aria-live`.
+ * @param {HTMLElement} root
+ * @param {string} message
+ */
+export function toast(root, message) {
+  let box = root.querySelector('.toast')
+  if (!(box instanceof HTMLElement)) {
+    box = document.createElement('div')
+    box.className = 'toast'
+    box.setAttribute('role', 'status')
+    box.setAttribute('aria-live', 'polite')
+    root.appendChild(box)
+  }
+  clearTimeout(toastTimers.get(box))
+  box.textContent = message
+  const region = box
+  toastTimers.set(
+    region,
+    setTimeout(() => {
+      region.textContent = ''
+      toastTimers.delete(region)
+    }, 5000)
+  )
+  return box
+}
+
+/**
+ * The card a command belongs to, and the part of it that collapses.
+ * @param {Element} el
+ * @returns {{ card: HTMLElement, body: HTMLElement, chevron: Element | null } | null}
+ */
+export function cardOf(el) {
+  const card = el.closest('article.file, section.layer')
+  const body = card?.querySelector(':scope > .file-body, :scope > .layer-body')
+  if (!(card instanceof HTMLElement && body instanceof HTMLElement)) {
+    return null
+  }
+  return { card, body, chevron: card.querySelector(':scope > .file-h > .chev, :scope > .layer-h > .chev') }
+}
+
+/**
+ * Opens or collapses one card. Nothing else on the card changes, so clicking the chevron never
+ * touches the reviewed box and the other way round.
+ * @param {Element} el an element inside the card
+ * @param {boolean} [collapsed] the state to set; the opposite of the current one when omitted
+ */
+export function setCardCollapsed(el, collapsed) {
+  const parts = cardOf(el)
+  if (parts === null) {
+    return null
+  }
+  const next = collapsed ?? !parts.body.hidden
+  parts.body.toggleAttribute('hidden', next)
+  parts.chevron?.setAttribute('aria-expanded', next ? 'false' : 'true')
+  return next
+}
+
+/**
+ * The layer or file card a reviewed id belongs to.
+ * @param {ParentNode} root
+ * @param {string} id
+ */
+export function cardForReviewedId(root, id) {
+  const input = root.querySelector(`input[data-reviewed-id="${cssEscape(id)}"]`)
+  return input === null ? null : cardOf(input)
+}
+
+/**
+ * Where the reader goes after marking something reviewed: the first layer or file that is still
+ * open, after the one they just finished.
+ * @param {ParentNode} root
+ * @param {ReviewSession} session
+ * @param {string} fromId the anchor id of the card that was just marked
+ * @param {'layer' | 'file'} kind
+ */
+export function nextUnreviewedTarget(root, session, fromId, kind) {
+  const order = buildNavOrder(session.artifact)
+  const from = order.findIndex(i => i.id === fromId)
+  for (let i = from + 1; i < order.length; i++) {
+    const item = order[i]
+    if (item === undefined || item.kind !== kind || item.other) {
+      continue
+    }
+    const id = item.kind === 'file' ? `layer:${item.layerId}/file:${sanitizeKey(item.path)}` : `layer:${item.layerId}`
+    if (!session.isReviewed(id)) {
+      return root.querySelector(`#${cssEscape(item.id)}`)
+    }
+  }
+  return null
+}
+
+/**
+ * What the `a` key asks about: the selection if there is one, else the attention point in focus,
+ * else the card in focus, else the whole pull request.
+ * @param {ParentNode} root
+ * @param {string | null} focusId
+ * @param {string | null} focusPointId
+ * @param {Selection | null} selection
+ * @returns {import('./chat-context.js').ChatContext}
+ */
+export function askTargetFor(root, focusId, focusPointId, selection) {
+  if (selection !== null) {
+    return { kind: 'lines', path: selection.path, side: selection.side, start: selection.start, end: selection.end }
+  }
+  if (focusPointId !== null) {
+    const el = root.querySelector(`[data-point="${cssEscape(focusPointId)}"] [data-act="ask"]`)
+    if (el instanceof HTMLElement) {
+      return chatContextFromElement(el)
+    }
+  }
+  if (focusId !== null) {
+    const card = root.querySelector(`#${cssEscape(focusId)}`)
+    const ask = card?.querySelector('[data-act="ask"]')
+    if (ask instanceof HTMLElement) {
+      return chatContextFromElement(ask)
+    }
+  }
+  return WHOLE_PR
+}
+
+/**
+ * Wires the whole review screen. Returns a stop function, so a re-render never leaves two sets
+ * of listeners behind.
+ * @param {HTMLElement} root
+ * @param {ReviewSession} session
+ * @param {{
+ *   document?: Document,
+ *   fetchReviewBody?: typeof fetchReviewBody,
+ *   chat?: () => ChatHandle | null,
+ *   quickQuestions?: () => { openFor: (el: HTMLElement) => void } | null,
+ *   openSettings?: (el: HTMLElement) => void,
+ * }} [opts]
+ */
+export function wireReview(root, session, opts = {}) {
+  const doc = opts.document ?? document
+  const readReviewBody = opts.fetchReviewBody ?? fetchReviewBody
+  /** @type {Selection | null} */
+  let selection = null
+  /** @type {string | null} */
+  let focusId = null
+  /** @type {string | null} */
+  let focusPointId = null
+  let pendingG = false
+  let composerSeq = 0
+  let signoffOpening = 0
+
+  const paths = () => pathSet(getRenderContext()?.files ?? [])
+  /** The diff key of a path, which is what the row ids are built from. */
+  const keyForPath = (/** @type {string} */ path) => getRenderContext()?.files.find(f => f.path === path)?.key ?? null
+  /** The time the page was drawn, which the comments it adds are timed against. */
+  const renderNow = () => getRenderContext()?.now ?? new Date()
+
+  /**
+   * Whether a card counts as reviewed, read the same way the page was first drawn: a layer is
+   * reviewed when its own mark is set or when every one of its files is.
+   * @param {string} id
+   * @param {PrState} state
+   */
+  const isCardReviewed = (id, state) => {
+    if (id.includes('/file:')) {
+      return state.reviewed[id] === true
+    }
+    const layer = session.artifact.layers.find(l => `layer:${l.id}` === id)
+    return layer === undefined ? state.reviewed[id] === true : layerProgress(layer, state) === 'done'
+  }
+
+  /** Draws everything the local state decides, after it changed. */
+  const onState = (/** @type {PrState} */ state) => {
+    updateRenderState(state)
+    refreshProgress(root, session.artifact, state)
+    applyDismissed(root, session.artifact.points, state, {
+      paths: paths(),
+      layers: session.artifact.layers,
+      posted: postedUrls(state, getRenderContext()?.comments ?? []),
+    })
+    for (const input of Array.from(root.querySelectorAll('input[data-reviewed-id]'))) {
+      const id = input.getAttribute('data-reviewed-id')
+      if (!(input instanceof HTMLInputElement) || id === null) {
+        continue
+      }
+      const reviewed = isCardReviewed(id, state)
+      input.checked = reviewed
+      // A card the server reopened (marking a layer reopens its files) opens here as well.
+      const parts = cardOf(input)
+      if (parts !== null && parts.card.classList.contains('is-reviewed') !== reviewed) {
+        parts.card.classList.toggle('is-reviewed', reviewed)
+        setCardCollapsed(parts.card, reviewed)
+      }
+    }
+    applyCapabilityGating(root, session.capabilities)
+  }
+  const unsubscribe = session.subscribe(onState)
+
+  /** @param {import('./contract-types.js').PostCommentInput} input */
+  const postComment = async input => {
+    const answer = await session.postComment(input)
+    const ctx = getRenderContext()
+    if (answer.kind === 'review' && ctx !== null) {
+      setRenderContext({ ...ctx, comments: [...ctx.comments.filter(c => c.id !== answer.comment.id), answer.comment] })
+      onState(session.state)
+    }
+    return answer
+  }
+  // A card drawn later carries posting commands of its own, which the same rules apply to.
+  setCardRenderedHook(card => applyCapabilityGating(card, session.capabilities))
+
+  /**
+   * @param {string} id
+   * @param {Element | null} [element] where to put the ring when the id names nothing on screen
+   */
+  const focusItem = (id, element) => {
+    focusId = id
+    const el = root.querySelector(`#${cssEscape(id)}`) ?? element
+    for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
+      marked.classList.remove('is-focused')
+    }
+    if (el instanceof HTMLElement) {
+      el.classList.add('is-focused')
+      // The ring follows the keyboard, so the focus does too: a screen reader reads the card
+      // the reader moved to instead of the command they pressed the key on.
+      el.tabIndex = -1
+      el.focus({ preventScroll: true })
+      scrollIntoViewSafe(el)
+    }
+    return el
+  }
+
+  /**
+   * The attention point the keys act on, kept by id so that dismissing one does not move the
+   * next key press onto its neighbour.
+   * @param {ReadonlyArray<Point>} points
+   * @param {1 | -1} direction
+   */
+  const stepPoint = (points, direction) => {
+    const at = points.findIndex(p => p.id === focusPointId)
+    const next = at === -1 ? (direction === 1 ? 0 : points.length - 1) : at + direction
+    const point = points[Math.min(Math.max(next, 0), points.length - 1)]
+    if (point === undefined) {
+      return
+    }
+    focusPointId = point.id
+    // A point of the Other layer has no card, so the ring lands on its row in the diff.
+    focusItem(pointAnchorId(point.id), root.querySelector(`[data-point="${cssEscape(point.id)}"]`))
+  }
+
+  /** @param {Selection | null} next */
+  const setSelection = next => {
+    selection = next
+    markSelection(root, selection)
+    applyCapabilityGating(root, session.capabilities)
+  }
+
+  /**
+   * Opens one composer, closing whatever was open before it.
+   * @param {Element} anchor the row or host the composer goes under
+   * @param {import('./composer.js').ComposerOptions} options
+   * @param {'row' | 'block'} shape
+   */
+  const openComposer = (anchor, options, shape) => {
+    closeComposers(root)
+    const node = shape === 'row' ? rowFrom(doc, composerRowHtml(options)) : nodeFrom(doc, composerHtml(options))
+    if (node === null) {
+      return null
+    }
+    if (shape === 'row') {
+      anchor.insertAdjacentElement('afterend', node)
+    } else {
+      anchor.append(node)
+    }
+    applyCapabilityGating(root, session.capabilities)
+    focusComposer(root, options.id)
+    return node
+  }
+
+  /**
+   * @param {{ key: string, path: string, side: 'new' | 'old', line: number, startLine?: number }} target
+   */
+  const openLineComposer = target => {
+    const row = findRow(root, target.key, target.side, target.line)
+    if (row === null) {
+      return null
+    }
+    composerSeq += 1
+    /** @type {import('./composer.js').ComposerOptions} */
+    const options = {
+      id: `composer-${composerSeq}`,
+      label: `Comment on ${target.path}:${target.line}`,
+      kind: 'inline',
+      path: target.path,
+      line: target.line,
+      side: target.side,
+    }
+    if (target.startLine !== undefined && target.startLine !== target.line) {
+      options.startLine = target.startLine
+    }
+    return openComposer(row, options, 'row')
+  }
+
+  /** The inline comment that a posted review comment becomes on the page. */
+  const insertPostedReviewComment = (/** @type {Element} */ composerNode, /** @type {ReviewComment} */ comment) => {
+    const thread = root.querySelector(
+      `tr.thread[data-thread="${cssEscape(String(comment.inReplyToId ?? comment.id))}"]`
+    )
+    const now = getRenderContext()?.now ?? new Date()
+    if (comment.inReplyToId !== undefined && thread !== null) {
+      const full = thread.querySelector('.thread-full')
+      const tbtns = full?.querySelector('.tbtns')
+      const template = doc.createElement('template')
+      template.innerHTML = commentHtml(comment, now)
+      const node = template.content.firstElementChild
+      if (node !== null) {
+        tbtns?.before(node)
+      }
+      composerNode.remove()
+      return
+    }
+    const template = doc.createElement('template')
+    template.innerHTML = `<table><tbody>${threadRowHtml({ root: comment, replies: [], resolved: false, outdated: comment.outdated, path: comment.path, side: comment.side, line: comment.line }, { now })}</tbody></table>`
+    const row = template.content.querySelector('tr')
+    const host = composerNode.closest('tr') ?? composerNode
+    if (row !== null) {
+      host.insertAdjacentElement('afterend', row)
+    }
+    host.remove()
+  }
+
+  /**
+   * @param {HTMLElement} button
+   * @param {Element} box
+   */
+  const postFromComposer = (button, box) => {
+    const input = composerInput(box)
+    if (input === null) {
+      showCommandError(button, 'write something first')
+      return
+    }
+    // While it waits for GitHub the box stays, even if the reader opens another one.
+    box.setAttribute('data-posting', '1')
+    void runCommand(
+      button,
+      async () => {
+        const answer = await postComment(input)
+        if (answer.kind === 'issue') {
+          const node = nodeFrom(doc, issueCommentHtml(answer.comment, renderNow()))
+          if (node !== null) {
+            root.querySelector('.conversation .pr-composer-host')?.before(node)
+          }
+          // Only the box that posted goes away; a draft the reader started meanwhile stays.
+          box.remove()
+        } else {
+          insertPostedReviewComment(box, answer.comment)
+        }
+        toast(root, 'comment posted to github')
+        applyCapabilityGating(root, session.capabilities)
+      },
+      { pendingLabel: 'posting…' }
+    ).finally(() => box.removeAttribute('data-posting'))
+  }
+
+  /** @param {string} pointId */
+  const pointById = pointId => session.artifact.points.find(p => p.id === pointId)
+
+  /**
+   * @param {HTMLElement} button
+   * @param {Point} point
+   */
+  const postPoint = (button, point) => {
+    void runCommand(
+      button,
+      async () => {
+        const answer = await postComment({
+          kind: 'inline',
+          path: point.path,
+          line: point.line,
+          side: point.side ?? 'new',
+          body: pointToMarkdown(point),
+          pointFingerprint: point.fingerprint,
+        })
+        for (const control of Array.from(
+          root.querySelectorAll(`[data-act="point-post"][data-point="${cssEscape(point.id)}"]`)
+        )) {
+          if (control instanceof HTMLElement) {
+            replacePostButton(control, answer.comment.url)
+          }
+        }
+        toast(root, 'attention point posted to github')
+      },
+      { pendingLabel: 'posting…' }
+    )
+  }
+
+  /**
+   * @param {HTMLElement} button
+   * @param {string} id
+   * @param {boolean} reviewed
+   * @param {'layer' | 'file'} kind
+   * @param {{ quiet?: boolean }} [opts] `quiet` keeps a checkbox label intact while it runs
+   */
+  const markReviewed = (button, id, reviewed, kind, opts = {}) => {
+    const run = async () => {
+      await session.setReviewed(id, reviewed)
+      const parts = cardForReviewedId(root, id)
+      if (parts !== null) {
+        setCardCollapsed(parts.card, reviewed)
+        parts.card.classList.toggle('is-reviewed', reviewed)
+        if (reviewed) {
+          const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
+          if (next instanceof HTMLElement) {
+            focusItem(next.id)
+          }
+        }
+      }
+      toast(root, reviewed ? `${kind} marked reviewed` : `${kind} reopened`)
+    }
+    void (opts.quiet === true
+      ? runControl(button, run)
+      : runCommand(button, run, { pendingLabel: reviewed ? 'marking…' : 'unmarking…' }))
+  }
+
+  /** @param {HTMLElement} button @param {string} fingerprint @param {boolean} dismissed */
+  const setDismissed = (button, fingerprint, dismissed) => {
+    void runCommand(
+      button,
+      async () => {
+        await session.setDismissed(fingerprint, dismissed)
+        toast(root, dismissed ? 'attention point dismissed' : 'attention point restored')
+      },
+      { pendingLabel: dismissed ? 'dismissing…' : 'restoring…' }
+    )
+  }
+
+  /** @param {HTMLElement} button @param {'APPROVE' | 'REQUEST_CHANGES'} event */
+  const openSignoff = (button, event) => {
+    const dialog = openSignoffDialog(root, { event })
+    applyCapabilityGating(root, session.capabilities)
+    signoffOpening += 1
+    const opening = signoffOpening
+    void runCommand(
+      button,
+      async () => {
+        try {
+          const preview = await readReviewBody(session.prNumber)
+          // A body that belongs to an earlier opening is not put in the dialog on screen.
+          if (opening === signoffOpening) {
+            fillSignoffDialog(dialog, preview)
+          }
+        } catch (err) {
+          // The command that opened the dialog sits behind it, so the reason is shown inside.
+          if (opening === signoffOpening) {
+            showSignoffError(dialog, err instanceof Error ? err.message : String(err))
+          }
+          throw err
+        }
+      },
+      { pendingLabel: 'loading…' }
+    )
+  }
+
+  /** @param {HTMLElement} button */
+  const postSignoff = button => {
+    const dialog = button.closest('dialog')
+    if (!(dialog instanceof HTMLDialogElement)) {
+      return
+    }
+    const event = dialog.getAttribute('data-event') === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES'
+    const body = signoffBody(dialog)
+    void runCommand(
+      button,
+      async () => {
+        const review = await session.postReview(event, body === '' ? undefined : body)
+        showSignoffResult(dialog, review)
+        toast(root, event === 'APPROVE' ? 'approved on github' : 'changes requested on github')
+      },
+      { pendingLabel: 'posting…' }
+    )
+  }
+
+  /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
+  const actions = {
+    'toggle-card': el => {
+      setCardCollapsed(el)
+    },
+    'mark-layer': el => {
+      const id = el.getAttribute('data-reviewed-id') ?? ''
+      markReviewed(el, id, !session.isReviewed(id), 'layer')
+    },
+    'point-dismiss': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', true),
+    'point-restore': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', false),
+    'show-dismissed': el => {
+      const list = el.closest('.dismissed-list')?.querySelector('ol.findings.dismissed')
+      if (list === null || list === undefined) {
+        return
+      }
+      const open = list.hasAttribute('hidden')
+      list.toggleAttribute('hidden', !open)
+      el.setAttribute('aria-expanded', open ? 'true' : 'false')
+      el.textContent = open ? 'hide' : 'show'
+    },
+    'point-post': el => {
+      const point = pointById(el.getAttribute('data-point') ?? '')
+      if (point !== undefined) {
+        postPoint(el, point)
+      }
+    },
+    'comment-line': el => {
+      const key = el.getAttribute('data-key') ?? ''
+      const path = session.pathForKey(key)
+      const line = Number(el.getAttribute('data-line'))
+      if (path === undefined || !Number.isInteger(line) || line <= 0) {
+        return
+      }
+      openLineComposer({ key, path, side: el.getAttribute('data-side') === 'old' ? 'old' : 'new', line })
+    },
+    'comment-selection': () => {
+      if (selection !== null) {
+        openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
+      }
+    },
+    'composer-post': el => {
+      const box = el.closest('.composer-box')
+      if (box !== null) {
+        postFromComposer(el, box)
+      }
+    },
+    'composer-cancel': () => {
+      closeComposers(root)
+    },
+    'thread-hide': el => {
+      const id = Number(el.getAttribute('data-thread'))
+      const row = el.closest('tr.thread')
+      void runCommand(
+        el,
+        async () => {
+          await session.setThreadHidden(id, true)
+          if (row !== null) {
+            setThreadCollapsed(row, true)
+          }
+        },
+        { pendingLabel: 'hiding…' }
+      )
+    },
+    'thread-collapse': el => {
+      const row = el.closest('tr.thread')
+      if (row !== null) {
+        setThreadCollapsed(row, true)
+      }
+    },
+    'thread-show': el => {
+      const row = el.closest('tr.thread')
+      if (row === null) {
+        return
+      }
+      if (!row.classList.contains('hidden-thread')) {
+        // A resolved thread is only folded away on screen, so opening it is local.
+        setThreadCollapsed(row, false)
+        return
+      }
+      const id = Number(el.getAttribute('data-thread'))
+      void runCommand(
+        el,
+        async () => {
+          await session.setThreadHidden(id, false)
+          setThreadCollapsed(row, false)
+        },
+        { pendingLabel: 'showing…' }
+      )
+    },
+    'thread-reply': el => {
+      const full = el.closest('.thread-full')
+      const id = Number(el.getAttribute('data-thread'))
+      if (full === null || !Number.isInteger(id)) {
+        return
+      }
+      composerSeq += 1
+      openComposer(full, { id: `composer-${composerSeq}`, label: 'Reply', kind: 'reply', inReplyToId: id }, 'block')
+    },
+    'pr-comment': () => {
+      const host = root.querySelector('.conversation .pr-composer-host')
+      if (host !== null) {
+        composerSeq += 1
+        openComposer(
+          host,
+          { id: `composer-${composerSeq}`, label: 'Comment on this pull request', kind: 'issue' },
+          'block'
+        )
+      }
+    },
+    signoff: el => {
+      openSignoff(el, el.getAttribute('data-event') === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES')
+    },
+    'signoff-post': el => postSignoff(el),
+    'signoff-close': el => {
+      el.closest('dialog')?.close()
+    },
+    ask: el => {
+      const chat = opts.chat?.() ?? null
+      if (chat === null) {
+        toast(root, NO_CHAT_NOTE)
+        return
+      }
+      chat.ask(chatContextFromElement(el))
+    },
+    'show-fold': el => {
+      const summary = el.closest('tr.more.fold')
+      if (summary instanceof HTMLTableRowElement) {
+        setFoldShown(summary, el.getAttribute('aria-expanded') !== 'true')
+      }
+    },
+    'jump-line': el => {
+      const line = Number(el.getAttribute('data-line'))
+      if (!Number.isInteger(line) || line <= 0) {
+        return
+      }
+      const side = el.getAttribute('data-side') === 'old' ? 'old' : 'new'
+      const row = findRow(root, el.getAttribute('data-key') ?? '', side, line)
+      if (row === null) {
+        return
+      }
+      // scrollIntoViewSafe raises `reveal-code` first, so a target inside a fold opens on the way.
+      scrollIntoViewSafe(row)
+      flash(row)
+    },
+    settings: el => {
+      opts.openSettings?.(el)
+    },
+    help: () => {
+      openHelpDialog(root)
+    },
+  }
+
+  /** @param {Event} event */
+  const onClick = event => {
+    const el = event.target instanceof Element ? event.target.closest('[data-act]') : null
+    if (!(el instanceof HTMLElement) || el.hasAttribute('disabled')) {
+      return
+    }
+    const act = actions[el.getAttribute('data-act') ?? '']
+    if (act !== undefined) {
+      event.preventDefault()
+      act(el, /** @type {MouseEvent} */ (event))
+    }
+  }
+
+  /** @param {Event} event */
+  const onChange = event => {
+    const input = event.target
+    if (!(input instanceof HTMLInputElement)) {
+      return
+    }
+    const id = input.getAttribute('data-reviewed-id')
+    if (id === null) {
+      return
+    }
+    const kind = id.includes('/file:') ? 'file' : 'layer'
+    const label = input.closest('label')
+    markReviewed(label instanceof HTMLElement ? label : input, id, input.checked, kind, { quiet: true })
+  }
+
+  /** @param {PointerEvent} event */
+  const onPointerDown = event => {
+    const target = lineRefFromEvent(event, key => session.pathForKey(key))
+    if (target === null) {
+      return
+    }
+    event.preventDefault()
+    setSelection(
+      selectionReducer(selection, event.shiftKey ? { type: 'shift-click', target } : { type: 'click', target })
+    )
+    if (selection !== null && !event.shiftKey) {
+      setSelection(selectionReducer(selection, { type: 'drag-start', target }))
+    }
+  }
+
+  /** @param {PointerEvent} event */
+  const onPointerOver = event => {
+    if (selection?.dragging !== true) {
+      return
+    }
+    const target = lineRefFromEvent(event, key => session.pathForKey(key))
+    if (target !== null) {
+      setSelection(selectionReducer(selection, { type: 'drag-over', target }))
+    }
+  }
+
+  const onPointerUp = () => {
+    if (selection?.dragging === true) {
+      setSelection(selectionReducer(selection, { type: 'commit' }))
+    }
+  }
+
+  /** @param {KeyboardEvent} event */
+  const onKeyDown = event => {
+    const decided = keyAction(event, { pendingG })
+    pendingG = decided.pendingG
+    if (decided.action === null) {
+      return
+    }
+    // While a dialog is open it owns the keyboard, Esc included: the browser closes it, and the
+    // page behind it keeps its selection and its open composer.
+    if (doc.querySelector('dialog[open]') !== null) {
+      return
+    }
+    const order = buildNavOrder(session.artifact)
+    const points = session.artifact.points.filter(p => session.state.dismissed[p.fingerprint] === undefined)
+    switch (decided.action) {
+      case 'next-layer':
+      case 'prev-layer':
+      case 'next-file':
+      case 'prev-file': {
+        const step =
+          decided.action === 'next-layer'
+            ? nextLayer
+            : decided.action === 'prev-layer'
+              ? prevLayer
+              : decided.action === 'next-file'
+                ? nextFile
+                : prevFile
+        const item = step(order, focusId)
+        if (item !== null) {
+          focusPointId = null
+          focusItem(item.id)
+        }
+        break
+      }
+      case 'next-point':
+      case 'prev-point':
+        stepPoint(points, decided.action === 'next-point' ? 1 : -1)
+        break
+      case 'toggle': {
+        const card = focusId === null ? null : root.querySelector(`#${cssEscape(focusId)}`)
+        if (card !== null) {
+          setCardCollapsed(card)
+        }
+        break
+      }
+      case 'reviewed-file':
+      case 'reviewed-layer': {
+        const item = order.find(i => i.id === focusId)
+        const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
+        const found =
+          item?.kind === wanted ? item : wanted === 'layer' && focusId !== null ? layerOf(order, focusId) : null
+        if (found === null || found === undefined || found.kind === 'overview') {
+          break
+        }
+        const id =
+          found.kind === 'file' ? `layer:${found.layerId}/file:${sanitizeKey(found.path)}` : `layer:${found.layerId}`
+        const parts = cardForReviewedId(root, id)
+        const box = parts?.card.querySelector('input[data-reviewed-id]')
+        if (box instanceof HTMLElement) {
+          markReviewed(box, id, !session.isReviewed(id), found.kind, { quiet: true })
+        }
+        break
+      }
+      case 'comment': {
+        if (selection !== null) {
+          openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
+        }
+        break
+      }
+      case 'dismiss': {
+        const point = points.find(p => p.id === focusPointId)
+        const button =
+          point === undefined
+            ? null
+            : root.querySelector(`[data-point="${cssEscape(point.id)}"] [data-act="point-dismiss"]`)
+        if (button instanceof HTMLElement && point !== undefined) {
+          focusPointId = null
+          setDismissed(button, point.fingerprint, true)
+        }
+        break
+      }
+      case 'overview':
+        focusPointId = null
+        focusItem('overview')
+        break
+      case 'help':
+        openHelpDialog(root)
+        break
+      case 'ask': {
+        // `a` asks about whatever is in focus: an attention point, a selection, or the card.
+        const chat = opts.chat?.() ?? null
+        const target = askTargetFor(root, focusId, focusPointId, selection)
+        if (chat === null) {
+          toast(root, NO_CHAT_NOTE)
+          break
+        }
+        chat.ask(target)
+        break
+      }
+      case 'focus-chat':
+        opts.chat?.()?.focusInput()
+        break
+      case 'escape':
+        if (closeComposers(root) === 0) {
+          setSelection(selectionReducer(selection, { type: 'clear' }))
+        }
+        break
+    }
+  }
+
+  root.addEventListener('click', onClick)
+  root.addEventListener('change', onChange)
+  root.addEventListener('pointerdown', /** @type {EventListener} */ (onPointerDown))
+  root.addEventListener('pointerover', /** @type {EventListener} */ (onPointerOver))
+  doc.addEventListener('pointerup', onPointerUp)
+  doc.addEventListener('pointercancel', onPointerUp)
+  doc.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+  applyCapabilityGating(root, session.capabilities)
+
+  return {
+    /**
+     * What the chat's proposed-comment card does: post it straight away, or open the same
+     * composer the rest of the page uses, prefilled.
+     * @param {'post' | 'edit'} what
+     * @param {import('./proposed-comment.js').ProposedComment} comment
+     * @param {HTMLElement} el
+     */
+    onProposedComment(what, comment, el) {
+      const key = keyForPath(comment.path)
+      if (what === 'edit') {
+        if (key === null) {
+          showCommandError(el, `${comment.path} is not a file of this pull request`)
+          return
+        }
+        composerSeq += 1
+        /** @type {import('./composer.js').ComposerOptions} */
+        const options = {
+          id: `composer-${composerSeq}`,
+          label: `Comment on ${comment.path}:${comment.line}`,
+          kind: 'inline',
+          path: comment.path,
+          line: comment.line,
+          side: comment.side,
+          body: comment.body,
+        }
+        if (comment.startLine !== undefined && comment.startLine !== comment.line) {
+          options.startLine = comment.startLine
+        }
+        const row = findRow(root, key, comment.side, comment.line)
+        if (row === null) {
+          showCommandError(el, 'that line is not on screen; open the file card first')
+          return
+        }
+        openComposer(row, options, 'row')
+        return
+      }
+      void runCommand(
+        el,
+        async () => {
+          const input = {
+            kind: /** @type {const} */ ('inline'),
+            path: comment.path,
+            line: comment.line,
+            side: comment.side,
+            body: comment.body,
+            ...(comment.startLine === undefined || comment.startLine === comment.line
+              ? {}
+              : { startLine: comment.startLine }),
+          }
+          const answer = await postComment(input)
+          replacePostButton(el, answer.comment.url)
+          toast(root, 'comment posted to github')
+        },
+        { pendingLabel: 'posting…' }
+      )
+    },
+    /** Lets the caller re-apply the gating after the probe answers. */
+    refreshCapabilities() {
+      applyCapabilityGating(root, session.capabilities)
+    },
+    stop() {
+      unsubscribe()
+      setCardRenderedHook(null)
+      root.removeEventListener('click', onClick)
+      root.removeEventListener('change', onChange)
+      root.removeEventListener('pointerdown', /** @type {EventListener} */ (onPointerDown))
+      root.removeEventListener('pointerover', /** @type {EventListener} */ (onPointerOver))
+      doc.removeEventListener('pointerup', onPointerUp)
+      doc.removeEventListener('pointercancel', onPointerUp)
+      doc.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+    },
+  }
+}

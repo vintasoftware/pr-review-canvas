@@ -1,0 +1,157 @@
+---
+name: pr-review-canvas
+description: Generate a review canvas for a GitHub pull request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` until the validator passes. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR.
+---
+
+# pr-review-canvas
+
+You produce one JSON file that groups a pull request's diff into semantic layers with attention
+points, and hand it to the `pr-review` CLI. The CLI does the deterministic work (fetching, diffs,
+validation, storage); you do the reading and the writing of `model.json`. Nothing here checks out
+a branch or writes outside the canvas directory.
+
+Arguments: `<pr-number> [--force]` or `--base <ref> --head <ref> [--force]`. `--force` regenerates
+a canvas that already exists for the head commit: prepare removes the old `model.json` and any
+other leftovers from the canvas directory, keeping `derived/`, `publish.log` (the attempts history),
+and the published `review.json` + `manifest.json` (the page keeps showing the old canvas until your
+publish replaces it), so you start a fresh `model.json`. Run every `pnpm pr-review` command from the
+repository root.
+
+## Flow
+
+### 1. Prepare
+
+```bash
+pnpm pr-review prepare --pr <n> [--force]
+# or, before a PR exists:
+pnpm pr-review prepare --base <ref> --head <ref> [--force]
+```
+
+Progress goes to stderr. The last stdout line is JSON:
+
+```json
+{ "canvasDir": "...", "headSha": "...", "mergeBaseSha": "...", "promptPath": "...", "contextPath": "...", "status": "prepared" }
+```
+
+- `status: "exists"` means a canvas already exists for this head. Stop and tell the user:
+  "canvas already exists for <headSha>; run with --force to regenerate".
+- A line of the form `{ "error": { "code", "message", "hint" } }` means prepare failed. Report the
+  code, message, and hint verbatim and stop. `pnpm pr-review doctor` names which of git, origin,
+  `gh`, the data dir, and the skill install is missing.
+
+### 2. Read the task
+
+Read `promptPath` in full: it holds the pull request, the manifest with every hunk id, the diffs
+(inline or by file path), the layering and length rules, the rulebook, and the JSON schema. Read
+`contextPath` when you need the paths of the head files, the base files, or the patches. Read any
+file in the repository you need to judge the change. Do not check anything out.
+
+### 3. Write model.json
+
+Write `<canvasDir>/model.json` matching the schema in the prompt. Write JSON only; no prose in the
+file, no comments, no markdown fence.
+
+Use a file-writing tool that can write to the canvas directory reported by prepare.
+
+### 4. Check before publishing
+
+```bash
+pnpm pr-review validate <canvasDir>/model.json --canvas <canvasDir> --human --fix
+```
+
+Same checks the publish step runs. It prints `ok: model.json passes against <n> files`, or one
+line per problem in the same form publish uses. Fix what it names and run it again until it says ok.
+
+`--fix` first shortens the titles that are over their cap, by dropping the explainer after the
+first `:` or `—`, and writes the file back. Each one is reported as
+`fixed <where>: "<before>" -> "<after>"`; read them, since the shortened title is what publishes.
+A title with nothing to drop is left alone for you to rewrite. Prose is never cut for you: an
+over-cap rationale, note, or body reports where the cap falls in your own words
+(`what fits ends at "..."`), and the rewrite is yours.
+
+Run this before every publish, including after a repair. A publish round-trip costs more than this
+command, and length caps are the usual reason a publish is rejected: they are measured on the text
+a reader sees, which you cannot count reliably while writing.
+
+### 5. Publish
+
+```bash
+pnpm pr-review publish <canvasDir> --agent <your agent id> --model <model id if you know it> --harness <claude-code|codex|other>
+```
+
+- `--agent`: a free-text id of the agent product you are: `claude`, `codex`, `gemini`, ...
+- `--model`: the model id when you know it (`claude-opus-4-1`, `gpt-5`, ...); omit it otherwise.
+- `--harness`: `claude-code` when you run inside Claude Code, `codex` inside Codex, `other`
+  anywhere else.
+
+On success the last line is `{ "status": "published", "headSha", "reviewJsonPath", "attempts",
+"reviewUrl" }` (`reviewUrl` is absent for a `--base/--head` run).
+
+On failure the command prints one line per problem, then an error line, and exits 5:
+
+```
+HUNK_UNASSIGNED packages_x_ts#3 in packages/x.ts (@@ -40,7 +41,9 @@) is in no layer
+TEXT_TOO_LONG layers.0.rationale: 412 visible chars, cap 300
+{"error":{"code":"MODEL_INVALID","message":"model.json has 2 problems","hint":"fix model.json and run publish again"}}
+```
+
+Fix exactly the named problems in `model.json` and run publish again. Give up after the number of
+failed rounds the prompt states (`maxRepairRounds`, 3 by default) and report the last output
+verbatim. Do not weaken the content to pass: shorten text, move hunks, fix links.
+
+If publish prints `CANVAS_STALE`, the branch moved while you worked. Tell the user and offer to run
+prepare again; pass `--allow-stale` only when the user asks for the canvas of the old commit.
+
+### 6. Export the zip
+
+```bash
+pnpm pr-review export --head <headSha> [--pr <n>]
+```
+
+Pass `--pr <n>` when the run had a PR number, so the file name and the manifest carry it. The
+command prints one JSON line with the absolute `path` of the zip.
+
+### 7. Finish
+
+Report the `reviewUrl` from publish and the zip path from export:
+
+> The canvas is ready at <reviewUrl> (start the server with `pnpm exec pr-review serve` if it is not running).
+> Drag this file into the PR comment so other reviewers get the canvas without
+> generating it again: <path>
+
+GitHub has no attachment API, so attaching the file is the human's step. For a `--base/--head` run,
+say the canvas is stored for `<headSha>`, that the zip has no PR number yet, and that
+`pnpm pr-review export --pr <n>` re-exports it once the pull request exists.
+
+## Rules the validator enforces (and models tend to break)
+
+- Every hunk id from the manifest appears in exactly one layer. Check the manifest against your
+  layers before you publish; a missed hunk is the most common failure.
+- At most one layer with `kind: "other"`, last when present, and omitted when there are no
+  mechanical hunks. It carries no risk tag. A test file may sit in Other only when the code it covers
+  is in Other too.
+- A small change set (the prompt states the hunk limit) gets one layer unless concerns truly differ.
+- Test files come after the files they cover, inside the same layer, never in a layer of their own.
+  The prompt's layering rules name the path patterns this project counts as tests; they are the
+  ones the validator uses.
+- Every text is within its cap, measured on the text a reader sees (link targets and backticks do
+  not count). Rationales, notes, and annotations are one or two short sentences.
+- At most 12 attention points, counting one per `missing` test entry.
+- `covered` test entries name a `testPath` that exists at the PR head (changed or not).
+- Annotations and attention points sit on lines inside a hunk, on the side you name.
+- Links use only the four forms `#layer:`, `#file:`, `#hunk:`, `#line:` and must resolve.
+- At most one diagram per layer (its `diagram` field plus a ```mermaid fence in its rationale)
+  and one in the summary; a fence in any other field stays a code block. Draw only when relations
+  beat prose and most canvases need zero to two diagrams in total, keep labels short, and write no
+  `click` directives, HTML labels, `%%{init}%%` blocks, or `---` front matter.
+- `diagram.links` maps a node id of the source to a canvas link, at most 12 per diagram. Spell the
+  node id the way the source spells it (`store`, not the label in its brackets; `App`, not the
+  name after `as`), and link only nodes that stand for a layer, a file, or a hunk of this canvas.
+- Markdown is allowed; headings are not. No prose outside the JSON file.
+
+## Updating a shared canvas
+
+After new commits, run this skill again for the PR number. Add `--force` to regenerate a canvas
+for the same commit. Export the new zip and ask the user to replace the attachment in their PR
+comment (or post a new comment). Reviewers click **refresh** to load it. A canvas for a different
+PR head shows **Canvas is outdated**; an older canvas remains readable with posting disabled.

@@ -1,0 +1,58 @@
+{
+  "name": "pr-review-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Localhost PR review canvas: layered diffs, attention points, and GitHub comments for one PR",
+  "type": "module",
+  "bin": {
+    "pr-review": "./bin/pr-review.mjs"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false --ignore '**/.pr-review/**' src/cli.ts serve",
+    "start": "tsx src/cli.ts serve",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:browser": "playwright test",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@highlightjs/cdn-assets": "^11.12.0",
+    "@hono/node-server": "^2.1.0",
+    "diff": "^9.0.0",
+    "dompurify": "^3.4.14",
+    "fflate": "^0.8.3",
+    "hono": "^4.13.1",
+    "marked": "^18.0.11",
+    "mermaid": "^11.17.2",
+    "tsx": "^4.23.12",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "happy-dom": "20.11.2",
+    "typescript": "^5.9.3",
+    "vite": "~8.0.16",
+    "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "static/",
+    "prompts/",
+    "skills/",
+    "pr-review.config.example.yml"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vintasoftware/pr-review-canvas.git"
+  },
+  "license": "Apache-2.0"
+}
