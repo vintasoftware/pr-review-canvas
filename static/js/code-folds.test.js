@@ -227,3 +227,49 @@ describe('wireFoldReveal', () => {
     expect(card.querySelector('tr.folded')?.classList.contains('shown')).toBe(false)
   })
 })
+
+it('leaves ranges spanning separate table bodies open', () => {
+  const card = mount()
+  const last = findRow(card, 'src_app_ts', 'new', 4)
+  const table = card.querySelector('table')
+  if (!last || !table) throw new Error('missing diff')
+  const body = document.createElement('tbody')
+  table.appendChild(body)
+  body.appendChild(last)
+  applyCodeFolds(card, 'src_app_ts', [FOLD])
+  expect(card.querySelector('.code-fold')).toBeNull()
+  expect(last.hidden).toBe(false)
+})
+
+it('ignores reveal events on folded rows without a summary', () => {
+  const card = mount()
+  const row = findRow(card, 'src_app_ts', 'new', 1)
+  if (!row) throw new Error('missing diff row')
+  row.classList.add('folded')
+  wireFoldReveal(card)
+  row.dispatchEvent(new CustomEvent('reveal-code', { bubbles: true }))
+  expect(row.classList.contains('shown')).toBe(false)
+})
+
+
+it('includes a preceding noise summary when all of its rows belong to the code fold', () => {
+  const card = mountFolded()
+  const summary = foldSummary(card)
+  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 2, endLine: 2 }])
+  expect(summary.hidden).toBe(true)
+  toggle(card).click()
+  expect(summary.hidden).toBe(true)
+  expect(findRow(card, 'src_app_ts', 'new', 2)?.hidden).toBe(false)
+})
+
+it('keeps a noise summary visible when its rows extend beyond the code fold', () => {
+  const card = mountFolded()
+  const summary = foldSummary(card)
+  const next = findRow(card, 'src_app_ts', 'new', 3)
+  if (!next) throw new Error('missing diff row')
+  next.classList.add('folded')
+  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 2, endLine: 2 }])
+  expect(summary.hidden).toBe(false)
+  expect(next.hidden).toBe(false)
+  expect(toggle(card).getAttribute('aria-expanded')).toBe('false')
+})

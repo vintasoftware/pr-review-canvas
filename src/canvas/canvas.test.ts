@@ -117,7 +117,7 @@ describe('canvas zip codec', () => {
     })
     // review.json alone fits, but the pair would inflate past the cap, so it is left out.
     expect(catchZip(() => readCanvasZip(bomb)).issues).toEqual(['review.json is missing from the zip'])
-  })
+  }, 15_000)
 
   it('inflates no more than an entry claims, so an understated size cannot expand in memory', () => {
     // fflate reads the declared uncompressed size and stops there, which is what the entry

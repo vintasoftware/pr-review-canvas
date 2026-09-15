@@ -2,6 +2,7 @@
 import {
   ConfigError,
   loadRuntimeConfig,
+  parseChatOverrides,
   parseGithubRemote,
   parsePort,
   resolveGithubRepo,
@@ -97,5 +98,23 @@ describe('loadRuntimeConfig', () => {
 
   it('rejects a bad env port', async () => {
     await expect(loadRuntimeConfig({}, { PR_REVIEW_PORT: 'x' }, git(), '/cwd')).rejects.toThrow(/invalid port/)
+  })
+})
+
+
+describe('chat command-line overrides', () => {
+  it.each(['claude', 'codex'])('selects %s with an explicit model', agent => {
+    expect(parseChatOverrides({ agent, model: 'custom-model' })).toEqual({ agent, model: 'custom-model' })
+  })
+
+  it('leaves the saved model in effect when the flag is empty', () => {
+    expect(parseChatOverrides({ model: '' })).toEqual({})
+    expect(parseChatOverrides({ model: 'custom-model' })).toEqual({ model: 'custom-model' })
+  })
+
+  it('rejects unsupported agents with a usage hint', () => {
+    expect(() => parseChatOverrides({ agent: 'unknown' })).toThrow(
+      expect.objectContaining({ code: 'BAD_REQUEST', hint: 'use --agent claude or --agent codex' })
+    )
   })
 })

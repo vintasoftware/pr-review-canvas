@@ -151,13 +151,19 @@ describe('createGitHubClient', () => {
     expect(missing).toMatchObject({ missingBinary: true, code: 1, stdout: '' })
     const piped = await execGh([], { binary: 'cat', input: 'from stdin' })
     expect(piped).toMatchObject({ stdout: 'from stdin', code: 0 })
-    const real = await execGh(['--version'])
-    expect(typeof real.code).toBe('number')
-    expect(real.missingBinary).toBe(false)
-    if (real.code === 0) {
-      const failing = await execGh(['pr-review-no-such-subcommand'])
-      expect(failing.code).not.toBe(0)
-      expect(failing.missingBinary).toBe(false)
-    }
+    const real = await execGh(['--version'], { binary: process.execPath })
+    expect(real).toMatchObject({ code: 0, missingBinary: false, stdout: `${process.version}\n` })
+    const failing = await execGh(['-e', 'process.stderr.write("failed"); process.exitCode = 7'], {
+      binary: process.execPath,
+    })
+    expect(failing).toEqual({ stdout: '', stderr: 'failed', code: 7, missingBinary: false })
+  })
+})
+
+
+it('handles an empty included response and ignores malformed header lines', () => {
+  expect(parseIncludedResponse('')).toEqual({ status: 0, headers: {}, body: null })
+  expect(parseIncludedResponse('HTTP/2.0 204 No Content\nMalformed\nX-Request: 123')).toEqual({
+    status: 204, headers: { 'x-request': '123' }, body: null,
   })
 })

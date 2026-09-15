@@ -278,3 +278,31 @@ describe('renderPrompt', () => {
     expect(patchLineCount({ a: '', b: 'x\ny' })).toBe(2)
   })
 })
+
+
+it('renders path hints only for layers with configured patterns', () => {
+  const prompt = renderPrompt(context({ defaultLayers: [
+    { id: 'api', title: 'API', description: 'Endpoints', paths: ['src/api/**', 'src/routes/**'] },
+    { id: 'other', title: 'Other', description: 'Remaining changes', paths: [] },
+  ] }), PATCHES, sources)
+  expect(prompt).toContain('Path hints: `src/api/**`, `src/routes/**`.')
+  expect(prompt).toContain('2. `other` **Other** — Remaining changes\n')
+})
+
+it('omits unavailable patches while retaining their manifest entries', () => {
+  const prompt = renderPrompt(context(), {}, sources)
+  expect(prompt).toContain('The whole diff follows (0 lines)')
+  expect(prompt).toContain('- `src/app.ts`')
+  expect(prompt).not.toContain('````diff')
+})
+
+it('describes a large ref comparison with a rulebook supplied without a path', () => {
+  const prompt = renderPrompt(context({
+    target: { kind: 'refs', base: 'main', head: 'HEAD' },
+    smallPr: false,
+    rulebook: { path: null, text: '# Rules\nKeep changes focused.' },
+  }), PATCHES, sources)
+  expect(prompt).toContain('This change set has 6 hunks, above the 10-hunk small-change limit')
+  expect(prompt).toContain('The project rulebook (``)')
+  expect(prompt).toContain('Keep changes focused.')
+})

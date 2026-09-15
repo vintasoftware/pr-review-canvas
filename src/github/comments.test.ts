@@ -181,3 +181,26 @@ describe('fetchComments', () => {
   expect(payload.reviews).toHaveLength(1)
   expect(payload.reviews?.[0]).toMatchObject({ state: 'APPROVED', avatarUrl: 'https://avatars.githubusercontent.com/u/1', body: '**Looks good**' })
 })
+
+
+it('preserves review comment avatars and handles deleted issue authors', () => {
+  expect(mapReviewComment({ ...GH_REVIEW_COMMENTS[0],
+    user: { login: 'reviewer', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
+  }, new Set())).toMatchObject({ author: 'reviewer', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })
+  const deleted = mapIssueComment({ ...GH_ISSUE_COMMENTS[0], user: null })
+  expect(deleted.author).toBe('ghost')
+  expect(deleted).not.toHaveProperty('avatarUrl')
+})
+
+it('keeps comment text available when thread resolution throws a non-Error value', async () => {
+  const gh = createFakeGh({ routes: {
+    'repos/acme/widgets/pulls/42/comments': ghJson(GH_REVIEW_COMMENTS),
+    'repos/acme/widgets/issues/42/comments': ghJson([]),
+    'repos/acme/widgets/pulls/42/reviews': ghJson([]),
+  } })
+  gh.graphql = async () => { throw 'offline' }
+  const { payload, warnings } = await fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)
+  expect(warnings).toEqual(['resolved state unavailable: offline'])
+  expect(payload.reviewComments[0]?.body).toBe('Why not `a() * b()`?')
+  expect(payload.reviewComments.every(comment => !comment.resolved)).toBe(true)
+})

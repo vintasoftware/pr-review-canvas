@@ -111,6 +111,7 @@ describe('POST /api/prs/:n/chat', () => {
     await reader.read()
     await reader.cancel()
     expect(runner.cancelled).toEqual([T1])
+    await expect.poll(() => t.ctx.chat.busy(42)).toBe(false)
   })
 
   it('refuses a context the canvas does not have, with a status rather than a stream', async () => {
