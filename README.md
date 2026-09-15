@@ -17,7 +17,9 @@ requesting review. After the project setup below, run the installed skill in Cla
 Replace **123** with your PR number. The skill reads the PR, generates and validates the canvas,
 then returns a local review URL and the exported zip's path. Open the URL to check the canvas.
 
-If you're happy with the canvas, attach the zip file to your PR description.
+The skill ends with upload instructions. If you're happy with the produced canvas, edit the PR
+description in GitHub's UI, drag the zip into the editor, wait for the upload to finish, and save.
+Uploading the zip is a manual browser step due to restrictions of GitHub's API.
 
 ### Review side
 
