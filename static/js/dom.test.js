@@ -1,6 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import {
+  avatarHtml,
   chevronHtml,
   copyToClipboard,
   detailsSummaryHtml,
@@ -101,4 +102,22 @@ describe('copyToClipboard', () => {
       /not available/
     )
   })
+})
+
+describe('avatarHtml', () => {
+  it('uses GitHub avatar images and falls back to initials for missing or untrusted URLs', () => {
+    expect(avatarHtml({ author: 'octocat', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })).toContain('<img')
+    expect(avatarHtml({ author: 'octocat', avatarUrl: 'https://example.com/tracker' })).not.toContain('<img')
+    expect(avatarHtml({ author: 'octocat', avatarUrl: '' })).toContain('OC')
+  })
+})
+
+it('copies through the browser clipboard when no override is supplied', async () => {
+  const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  try {
+    await copyToClipboard('review command')
+    expect(write).toHaveBeenCalledWith('review command')
+  } finally {
+    write.mockRestore()
+  }
 })

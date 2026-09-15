@@ -194,6 +194,31 @@ describe('normalize', () => {
     expect(layerIdForLine(layers, FILES, 'nope.ts', 'new', 1)).toBeUndefined()
   })
 
+  it('preserves model risk reasons across a saved-artifact round trip and excludes config tags', () => {
+    const saved = syntheticArtifact()
+    saved.layers[0]!.risk = [
+      { label: 'auth', source: 'config' },
+      { label: 'perf', source: 'model', reason: 'hot path' },
+      { label: 'data', source: 'model' },
+    ]
+    const model = artifactToModelOutput(saved)
+    expect(model.layers[0]?.risk).toEqual([
+      { label: 'perf', reason: 'hot path' },
+      { label: 'data', reason: '' },
+    ])
+    expect(normalize(model, { ...input(), highRisk: [] }).layers[0]?.risk).toEqual([
+      { label: 'perf', source: 'model', reason: 'hot path' },
+      { label: 'data', source: 'model', reason: '' },
+    ])
+  })
+
+  it('skips synthetic missing-test points when the layer has no files to anchor them to', () => {
+    const model = artifactToModelOutput(syntheticArtifact())
+    model.layers[0]!.files = []
+    const saved = normalize(model, input())
+    expect(saved.points.some(point => point.origin === 'tests')).toBe(false)
+  })
+
   it('round-trips through artifactToModelOutput and normalize', () => {
     const original = syntheticArtifact()
     const model = artifactToModelOutput(original)

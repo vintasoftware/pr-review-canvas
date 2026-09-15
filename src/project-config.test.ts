@@ -81,6 +81,14 @@ describe('mergeProjectConfig', () => {
     expect(result.warnings).toEqual([expect.stringContaining('generation.mode')])
   })
 
+  it.each([null, [], 'layers: []'])('warns and uses defaults for a non-object config: %j', raw => {
+    const result = mergeProjectConfig(raw)
+    expect(result.config).toEqual(DEFAULT_PROJECT_CONFIG)
+    expect(result.warnings).toEqual([
+      expect.stringMatching(/^pr-review\.config\.yml is invalid, using defaults: \(root\): /),
+    ])
+  })
+
   it('falls back to defaults with a warning when the shape is wrong', () => {
     const { config, warnings } = mergeProjectConfig({ layers: 'nope', generation: { maxRepairRounds: -1 } })
     expect(config).toEqual(DEFAULT_PROJECT_CONFIG)

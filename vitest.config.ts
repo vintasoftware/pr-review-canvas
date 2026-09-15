@@ -31,7 +31,7 @@ export default defineConfig({
         'static/js/**/*.d.ts',
         'src/**/*.d.ts',
       ],
-      reporter: ['text'],
+      reporter: ['text', 'json', 'json-summary'],
       thresholds: {
         lines: 95,
         branches: 95,

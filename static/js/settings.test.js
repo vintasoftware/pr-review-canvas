@@ -116,6 +116,15 @@ describe('settingsDialogHtml', () => {
     expect(html).toContain('rulebook: none')
   })
 
+  it('shows disabled chat and an agent-only override without adding a model flag', () => {
+    const html = settingsDialogHtml({
+      ...SETTINGS, overrides: { agent: 'codex' }, project: { ...SETTINGS.project, chatEnabled: false },
+    }, AGENTS)
+    expect(html).toContain('chat enabled: no')
+    expect(html).toContain('--agent codex')
+    expect(html).not.toContain('--model')
+  })
+
   it('names the serve flags that win over the file', () => {
     const html = settingsDialogHtml({ ...SETTINGS, overrides: { agent: 'codex', model: 'x' } }, AGENTS)
     expect(html).toContain('--agent codex --model x')

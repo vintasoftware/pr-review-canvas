@@ -448,3 +448,15 @@ describe('upload and download', () => {
     expect(result).toEqual({ ok: true })
   })
 })
+
+it('uses the browser upload transport without forcing a cross-repository import', async () => {
+  const xhr = fakeXhr(200, JSON.stringify({ status: 'ready' }))
+  vi.stubGlobal('XMLHttpRequest', class { constructor() { return xhr } })
+  try {
+    expect(await importCanvas(42, new File(['zip'], 'canvas.zip'))).toEqual({ status: 'ready' })
+    expect(xhr.sent?.get('force')).toBeNull()
+    expect(xhr.url).toBe('/api/prs/42/import')
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

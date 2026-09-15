@@ -98,6 +98,12 @@ describe('findAttachmentLinks', () => {
     ])
   })
 
+  it('deduplicates repeated asset URLs even when their labels differ', () => {
+    const name = 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    const text = `[${name}](${ASSET_URL}) and [copy.zip](${ASSET_URL})`
+    expect(findAttachmentLinks(text)).toEqual([{ url: ASSET_URL, name }])
+  })
+
   it('ignores links that are not zip attachments on github', () => {
     const text = [
       'https://evil.example/user-attachments/files/1/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
@@ -266,6 +272,19 @@ describe('downloadAttachment', () => {
 
     const failing: typeof fetch = () => Promise.reject(new Error('socket hang up'))
     t = await makeTestContext({ fetch: failing })
+    expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
+  })
+
+  it('reports a download interrupted after the ZIP header as a network failure', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([0x50, 0x4b, 0x03, 0x04]))
+      },
+      pull(controller) {
+        controller.error(new Error('connection closed during download'))
+      },
+    })
+    t = await makeTestContext({ fetch: fakeFetch([new Response(body)]).impl })
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
   })
 

@@ -627,6 +627,24 @@ describe('validateModelOutput', () => {
     ])
   })
 
+  it('reports unknown nodes when a diagram source has no recognized kind', () => {
+    const output = clean()
+    layer(output, 0).diagram = { mermaid: '%% comment without a diagram', links: { missing: '#file:src/app.ts' } }
+    expect(errorsOf(output).map(formatValidationError)).toContain(
+      'DIAGRAM_NODE_UNKNOWN layer run-path diagram: "missing" is not a node of the source'
+    )
+  })
+
+  it('identifies each oversized diagram when a field contains several', () => {
+    const output = clean()
+    const source = 'flowchart LR\n  A --> B'
+    output.summary = ['```mermaid', source, '```', '', '```mermaid', source, '```'].join('\n')
+    const errors = errorsOf(output, { caps: { ...TEXT_CAPS, diagram: 10 } })
+    expect(errors.filter(error => error.code === 'TEXT_TOO_LONG').map(error => error.where)).toEqual([
+      'summary.diagram.1', 'summary.diagram.2',
+    ])
+  })
+
   it('DIAGRAM_NODE_UNKNOWN: a sidecar key names a node the source does not draw', () => {
     const output = clean()
     layer(output, 0).diagram = {

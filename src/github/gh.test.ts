@@ -146,6 +146,26 @@ describe('createGitHubClient', () => {
     await expect(gh.post('repos/x/y/issues/1/comments', {})).rejects.toMatchObject({ missingBinary: true })
   })
 
+  it.each([
+    { stdout: '  example-token\n', code: 0, expected: 'example-token' },
+    { stdout: '  \n', code: 0, expected: null },
+    { stdout: 'stale-token', code: 1, expected: null },
+  ])('returns an auth token only after a successful nonempty response: $code/$expected', async row => {
+    const { exec, calls } = fakeExec(() => row)
+    expect(await createGitHubClient(exec).authToken()).toBe(row.expected)
+    expect(calls).toEqual([['auth', 'token']])
+  })
+
+  it('preserves API errors from an installed gh for header reads and posts', async () => {
+    const gh = createGitHubClient(fakeExec(() => ({ code: 1, stderr: 'HTTP 403: forbidden' })).exec)
+    await expect(gh.apiWithHeaders('repos/acme/widgets')).rejects.toMatchObject({
+      stderr: 'HTTP 403: forbidden', missingBinary: false,
+    })
+    await expect(gh.post('repos/acme/widgets/issues/42/comments', { body: 'hello' })).rejects.toMatchObject({
+      stderr: 'HTTP 403: forbidden', missingBinary: false,
+    })
+  })
+
   it('runs the real exec wrapper: a missing binary is reported, a real one answers', async () => {
     const missing = await execGh(['--version'], { binary: 'pr-review-no-such-binary' })
     expect(missing).toMatchObject({ missingBinary: true, code: 1, stdout: '' })

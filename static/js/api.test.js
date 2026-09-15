@@ -425,3 +425,22 @@ describe('streamChat', () => {
     ).resolves.toBeUndefined()
   })
 })
+
+it('pins reviewed-state writes to the selected canvas commit', async () => {
+  const f = fakeFetch(200, {})
+  await putReviewed(42, 'layer:1', true, { headSha: 'abc123', fetchImpl: f.impl })
+  expect(JSON.parse(String(f.calls[0]?.init?.body))).toEqual({ reviewed: true, headSha: 'abc123' })
+})
+
+it('streams chat using the browser fetch when no override is supplied', async () => {
+  const impl = vi.fn().mockResolvedValue(new Response('event: done\ndata: {"ok":true}\n\n'))
+  vi.stubGlobal('fetch', impl)
+  try {
+    const onEvent = vi.fn()
+    await streamChat(42, { message: 'hello', context: { kind: 'pr' } }, { onEvent })
+    expect(impl).toHaveBeenCalledTimes(1)
+    expect(onEvent).toHaveBeenCalledWith({ event: 'done', data: { ok: true } })
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

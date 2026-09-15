@@ -32,6 +32,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm verify
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-node-${{ matrix.node }}
+          path: coverage/*.json
+          retention-days: 7
       - name: Upload failure screenshots and traces
         if: failure()
         uses: actions/upload-artifact@v6

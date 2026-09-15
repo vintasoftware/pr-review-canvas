@@ -401,3 +401,33 @@ describe('renderDiff', () => {
     expect(html).toContain('&lt;/script&gt;')
   })
 })
+
+describe('move detection boundaries', () => {
+  it('does not treat whitespace-only additions as moved code', () => {
+    const hunks = parsePatch('@@ -1,3 +1,3 @@\n-a()\n-b()\n-c()\n+  \n+\n+  ')
+    expect(detectMoves(hunks)).toEqual([])
+  })
+
+  it('uses an added block only once when two deleted blocks contain the same code', () => {
+    const hunks = parsePatch([
+      '@@ -1,3 +0,0 @@', '-a()', '-b()', '-c()',
+      '@@ -10,3 +6,0 @@', '-a()', '-b()', '-c()',
+      '@@ -20,0 +14,3 @@', '+a()', '+b()', '+c()',
+    ].join('\n'))
+    expect(detectMoves(hunks)).toHaveLength(1)
+    expect(hunks[1]?.entries.every(entry => entry.move === null)).toBe(true)
+  })
+
+  it.each([
+    ['a()', 'b()'],
+    ['a()', 'other()', 'changed()', 'd()'],
+    ['a()', 'b()', 'c()', 'other()', 'changed()'],
+  ].map(added => ({ added })))('requires three matching lines and at least 70% similarity: $added', ({ added }) => {
+    const removed = ['a()', 'b()', 'c()', 'd()', 'e()']
+    const hunks = parsePatch([
+      '@@ -1,5 +0,0 @@', ...removed.map(line => '-' + line),
+      `@@ -10,0 +5,${added.length} @@`, ...added.map(line => '+' + line),
+    ].join('\n'))
+    expect(detectMoves(hunks)).toEqual([])
+  })
+})
