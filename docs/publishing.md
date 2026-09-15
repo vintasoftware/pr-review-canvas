@@ -1,7 +1,21 @@
 # Publishing to npm
 
 The package is `@vintasoftware/pr-review-canvas`; its installed command is `pr-review`.
-The next release is `0.2.0`. Publishing is manual. CI validates changes and has no npm credentials.
+Publishing is manual. CI validates changes and has no npm credentials.
+
+## Prepare a release
+
+Create a release branch, then bump the version without creating a tag:
+
+```bash
+git switch -c release/next
+npm version minor --no-git-tag-version
+corepack pnpm install --lockfile-only
+```
+
+Use `patch` or `major` when appropriate. Add release notes and upgrade instructions to
+[CHANGELOG.md](../CHANGELOG.md), commit the changes, and open a PR. Put commands for the
+specific release version in the PR description.
 
 ## Before publishing
 
@@ -60,16 +74,16 @@ If a fix is needed, merge it and repeat these checks for the new commit.
 ## Inspect the package and authenticate
 
 ```bash
+release_version=$(node -p "require('./package.json').version")
 npm pack --dry-run
-npm pack
-# Inspect the archive printed by npm pack (for 0.2.0):
-tar -tzf vintasoftware-pr-review-canvas-0.2.0.tgz
+npm pack --pack-destination /tmp
+tar -tzf "/tmp/vintasoftware-pr-review-canvas-${release_version}.tgz"
 npm login --registry=https://registry.npmjs.org/
 npm whoami --registry=https://registry.npmjs.org/
 npm view @vintasoftware/pr-review-canvas versions --json --registry=https://registry.npmjs.org/
 ```
 
-Confirm that `0.2.0` is absent from the published versions before proceeding. npm versions
+Confirm that the version in `package.json` is absent from the published versions before proceeding. npm versions
 cannot be reused once published. A network or authentication error does not establish
 version availability.
 
@@ -77,7 +91,7 @@ The archive should contain runtime source, static assets, prompts, the skill, ex
 CLI reference, README, package metadata, and license. Tests, fixtures, local review data, and
 credentials must be absent. `corepack pnpm test:package` checks the package contents and installation.
 
-## Publish 0.2.0
+## Publish
 
 From the same clean, verified checkout:
 
@@ -94,32 +108,20 @@ Publish from the checkout as shown: publishing a `.tgz` directly does not run th
 ## Verify and tag the release
 
 ```bash
-npm view @vintasoftware/pr-review-canvas@0.2.0 version dist.integrity --registry=https://registry.npmjs.org/
-npm install -g @vintasoftware/pr-review-canvas@0.2.0
+release_version=$(node -p "require('./package.json').version")
+npm view "@vintasoftware/pr-review-canvas@${release_version}" version dist.integrity --registry=https://registry.npmjs.org/
+npm install -g "@vintasoftware/pr-review-canvas@${release_version}"
 pr-review --help
-git tag -a v0.2.0 -m 'Release 0.2.0'
-git push origin v0.2.0
+git tag -a "v${release_version}" -m "Release ${release_version}"
+git push origin "v${release_version}"
 ```
 
 From a project clone, run `pr-review install-skill`, then `pr-review serve` and open
 http://localhost:3010. `pr-review doctor` checks GitHub access and local setup;
 `doctor --all-checks` additionally requires the optional `acpx` installation.
 
-Create a GitHub release for `v0.2.0` using the 0.2.0 section of [CHANGELOG.md](../CHANGELOG.md).
-
-## Later releases
-
-Use a branch to update the version before running CI:
-
-```bash
-git switch -c release/0.2.1
-npm version patch --no-git-tag-version
-corepack pnpm install --lockfile-only
-```
-
-Use `minor` or `major` when appropriate. Commit the version change and any release notes,
-open a PR, merge after CI passes, then repeat validation and publishing from `main`.
-Substitute the new version in all inspection, verification, and tagging commands.
+Create a GitHub release for the new tag using its section of
+[CHANGELOG.md](../CHANGELOG.md).
 
 References: [npm public scoped packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/),
 [npm publishing authentication](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/),
