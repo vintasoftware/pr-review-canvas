@@ -227,3 +227,33 @@ describe('wireFoldReveal', () => {
     expect(card.querySelector('tr.folded')?.classList.contains('shown')).toBe(false)
   })
 })
+
+it('leaves reversed ranges open', () => {
+  const card = mount()
+  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 4, endLine: 1 }])
+  expect(card.querySelector('.code-fold')).toBeNull()
+  expect(card.querySelector('tr[hidden]')).toBeNull()
+})
+
+it('leaves ranges spanning separate table bodies open', () => {
+  const card = mount()
+  const last = findRow(card, 'src_app_ts', 'new', 4)
+  const table = card.querySelector('table')
+  if (!last || !table) throw new Error('missing diff')
+  const body = document.createElement('tbody')
+  table.appendChild(body)
+  body.appendChild(last)
+  applyCodeFolds(card, 'src_app_ts', [FOLD])
+  expect(card.querySelector('.code-fold')).toBeNull()
+  expect(last.hidden).toBe(false)
+})
+
+it('ignores reveal events on folded rows without a summary', () => {
+  const card = mount()
+  const row = findRow(card, 'src_app_ts', 'new', 1)
+  if (!row) throw new Error('missing diff row')
+  row.classList.add('folded')
+  wireFoldReveal(card)
+  row.dispatchEvent(new CustomEvent('reveal-code', { bubbles: true }))
+  expect(row.classList.contains('shown')).toBe(false)
+})

@@ -1,7 +1,6 @@
 {
-  "name": "pr-review-canvas",
+  "name": "@vintasoftware/pr-review-canvas",
   "version": "0.1.0",
-  "private": true,
   "description": "Localhost PR review canvas: layered diffs, attention points, and GitHub comments for one PR",
   "type": "module",
   "bin": {
@@ -14,7 +13,10 @@
     "test:watch": "vitest",
     "test:browser": "playwright test",
     "coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:package": "node scripts/test-package.mjs",
+    "verify": "pnpm typecheck && pnpm coverage && pnpm test:browser --workers=2 && pnpm test:package",
+    "prepublishOnly": "pnpm verify"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",
@@ -48,11 +50,25 @@
     "static/",
     "prompts/",
     "skills/",
-    "pr-review.config.example.yml"
+    "pr-review.config.example.yml",
+    "docs/reference.md",
+    "!src/**/*.test.ts",
+    "!src/__tests__/**",
+    "!src/testing/**",
+    "!static/**/*.test.js",
+    "!static/**/__fixtures__/**"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vintasoftware/pr-review-canvas.git"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/vintasoftware/pr-review-canvas#readme",
+  "bugs": {
+    "url": "https://github.com/vintasoftware/pr-review-canvas/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

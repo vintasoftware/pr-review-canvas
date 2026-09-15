@@ -40,10 +40,10 @@ Sign in to GitHub with `gh auth login`.
 Install the command globally once, for use in any project:
 
 ```bash
-npm install -g git+ssh://git@github.com/vintasoftware/pr-review-canvas.git
+npm install -g @vintasoftware/pr-review-canvas
 ```
 
-The repository is currently private, so you need repository access and GitHub SSH authentication.
+The npm installation command will be available after the first release.
 
 ## Set up a project
 
@@ -145,7 +145,7 @@ To start from the installed templates (for an npm global install):
 
 ```bash
 mkdir -p review-prompts
-cp "$(npm root -g)/pr-review-canvas/prompts/"*.md review-prompts/
+cp "$(npm root -g)/@vintasoftware/pr-review-canvas/prompts/"*.md review-prompts/
 ```
 
 Edit the copies and add entries only for the templates you want to override. Commit
@@ -175,16 +175,17 @@ Restart the server after changing the config; chat template edits apply to new t
 In a clone of this tool, use pnpm for the shared lockfile and development checks:
 
 ```bash
-pnpm install
-pnpm test
-pnpm typecheck
-pnpm exec playwright install chromium
-pnpm test:browser
+corepack enable
+pnpm install --frozen-lockfile
+pnpm exec playwright install --with-deps chromium
+pnpm verify
 pnpm start --repo /path/to/your-project
 ```
 
 Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`
 directory; keep it out of Git.
+
+See [Publishing to npm](docs/publishing.md) for release checks and first-publish instructions.
 
 ## License
 
