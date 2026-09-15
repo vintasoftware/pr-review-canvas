@@ -9,9 +9,9 @@ import {
   hunkRange,
   loadPromptSources,
   manifestMarkdown,
-  PR_BODY_MAX_CHARS,
   patchLineCount,
   renderPrompt,
+  schemaMarkdown,
 } from './prompt.js'
 import { DEFAULT_TEST_PATTERNS } from './test-paths.js'
 
@@ -55,6 +55,26 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('"folds": {')
     expect(prompt).toContain('"collapsed": {')
     expect(prompt).not.toContain('{{')
+  })
+
+  it('uses immutable revisions for surrounding code', () => {
+    const prompt = renderPrompt(context(), PATCHES, sources)
+    expect(prompt).toContain(`git show ${HEAD_SHA}:<path>`)
+    expect(prompt).toContain(`git show ${BASE_SHA}:<path>`)
+    expect(prompt).not.toContain('working tree around you is fine')
+  })
+
+  it('exposes effective visible caps beside raw ceilings and uses the exact fold cap', () => {
+    const caps = { ...TEXT_CAPS, pointTitle: 75, annotation: 200 }
+    const schema = JSON.parse(schemaMarkdown(context({ caps })).slice(8, -4))
+    const layer = schema.properties.layers.items.properties
+    const file = layer.files.items.properties
+    expect(schema.properties.summary['x-visibleMaxLength']).toBe(caps.summary)
+    expect(layer.title['x-visibleMaxLength']).toBe(caps.layerTitle)
+    expect(file.note['x-visibleMaxLength']).toBe(caps.annotation)
+    expect(file.annotations.items.properties.text['x-visibleMaxLength']).toBe(caps.annotation)
+    expect(file.folds.items.properties.title.maxLength).toBe(caps.pointTitle)
+    expect(schema.properties.points.items.properties.title['x-visibleMaxLength']).toBe(caps.pointTitle)
   })
 
   it('uses the strict review guidance and quality standards by default', () => {
@@ -206,7 +226,7 @@ describe('renderPrompt', () => {
     )
   })
 
-  it('describes a change set, an empty description, a cut description, and an empty taxonomy', () => {
+  it('describes a change set, an empty description, a full description, and an empty taxonomy', () => {
     const pr = { ...syntheticArtifact().pr, number: null, body: '', state: 'pre-pr', draft: true }
     const prompt = renderPrompt(
       context({ target: { kind: 'refs', base: 'main', head: 'feat/b' }, pr, defaultLayers: [], highRisk: [] }),
@@ -219,9 +239,9 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('_No description._')
     expect(prompt).toContain('_The project config lists no default layers; choose the layers yourself._')
     expect(prompt).toContain('_No highRisk patterns are configured._')
-    const long = renderPrompt(context({ pr: { ...pr, body: 'x'.repeat(PR_BODY_MAX_CHARS + 5) } }), PATCHES, sources)
-    expect(long).toContain(`_[description cut at ${PR_BODY_MAX_CHARS} characters]_`)
-    expect(long).not.toContain('x'.repeat(PR_BODY_MAX_CHARS + 1))
+    const body = 'x'.repeat(8000) + '\n\n## What this costs\nThe complete trade-off.'
+    const long = renderPrompt(context({ pr: { ...pr, body } }), PATCHES, sources)
+    expect(long).toContain('> ' + body.replace(/\n/g, '\n> '))
   })
 
   it('states the small-change guidance with the hunk count and limit, or that the rules apply in full', () => {

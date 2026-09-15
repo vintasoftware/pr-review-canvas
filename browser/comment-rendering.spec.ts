@@ -1,5 +1,34 @@
 import { expect, test } from './fixtures.js'
 
+test('loads PR screenshots and external bot images under the canvas CSP', async ({ page, reviewUrl }) => {
+  const screenshot = 'https://github.com/user-attachments/assets/test-screenshot'
+  const botAsset = 'https://assets.coderabbit.ai/test-review.png'
+  for (const url of [screenshot, botAsset]) {
+    await page.route(url, route => route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCWQAAAAASUVORK5CYII=', 'base64'),
+    }))
+  }
+  await page.route('**/api/prs/42', async route => {
+    const response = await route.fetch()
+    const bundle = await response.json()
+    bundle.pr.body = `![Self-QA screenshot](${screenshot})`
+    bundle.comments.issueComments.push({
+      id: 9010, author: 'coderabbitai', body: `![Bot evidence](${botAsset})`,
+      createdAt: '2026-09-10T12:00:00Z', updatedAt: '2026-09-10T12:00:00Z',
+      url: 'https://github.com/comment/9010',
+    })
+    await route.fulfill({ response, json: bundle })
+  })
+  await page.goto(reviewUrl)
+  await page.locator('.pr-desc > summary').click()
+  for (const alt of ['Self-QA screenshot', 'Bot evidence']) {
+    const img = page.getByRole('img', { name: alt, exact: true })
+    await img.scrollIntoViewIfNeeded()
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1)
+  }
+})
+
 test('renders avatars, safe GitHub Markdown, and comments missing from current files', async ({ page, reviewUrl }) => {
   await page.route('https://avatars.githubusercontent.com/**', route => route.fulfill({
     contentType: 'image/png',

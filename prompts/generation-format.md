@@ -7,9 +7,12 @@
 - Read-only. Do not check anything out, do not run the tests, and do not write anywhere except
   `<model>`.
 - The {{TARGET_WORD}} head is **not** checked out. Read a changed file as it is at the head from
-  `<head>/<path>` and at the merge base from `<base>/<path>`. The working tree around you is fine
-  for surrounding code that the diff does not touch.
+  `<head>/<path>` and at the merge base from `<base>/<path>`. Read untouched files with
+  `git show {{HEAD_SHA}}:<path>` from the repository root; the working tree may be on an unrelated
+  branch, including for stacked PRs. Use `git show {{MERGE_BASE_SHA}}:<path>` for base context.
 - Write `<model>` and nothing else. It must match the JSON schema at the end of this file.
+  Prefer the host's file-writing tool (such as Write) over a shell heredoc: the canvas directory
+  may be under the user's home directory, where shell write guards can block heredocs.
 
 ## The {{TARGET_WORD}}
 
@@ -94,14 +97,17 @@ the reviewer can expand the full diff. Collapsing never marks code as reviewed.
   Leave partial or ambiguous ranges open. A function spanning several hunks can use a separate
   titled range in each hunk, or the whole file can start collapsed when appropriate.
 - Generate no explanation or confidence score for a fold. The title is plain text. Use the actual test title or symbol
-  name, not a label such as "safe code". Omit `collapsed` and `folds` where the code should start open.
+  name when it fits. For a longer name, use a faithful excerpt with an ellipsis within the fold-title
+  cap, preserving the behavior and distinguishing condition. The full name remains in the expanded
+  code. Omit `collapsed` and `folds` where the code should start open.
 
 ## Length rules
 
 Caps, in characters of the text a reader sees: link targets, backticks, and code-fence lines do not
 count, so `[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects
-anything longer. (The JSON schema's `maxLength` values are a hard limit on the raw text, four times
-the cap; the caps below are the ones that matter.)
+anything longer. Each prose field's schema description states its visible-character cap;
+`maxLength` only bounds raw Markdown, including link targets. Passing JSON Schema alone does not
+check visible length. Draft below the visible caps, then run `validate --human --fix` before publish.
 
 {{CAPS}}
 

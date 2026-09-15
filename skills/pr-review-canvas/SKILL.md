@@ -1,5 +1,6 @@
 ---
 name: pr-review-canvas
+model: sonnet
 description: Generate a review canvas for a GitHub pull request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` until the validator passes. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR.
 ---
 
@@ -18,6 +19,14 @@ publish replaces it), so you start a fresh `model.json`. Run every `pr-review` c
 repository root.
 
 ## Flow
+
+### Model choice
+
+Claude Code defaults this skill to Sonnet. If the prepared diff changes authentication, access
+policy, or protected health information (PHI) handling, use an Opus agent for the generation and
+validation steps when available. Pass it the prepared prompt and context paths; it writes the
+same model file. Honor an explicit user model choice. Other hosts keep their selected model.
+Record the model that actually generated the canvas when publishing.
 
 ### 1. Prepare
 
@@ -44,14 +53,16 @@ Progress goes to stderr. The last stdout line is JSON:
 Read `promptPath` in full: it holds the pull request, the manifest with every hunk id, the diffs
 (inline or by file path), the layering and length rules, the rulebook, and the JSON schema. Read
 `contextPath` when you need the paths of the head files, the base files, or the patches. Read any
-file in the repository you need to judge the change. Do not check anything out.
+untouched file with `git show <headSha>:<path>` from the repository root, using the SHA returned
+by prepare. The working tree may be on another branch. Do not check anything out.
 
 ### 3. Write model.json
 
 Write `<canvasDir>/model.json` matching the schema in the prompt. Write JSON only; no prose in the
 file, no comments, no markdown fence.
 
-Use a file-writing tool that can write to the canvas directory reported by prepare.
+Prefer the host's file-writing tool (such as Write) for the canvas directory reported by prepare.
+Shell heredocs may be blocked by write guards when that directory is under the user's home.
 
 ### 4. Check before publishing
 

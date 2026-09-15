@@ -144,3 +144,22 @@ it('renders safe GitHub HTML and images while removing active content', () => {
   expect(document.querySelectorAll('img')).toHaveLength(1)
   expect(document.querySelector('script, iframe, [onerror]')).toBeNull()
 })
+
+it('allows HTTPS screenshots and bot assets with no referrer, and removes unsafe image sources', () => {
+  document.body.innerHTML = renderMarkdown([
+    '![screenshot](https://github.com/user-attachments/assets/example)',
+    '![bot](https://assets.coderabbit.ai/review.png)',
+    '<img src="http://example.com/plain.png">',
+    '<img src="data:image/png;base64,AAAA">',
+    '<img src="/api/private">',
+  ].join('\n\n'), { github: true })
+  const images = Array.from(document.querySelectorAll('img'))
+  expect(images.map(img => img.getAttribute('src'))).toEqual([
+    'https://github.com/user-attachments/assets/example',
+    'https://assets.coderabbit.ai/review.png',
+  ])
+  for (const img of images) {
+    expect(img.loading).toBe('lazy')
+    expect(img.referrerPolicy).toBe('no-referrer')
+  }
+})

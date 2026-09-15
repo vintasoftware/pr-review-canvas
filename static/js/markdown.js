@@ -172,8 +172,12 @@ function renderProse(src, opts) {
     if (!ALLOWED_TAGS.includes(element.tagName.toLowerCase())) element.remove()
   }
   for (const img of root.querySelectorAll('img')) {
-    if (!/^https:\/\/(?:avatars\.githubusercontent\.com|user-images\.githubusercontent\.com|private-user-images\.githubusercontent\.com|github\.com|camo\.githubusercontent\.com)\//i.test(img.getAttribute('src') ?? '')) img.remove()
-    else { img.loading = 'lazy'; img.referrerPolicy = 'no-referrer' }
+    if (!/^https:\/\//i.test(img.getAttribute('src') ?? '')) {
+      img.remove()
+    } else {
+      img.loading = 'lazy'
+      img.referrerPolicy = 'no-referrer'
+    }
   }
   for (const input of root.querySelectorAll('input')) {
     input.type = 'checkbox'

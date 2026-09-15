@@ -31,6 +31,11 @@ pr-review doctor
 and `.agents/skills/pr-review-canvas`, respectively. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
+Canvas generation defaults to Sonnet in Claude Code. The skill directs reviews of authentication,
+access policy, or protected health information (PHI) handling to an Opus agent when available,
+and honors an explicit model request. Other hosts keep their selected model. The publish command's
+`--model` flag records the generator; it does not select a model.
+
 `doctor` checks Git, your GitHub remote, the GitHub CLI and its login, write access to the local
 canvas directory, and whether the skill is installed. It prints a JSON report with a result for
 each check and suggested fixes for failures. Exit code `0` means all checks passed.

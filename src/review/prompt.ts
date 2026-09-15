@@ -29,8 +29,6 @@ export async function loadPromptSources(dir = PROMPTS_DIR): Promise<PromptSource
   return { format, layersDefault, qualityStandards, generation: { strict, surfacing } }
 }
 
-export const PR_BODY_MAX_CHARS = 8000
-
 /** The line ranges of a hunk header; the trailing function context can hold backticks. */
 export function hunkRange(header: string): string {
   const m = /^(@@ [^@]*@@)/.exec(header)
@@ -122,11 +120,7 @@ function bodyMarkdown(ctx: GenerationContext): string {
   if (body === '') {
     return '_No description._'
   }
-  const cut =
-    body.length > PR_BODY_MAX_CHARS
-      ? `${body.slice(0, PR_BODY_MAX_CHARS)}\n\n_[description cut at ${PR_BODY_MAX_CHARS} characters]_`
-      : body
-  return `> ${cut.replace(/\n/g, '\n> ')}`
+  return `> ${body.replace(/\n/g, '\n> ')}`
 }
 
 function rulebookMarkdown(ctx: GenerationContext): string {
@@ -207,6 +201,8 @@ export function renderPrompt(ctx: GenerationContext, patches: Record<string, str
   const tokens: Record<string, string> = {
     TARGET_WORD: ctx.target.kind === 'pr' ? 'pull request' : 'change set',
     META: metaMarkdown(ctx),
+    HEAD_SHA: ctx.headSha,
+    MERGE_BASE_SHA: ctx.mergeBaseSha,
     BODY: bodyMarkdown(ctx),
     PATHS: pathsMarkdown(ctx),
     MODEL_PATH: ctx.paths.model,

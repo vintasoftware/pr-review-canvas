@@ -148,6 +148,7 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
       check(`${at}.tests.${j}.behavior`, 'testBehavior', t.behavior)
     })
     layer.files.forEach((f, j) => {
+      check(`${at}.files.${j}.note`, 'annotation', f.note)
       f.folds?.forEach((fold, k) => {
         const where = `${at}.files.${j}.folds.${k}.title`
         if (fold.title.length > caps.pointTitle) {

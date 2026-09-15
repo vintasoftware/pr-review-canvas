@@ -157,11 +157,18 @@ export type Diagram = z.infer<typeof DiagramSchema>
 type Caps = TextCaps
 
 function text(caps: Caps, key: keyof TextCaps): z.ZodString {
-  return z.string().min(1).max(caps[key])
+  return textOrEmpty(caps, key).min(1)
 }
 
 function textOrEmpty(caps: Caps, key: keyof TextCaps): z.ZodString {
-  return z.string().max(caps[key])
+  const visibleCap = caps[key] / HARD_CAP_FACTOR
+  const diagrams = key === 'summary' || key === 'rationale'
+    ? ' Mermaid fences count toward the separate diagram cap, not this prose cap.'
+    : ''
+  return z.string().max(caps[key]).meta({
+    description: `At most ${visibleCap} visible characters. Link targets, backticks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
+    'x-visibleMaxLength': visibleCap,
+  })
 }
 
 export function testEntrySchema(caps: Caps) {
@@ -197,14 +204,14 @@ function codeFoldSchema(caps: Caps) {
 export const CodeFoldSchema = codeFoldSchema(ARTIFACT_HARD_CAPS)
 export type CodeFold = z.infer<typeof CodeFoldSchema>
 
-function layerFileBase(caps: Caps) {
+function layerFileBase(caps: Caps, foldTitleCap = caps.pointTitle) {
   return {
     path: z.string().min(1),
     hunks: z.array(z.string().min(1)).min(1),
-    note: z.string().optional(),
+    note: textOrEmpty(caps, 'annotation').optional(),
     annotations: z.array(annotationSchema(caps)),
     collapsed: z.boolean().optional(),
-    folds: z.array(codeFoldSchema(caps)).optional(),
+    folds: z.array(codeFoldSchema({ ...caps, pointTitle: foldTitleCap })).optional(),
   }
 }
 
@@ -304,7 +311,7 @@ export function modelOutputSchema(textCaps: TextCaps) {
         z.object({
           ...layerBase(caps),
           risk: z.array(z.object({ label: z.string().min(1), reason: z.string().min(1) })).optional(),
-          files: z.array(z.object(layerFileBase(caps))),
+          files: z.array(z.object(layerFileBase(caps, textCaps.pointTitle))),
         })
       )
       .min(1),

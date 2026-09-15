@@ -42,6 +42,17 @@ function errorsOf(output: unknown, over: Partial<ValidationInput> = {}): Validat
 }
 
 describe('validateModelOutput', () => {
+  it('caps file notes by visible text while allowing long link targets', () => {
+    const output = clean()
+    const file = output.layers[0]!.files[0]!
+    file.note = 'x'.repeat(TEXT_CAPS.annotation + 1)
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'layers.0.files.0.note' }),
+    ])
+    file.note = `[short](https://example.com/${'x'.repeat(TEXT_CAPS.annotation)})`
+    expect(errorsOf(output)).toEqual([])
+  })
+
   it('keeps descriptive fold fields in the validated JSON', () => {
     const output = clean()
     const file = output.layers.flatMap(layer => layer.files).find(file => file.path === 'src/app.test.ts')
