@@ -94,9 +94,9 @@ export function rankCandidates(
   candidates: AttachmentCandidate[],
   target: { headSha: string; prNumber: number }
 ): AttachmentCandidate[] {
-  const sha7 = target.headSha.slice(0, 7)
+  const shaPrefix = target.headSha.slice(0, 8)
   const score = (c: AttachmentCandidate): number =>
-    (c.parsed.sha7 === sha7 ? 2 : 0) + (c.parsed.prNumber === target.prNumber ? 1 : 0)
+    (c.parsed.shaPrefix === shaPrefix ? 2 : 0) + (c.parsed.prNumber === target.prNumber ? 1 : 0)
   return [...candidates].sort(
     (a, b) => score(b) - score(a) || b.postedAt.localeCompare(a.postedAt) || b.order - a.order
   )
@@ -261,7 +261,7 @@ async function tryCandidate(
   const shared = {
     url: candidate.url,
     name: candidate.name,
-    matchesHead: candidate.parsed.sha7 === pr.headSha.slice(0, 7),
+    matchesHead: candidate.parsed.shaPrefix === pr.headSha.slice(0, 8),
   }
   const download = await downloadAttachment(ctx, candidate.url)
   if (!download.ok) {

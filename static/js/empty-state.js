@@ -50,7 +50,7 @@ export function validateCanvasFilename(filename) {
   if (!filename.toLowerCase().endsWith('.zip')) {
     return 'that is not a zip file'
   }
-  return filename.toLowerCase().startsWith('pr-review-canvas-') ? null : 'that zip is not a review canvas export'
+  return /^(?:pr-[1-9]\d*|ref)-.+-canvas\.zip$/i.test(filename) ? null : 'that zip is not a review canvas export'
 }
 
 /**

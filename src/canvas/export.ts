@@ -37,7 +37,7 @@ export async function buildCanvasZipFor(
   const number = prNumber ?? stored.prNumber
   const manifest: CanvasManifest = number === undefined ? stored : { ...stored, prNumber: number }
   const zip: CanvasZip = {
-    name: buildCanvasZipName({ repo: manifest.repo, headSha, prNumber: number }),
+    name: buildCanvasZipName({ repo: manifest.repo, headSha, prNumber: number, generatedAt: manifest.generatedAt }),
     bytes: buildCanvasZip(manifest, artifact),
     headSha,
   }

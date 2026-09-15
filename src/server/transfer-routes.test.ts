@@ -22,7 +22,7 @@ import { createApp } from './app.js'
 const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, origin: 'http://localhost:3010', 'sec-fetch-site': 'same-origin' }
 const OLD_SHA = 'e'.repeat(40)
-const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-review-canvas-acme-widgets-pr42-eeeeeee.zip'
+const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip'
 
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T
@@ -125,7 +125,7 @@ describe('transfer routes', () => {
       expect(res.status).toBe(200)
       expect(res.headers.get('content-type')).toBe('application/zip')
       expect(res.headers.get('content-disposition')).toBe(
-        'attachment; filename="pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip"'
+        'attachment; filename="pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip"'
       )
       const read = readCanvasZip(new Uint8Array(await res.arrayBuffer()))
       expect(read.artifact).toEqual(artifactFor(HEAD_SHA))
@@ -135,7 +135,7 @@ describe('transfer routes', () => {
       t = await contextFor()
       await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
       const res = await createApp(t.ctx).request(`/api/prs/42/export?headSha=${OLD_SHA}`, { headers: LOCAL })
-      expect(res.headers.get('content-disposition')).toContain('pr42-eeeeeee.zip')
+      expect(res.headers.get('content-disposition')).toContain('pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip')
       const bad = await createApp(t.ctx).request('/api/prs/42/export?headSha=nope', { headers: LOCAL })
       expect(bad.status).toBe(400)
     })
@@ -316,7 +316,7 @@ describe('transfer routes', () => {
       expect(bundle.canvas?.source).toBe('import')
       expect(bundle.sharedCanvas).toEqual({
         url: FILE_URL,
-        name: 'pr-review-canvas-acme-widgets-pr42-eeeeeee.zip',
+        name: 'pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip',
         matchesHead: false,
         downloadable: true,
       })

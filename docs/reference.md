@@ -75,6 +75,10 @@ pr-review import <zip> [--pr <n>] [--force]
   the archive; it does not select the commit.
 - `--out` defaults to the data directory's `exports/` folder. Supply an existing directory to
   keep the generated filename, or a full `.zip` file path to choose a name.
+- Generated names follow `pr-<number>-<YYYYMMDDTHHmmssZ>-<sha8>-<owner>-<repo>-canvas.zip`,
+  for example `pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip`. The timestamp is the
+  canvas generation time in UTC, to seconds, so exports sort chronologically within each PR.
+  Before a PR exists, `ref-` replaces `pr-<number>-`. Re-exporting the same canvas keeps its name.
 - Export returns `status`, `path`, `name`, `headSha`, and `prNumber` when supplied or stored.
 - `import --pr` compares the imported canvas with that PR's current head. Without it, import does
   not check against a live PR.

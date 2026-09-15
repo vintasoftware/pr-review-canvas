@@ -83,7 +83,8 @@ describe('drop state', () => {
   })
 
   it('accepts a canvas export and names the problem with anything else', () => {
-    expect(validateCanvasFilename('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')).toBeNull()
+    expect(validateCanvasFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')).toBeNull()
+    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')).toBeNull()
     expect(validateCanvasFilename('notes.pdf')).toBe('that is not a zip file')
     expect(validateCanvasFilename('holiday-photos.zip')).toBe('that zip is not a review canvas export')
   })
@@ -119,9 +120,9 @@ describe('drop zone', () => {
       onImported: result => sent.push([0, result.status]),
     })
     expect(zone).not.toBeNull()
-    await zone?.send(zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'))
+    await zone?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
     expect(sent).toEqual([
-      [42, 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'],
+      [42, 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'],
       [0, 'ready'],
     ])
     expect(zone?.state()).toEqual({ phase: 'idle', progress: 1, error: null })
@@ -135,7 +136,7 @@ describe('drop zone', () => {
       importImpl: () => Promise.reject(new ApiError({ code: 'CANVAS_INVALID', message: 'not a canvas' }, 400)),
       onImported: () => undefined,
     })
-    await zone?.send(zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'))
+    await zone?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
     expect(document.querySelector('.cmd-err')?.textContent).toBe('not a canvas')
     expect(zone?.state().error).toBe('not a canvas')
     const thrown = wireDropZone(mount(renderEmptyState(bundle())), {
@@ -144,7 +145,7 @@ describe('drop zone', () => {
       importImpl: () => Promise.reject('boom'),
       onImported: () => undefined,
     })
-    await thrown?.send(zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'))
+    await thrown?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
     expect(document.querySelector('.cmd-err')?.textContent).toBe('boom')
   })
 
@@ -183,13 +184,13 @@ describe('drop zone', () => {
     expect(label?.classList.contains('over')).toBe(false)
     const input = document.querySelector('#zip')
     if (input instanceof HTMLInputElement) {
-      const file = zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')
+      const file = zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
       Object.defineProperty(input, 'files', { value: [file], configurable: true })
       input.dispatchEvent(new Event('change'))
       await Promise.resolve()
       await Promise.resolve()
     }
-    expect(sent).toEqual(['pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'])
+    expect(sent).toEqual(['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'])
   })
 
   it('sends a file dropped on the zone and ignores a drop with no file', async () => {
@@ -204,7 +205,7 @@ describe('drop zone', () => {
       },
       onImported: () => undefined,
     })
-    const file = zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')
+    const file = zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     const drop = new DragEvent('drop', { bubbles: true, cancelable: true })
     Object.defineProperty(drop, 'dataTransfer', { value: { files: [file] } })
     zone?.element.dispatchEvent(drop)
@@ -214,7 +215,7 @@ describe('drop zone', () => {
     Object.defineProperty(empty, 'dataTransfer', { value: { files: [] } })
     zone?.element.dispatchEvent(empty)
     zone?.element.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }))
-    expect(sent).toEqual(['pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'])
+    expect(sent).toEqual(['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'])
   })
 
   it('returns null on a screen without a drop zone', () => {
@@ -276,8 +277,8 @@ describe('stale screen', () => {
 
   it('offers to fetch the shared canvas again when the download failed', () => {
     const shared = {
-      url: 'https://github.com/user-attachments/files/1/pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      url: 'https://github.com/user-attachments/files/1/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       matchesHead: true,
       downloadable: false,
       reason: /** @type {const} */ ('auth-required'),

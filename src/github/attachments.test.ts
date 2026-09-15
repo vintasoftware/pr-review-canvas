@@ -17,7 +17,7 @@ import {
   rankCandidates,
 } from './attachments.js'
 
-const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'
+const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
 const ASSET_URL = 'https://github.com/user-attachments/assets/6e9d2b7c-1f2a-4c3d-9a8b-0f1e2d3c4b5a'
 const SIGNED_URL = 'https://objects.githubusercontent.com/canvas.zip?sig=abc'
 
@@ -91,16 +91,16 @@ function zipResponse(bytes: Uint8Array, status = 200): Response {
 
 describe('findAttachmentLinks', () => {
   it('reads the files form and the markdown-labelled assets form once each', () => {
-    const text = `see ${FILE_URL} and [pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip](${ASSET_URL})\nand ${FILE_URL}`
+    const text = `see ${FILE_URL} and [pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip](${ASSET_URL})\nand ${FILE_URL}`
     expect(findAttachmentLinks(text)).toEqual([
-      { url: FILE_URL, name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip' },
-      { url: ASSET_URL, name: 'pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip' },
+      { url: FILE_URL, name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip' },
+      { url: ASSET_URL, name: 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip' },
     ])
   })
 
   it('ignores links that are not zip attachments on github', () => {
     const text = [
-      'https://evil.example/user-attachments/files/1/pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      'https://evil.example/user-attachments/files/1/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       'https://github.com/user-attachments/files/1/notes.pdf',
       '[canvas.zip](https://github.com/acme/widgets/files/1/canvas.zip)',
     ].join('\n')
@@ -111,23 +111,35 @@ describe('findAttachmentLinks', () => {
 describe('candidate collection and ranking', () => {
   it('keeps only names that parse for this repo, across body and comments', () => {
     const payload = comments({
-      issueComments: [issue(1, `[pr-review-canvas-other-repo-pr42-aaaaaaa.zip](${ASSET_URL})`), issue(2, FILE_URL)],
+      issueComments: [issue(1, `[pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip](${ASSET_URL})`), issue(2, FILE_URL)],
     })
     const found = collectCandidates(
       { body: 'nothing here', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
       TEST_REPO
     )
-    expect(found.map(c => [c.name, c.order])).toEqual([['pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip', 0]])
+    expect(found.map(c => [c.name, c.order])).toEqual([['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 0]])
+  })
+
+  it('uses all eight commit characters when ranking attachments', () => {
+    const name = 'pr-42-20260910T110000Z-aaaaaaab-acme-widgets-canvas.zip'
+    const candidates = collectCandidates({
+      body: FILE_URL,
+      bodyUpdatedAt: '2026-09-09T09:00:00Z',
+      comments: comments({ issueComments: [issue(1, `https://github.com/user-attachments/files/2/${name}`)] }),
+    }, TEST_REPO)
+    const ranked = rankCandidates(candidates, { headSha: HEAD_SHA, prNumber: 42 })
+    expect(ranked).toHaveLength(2)
+    expect(ranked[0]?.parsed.shaPrefix).toBe('aaaaaaaa')
   })
 
   it('puts the canvas for the head first, then this PR, then the newest link', () => {
     const url = (n: string) => `https://github.com/user-attachments/files/1/${n}`
-    const forHead = `pr-review-canvas-acme-widgets-pr42-${HEAD_SHA.slice(0, 7)}.zip`
+    const forHead = `pr-42-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
     const payload = comments({
       issueComments: [
-        issue(1, url('pr-review-canvas-acme-widgets-ccccccc.zip')),
-        issue(2, url('pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip')),
-        issue(3, url('pr-review-canvas-acme-widgets-ddddddd.zip')),
+        issue(1, url('ref-20260910T110000Z-cccccccc-acme-widgets-canvas.zip')),
+        issue(2, url('pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip')),
+        issue(3, url('ref-20260910T110000Z-dddddddd-acme-widgets-canvas.zip')),
         issue(4, url(forHead)),
       ],
     })
@@ -137,9 +149,9 @@ describe('candidate collection and ranking', () => {
     )
     expect(ranked.map(c => c.name)).toEqual([
       forHead,
-      'pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip',
-      'pr-review-canvas-acme-widgets-ddddddd.zip',
-      'pr-review-canvas-acme-widgets-ccccccc.zip',
+      'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip',
+      'ref-20260910T110000Z-dddddddd-acme-widgets-canvas.zip',
+      'ref-20260910T110000Z-cccccccc-acme-widgets-canvas.zip',
     ])
   })
 })
@@ -147,8 +159,8 @@ describe('candidate collection and ranking', () => {
 describe('ranking by edit time', () => {
   it('prefers the attachment added last, counting an edit as the moment it appeared', () => {
     const url = (n: string) => `https://github.com/user-attachments/files/1/${n}`
-    const edited = 'pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip'
-    const newer = 'pr-review-canvas-acme-widgets-pr42-ccccccc.zip'
+    const edited = 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip'
+    const newer = 'pr-42-20260910T110000Z-cccccccc-acme-widgets-canvas.zip'
     const payload = comments({
       issueComments: [
         // Monday's comment, edited on Wednesday to carry a canvas.
@@ -295,7 +307,7 @@ describe('discoverSharedCanvas', () => {
     const outcome = await discoverSharedCanvas(t.ctx, pr({ body: FILE_URL }), comments())
     expect(outcome.sharedCanvas).toEqual({
       url: FILE_URL,
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       matchesHead: true,
       downloadable: true,
     })
@@ -308,7 +320,7 @@ describe('discoverSharedCanvas', () => {
     const outcome = await discoverSharedCanvas(t.ctx, pr({ body: FILE_URL }), comments())
     expect(outcome.sharedCanvas).toEqual({
       url: FILE_URL,
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       matchesHead: true,
       downloadable: false,
       reason: 'auth-required',
@@ -318,7 +330,7 @@ describe('discoverSharedCanvas', () => {
 
   it('falls through to the next attachment when the best one cannot be downloaded', async () => {
     // The link named for the head ranks first and is broken; the other one is the real canvas.
-    const other = 'https://github.com/user-attachments/files/2/pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip'
+    const other = 'https://github.com/user-attachments/files/2/pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip'
     const fetches = fakeFetch([new Response('', { status: 404 }), zipResponse(canvasBytes())])
     t = await localClone(fetches.impl)
     const payload = comments({
@@ -329,7 +341,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.imported?.status).toBe('ready')
     expect(outcome.sharedCanvas).toEqual({
       url: other,
-      name: 'pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip',
+      name: 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip',
       matchesHead: false,
       downloadable: true,
     })
@@ -337,7 +349,7 @@ describe('discoverSharedCanvas', () => {
 
   it('tries at most three attachments and reports the first failure', async () => {
     const url = (n: number) =>
-      `https://github.com/user-attachments/files/${n}/pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip`
+      `https://github.com/user-attachments/files/${n}/pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip`
     const fetches = alwaysFetch(() => new Response('', { status: 404 }))
     t = await localClone(fetches.impl)
     const payload = comments({
@@ -348,7 +360,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.imported).toBeNull()
     expect(outcome.sharedCanvas).toEqual({
       url: url(4),
-      name: 'pr-review-canvas-acme-widgets-pr42-bbbbbbb.zip',
+      name: 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip',
       matchesHead: false,
       downloadable: false,
       reason: 'auth-required',

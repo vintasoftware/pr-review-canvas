@@ -4,10 +4,8 @@ import type { Repo } from '../contract/review-artifact.js'
 
 export interface ParsedCanvasName {
   prNumber?: number
-  sha7: string
+  shaPrefix: string
 }
-
-export const CANVAS_NAME_PREFIX = 'pr-review-canvas'
 
 /** Owner and repo names may hold characters a file name should not; runs of them become one dash. */
 function slugPart(value: string): string {
@@ -24,32 +22,34 @@ export function repoSlug(repo: Repo): string {
 export interface BuildNameOptions {
   repo: Repo
   headSha: string
+  generatedAt: string
   prNumber?: number | undefined
 }
 
-/** `pr-review-canvas-<owner>-<repo>-pr<n>-<sha7>.zip`, without `-pr<n>` before the PR exists. */
+/** PR or ref, UTC generation time to seconds, commit prefix, repository, and canvas marker. */
 export function buildCanvasZipName(opts: BuildNameOptions): string {
-  const pr = opts.prNumber === undefined ? '' : `-pr${opts.prNumber}`
-  return `${CANVAS_NAME_PREFIX}-${repoSlug(opts.repo)}${pr}-${opts.headSha.slice(0, 7)}.zip`
+  const target = opts.prNumber === undefined ? 'ref' : `pr-${opts.prNumber}`
+  const timestamp = new Date(opts.generatedAt).toISOString().slice(0, 19).replace(/[-:]/g, '') + 'Z'
+  return `${target}-${timestamp}-${opts.headSha.slice(0, 8)}-${repoSlug(opts.repo)}-canvas.zip`
 }
 
-const TAIL_RE = /^(?:pr(\d+)-)?([0-9a-f]{7})\.zip$/
+const NAME_RE = /^(?:pr-([1-9]\d*)|ref)-\d{8}t\d{6}z-([0-9a-f]{8})$/
 
 /**
  * Reads a file name as a canvas zip for `repo`. A name for another repository, or one that does
  * not follow the grammar, returns null: discovery uses this to skip attachments that are not ours.
  */
 export function parseCanvasZipName(filename: string, repo: Repo): ParsedCanvasName | null {
-  const prefix = `${CANVAS_NAME_PREFIX}-${repoSlug(repo)}-`
+  const suffix = `-${repoSlug(repo)}-canvas.zip`
   const lower = filename.toLowerCase()
-  if (!lower.startsWith(prefix)) {
+  if (!lower.endsWith(suffix)) {
     return null
   }
-  const m = TAIL_RE.exec(lower.slice(prefix.length))
-  const sha7 = m?.[2]
-  if (sha7 === undefined) {
+  const m = NAME_RE.exec(lower.slice(0, -suffix.length))
+  const shaPrefix = m?.[2]
+  if (shaPrefix === undefined) {
     return null
   }
   const pr = m?.[1]
-  return pr === undefined ? { sha7 } : { prNumber: Number(pr), sha7 }
+  return pr === undefined ? { shaPrefix } : { prNumber: Number(pr), shaPrefix }
 }
