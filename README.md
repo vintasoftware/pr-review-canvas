@@ -175,11 +175,11 @@ Restart the server after changing the config; chat template edits apply to new t
 In a clone of this tool, use pnpm for the shared lockfile and development checks:
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm exec playwright install --with-deps chromium
-pnpm verify
-pnpm start --repo /path/to/your-project
+corepack pnpm --version
+corepack pnpm install --frozen-lockfile
+corepack pnpm exec playwright install --with-deps chromium
+corepack pnpm verify
+corepack pnpm start --repo /path/to/your-project
 ```
 
 Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`

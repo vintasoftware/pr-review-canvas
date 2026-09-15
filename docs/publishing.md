@@ -12,7 +12,7 @@ The first release is `0.1.0`. Publishing is manual. CI validates changes and has
 3. Merge the release-preparation PR. Wait for both `Verify (Node 22)` and `Verify (Node 24)`
    in the **CI** workflow to pass on the resulting `main` commit.
 4. Install Node.js 24, Corepack, Git, and GitHub CLI. Authenticate GitHub CLI with `gh auth login`.
-   The project pins pnpm in `package.json`; `corepack enable` makes that version available.
+   Run pnpm through Corepack to use the version pinned in `package.json`.
 5. This is a **public npm package**, even while the GitHub repository is private. Confirm that
    the bundled source, prompts, skill, documentation, and Apache-2.0 license are ready to share.
    Links to the private GitHub repository will require access; the CLI reference is also bundled
@@ -30,15 +30,17 @@ Start in a clean clone or checkout, with no local edits:
 git switch main
 git pull --ff-only
 git status --short
-corepack enable
-pnpm install --frozen-lockfile
-pnpm exec playwright install --with-deps chromium
-pnpm verify
+corepack pnpm --version
+corepack pnpm install --frozen-lockfile
+corepack pnpm exec playwright install --with-deps chromium
+corepack pnpm verify
 ```
 
-`git status --short` must print nothing. `pnpm verify` runs type checking, all unit tests with
+`git status --short` must print nothing. `corepack pnpm verify` runs type checking, all unit tests with
 95% coverage thresholds, Chromium tests at three viewport sizes, and the npm package smoke test.
 The package smoke test needs registry access to install production dependencies.
+`corepack pnpm --version` should report `10.33.0`. The explicit prefix selects the pinned
+version even when an older global pnpm is on your PATH.
 On Linux, Playwright's `--with-deps` option may need sudo to install system libraries.
 
 Check CI for the exact commit you are about to publish:
@@ -73,7 +75,7 @@ error does not establish name availability. npm versions cannot be reused once p
 
 The archive should contain runtime source, static assets, prompts, the skill, example config,
 CLI reference, README, package metadata, and license. Tests, fixtures, local review data, and
-credentials must be absent. `pnpm test:package` checks the package contents and installation.
+credentials must be absent. `corepack pnpm test:package` checks the package contents and installation.
 
 ## Publish 0.1.0
 
@@ -113,7 +115,7 @@ Use a branch to update the version before running CI:
 ```bash
 git switch -c release/0.1.1
 npm version patch --no-git-tag-version
-pnpm install --lockfile-only
+corepack pnpm install --lockfile-only
 ```
 
 Use `minor` or `major` when appropriate. Commit the version change and any release notes,
