@@ -814,3 +814,68 @@ describe('node links', () => {
     expect(followed).toEqual([false])
   })
 })
+
+describe('diagram lifecycle boundaries', () => {
+  it('renders a placeholder passed as the root itself', async () => {
+    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  A --> B')
+    const node = document.querySelector('.diagram')
+    if (!(node instanceof HTMLElement)) throw new Error('missing diagram')
+    const mermaid = fakeMermaid()
+    expect(await renderDiagrams(node, { load: mermaid.load, colors: COLORS })).toEqual({ rendered: 1, failed: 0 })
+    expect(node.querySelector('svg')).not.toBeNull()
+  })
+
+  it('reads fallback colors from a detached document without a window', () => {
+    const doc = document.implementation.createHTMLDocument('preview')
+    expect(doc.defaultView).toBeNull()
+    expect(readThemeColors(doc)['--bg']).toBe('#1e1f2b')
+    expect(doc.body.children).toHaveLength(0)
+  })
+
+  it('does not write a failed library load into a diagram whose body disappeared', async () => {
+    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  A --> B')
+    const result = await renderDiagrams(document.body, {
+      load: async () => {
+        document.querySelector('.diagram-body')?.remove()
+        throw new Error('offline')
+      },
+      colors: COLORS,
+    })
+    expect(result).toEqual({ rendered: 0, failed: 0 })
+    expect(document.querySelector('.diagram-error')).toBeNull()
+  })
+
+  it('ignores a closed placeholder whose body was removed', async () => {
+    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  A --> B')
+    document.querySelector('.diagram-h .chev')?.setAttribute('aria-expanded', 'false')
+    document.querySelector('.diagram-body')?.remove()
+    const mermaid = fakeMermaid()
+    expect(await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })).toEqual({ rendered: 0, failed: 0 })
+    expect(mermaid.calls.loads).toBe(0)
+  })
+
+  it('initializes diagrams inside a document fragment and disposes cleanly', async () => {
+    const fragment = document.createDocumentFragment()
+    const holder = document.createElement('div')
+    holder.innerHTML = diagramPlaceholderHtml('flowchart LR\n  A --> B')
+    fragment.append(holder)
+    const mermaid = fakeMermaid()
+    const handle = initDiagrams(fragment, { load: mermaid.load, colors: COLORS })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(holder.querySelector('svg')).not.toBeNull()
+    handle.stop()
+  })
+})
+
+it('does not show a late rendering error after the reader closes the diagram', async () => {
+  document.body.innerHTML = diagramPlaceholderHtml(SOURCE)
+  const load = async () => ({
+    initialize() {},
+    async render() {
+      document.querySelector('.diagram-h .chev')?.setAttribute('aria-expanded', 'false')
+      throw new Error('render failed')
+    },
+  })
+  expect(await renderDiagrams(document.body, { load, colors: COLORS })).toEqual({ rendered: 0, failed: 0 })
+  expect(document.querySelector('.diagram-body')?.innerHTML).toBe('')
+})

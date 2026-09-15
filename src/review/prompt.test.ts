@@ -2,7 +2,6 @@
 import type { GenerationContext } from '../contract/generation-context.js'
 import { TEXT_CAPS } from '../contract/review-artifact.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
-import { DEFAULT_LAYERS } from '../project-config.js'
 import { BASE_SHA, HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import {
   embedMarkdown,
@@ -29,7 +28,7 @@ function context(over: Partial<GenerationContext> = {}): GenerationContext {
     canvasDir: '/data/canvases/x',
     paths: { head: '/data/h', base: '/data/b', patches: '/data/p', model: '/data/canvases/x/model.json' },
     files: SYNTHETIC_FILES.map(toFileEntry),
-    defaultLayers: DEFAULT_LAYERS,
+    defaultLayers: [],
     rulebook: { path: 'RULES.md', text: '---\nname: r\n---\n# Rules\n\n## One\n\ntext\n#### Deep\n' },
     highRisk: [{ pattern: '**/*auth*', label: 'auth' }],
     caps: TEXT_CAPS,
@@ -55,6 +54,23 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('"folds": {')
     expect(prompt).toContain('"collapsed": {')
     expect(prompt).not.toContain('{{')
+  })
+
+  it.each(['strict', 'surfacing'] as const)('uses semantic sections and optional project guidance in %s mode', mode => {
+    const ctx = context()
+    ctx.generation.mode = mode
+    const prompt = renderPrompt(ctx, PATCHES, sources)
+    expect(prompt).toContain('No layers are configured; divide the change into semantic sections')
+    expect(prompt).toContain('Lead with the main behavior changes')
+    expect(prompt).not.toContain('Contracts and schemas')
+
+    ctx.defaultLayers = [{ id: 'checkout', title: 'Checkout', description: 'Payment processing', paths: ['src/pay/**'] }]
+    const configured = renderPrompt(ctx, PATCHES, sources)
+    expect(configured).toContain('Project-configured layers (optional guidance):')
+    expect(configured).toContain('1. `checkout` **Checkout** — Payment processing Path hints: `src/pay/**`.')
+    expect(configured).toContain('Adapt, combine, split, or reorder them to fit the change')
+    expect(configured).not.toContain('No layers are configured;')
+    expect(configured).toContain('Set `defaultLayerId` only when a layer derives from a configured layer')
   })
 
   it('uses immutable revisions for surrounding code', () => {
@@ -114,7 +130,6 @@ describe('renderPrompt', () => {
     )
     expect(prompt).toContain('- summary: 1200 characters\n- layer title: 60\n- layer rationale: 300')
     expect(prompt).toContain('At most 12 per canvas')
-    expect(prompt).toContain('1. `contracts` **Contracts and schemas** — Types, Zod schemas')
     expect(prompt).toContain('- `**/*auth*` → **auth**')
     expect(prompt).toContain('- Pull request: #42 — feat: add b')
     expect(prompt).toContain('> Adds `b()` to the run path.')
@@ -226,7 +241,7 @@ describe('renderPrompt', () => {
     )
   })
 
-  it('describes a change set, an empty description, a full description, and an empty taxonomy', () => {
+  it('describes a change set, an empty description, a full description, and no configured layers', () => {
     const pr = { ...syntheticArtifact().pr, number: null, body: '', state: 'pre-pr', draft: true }
     const prompt = renderPrompt(
       context({ target: { kind: 'refs', base: 'main', head: 'feat/b' }, pr, defaultLayers: [], highRisk: [] }),
@@ -237,7 +252,7 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('- Change set: no pull request yet — feat: add b')
     expect(prompt).toContain('state: pre-pr (draft)')
     expect(prompt).toContain('_No description._')
-    expect(prompt).toContain('_The project config lists no default layers; choose the layers yourself._')
+    expect(prompt).toContain('_No layers are configured; divide the change into semantic sections based on its behavior and concerns._')
     expect(prompt).toContain('_No highRisk patterns are configured._')
     const body = 'x'.repeat(8000) + '\n\n## What this costs\nThe complete trade-off.'
     const long = renderPrompt(context({ pr: { ...pr, body } }), PATCHES, sources)

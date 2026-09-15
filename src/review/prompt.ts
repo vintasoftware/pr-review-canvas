@@ -13,19 +13,19 @@ export { PROMPTS_DIR }
 export interface PromptSources {
   generation: Record<GenerationMode, string>
   format: string
-  layersDefault: string
+  layeringGuidance: string
   qualityStandards: string
 }
 
 export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<PromptSources> {
-  const [format, layersDefault, qualityStandards, strict, surfacing] = await Promise.all([
+  const [format, layeringGuidance, qualityStandards, strict, surfacing] = await Promise.all([
     loadPromptFile('generation-format.md', dir, project),
-    loadPromptFile('layers-default.md', dir, project),
+    loadPromptFile('layering-guidance.md', dir, project),
     loadPromptFile('quality-standards.md', dir, project),
     loadPromptFile('generation-strict.md', dir, project),
     loadPromptFile('generation-surfacing.md', dir, project),
   ])
-  return { format, layersDefault, qualityStandards, generation: { strict, surfacing } }
+  return { format, layeringGuidance, qualityStandards, generation: { strict, surfacing } }
 }
 
 /** The line ranges of a hunk header; the trailing function context can hold backticks. */
@@ -64,9 +64,9 @@ function inlineDiffs(files: readonly FileEntry[], patches: Record<string, string
     .join('\n\n')
 }
 
-function defaultLayersMarkdown(ctx: GenerationContext): string {
+function configuredLayersMarkdown(ctx: GenerationContext): string {
   if (ctx.defaultLayers.length === 0) {
-    return '_The project config lists no default layers; choose the layers yourself._'
+    return '_No layers are configured; divide the change into semantic sections based on its behavior and concerns._'
   }
   return ctx.defaultLayers
     .map((l, i) => {
@@ -164,7 +164,7 @@ function smallPrMarkdown(ctx: GenerationContext): string {
   }
   return (
     `**Small change set.** This ${ctx.target.kind === 'pr' ? 'pull request' : 'change set'} has ${hunks} hunks, at most ${limit}, so:\n\n` +
-    '- Use one layer unless the concerns truly differ; do not split for the sake of the taxonomy.\n' +
+    '- Use one layer unless the concerns truly differ; do not split merely to fill suggested groups.\n' +
     '- Annotate only where the diff does not speak for itself; zero annotations is a fine answer.\n' +
     '- Keep the summary self-contained: state the behavior change and the one relationship or decision worth understanding.'
   )
@@ -207,8 +207,8 @@ export function renderPrompt(ctx: GenerationContext, patches: Record<string, str
     MODEL_PATH: ctx.paths.model,
     MANIFEST: manifestMarkdown(ctx.files),
     DIFFS: diffsMarkdown(ctx, patches),
-    DEFAULT_LAYERS: defaultLayersMarkdown(ctx),
-    LAYERS_DEFAULT: sources.layersDefault.trim(),
+    CONFIGURED_LAYERS: configuredLayersMarkdown(ctx),
+    LAYERING_GUIDANCE: sources.layeringGuidance.trim(),
     CAPS: capsMarkdown(ctx),
     MAX_POINTS: String(ctx.limits.maxPoints),
     MAX_DIAGRAMS: String(ctx.limits.maxDiagramsPerLayer),

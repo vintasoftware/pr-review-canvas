@@ -10,6 +10,7 @@ import {
   focusComposer,
   NO_POSTING_TITLE,
   setDisabledReason,
+  toggleMarkdownPreview,
 } from './composer.js'
 
 /** @param {string} html */
@@ -231,5 +232,42 @@ describe('applyCapabilityGating', () => {
   it('ignores an element that is not a command', () => {
     setDisabledReason(document.querySelector('span[data-needs-post]'), 'nope')
     expect(document.querySelector('span[data-needs-post]')?.hasAttribute('data-disabled-reason')).toBe(false)
+  })
+})
+
+describe('Markdown preview', () => {
+  it('renders a draft safely, reports an empty preview, and returns focus to the unchanged draft', () => {
+    const box = mount(composerHtml({ id: 'preview', label: 'Comment', kind: 'issue' }))
+    const textarea = type(box, '**hello** <script>bad()</script>')
+    const button = box.querySelector('[data-act="markdown-preview"]')
+    if (!(button instanceof HTMLElement)) throw new Error('missing preview button')
+    toggleMarkdownPreview(button, true)
+    expect(textarea.hidden).toBe(true)
+    expect(box.querySelector('.markdown-preview strong')?.textContent).toBe('hello')
+    expect(box.querySelector('.markdown-preview script')).toBeNull()
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    toggleMarkdownPreview(button, false)
+    expect(textarea.hidden).toBe(false)
+    expect(document.activeElement).toBe(textarea)
+    expect(textarea.value).toBe('**hello** <script>bad()</script>')
+    textarea.value = '  '
+    toggleMarkdownPreview(button, true)
+    expect(box.querySelector('.markdown-preview')?.textContent).toBe('Nothing to preview.')
+  })
+
+  it('ignores a preview command after its editor has been removed', () => {
+    const button = document.createElement('button')
+    expect(() => toggleMarkdownPreview(button, true)).not.toThrow()
+  })
+
+  it('keeps capability restrictions when a local disabled reason changes', () => {
+    const box = mount(composerHtml({ id: 'blocked', label: 'Comment', kind: 'issue' }))
+    const button = box.querySelector('[data-act="composer-post"]')
+    applyCapabilityGating(box, { canComment: false, tokenKind: 'classic', login: null, reason: 'no scope' })
+    setDisabledReason(button, 'saving')
+    expect(button?.getAttribute('title')).toBe('no scope')
+    setDisabledReason(button, null)
+    expect(button?.hasAttribute('disabled')).toBe(true)
+    expect(button?.getAttribute('title')).toBe('no scope')
   })
 })

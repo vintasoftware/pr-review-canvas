@@ -1,7 +1,7 @@
 // @vitest-environment node
 // The three transfer routes and the two bundle paths they feed: a stale canvas and a canvas
 // discovered on the pull request.
-import { buildCanvasZip, readCanvasZip } from '../canvas/zip.js'
+import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, readCanvasZip } from '../canvas/zip.js'
 import type { ImportResult, PrBundle, SharedCanvasFetchResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
@@ -22,7 +22,7 @@ import { createApp } from './app.js'
 const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, origin: 'http://localhost:3010', 'sec-fetch-site': 'same-origin' }
 const OLD_SHA = 'e'.repeat(40)
-const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-review-canvas-acme-widgets-pr42-eeeeeee.zip'
+const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip'
 
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T
@@ -125,7 +125,7 @@ describe('transfer routes', () => {
       expect(res.status).toBe(200)
       expect(res.headers.get('content-type')).toBe('application/zip')
       expect(res.headers.get('content-disposition')).toBe(
-        'attachment; filename="pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip"'
+        'attachment; filename="pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip"'
       )
       const read = readCanvasZip(new Uint8Array(await res.arrayBuffer()))
       expect(read.artifact).toEqual(artifactFor(HEAD_SHA))
@@ -135,7 +135,7 @@ describe('transfer routes', () => {
       t = await contextFor()
       await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
       const res = await createApp(t.ctx).request(`/api/prs/42/export?headSha=${OLD_SHA}`, { headers: LOCAL })
-      expect(res.headers.get('content-disposition')).toContain('pr42-eeeeeee.zip')
+      expect(res.headers.get('content-disposition')).toContain('pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip')
       const bad = await createApp(t.ctx).request('/api/prs/42/export?headSha=nope', { headers: LOCAL })
       expect(bad.status).toBe(400)
     })
@@ -213,6 +213,16 @@ describe('transfer routes', () => {
       expect(forced.status).toBe(200)
     })
 
+    it('rejects a file over the ZIP limit even when the multipart envelope is within its limit', async () => {
+      t = await contextFor()
+      const res = await createApp(t.ctx).request('/api/prs/42/import', {
+        method: 'POST', headers: SAME_ORIGIN,
+        body: upload(new Uint8Array(CANVAS_ZIP_MAX_BYTES + 1)),
+      })
+      expect(res.status).toBe(413)
+      expect(await res.json()).toMatchObject({ error: { code: 'CANVAS_TOO_LARGE' } })
+    })
+
     it('refuses a body that is not multipart, and one that grows past the cap while streaming', async () => {
       t = await contextFor()
       const app = createApp(t.ctx)
@@ -271,6 +281,22 @@ describe('transfer routes', () => {
       expect(bundle.files.map(f => f.path)).toEqual(['src/old-only.ts'])
     })
 
+    it('keeps an imported stale canvas readable when its commits are absent from the clone', async () => {
+      const { createFakeGh } = await import('../testing/fakes.js')
+      t = await makeTestContext({
+        git: gitWithHistory({ refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA }, ancestors: {} }),
+        gh: createFakeGh(ghWithBody('no attachment here')),
+      })
+      await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
+      const res = await createApp(t.ctx).request('/api/prs/42', { headers: LOCAL })
+      expect(res.status).toBe(200)
+      const bundle = await json<PrBundle>(res)
+      expect(bundle.status).toBe('stale')
+      expect(bundle.files).toEqual(artifactFor(OLD_SHA).files)
+      expect(bundle.artifact).toEqual(artifactFor(OLD_SHA))
+      expect(bundle.stale?.commitsBehind).toBeUndefined()
+    })
+
     it('reports stale with the distance, carries the old artifact, and serves its patches', async () => {
       t = await contextFor()
       await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
@@ -316,7 +342,7 @@ describe('transfer routes', () => {
       expect(bundle.canvas?.source).toBe('import')
       expect(bundle.sharedCanvas).toEqual({
         url: FILE_URL,
-        name: 'pr-review-canvas-acme-widgets-pr42-eeeeeee.zip',
+        name: 'pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip',
         matchesHead: false,
         downloadable: true,
       })

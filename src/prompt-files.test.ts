@@ -16,7 +16,7 @@ it('overrides all generation sources individually, with bundled fallback for omi
     ['generation-format.md', (s: typeof bundled) => s.format],
     ['generation-strict.md', (s: typeof bundled) => s.generation.strict],
     ['generation-surfacing.md', (s: typeof bundled) => s.generation.surfacing],
-    ['layers-default.md', (s: typeof bundled) => s.layersDefault],
+    ['layering-guidance.md', (s: typeof bundled) => s.layeringGuidance],
     ['quality-standards.md', (s: typeof bundled) => s.qualityStandards],
   ] as const) {
     const result = await loadPromptSources(undefined, { repoRoot: root, overrides: { [name]: 'custom.md' } })

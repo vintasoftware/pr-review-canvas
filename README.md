@@ -160,7 +160,7 @@ package's defaults; a configured file that cannot be read causes an error.
 
 The six supported keys are `generation-format.md` (schema and output rules),
 `generation-strict.md` and `generation-surfacing.md` (mode wrappers),
-`quality-standards.md` (bundled code standards), `layers-default.md` (taxonomy prose),
+`quality-standards.md` (bundled code standards), `layering-guidance.md` (semantic grouping guidance),
 and `chat-seed.md` (the opening AI Chat instructions). `generation.mode` still selects
 the wrapper. The rulebook still takes precedence over code standards, and configured
 layers and caps still supply the template data.
@@ -185,6 +185,11 @@ corepack pnpm exec playwright install --with-deps chromium
 corepack pnpm verify
 corepack pnpm start --repo /path/to/your-project
 ```
+
+Run the full `pnpm verify` before pushing. Keep branch coverage at least 96% when adding or
+changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful failure and boundary
+cases rather than lowering thresholds. Each CI job uploads `coverage-node-<version>` with branch
+locations and a summary; locally, these reports are in `coverage/` after `pnpm coverage`.
 
 Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`
 directory; keep it out of Git.

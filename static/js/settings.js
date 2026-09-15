@@ -66,7 +66,7 @@ export function settingsDialogHtml(data, agents) {
     '<div class="panel-ro"><h3>Project config (read-only)</h3>' +
     `<ul class="plain"><li>chat enabled: ${project.chatEnabled ? 'yes' : 'no'}</li>` +
     `<li>rulebook: ${esc(project.rulebook ?? 'none')}</li>` +
-    `<li>layers in the taxonomy: ${project.layers}</li>` +
+    `<li>configured layer suggestions: ${project.layers}</li>` +
     `<li>high-risk patterns: ${project.highRisk}</li>` +
     `<li>max repair rounds: ${project.maxRepairRounds}</li>` +
     `<li>inline diff max lines: ${project.inlineDiffMaxLines}</li>` +

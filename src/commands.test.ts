@@ -375,7 +375,7 @@ describe('export and import through the CLI layer', () => {
     const io = fakeIo()
     expect(await runExport(t.ctx, ['--pr', '42'], io)).toBe(EXIT.ok)
     const exported = lastJson(io) as { path: string; name: string; prNumber: number }
-    expect(exported.name).toBe('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')
+    expect(exported.name).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     expect(exported.prNumber).toBe(42)
     expect(io.err[0]).toContain('drag')
 
@@ -389,7 +389,7 @@ describe('export and import through the CLI layer', () => {
     await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), manifestFor(HEAD_SHA))
     const io = fakeIo()
     expect(await runExport(t.ctx, ['--head', 'feat/b'], io)).toBe(EXIT.ok)
-    expect(lastJson(io)).toMatchObject({ name: 'pr-review-canvas-acme-widgets-aaaaaaa.zip' })
+    expect(lastJson(io)).toMatchObject({ name: 'ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip' })
   })
 
   it('exports the named commit and stamps the number when both flags are given', async () => {
@@ -399,7 +399,7 @@ describe('export and import through the CLI layer', () => {
     // This is what the generation skill runs right after publishing a canvas for a PR.
     expect(await runExport(t.ctx, ['--head', HEAD_SHA, '--pr', '42'], io)).toBe(EXIT.ok)
     expect(lastJson(io)).toMatchObject({
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       headSha: HEAD_SHA,
       prNumber: 42,
     })

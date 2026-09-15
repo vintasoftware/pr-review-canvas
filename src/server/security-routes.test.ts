@@ -227,13 +227,13 @@ describe('the gh token', () => {
     const bundle = (await (await app.request('/api/prs/42', { headers: LOCAL })).json()) as { pr: Pr }
     const pr: Pr = {
       ...bundle.pr,
-      body: 'canvas: https://github.com/user-attachments/files/1/pr-review-canvas-acme-widgets-pr42-1111111.zip',
+      body: 'canvas: https://github.com/user-attachments/files/1/pr-42-20260910T110000Z-11111111-acme-widgets-canvas.zip',
     }
     const comments = { fetchedAt: '', headSha: HEAD_SHA, reviewComments: [], issueComments: [] }
     const outcome = await discoverSharedCanvas(t.ctx, pr, comments)
     expect(outcome.sharedCanvas?.reason).toBe('not-zip')
     expect(sentAuth).toEqual([
-      `https://github.com/user-attachments/files/1/pr-review-canvas-acme-widgets-pr42-1111111.zip token ${secret}`,
+      `https://github.com/user-attachments/files/1/pr-42-20260910T110000Z-11111111-acme-widgets-canvas.zip token ${secret}`,
       `${storage} none`,
     ])
     expect(seen.join('\n')).not.toContain(secret)
@@ -251,7 +251,7 @@ describe('the gh token', () => {
     t = await makeTestContext({ git: gitFor42(), gh: createFakeGh({ token: secret }), fetch: fetchImpl })
     const pr: Pr = {
       ...syntheticArtifact().pr,
-      body: 'https://github.com/user-attachments/files/9/pr-review-canvas-acme-widgets-pr42-1111111.zip',
+      body: 'https://github.com/user-attachments/files/9/pr-42-20260910T110000Z-11111111-acme-widgets-canvas.zip',
     }
     const outcome = await discoverSharedCanvas(t.ctx, pr, {
       fetchedAt: '',

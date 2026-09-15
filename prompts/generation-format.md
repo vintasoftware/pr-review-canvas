@@ -39,11 +39,11 @@ hunk in that file's patch.
 
 ## Layering rules
 
-The project's default layers, in review order, are the default taxonomy:
+Project-configured layers (optional guidance):
 
-{{DEFAULT_LAYERS}}
+{{CONFIGURED_LAYERS}}
 
-{{LAYERS_DEFAULT}}
+{{LAYERING_GUIDANCE}}
 
 - **Every hunk id must appear in exactly one layer.** The validator rejects an unassigned or
   duplicated hunk. A file's hunks may be spread over several layers.
@@ -55,7 +55,7 @@ The project's default layers, in review order, are the default taxonomy:
 - Test files go at the **end** of the layer whose code they cover, never in a layer of their own,
   and into Other only together with the code they cover. This project counts a file as a test when
   its path matches one of: {{TEST_PATTERNS}}.
-- No empty layers. Set `defaultLayerId` when a layer derives from a default; add, split, or reorder
+- No empty layers. Set `defaultLayerId` only when a layer derives from a configured layer; add, split, or reorder
   layers when the {{TARGET_WORD}} reads better that way. Two to eight layers is typical for a
   {{TARGET_WORD}} of any size; see the size note below for a small one.
 - Each layer's `key` is a short lowercase slug (`auth-session`); links use it.

@@ -75,6 +75,10 @@ pr-review import <zip> [--pr <n>] [--force]
   the archive; it does not select the commit.
 - `--out` defaults to the data directory's `exports/` folder. Supply an existing directory to
   keep the generated filename, or a full `.zip` file path to choose a name.
+- Generated names follow `pr-<number>-<YYYYMMDDTHHmmssZ>-<sha8>-<owner>-<repo>-canvas.zip`,
+  for example `pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip`. The timestamp is the
+  canvas generation time in UTC, to seconds, so exports sort chronologically within each PR.
+  Before a PR exists, `ref-` replaces `pr-<number>-`. Re-exporting the same canvas keeps its name.
 - Export returns `status`, `path`, `name`, `headSha`, and `prNumber` when supplied or stored.
 - `import --pr` compares the imported canvas with that PR's current head. Without it, import does
   not check against a live PR.
@@ -149,7 +153,7 @@ within one path segment.
 |---|---|---|
 | `version` | `1` | The only supported configuration version |
 | `rulebook` | Unset | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards |
-| `layers` | Eight architecture groups | Suggested review groups; each entry has `id`, `title`, `description`, and optional `paths` patterns. The generator may split or reorder groups |
+| `layers` | `[]` | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change |
 | `highRisk` | `[]` | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer |
 | `generation.mode` | `strict` | See [generation modes](#generation-modes) |
 | `generation.maxRepairRounds` | `3` | Failed validation rounds allowed by the generation skill |

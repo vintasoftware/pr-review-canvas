@@ -302,7 +302,7 @@ describe('empty state', () => {
   it('renders the shared-canvas callout in both states', () => {
     const shared = {
       url: 'https://github.com/x.zip',
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       matchesHead: true,
       downloadable: true,
     }

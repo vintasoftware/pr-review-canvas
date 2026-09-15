@@ -36,28 +36,39 @@ function artifact(over: Partial<ReviewArtifact> = {}): ReviewArtifact {
 
 describe('canvas zip name', () => {
   it('builds and parses the PR form and the pre-PR form', () => {
-    const withPr = buildCanvasZipName({ repo: TEST_REPO, headSha: HEAD_SHA, prNumber: 42 })
-    const withoutPr = buildCanvasZipName({ repo: TEST_REPO, headSha: HEAD_SHA })
-    expect(withPr).toBe('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')
-    expect(withoutPr).toBe('pr-review-canvas-acme-widgets-aaaaaaa.zip')
-    expect(parseCanvasZipName(withPr, TEST_REPO)).toEqual({ prNumber: 42, sha7: 'aaaaaaa' })
-    expect(parseCanvasZipName(withoutPr, TEST_REPO)).toEqual({ sha7: 'aaaaaaa' })
+    const withPr = buildCanvasZipName({ repo: TEST_REPO, generatedAt: manifest().generatedAt, headSha: HEAD_SHA, prNumber: 42 })
+    const withoutPr = buildCanvasZipName({ repo: TEST_REPO, generatedAt: manifest().generatedAt, headSha: HEAD_SHA })
+    expect(withPr).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
+    expect(withoutPr).toBe('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
+    expect(parseCanvasZipName(withPr, TEST_REPO)).toEqual({ prNumber: 42, shaPrefix: 'aaaaaaaa' })
+    expect(parseCanvasZipName(withoutPr, TEST_REPO)).toEqual({ shaPrefix: 'aaaaaaaa' })
+  })
+
+  it('normalizes generation time to UTC seconds and sorts by time before commit hash', () => {
+    const opts = { repo: TEST_REPO, headSha: HEAD_SHA, prNumber: 42 }
+    const normalized = buildCanvasZipName({ ...opts, generatedAt: '2026-09-10T08:00:00.987-03:00' })
+    expect(normalized).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
+    const times = ['2027-01-01T00:00:00Z', '2026-12-31T23:59:59Z', '2026-09-10T11:00:01Z']
+    const names = times.map((generatedAt, i) => buildCanvasZipName({
+      ...opts, generatedAt, headSha: String(i).repeat(40),
+    }))
+    expect([...names].sort()).toEqual([...names].reverse())
   })
 
   it('slugs characters a file name should not carry', () => {
     const repo = { owner: 'Vinta.Software', name: 'building_blocks' }
     expect(repoSlug(repo)).toBe('vinta-software-building-blocks')
-    const name = buildCanvasZipName({ repo, headSha: HEAD_SHA, prNumber: 7 })
-    expect(name).toBe('pr-review-canvas-vinta-software-building-blocks-pr7-aaaaaaa.zip')
-    expect(parseCanvasZipName(name, repo)).toEqual({ prNumber: 7, sha7: 'aaaaaaa' })
+    const name = buildCanvasZipName({ repo, generatedAt: manifest().generatedAt, headSha: HEAD_SHA, prNumber: 7 })
+    expect(name).toBe('pr-7-20260910T110000Z-aaaaaaaa-vinta-software-building-blocks-canvas.zip')
+    expect(parseCanvasZipName(name, repo)).toEqual({ prNumber: 7, shaPrefix: 'aaaaaaaa' })
   })
 
   it('refuses a name for another repo, another tool, a bad sha, or another extension', () => {
-    expect(parseCanvasZipName('pr-review-canvas-other-repo-pr42-aaaaaaa.zip', TEST_REPO)).toBeNull()
+    expect(parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip', TEST_REPO)).toBeNull()
     expect(parseCanvasZipName('logs-acme-widgets-pr42-aaaaaaa.zip', TEST_REPO)).toBeNull()
-    expect(parseCanvasZipName('pr-review-canvas-acme-widgets-pr42-zzzzzzz.zip', TEST_REPO)).toBeNull()
-    expect(parseCanvasZipName('pr-review-canvas-acme-widgets-pr42-aaaaaaa.tar', TEST_REPO)).toBeNull()
-    expect(parseCanvasZipName('pr-review-canvas-acme-widgets-aaaaaaaaa.zip', TEST_REPO)).toBeNull()
+    expect(parseCanvasZipName('pr-42-20260910T110000Z-zzzzzzzz-acme-widgets-canvas.zip', TEST_REPO)).toBeNull()
+    expect(parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.tar', TEST_REPO)).toBeNull()
+    expect(parseCanvasZipName('ref-20260910T110000Z-aaaaaaaaa-acme-widgets-canvas.zip', TEST_REPO)).toBeNull()
   })
 })
 
@@ -384,8 +395,8 @@ describe('exportCanvas', () => {
     const result = await exportCanvas(t.ctx, { headSha: HEAD_SHA, prNumber: 42 })
     expect(result).toEqual({
       status: 'exported',
-      path: path.join(defaultExportDir(t.ctx), 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'),
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      path: path.join(defaultExportDir(t.ctx), 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'),
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       headSha: HEAD_SHA,
       prNumber: 42,
     })
@@ -394,12 +405,12 @@ describe('exportCanvas', () => {
     expect(read.artifact).toEqual(artifact())
   })
 
-  it('names the file after the head alone when there is no PR yet', async () => {
+  it('uses the ref prefix when there is no PR yet', async () => {
     t = await makeTestContext()
     const { prNumber: _ignored, ...noPr } = manifest()
     await t.ctx.canvases.write(HEAD_SHA, artifact(), noPr)
     const result = await exportCanvas(t.ctx, { headSha: HEAD_SHA })
-    expect(result.name).toBe('pr-review-canvas-acme-widgets-aaaaaaa.zip')
+    expect(result.name).toBe('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     expect(result.prNumber).toBeUndefined()
   })
 
