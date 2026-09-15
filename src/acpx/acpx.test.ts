@@ -1,7 +1,8 @@
 // @vitest-environment node
 // The spawn path against a real child process: src/testing/fake-acpx.mjs stands in for acpx and
 // plays the scenarios the spike showed, the exit-0-without-an-answer one included.
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,10 +15,17 @@ import {
   buildExecArgs,
   buildPromptArgs,
   commonAcpxArgs,
-  createAgentRunner,
+  createAgentRunner as createProductionAgentRunner,
   readExecStream,
 } from './acpx.js'
 import type { AgentEvent } from './events.js'
+
+// Process protocol tests inject unsandboxed transports; sandbox.test.ts exercises containment.
+const createAgentRunner: typeof createProductionAgentRunner = options => createProductionAgentRunner({
+  spawnImpl: spawn,
+  execFileImpl: (file, args, opts) => promisify(execFile)(file, args, { ...opts, encoding: 'utf8' }),
+  ...options,
+})
 
 const FAKE = path.join(PACKAGE_ROOT, 'src', 'testing', 'fake-acpx.mjs')
 
@@ -292,13 +300,13 @@ describe('createAgentRunner().exec', () => {
     expect(result).toMatchObject({ ok: false, code: 'AGENT_AUTH_REQUIRED' })
   })
 
-  it('maps the exit code when acpx says nothing', async () => {
+  it('maps the exit code and preserves stderr when acpx emits no JSON', async () => {
     env.FAKE_ACPX_MODE = 'usage'
     expect(await runner().exec({ agent: 'claude', prompt: 'x', cwd: PACKAGE_ROOT, timeoutSec: 30 })).toEqual({
       ok: false,
       text: '',
       code: 'AGENT_USAGE',
-      message: 'acpx rejected the command line',
+      message: "error: unknown option '--nope'",
     })
   })
 
@@ -425,7 +433,7 @@ describe('the runner in the odd cases', () => {
     })
     const run = runner.run(RUN)
     expect(await collect(run.events)).toEqual([
-      { type: 'error', code: 'AGENT_MISSING', message: 'acpx could not be started' },
+      { type: 'error', code: 'AGENT_MISSING', message: 'no processes left' },
     ])
     // There is nothing to cancel, and asking does not throw.
     await expect(run.cancel()).resolves.toBeUndefined()

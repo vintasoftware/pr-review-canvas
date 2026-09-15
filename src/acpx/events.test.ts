@@ -28,6 +28,14 @@ function eventsOf(messages: unknown[]): AgentEvent[] {
 }
 
 describe('mapAcpxMessage', () => {
+  it('shows dcg’s denial in the failed tool status without retaining unrelated output', () => {
+    const reason = 'Blocked by dcg (cloud.aws:s3-rb): aws s3 rb removes the entire S3 bucket.'
+    expect(mapAcpxMessage({ method: 'session/update', params: { update: {
+      sessionUpdate: 'tool_call_update', toolCallId: 'guarded', status: 'failed',
+      content: [{ type: 'content', content: { type: 'text', text: `Private tool output\n${reason}\nMore private output` } }],
+    } } })).toEqual({ type: 'tool', id: 'guarded', status: 'failed', title: reason })
+  })
+
   it('maps a real claude turn to chunks, tool calls, usage, and the stop reason', async () => {
     const events = eventsOf(await fixtureLines('claude-turn.ndjson'))
     const kinds = events.map(e => e.type)

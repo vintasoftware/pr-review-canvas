@@ -5,6 +5,7 @@
  */
 import { type ChildProcess, execFile, type SpawnOptions, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
 import {
   type AgentErrorCode,
   type AgentEvent,
@@ -14,6 +15,7 @@ import {
   scrubForLog,
 } from './events.js'
 import { createNdjsonSplitter, NdjsonError } from './ndjson.js'
+import { agentPath, createSandbox, hostCommand, SandboxError, type SandboxOptions } from './sandbox.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -134,6 +136,7 @@ export type ExecFileImpl = (
 ) => Promise<{ stdout: string; stderr: string }>
 
 export interface CreateAgentRunnerOptions {
+  sandbox?: SandboxOptions
   bin?: string
   spawnImpl?: SpawnImpl
   execFileImpl?: ExecFileImpl
@@ -191,10 +194,28 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
   const bin = opts.bin ?? ACPX_BIN
   const slackMs = opts.deadlineSlackMs ?? DEADLINE_SLACK_MS
   const cancelGraceMs = opts.cancelGraceMs ?? CANCEL_TIMEOUT_SEC * 1000
-  const spawnImpl = opts.spawnImpl ?? spawn
+  const sandbox = createSandbox(opts.sandbox)
+  const chatCommand = (file: string, args: string[], cwd: string) => {
+    // Tests may supply a fixture binary. Production always uses the guarded acpx entry point.
+    if (opts.bin) return sandbox(file, args, cwd)
+    const launcher = agentPath(fileURLToPath(new URL('./chat-acpx.mjs', import.meta.url)))
+    return sandbox('node', [launcher, ...args], cwd)
+  }
+  const spawnImpl: SpawnImpl =
+    opts.spawnImpl ??
+    ((file, args, options) => {
+      const command = chatCommand(file, args, String(options.cwd ?? process.cwd()))
+      return spawn(command.file, command.args, options)
+    })
   const run: ExecFileImpl =
     opts.execFileImpl ??
-    ((file, args, options) => execFileAsync(file, args, { ...options, encoding: 'utf8', shell: false }))
+    ((file, args, options) => {
+      // Version and login probes do not start an agent session.
+      const command = file === bin && args[0] !== '--version'
+        ? chatCommand(file, args, options.cwd ?? process.cwd())
+        : hostCommand(file, args)
+      return execFileAsync(command.file, command.args, { ...options, encoding: 'utf8', shell: false })
+    })
 
   const execQuiet = async (
     file: string,
@@ -258,13 +279,16 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         return { ok: false, text: '', code: error.code, message: error.message }
       }
       if (!result.ok) {
+        if (result.error instanceof SandboxError) {
+          return { ok: false, text: '', code: 'AGENT_PERMISSION_DENIED', message: result.error.message }
+        }
         const code = exitCodeOf(result.error)
         return {
           ok: false,
           text: '',
           // A failed call never exits 0, so the table always names a code here.
           code: exitCodeToAgentCode(code) ?? 'AGENT_FAILED',
-          message: missingBinary(result.error) ? `${bin} is not installed` : exitCodeMessage(code),
+          message: missingBinary(result.error) ? `${bin} is not installed` : result.stderr.trim() || exitCodeMessage(code),
         }
       }
       if (!ended) {
@@ -377,8 +401,12 @@ function startRun(
   let child: ChildProcess
   try {
     child = spawnImpl(bin, buildPromptArgs(options), { cwd: options.cwd, stdio: ['pipe', 'pipe', 'pipe'] })
-  } catch {
-    queue.push({ type: 'error', code: 'AGENT_MISSING', message: `${bin} could not be started` })
+  } catch (error) {
+    queue.push({
+      type: 'error',
+      code: error instanceof SandboxError ? 'AGENT_PERMISSION_DENIED' : 'AGENT_MISSING',
+      message: error instanceof Error ? error.message : `${bin} could not be started`,
+    })
     queue.end()
     return { events: queue.iterate(), cancel: async () => undefined }
   }

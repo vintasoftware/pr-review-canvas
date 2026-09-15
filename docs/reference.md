@@ -148,7 +148,7 @@ on failure; progress goes to stderr. `--repo <dir>` and `--data-dir <dir>` work 
 | Command | What it does |
 |---|---|
 | `serve [--port] [--repo] [--data-dir] [--fixture-canvas]` | The review server |
-| `doctor [--all-checks]` | Checks `git`, `origin`, `gh`, `ghAuth`, data directory access, and the skill. `--all-checks` also runs `acpx --version`. Prints one JSON line; exit 1 when any requested check fails |
+| `doctor [--all-checks] [--json]` | Checks Git, origin, GitHub CLI/login, storage, skill, and dcg's required policy. `--all-checks` adds acpx, containment, and native hooks. Prints readable results and repair instructions; `--json` prints the structured report. Exit 1 when any requested check fails |
 | `prepare (--pr <n> \| --base <ref> --head <ref>) [--force]` | Prints `{ canvasDir, headSha, mergeBaseSha, promptPath, contextPath, status }`, `status` being `prepared` or `exists` |
 | `validate <model.json\|review.json> --canvas <dir> [--human] [--fix]` | Prints the validation report as one JSON line (`--human`: one line per problem); exit 5 when not ok. `--fix` first shortens over-cap titles in place, dropping the explainer after the first `:` or `—`, and reports each one; prose is never cut, but an over-cap field names where the cap falls in its own text |
 | `publish <canvasDir> --agent <id> [--model <id>] --harness <id> [--allow-stale]` | Prints `{ status: 'published', headSha, reviewJsonPath, attempts, reviewUrl? }`; refuses with `CANVAS_STALE` when the PR head moved |
@@ -364,14 +364,29 @@ prompt tells the agent it reads code and changes nothing. `chat.enabled: false` 
 config removes the pane and answers 404 on every chat and settings route. A missing `acpx` does
 the same at runtime, with a banner saying so.
 
-**What "read-only" rests on.** `--no-terminal` means acpx does not advertise the ACP terminal
-capability, and `--non-interactive-permissions deny` denies any permission prompt. It is not a
-sandbox: an agent that ships its own shell tool still has it, and `--approve-reads` approves
-read-like calls without asking, which is how the agent inspects the materialized files. A write
-therefore has to pass the agent's own permission policy, and a probe asking for one was refused,
-but the refusal came from the agent rather than from a boundary this tool controls. Treat the
-chat as "an agent running under your own settings, pointed at this pull request", and turn it off
-with `chat.enabled: false` where that is not acceptable.
+**Filesystem containment.** Every agent session command (ensure, prompt, exec, and cancel) runs
+inside an OS sandbox. Ubuntu and Ubuntu WSL2 use bubblewrap with read-only host mounts; macOS
+uses Seatbelt through `/usr/bin/sandbox-exec`. Windows 11 launches the same Linux backend through
+Ubuntu WSL2. Agent processes can write only to their separate scratch/session runtime, plus
+sandbox-local OS facilities such as `/dev/null`. The repository, linked-worktree Git metadata,
+and snapshots remain read-only even for native agent tools. Missing dcg or an unavailable
+sandbox prevents launch. Normal doctor checks require dcg; `--all-checks` also probes the
+sandbox, acpx, and native hook activation for installed agents. See
+[platform setup and runtime storage](../README.md#platform-setup).
+
+**Mandatory dcg guard.** App-owned launchers configure native Bash `PreToolUse` hooks for both
+agents. Codex's isolated configuration stores trust for the exact guard hash and is protected
+against writes and renaming. Claude receives explicit launch settings and verifies that hooks
+run before starting its session. Chat uses pinned ACP adapters and cannot opt out of this guard.
+Normal doctor checks evaluate known safe and dangerous commands without executing them;
+`--all-checks` also verifies hook activation inside containment.
+
+The policy includes cloud, Kubernetes, Terraform, database, GitHub Actions, and Cloudflare
+Workers rules in addition to Git/filesystem rules. Denials return a rule and explanation;
+evaluation errors and timeouts deny the command. Claude's failed tool status and Codex's guard
+notice show the short dcg reason. The existing ACP permission flags remain in place. Network access is enabled for
+inference, and dcg does not inspect every SDK, MCP, HTTP, or interactive-input operation.
+Native hook coverage and failures remain agent-dependent; filesystem containment is independent.
 
 **One context per message, set-not-toggle.** `[ ask ]` on a layer, a file, an attention point, or a
 line selection replaces the chip; asking the same target again changes nothing, and `[ clear ]` is
@@ -490,9 +505,13 @@ Verified against acpx 0.13.2 while building this:
 | `SIGNOFF_INCOMPLETE` | Mark every layer outside Other reviewed for the current head |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN` | Open the page as `localhost` or `127.0.0.1`, and drive it from the page itself |
 
-`pr-review doctor` answers most of the first rows in one line, including whether the data dir
+`pr-review doctor` explains most of the first rows, including whether the data dir
 is writable and the skill is installed. `GET /api/health` reports the four checks a running server
 can answer for itself: git, origin, `gh`, and `gh` auth.
+
+Use `--json` for the previous machine-readable report. The default output includes installation
+commands or links and repair steps. Chat supplies the remote-service dcg rules automatically;
+doctor distinguishes missing dcg from a failed bundled policy and explains how to fix either.
 
 ## Develop
 

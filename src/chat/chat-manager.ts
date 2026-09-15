@@ -2,6 +2,7 @@
 // and keep the transcript. The lock is what makes `CHAT_BUSY` a real answer rather than two
 // agents writing into one thread.
 import type { AgentRunner } from '../acpx/acpx.js'
+import { agentPath } from '../acpx/sandbox.js'
 import type { ChatContext, ChatEvent, ChatThreadsResponse, ChatTurn } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
@@ -371,10 +372,10 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
 
 function seedPaths(deps: ChatManagerDeps, target: ChatTarget): SeedPaths {
   return {
-    headDir: `${target.derivedDir}/head`,
-    baseDir: `${target.derivedDir}/base`,
-    patchDir: `${target.derivedDir}/patches`,
-    repoRoot: deps.repoRoot,
+    headDir: agentPath(`${target.derivedDir}/head`),
+    baseDir: agentPath(`${target.derivedDir}/base`),
+    patchDir: agentPath(`${target.derivedDir}/patches`),
+    repoRoot: agentPath(deps.repoRoot),
   }
 }
 

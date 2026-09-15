@@ -27,6 +27,7 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: bash .github/scripts/install-chat-tools.sh
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm exec playwright install --with-deps chromium
@@ -38,3 +39,42 @@ jobs:
           name: pr-review-browser-failures
           path: test-results/
           retention-days: 7
+
+  containment:
+    if: ${{ !github.event.pull_request.draft }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install macOS chat dependencies
+        if: runner.os == 'macOS'
+        run: bash .github/scripts/install-chat-tools.sh
+      - name: Install Ubuntu WSL2 for the Windows host
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          wsl --install --distribution Ubuntu --no-launch --web-download
+          if ($LASTEXITCODE -ne 0) { throw 'WSL installation failed' }
+          wsl --set-version Ubuntu 2
+          if ($LASTEXITCODE -ne 0) { throw 'WSL2 is required' }
+          wsl --set-default Ubuntu
+          $setup = (wsl --distribution Ubuntu --user root --exec wslpath -a -u "$env:GITHUB_WORKSPACE/.github/scripts/install-wsl-chat-tools.sh").Trim()
+          wsl --distribution Ubuntu --user root --exec bash $setup
+          if ($LASTEXITCODE -ne 0) { throw 'WSL chat dependency installation failed' }
+      - run: pnpm typecheck
+      - name: Test native host containment and doctor
+        run: pnpm test src/acpx/sandbox.test.ts src/acpx/guard.test.ts src/review/doctor.test.ts
