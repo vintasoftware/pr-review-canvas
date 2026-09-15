@@ -101,7 +101,7 @@ describe('settingsDialogHtml', () => {
   it('shows the project config read-only, with its path', () => {
     const html = settingsDialogHtml(SETTINGS, AGENTS)
     expect(html).toContain('Project config (read-only)')
-    expect(html).toContain('layers in the taxonomy: 8')
+    expect(html).toContain('configured layer suggestions: 8')
     expect(html).toContain('high-risk patterns: 2')
     expect(html).toContain('/repo/pr-review.config.yml')
     expect(html).toContain('/repo/.pr-review/settings.yml')

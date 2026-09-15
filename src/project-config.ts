@@ -86,49 +86,9 @@ const PartialProjectConfigSchema = z.object({
   chat: z.object({ enabled: z.boolean().optional() }).optional(),
 })
 
-/** The 8 architecture groups, in review order. A project file replaces the list. */
-export const DEFAULT_LAYERS: DefaultLayer[] = [
-  {
-    id: 'contracts',
-    title: 'Contracts and schemas',
-    description: 'Types, Zod schemas, FHIR profiles, and the shapes two packages must agree on.',
-  },
-  {
-    id: 'data-access',
-    title: 'Data access',
-    description: 'Server functions, FHIR client calls, repositories, migrations, and storage.',
-  },
-  {
-    id: 'mappers',
-    title: 'Mappers and DTOs',
-    description: 'Code that turns resources or rows into view models and back.',
-  },
-  {
-    id: 'hooks-state',
-    title: 'Hooks and state',
-    description: 'React hooks, query definitions, stores, and client-side state machines.',
-  },
-  { id: 'views', title: 'Views', description: 'Components, screens, styles, and copy.' },
-  {
-    id: 'routes-wiring',
-    title: 'Routes and wiring',
-    description: 'Route files, providers, app shells, dependency wiring, and entry points.',
-  },
-  {
-    id: 'policy-config',
-    title: 'Policy and config',
-    description: 'Access policies, environment variables, feature flags, CI, and deployment config.',
-  },
-  {
-    id: 'mechanical',
-    title: 'Mechanical changes',
-    description: 'Renames, lockfiles, generated files, formatting, and moved code.',
-  },
-]
-
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   version: 1,
-  layers: DEFAULT_LAYERS,
+  layers: [],
   highRisk: [],
   generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
@@ -167,7 +127,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
   }
   const config: ProjectConfig = {
     version: 1,
-    layers: user.layers ?? DEFAULT_LAYERS,
+    layers: user.layers ?? [],
     highRisk: user.highRisk ?? [],
     generation,
     tests: { patterns: user.tests?.patterns ?? [...DEFAULT_TEST_PATTERNS] },
@@ -180,9 +140,6 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     config.prompts = user.prompts
   }
   const warnings: string[] = []
-  if (config.layers.length === 0) {
-    warnings.push(`${PROJECT_CONFIG_FILE}: "layers" is empty, the model gets no default taxonomy`)
-  }
   if (config.tests.patterns.length === 0) {
     warnings.push(`${PROJECT_CONFIG_FILE}: "tests.patterns" is empty, so no file counts as a test`)
   }

@@ -138,7 +138,7 @@ within one path segment.
 |---|---|---|
 | `version` | `1` | The only supported configuration version |
 | `rulebook` | Unset | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards |
-| `layers` | Eight architecture groups | Suggested review groups; each entry has `id`, `title`, `description`, and optional `paths` patterns. The generator may split or reorder groups |
+| `layers` | `[]` | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change |
 | `highRisk` | `[]` | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer |
 | `generation.mode` | `strict` | See [generation modes](#generation-modes) |
 | `generation.maxRepairRounds` | `3` | Failed validation rounds allowed by the generation skill |

@@ -66,7 +66,7 @@ function inlineDiffs(files: readonly FileEntry[], patches: Record<string, string
 
 function defaultLayersMarkdown(ctx: GenerationContext): string {
   if (ctx.defaultLayers.length === 0) {
-    return '_The project config lists no default layers; choose the layers yourself._'
+    return '_No layers are configured; divide the change into semantic sections based on its behavior and concerns._'
   }
   return ctx.defaultLayers
     .map((l, i) => {
@@ -164,7 +164,7 @@ function smallPrMarkdown(ctx: GenerationContext): string {
   }
   return (
     `**Small change set.** This ${ctx.target.kind === 'pr' ? 'pull request' : 'change set'} has ${hunks} hunks, at most ${limit}, so:\n\n` +
-    '- Use one layer unless the concerns truly differ; do not split for the sake of the taxonomy.\n' +
+    '- Use one layer unless the concerns truly differ; do not split merely to fill suggested groups.\n' +
     '- Annotate only where the diff does not speak for itself; zero annotations is a fine answer.\n' +
     '- Keep the summary self-contained: state the behavior change and the one relationship or decision worth understanding.'
   )

@@ -3,7 +3,6 @@ import { copyFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { TEXT_CAPS } from './contract/review-artifact.js'
 import {
-  DEFAULT_LAYERS,
   DEFAULT_PROJECT_CONFIG,
   loadProjectConfig,
   mergeProjectConfig,
@@ -23,16 +22,7 @@ describe('mergeProjectConfig', () => {
 
   it('fills every missing key from the defaults', () => {
     expect(mergeProjectConfig({})).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [] })
-    expect(DEFAULT_LAYERS.map(l => l.id)).toEqual([
-      'contracts',
-      'data-access',
-      'mappers',
-      'hooks-state',
-      'views',
-      'routes-wiring',
-      'policy-config',
-      'mechanical',
-    ])
+    expect(mergeProjectConfig({}).config.layers).toEqual([])
   })
 
   it('takes user values and keeps caps overrides', () => {
@@ -99,10 +89,8 @@ describe('mergeProjectConfig', () => {
     expect(warnings[0]).toMatch(/generation\.maxRepairRounds/)
   })
 
-  it('warns about empty layers and duplicate ids', () => {
-    expect(mergeProjectConfig({ layers: [] }).warnings).toEqual([
-      'pr-review.config.yml: "layers" is empty, the model gets no default taxonomy',
-    ])
+  it('accepts empty layers and warns about duplicate ids', () => {
+    expect(mergeProjectConfig({ layers: [] })).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [] })
     const dup = { id: 'a', title: 'A', description: '' }
     expect(mergeProjectConfig({ layers: [dup, dup] }).warnings).toEqual([
       'pr-review.config.yml: duplicate layer id "a"',
@@ -143,7 +131,7 @@ describe('loadProjectConfig', () => {
     const loaded = await loadProjectConfig(dir)
     expect(loaded.warnings).toEqual([])
     expect(loaded.config.generation).toEqual(DEFAULT_PROJECT_CONFIG.generation)
-    expect(loaded.config.layers.map(layer => layer.id)).toEqual(DEFAULT_LAYERS.map(layer => layer.id))
+    expect(loaded.config.layers).toEqual([])
     expect(loaded.config.highRisk).toEqual([
       { pattern: '**/migrations/**', label: 'schema' },
       { pattern: '**/*auth*', label: 'auth' },
