@@ -6,18 +6,33 @@ import os from 'node:os'
 import path from 'node:path'
 import { createAgentRunner } from './acpx.js'
 import { fileURLToPath } from 'node:url'
-import { agentPath, createSandbox } from './sandbox.js'
+import { agentPath, createSandbox, hostCommand } from './sandbox.js'
 
 let fixture: string
-beforeEach(async () => { fixture = await realpath(await mkdtemp(path.join(os.tmpdir(), 'chat containment-'))) })
-afterEach(async () => { vi.unstubAllEnvs(); await rm(fixture, { recursive: true, force: true }) })
+let stateRoot: string
+beforeEach(async () => {
+  fixture = await realpath(await mkdtemp(path.join(os.tmpdir(), 'chat containment-')))
+  stateRoot = path.join(fixture, 'runtime')
+  if (process.platform === 'win32') {
+    // Production keeps sessions on WSL's Linux filesystem: NTFS cannot host acpx's Unix sockets.
+    // Keep the repository on NTFS, and access the Linux runtime through its Windows UNC path.
+    const temporary = hostCommand('mktemp', ['-d', '/tmp/pr-review-fixture-XXXXXX'])
+    const linuxRoot = execFileSync(temporary.file, temporary.args, { encoding: 'utf8' }).trim()
+    const windows = hostCommand('wslpath', ['-w', linuxRoot])
+    stateRoot = execFileSync(windows.file, windows.args, { encoding: 'utf8' }).trim()
+  }
+})
+afterEach(async () => {
+  vi.unstubAllEnvs()
+  await rm(stateRoot, { recursive: true, force: true })
+  await rm(fixture, { recursive: true, force: true })
+})
 
 it('contains native writes in ensure, exec, prompt, and cancel while keeping sessions writable', async () => {
   // This is a required integration test: missing dcg/bwrap or denied namespaces must fail it.
   const repo = path.join(fixture, 'repo')
   const snapshots = path.join(fixture, 'snapshots')
   const home = path.join(fixture, 'host-home')
-  const stateRoot = path.join(fixture, 'runtime')
   await Promise.all([repo, snapshots, home].map(dir => mkdir(dir)))
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: 'pipe' })
   git('init')
@@ -43,7 +58,8 @@ it('contains native writes in ensure, exec, prompt, and cancel while keeping ses
   const runner = createAgentRunner({ bin, sandbox: { stateRoot, home } })
   const options = { cwd: repo, agent: 'claude', session: 'containment', prompt: 'try writes', timeoutSec: 20 }
   await runner.ensureSession(options)
-  expect(await runner.exec(options)).toMatchObject({ ok: true })
+  const result = await runner.exec(options)
+  expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
   const run = runner.run(options)
   const events = []
   for await (const event of run.events) events.push(event)
@@ -73,7 +89,7 @@ it('contains native writes in ensure, exec, prompt, and cancel while keeping ses
 it('fails closed before running an agent when dcg is missing', async () => {
   vi.stubEnv('PATH', fixture)
   if (process.platform === 'win32') vi.stubEnv('PR_REVIEW_WSL_DISTRO', 'pr-review-missing-distribution-test')
-  const runner = createAgentRunner({ sandbox: { stateRoot: path.join(fixture, 'runtime'), home: fixture } })
+  const runner = createAgentRunner({ sandbox: { stateRoot, home: fixture } })
   const options = { cwd: fixture, agent: 'claude', session: 'missing-dcg', prompt: 'hello', timeoutSec: 5 }
   expect(await runner.exec(options)).toMatchObject({ ok: false, code: 'AGENT_PERMISSION_DENIED', message: expect.stringMatching(/Install (Destructive Command Guard|Ubuntu WSL2)/) })
   const events = []
@@ -100,14 +116,19 @@ it('resumes two real acpx turns with writable session storage and denied native 
   const repo = path.join(fixture, 'repo')
   await mkdir(repo)
   await writeFile(path.join(repo, 'victim.txt'), 'preserve')
-  const launch = createSandbox({ stateRoot: path.join(fixture, 'runtime'), home: fixture })
+  const launch = createSandbox({ stateRoot, home: fixture })
   const adapter = agentPath(fileURLToPath(new URL('../testing/sandbox-agent.mjs', import.meta.url)))
   const agent = `node '${adapter.replaceAll("'", "'\\''")}'`
   const common = ['--cwd', repo, '--format', 'json', '--approve-reads', '--no-terminal',
     '--non-interactive-permissions', 'deny', '--timeout', '20', '--ttl', '1', '--agent', agent]
   const call = (args: string[]): string => {
     const command = launch('acpx', [...common, ...args], repo)
-    return execFileSync(command.file, command.args, { cwd: repo, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] })
+    try {
+      return execFileSync(command.file, command.args, { cwd: repo, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch (error) {
+      const failure = error as { stdout?: string; stderr?: string }
+      throw new Error(`${failure.stdout ?? ''}\n${failure.stderr ?? ''}`, { cause: error })
+    }
   }
   expect(call(['sessions', 'ensure', '--name', 'smoke'])).toContain('session_ensured')
   for (const prompt of ['hello', 'again']) {
@@ -121,7 +142,7 @@ it('resumes two real acpx turns with writable session storage and denied native 
 it.runIf(process.platform !== 'win32')('runs the dependency-free WSL bridge without loading node_modules', () => {
   const request = Buffer.from(JSON.stringify({
     action: 'launch', file: 'node', args: ['-e', 'console.log("bridge ready")'], cwd: fixture,
-    sandbox: { stateRoot: path.join(fixture, 'runtime'), home: fixture },
+    sandbox: { stateRoot, home: fixture },
   })).toString('base64')
   const output = execFileSync(process.execPath, [
     fileURLToPath(new URL('./wsl-sandbox.mjs', import.meta.url)), '--pr-review-sandbox', request,
@@ -134,7 +155,7 @@ it.runIf(process.platform !== 'win32')('does not import credentials through link
   const outside = path.join(fixture, 'outside')
   await mkdir(path.join(home, '.codex'), { recursive: true })
   await mkdir(outside)
-  const options = { stateRoot: path.join(fixture, 'runtime'), home }
+  const options = { stateRoot, home }
   createSandbox(options)('/bin/true', [], fixture)
   const key = createHash('sha256').update(`dcg-v1:${fixture}`).digest('hex')
   const agentHome = path.join(options.stateRoot, key, 'home', '.codex')
