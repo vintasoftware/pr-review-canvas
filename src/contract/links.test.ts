@@ -94,15 +94,15 @@ describe('resolveLink', () => {
   it('rejects a line range outside every hunk, across two hunks, or on the wrong side', () => {
     expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 400, end: 410, side: 'new' }, targets)).toEqual({
       ok: false,
-      message: 'packages/x.ts:400-410 (new) is not inside one hunk of the diff',
+      message: 'packages/x.ts:400-410 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
     })
     expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 4, end: 12, side: 'new' }, targets)).toEqual({
       ok: false,
-      message: 'packages/x.ts:4-12 (new) is not inside one hunk of the diff',
+      message: 'packages/x.ts:4-12 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
     })
     expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 54, end: 54, side: 'old' }, targets)).toEqual({
       ok: false,
-      message: 'packages/x.ts:54 (old) is not inside one hunk of the diff',
+      message: 'packages/x.ts:54 (old) is not inside one hunk of the diff (old-side lines 1-4, 10-12, 30, 50-51)',
     })
   })
 

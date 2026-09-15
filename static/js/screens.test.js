@@ -200,7 +200,7 @@ describe('header', () => {
     expect(root.querySelector('.pline span')?.getAttribute('style')).toContain('100%')
     const approve = root.querySelector('#approve')
     expect(approve?.hasAttribute('disabled')).toBe(false)
-    expect(approve?.hasAttribute('title')).toBe(false)
+    expect(approve?.getAttribute('title')).toBe('Write and preview an approving review on GitHub')
     expect(root.querySelector('.tree')).not.toBeNull()
     // Marking it open again puts the gate and its reason back.
     refreshProgress(root, artifact, base)

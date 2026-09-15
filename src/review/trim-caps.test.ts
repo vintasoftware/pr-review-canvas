@@ -57,16 +57,33 @@ describe('applyTitleTrims', () => {
       points: [{ title: 'A stale claim: taken over after 15 minutes' }],
     }
     expect(applyTitleTrims(model, caps)).toEqual([
-      { where: 'layers.0.title', from: 'Storage layer: tracked uploads and the manifest swap', to: 'Storage layer' },
+      { outcome: 'fixed', where: 'layers.0.title', from: 'Storage layer: tracked uploads and the manifest swap', to: 'Storage layer' },
       {
+        outcome: 'fixed',
         where: 'layers.0.files.0.folds.0.title',
         from: 'publishes it: and queues the previous one',
         to: 'publishes it',
       },
-      { where: 'points.0.title', from: 'A stale claim: taken over after 15 minutes', to: 'A stale claim' },
+      { outcome: 'fixed', where: 'points.0.title', from: 'A stale claim: taken over after 15 minutes', to: 'A stale claim' },
     ])
     expect(model.layers[0]?.title).toBe('Storage layer')
     expect(model.layers[1]?.title).toBe('Cleanup job')
+  })
+
+  it('reports unfixable titles without changing them, using visible length', () => {
+    const titles = ['a long title without separators', 'a very long prefix: explanation', ': explanation too long']
+    const model = { points: titles.map(title => ({ title })) }
+    const results = applyTitleTrims(model, caps)
+    expect(results).toEqual(titles.map((title, i) => ({
+      outcome: 'unfixable', where: `points.${i}.title`, length: title.length, cap: 15,
+      reason: [
+        'no explainer separator (:, —, – or -) to drop',
+        'the title before the explainer still exceeds the cap',
+        'dropping the explainer would leave an empty title',
+      ][i],
+    })))
+    expect(model.points.map(point => point.title)).toEqual(titles)
+    expect(applyTitleTrims({ points: [{ title: '[short](https://example.com/long-target)' }] }, caps)).toEqual([])
   })
 
   it('reports nothing for a model whose titles all fit', () => {

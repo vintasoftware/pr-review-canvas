@@ -4,7 +4,7 @@ import { parseHunkHeader } from '../../static/js/hunks.js'
 import { hunkId } from '../contract/keys.js'
 import type { Hunk } from '../contract/review-artifact.js'
 
-export { hunkForLine, parseHunkHeader } from '../../static/js/hunks.js'
+export { hunkForLine, hunkLineRanges, parseHunkHeader } from '../../static/js/hunks.js'
 
 export interface ParsedHunk {
   header: string
