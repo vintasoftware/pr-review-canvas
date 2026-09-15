@@ -54,14 +54,18 @@ pr-review doctor --all-checks
 ```
 
 `install-skill` sets up **both Claude Code and Codex** in one command: `.claude/skills/pr-review-canvas`
-and `.agents/skills/pr-review-canvas`, respectively. It also adds `.pr-review/settings.yml` to the
+and `.agents/skills/pr-review-canvas`, respectively. These are portable copies you can commit to Git.
+Re-run `pr-review install-skill` after upgrading the CLI to refresh them. It also adds `.pr-review/settings.yml` to the
 project's `.gitignore`. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
 `doctor` checks Git, your GitHub remote, the GitHub CLI and its login, write access to the local
-canvas directory, and whether the skill is installed. It prints a JSON report with a result for
+canvas directory, and whether installed skills match the current package. It prints a JSON report with a result for
 each check and suggested fixes for failures. `doctor --all-checks` also checks that `acpx` runs and
 reports its version. Exit code `0` means all checks passed.
+
+`serve` automatically runs the skill check and warns on stderr if a skill is missing, outdated,
+or modified. The warning includes the reinstall command and does not block startup.
 
 ### Optional: AI Chat install
 

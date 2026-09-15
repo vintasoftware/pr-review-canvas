@@ -306,7 +306,6 @@ export async function runDoctor(deps: DoctorDeps, argv: string[], io: CliIo): Pr
 export interface InstallSkillEnv {
   repoRoot: string
   cwd: string
-  platform: NodeJS.Platform
 }
 
 /** `install-skill [--claude-dir <dir>] [--codex-dir <dir>] [--force]`, both dirs under the repo root by default. */
@@ -319,7 +318,6 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: 
   const resolve = (flag: string | undefined, fallback: string): string =>
     flag === undefined ? path.join(env.repoRoot, fallback) : path.resolve(env.cwd, flag)
   const result = await installSkill({
-    platform: env.platform,
     force: values.force === true,
     targets: [
       { kind: 'claude', dir: resolve(values['claude-dir'], CLAUDE_SKILLS_DIR) },

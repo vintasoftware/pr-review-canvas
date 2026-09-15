@@ -317,7 +317,7 @@ describe('install-skill through the CLI layer', () => {
       }
       const cwd = path.join(repoRoot, 'nested')
       await mkdir(cwd)
-      const env = { repoRoot, cwd, platform: 'linux' as const }
+      const env = { repoRoot, cwd }
       await runInstallSkill(env, [], fakeIo())
       await runInstallSkill(env, [], fakeIo())
       expect(await readFile(file, 'utf8')).toBe(expected)
@@ -330,11 +330,11 @@ describe('install-skill through the CLI layer', () => {
   it('installs under the repo root by default and where the flags say otherwise', async () => {
     const repoRoot = await makeTempDir()
     const io = fakeIo()
-    expect(await runInstallSkill({ repoRoot, cwd: repoRoot, platform: 'linux' }, [], io)).toBe(EXIT.ok)
+    expect(await runInstallSkill({ repoRoot, cwd: repoRoot }, [], io)).toBe(EXIT.ok)
     const result = lastJson(io) as { targets: Array<{ kind: string; path: string; status: string }> }
     expect(result.targets).toEqual([
-      { kind: 'claude', path: expect.stringMatching(/\.claude\/skills\/pr-review-canvas$/), status: 'linked' },
-      { kind: 'codex', path: expect.stringMatching(/\.agents\/skills\/pr-review-canvas$/), status: 'linked' },
+      { kind: 'claude', path: expect.stringMatching(/\.claude\/skills\/pr-review-canvas$/), status: 'copied' },
+      { kind: 'codex', path: expect.stringMatching(/\.agents\/skills\/pr-review-canvas$/), status: 'copied' },
     ])
     expect(await readFile(path.join(repoRoot, '.claude', 'skills', 'pr-review-canvas', 'SKILL.md'), 'utf8')).toContain(
       'pr-review-canvas'
@@ -342,7 +342,7 @@ describe('install-skill through the CLI layer', () => {
     await mkdir(path.join(repoRoot, 'custom'))
     const custom = fakeIo()
     await runInstallSkill(
-      { repoRoot, cwd: repoRoot, platform: 'linux' },
+      { repoRoot, cwd: repoRoot },
       ['--claude-dir', 'custom/a', '--codex-dir', path.join(repoRoot, 'custom', 'b')],
       custom
     )

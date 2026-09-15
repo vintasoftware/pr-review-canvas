@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { appendFile, lstat, mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import { createServer } from 'node:net'
 import path from 'node:path'
@@ -39,8 +39,10 @@ try {
   run('git', ['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'])
   run(cli, ['install-skill'])
   for (const directory of ['.claude', '.agents']) {
+    assert(!(await lstat(path.join(temp, directory, 'skills/pr-review-canvas'))).isSymbolicLink())
     assert.match(await readFile(path.join(temp, directory, 'skills/pr-review-canvas/SKILL.md'), 'utf8'), /pr-review/)
   }
+  await appendFile(path.join(temp, '.agents/skills/pr-review-canvas/SKILL.md'), '\nlocal edit\n')
   const probe = createServer()
   probe.listen(0, '127.0.0.1')
   await once(probe, 'listening')
@@ -70,6 +72,8 @@ try {
     server.once('error', onError)
     server.once('exit', onExit)
   })
+  assert.match(logs, /pr-review doctor: outdated or modified skill/)
+  assert.match(logs, /pr-review install-skill/)
   for (const route of ['/', '/static/styles.css', '/static/js/app.js', '/vendor/marked.js',
     '/vendor/purify.js', '/vendor/highlight.js', '/vendor/mermaid/mermaid.esm.min.mjs']) {
     const response = await fetch(`${origin}${route}`, { signal: AbortSignal.timeout(5_000) })

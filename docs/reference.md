@@ -101,8 +101,19 @@ Relative custom paths resolve from the command's working directory. For example:
 pr-review install-skill --codex-dir ~/.codex/skills
 ```
 
-Installation uses relative symlinks on Linux and macOS and copies on Windows. Re-running it
-refreshes its own installation. A customized directory requires `--force` to replace it.
+Installation copies the bundled skill on every platform. The copies and their `.pr-review-install`
+marker files can be committed to Git. Re-running the command refreshes managed copies and replaces
+legacy symlinks. An unmanaged directory requires `--force` to replace it.
+
+Each installed `SKILL.md` records `metadata.body-sha256` in its YAML frontmatter. The SHA-256 hash
+covers the body after the closing frontmatter delimiter, with CRLF normalized to LF. `doctor`
+compares the recorded hash and actual body against the skill bundled with the running CLI. Any
+outdated or modified copy in `.claude/skills` or `.agents/skills` fails the skill check, even if the
+other copy is current. Refresh copies with `pr-review install-skill` (repeat any custom directory
+flags used during installation). Automatic discovery checks the two default directories.
+
+`serve` runs this skill check automatically and prints failures with a repair hint to stderr.
+Warnings do not prevent the server from starting. Use `doctor --all-checks` for full diagnostics.
 The `.gitignore` update always applies to the selected repository root, even with custom skill
 directories.
 

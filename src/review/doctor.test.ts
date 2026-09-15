@@ -1,11 +1,15 @@
 // @vitest-environment node
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type CliIo, runDoctor } from '../commands.js'
 import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
 import { type DoctorDeps, runDoctorChecks } from './doctor.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME } from './install-skill.js'
+import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
 
+import { stampSkill } from './skill-content.js'
+
+const bundled = await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')
+const installed = stampSkill(bundled)
 const REPO = '/repo'
 
 function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
@@ -18,12 +22,35 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     gh: createFakeGh(),
     version: '0.0.0-test',
     acpxVersion: async () => '0.13.2',
-    exists: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md'),
+    readSkill: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md') ? installed : null,
     ...over,
   }
 }
 
 describe('runDoctorChecks', () => {
+  it.each([
+    ['unstamped', bundled],
+    ['edited body with unchanged hash', installed + '\nlocal edit'],
+    ['older release', stampSkill(bundled + '\nold instructions')],
+    ['invalid frontmatter', 'broken'],
+  ])('reports a %s copy even when the other harness is current', async (_, stale) => {
+    const report = await runDoctorChecks(deps({
+      dataDirOverride: await makeTempDir(),
+      readSkill: async file => file.includes(CLAUDE_SKILLS_DIR) ? installed : stale,
+    }))
+    expect(report.checks.skill.ok).toBe(false)
+    expect(report.checks.skill.detail).toContain(CODEX_SKILLS_DIR)
+    expect(report.checks.skill.hint).toBe('run `pr-review install-skill`')
+  })
+
+  it('accepts copies after Git converts line endings to CRLF', async () => {
+    const report = await runDoctorChecks(deps({
+      dataDirOverride: await makeTempDir(),
+      readSkill: async () => installed.replace(/\n/g, '\r\n'),
+    }))
+    expect(report.checks.skill.ok).toBe(true)
+  })
+
   it('reports every check green on a working setup', async () => {
     const dataDir = await makeTempDir()
     const acpxVersion = vi.fn(async () => null)
@@ -47,18 +74,18 @@ describe('runDoctorChecks', () => {
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: await makeTempDir(),
-        exists: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME),
+        readSkill: async () => { throw Object.assign(new Error('is a directory'), { code: 'EISDIR' }) },
       })
     )
     expect(report.checks.skill.ok).toBe(false)
   })
 
-  it('names both skill directories when the skill is linked into both', async () => {
+  it('names both skill directories when the skill is copied into both', async () => {
     const dataDir = await makeTempDir()
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: dataDir,
-        exists: async () => true,
+        readSkill: async () => installed,
       })
     )
     expect(report.checks.skill).toEqual({
@@ -77,7 +104,7 @@ describe('runDoctorChecks', () => {
         git: createFakeGit({ commonDir: '/repo/.git', remotes: {} }),
         gh: createFakeGh({ auth: { installed: false, authenticated: false, detail: 'gh is not on PATH' } }),
         dataDirOverride: blocked,
-        exists: async () => false,
+        readSkill: async () => null,
       })
     )
     expect(report.ok).toBe(false)
@@ -110,7 +137,7 @@ describe('runDoctorChecks', () => {
           remotes: { origin: 'https://gitlab.com/acme/widgets.git' },
         }),
         dataDirOverride: dataDir,
-        exists: async () => false,
+        readSkill: async () => null,
       })
     )
     expect(report.checks.origin).toEqual({
@@ -230,7 +257,7 @@ describe('pr-review doctor', () => {
   })
 
   it('keeps core failures when acpx is installed', async () => {
-    const dependencies = deps({ dataDirOverride: await makeTempDir(), exists: async () => false })
+    const dependencies = deps({ dataDirOverride: await makeTempDir(), readSkill: async () => null })
     const core = await runDoctorChecks(dependencies)
     expect(await runDoctor(dependencies, ['--all-checks'], io)).toBe(1)
     expect(lines.map(line => JSON.parse(line))).toEqual([

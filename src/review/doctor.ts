@@ -1,13 +1,14 @@
 // `pr-review doctor`: one pass over everything the tool needs before it can serve a review, as
 // one JSON line. It reports instead of throwing, so a broken setup still answers.
 import { randomBytes } from 'node:crypto'
-import { rm, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parseGithubRemote } from '../config.js'
 import type { Git } from '../git/git.js'
 import type { GitHubClient } from '../github/gh.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME } from './install-skill.js'
+import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
+import { skillContent } from './skill-content.js'
 
 export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill'] as const
 export type DoctorCheckName = (typeof DOCTOR_CHECKS)[number]
@@ -31,8 +32,7 @@ export interface DoctorDeps {
   acpxVersion: () => Promise<string | null>
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
   dataDirOverride?: string | undefined
-  /** Answers whether a file can be read; the skill check asks for the SKILL.md inside. */
-  exists: (file: string) => Promise<boolean>
+  readSkill?: (file: string) => Promise<string | null>
 }
 
 function message(err: unknown): string {
@@ -56,18 +56,39 @@ async function checkDataDir(dir: string): Promise<DoctorCheck> {
 }
 
 /** The skill the generation flow needs, in either harness's directory. */
-async function checkSkill(repoRoot: string | null, exists: DoctorDeps['exists']): Promise<DoctorCheck> {
+export async function checkSkill(
+  repoRoot: string | null,
+  readSkill: NonNullable<DoctorDeps['readSkill']> = file => readFile(file, 'utf8')
+): Promise<DoctorCheck> {
   if (repoRoot === null) {
     return { ok: false, detail: 'no repository, so no skill directory to look in', hint: 'run from a clone' }
   }
   const targets = [CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR].map(dir => path.join(repoRoot, dir, SKILL_NAME))
   const found: string[] = []
+  const stale: string[] = []
+  let expected: string
+  try {
+    expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
+  } catch (err) {
+    return { ok: false, detail: message(err), hint: 'reinstall the pr-review package' }
+  }
   for (const target of targets) {
-    // The file the harness reads, not the directory: an empty directory, a dangling link, and
-    // an unreadable file all install nothing.
-    if (await exists(path.join(target, 'SKILL.md'))) {
+    try {
+      const text = await readSkill(path.join(target, 'SKILL.md'))
+      if (text === null) continue
       found.push(path.relative(repoRoot, target))
+      const { hash, frontmatter } = skillContent(text)
+      if (hash !== expected || frontmatter.getIn(['metadata', 'body-sha256']) !== expected) {
+        stale.push(path.relative(repoRoot, target))
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        stale.push(`${path.relative(repoRoot, target)}: ${message(err)}`)
+      }
     }
+  }
+  if (stale.length > 0) {
+    return { ok: false, detail: `outdated or modified skill: ${stale.join(', ')}`, hint: 'run `pr-review install-skill`' }
   }
   if (found.length === 0) {
     return {
@@ -130,7 +151,7 @@ export async function runDoctorChecks(deps: DoctorDeps, options: { allChecks?: b
     dataDir = { ok: false, detail: message(err), hint: 'pass --data-dir <dir>' }
   }
 
-  const skill = await checkSkill(repoRoot, deps.exists)
+  const skill = await checkSkill(repoRoot, deps.readSkill)
   const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill }
   if (options.allChecks) {
     checks.acpx = await checkAcpx(deps)
