@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -187,7 +187,33 @@ function codexPolicy(): string {
   }
 }
 
-/** One persistent runtime per checkout, separate from the user's normal agent sessions. */
+/** Publish only complete runtimes. Failed or competing initializers own only their staging directory. */
+function initializeRuntime(stateDir: string, configs: Map<string, string>, imports: string[][]): void {
+  if (existsSync(stateDir)) return
+  const staging = mkdtempSync(`${stateDir}.preparing-`)
+  try {
+    for (const dir of ['home', 'home/.acpx', 'home/.codex', 'home/.claude', 'home/.config/dcg', 'cache', 'state', 'data', 'run', 'tmp', 'ipc']) {
+      privateDirectory(path.join(staging, dir))
+    }
+    for (const [name, content] of configs) {
+      writeFileSync(path.join(staging, name), content, { flag: 'wx', mode: 0o600 })
+    }
+    for (const [source, target] of imports) {
+      if (source && target && existsSync(source) && statSync(source).isFile()) copyOnce(source, path.join(staging, target))
+    }
+    writeFileSync(path.join(staging, '.initialized'), '', { flag: 'wx', mode: 0o600 })
+    try {
+      renameSync(staging, stateDir)
+    } catch (error) {
+      // POSIX rename refuses to replace a nonempty directory. Validate the winner below.
+      if (!['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+    }
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
+}
+
+/** Runs in the preparation child or doctor CLI, never on the chat server's event loop. */
 export function createSandbox(options: SandboxOptions = {}): (file: string, args: string[], cwd: string) => { file: string; args: string[] } {
   const home = options.home ?? os.homedir()
   const root = options.stateRoot ?? path.join(home, '.local', 'state', 'pr-review-canvas', 'chat')
@@ -197,44 +223,39 @@ export function createSandbox(options: SandboxOptions = {}): (file: string, args
   const prepared = new Map<string, { file: string; args: string[] }>()
   return (file, args, cwd) => {
     if (process.platform === 'win32') return windowsSandboxCommand(file, args, cwd, 'launch', options)
-    dcgVersion()
     const repo = realpathSync(cwd)
     let prefix = prepared.get(repo)
     if (!prefix) {
+      dcgVersion()
       checkSandbox()
       const key = createHash('sha256').update(`dcg-v1:${repo}`).digest('hex')
-      const stateDir = path.join(root, key)
       privateDirectory(root)
-      let fresh = false
-      try {
-        mkdirSync(stateDir, { mode: 0o700 })
-        fresh = true
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      }
-      if (!lstatSync(stateDir).isDirectory() || lstatSync(stateDir).isSymbolicLink()) {
-        throw new SandboxError(`Chat runtime directory must not be a symlink: ${stateDir}`)
-      }
-      if (!fresh && !existsSync(path.join(stateDir, '.initialized'))) {
-        throw new SandboxError(`Chat runtime initialization is incomplete: ${stateDir}. Stop the server and remove this directory before retrying.`)
-      }
-      // Only initialize new storage. Once an agent has run, its files and links are untrusted:
-      // the host must never write through them, including on a later server restart.
-      if (fresh) {
-        for (const dir of ['home', 'home/.acpx', 'home/.codex', 'home/.claude', 'home/.config/dcg', 'cache', 'state', 'data', 'run', 'tmp', 'ipc']) {
-          privateDirectory(path.join(stateDir, dir))
-        }
-      }
+      const stateDir = path.join(root, key)
       const protectedConfigs = new Map([
         ['home/.codex/config.toml', codexPolicy()],
         ['home/.codex/hooks.json', '{"hooks":{}}\n'],
       ])
+      const configs = [
+        [path.join(home, '.acpx/config.json'), 'home/.acpx/config.json'],
+        [path.join(claudeHome, 'settings.json'), 'home/.claude/settings.json'],
+        [path.join(configHome, 'dcg/config.toml'), 'home/.config/dcg/config.toml'],
+      ]
+      initializeRuntime(stateDir, protectedConfigs, [
+        ...(process.platform === 'darwin' ? configs : []),
+        [path.join(home, '.claude.json'), 'home/.claude.json'],
+        [path.join(claudeHome, '.credentials.json'), 'home/.claude/.credentials.json'],
+        [path.join(codexHome, 'auth.json'), 'home/.codex/auth.json'],
+      ])
+      // Existing runtime paths are untrusted; never follow links or repair them from the host.
+      if (!lstatSync(stateDir).isDirectory() || lstatSync(stateDir).isSymbolicLink()) {
+        throw new SandboxError(`Chat runtime directory must not be a symlink: ${stateDir}`)
+      }
+      if (!existsSync(path.join(stateDir, '.initialized'))) {
+        throw new SandboxError(`Chat runtime initialization is incomplete: ${stateDir}. Stop the server and remove this directory before retrying.`)
+      }
       for (const [name, content] of protectedConfigs) {
-        const target = path.join(stateDir, name)
-        if (fresh) writeFileSync(target, content, { flag: 'wx', mode: 0o600 })
-        // Existing runtime paths are untrusted; never follow links or repair them from the host.
         const parts = ['home', 'home/.codex', name].map(part => path.join(stateDir, part))
-        if (parts.some(part => !existsSync(part) || lstatSync(part).isSymbolicLink()) || readFileSync(target, 'utf8') !== content) {
+        if (parts.some(part => !existsSync(part) || lstatSync(part).isSymbolicLink()) || readFileSync(path.join(stateDir, name), 'utf8') !== content) {
           throw new SandboxError('Chat guard configuration changed. Stop the server, remove this checkout’s chat runtime, and retry.')
         }
       }
@@ -244,38 +265,15 @@ export function createSandbox(options: SandboxOptions = {}): (file: string, args
         ? { file: '/usr/bin/sandbox-exec', args: ['-p', macosProfile(canonicalState), '/usr/bin/env', ...runtimeEnv(canonicalState)] }
         : { file: 'bwrap', args: sandboxArgs(canonicalState, repo) }
       if (process.platform === 'linux') {
-        // Make the ancestors mount points too, so a writable parent cannot rename the guard away.
+        // Ancestor mount points prevent renaming the guard through a writable parent.
         for (const name of ['home', 'home/.codex']) prefix.args.push('--bind', path.join(canonicalState, name), `${RUNTIME}/${name}`)
         for (const name of protectedConfigs.keys()) prefix.args.push('--ro-bind', path.join(canonicalState, name), `${RUNTIME}/${name}`)
-      }
-      // Codex uses app-owned hook trust. Login state and sessions stay in the isolated HOME.
-      const configs = [
-        [path.join(home, '.acpx/config.json'), 'home/.acpx/config.json'],
-        [path.join(claudeHome, 'settings.json'), 'home/.claude/settings.json'],
-        [path.join(configHome, 'dcg/config.toml'), 'home/.config/dcg/config.toml'],
-      ]
-      for (const [source, target] of configs) {
-        if (source && target && existsSync(source) && statSync(source).isFile()) {
-          if (process.platform === 'darwin' && fresh) {
-            copyOnce(source, path.join(stateDir, target))
-          } else if (process.platform === 'linux') {
+        for (const [source, target] of configs) {
+          if (source && target && existsSync(source) && statSync(source).isFile()) {
             prefix.args.push('--ro-bind', realpathSync(source), `${RUNTIME}/${target}`)
           }
         }
       }
-      // Login state may refresh inside the sandbox. Never overwrite an existing runtime file
-      // or follow a link planted by an earlier agent turn.
-      const loginFiles = [
-        [path.join(home, '.claude.json'), 'home/.claude.json'],
-        [path.join(claudeHome, '.credentials.json'), 'home/.claude/.credentials.json'],
-        [path.join(codexHome, 'auth.json'), 'home/.codex/auth.json'],
-      ]
-      for (const [source, target] of loginFiles) {
-        if (fresh && source && target && existsSync(source) && statSync(source).isFile()) {
-          copyOnce(source, path.join(stateDir, target))
-        }
-      }
-      if (fresh) writeFileSync(path.join(stateDir, '.initialized'), '', { flag: 'wx', mode: 0o600 })
       prepared.set(repo, prefix)
     }
     return { file: prefix.file, args: [...prefix.args, ...(process.platform === 'darwin' ? [] : ['--']), file, ...args] }
@@ -299,8 +297,9 @@ export function checkSandbox(): void {
       '--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
       '--cap-drop', 'ALL', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/run', '--', '/bin/true',
     ], { timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] })
-  } catch {
-    throw new SandboxError(SANDBOX_INSTALL_HINT)
+  } catch (error) {
+    const detail = (error as { stderr?: Buffer | string }).stderr?.toString().trim()
+    throw new SandboxError(`${SANDBOX_INSTALL_HINT}${detail ? `: ${detail}` : ''}`)
   }
 }
 
@@ -340,6 +339,10 @@ if (process.argv[2] === '--pr-review-sandbox') {
       dcgVersion()
     } else if (request.action === 'checkGuards') {
       process.stdout.write(`${checkChatGuards(request.cwd)}\n`)
+    } else if (request.action === 'prepare') {
+      const command = createSandbox(request.sandbox)('', [], request.cwd)
+      command.args.pop()
+      process.stdout.write(JSON.stringify(command))
     } else {
       const command = createSandbox(request.sandbox)(request.file, request.args, request.cwd)
       execFileSync(command.file, command.args, { cwd: request.cwd, stdio: 'inherit' })

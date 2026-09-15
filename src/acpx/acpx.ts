@@ -15,7 +15,9 @@ import {
   scrubForLog,
 } from './events.js'
 import { createNdjsonSplitter, NdjsonError } from './ndjson.js'
-import { agentPath, createSandbox, hostCommand, SandboxError, type SandboxOptions } from './sandbox.js'
+import { hostCommand, SandboxError, type SandboxOptions } from './sandbox.js'
+
+import { agentPathAsync, createSandboxClient } from './sandbox-client.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -194,25 +196,19 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
   const bin = opts.bin ?? ACPX_BIN
   const slackMs = opts.deadlineSlackMs ?? DEADLINE_SLACK_MS
   const cancelGraceMs = opts.cancelGraceMs ?? CANCEL_TIMEOUT_SEC * 1000
-  const sandbox = createSandbox(opts.sandbox)
-  const chatCommand = (file: string, args: string[], cwd: string) => {
+  const sandbox = createSandboxClient(opts.sandbox)
+  const chatCommand = async (file: string, args: string[], cwd: string) => {
     // Tests may supply a fixture binary. Production always uses the guarded acpx entry point.
     if (opts.bin) return sandbox(file, args, cwd)
-    const launcher = agentPath(fileURLToPath(new URL('./chat-acpx.mjs', import.meta.url)))
+    const launcher = await agentPathAsync(fileURLToPath(new URL('./chat-acpx.mjs', import.meta.url)))
     return sandbox('node', [launcher, ...args], cwd)
   }
-  const spawnImpl: SpawnImpl =
-    opts.spawnImpl ??
-    ((file, args, options) => {
-      const command = chatCommand(file, args, String(options.cwd ?? process.cwd()))
-      return spawn(command.file, command.args, options)
-    })
   const run: ExecFileImpl =
     opts.execFileImpl ??
-    ((file, args, options) => {
+    (async (file, args, options) => {
       // Version and login probes do not start an agent session.
       const command = file === bin && args[0] !== '--version'
-        ? chatCommand(file, args, options.cwd ?? process.cwd())
+        ? await chatCommand(file, args, options.cwd ?? process.cwd())
         : hostCommand(file, args)
       return execFileAsync(command.file, command.args, { ...options, encoding: 'utf8', shell: false })
     })
@@ -245,7 +241,7 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
 
   return {
     run(options) {
-      return startRun(
+      const start = (spawnImpl: SpawnImpl) => startRun(
         bin,
         spawnImpl,
         options,
@@ -256,6 +252,11 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         slackMs,
         cancelGraceMs
       )
+      if (opts.spawnImpl) return start(opts.spawnImpl)
+      return prepareRun(async () => {
+        const command = await chatCommand(bin, buildPromptArgs(options), options.cwd)
+        return () => start((_file, _args, spawnOptions) => spawn(command.file, command.args, spawnOptions))
+      }, options.timeoutSec * 1000 + slackMs)
     },
 
     async ensureSession(options) {
@@ -377,6 +378,50 @@ export function readExecStream(stdout: string): {
     }
   }
   return { text: text.trim(), error: null, ended }
+}
+
+/** Cancellation and the deadline also cover asynchronous sandbox preparation. */
+function prepareRun(prepare: () => Promise<() => AgentRun>, timeoutMs: number): AgentRun {
+  const queue = createEventQueue()
+  let stopped = false
+  let run: AgentRun | undefined
+  let cancellation: Promise<void> | undefined
+  const deadline = setTimeout(() => {
+    stopped = true
+    queue.push({ type: 'error', code: 'AGENT_TIMEOUT', message: 'Chat sandbox preparation timed out' })
+    queue.end()
+  }, timeoutMs)
+  deadline.unref?.()
+  void (async () => {
+    try {
+      const start = await prepare()
+      clearTimeout(deadline)
+      if (stopped) return
+      run = start()
+      for await (const event of run.events) queue.push(event)
+    } catch (error) {
+      if (!stopped) queue.push({ type: 'error', code: error instanceof SandboxError ? 'AGENT_PERMISSION_DENIED' : 'AGENT_FAILED', message: error instanceof Error ? error.message : String(error) })
+    } finally {
+      clearTimeout(deadline)
+      queue.end()
+    }
+  })()
+  return {
+    events: queue.iterate(),
+    cancel() {
+      if (!cancellation) {
+        stopped = true
+        clearTimeout(deadline)
+        if (run) cancellation = run.cancel()
+        else {
+          queue.push({ type: 'done', stopReason: 'cancelled' })
+          queue.end()
+          cancellation = Promise.resolve()
+        }
+      }
+      return cancellation
+    },
+  }
 }
 
 /** Spawns one prompt turn and turns its output into events. */

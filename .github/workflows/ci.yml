@@ -67,14 +67,16 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          wsl --set-default-version 2
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot set WSL2 as the default' }
           wsl --install --distribution Ubuntu --no-launch --web-download
           if ($LASTEXITCODE -ne 0) { throw 'WSL installation failed' }
-          wsl --set-version Ubuntu 2
-          if ($LASTEXITCODE -ne 0) { throw 'WSL2 is required' }
+          $kernel = (wsl --distribution Ubuntu --user root --exec uname -r) -join ''
+          if ($LASTEXITCODE -ne 0 -or $kernel -notmatch 'WSL2') { throw 'A running WSL2 kernel is required' }
           wsl --set-default Ubuntu
           $setup = (wsl --distribution Ubuntu --user root --exec wslpath -a -u "$env:GITHUB_WORKSPACE/.github/scripts/install-wsl-chat-tools.sh").Trim()
           wsl --distribution Ubuntu --user root --exec bash $setup
           if ($LASTEXITCODE -ne 0) { throw 'WSL chat dependency installation failed' }
       - run: pnpm typecheck
       - name: Test native host containment and doctor
-        run: pnpm test src/acpx/sandbox.test.ts src/acpx/guard.test.ts src/review/doctor.test.ts
+        run: pnpm test src/acpx/sandbox.test.ts src/acpx/sandbox-client.test.ts src/acpx/acpx-preparation.test.ts src/acpx/guard.test.ts src/review/doctor.test.ts

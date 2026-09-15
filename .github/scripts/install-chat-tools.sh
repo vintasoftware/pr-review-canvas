@@ -4,6 +4,20 @@ set -euo pipefail
 if [[ "$(uname -s)" == Linux ]]; then
   sudo apt-get update
   sudo apt-get install -y bubblewrap
+  # Ubuntu's hosted image may install the namespace profile without loading it.
+  if [[ -f /etc/apparmor.d/bwrap ]]; then
+    sudo apparmor_parser -r /etc/apparmor.d/bwrap
+  elif [[ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+    sudo tee /etc/apparmor.d/pr-review-bwrap >/dev/null <<'PROFILE'
+abi <abi/4.0>,
+include <tunables/global>
+profile pr-review-bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+}
+PROFILE
+    sudo apparmor_parser -r /etc/apparmor.d/pr-review-bwrap
+  fi
+  bwrap --unshare-user --unshare-pid --ro-bind / / -- /bin/true
 fi
 
 installer="$(mktemp)"
