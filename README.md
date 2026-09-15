@@ -54,7 +54,8 @@ pr-review doctor --all-checks
 ```
 
 `install-skill` sets up **both Claude Code and Codex** in one command: `.claude/skills/pr-review-canvas`
-and `.agents/skills/pr-review-canvas`, respectively. Restart your coding agent if the skill
+and `.agents/skills/pr-review-canvas`, respectively. It also adds `.pr-review/settings.yml` to the
+project's `.gitignore`. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
 `doctor` checks Git, your GitHub remote, the GitHub CLI and its login, write access to the local
@@ -103,26 +104,28 @@ from that view is disabled. Click **refresh** to check GitHub for changes and a 
 
 ## Configuration
 
-### Settings
+### User-local preferences
 
-Use the header's **skin** button to choose Terminal or GitHub styling, and **theme** to choose
-Light, Dark, or Auto (your system preference).
+Your appearance and AI Chat preferences are saved in `.pr-review/settings.yml` in your local
+project directory. This file is ignored by Git, so each teammate can use their own settings.
 
-For AI Chat, open **settings** in the header:
+Use **skin** and **theme** in the header to change the appearance.
 
-- **Agent:** Claude Code or Codex. Switching agents starts a new thread and keeps earlier threads.
-- **Model:** enter a model ID, or leave it blank to use the agent's default.
-- **Chat timeout:** seconds allowed for a reply; default 600, allowed range 30–3600.
-- **Max turns:** limit the agent's steps per reply (1–100), or leave blank for its default.
-- **Test agent:** send a small request to check that the selected agent can respond. Then **save** your settings.
+For AI Chat, open **settings**, choose Claude Code or Codex, and optionally enter a model ID.
+Leave the model blank to use the agent's default. You can also adjust the reply timeout and
+maximum turns. Click **Test agent** to check the connection, then **save**.
 
-Canvas generation defaults to Sonnet in Claude Code. The skill directs reviews of auth and PHI handling
-to an Opus agent when available, and honors an explicit model request. Other hosts keep their selected
-model. The publish command's `--model` flag records the generator; it does not select a model.
+Switching agents starts a new thread and keeps earlier threads. Server flags `--agent` and
+`--model` override your saved chat preferences for that run.
 
-Preferences are saved in the project's local `.pr-review/settings.yml`. Server flags `--agent`
-and `--model` override saved values for that run. The dialog also shows project configuration;
-edit `pr-review.config.yml` to change it. See the [configuration reference](docs/reference.md).
+### Shared project settings
+
+Edit `pr-review.config.yml` at the repository root and commit it to share settings with your team.
+It controls review rules, layers, generation mode, test file patterns, prompt templates, and
+whether AI Chat is enabled. The settings dialog displays this configuration; edit the file to
+change it. See the [configuration reference](docs/reference.md#project-config).
+
+Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKILL.md#model-choice).
 
 ### Project prompt templates
 

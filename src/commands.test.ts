@@ -302,6 +302,31 @@ describe('splitCommonFlags', () => {
 })
 
 describe('install-skill through the CLI layer', () => {
+  it.each([
+    [undefined, '.pr-review/settings.yml\n'],
+    ['# Local files\nnode_modules/', '# Local files\nnode_modules/\n.pr-review/settings.yml\n'],
+    ['node_modules/\r\n', 'node_modules/\r\n.pr-review/settings.yml\r\n'],
+    ['.pr-review/settings.yml\n', '.pr-review/settings.yml\n'],
+    ['/.pr-review/settings.yml\n', '/.pr-review/settings.yml\n'],
+  ])('preserves existing ignore rules and adds local settings once (%j)', async (before, expected) => {
+    const repoRoot = await makeTempDir()
+    try {
+      const file = path.join(repoRoot, '.gitignore')
+      if (before !== undefined) {
+        await writeFile(file, before)
+      }
+      const cwd = path.join(repoRoot, 'nested')
+      await mkdir(cwd)
+      const env = { repoRoot, cwd, platform: 'linux' as const }
+      await runInstallSkill(env, [], fakeIo())
+      await runInstallSkill(env, [], fakeIo())
+      expect(await readFile(file, 'utf8')).toBe(expected)
+      await expect(readFile(path.join(cwd, '.gitignore'))).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true })
+    }
+  })
+
   it('installs under the repo root by default and where the flags say otherwise', async () => {
     const repoRoot = await makeTempDir()
     const io = fakeIo()

@@ -12,7 +12,13 @@ import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
 import { fetchPrMeta, fetchPrRefs } from './github/pr.js'
 import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill, SkillDirExistsError } from './review/install-skill.js'
+import {
+  CLAUDE_SKILLS_DIR,
+  CODEX_SKILLS_DIR,
+  ignoreLocalSettings,
+  installSkill,
+  SkillDirExistsError,
+} from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
 import { prepare } from './review/prepare.js'
 import {
@@ -320,6 +326,7 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: 
       { kind: 'codex', dir: resolve(values['codex-dir'], CODEX_SKILLS_DIR) },
     ],
   })
+  await ignoreLocalSettings(env.repoRoot)
   printJson(io, result)
   return EXIT.ok
 }

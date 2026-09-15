@@ -1,14 +1,27 @@
 // `pr-review install-skill`: link the bundled skill into the host repo's skill directories, so
 // Claude Code (`.claude/skills`) and Codex (`.agents/skills`) both see `/pr-review-canvas`.
-import { cp, lstat, mkdir, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, cp, lstat, mkdir, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PACKAGE_ROOT } from '../server/context.js'
+import { readText } from '../store/atomic-json.js'
 
 export const SKILL_NAME = 'pr-review-canvas'
 export const SKILL_SOURCE_DIR = path.join(PACKAGE_ROOT, 'skills', SKILL_NAME)
 export const CLAUDE_SKILLS_DIR = '.claude/skills'
 /** Codex reads repo skills from `.agents/skills` under the project root (codex-rs/ext/skills). */
 export const CODEX_SKILLS_DIR = '.agents/skills'
+
+export async function ignoreLocalSettings(repoRoot: string): Promise<void> {
+  const file = path.join(repoRoot, '.gitignore')
+  const text = (await readText(file)) ?? ''
+  const entry = '.pr-review/settings.yml'
+  if (text.split(/\r?\n/).some(line => line === entry || line === `/${entry}`)) {
+    return
+  }
+  const newline = text.includes('\r\n') ? '\r\n' : '\n'
+  const separator = text.length > 0 && !text.endsWith('\n') ? newline : ''
+  await appendFile(file, `${separator}${entry}${newline}`, 'utf8')
+}
 
 export interface InstallSkillOptions {
   /** Absolute skills directories to install into; each gets `<dir>/pr-review-canvas`. */
