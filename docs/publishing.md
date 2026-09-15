@@ -1,15 +1,15 @@
 # Publishing to npm
 
 The package is `@vintasoftware/pr-review-canvas`; its installed command is `pr-review`.
-The first release is `0.1.0`. Publishing is manual. CI validates changes and has no npm credentials.
+The next release is `0.2.0`. Publishing is manual. CI validates changes and has no npm credentials.
 
-## Before the first release
+## Before publishing
 
 1. Create or sign in to your [npm account](https://www.npmjs.com/login), verify its email,
    and enable [two-factor authentication](https://docs.npmjs.com/about-two-factor-authentication/).
 2. Confirm that the `vintasoftware` npm organization exists and that your account can publish
    packages in that scope. GitHub organization membership does not grant npm access.
-3. Merge the release-preparation PR. Wait for both `Verify (Node 22)` and `Verify (Node 24)`
+3. Merge the release-preparation PR, including the version change and release notes. Wait for both `Verify (Node 22)` and `Verify (Node 24)`
    in the **CI** workflow to pass on the resulting `main` commit.
 4. Install Node.js 24, Corepack, Git, and GitHub CLI. Authenticate GitHub CLI with `gh auth login`.
    Run pnpm through Corepack to use the version pinned in `package.json`.
@@ -62,22 +62,22 @@ If a fix is needed, merge it and repeat these checks for the new commit.
 ```bash
 npm pack --dry-run
 npm pack
-# Inspect the archive printed by npm pack (for the first release):
-tar -tzf vintasoftware-pr-review-canvas-0.1.0.tgz
+# Inspect the archive printed by npm pack (for 0.2.0):
+tar -tzf vintasoftware-pr-review-canvas-0.2.0.tgz
 npm login --registry=https://registry.npmjs.org/
 npm whoami --registry=https://registry.npmjs.org/
 npm view @vintasoftware/pr-review-canvas versions --json --registry=https://registry.npmjs.org/
 ```
 
-For a new public package, the last command should return `E404`. If the package already exists,
-confirm ownership and select an unused version before proceeding. A network or authentication
-error does not establish name availability. npm versions cannot be reused once published.
+Confirm that `0.2.0` is absent from the published versions before proceeding. npm versions
+cannot be reused once published. A network or authentication error does not establish
+version availability.
 
 The archive should contain runtime source, static assets, prompts, the skill, example config,
 CLI reference, README, package metadata, and license. Tests, fixtures, local review data, and
 credentials must be absent. `corepack pnpm test:package` checks the package contents and installation.
 
-## Publish 0.1.0
+## Publish 0.2.0
 
 From the same clean, verified checkout:
 
@@ -94,26 +94,25 @@ Publish from the checkout as shown: publishing a `.tgz` directly does not run th
 ## Verify and tag the release
 
 ```bash
-npm view @vintasoftware/pr-review-canvas@0.1.0 version dist.integrity --registry=https://registry.npmjs.org/
-npm install -g @vintasoftware/pr-review-canvas@0.1.0
+npm view @vintasoftware/pr-review-canvas@0.2.0 version dist.integrity --registry=https://registry.npmjs.org/
+npm install -g @vintasoftware/pr-review-canvas@0.2.0
 pr-review --help
-git tag -a v0.1.0 -m 'Release 0.1.0'
-git push origin v0.1.0
+git tag -a v0.2.0 -m 'Release 0.2.0'
+git push origin v0.2.0
 ```
 
 From a project clone, run `pr-review install-skill`, then `pr-review serve` and open
 http://localhost:3010. `pr-review doctor` checks GitHub access and local setup;
 `doctor --all-checks` additionally requires the optional `acpx` installation.
 
-Optionally create a GitHub release for `v0.1.0` with release notes. Remove the README's
-first-release availability note in a follow-up documentation change once npm installation works.
+Create a GitHub release for `v0.2.0` using the 0.2.0 section of [CHANGELOG.md](../CHANGELOG.md).
 
 ## Later releases
 
 Use a branch to update the version before running CI:
 
 ```bash
-git switch -c release/0.1.1
+git switch -c release/0.2.1
 npm version patch --no-git-tag-version
 corepack pnpm install --lockfile-only
 ```

@@ -1,8 +1,7 @@
 # CLI and configuration reference
 
-For installation, the author/reviewer workflow, and basic settings, start with the
-[README](../README.md). This reference covers command options, configuration values, and behavior
-that matters when customizing or troubleshooting a review.
+This reference covers command options, configuration, and troubleshooting for local PR reviews.
+For setup and the basic review workflow, see the [README](../README.md).
 
 - [CLI options](#cli-options)
 - [Project config](#project-config)
@@ -162,7 +161,7 @@ within one path segment.
 | `generation.caps` | See below | Overrides individual text limits |
 | `tests.patterns` | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels |
 | `chat.enabled` | `true` | Set to `false` to disable AI Chat |
-| `prompts` | Bundled templates | See [prompt customization](../README.md#project-prompt-templates) for supported keys and setup |
+| `prompts` | Bundled templates | See [prompt templates](#prompt-templates) for supported keys and behavior |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
 provides no suggested groups; an empty `tests.patterns` list recognizes no files as tests.
@@ -178,6 +177,37 @@ not change an already prepared generation or an existing canvas.
 
 Both modes read the project rulebook and use the same validation and review controls. The mode
 affects canvas generation; chat answers the reviewer's selected question.
+
+### Prompt templates
+
+The `prompts` map in `pr-review.config.yml` accepts these keys:
+
+| Key | Purpose |
+|---|---|
+| `generation-format.md` | Schema and output rules |
+| `generation-strict.md` | Instructions for strict mode |
+| `generation-surfacing.md` | Instructions for surfacing mode |
+| `quality-standards.md` | Bundled code standards |
+| `layering-guidance.md` | Guidance for grouping related changes |
+| `chat-seed.md` | Opening AI Chat instructions |
+
+Each configured file replaces a whole template. Paths resolve from the project root,
+including when running from a subdirectory or using `--repo`. Absolute paths work for
+personal templates shared across projects. Omitted entries use the installed package's
+defaults. A configured file that cannot be read causes an error.
+
+`generation.mode` selects the generation wrapper. The project rulebook takes precedence
+over code standards. Configured layers and caps supply data to the templates.
+
+Preserve `{{TOKENS}}`, including `{{FORMAT}}` in generation wrappers, so generated prompts
+include the context and output requirements. Unknown generation tokens fail rendering;
+chat leaves unknown tokens as written. Prompt edits do not change the output schema or
+validation rules enforced by the tool.
+
+Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
+Restart the server after changing the config; chat template edits apply to new threads.
+Custom templates persist across tool upgrades. Compare them with the new bundled templates
+when upgrading.
 
 ### Text limits
 
@@ -215,8 +245,7 @@ placed in Other while its source is in a regular layer.
 
 ## Local settings and storage
 
-See the [README's settings overview](../README.md#user-local-preferences) for editing preferences
-through the UI. These are the file keys and accepted values:
+The data directory's `settings.yml` accepts these keys and values:
 
 | Key | Default | Accepted values |
 |---|---|---|
@@ -319,7 +348,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 |---|---|
 | `NOT_A_REPO` | Run inside a Git clone or pass `--repo <dir>` |
 | `NO_ORIGIN` | Check that `origin` points to a repository on github.com |
-| `GH_MISSING` / `GH_UNAUTHENTICATED` | Follow the [GitHub CLI setup](../README.md#install); check authentication in the same environment that runs the server |
+| `GH_MISSING` / `GH_UNAUTHENTICATED` | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server |
 | `GITHUB_API_ERROR` | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems |
 | `PR_NOT_FOUND` | Check the PR number, repository, and your access |
 | `CANVAS_NOT_FOUND` | Generate or import a canvas for the requested commit |
@@ -331,7 +360,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `SKILL_DIR_EXISTS` | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force` |
 | `CHAT_BUSY` | Wait for the running reply or press **stop** |
 | `AGENT_AUTH_REQUIRED` | Sign in through the selected agent's CLI, then retry |
-| `AGENT_MISSING` or missing chat pane | Check the [chat setup](../README.md#optional-ai-chat-install), `chat.enabled`, and that the server can find the installed executables |
+| `AGENT_MISSING` or missing chat pane | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks` |
 | `AGENT_INCOMPLETE` | Retry the message or increase the chat timeout |
 | `COMMENT_FORBIDDEN` | Check the GitHub account's repository access and token permissions |
 | `COMMENT_LINE_NOT_IN_DIFF` | Choose a line shown in the current diff |

@@ -43,8 +43,6 @@ Install the command globally once, for use in any project:
 npm install -g @vintasoftware/pr-review-canvas
 ```
 
-The npm installation command will be available after the first release.
-
 ## Set up a project
 
 ```bash
@@ -135,8 +133,8 @@ Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKIL
 
 ### Project prompt templates
 
-A global install reads `pr-review.config.yml` from the project root. Use its `prompts`
-map to replace individual templates with files you keep in the project's Git repository:
+Customize generation and AI Chat prompts with the `prompts` map in your project's
+`pr-review.config.yml`:
 
 ```yaml
 prompts:
@@ -145,34 +143,23 @@ prompts:
   chat-seed.md: review-prompts/chat-seed.md
 ```
 
-To start from the installed templates (for an npm global install):
+Copy the installed templates to start editing (for an npm global install):
 
 ```bash
 mkdir -p review-prompts
 cp "$(npm root -g)/@vintasoftware/pr-review-canvas/prompts/"*.md review-prompts/
 ```
 
-Edit the copies and add entries only for the templates you want to override. Commit
-`pr-review.config.yml` and the referenced files together. Paths resolve from the project
-root, including when running from a subdirectory or using `--repo`. Absolute paths also
-work for personal templates shared across projects. Omitted entries use the installed
-package's defaults; a configured file that cannot be read causes an error.
-
-The six supported keys are `generation-format.md` (schema and output rules),
-`generation-strict.md` and `generation-surfacing.md` (mode wrappers),
-`quality-standards.md` (bundled code standards), `layering-guidance.md` (semantic grouping guidance),
-and `chat-seed.md` (the opening AI Chat instructions). `generation.mode` still selects
-the wrapper. The rulebook still takes precedence over code standards, and configured
-layers and caps still supply the template data.
-
-Each file replaces a whole template. Preserve its `{{TOKENS}}`, including `{{FORMAT}}`
-in generation wrappers, to keep the generated context and output contract. Unknown
-generation tokens fail rendering. Chat leaves unknown tokens as written. Prompt edits
-do not change the output schema or validation rules enforced by the tool. Overrides
-remain yours across tool upgrades; compare them with new bundled templates when upgrading.
+Edit the copies and configure only the templates you want to replace. Paths are relative
+to the project root. Omitted entries use the bundled defaults. Keep each template's
+`{{TOKENS}}`, including `{{FORMAT}}` in generation wrappers. Commit the config and
+referenced files together.
 
 Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
 Restart the server after changing the config; chat template edits apply to new threads.
+
+See the [prompt template reference](docs/reference.md#prompt-templates) for supported keys,
+path rules, validation, and upgrades.
 
 ## Contributing
 

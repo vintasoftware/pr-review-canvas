@@ -1,6 +1,6 @@
 {
   "name": "@vintasoftware/pr-review-canvas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Localhost PR review canvas: layered diffs, attention points, and GitHub comments for one PR",
   "type": "module",
   "bin": {

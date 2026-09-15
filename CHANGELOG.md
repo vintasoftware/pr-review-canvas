@@ -1,0 +1,47 @@
+# Changelog
+
+## 0.2.0
+
+Changes since 0.1.0.
+
+### Review layers
+
+- Generation groups related behavior and decisions into semantic layers. Projects without
+  configured layers no longer use a fixed set of eight architecture groups.
+- Configured layers provide optional descriptions, path hints, and reading order. The generator
+  can combine, split, or reorder them to fit the change. Tests stay with the code they cover.
+- Prompt customization instructions are shorter, with detailed rules in `docs/reference.md`.
+
+### Skill installation
+
+- `install-skill` creates portable copies for Claude Code and Codex on every platform.
+  Re-running it refreshes managed copies and replaces legacy symlinks.
+- Installed skills include a content hash. `doctor` reports outdated or modified copies;
+  `serve` warns with a repair command while continuing to start.
+- Installation prevents overwriting the bundled skill's source directory.
+
+### Canvas exports
+
+- ZIP filenames include the PR number, UTC generation time, eight-character commit prefix,
+  and repository: `pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip`.
+- Comparisons before a PR exists use `ref-` instead of `pr-<number>-`. Re-exporting a canvas
+  keeps its filename. Attachment discovery recognizes the new names.
+
+### Validation
+
+- Expanded unit coverage for review validation, GitHub attachments, server routes, and UI behavior.
+- CI retains coverage reports for seven days for both Node.js versions.
+
+### Upgrade from 0.1.0
+
+1. Run `pr-review install-skill` in each project after upgrading. Repeat custom directory flags
+   if used. Preserve customized skills before refreshing managed copies, and commit updated copies.
+2. Rename the `prompts` config key `layers-default.md` to `layering-guidance.md`. Update any
+   custom generation templates from `{{DEFAULT_LAYERS}}` to `{{CONFIGURED_LAYERS}}` and from
+   `{{LAYERS_DEFAULT}}` to `{{LAYERING_GUIDANCE}}`. The old config key is rejected and causes
+   configuration to fall back to defaults; old generation tokens fail rendering.
+3. Re-export shared canvases and replace their attachments to use automatic discovery in 0.2.0.
+   Old ZIP filenames are no longer recognized by discovery; existing archives can still be
+   imported manually.
+4. Run `prepare` again for updated generation prompts, using `--force` for an existing canvas.
+   Restart the server after configuration changes.
