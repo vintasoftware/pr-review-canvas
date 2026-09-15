@@ -41,7 +41,7 @@ export const PromptOverridesSchema = z.object({
   'generation-strict.md': z.string().min(1).optional(),
   'generation-surfacing.md': z.string().min(1).optional(),
   'quality-standards.md': z.string().min(1).optional(),
-  'layers-default.md': z.string().min(1).optional(),
+  'layering-guidance.md': z.string().min(1).optional(),
   'chat-seed.md': z.string().min(1).optional(),
 }).strict()
 export type PromptOverrides = z.infer<typeof PromptOverridesSchema>

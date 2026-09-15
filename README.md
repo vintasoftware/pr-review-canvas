@@ -156,7 +156,7 @@ package's defaults; a configured file that cannot be read causes an error.
 
 The six supported keys are `generation-format.md` (schema and output rules),
 `generation-strict.md` and `generation-surfacing.md` (mode wrappers),
-`quality-standards.md` (bundled code standards), `layers-default.md` (semantic grouping guidance),
+`quality-standards.md` (bundled code standards), `layering-guidance.md` (semantic grouping guidance),
 and `chat-seed.md` (the opening AI Chat instructions). `generation.mode` still selects
 the wrapper. The rulebook still takes precedence over code standards, and configured
 layers and caps still supply the template data.

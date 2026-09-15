@@ -41,9 +41,9 @@ hunk in that file's patch.
 
 Project-configured layers (optional guidance):
 
-{{DEFAULT_LAYERS}}
+{{CONFIGURED_LAYERS}}
 
-{{LAYERS_DEFAULT}}
+{{LAYERING_GUIDANCE}}
 
 - **Every hunk id must appear in exactly one layer.** The validator rejects an unassigned or
   duplicated hunk. A file's hunks may be spread over several layers.
