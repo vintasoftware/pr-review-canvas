@@ -79,6 +79,8 @@ You can review canvases without installing `acpx`.
 
 ## Advanced usage
 
+See the [CLI and configuration reference](docs/reference.md) for detailed options and troubleshooting.
+
 ### Export an existing canvas
 
 ```bash
@@ -182,8 +184,7 @@ pnpm start --repo /path/to/your-project
 ```
 
 Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`
-directory; keep it out of Git. See the [CLI and configuration reference](docs/reference.md)
-for more options and [the release data review](docs/release-data-review.md) for the SHL example.
+directory; keep it out of Git.
 
 ## License
 
