@@ -2,10 +2,9 @@ import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { hostCommand, SandboxError, type SandboxOptions } from './sandbox.js'
+import { appendSandboxCommand, hostCommand, SandboxError, type SandboxCommand, type SandboxOptions } from './sandbox.js'
 
 const execute = promisify(execFile)
-type Command = { file: string; args: string[] }
 
 /** Translate on the WSL side without blocking the Windows server's event loop. */
 export async function agentPathAsync(file: string): Promise<string> {
@@ -30,8 +29,8 @@ export function createSandboxClient(options: SandboxOptions = {}) {
     }
     return pending
   }
-  const prepared = new Map<string, Promise<Command>>()
-  const prepare = async (cwd: string): Promise<Command> => {
+  const prepared = new Map<string, Promise<SandboxCommand>>()
+  const prepare = async (cwd: string): Promise<SandboxCommand> => {
     const [directory, bridge, stateRoot, home] = await Promise.all([
       translate(cwd), translate(fileURLToPath(new URL('./wsl-sandbox.mjs', import.meta.url))),
       options.stateRoot ? translate(options.stateRoot) : undefined,
@@ -41,7 +40,7 @@ export function createSandboxClient(options: SandboxOptions = {}) {
     const command = hostCommand(process.platform === 'win32' ? 'node' : process.execPath, [bridge, '--pr-review-sandbox', request])
     try {
       const { stdout } = await execute(command.file, command.args, { cwd, timeout: 60_000, encoding: 'utf8', maxBuffer: 1024 * 1024 })
-      const prefix: Command = JSON.parse(stdout)
+      const prefix: SandboxCommand = JSON.parse(stdout)
       if (typeof prefix.file !== 'string' || !Array.isArray(prefix.args) || !prefix.args.every(arg => typeof arg === 'string')) {
         throw new Error('Invalid sandbox preparation response')
       }
@@ -51,7 +50,7 @@ export function createSandboxClient(options: SandboxOptions = {}) {
       throw new SandboxError(detail || (error instanceof Error ? error.message : String(error)))
     }
   }
-  return async (file: string, args: string[], cwd: string): Promise<Command> => {
+  return async (file: string, args: string[], cwd: string): Promise<SandboxCommand> => {
     let pending = prepared.get(cwd)
     if (!pending) {
       pending = prepare(cwd)
@@ -61,6 +60,7 @@ export function createSandboxClient(options: SandboxOptions = {}) {
     const [prefix, executable, directory] = await Promise.all([
       pending, path.isAbsolute(file) ? translate(file) : file, translate(cwd),
     ])
-    return hostCommand(prefix.file, [...prefix.args, executable, ...args.map((arg, index) => args[index - 1] === '--cwd' ? directory : arg)])
+    const command = appendSandboxCommand(prefix, executable, args.map((arg, index) => args[index - 1] === '--cwd' ? directory : arg))
+    return hostCommand(command.file, command.args)
   }
 }
