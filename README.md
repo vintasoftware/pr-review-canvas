@@ -40,6 +40,47 @@ and honors an explicit model request. Other hosts keep their selected model. The
 canvas directory, and whether the skill is installed. It prints a JSON report with a result for
 each check and suggested fixes for failures. Exit code `0` means all checks passed.
 
+### Project prompt templates
+
+A global install reads `pr-review.config.yml` from the project root. Use its `prompts`
+map to replace individual templates with files you keep in the project's Git repository:
+
+```yaml
+prompts:
+  generation-format.md: review-prompts/generation-format.md
+  generation-surfacing.md: review-prompts/generation-surfacing.md
+  chat-seed.md: review-prompts/chat-seed.md
+```
+
+To start from the installed templates (for an npm global install):
+
+```bash
+mkdir -p review-prompts
+cp "$(npm root -g)/pr-review-canvas/prompts/"*.md review-prompts/
+```
+
+Edit the copies and add entries only for the templates you want to override. Commit
+`pr-review.config.yml` and the referenced files together. Paths resolve from the project
+root, including when running from a subdirectory or using `--repo`. Absolute paths also
+work for personal templates shared across projects. Omitted entries use the installed
+package's defaults; a configured file that cannot be read causes an error.
+
+The six supported keys are `generation-format.md` (schema and output rules),
+`generation-strict.md` and `generation-surfacing.md` (mode wrappers),
+`quality-standards.md` (bundled code standards), `layers-default.md` (taxonomy prose),
+and `chat-seed.md` (the opening AI Chat instructions). `generation.mode` still selects
+the wrapper. The rulebook still takes precedence over code standards, and configured
+layers and caps still supply the template data.
+
+Each file replaces a whole template. Preserve its `{{TOKENS}}`, including `{{FORMAT}}`
+in generation wrappers, to keep the generated context and output contract. Unknown
+generation tokens fail rendering. Chat leaves unknown tokens as written. Prompt edits
+do not change the output schema or validation rules enforced by the tool. Overrides
+remain yours across tool upgrades; compare them with new bundled templates when upgrading.
+
+Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
+Restart the server after changing the config; chat template edits apply to new threads.
+
 ### Optional: AI Chat
 
 To ask questions about a PR inside the canvas, install `acpx` globally:

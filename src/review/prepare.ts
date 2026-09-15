@@ -152,7 +152,10 @@ export async function prepare(ctx: AppContext, target: PrepareTarget, opts: Prep
     largePr: isLargePr({ files: derived.files.length, additions, deletions }),
     preparedAt: ctx.now().toISOString(),
   }
-  const sources = opts.promptSources ?? (await loadPromptSources())
+  const sources = opts.promptSources ?? (await loadPromptSources(undefined, {
+    repoRoot: ctx.config.repoRoot,
+    overrides: ctx.projectConfig.config.prompts,
+  }))
   await clearCanvasDir(canvasDir)
   await writeTextAtomic(promptPath, renderPrompt(context, derived.patches, sources))
   await writeJsonAtomic(contextPath, context)

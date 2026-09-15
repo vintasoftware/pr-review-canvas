@@ -5,6 +5,7 @@ import { type AgentRunner, createAgentRunner } from '../acpx/acpx.js'
 import { type AgentDirectory, createAgentDirectory } from '../acpx/agents.js'
 import { createPreflightProbe, type PreflightProbe } from '../acpx/preflight.js'
 import { type ChatManager, createChatManager } from '../chat/chat-manager.js'
+import type { PromptOverrides } from '../project-config.js'
 import { loadSeedTemplate } from '../chat/seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
@@ -121,7 +122,13 @@ export interface ChatSet {
 }
 
 /** The chat side of the context, built over the same stores. Shared by the real context and tests. */
-export function createChatSet(config: RuntimeConfig, runner: AgentRunner, stores: StoreSet, now: () => Date): ChatSet {
+export function createChatSet(
+  config: RuntimeConfig,
+  runner: AgentRunner,
+  stores: StoreSet,
+  now: () => Date,
+  prompts?: PromptOverrides
+): ChatSet {
   const settings = createSettingsStore(config.dataDir)
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(number => stores.prs.prDir(number))
@@ -138,7 +145,7 @@ export function createChatSet(config: RuntimeConfig, runner: AgentRunner, stores
       repo: config.repo,
       repoRoot: config.repoRoot,
       overrides: config.chatOverrides,
-      loadSeedTemplate: () => loadSeedTemplate(),
+      loadSeedTemplate: () => loadSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
       now,
     }),
   }
@@ -157,7 +164,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
     capabilities: createCapabilityProbe(gh, opts.config.repo, now),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     ...stores,
-    ...createChatSet(opts.config, opts.runner ?? createAgentRunner(), stores, now),
+    ...createChatSet(opts.config, opts.runner ?? createAgentRunner(), stores, now, opts.projectConfig.config.prompts),
     now,
     version: readPackageVersion(),
     staticDir: STATIC_DIR,

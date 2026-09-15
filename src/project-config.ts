@@ -36,9 +36,20 @@ const capsShape = {
   diagram: cap(),
 } satisfies Record<keyof TextCaps, z.ZodOptional<z.ZodNumber>>
 
+export const PromptOverridesSchema = z.object({
+  'generation-format.md': z.string().min(1).optional(),
+  'generation-strict.md': z.string().min(1).optional(),
+  'generation-surfacing.md': z.string().min(1).optional(),
+  'quality-standards.md': z.string().min(1).optional(),
+  'layers-default.md': z.string().min(1).optional(),
+  'chat-seed.md': z.string().min(1).optional(),
+}).strict()
+export type PromptOverrides = z.infer<typeof PromptOverridesSchema>
+
 export const ProjectConfigSchema = z.object({
   version: z.literal(1),
   rulebook: z.string().min(1).optional(),
+  prompts: PromptOverridesSchema.optional(),
   layers: z.array(DefaultLayerSchema),
   highRisk: z.array(HighRiskRuleSchema),
   generation: z.object({
@@ -59,6 +70,7 @@ export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
 const PartialProjectConfigSchema = z.object({
   version: z.literal(1).optional(),
   rulebook: z.string().min(1).optional(),
+  prompts: PromptOverridesSchema.optional(),
   layers: z.array(DefaultLayerSchema).optional(),
   highRisk: z.array(HighRiskRuleSchema).optional(),
   generation: z
@@ -163,6 +175,9 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
   }
   if (user.rulebook !== undefined) {
     config.rulebook = user.rulebook
+  }
+  if (user.prompts !== undefined) {
+    config.prompts = user.prompts
   }
   const warnings: string[] = []
   if (config.layers.length === 0) {

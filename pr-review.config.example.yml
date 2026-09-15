@@ -4,6 +4,16 @@ version: 1
 # Markdown reference for project standards. The generation mode controls how the generator uses it.
 # rulebook: docs/CODE_REVIEW.md
 
+# Optional full-template replacements, resolved from this project's root.
+# Commit these files with this config. Omitted entries use the installed defaults.
+# prompts:
+#   generation-format.md: review-prompts/generation-format.md
+#   generation-strict.md: review-prompts/generation-strict.md
+#   generation-surfacing.md: review-prompts/generation-surfacing.md
+#   quality-standards.md: review-prompts/quality-standards.md
+#   layers-default.md: review-prompts/layers-default.md
+#   chat-seed.md: review-prompts/chat-seed.md
+
 # Default layer taxonomy, in review order. Ids are referenced by `defaultLayerId` in a canvas.
 layers:
   - id: contracts

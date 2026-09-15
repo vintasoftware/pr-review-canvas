@@ -1,8 +1,7 @@
 // Renders the seed that opens a chat thread: who the agent is, what the pull request changes,
 // and where the code sits on disk. The prose lives in prompts/chat-seed.md.
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import type { Pr, ReviewArtifact } from '../contract/review-artifact.js'
+import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
 
 export interface SeedPaths {
@@ -12,8 +11,8 @@ export interface SeedPaths {
   repoRoot: string
 }
 
-export async function loadSeedTemplate(dir = PROMPTS_DIR): Promise<string> {
-  return readFile(path.join(dir, 'chat-seed.md'), 'utf8')
+export async function loadSeedTemplate(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<string> {
+  return loadPromptFile('chat-seed.md', dir, project)
 }
 
 /** The pull request in six lines: what a reviewer would read before opening the diff. */
