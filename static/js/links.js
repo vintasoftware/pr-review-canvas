@@ -20,7 +20,7 @@
  *   files: ReadonlyArray<{ path: string, hunks: ReadonlyArray<import('./hunks.js').HunkRange> }>,
  * }} LinkTargets
  */
-import { hunkForLine } from './hunks.js'
+import { hunkForLine, hunkLineRanges } from './hunks.js'
 
 const LINE_RE = /^([^\n]+?):(\d+)(?:-(\d+))?(:old)?$/
 
@@ -106,7 +106,7 @@ export function resolveLink(link, targets) {
     const end = hunkForLine(file.hunks, link.side, link.end)
     if (start === null || start !== end) {
       const range = link.end === link.start ? `${link.start}` : `${link.start}-${link.end}`
-      return { ok: false, message: `${link.path}:${range} (${link.side}) is not inside one hunk of the diff` }
+      return { ok: false, message: `${link.path}:${range} (${link.side}) is not inside one hunk of the diff (${hunkLineRanges(file.hunks, link.side)})` }
     }
   }
   return { ok: true }

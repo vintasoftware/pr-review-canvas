@@ -511,11 +511,20 @@ describe('validateModelOutput', () => {
       { side: 'new', startLine: 12, endLine: 12, text: 'other layer hunk' },
     ]
     expect(errorsOf(output).map(formatValidationError)).toEqual([
-      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:40-41 (new) is not inside one hunk of the diff',
-      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-12 (new) is not inside one hunk of the diff',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:40-41 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14)',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-12 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14)',
       'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-3 (new): endLine is before startLine',
       'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:12 (new) is in src_app_ts#2, which this layer does not list',
     ])
+  })
+
+  it('reports old-side ranges for an annotation on deleted code', () => {
+    const output = clean()
+    layer(output, 0).files[0]!.annotations = [{ side: 'old', startLine: 99, endLine: 100, text: 'outside' }]
+    expect(errorsOf(output)).toEqual([expect.objectContaining({
+      code: 'ANNOTATION_OUTSIDE_HUNK',
+      message: expect.stringContaining('(old-side lines 1-4, 10-12)'),
+    })])
   })
 
   it('POINT_OUTSIDE_DIFF: unknown path, a line outside every hunk, and a range that leaves its hunk', () => {
@@ -528,8 +537,8 @@ describe('validateModelOutput', () => {
     ]
     expect(errorsOf(output).map(formatValidationError)).toEqual([
       'POINT_OUTSIDE_DIFF point 1 "Nowhere": src/nope.ts is not in the diff',
-      'POINT_OUTSIDE_DIFF point 2 "Far": src/app.ts:99 (old) is not in the diff',
-      'POINT_OUTSIDE_DIFF point 3 "Wide": src/app.ts:4-12 (new) crosses out of src_app_ts#1',
+      'POINT_OUTSIDE_DIFF point 2 "Far": src/app.ts:99 (old) is not in the diff (old-side lines 1-4, 10-12)',
+      'POINT_OUTSIDE_DIFF point 3 "Wide": src/app.ts:4-12 (new) crosses out of src_app_ts#1 (new-side lines 1-5, 11-14)',
       'POINT_OUTSIDE_DIFF point 4 "Back": endLine is before line',
     ])
   })
@@ -609,8 +618,8 @@ describe('validateModelOutput', () => {
       'LINK_UNRESOLVED layer run-path rationale: #file:src/nope.ts src/nope.ts is not in the diff',
       'LINK_UNRESOLVED layer run-path decisions: #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 hunks)',
       'LINK_UNRESOLVED layer run-path checkByHand: #line:src/nope.ts:4 src/nope.ts is not in the diff',
-      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:400-410 src/app.ts:400-410 (new) is not inside one hunk of the diff',
-      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:8:old src/app.ts:8 (old) is not inside one hunk of the diff',
+      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:400-410 src/app.ts:400-410 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14)',
+      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:8:old src/app.ts:8 (old) is not inside one hunk of the diff (old-side lines 1-4, 10-12)',
       'LINK_UNRESOLVED layer run-path test "run() adds b()": #hunk:src/app.ts#3 src/app.ts#3 does not exist (file has 2 hunks)',
       'LINK_UNRESOLVED layer run-path src/app.ts note: #layer:zzz layer zzz does not exist',
       'LINK_UNRESOLVED layer run-path src/app.ts annotation 1: #hunk:nope is not one of the four link forms',

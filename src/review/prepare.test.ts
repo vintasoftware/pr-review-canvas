@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { GenerationContextSchema } from '../contract/generation-context.js'
 import { TEXT_CAPS } from '../contract/review-artifact.js'
@@ -27,6 +27,21 @@ function opts(force = false): PrepareOptions & { phases: string[] } {
 }
 
 describe('prepare', () => {
+  it('renders a project override with bundled format and project data', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    t.ctx.config.repoRoot = t.dataDir
+    t.ctx.projectConfig = {
+      config: { ...DEFAULT_PROJECT_CONFIG, prompts: { 'generation-strict.md': 'strict.md' } },
+      warnings: [], source: null,
+    }
+    await writeFile(path.join(t.dataDir, 'strict.md'), 'Project instructions {{HEAD_SHA}}\n{{FORMAT}}')
+    const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
+    const prompt = await readFile(result.promptPath, 'utf8')
+    expect(prompt).toContain(`Project instructions ${HEAD_SHA}`)
+    expect(prompt).toContain('model.json')
+    expect(prompt).not.toContain('{{')
+  })
+
   it('fetches the PR, builds derived/, and writes prompt.md + context.json for a PR target', async () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const o = opts()

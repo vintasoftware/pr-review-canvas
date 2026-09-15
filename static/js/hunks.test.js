@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment node
 import { buildHunkIndex } from '../../src/git/patch-lines.js'
-import { hunkForLine, parseHunkHeader } from './hunks.js'
+import { hunkForLine, hunkLineRanges, parseHunkHeader } from './hunks.js'
 
 const PATCH = ['@@ -1,4 +1,5 @@', ' a', '+b', ' c', '@@ -10 +11,2 @@ ctx', ' x', '+y'].join('\n')
 
@@ -36,5 +36,18 @@ describe('hunkForLine', () => {
   it('anchors a zero-length side on its start line', () => {
     const added = buildHunkIndex('k', '@@ -0,0 +1,2 @@\n+a\n+b')
     expect(hunkForLine(added, 'old', 0)?.id).toBe('k#1')
+  })
+})
+
+
+describe('hunkLineRanges', () => {
+  it('lists separate spans and zero-length anchors on the requested side', () => {
+    const hunks = [
+      { oldStart: 0, oldLines: 0, newStart: 1, newLines: 3 },
+      { oldStart: 10, oldLines: 2, newStart: 14, newLines: 0 },
+    ]
+    expect(hunkLineRanges(hunks, 'new')).toBe('new-side lines 1-3, 14')
+    expect(hunkLineRanges(hunks, 'old')).toBe('old-side lines 0, 10-11')
+    expect(hunkLineRanges([], 'old')).toBe('old-side lines none')
   })
 })

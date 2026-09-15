@@ -129,6 +129,25 @@ describe('prepare, publish, validate through the CLI layer', () => {
     expect(lastJson(again)).toMatchObject({ ok: true, fixed: [] })
   })
 
+  it('--fix reports an unfixable title in human and JSON output without rewriting the file', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const prepare = fakeIo()
+    await runPrepare(t.ctx, ['--base', 'main', '--head', 'feat/b'], prepare)
+    const { canvasDir } = lastJson(prepare) as { canvasDir: string }
+    const model = path.join(canvasDir, 'model.json')
+    const output = artifactToModelOutput(syntheticArtifact())
+    output.layers[0]!.title = 'x'.repeat(61)
+    const original = JSON.stringify(output)
+    await writeFile(model, original)
+    const human = fakeIo()
+    expect(await runValidate(t.ctx, [model, '--canvas', canvasDir, '--human', '--fix'], human)).toBe(EXIT.invalid)
+    expect(human.out[0]).toBe('unfixable layers.0.title: 61 visible chars, cap 60, no explainer separator (:, —, – or -) to drop; rewrite by hand')
+    expect(await readFile(model, 'utf8')).toBe(original)
+    const json = fakeIo()
+    expect(await runValidate(t.ctx, [model, '--canvas', canvasDir, '--fix'], json)).toBe(EXIT.invalid)
+    expect(lastJson(json)).toMatchObject({ fixed: [{ outcome: 'unfixable', where: 'layers.0.title', length: 61, cap: 60 }] })
+  })
+
   it('prints the report lines and exits 5 for an invalid model, through validate and publish', async () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const io = fakeIo()
@@ -283,6 +302,31 @@ describe('splitCommonFlags', () => {
 })
 
 describe('install-skill through the CLI layer', () => {
+  it.each([
+    [undefined, '.pr-review/settings.yml\n'],
+    ['# Local files\nnode_modules/', '# Local files\nnode_modules/\n.pr-review/settings.yml\n'],
+    ['node_modules/\r\n', 'node_modules/\r\n.pr-review/settings.yml\r\n'],
+    ['.pr-review/settings.yml\n', '.pr-review/settings.yml\n'],
+    ['/.pr-review/settings.yml\n', '/.pr-review/settings.yml\n'],
+  ])('preserves existing ignore rules and adds local settings once (%j)', async (before, expected) => {
+    const repoRoot = await makeTempDir()
+    try {
+      const file = path.join(repoRoot, '.gitignore')
+      if (before !== undefined) {
+        await writeFile(file, before)
+      }
+      const cwd = path.join(repoRoot, 'nested')
+      await mkdir(cwd)
+      const env = { repoRoot, cwd, platform: 'linux' as const }
+      await runInstallSkill(env, [], fakeIo())
+      await runInstallSkill(env, [], fakeIo())
+      expect(await readFile(file, 'utf8')).toBe(expected)
+      await expect(readFile(path.join(cwd, '.gitignore'))).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true })
+    }
+  })
+
   it('installs under the repo root by default and where the flags say otherwise', async () => {
     const repoRoot = await makeTempDir()
     const io = fakeIo()

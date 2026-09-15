@@ -280,7 +280,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     capabilities: opts.capabilities ?? createCapabilityProbe(gh, TEST_REPO, now),
     fetch: opts.fetch ?? notFetched,
     ...stores,
-    ...createChatSet(config, opts.runner ?? createFakeRunner(), stores, now),
+    ...createChatSet(config, opts.runner ?? createFakeRunner(), stores, now, opts.projectConfig?.config.prompts),
     now,
     version: '0.0.0-test',
     staticDir: STATIC_DIR,

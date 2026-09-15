@@ -44,3 +44,19 @@ export function hunkForLine(hunks, side, line) {
   }
   return null
 }
+
+/**
+ * Valid anchor ranges, using the same zero-length anchor rule as hunkForLine.
+ * @param {ReadonlyArray<HunkRange>} hunks
+ * @param {Side} side
+ * @returns {string}
+ */
+export function hunkLineRanges(hunks, side) {
+  const ranges = hunks.map(h => {
+    const start = side === 'new' ? h.newStart : h.oldStart
+    const count = side === 'new' ? h.newLines : h.oldLines
+    const end = start + Math.max(count, 1) - 1
+    return start === end ? `${start}` : `${start}-${end}`
+  })
+  return `${side}-side lines ${ranges.length ? ranges.join(', ') : 'none'}`
+}

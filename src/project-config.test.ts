@@ -14,6 +14,13 @@ import { PACKAGE_ROOT } from './server/context.js'
 import { makeTempDir } from './testing/fakes.js'
 
 describe('mergeProjectConfig', () => {
+  it('keeps prompt overrides and rejects misspelled template names or empty paths', () => {
+    const prompts = { 'generation-format.md': 'docs/prompts/format.md', 'chat-seed.md': '/shared/chat.md' }
+    expect(mergeProjectConfig({ prompts }).config.prompts).toEqual(prompts)
+    expect(mergeProjectConfig({ prompts: { 'typo.md': 'x' } }).warnings[0]).toContain('invalid')
+    expect(mergeProjectConfig({ prompts: { 'chat-seed.md': '' } }).warnings[0]).toContain('invalid')
+  })
+
   it('fills every missing key from the defaults', () => {
     expect(mergeProjectConfig({})).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [] })
     expect(DEFAULT_LAYERS.map(l => l.id)).toEqual([

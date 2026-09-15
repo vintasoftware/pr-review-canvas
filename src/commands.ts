@@ -12,7 +12,13 @@ import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
 import { fetchPrMeta, fetchPrRefs } from './github/pr.js'
 import { type DoctorDeps, formatDoctorReport, runDoctorChecks } from './review/doctor.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill, SkillDirExistsError } from './review/install-skill.js'
+import {
+  CLAUDE_SKILLS_DIR,
+  CODEX_SKILLS_DIR,
+  ignoreLocalSettings,
+  installSkill,
+  SkillDirExistsError,
+} from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
 import { prepare } from './review/prepare.js'
 import {
@@ -205,7 +211,11 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     return report.ok ? EXIT.ok : EXIT.invalid
   }
   for (const trim of fixed.trims) {
-    io.stdout(`fixed ${trim.where}: "${trim.from}" -> "${trim.to}"`)
+    if (trim.outcome === 'fixed') {
+      io.stdout(`fixed ${trim.where}: "${trim.from}" -> "${trim.to}"`)
+    } else {
+      io.stdout(`unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`)
+    }
   }
   if (report.ok) {
     io.stdout(`ok: ${path.basename(file)} passes against ${context.files.length} files`)
@@ -234,7 +244,7 @@ async function fixTitles(
     return { text, trims: [] }
   }
   const trims = applyTitleTrims(parsed, context.caps)
-  if (trims.length === 0) {
+  if (!trims.some(trim => trim.outcome === 'fixed')) {
     return { text, trims }
   }
   const next = `${JSON.stringify(parsed, null, 2)}\n`
@@ -314,6 +324,7 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: 
       { kind: 'codex', dir: resolve(values['codex-dir'], CODEX_SKILLS_DIR) },
     ],
   })
+  await ignoreLocalSettings(env.repoRoot)
   printJson(io, result)
   return EXIT.ok
 }

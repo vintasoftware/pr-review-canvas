@@ -93,6 +93,8 @@
 dialog.settings {
   max-width: 560px;
   width: calc(100vw - 32px);
+  padding: 20px;
+  overflow-wrap: anywhere;
 }
 dialog.settings .field {
   display: grid;
@@ -112,6 +114,14 @@ dialog.settings .panel-ro h3 {
 }
 dialog.settings .probe-result:empty {
   display: none;
+}
+@media (max-width: 480px) {
+  dialog.settings .field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  dialog.settings .dialog-actions {
+    flex-wrap: wrap;
+  }
 }
 @media (max-width: 1360px) {
   .cmd.unseen {

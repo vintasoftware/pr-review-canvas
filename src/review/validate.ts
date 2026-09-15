@@ -14,7 +14,7 @@ import {
   type TextCaps,
 } from '../contract/review-artifact.js'
 import type { ValidationCode, ValidationError, ValidationReport } from '../contract/validation.js'
-import { hunkForLine } from '../git/patch-lines.js'
+import { hunkForLine, hunkLineRanges } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { diagramNodeIds } from './diagram-nodes.js'
 import { matchesGlob } from './glob.js'
@@ -368,7 +368,7 @@ function checkAnnotations(output: ModelOutput, index: Index, report: Report): vo
         const start = hunkAt(entry, a.side, a.startLine)
         const end = hunkAt(entry, a.side, a.endLine)
         if (start === null || end === null || start.id !== end.id) {
-          report.add('ANNOTATION_OUTSIDE_HUNK', where, `${label} is not inside one hunk of the diff`)
+          report.add('ANNOTATION_OUTSIDE_HUNK', where, `${label} is not inside one hunk of the diff (${hunkLineRanges(entry?.hunks ?? [], a.side)})`)
         } else if (!file.hunks.includes(start.id)) {
           report.add('ANNOTATION_OUTSIDE_HUNK', where, `${label} is in ${start.id}, which this layer does not list`)
         }
@@ -400,7 +400,7 @@ function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: 
       report.add(
         'POINT_OUTSIDE_DIFF',
         where,
-        `point ${i + 1} "${p.title}": ${p.path}:${p.line} (${side}) is not in the diff`
+        `point ${i + 1} "${p.title}": ${p.path}:${p.line} (${side}) is not in the diff (${hunkLineRanges(entry.hunks, side)})`
       )
       return
     }
@@ -412,7 +412,7 @@ function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: 
       report.add(
         'POINT_OUTSIDE_DIFF',
         where,
-        `point ${i + 1} "${p.title}": ${p.path}:${p.line}-${p.endLine} (${side}) crosses out of ${start.id}`
+        `point ${i + 1} "${p.title}": ${p.path}:${p.line}-${p.endLine} (${side}) crosses out of ${start.id} (${hunkLineRanges(entry.hunks, side)})`
       )
     }
   })

@@ -124,15 +124,24 @@ command prints one JSON line with the absolute `path` of the zip.
 
 ### 7. Finish
 
-Report the `reviewUrl` from publish and the zip path from export:
+For a PR run, report the `reviewUrl` from publish, the absolute zip path from export, and a link
+to the GitHub PR from the prepared context. End with upload instructions:
 
 > The canvas is ready at <reviewUrl> (start the server with `pr-review serve` if it is not running).
-> Drag this file into the PR description so other reviewers get the canvas without
-> generating it again: <path>
+> ZIP: <path>
+> If you're happy with the produced canvas, open <PR URL>, edit the PR description, drag the ZIP
+> into the editor, wait for the upload to finish, and save.
 
-The tool exports locally; attaching the zip to GitHub is the human's step. For a `--base/--head` run,
-say the canvas is stored for `<headSha>`, that the zip has no PR number yet, and that
-`pr-review export --pr <n>` re-exports it once the pull request exists.
+For an update, tell the user to replace the old canvas attachment link with the new one.
+Include these instructions in the final response without asking a question or waiting for a reply.
+
+Uploading and saving the description are manual browser steps. Do not create a release or claim
+the ZIP was uploaded. GitHub's `gh --attach` supports images and video, but not ZIP files
+([supported types](https://github.com/cli/cli/blob/trunk/internal/attachments/userasset.go)).
+
+For a `--base/--head` run, say the canvas is stored for `<headSha>`, that the zip has no PR number
+yet, and that `pr-review export --pr <n>` re-exports it once the pull request exists. Include the
+manual upload instructions for when the PR is ready.
 
 ## Rules the validator enforces (and models tend to break)
 

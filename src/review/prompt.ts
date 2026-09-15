@@ -1,11 +1,10 @@
 // Renders prompt.md from the selected generation template and the prepared context. The template carries
 // the prose; this module fills the `{{TOKENS}}` with data so a wording change never touches code.
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { z } from 'zod'
 import { type GenerationContext, LARGE_PR } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
+import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
 import type { GenerationMode } from '../project-config.js'
 
@@ -18,13 +17,13 @@ export interface PromptSources {
   qualityStandards: string
 }
 
-export async function loadPromptSources(dir = PROMPTS_DIR): Promise<PromptSources> {
+export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<PromptSources> {
   const [format, layersDefault, qualityStandards, strict, surfacing] = await Promise.all([
-    readFile(path.join(dir, 'generation-format.md'), 'utf8'),
-    readFile(path.join(dir, 'layers-default.md'), 'utf8'),
-    readFile(path.join(dir, 'quality-standards.md'), 'utf8'),
-    readFile(path.join(dir, 'generation-strict.md'), 'utf8'),
-    readFile(path.join(dir, 'generation-surfacing.md'), 'utf8'),
+    loadPromptFile('generation-format.md', dir, project),
+    loadPromptFile('layers-default.md', dir, project),
+    loadPromptFile('quality-standards.md', dir, project),
+    loadPromptFile('generation-strict.md', dir, project),
+    loadPromptFile('generation-surfacing.md', dir, project),
   ])
   return { format, layersDefault, qualityStandards, generation: { strict, surfacing } }
 }

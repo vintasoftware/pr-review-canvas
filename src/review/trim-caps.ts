@@ -49,12 +49,10 @@ export function trimTitle(title: string, cap: number): string | null {
   return head !== '' && visibleLength(head) <= cap ? head : null
 }
 
-/** One title this pass rewrote. */
-export interface TitleTrim {
-  where: string
-  from: string
-  to: string
-}
+/** A title this pass repaired or could not shorten safely. */
+export type TitleTrim =
+  | { outcome: 'fixed'; where: string; from: string; to: string }
+  | { outcome: 'unfixable'; where: string; length: number; cap: number; reason: string }
 
 interface TitledFold {
   title?: string
@@ -87,8 +85,16 @@ export function applyTitleTrims(output: unknown, caps: { layerTitle: number; poi
     }
     const trimmed = trimTitle(holder.title, cap)
     if (trimmed !== null) {
-      trims.push({ where, from: holder.title, to: trimmed })
+      trims.push({ outcome: 'fixed', where, from: holder.title, to: trimmed })
       holder.title = trimmed
+    } else if (visibleLength(holder.title) > cap) {
+      const match = EXPLAINER.exec(holder.title.trim().replace(/\s+/g, ' '))
+      const reason = match === null
+        ? 'no explainer separator (:, —, – or -) to drop'
+        : match.index === 0
+          ? 'dropping the explainer would leave an empty title'
+          : 'the title before the explainer still exceeds the cap'
+      trims.push({ outcome: 'unfixable', where, length: visibleLength(holder.title), cap, reason })
     }
   }
 
