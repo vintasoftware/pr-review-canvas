@@ -32,7 +32,8 @@ describe('prepare', () => {
     t.ctx.config.repoRoot = t.dataDir
     t.ctx.projectConfig = {
       config: { ...DEFAULT_PROJECT_CONFIG, prompts: { 'generation-strict.md': 'strict.md' } },
-      warnings: [], source: null,
+      warnings: [],
+      source: null,
     }
     await writeFile(path.join(t.dataDir, 'strict.md'), 'Project instructions {{HEAD_SHA}}\n{{FORMAT}}')
     const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
@@ -179,7 +180,7 @@ describe('prepare', () => {
 
   it('reads the rulebook and the caps from the project config', async () => {
     const dir = await import('../testing/fakes.js').then(m => m.makeTempDir())
-    const { writeFile, rm } = await import('node:fs/promises')
+    const { rm } = await import('node:fs/promises')
     await writeFile(path.join(dir, 'RULES.md'), '---\nname: x\n---\n# Rules\n\n## Be kind\n')
     t = await makeTestContext({
       git: gitFor42(),
@@ -229,7 +230,11 @@ describe('prepare', () => {
     t = await makeTestContext({
       git: gitFor42(),
       gh: ghFor42(),
-      projectConfig: { config: { ...DEFAULT_PROJECT_CONFIG, rulebook: 'nope.md' }, warnings: [], source: null },
+      projectConfig: {
+        config: { ...DEFAULT_PROJECT_CONFIG, rulebook: 'nope.md' },
+        warnings: [],
+        source: null,
+      },
     })
     const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))

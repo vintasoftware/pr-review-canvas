@@ -99,14 +99,20 @@ export function resolveLink(link, targets) {
     return { ok: false, message: `${link.path} is not in the diff` }
   }
   if (link.kind === 'hunk' && (link.n < 1 || link.n > file.hunks.length)) {
-    return { ok: false, message: `${link.path}#${link.n} does not exist (file has ${file.hunks.length} hunks)` }
+    return {
+      ok: false,
+      message: `${link.path}#${link.n} does not exist (file has ${file.hunks.length} hunks)`,
+    }
   }
   if (link.kind === 'line') {
     const start = hunkForLine(file.hunks, link.side, link.start)
     const end = hunkForLine(file.hunks, link.side, link.end)
     if (start === null || start !== end) {
       const range = link.end === link.start ? `${link.start}` : `${link.start}-${link.end}`
-      return { ok: false, message: `${link.path}:${range} (${link.side}) is not inside one hunk of the diff (${hunkLineRanges(file.hunks, link.side)})` }
+      return {
+        ok: false,
+        message: `${link.path}:${range} (${link.side}) is not inside one hunk of the diff (${hunkLineRanges(file.hunks, link.side)})`,
+      }
     }
   }
   return { ok: true }

@@ -31,7 +31,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm verify
+      - name: Lint, format, typecheck, coverage, browser, and package checks
+        run: pnpm verify
       - name: Upload coverage reports
         if: always()
         uses: actions/upload-artifact@v6

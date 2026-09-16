@@ -45,5 +45,6 @@ export function progressSummary(artifact, state) {
  * @param {PrState} state
  */
 export function filesReviewed(layer, state) {
-  return layer.files.filter(f => state.reviewed[`layer:${layer.id}/file:${sanitizeKey(f.path)}`] === true).length
+  return layer.files.filter(f => state.reviewed[`layer:${layer.id}/file:${sanitizeKey(f.path)}`] === true)
+    .length
 }

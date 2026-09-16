@@ -81,7 +81,10 @@ export function commentRequest(
       return { path: `${base}/pulls/${number}/comments`, body }
     }
     case 'reply':
-      return { path: `${base}/pulls/${number}/comments/${input.inReplyToId}/replies`, body: { body: input.body } }
+      return {
+        path: `${base}/pulls/${number}/comments/${input.inReplyToId}/replies`,
+        body: { body: input.body },
+      }
     case 'issue':
       return { path: `${base}/issues/${number}/comments`, body: { body: input.body } }
   }

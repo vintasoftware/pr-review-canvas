@@ -25,7 +25,9 @@ export const PrStateSchema = z.object({
    */
   reviewedHeadSha: z.string().optional(),
   hiddenThreads: z.record(z.string(), z.object({ at: z.string() })),
-  posted: z.array(z.object({ commentId: z.number().int(), pointFingerprint: z.string().optional(), at: z.string() })),
+  posted: z.array(
+    z.object({ commentId: z.number().int(), pointFingerprint: z.string().optional(), at: z.string() })
+  ),
   dismissed: z.record(z.string(), z.object({ at: z.string(), reason: z.string().optional() })),
   chat: z.object({ threads: z.array(ChatThreadSchema), activeThread: z.string().optional() }),
   updatedAt: z.string(),

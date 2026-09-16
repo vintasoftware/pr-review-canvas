@@ -3,7 +3,9 @@ import { globToRegExp, matchesGlob } from './glob.js'
 
 describe('matchesGlob', () => {
   it('crosses directories with ** and stays in one segment with * and ?', () => {
-    expect(matchesGlob('**/prisma/migrations/**', 'apps/shl/prisma/migrations/2026_x/migration.sql')).toBe(true)
+    expect(matchesGlob('**/prisma/migrations/**', 'apps/shl/prisma/migrations/2026_x/migration.sql')).toBe(
+      true
+    )
     expect(matchesGlob('**/prisma/migrations/**', 'prisma/migrations/a.sql')).toBe(true)
     expect(matchesGlob('**/prisma/migrations/**', 'apps/shl/prisma/schema.prisma')).toBe(false)
     expect(matchesGlob('**/*auth*.ts', 'packages/x/src/service-auth.ts')).toBe(true)

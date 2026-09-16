@@ -12,7 +12,13 @@ export class AppError extends Error {
   /** What a rejected file got wrong, one line each. Never the file's content. */
   readonly issues: string[] | undefined
 
-  constructor(code: ErrorCode, message: string, status: ContentfulStatusCode, hint?: string, issues?: string[]) {
+  constructor(
+    code: ErrorCode,
+    message: string,
+    status: ContentfulStatusCode,
+    hint?: string,
+    issues?: string[]
+  ) {
     super(message)
     this.name = 'AppError'
     this.code = code
@@ -39,7 +45,12 @@ export function toAppError(err: unknown): AppError {
     return err
   }
   if (err instanceof PrNotFoundError) {
-    return new AppError('PR_NOT_FOUND', err.message, 404, 'check the number and that origin is the right repository')
+    return new AppError(
+      'PR_NOT_FOUND',
+      err.message,
+      404,
+      'check the number and that origin is the right repository'
+    )
   }
   if (err instanceof GitHubApiError) {
     if (err.missingBinary) {

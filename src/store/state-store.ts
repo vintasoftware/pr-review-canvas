@@ -93,7 +93,8 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
       update(number, state => {
         const next = { ...state.dismissed }
         if (dismissed) {
-          next[fingerprint] = reason === undefined ? { at: now().toISOString() } : { at: now().toISOString(), reason }
+          next[fingerprint] =
+            reason === undefined ? { at: now().toISOString() } : { at: now().toISOString(), reason }
         } else {
           delete next[fingerprint]
         }

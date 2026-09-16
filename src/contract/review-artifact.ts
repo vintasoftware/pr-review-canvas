@@ -48,7 +48,9 @@ function mapCaps(fn: (key: keyof TextCaps) => number): TextCaps {
 }
 
 /** The project config may raise or lower a cap; the result is what the validator and the prompt use. */
-export function effectiveCaps(overrides: { [K in keyof TextCaps]?: number | undefined } | undefined): TextCaps {
+export function effectiveCaps(
+  overrides: { [K in keyof TextCaps]?: number | undefined } | undefined
+): TextCaps {
   return mapCaps(key => overrides?.[key] ?? TEXT_CAPS[key])
 }
 
@@ -162,13 +164,17 @@ function text(caps: Caps, key: keyof TextCaps): z.ZodString {
 
 function textOrEmpty(caps: Caps, key: keyof TextCaps): z.ZodString {
   const visibleCap = caps[key] / HARD_CAP_FACTOR
-  const diagrams = key === 'summary' || key === 'rationale'
-    ? ' Mermaid fences count toward the separate diagram cap, not this prose cap.'
-    : ''
-  return z.string().max(caps[key]).meta({
-    description: `At most ${visibleCap} visible characters. Link targets, backticks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
-    'x-visibleMaxLength': visibleCap,
-  })
+  const diagrams =
+    key === 'summary' || key === 'rationale'
+      ? ' Mermaid fences count toward the separate diagram cap, not this prose cap.'
+      : ''
+  return z
+    .string()
+    .max(caps[key])
+    .meta({
+      description: `At most ${visibleCap} visible characters. Link targets, backticks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
+      'x-visibleMaxLength': visibleCap,
+    })
 }
 
 export function testEntrySchema(caps: Caps) {

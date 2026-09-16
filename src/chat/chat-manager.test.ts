@@ -39,7 +39,9 @@ function target(): ChatTarget {
   }
 }
 
-function build(opts: { runner?: FakeRunner; overrides?: { agent?: 'claude' | 'codex'; model?: string } } = {}) {
+function build(
+  opts: { runner?: FakeRunner; overrides?: { agent?: 'claude' | 'codex'; model?: string } } = {}
+) {
   runner = opts.runner ?? createFakeRunner()
   const prs = createPrStore(dataDir)
   state = createStateStore(prs, () => new Date('2026-09-11T10:00:00.000Z'))
@@ -77,7 +79,9 @@ afterEach(async () => {
 
 describe('createChatManager().send', () => {
   it('opens a thread, seeds it, and streams the answer', async () => {
-    const events = await collect(manager.send(target(), { message: 'is this covered?', context: { kind: 'pr' } }))
+    const events = await collect(
+      manager.send(target(), { message: 'is this covered?', context: { kind: 'pr' } })
+    )
     expect(events).toEqual([
       { event: 'turn', thread: T1, agent: 'claude', seeded: true },
       { event: 'chunk', text: 'Yes. ' },
@@ -141,13 +145,14 @@ describe('createChatManager().send', () => {
 
   it('refuses a second turn while one is running', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     // The lock is taken by the time the first event comes back.
     await iterator.next()
     expect(manager.busy(42)).toBe(true)
-    await expect(collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))).rejects.toBeInstanceOf(
-      ChatBusyError
-    )
+    await expect(
+      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
     for (;;) {
       if ((await iterator.next()).done === true) {
         break
@@ -159,7 +164,8 @@ describe('createChatManager().send', () => {
   it('reports a turn that was stopped as cancelled and saves what was said', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
     const events: ChatEvent[] = []
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     events.push((await iterator.next()).value)
     events.push((await iterator.next()).value)
     expect(await manager.cancel(42)).toBe(true)
@@ -277,7 +283,9 @@ describe('createChatManager() threads and settings', () => {
 
 describe('the hints on an agent failure', () => {
   it('tells the reader to install acpx when it is missing', async () => {
-    build({ runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_MISSING', message: 'no acpx' }] }) })
+    build({
+      runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_MISSING', message: 'no acpx' }] }),
+    })
     const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
     expect(events.at(-1)).toEqual({
       event: 'error',
@@ -288,7 +296,9 @@ describe('the hints on an agent failure', () => {
   })
 
   it('gives no hint for a failure the reader cannot act on', async () => {
-    build({ runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_FAILED', message: 'boom' }] }) })
+    build({
+      runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_FAILED', message: 'boom' }] }),
+    })
     const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
     expect(events.at(-1)).toEqual({ event: 'error', code: 'AGENT_FAILED', message: 'boom' })
   })
@@ -332,7 +342,8 @@ describe('two turns that arrive together', () => {
 
   it('stops the agent and frees the chat when the reader goes away mid-answer', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     await iterator.next()
     await iterator.next()
     await iterator.return?.(undefined)
@@ -342,7 +353,8 @@ describe('two turns that arrive together', () => {
 
   it('frees the chat when the reader goes away before the first event', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     const started = iterator.next()
     await iterator.return?.(undefined)
     await started.catch(() => undefined)
@@ -353,7 +365,9 @@ describe('two turns that arrive together', () => {
 describe('a turn the agent never took', () => {
   it('leaves the thread unseeded, so the next try creates the session and seeds again', async () => {
     build({
-      runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_NO_SESSION', message: 'no session' }] }),
+      runner: createFakeRunner({
+        script: [{ type: 'error', code: 'AGENT_NO_SESSION', message: 'no session' }],
+      }),
     })
     await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
     expect(runner.ensured).toEqual([T1])
@@ -367,7 +381,8 @@ describe('a turn the agent never took', () => {
 
   it('keeps a cancelled turn as a turn that happened', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     await iterator.next()
     await manager.cancel(42)
     for (;;) {
@@ -386,7 +401,8 @@ describe('a stop that arrives before the agent has started', () => {
       openGate = resolve
     })
     build({ runner: createFakeRunner({ delayMs: 5, ensureGate: gate }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     const first = iterator.next()
     expect(await manager.cancel(42)).toBe(true)
     openGate()
@@ -411,7 +427,8 @@ describe('a stop that arrives before the agent has started', () => {
       openGate = resolve
     })
     build({ runner: createFakeRunner({ ensureGate: gate }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     const first = iterator.next()
     await manager.cancel(42)
     openGate()
@@ -430,7 +447,8 @@ describe('a stop that arrives before the agent has started', () => {
 describe('an answer the reader walked out on', () => {
   it('is kept as an incomplete answer, not as one the agent finished', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const iterator = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = stream[Symbol.asyncIterator]()
     await iterator.next()
     await iterator.next()
     await iterator.return?.(undefined)

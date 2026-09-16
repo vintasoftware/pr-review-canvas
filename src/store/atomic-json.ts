@@ -37,7 +37,11 @@ export async function readJson<T>(file: string, schema: z.ZodType<T>): Promise<T
  * Like readJson, but a missing file, invalid JSON, or a shape the schema rejects all return
  * `fallback()`. Other read errors still throw.
  */
-export async function readJsonOrDefault<T, D>(file: string, schema: z.ZodType<T>, fallback: () => D): Promise<T | D> {
+export async function readJsonOrDefault<T, D>(
+  file: string,
+  schema: z.ZodType<T>,
+  fallback: () => D
+): Promise<T | D> {
   const text = await readText(file)
   if (text === null) {
     return fallback()

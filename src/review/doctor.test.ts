@@ -22,7 +22,8 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     gh: createFakeGh(),
     version: '0.0.0-test',
     acpxVersion: async () => '0.13.2',
-    readSkill: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md') ? installed : null,
+    readSkill: async file =>
+      file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md') ? installed : null,
     ...over,
   }
 }
@@ -34,20 +35,24 @@ describe('runDoctorChecks', () => {
     ['older release', stampSkill(bundled + '\nold instructions')],
     ['invalid frontmatter', 'broken'],
   ])('reports a %s copy even when the other harness is current', async (_, stale) => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(),
-      readSkill: async file => file.includes(CLAUDE_SKILLS_DIR) ? installed : stale,
-    }))
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        readSkill: async file => (file.includes(CLAUDE_SKILLS_DIR) ? installed : stale),
+      })
+    )
     expect(report.checks.skill.ok).toBe(false)
     expect(report.checks.skill.detail).toContain(CODEX_SKILLS_DIR)
     expect(report.checks.skill.hint).toBe('run `pr-review install-skill`')
   })
 
   it('accepts copies after Git converts line endings to CRLF', async () => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(),
-      readSkill: async () => installed.replace(/\n/g, '\r\n'),
-    }))
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        readSkill: async () => installed.replace(/\n/g, '\r\n'),
+      })
+    )
     expect(report.checks.skill.ok).toBe(true)
   })
 
@@ -74,7 +79,9 @@ describe('runDoctorChecks', () => {
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: await makeTempDir(),
-        readSkill: async () => { throw Object.assign(new Error('is a directory'), { code: 'EISDIR' }) },
+        readSkill: async () => {
+          throw Object.assign(new Error('is a directory'), { code: 'EISDIR' })
+        },
       })
     )
     expect(report.checks.skill.ok).toBe(false)
@@ -110,7 +117,11 @@ describe('runDoctorChecks', () => {
     expect(report.ok).toBe(false)
     expect(report.checks.git.ok).toBe(false)
     expect(report.checks.git.hint).toBe('run from a clone or pass --repo <dir>')
-    expect(report.checks.origin).toEqual({ ok: false, detail: 'no origin remote', hint: 'add a github.com origin' })
+    expect(report.checks.origin).toEqual({
+      ok: false,
+      detail: 'no origin remote',
+      hint: 'add a github.com origin',
+    })
     expect(report.checks.gh).toEqual({
       ok: false,
       detail: 'gh is not on PATH',
@@ -159,7 +170,7 @@ describe('runDoctorChecks', () => {
         git: {
           ...git,
           topLevel: async (): Promise<string> => {
-            // eslint-disable-next-line no-throw-literal -- a child process can reject with a string
+            // A child process can reject with a string.
             throw 'not an Error'
           },
         },
@@ -221,7 +232,10 @@ describe('pr-review doctor', () => {
       exit: 1,
     })),
   ])('checks acpx with --all-checks when its version is $version', async ({ version, check, exit }) => {
-    const dependencies = deps({ dataDirOverride: await makeTempDir(), acpxVersion: vi.fn(async () => version) })
+    const dependencies = deps({
+      dataDirOverride: await makeTempDir(),
+      acpxVersion: vi.fn(async () => version),
+    })
     const core = await runDoctorChecks(dependencies)
     const code = await runDoctor(dependencies, ['--all-checks'], io)
     expect(code).toBe(exit)

@@ -52,7 +52,7 @@
   cursor: pointer;
   transition: transform 0.12s ease-out;
 }
-.chev[aria-expanded="true"] {
+.chev[aria-expanded='true'] {
   transform: rotate(90deg);
 }
 .body {
@@ -484,5 +484,11 @@ details[open] > summary .chev {
   margin: 0;
 }
 
-.prose img { max-width: 100%; height: auto; }
-img.av { object-fit: cover; border-radius: 50%; }
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+img.av {
+  object-fit: cover;
+  border-radius: 50%;
+}

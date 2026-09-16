@@ -44,7 +44,8 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
     }
     return path.join(repoRoot, 'canvases', headSha)
   }
-  const readIndex = async (): Promise<CanvasIndex> => (await readJson(indexFile, CanvasIndexSchema)) ?? { canvases: {} }
+  const readIndex = async (): Promise<CanvasIndex> =>
+    (await readJson(indexFile, CanvasIndexSchema)) ?? { canvases: {} }
 
   return {
     root: repoRoot,
@@ -58,7 +59,10 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       await writeJsonAtomic(path.join(dir, 'review.json'), artifact)
       await writeJsonAtomic(path.join(dir, 'manifest.json'), manifest)
       const index = await readIndex()
-      const entry: CanvasIndex['canvases'][string] = { generatedAt: artifact.generatedAt, source: artifact.source }
+      const entry: CanvasIndex['canvases'][string] = {
+        generatedAt: artifact.generatedAt,
+        source: artifact.source,
+      }
       const number = prNumber ?? manifest.prNumber
       if (number !== undefined) {
         entry.prNumber = number
@@ -76,10 +80,15 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       }
       // A canvas belongs to this PR when it was exported for it, or before the PR existed.
       const candidates = Object.entries(index.canvases).filter(
-        ([sha, entry]) => sha !== currentHeadSha && (entry.prNumber === undefined || entry.prNumber === prNumber)
+        ([sha, entry]) =>
+          sha !== currentHeadSha && (entry.prNumber === undefined || entry.prNumber === prNumber)
       )
-      const ranked: Array<{ headSha: string; generatedAt: string; relation: CanvasRelation; commitsBehind?: number }> =
-        []
+      const ranked: Array<{
+        headSha: string
+        generatedAt: string
+        relation: CanvasRelation
+        commitsBehind?: number
+      }> = []
       for (const [sha, entry] of candidates) {
         if (await git.isAncestor(sha, currentHeadSha)) {
           ranked.push({
@@ -105,7 +114,12 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       }
       return best.commitsBehind === undefined
         ? { status: 'stale', headSha: best.headSha, relation: best.relation }
-        : { status: 'stale', headSha: best.headSha, relation: best.relation, commitsBehind: best.commitsBehind }
+        : {
+            status: 'stale',
+            headSha: best.headSha,
+            relation: best.relation,
+            commitsBehind: best.commitsBehind,
+          }
     },
     attachPrNumber: async (headSha, prNumber) => {
       const index = await readIndex()

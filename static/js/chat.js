@@ -152,7 +152,9 @@ function turnHtml(role, bodyHtml, opts = {}) {
  */
 function turnInnerHtml(role, bodyHtml, opts = {}) {
   const note =
-    opts.incomplete === undefined ? '' : `<p class="muted small">the answer stopped early (${esc(opts.incomplete)})</p>`
+    opts.incomplete === undefined
+      ? ''
+      : `<p class="muted small">the answer stopped early (${esc(opts.incomplete)})</p>`
   return (
     `<span class="role">${role === 'assistant' ? 'AI Chat' : 'You'}</span>` +
     `<div class="prose">${bodyHtml}</div>${note}`
@@ -239,7 +241,11 @@ export function wireChat(options) {
   const { root, prNumber, session } = options
   const api = withDefaults(options.api)
   const storage =
-    options.storage === undefined ? (typeof localStorage === 'undefined' ? null : localStorage) : options.storage
+    options.storage === undefined
+      ? typeof localStorage === 'undefined'
+        ? null
+        : localStorage
+      : options.storage
   const paths = new Set(session.artifact.files.map(f => f.path))
   const targets = targetsFromFiles(session.artifact.files)
   const reducedMotion =
@@ -308,7 +314,8 @@ export function wireChat(options) {
   applyWidth(readChatWidth(storage))
 
   const layerTitle = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)?.title
-  const pointTitle = /** @param {string} fp */ fp => session.artifact.points.find(p => p.fingerprint === fp)?.title
+  const pointTitle = /** @param {string} fp */ fp =>
+    session.artifact.points.find(p => p.fingerprint === fp)?.title
 
   const drawContext = () => {
     chip.textContent = chatContextLabel(context, layerTitle, pointTitle)
@@ -420,7 +427,8 @@ export function wireChat(options) {
     activeThread = data.activeThread
     select.innerHTML = data.threads
       .map(
-        t => `<option value="${esc(t.name)}"${t.name === data.activeThread ? ' selected' : ''}>${esc(t.title)}</option>`
+        t =>
+          `<option value="${esc(t.name)}"${t.name === data.activeThread ? ' selected' : ''}>${esc(t.title)}</option>`
       )
       .join('')
     if (data.threads.length === 0) {
@@ -514,7 +522,7 @@ export function wireChat(options) {
     const started = Date.now()
     const updateActivity = () => {
       const elapsed = Date.now() - started
-      activity.textContent = `Preparing answer${'.'.repeat(Math.floor(elapsed / 400) % 3 + 1)} · ${Math.floor(elapsed / 1000)}s`
+      activity.textContent = `Preparing answer${'.'.repeat((Math.floor(elapsed / 400) % 3) + 1)} · ${Math.floor(elapsed / 1000)}s`
     }
     updateActivity()
     const timer = setInterval(updateActivity, 400)
@@ -548,7 +556,10 @@ export function wireChat(options) {
               const previous = tools.get(id)
               const title = String(field('title') ?? 'tool')
               tools.delete(id)
-              tools.set(id, { title: title === 'tool' && previous ? previous.title : title, status: String(field('status') ?? 'pending') })
+              tools.set(id, {
+                title: title === 'tool' && previous ? previous.title : title,
+                status: String(field('status') ?? 'pending'),
+              })
               toolDetails.hidden = false
               const latest = tools.get(id)
               toolDetails.innerHTML = `<summary>${esc(latest.title)} · ${esc(latest.status)} (${tools.size} tool calls)</summary><ul>${[...tools.values()].map(t => `<li>${esc(t.title)} · ${esc(t.status)}</li>`).join('')}</ul>`
@@ -582,9 +593,13 @@ export function wireChat(options) {
       const toolSummary = toolDetails.querySelector('summary')
       if (toolSummary) toolSummary.textContent = `${tools.size} tool calls`
       activity.textContent = `Elapsed: ${Math.floor((Date.now() - started) / 1000)}s`
-      if (frame !== 0) { cancelFrame(frame); frame = 0 }
+      if (frame !== 0) {
+        cancelFrame(frame)
+        frame = 0
+      }
       setStreaming(false)
-      answer.body.innerHTML = text === '' ? '<span class="muted">no answer</span>' : renderAnswer(text, turnKey)
+      answer.body.innerHTML =
+        text === '' ? '<span class="muted">no answer</span>' : renderAnswer(text, turnKey)
       if (scroll.pinned) {
         scrollToBottom('follow')
       }

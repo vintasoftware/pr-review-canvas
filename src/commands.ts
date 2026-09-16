@@ -63,7 +63,12 @@ export function printErrorEnvelope(io: CliIo, code: ErrorCode, message: string, 
 }
 
 function isParseArgsError(err: unknown): err is Error {
-  return err instanceof Error && 'code' in err && typeof err.code === 'string' && err.code.startsWith('ERR_PARSE_ARGS')
+  return (
+    err instanceof Error &&
+    'code' in err &&
+    typeof err.code === 'string' &&
+    err.code.startsWith('ERR_PARSE_ARGS')
+  )
 }
 
 /** Prints the envelope for any failure and picks the exit code. */
@@ -156,7 +161,12 @@ export function parsePrepareTarget(values: { pr?: string; base?: string; head?: 
 export async function runPrepare(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
   const { values } = parseArgs({
     args: argv,
-    options: { pr: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' }, force: { type: 'boolean' } },
+    options: {
+      pr: { type: 'string' },
+      base: { type: 'string' },
+      head: { type: 'string' },
+      force: { type: 'boolean' },
+    },
     strict: true,
   })
   const target = parsePrepareTarget(values)
@@ -194,7 +204,9 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
   })
   const file = positionals[0]
   if (file === undefined || positionals.length > 1) {
-    throw new UsageError('validate takes one file: pr-review validate <model.json|review.json> --canvas <dir>')
+    throw new UsageError(
+      'validate takes one file: pr-review validate <model.json|review.json> --canvas <dir>'
+    )
   }
   if (values.canvas === undefined) {
     throw new UsageError('validate needs --canvas <dir> (the directory prepare printed)')
@@ -202,7 +214,11 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
   const context = await readContext(path.resolve(values.canvas))
   const text = await readText(path.resolve(file))
   if (text === null) {
-    throw new PublishError('NOT_FOUND', `${file} does not exist`, 'pass the model.json or review.json to check')
+    throw new PublishError(
+      'NOT_FOUND',
+      `${file} does not exist`,
+      'pass the model.json or review.json to check'
+    )
   }
   const fixed = values.fix === true ? await fixTitles(path.resolve(file), text, context) : { text, trims: [] }
   const report = await validateFile(ctx, parseModelText(fixed.text, path.basename(file)), context)
@@ -214,7 +230,9 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     if (trim.outcome === 'fixed') {
       io.stdout(`fixed ${trim.where}: "${trim.from}" -> "${trim.to}"`)
     } else {
-      io.stdout(`unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`)
+      io.stdout(
+        `unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`
+      )
     }
   }
   if (report.ok) {
@@ -277,7 +295,9 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
   })
   const canvasDir = positionals[0]
   if (canvasDir === undefined || positionals.length > 1) {
-    throw new UsageError('publish takes one directory: pr-review publish <canvasDir> --agent <id> --harness <id>')
+    throw new UsageError(
+      'publish takes one directory: pr-review publish <canvasDir> --agent <id> --harness <id>'
+    )
   }
   if (values.agent === undefined || values.agent === '') {
     throw new UsageError('publish needs --agent <id>')
@@ -312,7 +332,11 @@ export interface InstallSkillEnv {
 export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: CliIo): Promise<number> {
   const { values } = parseArgs({
     args: argv,
-    options: { 'claude-dir': { type: 'string' }, 'codex-dir': { type: 'string' }, force: { type: 'boolean' } },
+    options: {
+      'claude-dir': { type: 'string' },
+      'codex-dir': { type: 'string' },
+      force: { type: 'boolean' },
+    },
     strict: true,
   })
   const resolve = (flag: string | undefined, fallback: string): string =>
@@ -357,7 +381,11 @@ export async function runExport(ctx: AppContext, argv: string[], io: CliIo): Pro
     strict: true,
   })
   const target = await resolveHead(ctx, values)
-  const result = await exportCanvas(ctx, { headSha: target.headSha, prNumber: target.prNumber, out: values.out })
+  const result = await exportCanvas(ctx, {
+    headSha: target.headSha,
+    prNumber: target.prNumber,
+    out: values.out,
+  })
   printJson(io, result)
   io.stderr(`drag ${result.path} into the pull request description or a comment`)
   return EXIT.ok
@@ -375,7 +403,11 @@ async function readZipFile(zipPath: string, shown: string): Promise<Uint8Array> 
   } catch {
     throw new PublishError('NOT_FOUND', `${shown} does not exist`, 'pass the canvas zip to import')
   }
-  const tooLarge = new AppError('CANVAS_TOO_LARGE', `${shown} is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`, 413)
+  const tooLarge = new AppError(
+    'CANVAS_TOO_LARGE',
+    `${shown} is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`,
+    413
+  )
   try {
     // One byte past the cap is read, so a file of exactly the cap still fits and anything longer
     // is refused without the rest of it ever being in memory.

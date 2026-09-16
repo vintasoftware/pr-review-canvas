@@ -16,11 +16,16 @@ function outdatedCommentsHtml(comments, now) {
   const threads = [...buildThreads(comments).outdated.values()].flat()
   if (!threads.length) return ''
   const count = threads.reduce((total, thread) => total + 1 + thread.replies.length, 0)
-  const entries = threads.map(thread => {
-    const line = thread.root.originalLine
-    return `<div class="body"><p class="muted small">${esc(thread.path)}${line === null ? '' : `:${line} (original)`}${thread.resolved ? ' · resolved' : ''}</p>` +
-      [thread.root, ...thread.replies].map(comment => issueCommentHtml(comment, now)).join('') + '</div>'
-  }).join('')
+  const entries = threads
+    .map(thread => {
+      const line = thread.root.originalLine
+      return (
+        `<div class="body"><p class="muted small">${esc(thread.path)}${line === null ? '' : `:${line} (original)`}${thread.resolved ? ' · resolved' : ''}</p>` +
+        [thread.root, ...thread.replies].map(comment => issueCommentHtml(comment, now)).join('') +
+        '</div>'
+      )
+    })
+    .join('')
   return `<details class="outdated-comments">${detailsSummaryHtml(`<span>Outdated comments · ${count}</span>`, 'Toggle outdated comments')}${entries}</details>`
 }
 
@@ -80,7 +85,9 @@ export function renderOverview(bundle, ctx) {
   const reviews = (bundle.comments.reviews ?? []).filter(
     review => review.state !== 'COMMENTED' || review.body.trim().length > 0
   )
-  const active = artifact ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined) : []
+  const active = artifact
+    ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined)
+    : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
   const description = bundle.pr.body.trim()
     ? `<details class="pr-desc">${detailsSummaryHtml('<span>PR description (from GitHub)</span>', 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
@@ -91,7 +98,9 @@ export function renderOverview(bundle, ctx) {
     `<div class="body">${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
-    (reviews.length ? `<details class="review-history">${detailsSummaryHtml(`<span>Review history · ${reviews.length}</span>`, 'Toggle review history')}${reviews.map(review => `<div class="body review-entry"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('')}</details>` : '') +
+    (reviews.length
+      ? `<details class="review-history">${detailsSummaryHtml(`<span>Review history · ${reviews.length}</span>`, 'Toggle review history')}${reviews.map(review => `<div class="body review-entry"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('')}</details>`
+      : '') +
     outdatedCommentsHtml(bundle.comments.reviewComments, ctx.now) +
     (artifact
       ? dismissedListHtml(artifact.points, bundle.state, {

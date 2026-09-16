@@ -55,7 +55,9 @@ describe('mergeProjectConfig', () => {
     expect(mergeProjectConfig({ generation: { caps: { unknown: 1 } } }).config.generation.caps).toEqual({})
     const noTests = mergeProjectConfig({ tests: { patterns: [] } })
     expect(noTests.config.tests).toEqual({ patterns: [] })
-    expect(noTests.warnings).toEqual(['pr-review.config.yml: "tests.patterns" is empty, so no file counts as a test'])
+    expect(noTests.warnings).toEqual([
+      'pr-review.config.yml: "tests.patterns" is empty, so no file counts as a test',
+    ])
     expect(mergeProjectConfig({ tests: { patterns: ['**/test_*.py'] } }).config.tests).toEqual({
       patterns: ['**/test_*.py'],
     })
@@ -114,7 +116,11 @@ describe('loadProjectConfig', () => {
   afterEach(() => rm(dir, { recursive: true, force: true }))
 
   it('returns defaults when the file is absent', async () => {
-    expect(await loadProjectConfig(dir)).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null })
+    expect(await loadProjectConfig(dir)).toEqual({
+      config: DEFAULT_PROJECT_CONFIG,
+      warnings: [],
+      source: null,
+    })
   })
 
   it('reads YAML and reports the source file', async () => {
@@ -135,7 +141,10 @@ describe('loadProjectConfig', () => {
   })
 
   it('loads the shipped example without warnings', async () => {
-    await copyFile(path.join(PACKAGE_ROOT, 'pr-review.config.example.yml'), path.join(dir, 'pr-review.config.yml'))
+    await copyFile(
+      path.join(PACKAGE_ROOT, 'pr-review.config.example.yml'),
+      path.join(dir, 'pr-review.config.yml')
+    )
     const loaded = await loadProjectConfig(dir)
     expect(loaded.warnings).toEqual([])
     expect(loaded.config.generation).toEqual(DEFAULT_PROJECT_CONFIG.generation)

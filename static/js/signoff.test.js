@@ -28,7 +28,9 @@ describe('approveBlockedReason', () => {
       ...artifact,
       layers: [...artifact.layers, { ...artifact.layers[0], id: 'layer-3', key: 'third', title: 'Third' }],
     }
-    expect(approveBlockedReason(/** @type {typeof artifact} */ (two), BASE)).toBe('2 layers are not reviewed yet')
+    expect(approveBlockedReason(/** @type {typeof artifact} */ (two), BASE)).toBe(
+      '2 layers are not reviewed yet'
+    )
   })
 
   it('clears once every layer that is not Other is reviewed', () => {
@@ -119,7 +121,9 @@ describe('a dialog the page stripped of its parts', () => {
     }
     expect(signoffBody(dialog)).toBe('')
     expect(fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'x', unreviewed: [] })).toBe(dialog)
-    expect(showSignoffResult(dialog, { id: 1, state: 'APPROVED', url: 'https://x.test', submittedAt: null })).toBeNull()
+    expect(
+      showSignoffResult(dialog, { id: 1, state: 'APPROVED', url: 'https://x.test', submittedAt: null })
+    ).toBeNull()
   })
 
   it('opens an element that has no showModal, and refuses one that is not a dialog', () => {

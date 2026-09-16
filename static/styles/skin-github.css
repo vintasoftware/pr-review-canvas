@@ -9,7 +9,7 @@
 
    Dark is GitHub's "dark dimmed": a softer grey-blue ground rather than the near-black one. */
 
-:root[data-skin="github"] {
+:root[data-skin='github'] {
   --r: 6px;
   --gap: 16px;
   --main-pad: 16px 16px 40px;
@@ -70,38 +70,38 @@
 }
 
 /* ---- Header ---- */
-[data-skin="github"] .hdr-bar {
+[data-skin='github'] .hdr-bar {
   background: light-dark(#ffffff, #151b23);
 }
 
-[data-skin="github"] .brand {
+[data-skin='github'] .brand {
   text-transform: none;
   letter-spacing: normal;
   font-size: 14px;
 }
 /* The rainbow bar becomes the hairline that runs under GitHub's page header. */
-[data-skin="github"] .stripe {
+[data-skin='github'] .stripe {
   height: 1px;
   background: var(--ink);
 }
-[data-skin="github"] .hdr-actions {
+[data-skin='github'] .hdr-actions {
   gap: 8px;
   align-items: center;
 }
-[data-skin="github"] .hdr-title {
+[data-skin='github'] .hdr-title {
   padding-bottom: 16px;
 }
 
 /* ---- Commands ---- */
-[data-skin="github"] .cmd::before,
-[data-skin="github"] .cmd::after {
+[data-skin='github'] .cmd::before,
+[data-skin='github'] .cmd::after {
   content: none;
 }
-[data-skin="github"] .cmd {
+[data-skin='github'] .cmd {
   font-weight: 500;
 }
 /* The header's commands read as GitHub's toolbar buttons; commands inside the page stay links. */
-[data-skin="github"] .hdr-actions .cmd {
+[data-skin='github'] .hdr-actions .cmd {
   padding: 3px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -110,16 +110,16 @@
   font-size: 12px;
   line-height: 20px;
 }
-[data-skin="github"] .hdr-actions .cmd:hover {
+[data-skin='github'] .hdr-actions .cmd:hover {
   background: var(--btn-bg-hover);
   text-decoration: none;
 }
-[data-skin="github"] .hdr-actions .cmd:disabled,
-[data-skin="github"] .hdr-actions .cmd[aria-disabled="true"] {
+[data-skin='github'] .hdr-actions .cmd:disabled,
+[data-skin='github'] .hdr-actions .cmd[aria-disabled='true'] {
   color: var(--fg-dim);
 }
-[data-skin="github"] .cmd.fill,
-[data-skin="github"] .cmd.big {
+[data-skin='github'] .cmd.fill,
+[data-skin='github'] .cmd.big {
   border: 1px solid transparent;
   border-radius: var(--r);
   background: var(--btn-primary);
@@ -127,56 +127,56 @@
   box-shadow: none;
   padding: 5px 16px;
 }
-[data-skin="github"] .cmd.big {
+[data-skin='github'] .cmd.big {
   padding: 8px 20px;
   font-size: 14px;
 }
-[data-skin="github"] .cmd.fill:hover,
-[data-skin="github"] .cmd.big:hover,
-[data-skin="github"] .cmd.fill:active {
+[data-skin='github'] .cmd.fill:hover,
+[data-skin='github'] .cmd.big:hover,
+[data-skin='github'] .cmd.fill:active {
   background: var(--btn-primary-hover);
   transform: none;
   box-shadow: none;
 }
-[data-skin="github"] .chat-composer .cmd.fill {
+[data-skin='github'] .chat-composer .cmd.fill {
   box-shadow: none;
 }
 
 /* ---- Pills: GitHub's rounded labels, with the state ones filled ---- */
-[data-skin="github"] .pill {
+[data-skin='github'] .pill {
   border-radius: 2em;
   padding: 0 8px;
   font-size: 12px;
   line-height: 20px;
   border-color: var(--line);
 }
-[data-skin="github"] .pill.open,
-[data-skin="github"] .pill.merged,
-[data-skin="github"] .pill.closed,
-[data-skin="github"] .pill.draft {
+[data-skin='github'] .pill.open,
+[data-skin='github'] .pill.merged,
+[data-skin='github'] .pill.closed,
+[data-skin='github'] .pill.draft {
   border-color: transparent;
   color: #ffffff;
 }
-[data-skin="github"] .pill.open {
+[data-skin='github'] .pill.open {
   background: light-dark(#1f883d, #347d39);
 }
-[data-skin="github"] .pill.merged {
+[data-skin='github'] .pill.merged {
   background: light-dark(#8250df, #8256d0);
 }
-[data-skin="github"] .pill.closed {
+[data-skin='github'] .pill.closed {
   background: light-dark(#cf222e, #c93c37);
 }
-[data-skin="github"] .pill.draft {
+[data-skin='github'] .pill.draft {
   background: light-dark(#6e7781, #636e7b);
 }
-[data-skin="github"] .pill.risk,
-[data-skin="github"] .pill.kind,
-[data-skin="github"] .pill.agent {
+[data-skin='github'] .pill.risk,
+[data-skin='github'] .pill.kind,
+[data-skin='github'] .pill.agent {
   background: var(--panel-2);
   color: var(--fg-muted);
   font-weight: 500;
 }
-[data-skin="github"] .pill.test-tag {
+[data-skin='github'] .pill.test-tag {
   background: var(--accent-bg);
   color: var(--accent);
   border-color: transparent;
@@ -186,164 +186,164 @@
 }
 
 /* ---- Cards ---- */
-[data-skin="github"] .panel,
-[data-skin="github"] .layer,
-[data-skin="github"] .diagram {
+[data-skin='github'] .panel,
+[data-skin='github'] .layer,
+[data-skin='github'] .diagram {
   border-radius: var(--r);
 }
-[data-skin="github"] .panel-h,
-[data-skin="github"] .layer-h,
-[data-skin="github"] .diagram-h {
+[data-skin='github'] .panel-h,
+[data-skin='github'] .layer-h,
+[data-skin='github'] .diagram-h {
   border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0;
 }
-[data-skin="github"] .chev {
+[data-skin='github'] .chev {
   color: var(--fg-muted);
 }
-[data-skin="github"] .summary h3,
-[data-skin="github"] .judgment .lbl,
-[data-skin="github"] .role,
-[data-skin="github"] .diff th {
+[data-skin='github'] .summary h3,
+[data-skin='github'] .judgment .lbl,
+[data-skin='github'] .role,
+[data-skin='github'] .diff th {
   text-transform: none;
   letter-spacing: normal;
 }
-[data-skin="github"] .summary h3 {
+[data-skin='github'] .summary h3 {
   font-size: 14px;
   color: var(--fg);
 }
-[data-skin="github"] .prose ul {
+[data-skin='github'] .prose ul {
   list-style: disc;
 }
-[data-skin="github"] .sq {
+[data-skin='github'] .sq {
   border-radius: 2px;
 }
-[data-skin="github"] .sevsum > .legend {
+[data-skin='github'] .sevsum > .legend {
   border-radius: var(--r);
   box-shadow: var(--drop-shadow);
 }
 /* GitHub draws progress as a filled track rather than a hairline. */
-[data-skin="github"] .pline {
+[data-skin='github'] .pline {
   background: var(--line);
   border-radius: var(--r);
 }
-[data-skin="github"] .pline span {
+[data-skin='github'] .pline span {
   border-radius: var(--r);
 }
 
 /* ---- Rail ---- */
-[data-skin="github"] .tree a {
+[data-skin='github'] .tree a {
   margin: 0 8px;
   padding: 6px 8px;
   border-radius: var(--r);
 }
-[data-skin="github"] .tree .layers a {
+[data-skin='github'] .tree .layers a {
   padding-left: 20px;
 }
-[data-skin="github"] .tree a[aria-current] {
+[data-skin='github'] .tree a[aria-current] {
   background: var(--accent-bg);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* ---- Diff ---- */
-[data-skin="github"] .plus {
+[data-skin='github'] .plus {
   border: 0;
   border-radius: var(--r);
   background: var(--accent);
   color: #ffffff;
 }
-[data-skin="github"] .av {
+[data-skin='github'] .av {
   border-radius: 50%;
   border-color: var(--line);
   background: var(--panel-2);
 }
-[data-skin="github"] tr.hunk td {
+[data-skin='github'] tr.hunk td {
   color: light-dark(#0550ae, #9198a1);
 }
 
-[data-skin="github"] .diff .ln {
+[data-skin='github'] .diff .ln {
   border-right-color: light-dark(#d1d9e0, transparent);
 }
-[data-skin="github"] tr.add .ln {
+[data-skin='github'] tr.add .ln {
   background: light-dark(#e6ffec, #31503d);
   color: light-dark(#818b98, #d1d7e0);
 }
-[data-skin="github"] tr.del .ln {
+[data-skin='github'] tr.del .ln {
   background: light-dark(#ffebe9, rgba(229, 83, 75, 0.3));
   color: light-dark(#818b98, #d1d7e0);
 }
 
 /* ---- Boxes, menus, and overlays ---- */
-[data-skin="github"] code,
-[data-skin="github"] .snip,
-[data-skin="github"] .ctx-chip,
-[data-skin="github"] .diagram-src,
-[data-skin="github"] .cmdbox code,
-[data-skin="github"] .notice,
-[data-skin="github"] .callout,
-[data-skin="github"] .stale-bar,
-[data-skin="github"] .proposed,
-[data-skin="github"] .proposed-invalid,
-[data-skin="github"] .drop,
-[data-skin="github"] .prose pre,
-[data-skin="github"] dialog.settings .panel-ro {
+[data-skin='github'] code,
+[data-skin='github'] .snip,
+[data-skin='github'] .ctx-chip,
+[data-skin='github'] .diagram-src,
+[data-skin='github'] .cmdbox code,
+[data-skin='github'] .notice,
+[data-skin='github'] .callout,
+[data-skin='github'] .stale-bar,
+[data-skin='github'] .proposed,
+[data-skin='github'] .proposed-invalid,
+[data-skin='github'] .drop,
+[data-skin='github'] .prose pre,
+[data-skin='github'] dialog.settings .panel-ro {
   border-radius: var(--r);
 }
-[data-skin="github"] code {
+[data-skin='github'] code {
   border: 0;
   background: light-dark(rgba(129, 139, 152, 0.2), rgba(99, 110, 123, 0.4));
   padding: 0.2em 0.4em;
 }
-[data-skin="github"] .cmdbox code,
-[data-skin="github"] .diagram-src {
+[data-skin='github'] .cmdbox code,
+[data-skin='github'] .diagram-src {
   background: var(--panel-2);
   border: 1px solid var(--line);
 }
-[data-skin="github"] .drop {
+[data-skin='github'] .drop {
   border-width: 1px;
   background: var(--panel-2);
 }
-[data-skin="github"] .drop:hover,
-[data-skin="github"] .drop.over {
+[data-skin='github'] .drop:hover,
+[data-skin='github'] .drop.over {
   transform: none;
   background: var(--accent-bg);
 }
-[data-skin="github"] .proposed,
-[data-skin="github"] .cmd.unseen,
-[data-skin="github"] .qq-menu {
+[data-skin='github'] .proposed,
+[data-skin='github'] .cmd.unseen,
+[data-skin='github'] .qq-menu {
   border-width: 1px;
 }
-[data-skin="github"] .cmd.unseen,
-[data-skin="github"] .qq-menu,
-[data-skin="github"] .toast {
+[data-skin='github'] .cmd.unseen,
+[data-skin='github'] .qq-menu,
+[data-skin='github'] .toast {
   border-radius: var(--r);
   box-shadow: var(--drop-shadow);
 }
-[data-skin="github"] select,
-[data-skin="github"] input,
-[data-skin="github"] textarea,
-[data-skin="github"] .composer-box textarea,
-[data-skin="github"] dialog.signoff-dialog textarea {
+[data-skin='github'] select,
+[data-skin='github'] input,
+[data-skin='github'] textarea,
+[data-skin='github'] .composer-box textarea,
+[data-skin='github'] dialog.signoff-dialog textarea {
   border-width: 1px;
   border-color: var(--line);
   border-radius: var(--r);
   padding: 5px 12px;
 }
-[data-skin="github"] dialog {
+[data-skin='github'] dialog {
   border-width: 1px;
   border-color: var(--line);
   border-radius: 12px;
   box-shadow: var(--drop-shadow);
 }
-[data-skin="github"] dialog::backdrop {
+[data-skin='github'] dialog::backdrop {
   background: rgba(28, 33, 40, 0.6);
 }
 
 @media (max-width: 1000px) {
   /* The rail is a strip of chips at this width; the current one is underlined, not filled. */
-  [data-skin="github"] .tree a {
+  [data-skin='github'] .tree a {
     margin: 0;
     border-radius: var(--r);
   }
-  [data-skin="github"] .tree a[aria-current] {
+  [data-skin='github'] .tree a[aria-current] {
     box-shadow: inset 0 -3px 0 var(--accent);
   }
 }

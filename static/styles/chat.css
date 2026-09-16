@@ -25,7 +25,7 @@
   z-index: 3;
 }
 .handle::before {
-  content: "";
+  content: '';
   width: 4px;
   height: 36px;
   border-left: 1px solid currentColor;

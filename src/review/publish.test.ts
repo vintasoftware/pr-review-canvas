@@ -27,7 +27,10 @@ async function prepared(target: Parameters<typeof prepare>[1] = { kind: 'pr', nu
 }
 
 async function writeModel(canvasDir: string, value: unknown): Promise<void> {
-  await writeFile(path.join(canvasDir, 'model.json'), typeof value === 'string' ? value : JSON.stringify(value))
+  await writeFile(
+    path.join(canvasDir, 'model.json'),
+    typeof value === 'string' ? value : JSON.stringify(value)
+  )
 }
 
 describe('publish', () => {
@@ -106,7 +109,10 @@ describe('publish', () => {
       report: {
         ok: false,
         errors: [
-          { code: 'TEXT_TOO_LONG', message: expect.stringContaining('summary: 1201 visible chars, cap 1200;') },
+          {
+            code: 'TEXT_TOO_LONG',
+            message: expect.stringContaining('summary: 1201 visible chars, cap 1200;'),
+          },
           { code: 'HUNK_UNASSIGNED' },
         ],
       },
@@ -188,7 +194,9 @@ describe('publish', () => {
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     const moved = 'e'.repeat(40)
     t.ctx.gh = createFakeGh({
-      routes: { 'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha: moved } }) },
+      routes: {
+        'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha: moved } }),
+      },
     })
     const err = await publish(t.ctx, canvasDir, OPTS).catch(e => e)
     expect(err).toBeInstanceOf(PublishError)

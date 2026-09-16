@@ -211,7 +211,10 @@ describe('sending a message', () => {
     const { root, chat } = mount({
       streamChat: async (_pr, input, opts) => {
         sent.push(input)
-        opts.onEvent({ event: 'turn', data: { thread: 'pr-review-a-b-42-claude-t1', agent: 'claude', seeded: true } })
+        opts.onEvent({
+          event: 'turn',
+          data: { thread: 'pr-review-a-b-42-claude-t1', agent: 'claude', seeded: true },
+        })
         opts.onEvent({ event: 'chunk', data: { text: 'Yes. ' } })
         opts.onEvent({ event: 'chunk', data: { text: 'Covered at `src/app.ts:3`.' } })
       },
@@ -380,7 +383,9 @@ describe('threads', () => {
   it('empties the transcript when a new thread starts', async () => {
     const { root } = mount({
       createThread: async () => ({
-        threads: [{ name: 'pr-review-a-b-42-claude-t2', agent: 'claude', title: 'New thread', createdAt: '' }],
+        threads: [
+          { name: 'pr-review-a-b-42-claude-t2', agent: 'claude', title: 'New thread', createdAt: '' },
+        ],
         activeThread: 'pr-review-a-b-42-claude-t2',
         agent: 'claude',
       }),
@@ -516,9 +521,9 @@ describe('answerHtml', () => {
   })
 
   it('shows a range and the old side on the card', () => {
-    expect(proposedCommentHtml({ path: 'a.ts', line: 5, startLine: 3, side: 'old', body: 'x' }, 'turn-1-0')).toContain(
-      'a.ts:3–5 (old side)'
-    )
+    expect(
+      proposedCommentHtml({ path: 'a.ts', line: 5, startLine: 3, side: 'old', body: 'x' }, 'turn-1-0')
+    ).toContain('a.ts:3–5 (old side)')
   })
 
   it('keeps a block that is not a usable comment as a code block with the reason', () => {
@@ -625,7 +630,9 @@ describe('wireChat', () => {
     })
     chat.askQuestion({ kind: 'layer', layerId: 'layer-1' }, 'Is this covered by tests?')
     await flush()
-    expect(sent).toEqual([{ message: 'Is this covered by tests?', context: { kind: 'layer', layerId: 'layer-1' } }])
+    expect(sent).toEqual([
+      { message: 'Is this covered by tests?', context: { kind: 'layer', layerId: 'layer-1' } },
+    ])
   })
 })
 
@@ -1122,7 +1129,8 @@ describe('what the second review round found', () => {
       }),
       fetchThreadHistory: (_pr, name) =>
         new Promise(resolve => {
-          history.release = () => resolve({ name, turns: [{ role: 'user', text: 'an old question', at: '' }] })
+          history.release = () =>
+            resolve({ name, turns: [{ role: 'user', text: 'an old question', at: '' }] })
         }),
       streamChat: async (_pr, _input, opts) => {
         opts.onEvent({ event: 'chunk', data: { text: 'the new answer' } })
@@ -1204,7 +1212,8 @@ describe('what the third review round found', () => {
           return { name, turns: [{ role: 'user', text: 'a question in the first thread', at: '' }] }
         }
         return new Promise(resolve => {
-          pending.release = () => resolve({ name, turns: [{ role: 'user', text: 'a question in the second', at: '' }] })
+          pending.release = () =>
+            resolve({ name, turns: [{ role: 'user', text: 'a question in the second', at: '' }] })
         })
       },
       streamChat: async (_pr, _input, opts) => {
@@ -1245,12 +1254,17 @@ describe('what the third review round found', () => {
         new Promise(resolve => {
           list.release = () =>
             resolve({
-              threads: [{ name: 'pr-review-a-b-42-claude-t1', agent: 'claude', title: 'first', createdAt: '' }],
+              threads: [
+                { name: 'pr-review-a-b-42-claude-t1', agent: 'claude', title: 'first', createdAt: '' },
+              ],
               activeThread: 'pr-review-a-b-42-claude-t1',
               agent: 'claude',
             })
         }),
-      fetchThreadHistory: async (_pr, name) => ({ name, turns: [{ role: 'user', text: 'an old one', at: '' }] }),
+      fetchThreadHistory: async (_pr, name) => ({
+        name,
+        turns: [{ role: 'user', text: 'an old one', at: '' }],
+      }),
       streamChat: async (_pr, _input, opts) => {
         opts.onEvent({ event: 'chunk', data: { text: 'the answer' } })
       },
@@ -1324,12 +1338,16 @@ describe('what the fourth review round found', () => {
 
 it('animates preparation, tracks elapsed time, and collapses updated tool calls', async () => {
   let finish = () => {}
-  const { root, chat } = mount({ streamChat: async (_pr, _input, opts) => {
-    opts.onEvent({ event: 'tool', data: { id: '1', title: 'Read src/app.ts', status: 'pending' } })
-    opts.onEvent({ event: 'tool', data: { id: '1', title: 'tool', status: 'completed' } })
-    await new Promise(resolve => { finish = () => resolve(undefined) })
-    opts.onEvent({ event: 'chunk', data: { text: 'Answer' } })
-  } })
+  const { root, chat } = mount({
+    streamChat: async (_pr, _input, opts) => {
+      opts.onEvent({ event: 'tool', data: { id: '1', title: 'Read src/app.ts', status: 'pending' } })
+      opts.onEvent({ event: 'tool', data: { id: '1', title: 'tool', status: 'completed' } })
+      await new Promise(resolve => {
+        finish = () => resolve(undefined)
+      })
+      opts.onEvent({ event: 'chunk', data: { text: 'Answer' } })
+    },
+  })
   await flush()
   vi.useFakeTimers()
   const box = /** @type {HTMLTextAreaElement} */ (el(root, 'textarea'))

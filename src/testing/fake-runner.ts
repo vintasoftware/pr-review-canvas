@@ -63,7 +63,9 @@ export function createFakeRunner(options: FakeRunnerOptions = {}): FakeRunner {
           if (stopped) {
             break
           }
-          runOptions.onRawLine?.(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { event } }))
+          runOptions.onRawLine?.(
+            JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { event } })
+          )
           yield event
         }
         if (stopped && options.onCancel !== 'silent') {

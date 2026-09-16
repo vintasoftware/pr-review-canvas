@@ -72,7 +72,11 @@ export function resolveVendorRoots(): VendorRoots {
     diff: path.dirname(fileURLToPath(import.meta.resolve('diff'))),
     marked: fileURLToPath(import.meta.resolve('marked')),
     dompurify: fileURLToPath(import.meta.resolve('dompurify')),
-    hljs: path.join(path.dirname(require.resolve('@highlightjs/cdn-assets/package.json')), 'es', 'highlight.min.js'),
+    hljs: path.join(
+      path.dirname(require.resolve('@highlightjs/cdn-assets/package.json')),
+      'es',
+      'highlight.min.js'
+    ),
     mermaid: path.dirname(fileURLToPath(import.meta.resolve('mermaid'))),
   }
 }
@@ -164,7 +168,13 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
     capabilities: createCapabilityProbe(gh, opts.config.repo, now),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     ...stores,
-    ...createChatSet(opts.config, opts.runner ?? createAgentRunner(), stores, now, opts.projectConfig.config.prompts),
+    ...createChatSet(
+      opts.config,
+      opts.runner ?? createAgentRunner(),
+      stores,
+      now,
+      opts.projectConfig.config.prompts
+    ),
     now,
     version: readPackageVersion(),
     staticDir: STATIC_DIR,

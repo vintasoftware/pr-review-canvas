@@ -91,7 +91,10 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
   }
 
-  const stateBody = (number: number, state: StateResponse['state']): StateResponse => ({ prNumber: number, state })
+  const stateBody = (number: number, state: StateResponse['state']): StateResponse => ({
+    prNumber: number,
+    state,
+  })
 
   api.get('/prs/:n/state', async c => {
     const number = parsePrNumber(c.req.param('n'))
@@ -102,7 +105,12 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const number = parsePrNumber(c.req.param('n'))
     const id = c.req.param('id')
     if (!isReviewedId(id)) {
-      throw new AppError('BAD_REQUEST', `not a reviewed id: ${id}`, 400, 'use layer:<id> or layer:<id>/file:<key>')
+      throw new AppError(
+        'BAD_REQUEST',
+        `not a reviewed id: ${id}`,
+        400,
+        'use layer:<id> or layer:<id>/file:<key>'
+      )
     }
     const body = await readBody(c.req.raw, ReviewedBodySchema, '{ "reviewed": true }')
     const pr = await loader.currentPr(number)
@@ -223,7 +231,11 @@ function appendComment(ctx: AppContext, number: number, posted: PostCommentResul
  * Keeps the cached comments in step with what was just posted, so a reload shows it once. With
  * nothing cached there is nothing to keep in step: the next read fetches the list from GitHub.
  */
-async function writeAppendedComment(ctx: AppContext, number: number, posted: PostCommentResult): Promise<void> {
+async function writeAppendedComment(
+  ctx: AppContext,
+  number: number,
+  posted: PostCommentResult
+): Promise<void> {
   const comments = await ctx.prs.readComments(number)
   if (comments === null) {
     return
@@ -241,5 +253,8 @@ async function writeAppendedComment(ctx: AppContext, number: number, posted: Pos
   if (comments.issueComments.some(c => c.id === posted.comment.id)) {
     return
   }
-  await ctx.prs.writeComments(number, { ...comments, issueComments: [...comments.issueComments, posted.comment] })
+  await ctx.prs.writeComments(number, {
+    ...comments,
+    issueComments: [...comments.issueComments, posted.comment],
+  })
 }

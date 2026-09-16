@@ -232,7 +232,10 @@ export function toggleMarkdownPreview(button, preview) {
   const textarea = host?.querySelector('textarea')
   const output = host?.querySelector('.markdown-preview')
   if (!(textarea instanceof HTMLTextAreaElement) || !(output instanceof HTMLElement)) return
-  if (preview) output.innerHTML = textarea.value.trim() ? renderMarkdown(textarea.value, { github: true }) : '<p class="muted">Nothing to preview.</p>'
+  if (preview)
+    output.innerHTML = textarea.value.trim()
+      ? renderMarkdown(textarea.value, { github: true })
+      : '<p class="muted">Nothing to preview.</p>'
   textarea.hidden = preview
   output.hidden = !preview
   host?.querySelector('[data-act="markdown-write"]')?.setAttribute('aria-pressed', String(!preview))

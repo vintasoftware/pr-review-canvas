@@ -7,10 +7,15 @@ test.beforeEach(async ({ page }) => {
     bundle.chat.enabled = true
     await route.fulfill({ response, json: bundle })
   })
-  await page.route('**/api/prs/42/chat/threads', route => route.fulfill({ json: { threads: [], activeThread: null } }))
+  await page.route('**/api/prs/42/chat/threads', route =>
+    route.fulfill({ json: { threads: [], activeThread: null } })
+  )
 })
 
-test('floats on smaller screens and preserves drafts across minimizing and resizing', async ({ page, reviewUrl }) => {
+test('floats on smaller screens and preserves drafts across minimizing and resizing', async ({
+  page,
+  reviewUrl,
+}) => {
   await page.setViewportSize({ width: 1100, height: 800 })
   await page.goto(reviewUrl)
   const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })

@@ -31,7 +31,9 @@ import {
 const SOURCE = 'flowchart LR\n  A --> B'
 
 /** @type {ThemeColors} */
-const COLORS = /** @type {ThemeColors} */ (Object.fromEntries(THEME_TOKENS.map((t, i) => [t, `rgb(${i}, 0, 0)`])))
+const COLORS = /** @type {ThemeColors} */ (
+  Object.fromEntries(THEME_TOKENS.map((t, i) => [t, `rgb(${i}, 0, 0)`]))
+)
 
 /**
  * A mermaid double that records what it was asked to draw.
@@ -101,7 +103,9 @@ beforeEach(() => {
 
 describe('diagramPlaceholderHtml', () => {
   it('keeps the source in an attribute, escaped, never as markup', () => {
-    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  A["<img src=x onerror=alert(1)>"] --> B')
+    document.body.innerHTML = diagramPlaceholderHtml(
+      'flowchart LR\n  A["<img src=x onerror=alert(1)>"] --> B'
+    )
     const el = document.querySelector('.diagram')
     expect(el?.getAttribute('data-mermaid')).toBe('flowchart LR\n  A["<img src=x onerror=alert(1)>"] --> B')
     expect(document.querySelector('img')).toBeNull()
@@ -250,7 +254,8 @@ describe('toggleDiagram', () => {
 
   it('draws a diagram opened while an earlier one is still being drawn, without waiting for it', async () => {
     const mermaid = fakeMermaid({ hold: true, svg: (text, n) => `<svg data-n="${n}">${text}</svg>` })
-    document.body.innerHTML = diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
+    document.body.innerHTML =
+      diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
     const handle = initDiagrams(document.body, { load: mermaid.load, colors: COLORS })
     // The pass stops on the first diagram, so the second is claimed but still blank.
     await vi.waitFor(() => expect(mermaid.calls.texts).toHaveLength(1))
@@ -271,7 +276,8 @@ describe('toggleDiagram', () => {
 
   it('leaves the diagrams of a finished pass alone when an older pass resumes', async () => {
     const mermaid = fakeMermaid({ hold: true, svg: (_text, n) => `<svg data-n="${n}"></svg>` })
-    document.body.innerHTML = diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
+    document.body.innerHTML =
+      diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
     // The first pass stops on the first diagram; the second passes over both and finishes.
     const first = renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })
     await vi.waitFor(() => expect(mermaid.calls.texts).toHaveLength(1))
@@ -281,7 +287,8 @@ describe('toggleDiagram', () => {
     await vi.waitFor(() => expect(mermaid.calls.texts).toHaveLength(3))
     mermaid.releaseRender(3)
     expect(await second).toEqual({ rendered: 2, failed: 0 })
-    const drawn = () => [...document.querySelectorAll('.diagram-body svg')].map(el => el.getAttribute('data-n'))
+    const drawn = () =>
+      [...document.querySelectorAll('.diagram-body svg')].map(el => el.getAttribute('data-n'))
     expect(drawn()).toEqual(['2', '3'])
     // The first pass wakes up owning nothing: it draws no more and overwrites nothing.
     mermaid.releaseRender(1)
@@ -327,7 +334,8 @@ describe('renderDiagrams', () => {
 
   it('draws every placeholder with one id each and imports the library once', async () => {
     const mermaid = fakeMermaid()
-    document.body.innerHTML = diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('sequenceDiagram\n  A ->> B: hi')
+    document.body.innerHTML =
+      diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('sequenceDiagram\n  A ->> B: hi')
     expect(await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })).toEqual({
       rendered: 2,
       failed: 0,
@@ -403,7 +411,8 @@ describe('renderDiagrams', () => {
 
   it('stops between placeholders when the screen it draws goes away', async () => {
     const mermaid = fakeMermaid()
-    document.body.innerHTML = diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
+    document.body.innerHTML =
+      diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
     const result = await renderDiagrams(document.body, {
       load: mermaid.load,
       colors: COLORS,
@@ -418,7 +427,9 @@ describe('renderDiagrams', () => {
   it('draws nothing when the screen goes away while the library loads', async () => {
     const mermaid = fakeMermaid()
     document.body.innerHTML = diagramPlaceholderHtml(SOURCE)
-    expect(await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS, cancelled: () => true })).toEqual({
+    expect(
+      await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS, cancelled: () => true })
+    ).toEqual({
       rendered: 0,
       failed: 0,
     })
@@ -427,7 +438,8 @@ describe('renderDiagrams', () => {
 
   it('writes no fallback for a screen that went away while a drawing failed', async () => {
     const mermaid = fakeMermaid({ fail: true })
-    document.body.innerHTML = diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
+    document.body.innerHTML =
+      diagramPlaceholderHtml(SOURCE) + diagramPlaceholderHtml('flowchart LR\n  C --> D')
     expect(
       await renderDiagrams(document.body, {
         load: mermaid.load,
@@ -621,7 +633,9 @@ describe('node links', () => {
     expect(nodeGroupPattern('a.b*c').test('pr-diagram-flowchart-a.b*c-0')).toBe(true)
     // Naming the drawing keeps `b` apart from a node whose own id ends in `-state-b`.
     expect(nodeGroupPattern('b', 'pr-diagram-1').test('pr-diagram-1-flowchart-a-state-b-0')).toBe(false)
-    expect(nodeGroupPattern('a-state-b', 'pr-diagram-1').test('pr-diagram-1-flowchart-a-state-b-0')).toBe(true)
+    expect(nodeGroupPattern('a-state-b', 'pr-diagram-1').test('pr-diagram-1-flowchart-a-state-b-0')).toBe(
+      true
+    )
     expect(nodeGroupPattern('b', 'pr-diagram-1').test('pr-diagram-1-flowchart-b-2')).toBe(true)
   })
 
@@ -632,9 +646,11 @@ describe('node links', () => {
       '<g class="node" id="d1-flowchart-b-1"><text>two</text></g>' +
       '</svg>'
     const mermaid = fakeMermaid({ svg: () => svg })
-    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  a-state-b --> b', { b: '#file:src/app.ts' })
+    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  a-state-b --> b', {
+      b: '#file:src/app.ts',
+    })
     return renderDiagrams(document.body, { load: mermaid.load, colors: COLORS }).then(() => {
-      expect([...document.querySelectorAll('[data-link]')].map(el => el.getAttribute('id'))).toEqual([
+      return expect([...document.querySelectorAll('[data-link]')].map(el => el.getAttribute('id'))).toEqual([
         'd1-flowchart-b-1',
       ])
     })
@@ -647,7 +663,9 @@ describe('node links', () => {
       '<g class="node" id="d2-flowchart-L_a_b_0-1"><text>node</text></g>' +
       '</svg>'
     const mermaid = fakeMermaid({ svg: () => svg })
-    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  L_a_b_0 --> z', { L_a_b_0: '#file:src/app.ts' })
+    document.body.innerHTML = diagramPlaceholderHtml('flowchart LR\n  L_a_b_0 --> z', {
+      L_a_b_0: '#file:src/app.ts',
+    })
     await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })
     expect([...document.querySelectorAll('[data-link]')].map(el => el.getAttribute('id'))).toEqual([
       'd2-flowchart-L_a_b_0-1',
@@ -667,8 +685,12 @@ describe('node links', () => {
       tabindex: '0',
       label: 'src/app.ts',
     })
-    expect(linkAttrs(node.querySelector('#pr-diagram-flowchart-flowchart-serve-3')).label).toBe('src/app.ts hunk 2')
-    expect(node.querySelector('#pr-diagram-flowchart-flowchart-ingest-0')?.hasAttribute('data-link')).toBe(false)
+    expect(linkAttrs(node.querySelector('#pr-diagram-flowchart-flowchart-serve-3')).label).toBe(
+      'src/app.ts hunk 2'
+    )
+    expect(node.querySelector('#pr-diagram-flowchart-flowchart-ingest-0')?.hasAttribute('data-link')).toBe(
+      false
+    )
     expect(node.querySelectorAll('[data-link]')).toHaveLength(2)
   })
 
@@ -711,7 +733,9 @@ describe('node links', () => {
     style.textContent = ':root { --bg: rgb(1, 1, 1) } :root[data-theme="light"] { --bg: rgb(9, 9, 9) }'
     document.head.append(style)
     try {
-      document.body.innerHTML = diagramPlaceholderHtml(MERMAID_SOURCE.flowchart, { store: '#file:src/app.ts' })
+      document.body.innerHTML = diagramPlaceholderHtml(MERMAID_SOURCE.flowchart, {
+        store: '#file:src/app.ts',
+      })
       const handle = initDiagrams(document.body, { load: mermaid.load })
       await vi.waitFor(() => expect(document.querySelectorAll('[data-link]')).toHaveLength(1))
       document.documentElement.setAttribute('data-theme', 'light')
@@ -821,7 +845,10 @@ describe('diagram lifecycle boundaries', () => {
     const node = document.querySelector('.diagram')
     if (!(node instanceof HTMLElement)) throw new Error('missing diagram')
     const mermaid = fakeMermaid()
-    expect(await renderDiagrams(node, { load: mermaid.load, colors: COLORS })).toEqual({ rendered: 1, failed: 0 })
+    expect(await renderDiagrams(node, { load: mermaid.load, colors: COLORS })).toEqual({
+      rendered: 1,
+      failed: 0,
+    })
     expect(node.querySelector('svg')).not.toBeNull()
   })
 
@@ -850,7 +877,10 @@ describe('diagram lifecycle boundaries', () => {
     document.querySelector('.diagram-h .chev')?.setAttribute('aria-expanded', 'false')
     document.querySelector('.diagram-body')?.remove()
     const mermaid = fakeMermaid()
-    expect(await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })).toEqual({ rendered: 0, failed: 0 })
+    expect(await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })).toEqual({
+      rendered: 0,
+      failed: 0,
+    })
     expect(mermaid.calls.loads).toBe(0)
   })
 

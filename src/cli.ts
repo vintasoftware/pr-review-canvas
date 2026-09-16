@@ -26,7 +26,16 @@ import { startServer } from './server/node-server.js'
 import { readJson } from './store/atomic-json.js'
 import { ensureDataDir } from './store/data-dir.js'
 
-const SUBCOMMANDS = ['serve', 'prepare', 'validate', 'publish', 'export', 'import', 'install-skill', 'doctor'] as const
+const SUBCOMMANDS = [
+  'serve',
+  'prepare',
+  'validate',
+  'publish',
+  'export',
+  'import',
+  'install-skill',
+  'doctor',
+] as const
 
 const USAGE = `usage: pr-review <command> [flags]
 
@@ -78,7 +87,8 @@ async function buildContext(
   )
   const projectConfig = await loadProjectConfig(config.repoRoot)
   await ensureDataDir(config.dataDir)
-  const fixtureArtifact = config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
+  const fixtureArtifact =
+    config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
   return createAppContext({ config, projectConfig, fixtureArtifact })
 }
 

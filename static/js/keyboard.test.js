@@ -34,7 +34,9 @@ describe('keyAction', () => {
       ['?', 'help'],
       ['Escape', 'escape'],
     ]
-    expect(pairs.map(([key]) => keyAction(press(String(key))).action)).toEqual(pairs.map(([, action]) => action))
+    expect(pairs.map(([key]) => keyAction(press(String(key))).action)).toEqual(
+      pairs.map(([, action]) => action)
+    )
   })
 
   it('sends a and / to the chat pane and says nothing for other keys', () => {

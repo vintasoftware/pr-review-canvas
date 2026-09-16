@@ -39,7 +39,7 @@
   }
   .tree a,
   .tree a:not(:has(.dot)) {
-    grid-template-areas: "d n t";
+    grid-template-areas: 'd n t';
     grid-template-columns: auto auto minmax(0, 1fr);
     align-items: center;
     border: 1px solid var(--ink);

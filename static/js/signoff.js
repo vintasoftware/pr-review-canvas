@@ -20,7 +20,9 @@ export const LOADING_REASON = 'the review body is still loading'
  * @returns {string | null}
  */
 export function approveBlockedReason(artifact, state) {
-  const [first, ...rest] = artifact.layers.filter(l => l.kind !== 'other' && layerProgress(l, state) !== 'done')
+  const [first, ...rest] = artifact.layers.filter(
+    l => l.kind !== 'other' && layerProgress(l, state) !== 'done'
+  )
   if (first === undefined) {
     return null
   }
@@ -75,7 +77,9 @@ export function openSignoffDialog(root, opts) {
   if (!(dialog instanceof HTMLDialogElement)) {
     throw new Error('sign-off dialog did not render')
   }
-  dialog.querySelector('[data-act="markdown-write"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  dialog
+    .querySelector('[data-act="markdown-write"]')
+    ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   dialog.setAttribute('data-event', opts.event)
   const heading = dialog.querySelector('#signoff-h')
   if (heading !== null) {

@@ -17,7 +17,8 @@ import {
   rankCandidates,
 } from './attachments.js'
 
-const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+const FILE_URL =
+  'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
 const ASSET_URL = 'https://github.com/user-attachments/assets/6e9d2b7c-1f2a-4c3d-9a8b-0f1e2d3c4b5a'
 const SIGNED_URL = 'https://objects.githubusercontent.com/canvas.zip?sig=abc'
 
@@ -70,7 +71,10 @@ function alwaysFetch(make: () => Response): { impl: typeof fetch; count: () => n
 }
 
 /** A fetch that answers from a list of responses in call order and records what it was asked. */
-function fakeFetch(responses: Response[]): { impl: typeof fetch; calls: Array<{ url: string; auth: string | null }> } {
+function fakeFetch(responses: Response[]): {
+  impl: typeof fetch
+  calls: Array<{ url: string; auth: string | null }>
+} {
   const calls: Array<{ url: string; auth: string | null }> = []
   let at = 0
   const impl: typeof fetch = async (input, init) => {
@@ -117,22 +121,32 @@ describe('findAttachmentLinks', () => {
 describe('candidate collection and ranking', () => {
   it('keeps only names that parse for this repo, across body and comments', () => {
     const payload = comments({
-      issueComments: [issue(1, `[pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip](${ASSET_URL})`), issue(2, FILE_URL)],
+      issueComments: [
+        issue(1, `[pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip](${ASSET_URL})`),
+        issue(2, FILE_URL),
+      ],
     })
     const found = collectCandidates(
       { body: 'nothing here', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
       TEST_REPO
     )
-    expect(found.map(c => [c.name, c.order])).toEqual([['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 0]])
+    expect(found.map(c => [c.name, c.order])).toEqual([
+      ['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 0],
+    ])
   })
 
   it('uses all eight commit characters when ranking attachments', () => {
     const name = 'pr-42-20260910T110000Z-aaaaaaab-acme-widgets-canvas.zip'
-    const candidates = collectCandidates({
-      body: FILE_URL,
-      bodyUpdatedAt: '2026-09-09T09:00:00Z',
-      comments: comments({ issueComments: [issue(1, `https://github.com/user-attachments/files/2/${name}`)] }),
-    }, TEST_REPO)
+    const candidates = collectCandidates(
+      {
+        body: FILE_URL,
+        bodyUpdatedAt: '2026-09-09T09:00:00Z',
+        comments: comments({
+          issueComments: [issue(1, `https://github.com/user-attachments/files/2/${name}`)],
+        }),
+      },
+      TEST_REPO
+    )
     const ranked = rankCandidates(candidates, { headSha: HEAD_SHA, prNumber: 42 })
     expect(ranked).toHaveLength(2)
     expect(ranked[0]?.parsed.shaPrefix).toBe('aaaaaaaa')
@@ -191,7 +205,9 @@ describe('discoveryFingerprint', () => {
       discoveryFingerprint('body', comments({ issueComments: [issue(1, 'a'), issue(2, 'b')] }), HEAD_SHA)
     ).not.toBe(base)
     // An edit that keeps the length, such as swapping one zip link for another, still counts.
-    expect(discoveryFingerprint('body', comments({ issueComments: [issue(1, 'b')] }), HEAD_SHA)).not.toBe(base)
+    expect(discoveryFingerprint('body', comments({ issueComments: [issue(1, 'b')] }), HEAD_SHA)).not.toBe(
+      base
+    )
     expect(discoveryFingerprint('body', one, BASE_SHA)).not.toBe(base)
   })
 })
@@ -236,7 +252,9 @@ describe('downloadAttachment', () => {
   })
 
   it('refuses a redirect that leaves the allowed hosts, and a URL that is not one of them', async () => {
-    const fetches = fakeFetch([new Response(null, { status: 302, headers: { location: 'https://evil.example/x' } })])
+    const fetches = fakeFetch([
+      new Response(null, { status: 302, headers: { location: 'https://evil.example/x' } }),
+    ])
     t = await makeTestContext({ fetch: fetches.impl })
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
     expect(await downloadAttachment(t.ctx, 'http://github.com/user-attachments/files/1/a.zip')).toEqual({
@@ -297,7 +315,10 @@ describe('downloadAttachment', () => {
     t = await makeTestContext({ fetch: fakeFetch([new Response('', { status: 500 })]).impl })
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
     await t.cleanup()
-    const loop = Array.from({ length: 5 }, () => new Response(null, { status: 302, headers: { location: SIGNED_URL } }))
+    const loop = Array.from(
+      { length: 5 },
+      () => new Response(null, { status: 302, headers: { location: SIGNED_URL } })
+    )
     t = await makeTestContext({ fetch: fakeFetch(loop).impl })
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
   })
@@ -349,7 +370,8 @@ describe('discoverSharedCanvas', () => {
 
   it('falls through to the next attachment when the best one cannot be downloaded', async () => {
     // The link named for the head ranks first and is broken; the other one is the real canvas.
-    const other = 'https://github.com/user-attachments/files/2/pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip'
+    const other =
+      'https://github.com/user-attachments/files/2/pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip'
     const fetches = fakeFetch([new Response('', { status: 404 }), zipResponse(canvasBytes())])
     t = await localClone(fetches.impl)
     const payload = comments({

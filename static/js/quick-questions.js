@@ -18,7 +18,8 @@ export const ASK_SOMETHING_ELSE = 'ask something else…'
 export function quickMenuHtml() {
   const items = [...QUICK_QUESTIONS, ASK_SOMETHING_ELSE]
     .map(
-      (q, i) => `<button class="qq-item" type="button" role="menuitem" tabindex="-1" data-qq="${i}">${esc(q)}</button>`
+      (q, i) =>
+        `<button class="qq-item" type="button" role="menuitem" tabindex="-1" data-qq="${i}">${esc(q)}</button>`
     )
     .join('')
   return `<div class="qq-menu" id="${QQ_MENU_ID}" role="menu" aria-label="Quick questions" hidden>${items}</div>`

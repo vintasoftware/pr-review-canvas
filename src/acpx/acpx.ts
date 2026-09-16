@@ -231,7 +231,11 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         // The cancel call gets its own timeout, and SIGKILL when it elapses: a cancel that hangs
         // must neither hold the kill back nor stay behind as a process of its own.
         agentArgs =>
-          execQuiet(bin, agentArgs, { cwd: options.cwd, timeoutSec: CANCEL_TIMEOUT_SEC, killSignal: 'SIGKILL' }),
+          execQuiet(bin, agentArgs, {
+            cwd: options.cwd,
+            timeoutSec: CANCEL_TIMEOUT_SEC,
+            killSignal: 'SIGKILL',
+          }),
         slackMs,
         cancelGraceMs
       )
@@ -268,7 +272,12 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         }
       }
       if (!ended) {
-        return { ok: false, text: '', code: 'AGENT_INCOMPLETE', message: 'the agent stopped before finishing' }
+        return {
+          ok: false,
+          text: '',
+          code: 'AGENT_INCOMPLETE',
+          message: 'the agent stopped before finishing',
+        }
       }
       return text === ''
         ? { ok: false, text: '', code: 'AGENT_INCOMPLETE', message: 'the agent replied nothing' }
@@ -516,11 +525,19 @@ function startRun(
     const exit = code ?? 1
     const mapped = exitCodeToAgentCode(exit)
     if (mapped !== null) {
-      finish({ type: 'error', code: mapped, message: stderr.trim() === '' ? exitCodeMessage(exit) : stderr.trim() })
+      finish({
+        type: 'error',
+        code: mapped,
+        message: stderr.trim() === '' ? exitCodeMessage(exit) : stderr.trim(),
+      })
       return
     }
     // acpx 0.13.2 exits 0 when its own --timeout elapses, without a terminal event.
-    finish({ type: 'error', code: 'AGENT_INCOMPLETE', message: 'the agent stopped before finishing its answer' })
+    finish({
+      type: 'error',
+      code: 'AGENT_INCOMPLETE',
+      message: 'the agent stopped before finishing its answer',
+    })
   })
 
   child.stdin?.on('error', () => undefined)

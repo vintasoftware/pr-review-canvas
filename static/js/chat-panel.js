@@ -50,8 +50,15 @@ export function wireChatPanel(root, pane) {
   /** @param {KeyboardEvent} event */
   function trapFocus(event) {
     if (event.key !== 'Tab' || !mobile.matches || !dialog.open) return
-    const controls = [...dialog.querySelectorAll('button, select, textarea, input, a[href], [tabindex]')]
-      .filter(el => el instanceof HTMLElement && el.tabIndex >= 0 && !el.matches(':disabled') && el.getClientRects().length)
+    const controls = [
+      ...dialog.querySelectorAll('button, select, textarea, input, a[href], [tabindex]'),
+    ].filter(
+      el =>
+        el instanceof HTMLElement &&
+        el.tabIndex >= 0 &&
+        !el.matches(':disabled') &&
+        el.getClientRects().length
+    )
     const first = /** @type {HTMLElement | undefined} */ (controls[0])
     const last = /** @type {HTMLElement | undefined} */ (controls.at(-1))
     if (event.shiftKey && document.activeElement === first) {

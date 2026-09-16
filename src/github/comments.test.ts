@@ -49,7 +49,15 @@ describe('mapReviewComment', () => {
 
 describe('mapReviewComment with sparse fields', () => {
   it('defaults line, original line, and side when GitHub omits them', () => {
-    const sparse = { id: 5, user: { login: 'x' }, body: 'b', path: 'p', commit_id: 'c', created_at: 't', html_url: 'u' }
+    const sparse = {
+      id: 5,
+      user: { login: 'x' },
+      body: 'b',
+      path: 'p',
+      commit_id: 'c',
+      created_at: 't',
+      html_url: 'u',
+    }
     expect(mapReviewComment(sparse, new Set())).toMatchObject({
       line: null,
       originalLine: null,
@@ -105,7 +113,7 @@ describe('fetchComments', () => {
   const routes = {
     'repos/acme/widgets/pulls/42/comments': ghJson(GH_REVIEW_COMMENTS),
     'repos/acme/widgets/pulls/42/reviews': { kind: 'json' as const, body: [] },
-      'repos/acme/widgets/issues/42/comments': ghJson(GH_ISSUE_COMMENTS),
+    'repos/acme/widgets/issues/42/comments': ghJson(GH_ISSUE_COMMENTS),
   }
 
   it('returns both comment kinds with the resolved flag joined in', async () => {
@@ -140,7 +148,7 @@ describe('fetchComments', () => {
       routes: {
         'repos/acme/widgets/pulls/42/comments': ghHandler(({ page = '' }) => pages[page] ?? []),
         'repos/acme/widgets/pulls/42/reviews': { kind: 'json' as const, body: [] },
-      'repos/acme/widgets/issues/42/comments': ghJson([]),
+        'repos/acme/widgets/issues/42/comments': ghJson([]),
       },
       graphql: [GH_THREADS_PAGE],
     })
@@ -168,37 +176,60 @@ describe('fetchComments', () => {
   })
 })
 
- it('fetches submitted reviews and preserves avatars', async () => {
-  const gh = createFakeGh({ routes: {
-    'repos/acme/widgets/pulls/42/comments': ghJson([]),
-    'repos/acme/widgets/issues/42/comments': ghJson([]),
-    'repos/acme/widgets/pulls/42/reviews': ghJson([
-      { id: 8, user: { login: 'reviewer', avatar_url: 'https://avatars.githubusercontent.com/u/1' }, body: '**Looks good**', submitted_at: '2026-09-10T10:00:00Z', state: 'APPROVED', html_url: 'https://github.com/review/8' },
-      { id: 9, user: null, body: 'draft', state: 'PENDING', html_url: 'https://github.com/review/9' },
-    ]),
-  }, graphql: [GH_THREADS_PAGE] })
+it('fetches submitted reviews and preserves avatars', async () => {
+  const gh = createFakeGh({
+    routes: {
+      'repos/acme/widgets/pulls/42/comments': ghJson([]),
+      'repos/acme/widgets/issues/42/comments': ghJson([]),
+      'repos/acme/widgets/pulls/42/reviews': ghJson([
+        {
+          id: 8,
+          user: { login: 'reviewer', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
+          body: '**Looks good**',
+          submitted_at: '2026-09-10T10:00:00Z',
+          state: 'APPROVED',
+          html_url: 'https://github.com/review/8',
+        },
+        { id: 9, user: null, body: 'draft', state: 'PENDING', html_url: 'https://github.com/review/9' },
+      ]),
+    },
+    graphql: [GH_THREADS_PAGE],
+  })
   const { payload } = await fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)
   expect(payload.reviews).toHaveLength(1)
-  expect(payload.reviews?.[0]).toMatchObject({ state: 'APPROVED', avatarUrl: 'https://avatars.githubusercontent.com/u/1', body: '**Looks good**' })
+  expect(payload.reviews?.[0]).toMatchObject({
+    state: 'APPROVED',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/1',
+    body: '**Looks good**',
+  })
 })
 
-
 it('preserves review comment avatars and handles deleted issue authors', () => {
-  expect(mapReviewComment({ ...GH_REVIEW_COMMENTS[0],
-    user: { login: 'reviewer', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
-  }, new Set())).toMatchObject({ author: 'reviewer', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })
+  expect(
+    mapReviewComment(
+      {
+        ...GH_REVIEW_COMMENTS[0],
+        user: { login: 'reviewer', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
+      },
+      new Set()
+    )
+  ).toMatchObject({ author: 'reviewer', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })
   const deleted = mapIssueComment({ ...GH_ISSUE_COMMENTS[0], user: null })
   expect(deleted.author).toBe('ghost')
   expect(deleted).not.toHaveProperty('avatarUrl')
 })
 
 it('keeps comment text available when thread resolution throws a non-Error value', async () => {
-  const gh = createFakeGh({ routes: {
-    'repos/acme/widgets/pulls/42/comments': ghJson(GH_REVIEW_COMMENTS),
-    'repos/acme/widgets/issues/42/comments': ghJson([]),
-    'repos/acme/widgets/pulls/42/reviews': ghJson([]),
-  } })
-  gh.graphql = async () => { throw 'offline' }
+  const gh = createFakeGh({
+    routes: {
+      'repos/acme/widgets/pulls/42/comments': ghJson(GH_REVIEW_COMMENTS),
+      'repos/acme/widgets/issues/42/comments': ghJson([]),
+      'repos/acme/widgets/pulls/42/reviews': ghJson([]),
+    },
+  })
+  gh.graphql = async () => {
+    throw 'offline'
+  }
   const { payload, warnings } = await fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)
   expect(warnings).toEqual(['resolved state unavailable: offline'])
   expect(payload.reviewComments[0]?.body).toBe('Why not `a() * b()`?')

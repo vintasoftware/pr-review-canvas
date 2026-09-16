@@ -79,7 +79,10 @@ describe('POST /api/prs/:n/chat', () => {
   it('sends the line range the reader selected to the agent', async () => {
     await warmDerived()
     await (
-      await sendChat({ message: 'why?', context: { kind: 'lines', path: 'src/app.ts', side: 'new', start: 2, end: 3 } })
+      await sendChat({
+        message: 'why?',
+        context: { kind: 'lines', path: 'src/app.ts', side: 'new', start: 2, end: 3 },
+      })
     ).text()
     expect(runner.runs[0]?.prompt).toContain('## Context: src/app.ts lines 2–3')
   })
@@ -124,7 +127,11 @@ describe('POST /api/prs/:n/chat', () => {
   it('rejects a body that is not a message with a context', async () => {
     const bad = await sendChat({ message: '' })
     expect(bad.status).toBe(400)
-    const notJson = await createApp(t.ctx).request('/api/prs/42/chat', { method: 'POST', headers: POST, body: '{' })
+    const notJson = await createApp(t.ctx).request('/api/prs/42/chat', {
+      method: 'POST',
+      headers: POST,
+      body: '{',
+    })
     expect(notJson.status).toBe(400)
   })
 
@@ -167,7 +174,9 @@ describe('the chat thread routes', () => {
   })
 
   it('refuses a thread name that is not one of this pull request', async () => {
-    const res = await createApp(t.ctx).request('/api/prs/42/chat/threads/..%2F..%2Fetc/history', { headers: LOCAL })
+    const res = await createApp(t.ctx).request('/api/prs/42/chat/threads/..%2F..%2Fetc/history', {
+      headers: LOCAL,
+    })
     expect(res.status).toBe(404)
   })
 
@@ -260,7 +269,10 @@ describe('the settings routes', () => {
   })
 
   it('refuses to probe an agent it does not know', async () => {
-    const res = await createApp(t.ctx).request('/api/settings/agents/gemini/probe', { method: 'POST', headers: POST })
+    const res = await createApp(t.ctx).request('/api/settings/agents/gemini/probe', {
+      method: 'POST',
+      headers: POST,
+    })
     expect(res.status).toBe(400)
   })
 })
@@ -327,7 +339,9 @@ describe('the health check', () => {
       await createApp(t.ctx).request('/api/prs/42', { headers: LOCAL })
     )
     expect(bundle.chat).toEqual({ enabled: false, acpx: false, agent: 'claude', model: null })
-    expect(bundle.warnings).toContain('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
+    expect(bundle.warnings).toContain(
+      'acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on'
+    )
   })
 })
 

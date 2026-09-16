@@ -71,7 +71,9 @@ function configuredLayersMarkdown(ctx: GenerationContext): string {
   return ctx.defaultLayers
     .map((l, i) => {
       const paths =
-        l.paths === undefined || l.paths.length === 0 ? '' : ` Path hints: ${l.paths.map(p => `\`${p}\``).join(', ')}.`
+        l.paths === undefined || l.paths.length === 0
+          ? ''
+          : ` Path hints: ${l.paths.map(p => `\`${p}\``).join(', ')}.`
       return `${i + 1}. \`${l.id}\` **${l.title}** — ${l.description}${paths}`
     })
     .join('\n')
@@ -196,7 +198,11 @@ export function schemaMarkdown(ctx: GenerationContext): string {
 }
 
 /** Selects one task and fills its data and format placeholders before the generator sees it. */
-export function renderPrompt(ctx: GenerationContext, patches: Record<string, string>, sources: PromptSources): string {
+export function renderPrompt(
+  ctx: GenerationContext,
+  patches: Record<string, string>,
+  sources: PromptSources
+): string {
   const tokens: Record<string, string> = {
     TARGET_WORD: ctx.target.kind === 'pr' ? 'pull request' : 'change set',
     META: metaMarkdown(ctx),

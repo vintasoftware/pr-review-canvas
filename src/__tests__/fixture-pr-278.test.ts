@@ -26,7 +26,8 @@ const artifact: ReviewArtifact = ReviewArtifactSchema.parse(
 )
 const git = createGit(REPO_ROOT)
 const liveHead = await git.revParse('refs/pr/278/head').catch(() => null)
-const liveDiffAvailable = liveHead === artifact.pr.headSha && (await git.commitExists(artifact.pr.mergeBaseSha))
+const liveDiffAvailable =
+  liveHead === artifact.pr.headSha && (await git.commitExists(artifact.pr.mergeBaseSha))
 
 const isTestPath = (p: string): boolean => /(\.test\.|\.spec\.|__tests__\/)/.test(p)
 
@@ -124,7 +125,10 @@ describe('PR #278 fixture', () => {
       }
     }
     // No fenced diagram anywhere else: one source, the `diagram` field.
-    const texts = [artifact.summary, ...artifact.layers.flatMap(l => [l.rationale, l.decisions, l.checkByHand])]
+    const texts = [
+      artifact.summary,
+      ...artifact.layers.flatMap(l => [l.rationale, l.decisions, l.checkByHand]),
+    ]
     expect(texts.filter(t => t?.includes('```mermaid'))).toEqual([])
   })
 
@@ -198,8 +202,11 @@ describe('PR #278 fixture', () => {
     }
   })
 
-  it.skipIf(!liveDiffAvailable)('lists exactly the files and hunks of the live diff of refs/pr/278/head', async () => {
-    const live = (await collectDiffs(git, artifact.pr.mergeBaseSha, artifact.pr.headSha)).map(toFileEntry)
-    expect(live).toEqual(artifact.files)
-  })
+  it.skipIf(!liveDiffAvailable)(
+    'lists exactly the files and hunks of the live diff of refs/pr/278/head',
+    async () => {
+      const live = (await collectDiffs(git, artifact.pr.mergeBaseSha, artifact.pr.headSha)).map(toFileEntry)
+      expect(live).toEqual(artifact.files)
+    }
+  )
 })

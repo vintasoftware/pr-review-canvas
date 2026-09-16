@@ -127,7 +127,7 @@ tr.thread.hidden-thread .x {
   font-size: 12px;
 }
 tr.is-approx .x::before {
-  content: "near line ";
+  content: 'near line ';
   color: var(--fg-muted);
   font-size: 11px;
 }

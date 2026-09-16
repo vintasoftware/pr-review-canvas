@@ -190,7 +190,8 @@ export function applyDismissed(root, points, state, ctx) {
   }
   const host = root.querySelector('.dismissed-list')
   if (host !== null) {
-    const expanded = host.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded') === 'true'
+    const expanded =
+      host.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded') === 'true'
     const template = document.createElement('template')
     template.innerHTML = dismissedListHtml(points, state, ctx, expanded)
     const next = template.content.firstElementChild

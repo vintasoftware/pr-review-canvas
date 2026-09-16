@@ -103,10 +103,12 @@ describe('commentRequest', () => {
   })
 
   it('maps a reply and a PR-level comment', () => {
-    expect(commentRequest(TEST_REPO, 42, HEAD_SHA, { kind: 'reply', inReplyToId: 1001, body: 'ok' })).toEqual({
-      path: 'repos/acme/widgets/pulls/42/comments/1001/replies',
-      body: { body: 'ok' },
-    })
+    expect(commentRequest(TEST_REPO, 42, HEAD_SHA, { kind: 'reply', inReplyToId: 1001, body: 'ok' })).toEqual(
+      {
+        path: 'repos/acme/widgets/pulls/42/comments/1001/replies',
+        body: { body: 'ok' },
+      }
+    )
     expect(commentRequest(TEST_REPO, 42, HEAD_SHA, { kind: 'issue', body: 'ok' })).toEqual({
       path: 'repos/acme/widgets/issues/42/comments',
       body: { body: 'ok' },
@@ -154,7 +156,10 @@ describe('postComment', () => {
     const gh = createFakeGh({
       postRoutes: { 'repos/acme/widgets/issues/42/comments': ghPost(() => GH_POSTED_ISSUE_COMMENT) },
     })
-    const result = await postComment(gh, TEST_REPO, 42, HEAD_SHA, { kind: 'issue', body: 'Overall looks fine' })
+    const result = await postComment(gh, TEST_REPO, 42, HEAD_SHA, {
+      kind: 'issue',
+      body: 'Overall looks fine',
+    })
     expect(result).toEqual({
       kind: 'issue',
       comment: {
@@ -170,7 +175,9 @@ describe('postComment', () => {
 
   it('reports a path the fake does not serve, like a 404 from GitHub', async () => {
     const gh = createFakeGh({})
-    await expect(postComment(gh, TEST_REPO, 42, HEAD_SHA, { kind: 'issue', body: 'x' })).rejects.toThrow('HTTP 404')
+    await expect(postComment(gh, TEST_REPO, 42, HEAD_SHA, { kind: 'issue', body: 'x' })).rejects.toThrow(
+      'HTTP 404'
+    )
   })
 
   it('passes the refusal from GitHub on to the caller', async () => {

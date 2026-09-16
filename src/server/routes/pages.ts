@@ -12,7 +12,9 @@ export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Pr
 }
 
 /** The `?skin` and `?theme` of one request, which pick an appearance for that load alone. */
-export function appearanceQuery(c: { req: { query: (name: string) => string | undefined } }): AppearanceQuery {
+export function appearanceQuery(c: {
+  req: { query: (name: string) => string | undefined }
+}): AppearanceQuery {
   return { skin: c.req.query('skin'), theme: c.req.query('theme') }
 }
 

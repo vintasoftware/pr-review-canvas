@@ -86,7 +86,9 @@ describe('wireQuickQuestions', () => {
 
   it('opens on the context chip too, and "ask something else" sends no question', () => {
     el('#chip').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
-    items().find(item => item.textContent === ASK_SOMETHING_ELSE)?.click()
+    items()
+      .find(item => item.textContent === ASK_SOMETHING_ELSE)
+      ?.click()
     expect(picked).toEqual([[{ kind: 'file', path: 'src/app.ts' }, null]])
   })
 
@@ -204,18 +206,17 @@ describe('wireQuickQuestions in the odd cases', () => {
 
   it('places itself under the command it opened on', () => {
     const trigger = el('[data-ask-path]')
-    trigger.getBoundingClientRect = () =>
-      /** @type {DOMRect} */ ({
-        left: 120,
-        bottom: 40,
-        top: 20,
-        right: 200,
-        width: 80,
-        height: 20,
-        x: 120,
-        y: 20,
-        toJSON: () => ({}),
-      })
+    trigger.getBoundingClientRect = () => /** @type {DOMRect} */ ({
+      left: 120,
+      bottom: 40,
+      top: 20,
+      right: 200,
+      width: 80,
+      height: 20,
+      x: 120,
+      y: 20,
+      toJSON: () => ({}),
+    })
     trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     expect(menuEl().style.left).toBe('120px')
     expect(menuEl().style.top).toBe('44px')

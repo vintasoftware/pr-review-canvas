@@ -79,7 +79,9 @@ export const PostCommentInputSchema = z.discriminatedUnion('kind', [
 export type PostCommentInput = z.infer<typeof PostCommentInputSchema>
 
 /** The posted comment: a review comment for inline and reply, an issue comment for PR-level. */
-export type PostCommentResult = { kind: 'review'; comment: ReviewComment } | { kind: 'issue'; comment: IssueComment }
+export type PostCommentResult =
+  | { kind: 'review'; comment: ReviewComment }
+  | { kind: 'issue'; comment: IssueComment }
 
 // The proposed-comment block a chat answer can carry. The parser lives in
 // static/js/proposed-comment.js so the browser loads the same code without a bundler.

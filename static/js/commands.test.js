@@ -115,7 +115,11 @@ describe('runControl', () => {
     /** @type {{ busy: string | null, disabled: boolean, text: string } | null} */
     let during = null
     const result = await runControl(label, async () => {
-      during = { busy: label.getAttribute('aria-busy'), disabled: box.disabled, text: label.textContent ?? '' }
+      during = {
+        busy: label.getAttribute('aria-busy'),
+        disabled: box.disabled,
+        text: label.textContent ?? '',
+      }
       return 'ok'
     })
     expect(result).toBe('ok')

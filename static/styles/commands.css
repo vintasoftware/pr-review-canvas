@@ -14,10 +14,10 @@
   line-height: inherit;
 }
 .cmd::before {
-  content: "[ ";
+  content: '[ ';
 }
 .cmd::after {
-  content: " ]";
+  content: ' ]';
 }
 .cmd:hover {
   text-decoration: underline;
@@ -25,12 +25,12 @@
   text-decoration-thickness: 2px;
 }
 .cmd:disabled,
-.cmd[aria-disabled="true"] {
+.cmd[aria-disabled='true'] {
   color: var(--fg-dim);
   cursor: not-allowed;
   text-decoration: none;
 }
-.cmd[aria-busy="true"] {
+.cmd[aria-busy='true'] {
   color: var(--fg-muted);
   cursor: progress;
 }

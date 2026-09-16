@@ -10,7 +10,11 @@ const RepoBodySchema = z.object({
 })
 
 /** What a page assumes before the probe answers: posting is tried and GitHub decides. */
-export const UNKNOWN_CAPABILITIES: Capabilities = { canComment: 'unknown', tokenKind: 'unprobed', login: null }
+export const UNKNOWN_CAPABILITIES: Capabilities = {
+  canComment: 'unknown',
+  tokenKind: 'unprobed',
+  login: null,
+}
 
 export const SCOPE_HINT = 'gh auth refresh -h github.com -s repo'
 

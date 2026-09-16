@@ -43,7 +43,9 @@ describe('error cards', () => {
 
   it('falls back to the generic card for an unknown code and escapes the message', () => {
     const unknown = /** @type {'INTERNAL'} */ ('SOMETHING_NEW')
-    expect(errorCardFor({ code: unknown, message: 'x' })).toEqual(errorCardFor({ code: 'INTERNAL', message: '' }))
+    expect(errorCardFor({ code: unknown, message: 'x' })).toEqual(
+      errorCardFor({ code: 'INTERNAL', message: '' })
+    )
     document.body.innerHTML = errorCardHtml({ code: unknown, message: '<b>bold</b>' })
     expect(document.querySelector('h2')?.textContent).toBe('Something went wrong SOMETHING_NEW')
     expect(document.querySelector('.body p')?.innerHTML).toBe('&lt;b&gt;bold&lt;/b&gt;')

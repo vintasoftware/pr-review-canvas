@@ -5,7 +5,13 @@ import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, readCanvasZip } from '../canvas/z
 import type { ImportResult, PrBundle, SharedCanvasFetchResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
-import { createFakeGit, type FakeGitOptions, makeTestContext, TEST_REPO, type TestContext } from '../testing/fakes.js'
+import {
+  createFakeGit,
+  type FakeGitOptions,
+  makeTestContext,
+  TEST_REPO,
+  type TestContext,
+} from '../testing/fakes.js'
 import {
   BASE_SHA,
   GH_ISSUE_COMMENTS,
@@ -22,7 +28,8 @@ import { createApp } from './app.js'
 const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, origin: 'http://localhost:3010', 'sec-fetch-site': 'same-origin' }
 const OLD_SHA = 'e'.repeat(40)
-const FILE_URL = 'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip'
+const FILE_URL =
+  'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip'
 
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T
@@ -135,7 +142,9 @@ describe('transfer routes', () => {
       t = await contextFor()
       await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
       const res = await createApp(t.ctx).request(`/api/prs/42/export?headSha=${OLD_SHA}`, { headers: LOCAL })
-      expect(res.headers.get('content-disposition')).toContain('pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip')
+      expect(res.headers.get('content-disposition')).toContain(
+        'pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip'
+      )
       const bad = await createApp(t.ctx).request('/api/prs/42/export?headSha=nope', { headers: LOCAL })
       expect(bad.status).toBe(400)
     })
@@ -144,7 +153,9 @@ describe('transfer routes', () => {
       t = await contextFor()
       const res = await createApp(t.ctx).request('/api/prs/42/export', { headers: LOCAL })
       expect(res.status).toBe(404)
-      expect(await json<{ error: { code: string } }>(res)).toMatchObject({ error: { code: 'CANVAS_NOT_FOUND' } })
+      expect(await json<{ error: { code: string } }>(res)).toMatchObject({
+        error: { code: 'CANVAS_NOT_FOUND' },
+      })
     })
   })
 
@@ -216,7 +227,8 @@ describe('transfer routes', () => {
     it('rejects a file over the ZIP limit even when the multipart envelope is within its limit', async () => {
       t = await contextFor()
       const res = await createApp(t.ctx).request('/api/prs/42/import', {
-        method: 'POST', headers: SAME_ORIGIN,
+        method: 'POST',
+        headers: SAME_ORIGIN,
         body: upload(new Uint8Array(CANVAS_ZIP_MAX_BYTES + 1)),
       })
       expect(res.status).toBe(413)
@@ -260,7 +272,9 @@ describe('transfer routes', () => {
         body: upload(new Uint8Array([1])),
       })
       expect(big.status).toBe(413)
-      expect(await json<{ error: { code: string } }>(big)).toMatchObject({ error: { code: 'CANVAS_TOO_LARGE' } })
+      expect(await json<{ error: { code: string } }>(big)).toMatchObject({
+        error: { code: 'CANVAS_TOO_LARGE' },
+      })
       const noFile = await app.request('/api/prs/42/import', {
         method: 'POST',
         headers: SAME_ORIGIN,
@@ -284,7 +298,10 @@ describe('transfer routes', () => {
     it('keeps an imported stale canvas readable when its commits are absent from the clone', async () => {
       const { createFakeGh } = await import('../testing/fakes.js')
       t = await makeTestContext({
-        git: gitWithHistory({ refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA }, ancestors: {} }),
+        git: gitWithHistory({
+          refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
+          ancestors: {},
+        }),
         gh: createFakeGh(ghWithBody('no attachment here')),
       })
       await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
@@ -368,7 +385,10 @@ describe('transfer routes', () => {
       const app = createApp(t.ctx)
       await app.request('/api/prs/42', { headers: LOCAL })
       answer = new Response(bytes.slice().buffer as ArrayBuffer, { status: 200 })
-      const res = await app.request('/api/prs/42/shared-canvas/fetch', { method: 'POST', headers: SAME_ORIGIN })
+      const res = await app.request('/api/prs/42/shared-canvas/fetch', {
+        method: 'POST',
+        headers: SAME_ORIGIN,
+      })
       expect(res.status).toBe(200)
       const body = await json<SharedCanvasFetchResponse>(res)
       expect(body.imported).toBe(true)

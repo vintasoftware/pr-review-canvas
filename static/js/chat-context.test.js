@@ -39,8 +39,12 @@ describe('chatContextLabel', () => {
   it('names the target exactly', () => {
     expect(chatContextLabel(WHOLE_PR)).toBe('whole PR')
     expect(chatContextLabel({ kind: 'file', path: 'src/app.ts' })).toBe('src/app.ts')
-    expect(chatContextLabel({ kind: 'lines', path: 'a.ts', side: 'new', start: 40, end: 52 })).toBe('a.ts lines 40–52')
-    expect(chatContextLabel({ kind: 'lines', path: 'a.ts', side: 'new', start: 7, end: 7 })).toBe('a.ts line 7')
+    expect(chatContextLabel({ kind: 'lines', path: 'a.ts', side: 'new', start: 40, end: 52 })).toBe(
+      'a.ts lines 40–52'
+    )
+    expect(chatContextLabel({ kind: 'lines', path: 'a.ts', side: 'new', start: 7, end: 7 })).toBe(
+      'a.ts line 7'
+    )
     expect(chatContextLabel({ kind: 'lines', path: 'a.ts', side: 'old', start: 7, end: 7 })).toBe(
       'a.ts line 7 (old side)'
     )
@@ -71,12 +75,12 @@ describe('chatContextFromElement and chatContextAttrs', () => {
   })
 
   it('falls back to the file when the line numbers make no range', () => {
-    expect(chatContextFromElement(el({ 'data-ask-path': 'a.ts', 'data-ask-start': '0', 'data-ask-end': '2' }))).toEqual(
-      { kind: 'file', path: 'a.ts' }
-    )
-    expect(chatContextFromElement(el({ 'data-ask-path': 'a.ts', 'data-ask-start': '5', 'data-ask-end': '2' }))).toEqual(
-      { kind: 'file', path: 'a.ts' }
-    )
+    expect(
+      chatContextFromElement(el({ 'data-ask-path': 'a.ts', 'data-ask-start': '0', 'data-ask-end': '2' }))
+    ).toEqual({ kind: 'file', path: 'a.ts' })
+    expect(
+      chatContextFromElement(el({ 'data-ask-path': 'a.ts', 'data-ask-start': '5', 'data-ask-end': '2' }))
+    ).toEqual({ kind: 'file', path: 'a.ts' })
   })
 
   it('escapes a path that would otherwise break out of the attribute', () => {
@@ -112,7 +116,9 @@ describe('attention-point context', () => {
   })
 
   it('names the point in the chip when the title resolves, and stays generic otherwise', () => {
-    expect(chatContextLabel(point, undefined, () => 'Sum instead of product')).toBe('point · Sum instead of product')
+    expect(chatContextLabel(point, undefined, () => 'Sum instead of product')).toBe(
+      'point · Sum instead of product'
+    )
     expect(chatContextLabel(point)).toBe('attention point')
   })
 

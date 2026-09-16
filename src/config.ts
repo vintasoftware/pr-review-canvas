@@ -47,7 +47,11 @@ export async function resolveRepoRoot(git: Git): Promise<string> {
     return await git.topLevel()
   } catch (err) {
     if (err instanceof GitError) {
-      throw new ConfigError('NOT_A_REPO', 'not inside a git repository', 'run from a clone or pass --repo <dir>')
+      throw new ConfigError(
+        'NOT_A_REPO',
+        'not inside a git repository',
+        'run from a clone or pass --repo <dir>'
+      )
     }
     throw err
   }
@@ -72,7 +76,11 @@ export function parseGithubRemote(url: string): Repo | null {
 export async function resolveGithubRepo(git: Git): Promise<Repo> {
   const url = await git.remoteUrl('origin')
   if (url === null) {
-    throw new ConfigError('NO_ORIGIN', 'the repository has no "origin" remote', 'add one that points at GitHub')
+    throw new ConfigError(
+      'NO_ORIGIN',
+      'the repository has no "origin" remote',
+      'add one that points at GitHub'
+    )
   }
   const repo = parseGithubRemote(url)
   if (repo === null) {
@@ -90,7 +98,11 @@ export function parseChatOverrides(flags: ServeFlags): SettingsOverrides {
   const overrides: SettingsOverrides = {}
   if (flags.agent !== undefined) {
     if (!isChatAgent(flags.agent)) {
-      throw new ConfigError('BAD_REQUEST', `unknown chat agent: ${flags.agent}`, 'use --agent claude or --agent codex')
+      throw new ConfigError(
+        'BAD_REQUEST',
+        `unknown chat agent: ${flags.agent}`,
+        'use --agent claude or --agent codex'
+      )
     }
     overrides.agent = flags.agent
   }

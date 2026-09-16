@@ -34,7 +34,10 @@ test('opens the editor below the code line and links to the posted comment', asy
   await expect(link).toHaveAttribute('href', postedUrl)
 })
 
-test('replaces point posting buttons with comment links across dismissal and reload', async ({ page, reviewUrl }) => {
+test('replaces point posting buttons with comment links across dismissal and reload', async ({
+  page,
+  reviewUrl,
+}) => {
   await page.goto(reviewUrl)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await card.locator('[data-act="point-post"]').click()
@@ -61,7 +64,9 @@ test('previews Markdown and preserves the comment draft', async ({ page, reviewU
   await page.goto(reviewUrl)
   await page.locator('[data-act="pr-comment"]').click()
   const editor = page.locator('.conversation .composer-box')
-  await editor.locator('textarea').fill('**Ready**\n\n- [x] checked\n\n<details><summary>Evidence</summary>Tests pass</details>')
+  await editor
+    .locator('textarea')
+    .fill('**Ready**\n\n- [x] checked\n\n<details><summary>Evidence</summary>Tests pass</details>')
   await editor.locator('[data-act="markdown-preview"]').click()
   await expect(editor.locator('textarea')).toBeHidden()
   await expect(editor.locator('.markdown-preview strong')).toHaveText('Ready')

@@ -16,7 +16,9 @@ import {
 
 describe('esc', () => {
   it('escapes the five HTML metacharacters and stringifies other values', () => {
-    expect(esc(`<a href="x" title='y'>&</a>`)).toBe('&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;')
+    expect(esc(`<a href="x" title='y'>&</a>`)).toBe(
+      '&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;'
+    )
     expect(esc(12)).toBe('12')
   })
 })
@@ -99,16 +101,20 @@ describe('copyToClipboard', () => {
     )
     await copyToClipboard('/pr-review-canvas 7', clipboard)
     expect(written).toEqual(['/pr-review-canvas 7'])
-    await expect(copyToClipboard('x', null)).rejects.toThrow('clipboard is not available; copy the command by hand')
-    await expect(copyToClipboard('x', /** @type {Clipboard} */ (/** @type {unknown} */ ({})))).rejects.toThrow(
-      /not available/
+    await expect(copyToClipboard('x', null)).rejects.toThrow(
+      'clipboard is not available; copy the command by hand'
     )
+    await expect(
+      copyToClipboard('x', /** @type {Clipboard} */ (/** @type {unknown} */ ({})))
+    ).rejects.toThrow(/not available/)
   })
 })
 
 describe('avatarHtml', () => {
   it('uses GitHub avatar images and falls back to initials for missing or untrusted URLs', () => {
-    expect(avatarHtml({ author: 'octocat', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })).toContain('<img')
+    expect(
+      avatarHtml({ author: 'octocat', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })
+    ).toContain('<img')
     expect(avatarHtml({ author: 'octocat', avatarUrl: 'https://example.com/tracker' })).not.toContain('<img')
     expect(avatarHtml({ author: 'octocat', avatarUrl: '' })).toContain('OC')
   })

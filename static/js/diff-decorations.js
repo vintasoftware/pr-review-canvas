@@ -186,7 +186,9 @@ export function applyDecorations(card, key, data) {
     }
   }
   for (const t of [...data.threads].reverse()) {
-    count(insertThreadRow(card, key, t, { now: data.now, hidden: data.hiddenThreads?.has(t.root.id) ?? false }))
+    count(
+      insertThreadRow(card, key, t, { now: data.now, hidden: data.hiddenThreads?.has(t.root.id) ?? false })
+    )
   }
   for (const p of [...data.points].reverse()) {
     count(

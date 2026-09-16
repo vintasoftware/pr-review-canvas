@@ -52,7 +52,11 @@ describe('createReviewSession', () => {
   it('shows a reviewed change at once and keeps the answer the server sends back', async () => {
     /** @type {Array<import('./contract-types.js').PrState>} */
     const seen = []
-    const served = { ...BASE, reviewed: { 'layer:layer-1': /** @type {const} */ (true) }, updatedAt: 'server' }
+    const served = {
+      ...BASE,
+      reviewed: { 'layer:layer-1': /** @type {const} */ (true) },
+      updatedAt: 'server',
+    }
     const s = session(
       {
         putReviewed: async () => {
@@ -278,7 +282,14 @@ describe('changes that overlap', () => {
           }),
         postComment: async () => ({
           kind: /** @type {const} */ ('issue'),
-          comment: { id: 5001, author: 'o', body: 'x', createdAt: 'n', updatedAt: 'n', url: 'https://x.test' },
+          comment: {
+            id: 5001,
+            author: 'o',
+            body: 'x',
+            createdAt: 'n',
+            updatedAt: 'n',
+            url: 'https://x.test',
+          },
           state: posted,
         }),
       },

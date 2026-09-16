@@ -138,9 +138,9 @@ Customize generation and AI Chat prompts with the `prompts` map in your project'
 
 ```yaml
 prompts:
-  generation-format.md: review-prompts/generation-format.md
-  generation-surfacing.md: review-prompts/generation-surfacing.md
-  chat-seed.md: review-prompts/chat-seed.md
+    generation-format.md: review-prompts/generation-format.md
+    generation-surfacing.md: review-prompts/generation-surfacing.md
+    chat-seed.md: review-prompts/chat-seed.md
 ```
 
 Copy the installed templates to start editing (for an npm global install):
@@ -174,8 +174,10 @@ corepack pnpm verify
 corepack pnpm start --repo /path/to/your-project
 ```
 
-The pre-commit hook runs `pnpm test` and blocks the commit if tests fail. Run `pnpm hooks:install`
-once per clone to enable it.
+The pre-commit hook runs `pnpm precommit`: lint, formatting, strict type checks, and tests.
+Any failure blocks the commit. Run `pnpm hooks:install`
+once per clone to enable it. Use `pnpm lint:fix` and `pnpm format` to apply automatic fixes.
+CI runs the same checks through `pnpm verify`, with coverage executing the unit tests once.
 
 Run the full `pnpm verify` before pushing. Keep branch coverage at least 96% when adding or
 changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful failure and boundary

@@ -66,7 +66,10 @@ function decode(entry: Uint8Array | undefined, name: string, issues: string[]): 
  */
 export function readCanvasZip(bytes: Uint8Array): CanvasZipContents {
   if (bytes.length > CANVAS_ZIP_MAX_BYTES) {
-    throw new CanvasZipError('CANVAS_TOO_LARGE', `the canvas zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`)
+    throw new CanvasZipError(
+      'CANVAS_TOO_LARGE',
+      `the canvas zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`
+    )
   }
   if (!hasZipMagic(bytes)) {
     throw new CanvasZipError('CANVAS_INVALID', 'this file is not a zip', [

@@ -6,7 +6,9 @@ import type { AppContext } from './context.js'
 export function startServer(ctx: AppContext, log: (line: string) => void): { close: () => void } {
   const app = createApp(ctx)
   const server = serve({ fetch: app.fetch, port: ctx.config.port, hostname: '127.0.0.1' }, info => {
-    log(`pr-review ${ctx.version} · http://localhost:${info.port}/ · ${ctx.config.repo.owner}/${ctx.config.repo.name}`)
+    log(
+      `pr-review ${ctx.version} · http://localhost:${info.port}/ · ${ctx.config.repo.owner}/${ctx.config.repo.name}`
+    )
     log(`data dir ${ctx.config.dataDir}`)
     if (ctx.fixtureArtifact !== null) {
       log(`fixture canvas ${ctx.config.fixtureCanvasPath ?? ''} (dev only): every PR reports ready`)

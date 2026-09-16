@@ -1,2 +1,2 @@
 #!/bin/sh
-exec pnpm test
+exec pnpm precommit

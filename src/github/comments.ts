@@ -110,9 +110,12 @@ export async function fetchComments(
     fetchAllPages(gh, `${base}/issues/${number}/comments`),
   ])
   const reviews = (await fetchAllPages(gh, `${base}/pulls/${number}/reviews`)).flatMap(raw => {
-    const review = GhIssueCommentSchema.omit({ created_at: true }).extend({
-      submitted_at: z.string().nullable().optional(), state: z.string(),
-    }).parse(raw)
+    const review = GhIssueCommentSchema.omit({ created_at: true })
+      .extend({
+        submitted_at: z.string().nullable().optional(),
+        state: z.string(),
+      })
+      .parse(raw)
     if (!review.submitted_at || review.state === 'PENDING') return []
     return [{ ...mapIssueComment({ ...review, created_at: review.submitted_at }), state: review.state }]
   })

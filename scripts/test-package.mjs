@@ -11,7 +11,10 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const temp = await mkdtemp(path.join(os.tmpdir(), 'pr-review-package-'))
 const run = (command, args, cwd = temp) => {
   const result = spawnSync(command, args, {
-    cwd, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd,
+    encoding: 'utf8',
+    timeout: 120_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
   if (result.error) throw result.error
   assert.equal(result.status, 0, `${command} failed: ${result.stderr}`)
@@ -22,13 +25,32 @@ let stopped
 try {
   const [pack] = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', temp], root))
   const files = pack.files.map(file => file.path)
-  for (const required of ['bin/pr-review.mjs', 'src/cli.ts', 'static/styles.css',
-    'prompts/chat-seed.md', 'skills/pr-review-canvas/SKILL.md', 'docs/reference.md', 'LICENSE']) {
+  for (const required of [
+    'bin/pr-review.mjs',
+    'src/cli.ts',
+    'static/styles.css',
+    'prompts/chat-seed.md',
+    'skills/pr-review-canvas/SKILL.md',
+    'docs/reference.md',
+    'LICENSE',
+  ]) {
     assert(files.includes(required), `Missing package file: ${required}`)
   }
-  assert(!files.some(file => /(?:\.test\.|__tests__|__fixtures__|^src\/testing\/|^\.github\/|^\.pr-review\/)/.test(file)),
-    'Package contains development or local data files')
-  run('npm', ['install', '--prefix', temp, '--omit=dev', '--no-audit', '--no-fund', path.join(temp, pack.filename)])
+  assert(
+    !files.some(file =>
+      /(?:\.test\.|__tests__|__fixtures__|^src\/testing\/|^\.github\/|^\.pr-review\/)/.test(file)
+    ),
+    'Package contains development or local data files'
+  )
+  run('npm', [
+    'install',
+    '--prefix',
+    temp,
+    '--omit=dev',
+    '--no-audit',
+    '--no-fund',
+    path.join(temp, pack.filename),
+  ])
   const cli = path.join(temp, 'node_modules', '.bin', 'pr-review')
   const help = spawnSync(cli, ['--help'], { cwd: temp, encoding: 'utf8', timeout: 15_000 })
   assert.equal(help.status, 0)
@@ -40,19 +62,26 @@ try {
   run(cli, ['install-skill'])
   for (const directory of ['.claude', '.agents']) {
     assert(!(await lstat(path.join(temp, directory, 'skills/pr-review-canvas'))).isSymbolicLink())
-    assert.match(await readFile(path.join(temp, directory, 'skills/pr-review-canvas/SKILL.md'), 'utf8'), /pr-review/)
+    assert.match(
+      await readFile(path.join(temp, directory, 'skills/pr-review-canvas/SKILL.md'), 'utf8'),
+      /pr-review/
+    )
   }
   await appendFile(path.join(temp, '.agents/skills/pr-review-canvas/SKILL.md'), '\nlocal edit\n')
   const probe = createServer()
   probe.listen(0, '127.0.0.1')
   await once(probe, 'listening')
   const port = probe.address().port
-  await new Promise((resolve, reject) => probe.close(error => error ? reject(error) : resolve()))
+  await new Promise((resolve, reject) => probe.close(error => (error ? reject(error) : resolve())))
   server = spawn(cli, ['serve', '--port', String(port)], { cwd: temp, stdio: ['ignore', 'pipe', 'pipe'] })
   stopped = once(server, 'exit')
   let logs = ''
-  server.stdout.on('data', chunk => { logs += chunk })
-  server.stderr.on('data', chunk => { logs += chunk })
+  server.stdout.on('data', chunk => {
+    logs += chunk
+  })
+  server.stderr.on('data', chunk => {
+    logs += chunk
+  })
   const origin = await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => finish(new Error(`Server startup timed out: ${logs}`)), 15_000)
     const poll = setInterval(() => {
@@ -74,8 +103,15 @@ try {
   })
   assert.match(logs, /pr-review doctor: outdated or modified skill/)
   assert.match(logs, /pr-review install-skill/)
-  for (const route of ['/', '/static/styles.css', '/static/js/app.js', '/vendor/marked.js',
-    '/vendor/purify.js', '/vendor/highlight.js', '/vendor/mermaid/mermaid.esm.min.mjs']) {
+  for (const route of [
+    '/',
+    '/static/styles.css',
+    '/static/js/app.js',
+    '/vendor/marked.js',
+    '/vendor/purify.js',
+    '/vendor/highlight.js',
+    '/vendor/mermaid/mermaid.esm.min.mjs',
+  ]) {
     const response = await fetch(`${origin}${route}`, { signal: AbortSignal.timeout(5_000) })
     assert.equal(response.status, 200, `${route}: ${await response.text()}`)
   }
@@ -84,7 +120,11 @@ try {
   if (server && server.exitCode === null) {
     server.kill('SIGTERM')
     const timeout = setTimeout(() => server.kill('SIGKILL'), 5_000)
-    try { await stopped } finally { clearTimeout(timeout) }
+    try {
+      await stopped
+    } finally {
+      clearTimeout(timeout)
+    }
   }
   await rm(temp, { recursive: true, force: true })
 }

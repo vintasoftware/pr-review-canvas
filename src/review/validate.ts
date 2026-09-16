@@ -152,7 +152,11 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
       f.folds?.forEach((fold, k) => {
         const where = `${at}.files.${j}.folds.${k}.title`
         if (fold.title.length > caps.pointTitle) {
-          report.add('TEXT_TOO_LONG', where, `${where}: ${fold.title.length} visible chars, cap ${caps.pointTitle}`)
+          report.add(
+            'TEXT_TOO_LONG',
+            where,
+            `${where}: ${fold.title.length} visible chars, cap ${caps.pointTitle}`
+          )
         }
       })
       f.annotations.forEach((a, k) => {
@@ -218,7 +222,11 @@ function checkHunks(output: ModelOutput, index: Index, report: Report): Map<stri
           continue
         }
         if (hit.file.path !== file.path) {
-          report.add('HUNK_UNKNOWN', where, `${layerLabel(layer)}: ${id} belongs to ${hit.file.path}, not ${file.path}`)
+          report.add(
+            'HUNK_UNKNOWN',
+            where,
+            `${layerLabel(layer)}: ${id} belongs to ${hit.file.path}, not ${file.path}`
+          )
           continue
         }
         const first = owner.get(id)
@@ -236,7 +244,11 @@ function checkHunks(output: ModelOutput, index: Index, report: Report): Map<stri
   }
   for (const { file, hunk } of index.byHunkId.values()) {
     if (!owner.has(hunk.id)) {
-      report.add('HUNK_UNASSIGNED', `hunk:${hunk.id}`, `${hunk.id} in ${file.path} (${hunk.header}) is in no layer`)
+      report.add(
+        'HUNK_UNASSIGNED',
+        `hunk:${hunk.id}`,
+        `${hunk.id} in ${file.path} (${hunk.header}) is in no layer`
+      )
     }
   }
   return owner
@@ -248,7 +260,11 @@ function checkLayers(output: ModelOutput, report: Report): void {
     const where = `layer:${layer.key}`
     const seen = keys.get(layer.key)
     if (seen !== undefined) {
-      report.add('LAYER_KEY_DUPLICATE', where, `layer ${i + 1}: key "${layer.key}" is also used by layer ${seen + 1}`)
+      report.add(
+        'LAYER_KEY_DUPLICATE',
+        where,
+        `layer ${i + 1}: key "${layer.key}" is also used by layer ${seen + 1}`
+      )
     } else {
       keys.set(layer.key, i)
     }
@@ -268,7 +284,11 @@ function checkLayers(output: ModelOutput, report: Report): void {
   }
   const last = output.layers[output.layers.length - 1]
   if (first !== undefined && first !== last) {
-    report.add('OTHER_NOT_LAST', `layer:${first.key}`, `layer ${first.key} (kind other) must be the last layer`)
+    report.add(
+      'OTHER_NOT_LAST',
+      `layer:${first.key}`,
+      `layer ${first.key} (kind other) must be the last layer`
+    )
   }
 }
 
@@ -308,7 +328,11 @@ function checkTests(
         continue
       }
       if (t.testPath === undefined) {
-        report.add('TEST_PATH_UNKNOWN', where, `${layerLabel(layer)}: "${t.behavior}" is covered but names no testPath`)
+        report.add(
+          'TEST_PATH_UNKNOWN',
+          where,
+          `${layerLabel(layer)}: "${t.behavior}" is covered but names no testPath`
+        )
       } else if (!(index.byPath.has(t.testPath) || headPaths.has(t.testPath))) {
         report.add('TEST_PATH_UNKNOWN', where, `${layerLabel(layer)}: ${t.testPath} is not in the PR head`)
       }
@@ -339,12 +363,20 @@ function checkRisk(output: ModelOutput, highRisk: readonly HighRiskRule[], repor
   }
   const where = `layer:${other.key}`
   for (const tag of other.risk ?? []) {
-    report.add('RISK_IN_OTHER', where, `other: carries the risk tag "${tag.label}"; move the hunks to a real layer`)
+    report.add(
+      'RISK_IN_OTHER',
+      where,
+      `other: carries the risk tag "${tag.label}"; move the hunks to a real layer`
+    )
   }
   for (const file of other.files) {
     const rule = highRisk.find(r => matchesGlob(r.pattern, file.path))
     if (rule !== undefined) {
-      report.add('RISK_IN_OTHER', where, `other: ${file.path} matches highRisk "${rule.pattern}" (${rule.label})`)
+      report.add(
+        'RISK_IN_OTHER',
+        where,
+        `other: ${file.path} matches highRisk "${rule.pattern}" (${rule.label})`
+      )
     }
   }
 }
@@ -368,9 +400,17 @@ function checkAnnotations(output: ModelOutput, index: Index, report: Report): vo
         const start = hunkAt(entry, a.side, a.startLine)
         const end = hunkAt(entry, a.side, a.endLine)
         if (start === null || end === null || start.id !== end.id) {
-          report.add('ANNOTATION_OUTSIDE_HUNK', where, `${label} is not inside one hunk of the diff (${hunkLineRanges(entry?.hunks ?? [], a.side)})`)
+          report.add(
+            'ANNOTATION_OUTSIDE_HUNK',
+            where,
+            `${label} is not inside one hunk of the diff (${hunkLineRanges(entry?.hunks ?? [], a.side)})`
+          )
         } else if (!file.hunks.includes(start.id)) {
-          report.add('ANNOTATION_OUTSIDE_HUNK', where, `${label} is in ${start.id}, which this layer does not list`)
+          report.add(
+            'ANNOTATION_OUTSIDE_HUNK',
+            where,
+            `${label} is in ${start.id}, which this layer does not list`
+          )
         }
       })
     }
@@ -378,7 +418,10 @@ function checkAnnotations(output: ModelOutput, index: Index, report: Report): vo
 }
 
 function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: Report): void {
-  const missingTests = output.layers.reduce((n, l) => n + l.tests.filter(t => t.status === 'missing').length, 0)
+  const missingTests = output.layers.reduce(
+    (n, l) => n + l.tests.filter(t => t.status === 'missing').length,
+    0
+  )
   const total = output.points.length + missingTests
   if (total > limits.maxPoints) {
     report.add(
@@ -464,7 +507,12 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
  * The sidecar map of a layer's diagram: each key names a node of the mermaid source, each value
  * is a canvas link, and a diagram carries at most `maxDiagramLinks` of them.
  */
-function checkDiagramLinks(output: ModelOutput, files: readonly FileEntry[], limits: Limits, report: Report): void {
+function checkDiagramLinks(
+  output: ModelOutput,
+  files: readonly FileEntry[],
+  limits: Limits,
+  report: Report
+): void {
   const targets: LinkTargets = { layers: output.layers, files }
   for (const layer of output.layers) {
     if (layer.diagram === undefined) {
@@ -474,7 +522,11 @@ function checkDiagramLinks(output: ModelOutput, files: readonly FileEntry[], lim
     const label = `${layerLabel(layer)} diagram`
     const entries = Object.entries(layer.diagram.links)
     if (entries.length > limits.maxDiagramLinks) {
-      report.add('DIAGRAM_LIMIT', where, `${label}: ${entries.length} node links, at most ${limits.maxDiagramLinks}`)
+      report.add(
+        'DIAGRAM_LIMIT',
+        where,
+        `${label}: ${entries.length} node links, at most ${limits.maxDiagramLinks}`
+      )
     }
     const kind = diagramKind(layer.diagram.mermaid)
     const nodes = diagramNodeIds(layer.diagram.mermaid)

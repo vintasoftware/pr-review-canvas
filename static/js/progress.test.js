@@ -36,10 +36,15 @@ describe('progress', () => {
     expect(progressSummary(artifact, none)).toEqual({ done: 0, total: 1, percent: 0 })
     const done = {
       ...none,
-      reviewed: { 'layer:layer-1': /** @type {const} */ (true), 'layer:layer-2': /** @type {const} */ (true) },
+      reviewed: {
+        'layer:layer-1': /** @type {const} */ (true),
+        'layer:layer-2': /** @type {const} */ (true),
+      },
     }
     expect(progressSummary(artifact, done)).toEqual({ done: 1, total: 1, percent: 100 })
-    expect(progressSummary({ ...artifact, layers: artifact.layers.filter(l => l.kind === 'other') }, none)).toEqual({
+    expect(
+      progressSummary({ ...artifact, layers: artifact.layers.filter(l => l.kind === 'other') }, none)
+    ).toEqual({
       done: 0,
       total: 0,
       percent: 0,

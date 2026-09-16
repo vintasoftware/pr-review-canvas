@@ -1,15 +1,15 @@
 /* Keep this order: shared styles, components, responsive rules, interaction controls, and the
    github skin last, because it repaints the rules above it. */
-@import "./styles/base.css";
-@import "./styles/commands.css";
-@import "./styles/header.css";
-@import "./styles/layout.css";
-@import "./styles/review.css";
-@import "./styles/diff.css";
-@import "./styles/chat.css";
-@import "./styles/panels.css";
-@import "./styles/responsive.css";
-@import "./styles/review-actions.css";
-@import "./styles/chat-tools.css";
-@import "./styles/skin-github.css";
-@import "./styles/chat-panel.css";
+@import './styles/base.css';
+@import './styles/commands.css';
+@import './styles/header.css';
+@import './styles/layout.css';
+@import './styles/review.css';
+@import './styles/diff.css';
+@import './styles/chat.css';
+@import './styles/panels.css';
+@import './styles/responsive.css';
+@import './styles/review-actions.css';
+@import './styles/chat-tools.css';
+@import './styles/skin-github.css';
+@import './styles/chat-panel.css';

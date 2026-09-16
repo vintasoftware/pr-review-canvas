@@ -15,7 +15,14 @@ import { setChatEnabled } from './ask.js'
 import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
-import { askTargetFor, cardOf, nextUnreviewedTarget, setCardCollapsed, toast, wireReview } from './interactions.js'
+import {
+  askTargetFor,
+  cardOf,
+  nextUnreviewedTarget,
+  setCardCollapsed,
+  toast,
+  wireReview,
+} from './interactions.js'
 import { hydrateAll, hydrateFileCard, renderLayers, renderRail, setRenderContext } from './layers.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
@@ -41,7 +48,12 @@ function bundleFor(state) {
     artifact,
     canvas: { headSha: artifact.pr.headSha, source: 'local', manifest: null },
     skillCommand: '/pr-review-canvas 42',
-    comments: { fetchedAt: NOW.toISOString(), headSha: artifact.pr.headSha, reviewComments: comments, issueComments },
+    comments: {
+      fetchedAt: NOW.toISOString(),
+      headSha: artifact.pr.headSha,
+      reviewComments: comments,
+      issueComments,
+    },
     state,
     capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
     chat: { enabled: false, acpx: true },
@@ -382,7 +394,9 @@ describe('attention points', () => {
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
     await flush()
     expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: true }]])
-    expect(root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')).toBe(true)
+    expect(
+      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
+    ).toBe(true)
     expect(root.querySelector('tr.ifind[data-fingerprint="fp-1"]')?.hasAttribute('hidden')).toBe(true)
     expect(root.querySelector('.point-count')?.textContent).toBe('0')
     expect(root.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
@@ -424,7 +438,8 @@ describe('attention points', () => {
 
   it('posts a point anchored on the old side', async () => {
     setRenderContext({ artifact, files, patches, comments, state: BASE, now: NOW })
-    document.body.innerHTML = '<div id="root"><button data-act="point-post" data-point="p-3">post</button></div>'
+    document.body.innerHTML =
+      '<div id="root"><button data-act="point-post" data-point="p-3">post</button></div>'
     const root = document.querySelector('#root')
     if (!(root instanceof HTMLElement)) {
       throw new Error('no root')
@@ -516,10 +531,15 @@ describe('comment composers', () => {
     click(root, 'tr.composer [data-act="composer-post"]')
     await flush()
     expect(calls).toEqual([
-      ['comment', { kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', body: 'look here', headSha: HEAD }],
+      [
+        'comment',
+        { kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', body: 'look here', headSha: HEAD },
+      ],
     ])
     expect(root.querySelector('tr.composer')).toBeNull()
-    expect(root.querySelector('tr.thread[data-thread="5001"] .cmt .prose')?.textContent).toContain('look here')
+    expect(root.querySelector('tr.thread[data-thread="5001"] .cmt .prose')?.textContent).toContain(
+      'look here'
+    )
     expect(root.querySelector('.toast')?.textContent).toBe('comment posted to github')
   })
 
@@ -583,7 +603,9 @@ describe('comment composers', () => {
     setRenderContext(null)
     click(root, '.pr-composer-host [data-act="composer-post"]')
     await flush()
-    expect([...root.querySelectorAll('.conversation > .cmt .prose')].at(-1)?.textContent).toContain('looks fine')
+    expect([...root.querySelectorAll('.conversation > .cmt .prose')].at(-1)?.textContent).toContain(
+      'looks fine'
+    )
   })
 
   it('replies under a thread', async () => {
@@ -598,9 +620,9 @@ describe('comment composers', () => {
     await flush()
     expect(calls).toEqual([['comment', { kind: 'reply', inReplyToId: 1001, body: 'agreed', headSha: HEAD }]])
     expect(root.querySelector('.thread-full .composer-box')).toBeNull()
-    expect([...root.querySelectorAll('tr.thread[data-thread="1001"] .cmt .prose')].at(-1)?.textContent).toContain(
-      'agreed'
-    )
+    expect(
+      [...root.querySelectorAll('tr.thread[data-thread="1001"] .cmt .prose')].at(-1)?.textContent
+    ).toContain('agreed')
   })
 
   it('comments on the pull request itself', async () => {
@@ -614,7 +636,9 @@ describe('comment composers', () => {
     click(root, '.pr-composer-host [data-act="composer-post"]')
     await flush()
     expect(calls).toEqual([['comment', { kind: 'issue', body: 'looks fine', headSha: HEAD }]])
-    expect([...root.querySelectorAll('.conversation > .cmt .prose')].at(-1)?.textContent).toContain('looks fine')
+    expect([...root.querySelectorAll('.conversation > .cmt .prose')].at(-1)?.textContent).toContain(
+      'looks fine'
+    )
     expect(root.querySelector('.pr-composer-host .composer-box')).toBeNull()
   })
 })
@@ -721,7 +745,9 @@ describe('line selection', () => {
   it('keeps the range while the pointer travels over something that is not a line', () => {
     const { root } = setup()
     pointerDown(root, '#L-src_app_ts-new-2 td.ln:nth-child(2)')
-    root.querySelector('#L-src_app_ts-new-2 td.code')?.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }))
+    root
+      .querySelector('#L-src_app_ts-new-2 td.code')
+      ?.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }))
     document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     expect(root.querySelectorAll('tr.is-selected').length).toBe(1)
   })
@@ -914,7 +940,9 @@ describe('capability gating and sign-off', () => {
     click(root, '[data-act="signoff-post"]')
     await flush()
     expect(calls).toEqual([['review', { event: 'APPROVE', body: 'Reviewed 1 of 1 layer.', headSha: HEAD }]])
-    expect(dialog?.querySelector('.signoff-result a')?.getAttribute('href')).toContain('pullrequestreview-7001')
+    expect(dialog?.querySelector('.signoff-result a')?.getAttribute('href')).toContain(
+      'pullrequestreview-7001'
+    )
     click(root, '[data-act="signoff-close"]')
     expect(dialog instanceof HTMLDialogElement && dialog.open).toBe(false)
   })
@@ -942,7 +970,9 @@ describe('capability gating and sign-off', () => {
     })
     click(root, '#request-changes')
     await flush()
-    expect(root.querySelector('#signoff-dialog .signoff-result')?.textContent).toBe('the canvas is for another commit')
+    expect(root.querySelector('#signoff-dialog .signoff-result')?.textContent).toBe(
+      'the canvas is for another commit'
+    )
     expect(root.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(true)
   })
 
@@ -1050,7 +1080,9 @@ describe('a page that lost the elements a command expects', () => {
   }
 
   it('marks a layer reviewed even when its card is gone from the page', async () => {
-    const { root, calls } = bare('<button data-act="mark-layer" data-reviewed-id="layer:layer-1">mark</button>')
+    const { root, calls } = bare(
+      '<button data-act="mark-layer" data-reviewed-id="layer:layer-1">mark</button>'
+    )
     click(root, '[data-act="mark-layer"]')
     await flush()
     expect(calls).toEqual([['reviewed', { id: 'layer:layer-1', reviewed: true }]])
@@ -1318,7 +1350,10 @@ describe('askTargetFor', () => {
     expect(askTargetFor(root, 'layer-run-path', null, null)).toEqual({ kind: 'layer', layerId: 'layer-1' })
     expect(askTargetFor(root, null, null, null)).toEqual({ kind: 'pr' })
     // A point or a card the page does not show falls through to the next choice.
-    expect(askTargetFor(root, 'layer-run-path', 'p-nope', null)).toEqual({ kind: 'layer', layerId: 'layer-1' })
+    expect(askTargetFor(root, 'layer-run-path', 'p-nope', null)).toEqual({
+      kind: 'layer',
+      layerId: 'layer-1',
+    })
     expect(askTargetFor(root, 'overview', null, null)).toEqual({ kind: 'pr' })
     setChatEnabled(false)
   })
@@ -1332,7 +1367,10 @@ describe('posting a proposed comment on one line', () => {
     wiring.onProposedComment('post', { path: 'src/app.ts', line: 3, side: 'new', body: 'One line.' }, button)
     await flush()
     expect(calls).toEqual([
-      ['comment', { kind: 'inline', path: 'src/app.ts', line: 3, side: 'new', body: 'One line.', headSha: HEAD }],
+      [
+        'comment',
+        { kind: 'inline', path: 'src/app.ts', line: 3, side: 'new', body: 'One line.', headSha: HEAD },
+      ],
     ])
   })
 })

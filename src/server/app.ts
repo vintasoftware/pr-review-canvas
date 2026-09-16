@@ -29,14 +29,19 @@ export function createApp(ctx: AppContext): Hono<AppEnv> {
     const nonce = c.get('cspNonce') ?? createNonce()
     const res = wantsJson(c.req.path)
       ? c.json(envelope, err.status)
-      : await c.html(errorPage(envelope.error, nonce, await appearanceFor(ctx, appearanceQuery(c))), err.status)
+      : await c.html(
+          errorPage(envelope.error, nonce, await appearanceFor(ctx, appearanceQuery(c))),
+          err.status
+        )
     applyResponseHeaders(res, c.req.path, nonce)
     return res
   }
 
   app.onError((err, c) => errorResponse(c, toAppError(err)))
 
-  app.notFound(c => errorResponse(c, new AppError('NOT_FOUND', `no route for ${c.req.method} ${c.req.path}`, 404)))
+  app.notFound(c =>
+    errorResponse(c, new AppError('NOT_FOUND', `no route for ${c.req.method} ${c.req.path}`, 404))
+  )
 
   app.route('/api', apiRoutes(ctx))
   app.route('/', staticRoutes(ctx))

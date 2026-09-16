@@ -55,7 +55,9 @@ describe('createApp', () => {
         method: 'POST',
         headers: { ...LOCAL, 'sec-fetch-site': 'cross-site' },
       })
-      expect(await json(crossSite)).toEqual({ error: { code: 'CROSS_ORIGIN', message: 'cross-site request rejected' } })
+      expect(await json(crossSite)).toEqual({
+        error: { code: 'CROSS_ORIGIN', message: 'cross-site request rejected' },
+      })
       const badOrigin = await app.request('/api/prs/42/comments', {
         method: 'POST',
         headers: { ...LOCAL, origin: 'https://evil.example' },
@@ -111,7 +113,9 @@ describe('createApp', () => {
       expect(res.status).toBe(200)
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
-      expect(html).toContain('{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test"}</script>')
+      expect(html).toContain(
+        '{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test"}</script>'
+      )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
       // Mermaid is in the map so `diagram.js` can import it, and is not preloaded: most pages have
@@ -137,11 +141,13 @@ describe('createApp', () => {
       expect(await (await app.request('/review/42', { headers: LOCAL })).text()).toContain(painted)
       expect(await (await app.request('/', { headers: LOCAL })).text()).toContain(painted)
       // The query wins for that response alone and changes nothing in the file.
-      expect(await (await app.request('/review/42?skin=terminal&theme=light', { headers: LOCAL })).text()).toContain(
-        'data-skin="terminal" data-theme="light"'
-      )
+      expect(
+        await (await app.request('/review/42?skin=terminal&theme=light', { headers: LOCAL })).text()
+      ).toContain('data-skin="terminal" data-theme="light"')
       // A name the tool does not know is ignored rather than refused.
-      expect(await (await app.request('/?skin=neon&theme=sepia', { headers: LOCAL })).text()).toContain(painted)
+      expect(await (await app.request('/?skin=neon&theme=sepia', { headers: LOCAL })).text()).toContain(
+        painted
+      )
       // The error page wears it too, so a wrong URL does not flash the other look.
       const missing = await app.request('/nope', { headers: LOCAL })
       expect(missing.status).toBe(404)
@@ -310,7 +316,11 @@ describe('createApp', () => {
 
     it('reports ready from the local canvas store with the manifest and --force in the command', async () => {
       t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
-      const artifact = { ...syntheticArtifact(), importedAt: '2026-09-10T11:30:00.000Z', source: 'import' as const }
+      const artifact = {
+        ...syntheticArtifact(),
+        importedAt: '2026-09-10T11:30:00.000Z',
+        source: 'import' as const,
+      }
       const manifest = {
         formatVersion: 1 as const,
         tool: { name: 'pr-review', version: '0.1.0' },
@@ -402,7 +412,9 @@ describe('createApp', () => {
     it('maps GitHub and input errors to envelopes', async () => {
       t = await makeTestContext({
         git: gitFor42(),
-        gh: createFakeGh({ routes: { 'repos/acme/widgets/pulls/7': ghError(new GitHubApiError('x', 'HTTP 401', 1)) } }),
+        gh: createFakeGh({
+          routes: { 'repos/acme/widgets/pulls/7': ghError(new GitHubApiError('x', 'HTTP 401', 1)) },
+        }),
       })
       const app = createApp(t.ctx)
       expect(await json(await app.request('/api/prs/42', { headers: LOCAL }))).toEqual({
@@ -417,7 +429,9 @@ describe('createApp', () => {
       expect(await json(unauth)).toMatchObject({ error: { code: 'GH_UNAUTHENTICATED' } })
       const bad = await app.request('/api/prs/x', { headers: LOCAL })
       expect(bad.status).toBe(400)
-      expect(await json(bad)).toEqual({ error: { code: 'BAD_REQUEST', message: 'not a pull request number: x' } })
+      expect(await json(bad)).toEqual({
+        error: { code: 'BAD_REQUEST', message: 'not a pull request number: x' },
+      })
     })
 
     it('maps a git failure while fetching refs to GIT_ERROR', async () => {
@@ -494,7 +508,9 @@ describe('createApp', () => {
     it('serves context lines from head and base with validation', async () => {
       const app = createApp(t.ctx)
       await app.request('/api/prs/42', { headers: LOCAL })
-      const ok = await app.request('/api/prs/42/context?path=src/app.ts&side=new&from=3&to=4', { headers: LOCAL })
+      const ok = await app.request('/api/prs/42/context?path=src/app.ts&side=new&from=3&to=4', {
+        headers: LOCAL,
+      })
       expect(await json(ok)).toEqual({
         path: 'src/app.ts',
         side: 'new',
@@ -502,7 +518,9 @@ describe('createApp', () => {
         to: 4,
         lines: ['export function run() {', '  return a() + b()'],
       })
-      const old = await app.request('/api/prs/42/context?path=src/app.ts&side=old&from=1&to=1', { headers: LOCAL })
+      const old = await app.request('/api/prs/42/context?path=src/app.ts&side=old&from=1&to=1', {
+        headers: LOCAL,
+      })
       expect(await json(old)).toEqual({
         path: 'src/app.ts',
         side: 'old',
@@ -521,9 +539,13 @@ describe('createApp', () => {
       expect(await json(tooMany)).toEqual({
         error: { code: 'BAD_REQUEST', message: `request between 1 and ${CONTEXT_MAX_LINES} lines` },
       })
-      const reversed = await app.request('/api/prs/42/context?path=src/app.ts&side=new&from=5&to=2', { headers: LOCAL })
+      const reversed = await app.request('/api/prs/42/context?path=src/app.ts&side=new&from=5&to=2', {
+        headers: LOCAL,
+      })
       expect(reversed.status).toBe(400)
-      const unknown = await app.request('/api/prs/42/context?path=src/zzz.ts&side=new&from=1&to=2', { headers: LOCAL })
+      const unknown = await app.request('/api/prs/42/context?path=src/zzz.ts&side=new&from=1&to=2', {
+        headers: LOCAL,
+      })
       expect(unknown.status).toBe(404)
     })
   })
@@ -561,14 +583,18 @@ describe('createApp', () => {
       expect((await app.request('/static/js/%00.js', { headers: LOCAL })).status).toBe(404)
       const malformed = await app.request('/static/js/%E0%A4%A.js', { headers: LOCAL })
       expect(malformed.status).toBe(404)
-      expect(await json(malformed)).toEqual({ error: { code: 'NOT_FOUND', message: 'no static file js/%E0%A4%A.js' } })
+      expect(await json(malformed)).toEqual({
+        error: { code: 'NOT_FOUND', message: 'no static file js/%E0%A4%A.js' },
+      })
       const marked = await app.request('/vendor/marked.js', { headers: LOCAL })
       expect(await marked.text()).toBe('export const marked = 1')
       expect(marked.headers.get('cache-control')).toBe('public, max-age=86400')
       expect(await (await app.request('/vendor/diff/index.js', { headers: LOCAL })).text()).toBe(
         'export const diff = 1'
       )
-      expect(await (await app.request('/vendor/diff/sub/x.js', { headers: LOCAL })).text()).toBe('export const x = 1')
+      expect(await (await app.request('/vendor/diff/sub/x.js', { headers: LOCAL })).text()).toBe(
+        'export const x = 1'
+      )
       expect((await app.request('/vendor/diff/secret.txt', { headers: LOCAL })).status).toBe(404)
       // URL normalization folds `..` before routing, so this lands on the allowlisted marked.js.
       expect((await app.request('/vendor/diff/%2e%2e/marked.js', { headers: LOCAL })).status).toBe(200)
@@ -581,7 +607,9 @@ describe('createApp', () => {
       expect(await (await app.request('/vendor/mermaid/chunks/c.mjs', { headers: LOCAL })).text()).toBe(
         'export const chunk = 1'
       )
-      expect((await app.request('/vendor/mermaid/mermaid.esm.min.mjs.map', { headers: LOCAL })).status).toBe(404)
+      expect((await app.request('/vendor/mermaid/mermaid.esm.min.mjs.map', { headers: LOCAL })).status).toBe(
+        404
+      )
       expect((await app.request('/vendor/mermaid/', { headers: LOCAL })).status).toBe(404)
     })
 
