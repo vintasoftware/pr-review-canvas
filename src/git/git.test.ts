@@ -6,16 +6,8 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
-import {
-  createGit,
-  envWithoutRepo,
-  execGit,
-  GitError,
-  type GitExec,
-  redactStderr,
-  REPO_ENV_VARS,
-  STDERR_MESSAGE_MAX,
-} from './git.js'
+import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
+import { createGit, execGit, GitError, type GitExec, redactStderr, STDERR_MESSAGE_MAX } from './git.js'
 
 const run = promisify(execFile)
 
@@ -157,7 +149,9 @@ describe('createGit (real adapter)', () => {
       'GIT_PREFIX',
     ])
     const kept = { PATH: '/bin', SSH_AUTH_SOCK: '/run/ssh', GIT_CONFIG_GLOBAL: '/home/u/.gitconfig' }
-    expect(envWithoutRepo({ ...kept, GIT_DIR: '/x', GIT_PREFIX: 'src/' })).toEqual(kept)
+    const inherited = { ...kept, ...Object.fromEntries(REPO_ENV_VARS.map(name => [name, '/x'])) }
+    expect(envWithoutRepo(inherited)).toEqual(kept)
+    expect(inherited).toHaveProperty('GIT_DIR', '/x')
   })
 
   it('reports a non-numeric exit as code 1 through the exec wrapper', async () => {

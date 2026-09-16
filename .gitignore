@@ -1,5 +1,6 @@
 node_modules/
 .pr-review/
+.claude/worktrees/
 .env
 .env.*
 !.env.example

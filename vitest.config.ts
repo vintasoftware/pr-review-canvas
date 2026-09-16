@@ -19,7 +19,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts', 'static/js/**/*.js'],
+      include: ['src/**/*.ts', 'src/git/**/*.mjs', 'static/js/**/*.js'],
       exclude: [
         'src/cli.ts',
         'src/server/node-server.ts',
