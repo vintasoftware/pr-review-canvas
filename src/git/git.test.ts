@@ -106,7 +106,7 @@ describe('createGit (real adapter)', () => {
   it('fetches from a local remote', async () => {
     const clone = await makeTempDir('pr-review-clone-')
     try {
-      await g(clone, 'clone', '-q', repo.dir, clone)
+      await g(repo.dir, 'clone', '-q', repo.dir, clone)
       const git = createGit(clone)
       await git.fetch('origin', ['+refs/heads/main:refs/pr/1/head'])
       expect(await git.revParse('refs/pr/1/head')).toBe(repo.sha2)
@@ -128,9 +128,10 @@ describe('createGit (real adapter)', () => {
       vi.stubEnv(name, value)
     }
     try {
-      // git itself, with the environment as it stands: this is what the adapter used to do, and
-      // it proves the poison bites. Without it the test below passes on an environment that was
-      // never poisoned at all.
+      // The one git call in this file that must NOT go through `g`: it is the baseline, git as the
+      // adapter used to run it, and routing it through the scrub would make it pass for the wrong
+      // reason and prove nothing. The message is matched so the failure is the poisoning and not
+      // some unrelated error; git's wording here has been stable for its whole life.
       await expect(run('git', ['rev-parse', 'HEAD'], { cwd: repo.dir })).rejects.toThrow(
         /not a git repository/i
       )
