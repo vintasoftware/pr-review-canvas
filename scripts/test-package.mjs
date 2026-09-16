@@ -9,9 +9,29 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const temp = await mkdtemp(path.join(os.tmpdir(), 'pr-review-package-'))
+/**
+ * The same names as REPO_ENV_VARS in src/git/git.ts, spelled out because this file is plain
+ * JavaScript run by node and cannot import the TypeScript source; a test in src/git/git.test.ts
+ * fails if the two lists drift. This script runs git in a throwaway package directory, and under
+ * the pre-commit hook of a linked worktree it would otherwise be handed this repository.
+ */
+const REPO_ENV_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+]
+const env = { ...process.env }
+for (const name of REPO_ENV_VARS) delete env[name]
+
 const run = (command, args, cwd = temp) => {
   const result = spawnSync(command, args, {
     cwd,
+    env,
     encoding: 'utf8',
     timeout: 120_000,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -52,10 +72,10 @@ try {
     path.join(temp, pack.filename),
   ])
   const cli = path.join(temp, 'node_modules', '.bin', 'pr-review')
-  const help = spawnSync(cli, ['--help'], { cwd: temp, encoding: 'utf8', timeout: 15_000 })
+  const help = spawnSync(cli, ['--help'], { cwd: temp, env, encoding: 'utf8', timeout: 15_000 })
   assert.equal(help.status, 0)
   assert.match(help.stderr, /install-skill/)
-  const invalid = spawnSync(cli, ['unknown-command'], { cwd: temp, encoding: 'utf8', timeout: 15_000 })
+  const invalid = spawnSync(cli, ['unknown-command'], { cwd: temp, env, encoding: 'utf8', timeout: 15_000 })
   assert.equal(invalid.status, 2, invalid.stderr)
   run('git', ['init', '--quiet'])
   run('git', ['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'])
@@ -73,7 +93,11 @@ try {
   await once(probe, 'listening')
   const port = probe.address().port
   await new Promise((resolve, reject) => probe.close(error => (error ? reject(error) : resolve())))
-  server = spawn(cli, ['serve', '--port', String(port)], { cwd: temp, stdio: ['ignore', 'pipe', 'pipe'] })
+  server = spawn(cli, ['serve', '--port', String(port)], {
+    cwd: temp,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   stopped = once(server, 'exit')
   let logs = ''
   server.stdout.on('data', chunk => {
