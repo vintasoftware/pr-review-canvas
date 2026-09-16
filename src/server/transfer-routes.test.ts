@@ -224,6 +224,39 @@ describe('transfer routes', () => {
       expect(forced.status).toBe(200)
     })
 
+    it('answers 400 CANVAS_PR_MISMATCH for a canvas of another pull request, force or not', async () => {
+      t = await contextFor()
+      const app = createApp(t.ctx)
+      const otherPr = buildCanvasZip(
+        { ...manifest(HEAD_SHA), prNumber: 7 },
+        {
+          ...artifactFor(HEAD_SHA),
+          pr: { ...artifactFor(HEAD_SHA).pr, number: 7 },
+        }
+      )
+      const refused = await app.request('/api/prs/42/import', {
+        method: 'POST',
+        headers: SAME_ORIGIN,
+        body: upload(otherPr),
+      })
+      expect(refused.status).toBe(400)
+      expect(await json<{ error: { code: string; hint: string } }>(refused)).toEqual({
+        error: {
+          code: 'CANVAS_PR_MISMATCH',
+          message: 'this canvas was exported for #7, and it is being imported for #42',
+          hint: 'import it without --pr to store it under #7, or generate a canvas for #42',
+        },
+      })
+      expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+      const forced = await app.request('/api/prs/42/import', {
+        method: 'POST',
+        headers: SAME_ORIGIN,
+        body: upload(otherPr, { force: '1' }),
+      })
+      expect(forced.status).toBe(400)
+      expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+    })
+
     it('rejects a file over the ZIP limit even when the multipart envelope is within its limit', async () => {
       t = await contextFor()
       const res = await createApp(t.ctx).request('/api/prs/42/import', {

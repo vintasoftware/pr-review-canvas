@@ -83,10 +83,18 @@ describe('drop state', () => {
   })
 
   it('accepts a canvas export and names the problem with anything else', () => {
-    expect(validateCanvasFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')).toBeNull()
-    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')).toBeNull()
-    expect(validateCanvasFilename('notes.pdf')).toBe('that is not a zip file')
-    expect(validateCanvasFilename('holiday-photos.zip')).toBe('that zip is not a review canvas export')
+    expect(validateCanvasFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
+    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
+    expect(validateCanvasFilename('notes.pdf', 42)).toBe('that is not a zip file')
+    expect(validateCanvasFilename('holiday-photos.zip', 42)).toBe('that zip is not a review canvas export')
+  })
+
+  it('names the pull request a canvas was exported for when it is not the one on screen', () => {
+    const name = 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    expect(validateCanvasFilename(name, 42)).toBe('that canvas was exported for PR #99, not #42')
+    expect(validateCanvasFilename(name, 99)).toBeNull()
+    // A canvas made before the PR existed names none, so it joins whichever PR imports it.
+    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
   })
 })
 
@@ -164,6 +172,11 @@ describe('drop zone', () => {
     await zone?.send(zipFile('notes.pdf'))
     expect(called).toBe(0)
     expect(document.querySelector('.cmd-err')?.textContent).toBe('that is not a zip file')
+    await zone?.send(zipFile('pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
+    expect(called).toBe(0)
+    expect(document.querySelector('.cmd-err')?.textContent).toBe(
+      'that canvas was exported for PR #99, not #42'
+    )
   })
 
   it('marks the zone while a file is dragged over it and sends the dropped file', async () => {
@@ -276,6 +289,25 @@ describe('stale screen', () => {
     expect(bar?.querySelector('strong')?.textContent).toBe('Canvas is outdated.')
     expect(bar?.textContent).toContain('older commit')
     expect(bar?.querySelector('#stale-generate')).not.toBeNull()
+  })
+
+  it('says a canvas of another pull request cannot be used, without offering to drop it', () => {
+    const shared = {
+      url: 'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      matchesHead: true,
+      downloadable: false,
+      reason: /** @type {const} */ ('pr-mismatch'),
+    }
+    document.body.innerHTML = sharedCanvasCalloutHtml(bundle({ sharedCanvas: shared }))
+    const callout = document.querySelector('.callout.warn')
+    expect(callout?.textContent).toContain('exported for another pull request')
+    expect(callout?.querySelector('a')).toBeNull()
+    expect(document.querySelector('#fetch-shared')).not.toBeNull()
+    document.body.innerHTML = sharedCanvasCalloutHtml(
+      bundle({ sharedCanvas: { ...shared, reason: 'name-mismatch' } })
+    )
+    expect(document.querySelector('.callout.warn')?.textContent).toContain('exported from another repository')
   })
 
   it('offers to fetch the shared canvas again when the download failed', () => {
