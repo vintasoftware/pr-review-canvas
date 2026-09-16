@@ -37,9 +37,9 @@ Run `corepack pnpm verify` before pushing repository changes, as required by the
 
 The site URL is **https://vintasoftware.github.io/pr-review-canvas/**. In the repository's Settings → Pages, the publishing source must be **GitHub Actions**. The `GitHub Pages` workflow builds and tests the site, uploads only `dist-site/`, and deploys using GitHub's Pages actions and short-lived workflow permissions. Pull requests build and test without deploying.
 
-For the first publication, the workflow permits the isolated `feat/github-pages` branch as well as `main`. This publishes the website without merging changes into the application branch. The `github-pages` deployment environment should allow exactly those two branches. **After merging the website PR, remove `feat/github-pages` from the workflow trigger, deploy condition, and environment branch rules.** Until then, pushes with website changes on either allowed branch can update the public site.
+Only `main` can publish. Pushes to `main` that change `site/**`, `package.json`, `pnpm-lock.yaml`, or `.github/workflows/pages.yml` trigger the workflow. The `github-pages` deployment environment allows only the `main` branch.
 
-Once the workflow is on the default branch, it can also be run from Actions → GitHub Pages → Run workflow. Deployments from other branches are skipped. Source lives in Git; generated output is ignored and uploaded as a Pages artifact, so there is no generated `gh-pages` branch to maintain.
+To publish manually, use Actions → GitHub Pages → Run workflow and select `main`. Deployments from other branches are skipped. Source lives in Git; generated output is ignored and uploaded as a Pages artifact, so there is no generated `gh-pages` branch to maintain.
 
 ## Demo source and attribution
 
