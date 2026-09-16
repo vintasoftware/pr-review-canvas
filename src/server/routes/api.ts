@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { buildCanvasZipFor } from '../../canvas/export.js'
 import { importCanvas } from '../../canvas/import.js'
 import { CANVAS_ZIP_MAX_BYTES } from '../../canvas/zip.js'
-import type { ContextResponse, HealthResponse, PatchesResponse, SharedCanvasFetchResponse } from '../../contract/api.js'
+import type {
+  ContextResponse,
+  HealthResponse,
+  PatchesResponse,
+  SharedCanvasFetchResponse,
+} from '../../contract/api.js'
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { createPrLoader, resolveBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
@@ -87,7 +92,10 @@ export function apiRoutes(ctx: AppContext): Hono {
 
   // How the page is painted. It lives in the same settings file the chat settings do, but on its
   // own route, because a repository with chat off still has a page to paint.
-  const appearanceOf = (settings: { skin: AppearanceResponse['skin']; theme: AppearanceResponse['theme'] }) => ({
+  const appearanceOf = (settings: {
+    skin: AppearanceResponse['skin']
+    theme: AppearanceResponse['theme']
+  }) => ({
     skin: settings.skin,
     theme: settings.theme,
   })
@@ -197,11 +205,23 @@ export function apiRoutes(ctx: AppContext): Hono {
       throw new AppError('BAD_REQUEST', `request between 1 and ${CONTEXT_MAX_LINES} lines`, 400)
     }
     const pr = await loader.currentPr(number)
-    const lines = await ctx.derived.readLines(pr.headSha, q.side === 'new' ? 'head' : 'base', q.path, q.from, q.to)
+    const lines = await ctx.derived.readLines(
+      pr.headSha,
+      q.side === 'new' ? 'head' : 'base',
+      q.path,
+      q.from,
+      q.to
+    )
     if (lines === null) {
       throw new AppError('NOT_FOUND', `${q.path} is not materialized for this head`, 404)
     }
-    const body: ContextResponse = { path: q.path, side: q.side, from: q.from, to: q.from + lines.length - 1, lines }
+    const body: ContextResponse = {
+      path: q.path,
+      side: q.side,
+      from: q.from,
+      to: q.from + lines.length - 1,
+      lines,
+    }
     return c.json(body)
   })
 
@@ -226,7 +246,11 @@ export function apiRoutes(ctx: AppContext): Hono {
       throw new AppError('BAD_REQUEST', 'send the zip as the multipart field `file`', 400)
     }
     if (file.size > CANVAS_ZIP_MAX_BYTES) {
-      throw new AppError('CANVAS_TOO_LARGE', `the canvas zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`, 413)
+      throw new AppError(
+        'CANVAS_TOO_LARGE',
+        `the canvas zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`,
+        413
+      )
     }
     const result = await importCanvas(ctx, {
       bytes: new Uint8Array(await file.arrayBuffer()),

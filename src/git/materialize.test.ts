@@ -14,7 +14,12 @@ describe('materialize', () => {
 
   it('writes head and base copies of every text file and skips binaries', async () => {
     const git = createFakeGit({ blobs: SYNTHETIC_BLOBS })
-    const result = await materialize(git, { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA, files: SYNTHETIC_FILES, outDir })
+    const result = await materialize(git, {
+      headSha: HEAD_SHA,
+      mergeBaseSha: BASE_SHA,
+      files: SYNTHETIC_FILES,
+      outDir,
+    })
     expect(result).toEqual({
       written: [
         'head/src/app.ts',
@@ -30,7 +35,9 @@ describe('materialize', () => {
       ],
       skipped: [{ path: 'assets/logo.png', reason: 'binary' }],
     })
-    expect(await readFile(path.join(outDir, 'head/src/new.ts'), 'utf8')).toBe(SYNTHETIC_BLOBS[`${HEAD_SHA}:src/new.ts`])
+    expect(await readFile(path.join(outDir, 'head/src/new.ts'), 'utf8')).toBe(
+      SYNTHETIC_BLOBS[`${HEAD_SHA}:src/new.ts`]
+    )
     expect(await readFile(path.join(outDir, 'base/src/old-name.ts'), 'utf8')).toBe(
       SYNTHETIC_BLOBS[`${BASE_SHA}:src/old-name.ts`]
     )
@@ -63,7 +70,9 @@ describe('materialize', () => {
     const result = await materialize(git, {
       headSha: HEAD_SHA,
       mergeBaseSha: BASE_SHA,
-      files: [{ path: '../evil.ts', key: '___evil_ts', status: 'added', additions: 1, deletions: 0, patch: '' }],
+      files: [
+        { path: '../evil.ts', key: '___evil_ts', status: 'added', additions: 1, deletions: 0, patch: '' },
+      ],
       outDir,
     })
     expect(result).toEqual({ written: [], skipped: [{ path: '../evil.ts', reason: 'missing' }] })

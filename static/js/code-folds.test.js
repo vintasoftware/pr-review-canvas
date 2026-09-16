@@ -20,7 +20,8 @@ const PATCH = [
 const FOLD = { title: 'run()', side: /** @type {const} */ ('new'), startLine: 1, endLine: 4 }
 
 function mount() {
-  document.body.innerHTML = '<article class="file" id="file-src_app_ts"><div class="file-body"></div></article>'
+  document.body.innerHTML =
+    '<article class="file" id="file-src_app_ts"><div class="file-body"></div></article>'
   const card = document.querySelector('article')
   const body = document.querySelector('.file-body')
 
@@ -155,7 +156,8 @@ const NOISE_PATCH = [
 
 /** Mounts a diff whose second line is an import, which the renderer folds away as noise. */
 function mountFolded() {
-  document.body.innerHTML = '<article class="file" id="file-src_app_ts"><div class="file-body"></div></article>'
+  document.body.innerHTML =
+    '<article class="file" id="file-src_app_ts"><div class="file-body"></div></article>'
   const card = document.querySelector('article')
   const body = document.querySelector('.file-body')
 
@@ -250,7 +252,6 @@ it('ignores reveal events on folded rows without a summary', () => {
   row.dispatchEvent(new CustomEvent('reveal-code', { bubbles: true }))
   expect(row.classList.contains('shown')).toBe(false)
 })
-
 
 it('includes a preceding noise summary when all of its rows belong to the code fold', () => {
   const card = mountFolded()

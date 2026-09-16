@@ -140,14 +140,24 @@ export function createGitHubClient(exec: GhExec = execGh): GitHubClient {
       }
       const r = await exec(args)
       if (r.code !== 0) {
-        throw new GitHubApiError(path, r.missingBinary ? 'gh: command not found' : r.stderr, r.code, r.missingBinary)
+        throw new GitHubApiError(
+          path,
+          r.missingBinary ? 'gh: command not found' : r.stderr,
+          r.code,
+          r.missingBinary
+        )
       }
       return JSON.parse(r.stdout) as unknown
     },
     apiWithHeaders: async path => {
       const r = await exec(['api', '-i', '--method', 'GET', path])
       if (r.code !== 0) {
-        throw new GitHubApiError(path, r.missingBinary ? 'gh: command not found' : r.stderr, r.code, r.missingBinary)
+        throw new GitHubApiError(
+          path,
+          r.missingBinary ? 'gh: command not found' : r.stderr,
+          r.code,
+          r.missingBinary
+        )
       }
       return parseIncludedResponse(r.stdout)
     },
@@ -155,7 +165,12 @@ export function createGitHubClient(exec: GhExec = execGh): GitHubClient {
       // The payload goes over stdin, so no comment text ever appears in an argument list.
       const r = await exec(['api', '--method', 'POST', path, '--input', '-'], { input: JSON.stringify(body) })
       if (r.code !== 0) {
-        throw new GitHubApiError(path, r.missingBinary ? 'gh: command not found' : r.stderr, r.code, r.missingBinary)
+        throw new GitHubApiError(
+          path,
+          r.missingBinary ? 'gh: command not found' : r.stderr,
+          r.code,
+          r.missingBinary
+        )
       }
       return JSON.parse(r.stdout) as unknown
     },

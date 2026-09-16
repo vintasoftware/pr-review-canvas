@@ -4,7 +4,13 @@ import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_REVIEW_COMMENTS } from '../../src/testing/synthetic.js'
 import { postedCommentUrl, replacePostButton, viewCommentHtml } from './comment-link.js'
 
-const proposed = { path: 'src/app.ts', line: 4, startLine: 3, side: /** @type {const} */ ('new'), body: 'Review this.' }
+const proposed = {
+  path: 'src/app.ts',
+  line: 4,
+  startLine: 3,
+  side: /** @type {const} */ ('new'),
+  body: 'Review this.',
+}
 const posted = { ...mapReviewComment(GH_REVIEW_COMMENTS[0], new Set()), body: proposed.body, startLine: 3 }
 
 afterEach(() => document.body.replaceChildren())

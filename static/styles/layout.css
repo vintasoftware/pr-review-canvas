@@ -31,8 +31,8 @@
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   grid-template-areas:
-    "d n t"
-    "d n m";
+    'd n t'
+    'd n m';
   column-gap: 8px;
   padding: 6px 14px 6px 12px;
   color: var(--fg);
@@ -44,8 +44,8 @@
 .tree a:not(:has(.dot)) {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "t"
-    "m";
+    't'
+    'm';
 }
 .tree a:hover {
   background: var(--panel-2);

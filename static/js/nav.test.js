@@ -75,7 +75,9 @@ describe('buildNavOrder', () => {
 
   it('names ids that layers.js renders, for the synthetic artifact and the PR #278 fixture', async () => {
     /** @type {import('./contract-types.js').ReviewArtifact} */
-    const fixture = JSON.parse(await readFile(path.join(PACKAGE_ROOT, '__fixtures__/pr-278/review.json'), 'utf8'))
+    const fixture = JSON.parse(
+      await readFile(path.join(PACKAGE_ROOT, '__fixtures__/pr-278/review.json'), 'utf8')
+    )
     for (const a of [artifact, fixture]) {
       document.body.innerHTML = renderLayers(a, a.files, emptyState('x'))
       const order = buildNavOrder(a).filter(i => i.kind !== 'overview')

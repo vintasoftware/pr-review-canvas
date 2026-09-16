@@ -1,6 +1,6 @@
 {
   "name": "@vintasoftware/pr-review-canvas",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Localhost PR review canvas: layered diffs, attention points, and GitHub comments for one PR",
   "type": "module",
   "bin": {
@@ -10,13 +10,20 @@
     "dev": "tsx watch --clear-screen=false --ignore '**/.pr-review/**' src/cli.ts serve",
     "start": "tsx src/cli.ts serve",
     "test": "vitest run",
+    "hooks:install": "git config core.hooksPath .githooks",
     "test:watch": "vitest",
     "test:browser": "playwright test",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "test:package": "node scripts/test-package.mjs",
-    "verify": "pnpm typecheck && pnpm coverage && pnpm test:browser --workers=2 && pnpm test:package",
-    "prepublishOnly": "pnpm verify"
+    "verify": "pnpm check && pnpm coverage && pnpm test:browser --workers=2 && pnpm test:package",
+    "prepublishOnly": "pnpm verify",
+    "lint": "oxlint --deny-warnings",
+    "lint:fix": "oxlint --fix --deny-warnings",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck",
+    "precommit": "pnpm check && pnpm test"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",
@@ -36,6 +43,8 @@
     "@types/node": "^24.13.3",
     "@vitest/coverage-v8": "^4.1.10",
     "happy-dom": "20.11.2",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
     "typescript": "^5.9.3",
     "vite": "~8.0.16",
     "vitest": "^4.1.10"

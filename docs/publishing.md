@@ -50,7 +50,8 @@ corepack pnpm exec playwright install --with-deps chromium
 corepack pnpm verify
 ```
 
-`git status --short` must print nothing. `corepack pnpm verify` runs type checking, all unit tests with
+`git status --short` must print nothing. `corepack pnpm verify` runs linting, formatting checks,
+strict type checking, all unit tests once with
 95% coverage thresholds, Chromium tests at three viewport sizes, and the npm package smoke test.
 The package smoke test needs registry access to install production dependencies.
 `corepack pnpm --version` should report `10.33.0`. The explicit prefix selects the pinned

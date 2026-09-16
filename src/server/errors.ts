@@ -1,3 +1,4 @@
+import { inspect } from 'node:util'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ConfigError } from '../config.js'
 import type { ErrorCode, ErrorEnvelope } from '../contract/api.js'
@@ -12,7 +13,13 @@ export class AppError extends Error {
   /** What a rejected file got wrong, one line each. Never the file's content. */
   readonly issues: string[] | undefined
 
-  constructor(code: ErrorCode, message: string, status: ContentfulStatusCode, hint?: string, issues?: string[]) {
+  constructor(
+    code: ErrorCode,
+    message: string,
+    status: ContentfulStatusCode,
+    hint?: string,
+    issues?: string[]
+  ) {
     super(message)
     this.name = 'AppError'
     this.code = code
@@ -39,7 +46,12 @@ export function toAppError(err: unknown): AppError {
     return err
   }
   if (err instanceof PrNotFoundError) {
-    return new AppError('PR_NOT_FOUND', err.message, 404, 'check the number and that origin is the right repository')
+    return new AppError(
+      'PR_NOT_FOUND',
+      err.message,
+      404,
+      'check the number and that origin is the right repository'
+    )
   }
   if (err instanceof GitHubApiError) {
     if (err.missingBinary) {
@@ -62,4 +74,16 @@ export function toAppError(err: unknown): AppError {
     return new AppError(err.code, err.message, 500, err.hint)
   }
   return new AppError('INTERNAL', err instanceof Error ? err.message : String(err), 500)
+}
+
+/** Keep the original error and its causes in the server log, before response mapping loses the stack. */
+export function logRequestError(
+  log: (line: string) => void,
+  request: { method: string; path: string },
+  err: unknown
+): void {
+  const mapped = toAppError(err)
+  if (mapped.status >= 500) {
+    log(`[serve] ${request.method} ${request.path} ${mapped.status} ${mapped.code}\n${inspect(err)}`)
+  }
 }

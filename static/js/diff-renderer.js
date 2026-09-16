@@ -113,7 +113,12 @@ export function parsePatch(patch) {
       prevDel = true
       prevAdd = false
     } else {
-      cur.entries.push({ ...base, code: line.startsWith(' ') ? line.slice(1) : line, oldLine: oL, newLine: nL })
+      cur.entries.push({
+        ...base,
+        code: line.startsWith(' ') ? line.slice(1) : line,
+        oldLine: oL,
+        newLine: nL,
+      })
       oL++
       nL++
       prevAdd = false

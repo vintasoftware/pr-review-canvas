@@ -3,7 +3,12 @@
 import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/github/capabilities.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
-import { canvasChanged, openRegenerateDialog, REGENERATE_DIALOG_ID, regenerateDialogHtml } from './regenerate.js'
+import {
+  canvasChanged,
+  openRegenerateDialog,
+  REGENERATE_DIALOG_ID,
+  regenerateDialogHtml,
+} from './regenerate.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 
@@ -44,7 +49,9 @@ describe('regenerate dialog', () => {
     const dialog = document.querySelector(`#${REGENERATE_DIALOG_ID}`)
     expect(dialog?.querySelector('h2')?.textContent).toBe('Regenerate the canvas')
     expect(dialog?.querySelector('code')?.textContent).toBe('/pr-review-canvas 42 --force')
-    expect(dialog?.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('/pr-review-canvas 42 --force')
+    expect(dialog?.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe(
+      '/pr-review-canvas 42 --force'
+    )
     expect(dialog?.querySelector('.cmd.fill')?.textContent).toBe('copy')
     expect(dialog?.querySelector('.dialog-actions .cmd')?.textContent).toBe('close')
   })

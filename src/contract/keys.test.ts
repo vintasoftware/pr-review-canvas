@@ -14,7 +14,9 @@ import {
 
 describe('keys', () => {
   it('sanitizes a path into a key the way the prior-art collector did', () => {
-    expect(sanitizeKey('apps/shl-server/src/__tests__/app.test.ts')).toBe('apps_shl_server_src___tests___app_test_ts')
+    expect(sanitizeKey('apps/shl-server/src/__tests__/app.test.ts')).toBe(
+      'apps_shl_server_src___tests___app_test_ts'
+    )
     expect(sanitizeKey('.env.example')).toBe('_env_example')
   })
 

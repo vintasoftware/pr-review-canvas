@@ -83,7 +83,11 @@ describe('ModelOutputSchema', () => {
 
   it('drops layerId from model points: publish assigns it', () => {
     const point = { kind: 'risk', level: 'check', title: 't', path: 'src/app.ts', line: 1, body: 'b' }
-    const parsed = ModelOutputSchema.parse({ summary: 'x', layers: [layer], points: [{ ...point, layerId: 'l1' }] })
+    const parsed = ModelOutputSchema.parse({
+      summary: 'x',
+      layers: [layer],
+      points: [{ ...point, layerId: 'l1' }],
+    })
     expect(parsed.points).toEqual([point])
   })
 
@@ -103,7 +107,9 @@ describe('ModelOutputSchema', () => {
             {
               path: 'src/app.ts',
               hunks: ['src_app_ts#1'],
-              annotations: [{ side: 'new', startLine: 1, endLine: 1, text: 'a'.repeat(over(TEXT_CAPS.annotation)) }],
+              annotations: [
+                { side: 'new', startLine: 1, endLine: 1, text: 'a'.repeat(over(TEXT_CAPS.annotation)) },
+              ],
             },
           ],
         },
@@ -137,8 +143,14 @@ describe('ModelOutputSchema', () => {
 
   it('accepts decisions and checkByHand as optional markdown and rejects them empty', () => {
     const withBoth = { ...layer, decisions: 'Sum over product.', checkByHand: 'Open the page.' }
-    expect(ModelOutputSchema.parse({ summary: 'x', layers: [withBoth], points: [] }).layers[0]).toEqual(withBoth)
-    const result = ModelOutputSchema.safeParse({ summary: 'x', layers: [{ ...layer, decisions: '' }], points: [] })
+    expect(ModelOutputSchema.parse({ summary: 'x', layers: [withBoth], points: [] }).layers[0]).toEqual(
+      withBoth
+    )
+    const result = ModelOutputSchema.safeParse({
+      summary: 'x',
+      layers: [{ ...layer, decisions: '' }],
+      points: [],
+    })
     expect(result.success).toBe(false)
     expect(result.error?.issues.map(i => i.path.join('.'))).toEqual(['layers.0.decisions'])
   })
@@ -158,7 +170,11 @@ describe('ModelOutputSchema', () => {
   })
 
   it('rejects a layer key that is not a slug', () => {
-    const result = ModelOutputSchema.safeParse({ summary: '', layers: [{ ...layer, key: 'Run Path' }], points: [] })
+    const result = ModelOutputSchema.safeParse({
+      summary: '',
+      layers: [{ ...layer, key: 'Run Path' }],
+      points: [],
+    })
     expect(result.success).toBe(false)
     expect(result.error?.issues.map(i => i.path.join('.'))).toEqual(['layers.0.key'])
   })

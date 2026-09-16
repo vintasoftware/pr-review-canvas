@@ -39,7 +39,14 @@ pr-review prepare --base <ref> --head <ref> [--force]
 Progress goes to stderr. The last stdout line is JSON:
 
 ```json
-{ "canvasDir": "...", "headSha": "...", "mergeBaseSha": "...", "promptPath": "...", "contextPath": "...", "status": "prepared" }
+{
+    "canvasDir": "...",
+    "headSha": "...",
+    "mergeBaseSha": "...",
+    "promptPath": "...",
+    "contextPath": "...",
+    "status": "prepared"
+}
 ```
 
 - `status: "exists"` means a canvas already exists for this head. Stop and tell the user:

@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { splitFences } from './fences.js'
-import { PROPOSED_BODY_MAX, parseProposedComment, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
+import {
+  PROPOSED_BODY_MAX,
+  parseProposedComment,
+  splitChatAnswer,
+  targetsFromFiles,
+} from './proposed-comment.js'
 
 /** @type {ReadonlyArray<import('./contract-types.js').FileEntry>} */
 const FILES = [
@@ -13,7 +18,14 @@ const FILES = [
     deletions: 1,
     hunks: [
       { id: 'src_app_ts#1', header: '@@ -1,4 +1,5 @@', oldStart: 1, oldLines: 4, newStart: 1, newLines: 5 },
-      { id: 'src_app_ts#2', header: '@@ -10,3 +11,4 @@', oldStart: 10, oldLines: 3, newStart: 11, newLines: 4 },
+      {
+        id: 'src_app_ts#2',
+        header: '@@ -10,3 +11,4 @@',
+        oldStart: 10,
+        oldLines: 3,
+        newStart: 11,
+        newLines: 4,
+      },
     ],
   },
 ]
@@ -51,7 +63,10 @@ describe('parseProposedComment', () => {
       [{ path: 'src/app.ts', line: 0, body: 'x' }, 'the block has no line number'],
       [{ path: 'src/app.ts', line: 3 }, 'the block has no body'],
       [{ path: 'src/app.ts', line: 3, body: '  ' }, 'the block has no body'],
-      [{ path: 'src/app.ts', line: 3, body: 'x'.repeat(PROPOSED_BODY_MAX + 1) }, 'the body is too long to post'],
+      [
+        { path: 'src/app.ts', line: 3, body: 'x'.repeat(PROPOSED_BODY_MAX + 1) },
+        'the body is too long to post',
+      ],
       [{ path: 'src/app.ts', line: 3, body: 'x', side: 'middle' }, 'side must be "new" or "old"'],
       [{ path: 'src/app.ts', line: 3, body: 'x', startLine: 'two' }, 'startLine must be a line number'],
       [{ path: 'src/app.ts', line: 3, body: 'x', startLine: 4 }, 'startLine comes after line'],
@@ -65,7 +80,9 @@ describe('parseProposedComment', () => {
     expect(parseProposedComment(JSON.stringify({ path: 'other.ts', line: 3, body: 'x' }), targets)).toEqual({
       reason: 'other.ts is not a file of this pull request',
     })
-    expect(parseProposedComment(JSON.stringify({ path: 'src/app.ts', line: 900, body: 'x' }), targets)).toEqual({
+    expect(
+      parseProposedComment(JSON.stringify({ path: 'src/app.ts', line: 900, body: 'x' }), targets)
+    ).toEqual({
       reason: 'src/app.ts:900 is not a line the diff shows',
     })
   })
@@ -93,7 +110,10 @@ describe('splitChatAnswer', () => {
 
   it('keeps a block that is not a usable comment as a block, with the reason', () => {
     const segments = splitChatAnswer(block({ path: 'nope.ts', line: 1, body: 'x' }), targets)
-    expect(segments[1]).toMatchObject({ type: 'invalid', reason: 'nope.ts is not a file of this pull request' })
+    expect(segments[1]).toMatchObject({
+      type: 'invalid',
+      reason: 'nope.ts is not a file of this pull request',
+    })
   })
 
   it('leaves an answer with no comment block as one piece of prose', () => {
@@ -119,15 +139,22 @@ describe('splitFences', () => {
   })
 
   it('leaves an unclosed block as prose, its opening line included', () => {
-    expect(splitFences('```comment\n{}\n', 'comment')).toEqual([{ type: 'markdown', text: '```comment\n{}\n' }])
+    expect(splitFences('```comment\n{}\n', 'comment')).toEqual([
+      { type: 'markdown', text: '```comment\n{}\n' },
+    ])
   })
 
   it('reads CRLF text the same as LF text', () => {
-    expect(splitFences('a\r\n```comment\r\n{}\r\n```\r\n', 'comment')[1]).toEqual({ type: 'block', text: '{}' })
+    expect(splitFences('a\r\n```comment\r\n{}\r\n```\r\n', 'comment')[1]).toEqual({
+      type: 'block',
+      text: '{}',
+    })
   })
 
   it('does not read inline code as a fence', () => {
-    expect(splitFences('a ```comment``` b', 'comment')).toEqual([{ type: 'markdown', text: 'a ```comment``` b' }])
+    expect(splitFences('a ```comment``` b', 'comment')).toEqual([
+      { type: 'markdown', text: 'a ```comment``` b' },
+    ])
   })
 })
 
@@ -149,7 +176,16 @@ describe('the target checks at the edges', () => {
         status: 'added',
         additions: 2,
         deletions: 0,
-        hunks: [{ id: 'src_new_ts#1', header: '@@ -0,0 +1,2 @@', oldStart: 0, oldLines: 0, newStart: 1, newLines: 2 }],
+        hunks: [
+          {
+            id: 'src_new_ts#1',
+            header: '@@ -0,0 +1,2 @@',
+            oldStart: 0,
+            oldLines: 0,
+            newStart: 1,
+            newLines: 2,
+          },
+        ],
       },
     ])
     expect(added.hasLine('src/new.ts', 'new', 1)).toBe(true)

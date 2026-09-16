@@ -88,7 +88,11 @@ export async function checkSkill(
     }
   }
   if (stale.length > 0) {
-    return { ok: false, detail: `outdated or modified skill: ${stale.join(', ')}`, hint: 'run `pr-review install-skill`' }
+    return {
+      ok: false,
+      detail: `outdated or modified skill: ${stale.join(', ')}`,
+      hint: 'run `pr-review install-skill`',
+    }
   }
   if (found.length === 0) {
     return {
@@ -113,7 +117,10 @@ async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {
 }
 
 /** Runs core checks and, with allChecks, checks acpx for AI Chat. */
-export async function runDoctorChecks(deps: DoctorDeps, options: { allChecks?: boolean } = {}): Promise<DoctorReport> {
+export async function runDoctorChecks(
+  deps: DoctorDeps,
+  options: { allChecks?: boolean } = {}
+): Promise<DoctorReport> {
   let repoRoot: string | null = null
   let git: DoctorCheck
   try {

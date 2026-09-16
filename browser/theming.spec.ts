@@ -38,13 +38,17 @@ async function readLook(page: Page) {
  */
 async function clickAppearance(page: Page, selector: string) {
   const saved = page.waitForResponse(
-    response => new URL(response.url()).pathname === '/api/appearance' && response.request().method() === 'PUT'
+    response =>
+      new URL(response.url()).pathname === '/api/appearance' && response.request().method() === 'PUT'
   )
   await page.locator(selector).click()
   expect((await saved).ok()).toBe(true)
 }
 
-test('starts in the terminal skin, switches to github, and remembers the choice', async ({ page, reviewUrl }) => {
+test('starts in the terminal skin, switches to github, and remembers the choice', async ({
+  page,
+  reviewUrl,
+}) => {
   await page.goto(reviewUrl)
   const root = page.locator('html')
   const toggle = page.locator('#skin-toggle')
@@ -102,7 +106,10 @@ test('cycles the theme auto → light → dark and remembers it the same way', a
   await expect(root).toHaveAttribute('data-theme', 'auto')
 })
 
-test('lets the query pick the look for one load of a page that runs no app module', async ({ page, reviewUrl }) => {
+test('lets the query pick the look for one load of a page that runs no app module', async ({
+  page,
+  reviewUrl,
+}) => {
   const { origin } = new URL(reviewUrl)
   const root = page.locator('html')
   const panel = page.locator('main.home .panel').first()
@@ -213,8 +220,14 @@ test('matches the GitHub dark screenshot palette', async ({ page, reviewUrl }, t
   await expect(page.locator('.file-h').first()).toHaveCSS('background-color', 'rgb(38, 44, 54)')
   await expect(page.locator('section.layer').first()).toHaveCSS('border-top-color', 'rgb(61, 68, 77)')
   await expect(page.locator('.hdr-actions .cmd').first()).toHaveCSS('background-color', 'rgb(42, 49, 60)')
-  await expect(page.locator('tr.add:not(.folded) > .code').first()).toHaveCSS('background-color', 'rgb(38, 56, 52)')
-  await expect(page.locator('tr.add:not(.folded) > .ln').first()).toHaveCSS('background-color', 'rgb(49, 80, 61)')
+  await expect(page.locator('tr.add:not(.folded) > .code').first()).toHaveCSS(
+    'background-color',
+    'rgb(38, 56, 52)'
+  )
+  await expect(page.locator('tr.add:not(.folded) > .ln').first()).toHaveCSS(
+    'background-color',
+    'rgb(49, 80, 61)'
+  )
   await expect(page.locator('tr.add:not(.folded) > .ln').first()).toHaveCSS('color', 'rgb(209, 215, 224)')
   await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('background-color', 'rgb(37, 49, 66)')
   await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('color', 'rgb(145, 152, 161)')

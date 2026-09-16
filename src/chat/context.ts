@@ -106,7 +106,10 @@ export async function renderChatContext(context: ChatContext, sources: ContextSo
  * An attention point: what it says, plus the lines it sits on. The agent needs the text to know
  * what the reader is reacting to; the lines alone leave it guessing. One context, one heading.
  */
-async function renderPoint(context: Extract<ChatContext, { kind: 'point' }>, sources: ContextSources): Promise<string> {
+async function renderPoint(
+  context: Extract<ChatContext, { kind: 'point' }>,
+  sources: ContextSources
+): Promise<string> {
   const point = sources.artifact.points.find(p => p.fingerprint === context.fingerprint)
   if (point === undefined) {
     throw new ChatContextError('this canvas has no such attention point')
@@ -140,7 +143,10 @@ async function renderLines(
 }
 
 /** The quoted lines and the hunk around them, with no heading of their own. */
-async function linesBody(context: Extract<ChatContext, { kind: 'lines' }>, sources: ContextSources): Promise<string> {
+async function linesBody(
+  context: Extract<ChatContext, { kind: 'lines' }>,
+  sources: ContextSources
+): Promise<string> {
   if (context.end < context.start) {
     throw new ChatContextError('the last line of a selection comes after the first')
   }
@@ -155,6 +161,7 @@ async function linesBody(context: Extract<ChatContext, { kind: 'lines' }>, sourc
     lines === null || lines.length === 0
       ? '_these lines are not available locally_'
       : fence(lines.map((text, i) => `${context.start + i}: ${text}`).join('\n'))
-  const hunkBlock = hunk === undefined ? '' : `\n\nThe hunk around them is \`${hunk.id}\` (\`${hunk.header}\`).`
+  const hunkBlock =
+    hunk === undefined ? '' : `\n\nThe hunk around them is \`${hunk.id}\` (\`${hunk.header}\`).`
   return `${numbered}${hunkBlock}`
 }

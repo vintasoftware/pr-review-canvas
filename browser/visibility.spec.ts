@@ -30,7 +30,10 @@ test('keeps the dismissed list open when a pending save completes', async ({ pag
   }
 })
 
-test('dismisses a point everywhere, keeps it dismissed after reload, and restores it', async ({ page, reviewUrl }) => {
+test('dismisses a point everywhere, keeps it dismissed after reload, and restores it', async ({
+  page,
+  reviewUrl,
+}) => {
   await page.goto(reviewUrl)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   const inline = page.locator('tr.ifind[data-fingerprint="fp-1"]')

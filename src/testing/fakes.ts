@@ -10,7 +10,13 @@ import { type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../github/capabilities.js'
 import { type GhResponse, GitHubApiError, type GitHubClient } from '../github/gh.js'
 import { DEFAULT_PROJECT_CONFIG, type LoadedProjectConfig } from '../project-config.js'
-import { type AppContext, createChatSet, createStores, STATIC_DIR, type VendorRoots } from '../server/context.js'
+import {
+  type AppContext,
+  createChatSet,
+  createStores,
+  STATIC_DIR,
+  type VendorRoots,
+} from '../server/context.js'
 import { createFakeRunner } from './fake-runner.js'
 
 export interface FakeGitOptions {
@@ -54,7 +60,9 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     },
     mergeBase: async (a, b) => {
       calls.push(['merge-base', a, b])
-      return options.mergeBases?.[`${a}..${b}`] ?? fail(['merge-base', a, b], 'fatal: Not a valid object name')
+      return (
+        options.mergeBases?.[`${a}..${b}`] ?? fail(['merge-base', a, b], 'fatal: Not a valid object name')
+      )
     },
     commitExists: async sha => {
       calls.push(['cat-file', '-e', sha])
@@ -133,7 +141,9 @@ export const ghHandler = (handler: (params: Record<string, string>) => unknown):
 export const ghError = (error: Error): FakeGhRoute => ({ kind: 'error', error })
 
 /** What a fake POST answers: a JSON body computed from the posted payload, or a throw. */
-export type FakePostRoute = { kind: 'json'; handler: (body: unknown) => unknown } | { kind: 'error'; error: Error }
+export type FakePostRoute =
+  | { kind: 'json'; handler: (body: unknown) => unknown }
+  | { kind: 'error'; error: Error }
 
 export const ghPost = (handler: (body: unknown) => unknown): FakePostRoute => ({ kind: 'json', handler })
 export const ghPostError = (error: Error): FakePostRoute => ({ kind: 'error', error })
@@ -273,6 +283,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
   const gh = opts.gh ?? createFakeGh()
   const stores = createStores(dataDir, config, git, now)
   const ctx: AppContext = {
+    log: () => undefined,
     config,
     projectConfig: opts.projectConfig ?? { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
     git,
@@ -280,7 +291,13 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     capabilities: opts.capabilities ?? createCapabilityProbe(gh, TEST_REPO, now),
     fetch: opts.fetch ?? notFetched,
     ...stores,
-    ...createChatSet(config, opts.runner ?? createFakeRunner(), stores, now, opts.projectConfig?.config.prompts),
+    ...createChatSet(
+      config,
+      opts.runner ?? createFakeRunner(),
+      stores,
+      now,
+      opts.projectConfig?.config.prompts
+    ),
     now,
     version: '0.0.0-test',
     staticDir: STATIC_DIR,

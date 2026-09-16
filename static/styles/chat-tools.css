@@ -1,4 +1,32 @@
 /* Chat context, proposed comments, quick questions, and settings. */
+.chat-tool-calls > summary {
+  padding: 4px 0;
+  gap: 8px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.chat-tool-calls > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+.chat-tool-calls[open] > summary::before {
+  transform: rotate(45deg);
+}
+.chat-tool-calls > ul {
+  margin: 4px 0 8px;
+  padding-left: 14px;
+  list-style: none;
+}
+.chat-tool-calls > ul > li {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
 .ctx-line {
   display: flex;
   align-items: baseline;

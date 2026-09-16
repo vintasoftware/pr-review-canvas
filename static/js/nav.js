@@ -46,7 +46,8 @@ export function buildNavOrder(artifact) {
  * @returns {NavItem | null}
  */
 function step(order, currentId, kind, direction) {
-  const from = currentId === null ? (direction === 1 ? -1 : order.length) : order.findIndex(i => i.id === currentId)
+  const from =
+    currentId === null ? (direction === 1 ? -1 : order.length) : order.findIndex(i => i.id === currentId)
   const start = from === -1 && currentId !== null ? (direction === 1 ? -1 : order.length) : from
   for (let i = start + direction; i >= 0 && i < order.length; i += direction) {
     const item = order[i]
@@ -87,5 +88,7 @@ export function layerOf(order, id) {
   if (!item || item.kind === 'overview') {
     return null
   }
-  return item.kind === 'layer' ? item : (order.find(i => i.kind === 'layer' && i.layerId === item.layerId) ?? null)
+  return item.kind === 'layer'
+    ? item
+    : (order.find(i => i.kind === 'layer' && i.layerId === item.layerId) ?? null)
 }

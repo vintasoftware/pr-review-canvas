@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "oxc", "import", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/no-explicit-any": "error"
+  },
+  "ignorePatterns": [
+    "node_modules/**",
+    "coverage/**",
+    "test-results/**",
+    ".pr-review/**",
+    "static/vendor/**"
+  ],
+  "options": {
+    "reportUnusedDisableDirectives": "error"
+  }
+}

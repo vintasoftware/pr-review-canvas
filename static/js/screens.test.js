@@ -3,7 +3,8 @@
 // Header, overview, empty state, and AI Chat shell over the synthetic bundle.
 import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/github/capabilities.js'
-import { GH_ISSUE_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
+import { mapReviewComment } from '../../src/github/comments.js'
+import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'
 import { renderEmptyState, sharedCanvasCalloutHtml } from './empty-state.js'
 import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
@@ -66,6 +67,72 @@ function bundle(over = {}) {
   return /** @type {PrBundle} */ (merged)
 }
 
+describe('review history', () => {
+  it('shows outdated threads and their replies below review history, excluding current threads', () => {
+    const data = bundle()
+    data.comments.reviewComments = GH_REVIEW_COMMENTS.map(comment => mapReviewComment(comment, new Set()))
+    const root = data.comments.reviewComments.find(comment => comment.outdated)
+    if (!root) throw new Error('Missing outdated fixture')
+    data.comments.reviewComments.push({
+      ...root,
+      id: 9999,
+      inReplyToId: root.id,
+      body: 'Outdated reply',
+      resolved: true,
+    })
+    data.comments.reviews = [{ ...root, state: 'APPROVED', body: '' }]
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    const section = document.querySelector('.outdated-comments')
+    expect(document.querySelector('.review-history')?.nextElementSibling).toBe(section)
+    expect(section?.querySelector('summary')?.textContent).toContain('Outdated comments · 2')
+    expect(section?.querySelectorAll('.cmt')).toHaveLength(2)
+    expect(section?.textContent).toContain('src/app.ts:2 (original) · resolved')
+    expect(section?.textContent).toContain('Outdated remark')
+    expect(section?.textContent).toContain('Outdated reply')
+    expect(section?.textContent).not.toContain('Why not')
+    expect(section?.querySelector('a')?.getAttribute('href')).toBe(root.url)
+
+    data.comments.reviewComments = data.comments.reviewComments.filter(comment => !comment.outdated)
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    expect(document.querySelector('.outdated-comments')).toBeNull()
+  })
+
+  it('hides empty commented events and retains written reviews and decisions', () => {
+    const data = bundle()
+    data.comments.reviews = [
+      { state: 'COMMENTED', body: '' },
+      { state: 'COMMENTED', body: ' \n\t' },
+      { state: 'COMMENTED', body: 'Please check the migration.' },
+      { state: 'APPROVED', body: '' },
+      { state: 'CHANGES_REQUESTED', body: '' },
+      { state: 'DISMISSED', body: '' },
+    ].map((review, id) => ({
+      id,
+      author: 'reviewer',
+      createdAt: NOW.toISOString(),
+      updatedAt: NOW.toISOString(),
+      url: `https://github.com/acme/widgets/pull/42#pullrequestreview-${id}`,
+      ...review,
+    }))
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    const history = document.querySelector('.review-history')
+    expect(history?.querySelector('summary')?.textContent).toContain('Review history · 4')
+    expect([...document.querySelectorAll('.review-entry .pill')].map(el => el.textContent)).toEqual([
+      'commented',
+      'approved',
+      'changes requested',
+      'dismissed',
+    ])
+    expect(history?.textContent).toContain('Please check the migration.')
+    expect(history?.textContent).not.toContain('Coverage 99%')
+    expect(document.querySelector('.conversation')?.textContent).toContain('Coverage 99%')
+
+    data.comments.reviews = data.comments.reviews.slice(0, 2)
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    expect(document.querySelector('.review-history')).toBeNull()
+  })
+})
+
 describe('header', () => {
   it('renders brand, commands, title, meta, risk line, progress, and the sign-off gate for a ready bundle', () => {
     document.body.innerHTML = renderHeader(bundle(), {
@@ -75,7 +142,7 @@ describe('header', () => {
       now: NOW,
     })
     const hdr = document.querySelector('header.hdr')
-    expect(hdr?.querySelector('.brand .box')?.textContent).toBe('PR review canvas')
+    expect(hdr?.querySelector('.brand-wordmark')?.textContent).toBe('PR review canvas')
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
       'regenerate',
       'export zip',
@@ -86,7 +153,9 @@ describe('header', () => {
       'theme: auto',
     ])
     // Every header command works on a ready bundle with acpx installed.
-    expect([...(hdr?.querySelectorAll('.hdr-actions .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual([])
+    expect([...(hdr?.querySelectorAll('.hdr-actions .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual(
+      []
+    )
     // Without acpx there is nothing to configure, so settings is disabled with the reason.
     document.body.innerHTML = renderHeader(bundle({ chat: { enabled: false, acpx: false } }), {
       host: 'localhost:3010',
@@ -106,7 +175,9 @@ describe('header', () => {
     expect(hdr?.querySelector('#export-zip')?.hasAttribute('disabled')).toBe(false)
     expect(hdr?.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
     expect(hdr?.querySelector('h1')?.textContent).toBe('#42feat: add b')
-    expect(hdr?.querySelector('.title a.cmd')?.getAttribute('href')).toBe('https://github.com/acme/widgets/pull/42')
+    expect(hdr?.querySelector('.title a.cmd')?.getAttribute('href')).toBe(
+      'https://github.com/acme/widgets/pull/42'
+    )
     expect(hdr?.querySelector('.meta .pill.open')?.textContent).toBe('open')
     expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5')
     expect(hdr?.querySelector('.pill.agent')?.textContent).toBe('claude · claude-opus-4-1 · claude-code')
@@ -121,7 +192,9 @@ describe('header', () => {
     expect([...(hdr?.querySelectorAll('.signoff .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual([
       'approve on github',
     ])
-    expect(hdr?.querySelector('#approve')?.getAttribute('title')).toBe('1 layer is not reviewed yet: Run path')
+    expect(hdr?.querySelector('#approve')?.getAttribute('title')).toBe(
+      '1 layer is not reviewed yet: Run path'
+    )
     expect(hdr?.querySelector('.stripe')).not.toBeNull()
     // A normal change set says nothing about caps.
     expect(hdr?.querySelector('.notice.large-pr')).toBeNull()
@@ -138,12 +211,15 @@ describe('header', () => {
       'Large change set: the canvas keeps at most 6 annotations per file and 12 attention points, ' +
         'and diffs were not inlined for the generator.'
     )
-    document.body.innerHTML = renderHeader(bundle({ largePr: true, status: 'missing', artifact: undefined }), {
-      host: 'h',
-      theme: 'auto',
-      skin: 'terminal',
-      now: NOW,
-    })
+    document.body.innerHTML = renderHeader(
+      bundle({ largePr: true, status: 'missing', artifact: undefined }),
+      {
+        host: 'h',
+        theme: 'auto',
+        skin: 'terminal',
+        now: NOW,
+      }
+    )
     expect(document.querySelector('.notice.large-pr')).not.toBeNull()
   })
 
@@ -171,7 +247,12 @@ describe('header', () => {
       '<p class="touches"><span>touches:</span><span class="pill risk model" title="touches tokens">auth</span></p>'
     )
     const state = { ...emptyState('x'), reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
-    document.body.innerHTML = renderHeader(bundle({ state }), { host: 'h', theme: 'auto', skin: 'terminal', now: NOW })
+    document.body.innerHTML = renderHeader(bundle({ state }), {
+      host: 'h',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+    })
     expect(document.querySelector('.ptext')?.textContent).toBe('1 of 1 layers reviewed')
     const artifact = syntheticArtifact()
     artifact.generator = { agent: 'codex', harness: 'codex', attempts: 1 }
@@ -204,7 +285,9 @@ describe('header', () => {
     expect(root.querySelector('.tree')).not.toBeNull()
     // Marking it open again puts the gate and its reason back.
     refreshProgress(root, artifact, base)
-    expect(root.querySelector('#approve')?.getAttribute('title')).toBe('1 layer is not reviewed yet: Run path')
+    expect(root.querySelector('#approve')?.getAttribute('title')).toBe(
+      '1 layer is not reviewed yet: Run path'
+    )
   })
 
   it('changes nothing on a page that has no progress line', () => {
@@ -213,7 +296,11 @@ describe('header', () => {
     if (!(root instanceof HTMLElement)) {
       throw new Error('no root')
     }
-    expect(refreshProgress(root, syntheticArtifact(), emptyState('x'))).toEqual({ done: 0, total: 1, percent: 0 })
+    expect(refreshProgress(root, syntheticArtifact(), emptyState('x'))).toEqual({
+      done: 0,
+      total: 1,
+      percent: 0,
+    })
   })
 })
 
@@ -223,7 +310,9 @@ describe('overview', () => {
   it('renders the summary as one prose block with its links, headings demoted', () => {
     document.body.innerHTML = summaryHtml(syntheticArtifact().summary, paths)
     expect(document.querySelector('.summary.prose a[href="#hunk:src/app.ts#1"]')?.textContent).toBe('app.ts')
-    expect(summaryHtml('plain summary', paths)).toBe('<div class="summary prose"><p>plain summary</p>\n</div>')
+    expect(summaryHtml('plain summary', paths)).toBe(
+      '<div class="summary prose"><p>plain summary</p>\n</div>'
+    )
     document.body.innerHTML = summaryHtml('## Heading\n\nbody', paths)
     expect(document.querySelector('.summary h4')?.textContent).toBe('Heading')
   })
@@ -234,7 +323,7 @@ describe('overview', () => {
     expect(document.querySelector('.cmt .who b')?.textContent).toBe('reviewer')
     expect(document.querySelector('.cmt .prose strong')?.textContent).toBe('good')
     expect(document.querySelector('details.bots summary .chev + span')?.textContent).toBe('1 bot comment')
-    expect(document.querySelector('details.bots summary > .chev')?.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('details.bots summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(document.querySelector('details.bots')?.hasAttribute('open')).toBe(false)
     expect(document.querySelector('details.bots summary .cmd')).toBeNull()
     expect(document.querySelector('button.cmd[data-act="pr-comment"]')?.textContent).toBe('comment')
@@ -271,7 +360,7 @@ describe('overview', () => {
     expect(panel?.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
       'PR description (from GitHub)'
     )
-    expect(panel?.querySelector('details.pr-desc summary > .chev')?.getAttribute('aria-expanded')).toBe('false')
+    expect(panel?.querySelector('details.pr-desc summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(panel?.querySelector('details.pr-desc')?.hasAttribute('open')).toBe(false)
     expect(panel?.querySelector('details.pr-desc summary .cmd')).toBeNull()
     expect(panel?.querySelector('details.pr-desc a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
@@ -313,7 +402,9 @@ describe('empty state', () => {
     expect(failed).toContain('callout warn')
     expect(failed).toContain('auth-required')
     expect(failed).toContain('id="fetch-shared"')
-    expect(sharedCanvasCalloutHtml(bundle({ sharedCanvas: { ...shared, downloadable: false } }))).toContain('(unknown)')
+    expect(sharedCanvasCalloutHtml(bundle({ sharedCanvas: { ...shared, downloadable: false } }))).toContain(
+      '(unknown)'
+    )
     expect(sharedCanvasCalloutHtml(bundle())).toBe('')
   })
 })

@@ -36,8 +36,17 @@ function artifact(over: Partial<ReviewArtifact> = {}): ReviewArtifact {
 
 describe('canvas zip name', () => {
   it('builds and parses the PR form and the pre-PR form', () => {
-    const withPr = buildCanvasZipName({ repo: TEST_REPO, generatedAt: manifest().generatedAt, headSha: HEAD_SHA, prNumber: 42 })
-    const withoutPr = buildCanvasZipName({ repo: TEST_REPO, generatedAt: manifest().generatedAt, headSha: HEAD_SHA })
+    const withPr = buildCanvasZipName({
+      repo: TEST_REPO,
+      generatedAt: manifest().generatedAt,
+      headSha: HEAD_SHA,
+      prNumber: 42,
+    })
+    const withoutPr = buildCanvasZipName({
+      repo: TEST_REPO,
+      generatedAt: manifest().generatedAt,
+      headSha: HEAD_SHA,
+    })
     expect(withPr).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     expect(withoutPr).toBe('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     expect(parseCanvasZipName(withPr, TEST_REPO)).toEqual({ prNumber: 42, shaPrefix: 'aaaaaaaa' })
@@ -49,16 +58,25 @@ describe('canvas zip name', () => {
     const normalized = buildCanvasZipName({ ...opts, generatedAt: '2026-09-10T08:00:00.987-03:00' })
     expect(normalized).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     const times = ['2027-01-01T00:00:00Z', '2026-12-31T23:59:59Z', '2026-09-10T11:00:01Z']
-    const names = times.map((generatedAt, i) => buildCanvasZipName({
-      ...opts, generatedAt, headSha: String(i).repeat(40),
-    }))
+    const names = times.map((generatedAt, i) =>
+      buildCanvasZipName({
+        ...opts,
+        generatedAt,
+        headSha: String(i).repeat(40),
+      })
+    )
     expect([...names].sort()).toEqual([...names].reverse())
   })
 
   it('slugs characters a file name should not carry', () => {
     const repo = { owner: 'Vinta.Software', name: 'building_blocks' }
     expect(repoSlug(repo)).toBe('vinta-software-building-blocks')
-    const name = buildCanvasZipName({ repo, generatedAt: manifest().generatedAt, headSha: HEAD_SHA, prNumber: 7 })
+    const name = buildCanvasZipName({
+      repo,
+      generatedAt: manifest().generatedAt,
+      headSha: HEAD_SHA,
+      prNumber: 7,
+    })
     expect(name).toBe('pr-7-20260910T110000Z-aaaaaaaa-vinta-software-building-blocks-canvas.zip')
     expect(parseCanvasZipName(name, repo)).toEqual({ prNumber: 7, shaPrefix: 'aaaaaaaa' })
   })
@@ -66,8 +84,12 @@ describe('canvas zip name', () => {
   it('refuses a name for another repo, another tool, a bad sha, or another extension', () => {
     expect(parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip', TEST_REPO)).toBeNull()
     expect(parseCanvasZipName('logs-acme-widgets-pr42-aaaaaaa.zip', TEST_REPO)).toBeNull()
-    expect(parseCanvasZipName('pr-42-20260910T110000Z-zzzzzzzz-acme-widgets-canvas.zip', TEST_REPO)).toBeNull()
-    expect(parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.tar', TEST_REPO)).toBeNull()
+    expect(
+      parseCanvasZipName('pr-42-20260910T110000Z-zzzzzzzz-acme-widgets-canvas.zip', TEST_REPO)
+    ).toBeNull()
+    expect(
+      parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.tar', TEST_REPO)
+    ).toBeNull()
     expect(parseCanvasZipName('ref-20260910T110000Z-aaaaaaaaa-acme-widgets-canvas.zip', TEST_REPO)).toBeNull()
   })
 })
@@ -135,10 +157,14 @@ describe('canvas zip codec', () => {
     // budget above relies on: a header that lies produces a truncated entry, not a huge one.
     // A zip that reads fine untampered: only the forged size makes review.json unreadable.
     const padded = `${JSON.stringify(artifact())}${' '.repeat(200_000)}`
-    const zip = zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest())), 'review.json': strToU8(padded) })
+    const zip = zipSync({
+      'manifest.json': strToU8(JSON.stringify(manifest())),
+      'review.json': strToU8(padded),
+    })
     expect(
-      readCanvasZip(zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest())), 'review.json': strToU8(padded) }))
-        .artifact
+      readCanvasZip(
+        zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest())), 'review.json': strToU8(padded) })
+      ).artifact
     ).toEqual(artifact())
     const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength)
     const text = new TextDecoder('latin1').decode(zip)
@@ -333,7 +359,9 @@ describe('importCanvas', () => {
 
   it('reports the zip errors as the HTTP envelope', async () => {
     t = await makeTestContext()
-    const invalid = await catchApp(() => importCanvas(t.ctx, { bytes: strToU8('nope'), currentHeadSha: HEAD_SHA }))
+    const invalid = await catchApp(() =>
+      importCanvas(t.ctx, { bytes: strToU8('nope'), currentHeadSha: HEAD_SHA })
+    )
     expect([invalid.code, invalid.status]).toEqual(['CANVAS_INVALID', 400])
     const big = new Uint8Array(CANVAS_ZIP_MAX_BYTES + 1)
     big.set([0x50, 0x4b, 0x03, 0x04])

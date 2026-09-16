@@ -161,7 +161,11 @@ export function fetchCapabilities(prNumber, opts = {}) {
  * @returns {Promise<import('./contract-types.js').PostCommentResponse>}
  */
 export function postComment(prNumber, input, opts = {}) {
-  return fetchJson(`/api/prs/${prNumber}/comments`, { method: 'POST', body: input, fetchImpl: opts.fetchImpl })
+  return fetchJson(`/api/prs/${prNumber}/comments`, {
+    method: 'POST',
+    body: input,
+    fetchImpl: opts.fetchImpl,
+  })
 }
 
 /**
@@ -388,7 +392,11 @@ export function fetchThreads(prNumber, opts = {}) {
  * @returns {Promise<import('./contract-types.js').ChatThreadsResponse>}
  */
 export function createThread(prNumber, opts = {}) {
-  return fetchJson(`/api/prs/${prNumber}/chat/threads`, { method: 'POST', body: {}, fetchImpl: opts.fetchImpl })
+  return fetchJson(`/api/prs/${prNumber}/chat/threads`, {
+    method: 'POST',
+    body: {},
+    fetchImpl: opts.fetchImpl,
+  })
 }
 
 /**
@@ -409,7 +417,11 @@ export function fetchThreadHistory(prNumber, name, opts = {}) {
  * @returns {Promise<{ cancelled: boolean }>}
  */
 export function cancelChat(prNumber, opts = {}) {
-  return fetchJson(`/api/prs/${prNumber}/chat/cancel`, { method: 'POST', body: {}, fetchImpl: opts.fetchImpl })
+  return fetchJson(`/api/prs/${prNumber}/chat/cancel`, {
+    method: 'POST',
+    body: {},
+    fetchImpl: opts.fetchImpl,
+  })
 }
 
 /**

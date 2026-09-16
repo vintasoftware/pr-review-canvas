@@ -52,7 +52,7 @@
   cursor: pointer;
   transition: transform 0.12s ease-out;
 }
-.chev[aria-expanded="true"] {
+.chev[aria-expanded='true'] {
   transform: rotate(90deg);
 }
 .body {
@@ -323,6 +323,21 @@
 .pr-desc {
   border-top: 1px solid var(--ink);
 }
+.review-history {
+  border-top: 1px solid var(--line);
+}
+.review-entry > .pill {
+  margin-bottom: 10px;
+}
+.review-entry .cmt {
+  row-gap: 8px;
+}
+.review-entry .who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
 /* A <details> summary reads like a card header: the chevron before the title is its toggle. The row
    itself keeps the default cursor and no hover background; the native <details> handles the click. */
 summary {
@@ -469,5 +484,11 @@ details[open] > summary .chev {
   margin: 0;
 }
 
-.prose img { max-width: 100%; height: auto; }
-img.av { object-fit: cover; border-radius: 50%; }
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+img.av {
+  object-fit: cover;
+  border-radius: 50%;
+}

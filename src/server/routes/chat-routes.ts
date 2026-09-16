@@ -12,14 +12,18 @@ import type { SettingsResponse } from '../../contract/settings.js'
 import { isChatAgent, SettingsInputSchema } from '../../contract/settings.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
-import { AppError } from '../errors.js'
+import { AppError, logRequestError } from '../errors.js'
 import { SSE_HEADERS, sseStream } from '../sse.js'
 import { parsePrNumber } from './api.js'
 
 async function readJsonBody<T>(
   request: Request,
   schema: {
-    safeParse: (raw: unknown) => { success: boolean; data?: T; error?: { issues: Array<{ message: string }> } }
+    safeParse: (raw: unknown) => {
+      success: boolean
+      data?: T
+      error?: { issues: Array<{ message: string }> }
+    }
   },
   expected: string
 ): Promise<T> {
@@ -106,7 +110,9 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     return c.json(settingsResponse(ctx, await ctx.settings.write(input)))
   })
 
-  api.get('/settings/agents', async c => c.json(await ctx.agents.list({ refresh: c.req.query('refresh') === '1' })))
+  api.get('/settings/agents', async c =>
+    c.json(await ctx.agents.list({ refresh: c.req.query('refresh') === '1' }))
+  )
 
   api.post('/settings/agents/:id/probe', async c => {
     const id = c.req.param('id')
@@ -141,7 +147,11 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
 
   api.post('/prs/:n/chat', async c => {
     const number = parsePrNumber(c.req.param('n'))
-    const input = await readJsonBody(c.req.raw, ChatSendSchema, '{ "message": "…", "context": { "kind": "pr" } }')
+    const input = await readJsonBody(
+      c.req.raw,
+      ChatSendSchema,
+      '{ "message": "…", "context": { "kind": "pr" } }'
+    )
     const pr = await loader.currentPr(number)
     const artifact = await artifactForChat(ctx, number, pr)
     const derived = await ctx.derived.read(pr.headSha)
@@ -176,9 +186,14 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     // A browser that goes away stops the agent; the turn is nobody's answer any more.
     return new Response(
-      sseStream(replayFrom(first, iterator), undefined, () => {
-        void ctx.chat.cancel(number)
-      }),
+      sseStream(
+        replayFrom(first, iterator),
+        undefined,
+        () => {
+          void ctx.chat.cancel(number)
+        },
+        err => logRequestError(ctx.log, c.req, err)
+      ),
       { headers: SSE_HEADERS }
     )
   })
@@ -190,7 +205,10 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
  * The turn as a stream again, after its first event was read to see whether the route can answer
  * with a stream at all. A turn that ended on that first read is an empty stream.
  */
-export function replayFrom(first: IteratorResult<ChatEvent>, rest: AsyncIterator<ChatEvent>): AsyncIterable<ChatEvent> {
+export function replayFrom(
+  first: IteratorResult<ChatEvent>,
+  rest: AsyncIterator<ChatEvent>
+): AsyncIterable<ChatEvent> {
   let sent = first.done === true
   return {
     [Symbol.asyncIterator]: () => ({
@@ -217,5 +235,8 @@ export function toChatError(err: unknown): AppError {
   if (err instanceof ChatContextError) {
     return new AppError('BAD_REQUEST', err.message, 400)
   }
-  return err instanceof AppError ? err : new AppError('INTERNAL', err instanceof Error ? err.message : String(err), 500)
+  if (err instanceof AppError) return err
+  const error = new AppError('INTERNAL', err instanceof Error ? err.message : String(err), 500)
+  error.cause = err
+  return error
 }

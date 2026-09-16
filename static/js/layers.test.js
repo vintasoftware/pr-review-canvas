@@ -82,7 +82,11 @@ describe('rail', () => {
     document.body.innerHTML = renderRail(artifact, done)
     expect(document.querySelector('a[href="#layer-run-path"] .dot')?.className).toBe('dot on')
     document.body.innerHTML = renderRail(
-      { ...artifact, layers: artifact.layers.filter(l => l.kind !== 'other'), points: artifact.points.slice(0, 1) },
+      {
+        ...artifact,
+        layers: artifact.layers.filter(l => l.kind !== 'other'),
+        points: artifact.points.slice(0, 1),
+      },
       state
     )
     expect(document.querySelector('li.other')).toBeNull()
@@ -142,14 +146,18 @@ describe('layer sections', () => {
       'Decisions and trade-offs',
       'Check by hand',
     ])
-    expect(section?.querySelector('.judgment.decisions a[href="#hunk:src/app.ts#1"]')?.textContent).toBe('app.ts')
+    expect(section?.querySelector('.judgment.decisions a[href="#hunk:src/app.ts#1"]')?.textContent).toBe(
+      'app.ts'
+    )
     expect(section?.querySelector('.judgment.check-by-hand .prose')?.textContent?.trim()).toBe(
       'Run the app once and confirm the total.'
     )
     expect(section?.querySelector('.testmap')).not.toBeNull()
     // Order inside the section: rationale and judgment, test map, this layer's point cards, then files.
     expect(
-      [...(section?.querySelectorAll('.body, .testmap, .lbl.sub, .findings, .files') ?? [])].map(el => el.className)
+      [...(section?.querySelectorAll('.body, .testmap, .lbl.sub, .findings, .files') ?? [])].map(
+        el => el.className
+      )
     ).toEqual(['body', 'lbl sub', 'testmap', 'lbl sub', 'findings', 'lbl sub', 'files'])
     expect([...(section?.querySelectorAll('.lbl.sub') ?? [])].map(h => h.textContent)).toEqual([
       'Tests',
@@ -181,7 +189,7 @@ describe('layer sections', () => {
     const other = document.querySelector('section.panel#layer-other')
     expect(other?.querySelector('details summary h2')?.textContent).toBe('Other changes — 3 files, ignored')
     const otherChevron = other?.querySelector('details summary > .chev')
-    expect(otherChevron?.getAttribute('aria-expanded')).toBe('false')
+    expect(otherChevron?.getAttribute('aria-hidden')).toBe('true')
     expect(otherChevron?.nextElementSibling?.tagName).toBe('H2')
     expect(other?.querySelector('details summary .cmd')).toBeNull()
     expect(other?.querySelector('details')?.hasAttribute('open')).toBe(false)
@@ -208,7 +216,9 @@ describe('layer sections', () => {
       'judgment decisions',
       'judgment check-by-hand',
     ])
-    expect(body?.querySelector('.diagram')?.getAttribute('data-mermaid')).toBe('stateDiagram-v2\n  [*] --> active')
+    expect(body?.querySelector('.diagram')?.getAttribute('data-mermaid')).toBe(
+      'stateDiagram-v2\n  [*] --> active'
+    )
   })
 
   it('draws a fence in the rationale and leaves one in the decisions as code', () => {
@@ -226,7 +236,9 @@ describe('layer sections', () => {
     expect([...document.querySelectorAll('.diagram')].map(el => el.getAttribute('data-mermaid'))).toEqual([
       'flowchart LR\n  A --> B',
     ])
-    expect(document.querySelector('.judgment.decisions pre code')?.textContent).toBe('flowchart LR\n  C --> D\n')
+    expect(document.querySelector('.judgment.decisions pre code')?.textContent).toBe(
+      'flowchart LR\n  C --> D\n'
+    )
   })
 
   it('handles files missing from the manifest and a checked reviewed box', () => {
@@ -244,7 +256,12 @@ describe('layer sections', () => {
     expect(html).toContain('id="file-ghost_ts"')
     expect(html).not.toContain('pill add')
     expect(
-      elsewhereHtml({ path: 'ghost.ts', hunks: [], isTest: false, annotations: [] }, undefined, layer, cctx.hunkIndex)
+      elsewhereHtml(
+        { path: 'ghost.ts', hunks: [], isTest: false, annotations: [] },
+        undefined,
+        layer,
+        cctx.hunkIndex
+      )
     ).toBe('')
     // A hunk that no layer lists is not reported as living elsewhere.
     const entry = files[0]
@@ -265,15 +282,21 @@ describe('layer sections', () => {
       throw new Error('missing layer')
     }
 
-    const file = { path: 'routine.ts', hunks: ['routine_ts#1'], isTest: false, annotations: [], collapsed: true }
-    const ctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
-    document.body.innerHTML = renderFileCard(file, undefined, layer, ctx)
+    const file = {
+      path: 'routine.ts',
+      hunks: ['routine_ts#1'],
+      isTest: false,
+      annotations: [],
+      collapsed: true,
+    }
+    const cardContext = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    document.body.innerHTML = renderFileCard(file, undefined, layer, cardContext)
 
     expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
     expect(document.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('false')
     expect(document.querySelector('input')?.checked).toBe(false)
 
-    document.body.innerHTML = renderFileCard(file, undefined, layer, { ...ctx, keepOpen: true })
+    document.body.innerHTML = renderFileCard(file, undefined, layer, { ...cardContext, keepOpen: true })
     expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
     expect(document.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('true')
   })
@@ -312,13 +335,17 @@ describe('hydration', () => {
     expect(card.querySelectorAll('tr.ann').length).toBe(3)
     expect(card.querySelector('tr.annot .lbl')?.textContent).toBe('Annotation · lines 3–4')
     expect(card.querySelector('tr.ifind')?.getAttribute('data-point')).toBe('p-1')
-    expect(card.querySelector('tr.thread.resolved .thread-collapsed')?.textContent).toBe('1 resolved thread · show')
+    expect(card.querySelector('tr.thread.resolved .thread-collapsed')?.textContent).toBe(
+      '1 resolved thread · show'
+    )
     expect(card.querySelector('tr.thread.resolved .thread-full')?.hasAttribute('hidden')).toBe(true)
     // Row order under line 4: the line, its annotation, the point, the thread.
     const row4 = card.querySelector('#L-src_app_ts-new-4')
     expect(row4?.nextElementSibling?.classList.contains('annot')).toBe(true)
     expect(row4?.nextElementSibling?.nextElementSibling?.classList.contains('ifind')).toBe(true)
-    expect(row4?.nextElementSibling?.nextElementSibling?.nextElementSibling?.classList.contains('thread')).toBe(true)
+    expect(
+      row4?.nextElementSibling?.nextElementSibling?.nextElementSibling?.classList.contains('thread')
+    ).toBe(true)
     // Idempotent.
     expect(hydrateFileCard(card, ctx())).toEqual({ rendered: true, deferred: false, placed: 3, missed: 0 })
     expect(card.querySelectorAll('tr.annot').length).toBe(1)
@@ -340,7 +367,9 @@ describe('hydration', () => {
       throw new Error('no card')
     }
     expect(hydrateFileCard(card, ctx())).toEqual({ rendered: true, deferred: false, placed: 1, missed: 0 })
-    expect(card.querySelector('#L-src_gone_ts-old-1')?.nextElementSibling?.classList.contains('ifind')).toBe(true)
+    expect(card.querySelector('#L-src_gone_ts-old-1')?.nextElementSibling?.classList.contains('ifind')).toBe(
+      true
+    )
   })
 
   it('shows the unavailable note without patches and skips malformed cards', () => {
@@ -406,7 +435,9 @@ describe('hydration', () => {
     expect(card.querySelectorAll('table.diff').length).toBe(0)
     const show = card.querySelector('[data-act="show-diff"]')
     expect(show?.textContent).toBe('show diff')
-    expect(card.querySelector('.deferred .hint')?.textContent).toContain(`above the ${DEFERRED_DIFF_LINES}-line limit`)
+    expect(card.querySelector('.deferred .hint')?.textContent).toContain(
+      `above the ${DEFERRED_DIFF_LINES}-line limit`
+    )
     if (!(show instanceof HTMLElement)) {
       throw new Error('no show command')
     }
@@ -633,7 +664,8 @@ describe('decorations in isolation', () => {
 const fixture = JSON.parse(await readFile(path.join(PACKAGE_ROOT, '__fixtures__/pr-278/review.json'), 'utf8'))
 const repoGit = createGit(path.resolve(PACKAGE_ROOT, '..', '..'))
 const liveHead = await repoGit.revParse('refs/pr/278/head').catch(() => null)
-const liveDiffAvailable = liveHead === fixture.pr.headSha && (await repoGit.commitExists(fixture.pr.mergeBaseSha))
+const liveDiffAvailable =
+  liveHead === fixture.pr.headSha && (await repoGit.commitExists(fixture.pr.mergeBaseSha))
 
 describe('canvas without an Other layer', () => {
   it('renders the rail, the sections, and the progress count with every layer semantic', () => {
@@ -682,7 +714,9 @@ describe('PR #278 fixture render', () => {
         now: NOW,
       })
       expect(rendered).toBe(document.querySelectorAll('article.file').length)
-      expect(document.querySelectorAll('table.diff').length).toBe(fixture.files.reduce((n, f) => n + f.hunks.length, 0))
+      expect(document.querySelectorAll('table.diff').length).toBe(
+        fixture.files.reduce((n, f) => n + f.hunks.length, 0)
+      )
       expect(document.querySelectorAll('tr.ifind').length).toBe(fixture.points.length)
       expect(document.querySelectorAll('tr.annot').length).toBe(
         fixture.layers.reduce((n, l) => n + l.files.reduce((m, f) => m + f.annotations.length, 0), 0)

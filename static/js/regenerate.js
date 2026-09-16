@@ -65,5 +65,8 @@ export function canvasChanged(current, next) {
   if (current.status !== 'ready' || !current.artifact || !current.canvas) {
     return true
   }
-  return next.canvas.headSha !== current.canvas.headSha || next.artifact.generatedAt !== current.artifact.generatedAt
+  return (
+    next.canvas.headSha !== current.canvas.headSha ||
+    next.artifact.generatedAt !== current.artifact.generatedAt
+  )
 }

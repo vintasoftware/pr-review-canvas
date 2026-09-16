@@ -19,19 +19,23 @@ const PRIVATE_PULL = { private: true, permissions: { pull: true, push: true } }
 
 describe('decideCapabilities', () => {
   it('allows posting for a classic token with repo scope and read access', () => {
-    expect(decideCapabilities('octocat', response({ 'x-oauth-scopes': 'gist, repo' }, PRIVATE_PULL))).toEqual({
-      canComment: true,
-      tokenKind: 'classic',
-      login: 'octocat',
-    })
+    expect(decideCapabilities('octocat', response({ 'x-oauth-scopes': 'gist, repo' }, PRIVATE_PULL))).toEqual(
+      {
+        canComment: true,
+        tokenKind: 'classic',
+        login: 'octocat',
+      }
+    )
   })
 
   it('allows public_repo on a public repository and refuses it on a private one', () => {
     const publicRepo = { private: false, permissions: { pull: true } }
-    expect(decideCapabilities('octocat', response({ 'x-oauth-scopes': 'public_repo' }, publicRepo)).canComment).toBe(
-      true
-    )
-    expect(decideCapabilities('octocat', response({ 'x-oauth-scopes': 'public_repo' }, PRIVATE_PULL))).toEqual({
+    expect(
+      decideCapabilities('octocat', response({ 'x-oauth-scopes': 'public_repo' }, publicRepo)).canComment
+    ).toBe(true)
+    expect(
+      decideCapabilities('octocat', response({ 'x-oauth-scopes': 'public_repo' }, PRIVATE_PULL))
+    ).toEqual({
       canComment: false,
       tokenKind: 'classic',
       login: 'octocat',
@@ -81,7 +85,9 @@ describe('decideCapabilities', () => {
   })
 
   it('treats a body it cannot read as a private repository with no access', () => {
-    expect(decideCapabilities(null, response({ 'x-oauth-scopes': 'repo' }, 'not json')).canComment).toBe(false)
+    expect(decideCapabilities(null, response({ 'x-oauth-scopes': 'repo' }, 'not json')).canComment).toBe(
+      false
+    )
   })
 })
 
@@ -91,7 +97,11 @@ describe('probeCapabilities', () => {
       routes: { user: ghJson({ login: 'octocat' }) },
       rawRoutes: { 'repos/acme/widgets': GH_REPO_RESPONSE },
     })
-    expect(await probeCapabilities(gh, TEST_REPO)).toEqual({ canComment: true, tokenKind: 'classic', login: 'octocat' })
+    expect(await probeCapabilities(gh, TEST_REPO)).toEqual({
+      canComment: true,
+      tokenKind: 'classic',
+      login: 'octocat',
+    })
   })
 
   it('still probes the repository when the user call fails', async () => {
@@ -99,7 +109,11 @@ describe('probeCapabilities', () => {
       routes: { user: ghError(new GitHubApiError('user', 'HTTP 401', 1)) },
       rawRoutes: { 'repos/acme/widgets': GH_REPO_RESPONSE },
     })
-    expect(await probeCapabilities(gh, TEST_REPO)).toEqual({ canComment: true, tokenKind: 'classic', login: null })
+    expect(await probeCapabilities(gh, TEST_REPO)).toEqual({
+      canComment: true,
+      tokenKind: 'classic',
+      login: null,
+    })
   })
 
   it('reports the failure the fake was told to raise', async () => {

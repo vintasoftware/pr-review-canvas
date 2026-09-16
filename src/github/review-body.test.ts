@@ -53,7 +53,9 @@ describe('unreviewedLayers', () => {
 describe('inlineText', () => {
   it('puts model text on one line and escapes what markdown would read', () => {
     expect(inlineText('  Sum\ninstead of *product*  ')).toBe('Sum instead of \\*product\\*')
-    expect(inlineText('[link](x) `code` <b> # | _a_ \\')).toBe('\\[link\\](x) \\`code\\` \\<b\\> \\# \\| \\_a\\_ \\\\')
+    expect(inlineText('[link](x) `code` <b> # | _a_ \\')).toBe(
+      '\\[link\\](x) \\`code\\` \\<b\\> \\# \\| \\_a\\_ \\\\'
+    )
   })
 })
 
@@ -90,8 +92,16 @@ describe('buildReviewBody', () => {
     if (first === undefined) {
       throw new Error('no layer')
     }
-    const two = { ...artifact, layers: [...artifact.layers, { ...first, id: 'layer-3', key: 'third', title: 'Third' }] }
-    const body = buildReviewBody({ artifact: two, state: emptyState('x'), comments: COMMENTS, headSha: HEAD_SHA })
+    const two = {
+      ...artifact,
+      layers: [...artifact.layers, { ...first, id: 'layer-3', key: 'third', title: 'Third' }],
+    }
+    const body = buildReviewBody({
+      artifact: two,
+      state: emptyState('x'),
+      comments: COMMENTS,
+      headSha: HEAD_SHA,
+    })
     expect(body.split('\n')[0]).toBe('Reviewed 0 of 2 layers on `aaaaaaa`.')
   })
 
@@ -105,6 +115,8 @@ describe('buildReviewBody', () => {
   it('names a posted comment by its id when its url is not cached', () => {
     const artifact = syntheticArtifact()
     const state = stateWith({ posted: [{ commentId: 9999, at: '2026-09-10T12:00:00.000Z' }] })
-    expect(buildReviewBody({ artifact, state, comments: COMMENTS, headSha: HEAD_SHA })).toContain('- comment 9999')
+    expect(buildReviewBody({ artifact, state, comments: COMMENTS, headSha: HEAD_SHA })).toContain(
+      '- comment 9999'
+    )
   })
 })

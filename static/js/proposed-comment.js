@@ -63,7 +63,10 @@ export function parseProposedComment(source, targets) {
     return { reason: 'side must be "new" or "old"' }
   }
   const side = sideRaw === 'old' ? 'old' : 'new'
-  if (startRaw !== undefined && (typeof startRaw !== 'number' || !Number.isInteger(startRaw) || startRaw <= 0)) {
+  if (
+    startRaw !== undefined &&
+    (typeof startRaw !== 'number' || !Number.isInteger(startRaw) || startRaw <= 0)
+  ) {
     return { reason: 'startLine must be a line number' }
   }
   const startLine = typeof startRaw === 'number' ? startRaw : undefined

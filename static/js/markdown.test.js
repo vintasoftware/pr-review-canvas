@@ -52,14 +52,16 @@ describe('renderMarkdown', () => {
   })
 
   it('keeps a reference link that a drawing sits between', () => {
-    const src = 'See [the run path][run].\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n[run]: #file:src/run.ts'
+    const src =
+      'See [the run path][run].\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n[run]: #file:src/run.ts'
     document.body.innerHTML = renderMarkdown(src, { diagrams: true })
     expect(document.querySelector('.diagram')).not.toBeNull()
     expect(document.querySelector('a')?.getAttribute('href')).toBe('#file:src/run.ts')
   })
 
   it('keeps a reference definition written over two lines', () => {
-    const src = 'See [run].\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n[run]:\n  #file:src/run.ts "the run path"'
+    const src =
+      'See [run].\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n[run]:\n  #file:src/run.ts "the run path"'
     document.body.innerHTML = renderMarkdown(src, { diagrams: true })
     expect(document.querySelector('a')?.getAttribute('href')).toBe('#file:src/run.ts')
   })
@@ -113,7 +115,9 @@ describe('renderMarkdown', () => {
       'See [the swap](#hunk:src/app.ts#2), src/app.ts:4-6, other/file.ts:9 and `src/app.ts:1`.',
       { paths }
     )
-    expect(html).toContain('<a href="#hunk:src/app.ts#2" class="loc" data-link="#hunk:src/app.ts#2">the swap</a>')
+    expect(html).toContain(
+      '<a href="#hunk:src/app.ts#2" class="loc" data-link="#hunk:src/app.ts#2">the swap</a>'
+    )
     expect(html).toContain(
       '<a href="#line:src/app.ts:4-6" class="loc" data-link="#line:src/app.ts:4-6">src/app.ts:4-6</a>'
     )
@@ -138,21 +142,29 @@ describe('renderMarkdown', () => {
 })
 
 it('renders safe GitHub HTML and images while removing active content', () => {
-  document.body.innerHTML = renderMarkdown('<details><summary>Details</summary><p>Hello</p></details>\n\n![screenshot](https://user-images.githubusercontent.com/image.png)\n\n<script>alert(1)</script><img src="javascript:bad" onerror="bad()"><iframe></iframe>', { github: true })
+  document.body.innerHTML = renderMarkdown(
+    '<details><summary>Details</summary><p>Hello</p></details>\n\n![screenshot](https://user-images.githubusercontent.com/image.png)\n\n<script>alert(1)</script><img src="javascript:bad" onerror="bad()"><iframe></iframe>',
+    { github: true }
+  )
   expect(document.querySelector('summary')?.textContent).toBe('Details')
-  expect(document.querySelector('img')?.getAttribute('src')).toBe('https://user-images.githubusercontent.com/image.png')
+  expect(document.querySelector('img')?.getAttribute('src')).toBe(
+    'https://user-images.githubusercontent.com/image.png'
+  )
   expect(document.querySelectorAll('img')).toHaveLength(1)
   expect(document.querySelector('script, iframe, [onerror]')).toBeNull()
 })
 
 it('allows HTTPS screenshots and bot assets with no referrer, and removes unsafe image sources', () => {
-  document.body.innerHTML = renderMarkdown([
-    '![screenshot](https://github.com/user-attachments/assets/example)',
-    '![bot](https://assets.coderabbit.ai/review.png)',
-    '<img src="http://example.com/plain.png">',
-    '<img src="data:image/png;base64,AAAA">',
-    '<img src="/api/private">',
-  ].join('\n\n'), { github: true })
+  document.body.innerHTML = renderMarkdown(
+    [
+      '![screenshot](https://github.com/user-attachments/assets/example)',
+      '![bot](https://assets.coderabbit.ai/review.png)',
+      '<img src="http://example.com/plain.png">',
+      '<img src="data:image/png;base64,AAAA">',
+      '<img src="/api/private">',
+    ].join('\n\n'),
+    { github: true }
+  )
   const images = Array.from(document.querySelectorAll('img'))
   expect(images.map(img => img.getAttribute('src'))).toEqual([
     'https://github.com/user-attachments/assets/example',

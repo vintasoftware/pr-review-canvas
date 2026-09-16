@@ -117,9 +117,14 @@ describe('settingsDialogHtml', () => {
   })
 
   it('shows disabled chat and an agent-only override without adding a model flag', () => {
-    const html = settingsDialogHtml({
-      ...SETTINGS, overrides: { agent: 'codex' }, project: { ...SETTINGS.project, chatEnabled: false },
-    }, AGENTS)
+    const html = settingsDialogHtml(
+      {
+        ...SETTINGS,
+        overrides: { agent: 'codex' },
+        project: { ...SETTINGS.project, chatEnabled: false },
+      },
+      AGENTS
+    )
     expect(html).toContain('chat enabled: no')
     expect(html).toContain('--agent codex')
     expect(html).not.toContain('--model')

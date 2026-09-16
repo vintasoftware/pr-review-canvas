@@ -36,14 +36,16 @@ const capsShape = {
   diagram: cap(),
 } satisfies Record<keyof TextCaps, z.ZodOptional<z.ZodNumber>>
 
-export const PromptOverridesSchema = z.object({
-  'generation-format.md': z.string().min(1).optional(),
-  'generation-strict.md': z.string().min(1).optional(),
-  'generation-surfacing.md': z.string().min(1).optional(),
-  'quality-standards.md': z.string().min(1).optional(),
-  'layering-guidance.md': z.string().min(1).optional(),
-  'chat-seed.md': z.string().min(1).optional(),
-}).strict()
+export const PromptOverridesSchema = z
+  .object({
+    'generation-format.md': z.string().min(1).optional(),
+    'generation-strict.md': z.string().min(1).optional(),
+    'generation-surfacing.md': z.string().min(1).optional(),
+    'quality-standards.md': z.string().min(1).optional(),
+    'layering-guidance.md': z.string().min(1).optional(),
+    'chat-seed.md': z.string().min(1).optional(),
+  })
+  .strict()
 export type PromptOverrides = z.infer<typeof PromptOverridesSchema>
 
 export const ProjectConfigSchema = z.object({
@@ -119,7 +121,8 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
   const generation: ProjectConfig['generation'] = {
     mode: user.generation?.mode ?? DEFAULT_PROJECT_CONFIG.generation.mode,
     maxRepairRounds: user.generation?.maxRepairRounds ?? DEFAULT_PROJECT_CONFIG.generation.maxRepairRounds,
-    inlineDiffMaxLines: user.generation?.inlineDiffMaxLines ?? DEFAULT_PROJECT_CONFIG.generation.inlineDiffMaxLines,
+    inlineDiffMaxLines:
+      user.generation?.inlineDiffMaxLines ?? DEFAULT_PROJECT_CONFIG.generation.inlineDiffMaxLines,
     smallPrHunks: user.generation?.smallPrHunks ?? DEFAULT_PROJECT_CONFIG.generation.smallPrHunks,
   }
   if (user.generation?.caps !== undefined) {

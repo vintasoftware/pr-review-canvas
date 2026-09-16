@@ -117,7 +117,8 @@ export function railInnerHtml(artifact, state, opts = {}) {
     .map((layer, i) => {
       const progress = layerProgress(layer, state)
       const dotClass = progress === 'done' ? 'dot on' : progress === 'partial' ? 'dot half' : 'dot'
-      const dotLabel = progress === 'done' ? 'reviewed' : progress === 'partial' ? 'in progress' : 'not started'
+      const dotLabel =
+        progress === 'done' ? 'reviewed' : progress === 'partial' ? 'in progress' : 'not started'
       const reviewed = filesReviewed(layer, state)
       const files = layer.files.length
       const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
@@ -206,7 +207,11 @@ export function layerDiagramHtml(layer) {
  * @param {ReadonlySet<string>} paths
  */
 export function judgmentHtml(layer, paths) {
-  const block = /** @param {string} cls @param {string} label @param {string | undefined} text */ (cls, label, text) =>
+  const block = /** @param {string} cls @param {string} label @param {string | undefined} text */ (
+    cls,
+    label,
+    text
+  ) =>
     text === undefined
       ? ''
       : `<div class="judgment ${cls}"><h3 class="lbl">${label}</h3><div class="prose">${renderMarkdown(text, { paths })}</div></div>`
@@ -230,7 +235,9 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
     return ''
   }
   const active = own.filter(p => state.dismissed[p.fingerprint] === undefined).length
-  const cards = own.map(p => pointCardHtml(p, posted === undefined ? { paths, state } : { paths, state, posted }))
+  const cards = own.map(p =>
+    pointCardHtml(p, posted === undefined ? { paths, state } : { paths, state, posted })
+  )
   return `<h3 class="lbl sub">Attention points · <span class="point-count">${active}</span></h3><ol class="findings">${cards.join('')}</ol>`
 }
 
@@ -245,14 +252,16 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const key = entry?.key ?? sanitizeKey(lf.path)
   const cardReviewedId = `layer:${layer.id}/file:${sanitizeKey(lf.path)}`
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
-  const collapsed = cardReviewed || (lf.collapsed === true && lf.annotations.length === 0 && ctx.keepOpen !== true)
+  const collapsed =
+    cardReviewed || (lf.collapsed === true && lf.annotations.length === 0 && ctx.keepOpen !== true)
   const isFirst = !ctx.firstCardFor.has(key)
   ctx.firstCardFor.add(key)
   const id = isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`
   const pills = entry
     ? `<span class="pill add">+${entry.additions}</span><span class="pill del">&minus;${entry.deletions}</span>`
     : ''
-  const status = entry && entry.status !== 'modified' ? `<span class="status">${esc(entry.status)}</span>` : ''
+  const status =
+    entry && entry.status !== 'modified' ? `<span class="status">${esc(entry.status)}</span>` : ''
   const path =
     entry?.oldPath !== undefined
       ? `<span class="old">${esc(entry.oldPath)} &rarr; </span>${esc(lf.path)}`
@@ -411,7 +420,8 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   const entry = ctx.files.find(f => f.key === key)
   const patch = ctx.patches?.[key]
   if (!entry || patch === undefined) {
-    host.innerHTML = '<div class="unavailable">Diff not available locally. Fetch the PR head and reload.</div>'
+    host.innerHTML =
+      '<div class="unavailable">Diff not available locally. Fetch the PR head and reload.</div>'
     return { rendered: false, deferred: false, placed: 0, missed: 0 }
   }
   const lines = patchLineCount(patch)
@@ -432,10 +442,10 @@ export function hydrateFileCard(card, ctx, opts = {}) {
         async () => {
           hydrateFileCard(card, ctx, { force: true })
           // The host element now holds a drawn diff, so a later link into it leaves it alone.
-          const host = card.closest('pr-file')
-          if (host instanceof PrFileElement) {
-            host.rendered = true
-            host.deferred = false
+          const fileHost = card.closest('pr-file')
+          if (fileHost instanceof PrFileElement) {
+            fileHost.rendered = true
+            fileHost.deferred = false
           }
         },
         { pendingLabel: 'drawing…' }
@@ -450,7 +460,9 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   const layer = ctx.artifact.layers.find(l => l.id === layerId)
   const lf = layer?.files.find(f => f.path === entry.path)
   const annotations = lf?.annotations ?? []
-  const points = ctx.artifact.points.filter(p => p.path === entry.path && hunkIds.has(hunkIdForPoint(p, entry)))
+  const points = ctx.artifact.points.filter(
+    p => p.path === entry.path && hunkIds.has(hunkIdForPoint(p, entry))
+  )
   const threads = threadsForHunks(ctx.comments, entry, hunkIds)
   const { placed, missed } = applyDecorations(card, key, {
     annotations,

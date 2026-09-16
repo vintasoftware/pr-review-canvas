@@ -64,7 +64,11 @@ function contentText(value: unknown): string {
  */
 export function mapAcpxMessage(message: unknown): AgentEvent | null {
   if (!isRecord(message)) {
-    return { type: 'error', code: 'AGENT_PROTOCOL_INVALID', message: 'the agent wrote a line that is not a message' }
+    return {
+      type: 'error',
+      code: 'AGENT_PROTOCOL_INVALID',
+      message: 'the agent wrote a line that is not a message',
+    }
   }
   const error = read(message, 'error')
   if (isRecord(error)) {

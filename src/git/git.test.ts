@@ -119,6 +119,8 @@ describe('createGit (real adapter)', () => {
     expect(err.stderr).toBe(leaky)
     const long = new GitError(['diff'], 'x'.repeat(STDERR_MESSAGE_MAX + 50), 1)
     expect(long.message).toBe(`git diff failed (1): ${'x'.repeat(STDERR_MESSAGE_MAX)}…`)
-    expect(redactStderr('ssh://git@host/repo and http://a:b@h/x')).toBe('ssh://***@host/repo and http://***@h/x')
+    expect(redactStderr('ssh://git@host/repo and http://a:b@h/x')).toBe(
+      'ssh://***@host/repo and http://***@h/x'
+    )
   })
 })

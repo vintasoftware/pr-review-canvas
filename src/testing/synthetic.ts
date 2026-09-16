@@ -3,7 +3,14 @@
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { parseUnifiedDiff, toFileEntry } from '../git/diff-collector.js'
 import type { GhResponse } from '../github/gh.js'
-import { createFakeGh, createFakeGit, type FakeGh, type FakeGhOptions, type FakeGit, ghJson } from './fakes.js'
+import {
+  createFakeGh,
+  createFakeGit,
+  type FakeGh,
+  type FakeGhOptions,
+  type FakeGit,
+  ghJson,
+} from './fakes.js'
 
 export const HEAD_SHA = 'a'.repeat(40)
 export const BASE_SHA = 'b'.repeat(40)
@@ -103,7 +110,8 @@ export const SYNTHETIC_BLOBS: Record<string, string> = {
   [`${BASE_SHA}:bin/run.sh`]: '#!/bin/sh\n',
   [`${HEAD_SHA}:src/app.test.ts`]:
     "import { run } from './app'\ntest('runs', () => {\n  expect(run()).toBe(3)\n  expect(run()).not.toBe(1)\n})\n",
-  [`${BASE_SHA}:src/app.test.ts`]: "import { run } from './app'\ntest('runs', () => {\n  expect(run()).toBe(1)\n})\n",
+  [`${BASE_SHA}:src/app.test.ts`]:
+    "import { run } from './app'\ntest('runs', () => {\n  expect(run()).toBe(1)\n})\n",
 }
 
 export const GH_PULL = {
@@ -187,7 +195,10 @@ export const GH_USER = { login: 'octocat' }
 export const GH_REPO_RESPONSE: GhResponse = {
   status: 200,
   headers: { 'x-oauth-scopes': 'gist, read:org, repo', 'content-type': 'application/json' },
-  body: { private: true, permissions: { admin: false, maintain: false, pull: true, push: true, triage: true } },
+  body: {
+    private: true,
+    permissions: { admin: false, maintain: false, pull: true, push: true, triage: true },
+  },
 }
 
 export const GH_THREADS_PAGE = {
@@ -196,7 +207,10 @@ export const GH_THREADS_PAGE = {
       reviewThreads: {
         pageInfo: { hasNextPage: false, endCursor: null },
         nodes: [
-          { isResolved: true, comments: { nodes: [{ databaseId: 1001 }, { databaseId: 1002 }, { databaseId: null }] } },
+          {
+            isResolved: true,
+            comments: { nodes: [{ databaseId: 1001 }, { databaseId: 1002 }, { databaseId: null }] },
+          },
         ],
       },
     },

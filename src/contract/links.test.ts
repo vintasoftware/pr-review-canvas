@@ -53,7 +53,8 @@ describe('parseLink', () => {
 
 describe('extractLinks', () => {
   it('finds markdown-wrapped and bare links in order', () => {
-    const md = 'See [the mapper](#hunk:packages/x.ts#2) and #layer:auth then\n#line:a/b.ts:3-4:old. Not #overview.'
+    const md =
+      'See [the mapper](#hunk:packages/x.ts#2) and #layer:auth then\n#line:a/b.ts:3-4:old. Not #overview.'
     expect(extractLinks(md)).toEqual(['#hunk:packages/x.ts#2', '#layer:auth', '#line:a/b.ts:3-4:old'])
   })
 
@@ -72,7 +73,10 @@ describe('resolveLink', () => {
   const targets = {
     layers: [{ key: 'auth' }],
     files: [
-      { path: 'packages/x.ts', hunks: [hunk(1, 4, 1, 5), hunk(10, 3, 11, 4), hunk(30, 0, 32, 2), hunk(50, 2, 54, 0)] },
+      {
+        path: 'packages/x.ts',
+        hunks: [hunk(1, 4, 1, 5), hunk(10, 3, 11, 4), hunk(30, 0, 32, 2), hunk(50, 2, 54, 0)],
+      },
     ],
   }
 
@@ -80,29 +84,44 @@ describe('resolveLink', () => {
     expect(resolveLink({ kind: 'layer', layerKey: 'auth' }, targets)).toEqual({ ok: true })
     expect(resolveLink({ kind: 'file', path: 'packages/x.ts' }, targets)).toEqual({ ok: true })
     expect(resolveLink({ kind: 'hunk', path: 'packages/x.ts', n: 4 }, targets)).toEqual({ ok: true })
-    expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 1, end: 2, side: 'new' }, targets)).toEqual({
+    expect(
+      resolveLink({ kind: 'line', path: 'packages/x.ts', start: 1, end: 2, side: 'new' }, targets)
+    ).toEqual({
       ok: true,
     })
-    expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 11, end: 14, side: 'new' }, targets)).toEqual({
+    expect(
+      resolveLink({ kind: 'line', path: 'packages/x.ts', start: 11, end: 14, side: 'new' }, targets)
+    ).toEqual({
       ok: true,
     })
-    expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 50, end: 51, side: 'old' }, targets)).toEqual({
+    expect(
+      resolveLink({ kind: 'line', path: 'packages/x.ts', start: 50, end: 51, side: 'old' }, targets)
+    ).toEqual({
       ok: true,
     })
   })
 
   it('rejects a line range outside every hunk, across two hunks, or on the wrong side', () => {
-    expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 400, end: 410, side: 'new' }, targets)).toEqual({
+    expect(
+      resolveLink({ kind: 'line', path: 'packages/x.ts', start: 400, end: 410, side: 'new' }, targets)
+    ).toEqual({
       ok: false,
-      message: 'packages/x.ts:400-410 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
+      message:
+        'packages/x.ts:400-410 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
     })
-    expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 4, end: 12, side: 'new' }, targets)).toEqual({
+    expect(
+      resolveLink({ kind: 'line', path: 'packages/x.ts', start: 4, end: 12, side: 'new' }, targets)
+    ).toEqual({
       ok: false,
-      message: 'packages/x.ts:4-12 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
+      message:
+        'packages/x.ts:4-12 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
     })
-    expect(resolveLink({ kind: 'line', path: 'packages/x.ts', start: 54, end: 54, side: 'old' }, targets)).toEqual({
+    expect(
+      resolveLink({ kind: 'line', path: 'packages/x.ts', start: 54, end: 54, side: 'old' }, targets)
+    ).toEqual({
       ok: false,
-      message: 'packages/x.ts:54 (old) is not inside one hunk of the diff (old-side lines 1-4, 10-12, 30, 50-51)',
+      message:
+        'packages/x.ts:54 (old) is not inside one hunk of the diff (old-side lines 1-4, 10-12, 30, 50-51)',
     })
   })
 
@@ -131,7 +150,9 @@ describe('linkTargetId and linkLabel', () => {
     expect(linkTargetId({ kind: 'layer', layerKey: 'auth' }, keyFor)).toBe('layer-auth')
     expect(linkTargetId({ kind: 'file', path: 'a/b.ts' }, keyFor)).toBe('file-a_b_ts')
     expect(linkTargetId({ kind: 'hunk', path: 'a/b.ts', n: 2 }, keyFor)).toBe('hunk-a_b_ts-2')
-    expect(linkTargetId({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' }, keyFor)).toBe('L-a_b_ts-old-5')
+    expect(linkTargetId({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' }, keyFor)).toBe(
+      'L-a_b_ts-old-5'
+    )
   })
 
   it('labels links for text that had none', () => {
@@ -139,6 +160,8 @@ describe('linkTargetId and linkLabel', () => {
     expect(linkLabel({ kind: 'file', path: 'a/b.ts' })).toBe('a/b.ts')
     expect(linkLabel({ kind: 'hunk', path: 'a/b.ts', n: 2 })).toBe('a/b.ts hunk 2')
     expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 5, side: 'new' })).toBe('a/b.ts:5')
-    expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' })).toBe('a/b.ts:5-9 (old)')
+    expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' })).toBe(
+      'a/b.ts:5-9 (old)'
+    )
   })
 })

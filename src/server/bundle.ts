@@ -45,7 +45,11 @@ export async function runDiscovery(
     checkedAt: ctx.now().toISOString(),
     sharedCanvas: outcome.sharedCanvas,
   })
-  return { sharedCanvas: outcome.sharedCanvas, imported: outcome.imported !== null, warnings: outcome.warnings }
+  return {
+    sharedCanvas: outcome.sharedCanvas,
+    imported: outcome.imported !== null,
+    warnings: outcome.warnings,
+  }
 }
 
 /**
@@ -55,7 +59,9 @@ export async function runDiscovery(
 export function createPrLoader(ctx: AppContext) {
   const refreshed = new Set<number>()
 
-  async function refreshPr(number: number): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
+  async function refreshPr(
+    number: number
+  ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
     const meta = await fetchPrMeta(ctx.gh, ctx.config.repo, number)
     const shas = await fetchPrRefs(ctx.git, meta)
     const pr = toPr(meta, ctx.config.repo, shas)
@@ -225,11 +231,18 @@ export async function resolveBundle(
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
 
   if (found.status === 'missing') {
-    return { ...base, ...shared, status: 'missing', skillCommand: buildSkillCommand(number, { force: false }) }
+    return {
+      ...base,
+      ...shared,
+      status: 'missing',
+      skillCommand: buildSkillCommand(number, { force: false }),
+    }
   }
   const loaded = await loadCanvas(ctx, found)
   if (loaded === null) {
-    allWarnings.push(`the canvas for ${found.headSha.slice(0, 7)} does not match the current format; regenerate it`)
+    allWarnings.push(
+      `the canvas for ${found.headSha.slice(0, 7)} does not match the current format; regenerate it`
+    )
     return { ...base, ...shared, status: 'missing', skillCommand: buildSkillCommand(number, { force: true }) }
   }
   // A canvas exists for this PR, so regenerating always needs --force.

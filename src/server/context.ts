@@ -36,6 +36,7 @@ export interface VendorRoots {
  * `createAppContext`; tests assemble their own with fakes and a temp data dir.
  */
 export interface AppContext {
+  log: (line: string) => void
   config: RuntimeConfig
   projectConfig: LoadedProjectConfig
   git: Git
@@ -72,7 +73,11 @@ export function resolveVendorRoots(): VendorRoots {
     diff: path.dirname(fileURLToPath(import.meta.resolve('diff'))),
     marked: fileURLToPath(import.meta.resolve('marked')),
     dompurify: fileURLToPath(import.meta.resolve('dompurify')),
-    hljs: path.join(path.dirname(require.resolve('@highlightjs/cdn-assets/package.json')), 'es', 'highlight.min.js'),
+    hljs: path.join(
+      path.dirname(require.resolve('@highlightjs/cdn-assets/package.json')),
+      'es',
+      'highlight.min.js'
+    ),
     mermaid: path.dirname(fileURLToPath(import.meta.resolve('mermaid'))),
   }
 }
@@ -158,13 +163,20 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
   return {
     config: opts.config,
+    log: line => process.stderr.write(`${line}\n`),
     projectConfig: opts.projectConfig,
     git,
     gh,
     capabilities: createCapabilityProbe(gh, opts.config.repo, now),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     ...stores,
-    ...createChatSet(opts.config, opts.runner ?? createAgentRunner(), stores, now, opts.projectConfig.config.prompts),
+    ...createChatSet(
+      opts.config,
+      opts.runner ?? createAgentRunner(),
+      stores,
+      now,
+      opts.projectConfig.config.prompts
+    ),
     now,
     version: readPackageVersion(),
     staticDir: STATIC_DIR,

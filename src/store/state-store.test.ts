@@ -49,7 +49,9 @@ describe('state store', () => {
 
   it('dismisses a point with a reason and restores it', async () => {
     const dismissed = await t.ctx.state.setDismissed(42, 'fp-1', true, 'the spec says sum')
-    expect(dismissed.dismissed).toEqual({ 'fp-1': { at: '2026-09-10T12:00:00.000Z', reason: 'the spec says sum' } })
+    expect(dismissed.dismissed).toEqual({
+      'fp-1': { at: '2026-09-10T12:00:00.000Z', reason: 'the spec says sum' },
+    })
     const noReason = await t.ctx.state.setDismissed(42, 'fp-2', true)
     expect(noReason.dismissed['fp-2']).toEqual({ at: '2026-09-10T12:00:00.000Z' })
     const restored = await t.ctx.state.setDismissed(42, 'fp-1', false)
@@ -117,12 +119,8 @@ describe('state store', () => {
 
   it('accepts only layer and layer-file reviewed ids', () => {
     expect(['layer:layer-1', 'layer:layer-1/file:src_app_ts'].map(isReviewedId)).toEqual([true, true])
-    expect(['layer-1', 'layer:', 'layer:a/file:', 'layer:a/file:b/c', '../../etc'].map(isReviewedId)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-    ])
+    expect(['layer-1', 'layer:', 'layer:a/file:', 'layer:a/file:b/c', '../../etc'].map(isReviewedId)).toEqual(
+      [false, false, false, false, false]
+    )
   })
 })

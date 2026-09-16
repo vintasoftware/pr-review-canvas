@@ -62,10 +62,15 @@ interface ExecResult {
 /** Runs git with an argument array; never a shell. */
 export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
   return new Promise(resolve => {
-    execFile('git', args, { cwd, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 }, (error, stdout, stderr) => {
-      const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
-      resolve({ stdout, stderr: stderr.toString('utf8'), code })
-    })
+    execFile(
+      'git',
+      args,
+      { cwd, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
+        resolve({ stdout, stderr: stderr.toString('utf8'), code })
+      }
+    )
   })
 }
 

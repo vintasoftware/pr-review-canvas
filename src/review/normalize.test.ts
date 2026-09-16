@@ -31,7 +31,7 @@ function input(): NormalizeInput {
 describe('normalize', () => {
   it('preserves fold descriptions when converting between model output and a saved artifact', () => {
     const output = artifactToModelOutput(syntheticArtifact())
-    const file = output.layers[0]?.files.find(file => file.path === 'src/app.test.ts')
+    const file = output.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')
     if (file === undefined) {
       throw new Error('missing test file')
     }
@@ -41,7 +41,7 @@ describe('normalize', () => {
     const saved = normalize(output, input())
     const restored = artifactToModelOutput(saved)
 
-    expect(restored.layers[0]?.files.find(file => file.path === 'src/app.test.ts')).toEqual(file)
+    expect(restored.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')).toEqual(file)
   })
 
   it('assigns ids, marks tests, tags risk from config and model, and adds one point per missing test', () => {
@@ -224,7 +224,10 @@ describe('normalize', () => {
     const model = artifactToModelOutput(original)
     expect(model.layers[0]?.risk).toBeUndefined()
     expect(model.points.map(p => p.title)).toEqual(['Sum instead of product', 'Deleted file had no owner'])
-    const again = normalize(model, { ...input(), highRisk: [{ pattern: 'src/new-name.ts', label: 'schema' }] })
+    const again = normalize(model, {
+      ...input(),
+      highRisk: [{ pattern: 'src/new-name.ts', label: 'schema' }],
+    })
     expect(again.layers.map(l => ({ ...l, risk: undefined }))).toEqual(
       original.layers.map(l => ({ ...l, risk: undefined }))
     )

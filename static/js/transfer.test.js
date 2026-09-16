@@ -133,7 +133,8 @@ describe('drop zone', () => {
     const root = mount(renderEmptyState(bundle()))
     const zone = wireDropZone(root, {
       prNumber: 42,
-      importImpl: () => Promise.reject(new ApiError({ code: 'CANVAS_INVALID', message: 'not a canvas' }, 400)),
+      importImpl: () =>
+        Promise.reject(new ApiError({ code: 'CANVAS_INVALID', message: 'not a canvas' }, 400)),
       onImported: () => undefined,
     })
     await zone?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
@@ -234,13 +235,15 @@ describe('drop zone', () => {
 
 describe('stale screen', () => {
   it('says how far behind the canvas is, in both relations', () => {
-    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 1 })).toBe(
-      'The canvas is for eeeeeee, 1 commit behind the head aaaaaaa.'
+    expect(
+      staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 1 })
+    ).toBe('The canvas is for eeeeeee, 1 commit behind the head aaaaaaa.')
+    expect(
+      staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 4 })
+    ).toBe('The canvas is for eeeeeee, 4 commits behind the head aaaaaaa.')
+    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor' })).toContain(
+      '0 commits'
     )
-    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 4 })).toBe(
-      'The canvas is for eeeeeee, 4 commits behind the head aaaaaaa.'
-    )
-    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor' })).toContain('0 commits')
     expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'unrelated' })).toBe(
       'The canvas is for eeeeeee, which is not in this branch any more; the head is aaaaaaa.'
     )
@@ -379,7 +382,9 @@ describe('upload and download', () => {
     const urls = []
     const fetchImpl = async (/** @type {string} */ url, /** @type {RequestInit} */ init) => {
       urls.push(`${init.method} ${url}`)
-      return new Response(JSON.stringify({ imported: false, status: 'missing', sharedCanvas: null, warnings: [] }))
+      return new Response(
+        JSON.stringify({ imported: false, status: 'missing', sharedCanvas: null, warnings: [] })
+      )
     }
     const body = await fetchSharedCanvas(42, { fetchImpl: /** @type {never} */ (fetchImpl) })
     expect(body.status).toBe('missing')
@@ -419,7 +424,9 @@ describe('upload and download', () => {
   it('reports the envelope of a failed export', async () => {
     /** @type {typeof fetch} */
     const fetchImpl = async () =>
-      new Response(JSON.stringify({ error: { code: 'CANVAS_NOT_FOUND', message: 'no canvas' } }), { status: 404 })
+      new Response(JSON.stringify({ error: { code: 'CANVAS_NOT_FOUND', message: 'no canvas' } }), {
+        status: 404,
+      })
     await expect(fetchCanvasZip(42, { fetchImpl })).rejects.toMatchObject({ code: 'CANVAS_NOT_FOUND' })
     /** @type {typeof fetch} */
     const plain = async () => new Response('boom', { status: 500 })
@@ -432,7 +439,9 @@ describe('upload and download', () => {
     expect(document.querySelector('a')).toBeNull()
     const original = globalThis.fetch
     globalThis.fetch = async () =>
-      new Response(new Uint8Array([1]), { headers: { 'content-disposition': 'attachment; filename="b.zip"' } })
+      new Response(new Uint8Array([1]), {
+        headers: { 'content-disposition': 'attachment; filename="b.zip"' },
+      })
     try {
       expect(await exportCanvasZip(42)).toBe('b.zip')
     } finally {
@@ -451,7 +460,9 @@ describe('upload and download', () => {
 
 it('uses the browser upload transport without forcing a cross-repository import', async () => {
   const xhr = fakeXhr(200, JSON.stringify({ status: 'ready' }))
-  vi.stubGlobal('XMLHttpRequest', class { constructor() { return xhr } })
+  vi.stubGlobal('XMLHttpRequest', function () {
+    return xhr
+  })
   try {
     expect(await importCanvas(42, new File(['zip'], 'canvas.zip'))).toEqual({ status: 'ready' })
     expect(xhr.sent?.get('force')).toBeNull()

@@ -59,7 +59,9 @@ describe('composerHtml', () => {
   })
 
   it('escapes the draft and the label it is given', () => {
-    const box = mount(composerHtml({ id: 'c1', label: '<b>x</b>', kind: 'issue', body: '<script>bad()</script>' }))
+    const box = mount(
+      composerHtml({ id: 'c1', label: '<b>x</b>', kind: 'issue', body: '<script>bad()</script>' })
+    )
     expect(box.querySelector('script')).toBeNull()
     expect(composerBody(box)).toBe('<script>bad()</script>')
     expect(box.querySelector('label')?.textContent).toBe('<b>x</b>')
@@ -75,7 +77,15 @@ describe('composerHtml', () => {
 describe('composerInput', () => {
   it('builds an inline comment, with the range only when it spans lines', () => {
     const box = mount(
-      composerHtml({ id: 'c1', label: 'x', kind: 'inline', path: 'src/app.ts', line: 4, side: 'old', startLine: 2 })
+      composerHtml({
+        id: 'c1',
+        label: 'x',
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 4,
+        side: 'old',
+        startLine: 2,
+      })
     )
     type(box, '  look here  ')
     expect(composerInput(box)).toEqual({
@@ -87,7 +97,15 @@ describe('composerInput', () => {
       body: 'look here',
     })
     const single = mount(
-      composerHtml({ id: 'c2', label: 'x', kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', startLine: 4 })
+      composerHtml({
+        id: 'c2',
+        label: 'x',
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 4,
+        side: 'new',
+        startLine: 4,
+      })
     )
     type(single, 'one line')
     expect(composerInput(single)).toEqual({
@@ -131,7 +149,9 @@ describe('composerInput', () => {
     type(reply, 'hi')
     reply.setAttribute('data-in-reply-to', 'nope')
     expect(composerInput(reply)).toBeNull()
-    const inline = mount(composerHtml({ id: 'c3', label: 'x', kind: 'inline', path: 'a.ts', line: 4, side: 'new' }))
+    const inline = mount(
+      composerHtml({ id: 'c3', label: 'x', kind: 'inline', path: 'a.ts', line: 4, side: 'new' })
+    )
     type(inline, 'hi')
     inline.removeAttribute('data-path')
     expect(composerInput(inline)).toBeNull()
@@ -186,7 +206,9 @@ describe('applyCapabilityGating', () => {
   it('falls back to a general reason and enables everything again', () => {
     applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null })
     expect(document.querySelector('button[data-needs-post]')?.getAttribute('title')).toBe(NO_POSTING_TITLE)
-    expect(applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })).toBe(false)
+    expect(
+      applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
+    ).toBe(false)
     const button = document.querySelector('button[data-needs-post]')
     expect(button?.hasAttribute('disabled')).toBe(false)
     expect(button?.hasAttribute('title')).toBe(false)
@@ -198,8 +220,15 @@ describe('applyCapabilityGating', () => {
   })
 
   it('says in plain sight why posting is off, and takes the line back', () => {
-    applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null, reason: 'no repo scope' })
-    expect(document.querySelector('.capability-note')?.textContent).toBe('Posting to GitHub is off: no repo scope')
+    applyCapabilityGating(document, {
+      canComment: false,
+      tokenKind: 'classic',
+      login: null,
+      reason: 'no repo scope',
+    })
+    expect(document.querySelector('.capability-note')?.textContent).toBe(
+      'Posting to GitHub is off: no repo scope'
+    )
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     expect(document.querySelector('.capability-note')?.textContent).toBe('')
   })
@@ -208,7 +237,12 @@ describe('applyCapabilityGating', () => {
     const button = document.querySelector('button[data-needs-post]')
     setDisabledReason(button, 'every layer must be read first')
     expect(button?.hasAttribute('disabled')).toBe(true)
-    applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null, reason: 'no scope' })
+    applyCapabilityGating(document, {
+      canComment: false,
+      tokenKind: 'classic',
+      login: null,
+      reason: 'no scope',
+    })
     expect(button?.getAttribute('title')).toBe('no scope')
     // Posting becomes allowed, but the command's own reason still holds.
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })

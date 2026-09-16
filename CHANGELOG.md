@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0
+
+Changes since 0.2.0.
+
+### Review interface
+
+- Review history groups submitted reviews and omits empty comment-only events while retaining
+  written reviews and approval, change-request, and dismissal decisions.
+- Outdated comments appear below review history with replies, original locations, and GitHub
+  links. Current comments remain in the diff without a duplicate overview section.
+- Clicking directly on a section chevron now expands or collapses it. Keyboard toggling continues
+  to work.
+- Improved review and tool-call spacing, removed the empty gutter beside inline comments and
+  annotations, and added SVG branding.
+
+### AI chat
+
+- Chat floats on smaller screens and becomes a minimizable modal on mobile, with keyboard focus
+  containment and Escape to minimize. Drafts survive minimizing and resizing.
+- Quick questions now lead with "Suggestion to solve this?" and include five suggested prompts.
+
+### Diagnostics and development
+
+- `serve` logs internal HTTP and chat-stream failures with the request method, path, status,
+  error code, and original error details. Expected client errors stay quiet.
+- Added Oxlint, Oxfmt, and a pre-commit hook for lint, formatting, strict type checks, and tests.
+  CI runs the same checks, executing unit tests once through coverage per Node.js version.
+
+### Upgrade from 0.2.0
+
+1. Run `npm install -g @vintasoftware/pr-review-canvas@0.3.0` and restart `pr-review serve`.
+2. Run `pr-review install-skill` in each project to refresh the bundled skill copy. Preserve any
+   customizations first, and repeat custom directory flags if used.
+3. Existing configuration and saved canvases remain compatible; no migration is required.
+4. Contributors should run `corepack pnpm install --frozen-lockfile` and `corepack pnpm hooks:install`
+   in their clone. Use `pnpm lint:fix` and `pnpm format` to apply automatic fixes.
+
 ## 0.2.0
 
 Changes since 0.1.0.

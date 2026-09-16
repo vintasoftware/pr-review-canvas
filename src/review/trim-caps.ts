@@ -77,7 +77,10 @@ interface TitledOutput {
  * Titles only: a rationale or a body is prose a reader will read, and cutting it is the author's
  * call, not the tool's.
  */
-export function applyTitleTrims(output: unknown, caps: { layerTitle: number; pointTitle: number }): TitleTrim[] {
+export function applyTitleTrims(
+  output: unknown,
+  caps: { layerTitle: number; pointTitle: number }
+): TitleTrim[] {
   const trims: TitleTrim[] = []
   const trim = (where: string, holder: { title?: string }, cap: number): void => {
     if (typeof holder.title !== 'string') {
@@ -89,11 +92,12 @@ export function applyTitleTrims(output: unknown, caps: { layerTitle: number; poi
       holder.title = trimmed
     } else if (visibleLength(holder.title) > cap) {
       const match = EXPLAINER.exec(holder.title.trim().replace(/\s+/g, ' '))
-      const reason = match === null
-        ? 'no explainer separator (:, —, – or -) to drop'
-        : match.index === 0
-          ? 'dropping the explainer would leave an empty title'
-          : 'the title before the explainer still exceeds the cap'
+      const reason =
+        match === null
+          ? 'no explainer separator (:, —, – or -) to drop'
+          : match.index === 0
+            ? 'dropping the explainer would leave an empty title'
+            : 'the title before the explainer still exceeds the cap'
       trims.push({ outcome: 'unfixable', where, length: visibleLength(holder.title), cap, reason })
     }
   }

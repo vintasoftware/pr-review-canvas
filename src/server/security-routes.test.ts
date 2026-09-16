@@ -59,43 +59,59 @@ describe('every route', () => {
     await t.cleanup()
   })
 
-  it.each(ROUTES.map(r => [`${r.method} ${r.path}`, r] as const))('refuses %s with a foreign Host', async (_n, r) => {
-    const app = createApp(t.ctx)
-    const res = await app.request(...request(r, { host: 'evil.example' }))
-    expect(res.status).toBe(403)
-    expect(await res.clone().text()).toContain('FORBIDDEN_HOST')
-  })
-
-  it.each(WRITES.map(r => [`${r.method} ${r.path}`, r] as const))('refuses %s from a foreign origin', async (_n, r) => {
-    const app = createApp(t.ctx)
-    const res = await app.request(...request(r, { ...LOCAL, origin: 'https://evil.example' }))
-    expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({ error: { code: 'CROSS_ORIGIN', message: 'cross-origin request rejected' } })
-  })
-
-  it.each(WRITES.map(r => [`${r.method} ${r.path}`, r] as const))('refuses %s from a cross site', async (_n, r) => {
-    const app = createApp(t.ctx)
-    const res = await app.request(...request(r, { ...LOCAL, 'sec-fetch-site': 'cross-site' }))
-    expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({ error: { code: 'CROSS_ORIGIN', message: 'cross-site request rejected' } })
-  })
-
-  it.each(ROUTES.map(r => [`${r.method} ${r.path}`, r] as const))('sends the header set on %s', async (_n, r) => {
-    const app = createApp(t.ctx)
-    const res = await app.request(...request(r, { ...LOCAL, origin: 'http://localhost:3010' }))
-    // A route that no longer exists would answer the router's own 404, and every check below
-    // would pass on it, so the table would go on testing a route the server dropped.
-    expect(await res.clone().text()).not.toContain(`no route for ${r.method} ${r.path.split('?')[0]}`)
-    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
-    expect(res.headers.get('referrer-policy')).toBe('no-referrer')
-    if (r.path.startsWith('/api/')) {
-      expect(res.headers.get('cache-control')).toBe('no-store')
+  it.each(ROUTES.map(r => [`${r.method} ${r.path}`, r] as const))(
+    'refuses %s with a foreign Host',
+    async (_n, r) => {
+      const app = createApp(t.ctx)
+      const res = await app.request(...request(r, { host: 'evil.example' }))
+      expect(res.status).toBe(403)
+      expect(await res.clone().text()).toContain('FORBIDDEN_HOST')
     }
-    const html = (res.headers.get('content-type') ?? '').startsWith('text/html')
-    expect(res.headers.get('content-security-policy')).toBe(
-      html ? contentSecurityPolicy(nonceOf(await res.clone().text())) : null
-    )
-  })
+  )
+
+  it.each(WRITES.map(r => [`${r.method} ${r.path}`, r] as const))(
+    'refuses %s from a foreign origin',
+    async (_n, r) => {
+      const app = createApp(t.ctx)
+      const res = await app.request(...request(r, { ...LOCAL, origin: 'https://evil.example' }))
+      expect(res.status).toBe(403)
+      expect(await res.json()).toEqual({
+        error: { code: 'CROSS_ORIGIN', message: 'cross-origin request rejected' },
+      })
+    }
+  )
+
+  it.each(WRITES.map(r => [`${r.method} ${r.path}`, r] as const))(
+    'refuses %s from a cross site',
+    async (_n, r) => {
+      const app = createApp(t.ctx)
+      const res = await app.request(...request(r, { ...LOCAL, 'sec-fetch-site': 'cross-site' }))
+      expect(res.status).toBe(403)
+      expect(await res.json()).toEqual({
+        error: { code: 'CROSS_ORIGIN', message: 'cross-site request rejected' },
+      })
+    }
+  )
+
+  it.each(ROUTES.map(r => [`${r.method} ${r.path}`, r] as const))(
+    'sends the header set on %s',
+    async (_n, r) => {
+      const app = createApp(t.ctx)
+      const res = await app.request(...request(r, { ...LOCAL, origin: 'http://localhost:3010' }))
+      // A route that no longer exists would answer the router's own 404, and every check below
+      // would pass on it, so the table would go on testing a route the server dropped.
+      expect(await res.clone().text()).not.toContain(`no route for ${r.method} ${r.path.split('?')[0]}`)
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+      expect(res.headers.get('referrer-policy')).toBe('no-referrer')
+      if (r.path.startsWith('/api/')) {
+        expect(res.headers.get('cache-control')).toBe('no-store')
+      }
+      const html = (res.headers.get('content-type') ?? '').startsWith('text/html')
+      expect(res.headers.get('content-security-policy')).toBe(
+        html ? contentSecurityPolicy(nonceOf(await res.clone().text())) : null
+      )
+    }
+  )
 })
 
 /** The nonce the page put on its inline scripts, so the policy can be compared against it. */

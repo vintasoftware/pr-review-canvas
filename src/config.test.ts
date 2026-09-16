@@ -45,7 +45,9 @@ describe('resolveRepoRoot and resolveGithubRepo', () => {
       code: 'NOT_A_REPO',
       hint: 'run from a clone or pass --repo <dir>',
     })
-    await expect(resolveGithubRepo(createFakeGit({ remotes: {} }))).rejects.toMatchObject({ code: 'NO_ORIGIN' })
+    await expect(resolveGithubRepo(createFakeGit({ remotes: {} }))).rejects.toMatchObject({
+      code: 'NO_ORIGIN',
+    })
     await expect(
       resolveGithubRepo(createFakeGit({ remotes: { origin: 'git@gitlab.com:a/b.git' } }))
     ).rejects.toMatchObject({
@@ -85,7 +87,10 @@ describe('loadRuntimeConfig', () => {
 
   it('lets flags win over env and env over defaults, and resolves the fixture path from cwd', async () => {
     const env = { PR_REVIEW_PORT: '4001', PR_REVIEW_DATA_DIR: '/env/data' }
-    expect(await loadRuntimeConfig({}, env, git(), '/cwd')).toMatchObject({ port: 4001, dataDir: '/env/data' })
+    expect(await loadRuntimeConfig({}, env, git(), '/cwd')).toMatchObject({
+      port: 4001,
+      dataDir: '/env/data',
+    })
     expect(
       await loadRuntimeConfig(
         { port: 5000, dataDir: '/flag/data', fixtureCanvas: 'fixtures/review.json' },
@@ -97,10 +102,11 @@ describe('loadRuntimeConfig', () => {
   })
 
   it('rejects a bad env port', async () => {
-    await expect(loadRuntimeConfig({}, { PR_REVIEW_PORT: 'x' }, git(), '/cwd')).rejects.toThrow(/invalid port/)
+    await expect(loadRuntimeConfig({}, { PR_REVIEW_PORT: 'x' }, git(), '/cwd')).rejects.toThrow(
+      /invalid port/
+    )
   })
 })
-
 
 describe('chat command-line overrides', () => {
   it.each(['claude', 'codex'])('selects %s with an explicit model', agent => {
