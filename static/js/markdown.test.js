@@ -141,16 +141,16 @@ describe('renderMarkdown', () => {
   })
 })
 
-it('renders safe GitHub HTML and images while removing active content', () => {
+it('renders safe GitHub HTML and image links while removing active content', () => {
   document.body.innerHTML = renderMarkdown(
     '<details><summary>Details</summary><p>Hello</p></details>\n\n![screenshot](https://user-images.githubusercontent.com/image.png)\n\n<script>alert(1)</script><img src="javascript:bad" onerror="bad()"><iframe></iframe>',
     { github: true }
   )
   expect(document.querySelector('summary')?.textContent).toBe('Details')
-  expect(document.querySelector('img')?.getAttribute('src')).toBe(
+  expect(document.querySelector('a')?.getAttribute('href')).toBe(
     'https://user-images.githubusercontent.com/image.png'
   )
-  expect(document.querySelectorAll('img')).toHaveLength(1)
+  expect(document.querySelector('img')).toBeNull()
   expect(document.querySelector('script, iframe, [onerror]')).toBeNull()
 })
 
@@ -166,12 +166,61 @@ it('allows HTTPS screenshots and bot assets with no referrer, and removes unsafe
     { github: true }
   )
   const images = Array.from(document.querySelectorAll('img'))
-  expect(images.map(img => img.getAttribute('src'))).toEqual([
-    'https://github.com/user-attachments/assets/example',
-    'https://assets.coderabbit.ai/review.png',
-  ])
+  expect(images.map(img => img.getAttribute('src'))).toEqual(['https://assets.coderabbit.ai/review.png'])
   for (const img of images) {
     expect(img.loading).toBe('lazy')
     expect(img.referrerPolicy).toBe('no-referrer')
   }
+})
+
+it.each([
+  'https://github.com/user-attachments/assets/example',
+  'https://github.com/owner/private-repo/blob/main/screenshot.png',
+  'https://user-images.githubusercontent.com/123/image.png',
+  'https://private-user-images.githubusercontent.com/123/image.png?jwt=example',
+  'https://raw.githubusercontent.com/owner/repo/main/image.png',
+  'https://GITHUB.COM:443/user-attachments/assets/example',
+])('renders a GitHub image as a safe external link: %s', src => {
+  document.body.innerHTML = renderMarkdown(`![Screenshot](${src} "Preview")`)
+  expect(document.querySelector('img')).toBeNull()
+  const link = document.querySelector('a')
+  expect(link?.getAttribute('href')).toBe(src)
+  expect(link?.textContent).toBe('View image on GitHub: Screenshot')
+  expect(link?.title).toBe('Preview')
+  expect(link?.target).toBe('_blank')
+  expect(link?.rel).toBe('noopener noreferrer')
+})
+
+it('gives raw GitHub images without alt text a useful link label', () => {
+  document.body.innerHTML = renderMarkdown(
+    '<img src="https://github.com/user-attachments/assets/example" onerror="bad()">',
+    { github: true }
+  )
+  expect(document.querySelector('a')?.textContent).toBe('View image on GitHub')
+  expect(document.querySelector('img, [onerror]')).toBeNull()
+})
+
+it('preserves a linked image destination without nesting the image link', () => {
+  document.body.innerHTML = renderMarkdown(
+    '[![Screenshot](https://github.com/user-attachments/assets/example)](https://example.com/details)'
+  )
+  const links = [...document.querySelectorAll('a')]
+  expect(links.map(link => link.getAttribute('href'))).toEqual([
+    'https://example.com/details',
+    'https://github.com/user-attachments/assets/example',
+  ])
+  expect(links.map(link => link.textContent)).toEqual(['Screenshot', 'View image on GitHub: Screenshot'])
+  expect(document.querySelector('a a, img')).toBeNull()
+})
+
+it('does not treat lookalike domains as GitHub image hosts', () => {
+  const sources = [
+    'https://github.com.example.org/image.png',
+    'https://example.org/github.com/image.png',
+    'https://notgithubusercontent.com/image.png',
+    'https://github.com@example.org/image.png',
+  ]
+  document.body.innerHTML = renderMarkdown(sources.map(src => `![Image](${src})`).join('\n\n'))
+  expect([...document.querySelectorAll('img')].map(img => img.getAttribute('src'))).toEqual(sources)
+  expect(document.querySelector('a')).toBeNull()
 })

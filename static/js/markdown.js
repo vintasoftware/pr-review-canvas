@@ -148,6 +148,28 @@ function decorateLinks(root) {
 }
 
 /**
+ * GitHub images can require a signed-in browser session. Link to them so the browser
+ * can open them on their own origin, where that session is available.
+ * @param {HTMLImageElement} img
+ * @param {string} src
+ */
+function linkGitHubImage(img, src) {
+  const link = document.createElement('a')
+  link.href = src
+  const alt = img.alt.trim()
+  link.textContent = alt ? `View image on GitHub: ${alt}` : 'View image on GitHub'
+  if (img.title) link.title = img.title
+  const enclosingLink = img.closest('a')
+  if (enclosingLink) {
+    // Keep the original destination without creating nested links.
+    img.replaceWith(document.createTextNode(alt || 'Image'))
+    enclosingLink.after(document.createTextNode(' '), link)
+  } else {
+    img.replaceWith(link)
+  }
+}
+
+/**
  * One markdown text, without mermaid blocks.
  * @param {string} src markdown
  * @param {{ paths?: ReadonlySet<string>, github?: boolean }} opts
@@ -172,8 +194,13 @@ function renderProse(src, opts) {
     if (!ALLOWED_TAGS.includes(element.tagName.toLowerCase())) element.remove()
   }
   for (const img of root.querySelectorAll('img')) {
-    if (!/^https:\/\//i.test(img.getAttribute('src') ?? '')) {
+    const imageSrc = img.getAttribute('src') ?? ''
+    if (!/^https:\/\//i.test(imageSrc)) {
       img.remove()
+    } else if (
+      /^https:\/\/(?:github\.com|(?:[a-z0-9-]+\.)*githubusercontent\.com)(?::443)?\//i.test(imageSrc)
+    ) {
+      linkGitHubImage(img, imageSrc)
     } else {
       img.loading = 'lazy'
       img.referrerPolicy = 'no-referrer'
