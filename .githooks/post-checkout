@@ -10,12 +10,13 @@ current=$(git rev-parse --show-toplevel)
 [ -d "$primary/.git" ] || exit 0
 
 for source in \
-	"$primary/.agents/skills/impeccable" \
-	"$primary/.claude/skills/impeccable" \
+	"$primary"/.agents/skills/* \
+	"$primary"/.claude/skills/* \
+	"$primary"/.codex/skills/* \
+	"$primary"/.github/skills/* \
 	"$primary"/.claude/agents/impeccable-*.md \
 	"$primary/.claude/settings.local.json" \
 	"$primary/.codex/hooks.json" \
-	"$primary/.github/skills/impeccable" \
 	"$primary"/.github/agents/impeccable-*.agent.md \
 	"$primary/.github/hooks/impeccable.json"
 do

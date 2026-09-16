@@ -183,11 +183,6 @@ Any failure blocks the commit. Run `pnpm hooks:install`
 once per clone to enable it. Use `pnpm lint:fix` and `pnpm format` to apply automatic fixes.
 CI runs the same checks through `pnpm verify`, with coverage executing the unit tests once.
 
-Local Impeccable skills and agent hooks are ignored by Git. The checkout hook links them
-from the main worktree into new worktrees, preserving any existing files. Keep the main
-worktree's installation in place: changes to it are shared through the links. Install Git
-hooks from the main worktree so new worktrees can use them before checking out this branch.
-
 Run the full `pnpm verify` before pushing. Keep branch coverage at least 96% when adding or
 changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful failure and boundary
 cases rather than lowering thresholds. Each CI job uploads `coverage-node-<version>` with branch
