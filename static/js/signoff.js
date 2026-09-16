@@ -4,7 +4,7 @@
 /** @typedef {import('./contract-types.js').PrState} PrState */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./contract-types.js').ReviewBodyResponse} ReviewBodyResponse */
-import { previewControlsHtml, setDisabledReason } from './composer.js'
+import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
 import { esc } from './dom.js'
 import { layerProgress } from './progress.js'
 
@@ -77,9 +77,7 @@ export function openSignoffDialog(root, opts) {
   if (!(dialog instanceof HTMLDialogElement)) {
     throw new Error('sign-off dialog did not render')
   }
-  dialog
-    .querySelector('[data-act="markdown-write"]')
-    ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  setMarkdownPreview(dialog, false)
   dialog.setAttribute('data-event', opts.event)
   const heading = dialog.querySelector('#signoff-h')
   if (heading !== null) {
