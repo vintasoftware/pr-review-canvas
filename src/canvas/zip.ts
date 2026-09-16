@@ -122,5 +122,14 @@ export function readCanvasZip(bytes: Uint8Array): CanvasZipContents {
       `${REVIEW_ENTRY} is for ${artifact.data.pr.headSha.slice(0, 7)} while ${MANIFEST_ENTRY} says ${manifest.data.headSha.slice(0, 7)}`,
     ])
   }
+  // A canvas generated before the pull request existed carries no number in review.json, and the
+  // export stamps one on the manifest; only two numbers that are both there must agree.
+  const artifactPr = artifact.data.pr.number
+  const manifestPr = manifest.data.prNumber
+  if (artifactPr !== null && manifestPr !== undefined && artifactPr !== manifestPr) {
+    throw new CanvasZipError('CANVAS_INVALID', 'the zip is not a review canvas', [
+      `${REVIEW_ENTRY} is for #${artifactPr} while ${MANIFEST_ENTRY} says #${manifestPr}`,
+    ])
+  }
   return { manifest: manifest.data, artifact: artifact.data }
 }

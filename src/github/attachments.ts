@@ -203,6 +203,9 @@ export function importFailureReason(err: unknown): DownloadFailure {
   if (err.code === 'CANVAS_TOO_LARGE') {
     return 'too-large'
   }
+  if (err.code === 'CANVAS_PR_MISMATCH') {
+    return 'pr-mismatch'
+  }
   return err.code === 'CANVAS_REPO_MISMATCH' ? 'name-mismatch' : 'not-zip'
 }
 
@@ -262,6 +265,15 @@ async function tryCandidate(
     url: candidate.url,
     name: candidate.name,
     matchesHead: candidate.parsed.shaPrefix === pr.headSha.slice(0, 8),
+  }
+  // A name that carries another pull request's number is a zip attached to the wrong PR. Import
+  // would refuse it anyway, so it is reported without spending a download on it.
+  if (candidate.parsed.prNumber !== undefined && candidate.parsed.prNumber !== prNumber) {
+    return {
+      sharedCanvas: { ...shared, downloadable: false, reason: 'pr-mismatch' },
+      imported: null,
+      warnings: [`${candidate.name} was exported for #${candidate.parsed.prNumber}, not #${prNumber}`],
+    }
   }
   const download = await downloadAttachment(ctx, candidate.url)
   if (!download.ok) {

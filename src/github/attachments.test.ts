@@ -420,6 +420,39 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.warnings[0]).toContain('other/repo')
   })
 
+  it('reports a zip attached to the wrong pull request without downloading it', async () => {
+    const wrongPr =
+      'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    const fetches = fakeFetch([])
+    t = await localClone(fetches.impl)
+    const outcome = await discoverSharedCanvas(t.ctx, pr({ body: wrongPr }), comments())
+    expect(fetches.calls).toEqual([])
+    expect(outcome.sharedCanvas).toEqual({
+      url: wrongPr,
+      name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      matchesHead: true,
+      downloadable: false,
+      reason: 'pr-mismatch',
+    })
+    expect(outcome.imported).toBeNull()
+    expect(outcome.warnings).toEqual([
+      'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip was exported for #99, not #42',
+    ])
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+  })
+
+  it('imports the canvas of this PR when a zip of another one is attached too', async () => {
+    const wrongPr =
+      'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    const fetches = fakeFetch([zipResponse(canvasBytes())])
+    t = await localClone(fetches.impl)
+    const payload = comments({ issueComments: [issue(1, wrongPr, { createdAt: '2026-09-10T11:00:00Z' })] })
+    const outcome = await discoverSharedCanvas(t.ctx, pr({ body: FILE_URL }), payload)
+    expect(fetches.calls.map(c => c.url)).toEqual([FILE_URL])
+    expect(outcome.sharedCanvas?.downloadable).toBe(true)
+    expect(outcome.imported?.status).toBe('ready')
+  })
+
   it('does nothing for a PR with no attachment and for a change set without a number', async () => {
     t = await makeTestContext()
     expect(await discoverSharedCanvas(t.ctx, pr({ body: 'no zip here' }), comments())).toEqual({
@@ -440,6 +473,7 @@ describe('importFailureReason', () => {
     expect(importFailureReason(new Error('boom'))).toBe('not-zip')
     expect(importFailureReason(new AppError('CANVAS_TOO_LARGE', 'big', 413))).toBe('too-large')
     expect(importFailureReason(new AppError('CANVAS_REPO_MISMATCH', 'elsewhere', 400))).toBe('name-mismatch')
+    expect(importFailureReason(new AppError('CANVAS_PR_MISMATCH', 'another PR', 400))).toBe('pr-mismatch')
     expect(importFailureReason(new AppError('CANVAS_INVALID', 'broken', 400))).toBe('not-zip')
   })
 })
