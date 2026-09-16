@@ -38,6 +38,27 @@ describe('parseOriginRemote', () => {
     expect(parseOriginRemote('https://gitlab.com/only-one')).toBeNull()
   })
 
+  it('keeps SSH ports out of the project path and preserves HTTPS ports', () => {
+    expect(parseOriginRemote('ssh://git@gitlab.example.com:2222/group/sub/repo.git')).toMatchObject({
+      host: { hostname: 'gitlab.example.com', webBase: 'https://gitlab.example.com' },
+      repo: { owner: 'group/sub', name: 'repo' },
+    })
+    expect(
+      parseOriginRemote('ssh://git@git.company.com:2222/group/repo.git', { PR_REVIEW_HOST: 'gitlab' })
+    ).toMatchObject({
+      host: { hostname: 'git.company.com' },
+      repo: { owner: 'group', name: 'repo' },
+    })
+    expect(parseOriginRemote('https://gitlab.example.com:8443/group/repo.git')).toMatchObject({
+      host: {
+        hostname: 'gitlab.example.com:8443',
+        webBase: 'https://gitlab.example.com:8443',
+        cli: { env: { GITLAB_HOST: 'gitlab.example.com:8443' } },
+      },
+      repo: { owner: 'group', name: 'repo' },
+    })
+  })
+
   it('needs PR_REVIEW_HOST=gitlab for a self-hosted instance whose name does not say so', () => {
     const url = 'git@git.company.com:group/app.git'
     expect(parseOriginRemote(url)).toBeNull()

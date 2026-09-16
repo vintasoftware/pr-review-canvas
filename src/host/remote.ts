@@ -9,7 +9,8 @@ export interface OriginRemote {
 /** Hostname and repository path from the three remote forms git gives out: scp-like ssh, ssh://, https. */
 export function splitGitRemote(url: string): { hostname: string; path: string } | null {
   const m =
-    /^(?:git@|ssh:\/\/git@)([^:/]+)[:/](.+)$/.exec(url.trim()) ??
+    /^ssh:\/\/git@([^:/]+)(?::\d+)?\/(.+)$/.exec(url.trim()) ??
+    /^git@([^:/]+):(.+)$/.exec(url.trim()) ??
     /^https?:\/\/(?:[^@/]+@)?([^/]+)\/(.+)$/.exec(url.trim())
   if (m?.[1] === undefined || m[2] === undefined) {
     return null

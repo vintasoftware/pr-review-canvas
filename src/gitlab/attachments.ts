@@ -15,7 +15,7 @@ export function gitlabAttachments(hostname: string, webBase: string): HostAttach
     const projectBase = `${webBase}/${repo.owner}/${repo.name}`
     try {
       const url = new URL(raw.startsWith('/uploads/') ? `${projectBase}${raw}` : raw, `${projectBase}/`)
-      return url.protocol === 'https:' && url.hostname === hostname ? url.toString() : null
+      return url.protocol === 'https:' && url.host === hostname ? url.toString() : null
     } catch {
       return null
     }

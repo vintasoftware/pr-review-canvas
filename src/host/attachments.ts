@@ -114,7 +114,7 @@ function allowedUrl(raw: string, hosts: ReadonlySet<string>, base?: string): URL
   } catch {
     return null
   }
-  return url.protocol === 'https:' && hosts.has(url.hostname) ? url : null
+  return url.protocol === 'https:' && hosts.has(url.host) ? url : null
 }
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
@@ -141,7 +141,7 @@ export async function downloadAttachment(ctx: AppContext, rawUrl: string): Promi
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       const accept = 'application/octet-stream'
-      const headers = url.hostname === hostname ? { accept, ...authHeader(token) } : { accept }
+      const headers = url.host === hostname ? { accept, ...authHeader(token) } : { accept }
       const res: Response = await ctx.fetch(url, {
         headers,
         redirect: 'manual',

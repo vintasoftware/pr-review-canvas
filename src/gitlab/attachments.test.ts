@@ -25,6 +25,16 @@ describe('gitlabAttachments', () => {
     expect(ATTACHMENTS.findLinks('[x.zip](https://evil.example/uploads/a/x.zip)', TEST_REPO)).toEqual([])
   })
 
+  it('discovers uploads only on the configured HTTPS port', () => {
+    const attachments = gitlabAttachments('gitlab.example.com:8443', 'https://gitlab.example.com:8443')
+    expect(attachments.findLinks(`[${NAME}](/uploads/abc/${NAME})`, TEST_REPO)).toEqual([
+      { url: `https://gitlab.example.com:8443/acme/widgets/uploads/abc/${NAME}`, name: NAME },
+    ])
+    expect(
+      attachments.findLinks('[x.zip](https://gitlab.example.com:9443/uploads/a/x.zip)', TEST_REPO)
+    ).toEqual([])
+  })
+
   it('allows the instance alone and sends the token as a Bearer header', () => {
     expect(ATTACHMENTS.allowedHosts).toEqual(new Set(['gitlab.com']))
     expect(ATTACHMENTS.authHeader('tok')).toEqual({ authorization: 'Bearer tok' })

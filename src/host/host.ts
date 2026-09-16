@@ -97,7 +97,9 @@ export const GITHUB_HOST: Host = {
 
 /** A GitLab instance. `hostname` is gitlab.com or the self-hosted instance the origin names. */
 export function gitlabHost(hostname: string): Host {
-  const webBase = `https://${hostname}`
+  const webUrl = new URL(`https://${hostname}`)
+  hostname = webUrl.host
+  const webBase = webUrl.origin
   return {
     kind: 'gitlab',
     hostname,

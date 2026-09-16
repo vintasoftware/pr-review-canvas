@@ -277,16 +277,22 @@ describe('downloadAttachment', () => {
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'auth-required' })
   })
 
-  it('asks a GitLab instance with a Bearer token and refuses every other host', async () => {
-    const bytes = canvasBytes()
-    const upload = `https://gitlab.example.com/acme/widgets/uploads/abc/${NAME_FOR_HEAD}`
-    const fetches = fakeFetch([zipResponse(bytes)])
-    t = await makeTestContext({ fetch: fetches.impl, host: gitlabHost('gitlab.example.com') })
-    expect(await downloadAttachment(t.ctx, upload)).toEqual({ ok: true, bytes })
-    expect(fetches.calls).toEqual([{ url: upload, auth: 'Bearer gh-test-token' }])
-    expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
-    expect(fetches.calls).toHaveLength(1)
-  })
+  it.each(['gitlab.example.com', 'gitlab.example.com:8443', 'gitlab.example.com:443'])(
+    'asks %s with a Bearer token and refuses other hosts and ports',
+    async hostname => {
+      const bytes = canvasBytes()
+      const upload = new URL(`https://${hostname}/acme/widgets/uploads/abc/${NAME_FOR_HEAD}`).toString()
+      const fetches = fakeFetch([zipResponse(bytes)])
+      t = await makeTestContext({ fetch: fetches.impl, host: gitlabHost(hostname) })
+      expect(await downloadAttachment(t.ctx, upload)).toEqual({ ok: true, bytes })
+      expect(fetches.calls).toEqual([{ url: upload, auth: 'Bearer gh-test-token' }])
+      const otherPort = new URL(upload)
+      otherPort.port = '9443'
+      expect(await downloadAttachment(t.ctx, otherPort.toString())).toEqual({ ok: false, reason: 'network' })
+      expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
+      expect(fetches.calls).toHaveLength(1)
+    }
+  )
 
   it('never sends the token to storage, even when the link points there', async () => {
     const bytes = canvasBytes()
