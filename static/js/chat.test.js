@@ -576,12 +576,13 @@ describe('the proposed-comment commands', () => {
 })
 
 describe('QUICK_QUESTIONS', () => {
-  it('holds the four fixed questions', () => {
+  it('holds the fixed quick questions', () => {
     expect(QUICK_QUESTIONS).toEqual([
-      'Is this covered by tests?',
-      'What could break?',
+      'Suggestion to solve this?',
       'Why this way, and what were the alternatives?',
+      'What could break?',
       'Does this follow how the codebase already does it?',
+      'Is this covered by tests?',
     ])
   })
 })

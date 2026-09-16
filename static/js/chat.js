@@ -101,12 +101,13 @@ export function writeChatWidth(storage, width) {
   storage?.setItem(CHAT_WIDTH_KEY, String(clampWidth(width)))
 }
 
-/** The four questions the quick menu offers, and the one that just focuses the box. */
+/** The questions the quick menu offers, and the one that just focuses the box. */
 export const QUICK_QUESTIONS = [
-  'Is this covered by tests?',
-  'What could break?',
+  'Suggestion to solve this?',
   'Why this way, and what were the alternatives?',
+  'What could break?',
   'Does this follow how the codebase already does it?',
+  'Is this covered by tests?',
 ]
 
 /**
