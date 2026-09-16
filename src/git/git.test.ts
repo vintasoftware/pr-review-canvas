@@ -128,6 +128,12 @@ describe('createGit (real adapter)', () => {
       vi.stubEnv(name, value)
     }
     try {
+      // git itself, with the environment as it stands: this is what the adapter used to do, and
+      // it proves the poison bites. Without it the test below passes on an environment that was
+      // never poisoned at all.
+      await expect(run('git', ['rev-parse', 'HEAD'], { cwd: repo.dir })).rejects.toThrow(
+        /not a git repository/i
+      )
       expect(await createGit(repo.dir).revParse('HEAD')).toBe(repo.sha2)
       // The default argument reads that live environment, and drops the same names from it.
       expect(Object.keys(poisoned).some(name => name in envWithoutRepo())).toBe(false)
