@@ -4,25 +4,11 @@
     grid-template-columns: var(--rail-w) minmax(0, 1fr);
     background: linear-gradient(var(--ink), var(--ink)) calc(var(--rail-w) - 1px) 0 / 1px 100% no-repeat;
   }
-  .chat {
-    grid-column: 2;
-    position: static;
-    align-self: auto;
-    height: auto;
-    border-top: 2px solid var(--ink);
-    padding: 0;
-  }
-  .transcript {
-    max-height: 50vh;
-  }
   .handle {
     display: none;
   }
 }
 @media (max-width: 1000px) {
-  .chat {
-    grid-column: 1 / -1;
-  }
   .layout,
   .layout.no-chat {
     grid-template-columns: minmax(0, 1fr);

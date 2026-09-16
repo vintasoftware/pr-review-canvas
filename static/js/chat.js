@@ -8,6 +8,7 @@
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 import { cancelChat, createThread, fetchThreadHistory, fetchThreads, streamChat } from './api.js'
 import { chatContextAttrs, chatContextLabel, sameChatContext, WHOLE_PR } from './chat-context.js'
+import { wireChatPanel } from './chat-panel.js'
 import {
   canScrollBy,
   chatScrollReducer,
@@ -43,7 +44,8 @@ export function renderChatShell(opts) {
     `<button class="handle" type="button" id="chat-handle" role="separator" aria-orientation="vertical" aria-label="Resize AI Chat" aria-valuenow="${width}" aria-valuemin="${CHAT_WIDTH_MIN}" aria-valuemax="${CHAT_WIDTH_MAX}"></button>` +
     '<div class="chat-h"><h2 id="chat-h">AI Chat</h2><label class="sr" for="thread">Thread</label>' +
     '<select id="thread"></select>' +
-    '<button class="cmd" type="button" id="new-thread">new thread</button></div>' +
+    '<button class="cmd" type="button" id="new-thread">new thread</button>' +
+    '<button class="cmd chat-minimize" type="button" id="chat-minimize" aria-label="Minimize AI Chat">minimize</button></div>' +
     '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
     ' <button class="cmd" type="button" id="chat-clear" hidden>clear</button></p>' +
     '<div class="transcript" id="chat-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0">' +
@@ -55,7 +57,9 @@ export function renderChatShell(opts) {
     '<div class="tbtns"><button class="cmd fill" type="submit" id="chat-send">send</button>' +
     '<button class="cmd" type="button" id="chat-stop" hidden>stop</button>' +
     '<span class="muted small">enter to send</span></div></form>' +
-    '</aside>'
+    '</aside>' +
+    '<dialog class="chat-dialog" id="chat-dialog" aria-labelledby="chat-h"></dialog>' +
+    '<button class="chat-launcher" id="chat-launcher" type="button" aria-controls="chat-dialog" aria-expanded="false">AI Chat</button>'
   )
 }
 
@@ -728,6 +732,7 @@ export function wireChat(options) {
   }
 
   const stopResize = wireResize(pane, root, storage, applyWidth)
+  const panel = wireChatPanel(root, pane)
 
   form.addEventListener('submit', onSubmit)
   root.addEventListener('click', onClick)
@@ -744,12 +749,12 @@ export function wireChat(options) {
     },
     setContext,
     focusInput() {
-      box.focus()
+      panel.open()
     },
     /** @param {ChatContext} next */
     ask(next) {
       setContext(next)
-      box.focus()
+      panel.open()
     },
     /**
      * Sends one of the quick questions about a target.
@@ -758,6 +763,7 @@ export function wireChat(options) {
      */
     askQuestion(next, question) {
       setContext(next)
+      panel.open()
       box.value = question
       void runCommand(sendButton, send, { pendingLabel: 'sending…' })
     },
@@ -775,6 +781,7 @@ export function wireChat(options) {
       select.removeEventListener('change', onThreadChange)
       box.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
       stopResize()
+      panel.stop()
     },
   }
 }
