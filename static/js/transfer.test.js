@@ -83,17 +83,16 @@ describe('drop state', () => {
   })
 
   it('accepts a canvas export and names the problem with anything else', () => {
-    expect(validateCanvasFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')).toBeNull()
-    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')).toBeNull()
-    expect(validateCanvasFilename('notes.pdf')).toBe('that is not a zip file')
-    expect(validateCanvasFilename('holiday-photos.zip')).toBe('that zip is not a review canvas export')
+    expect(validateCanvasFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
+    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
+    expect(validateCanvasFilename('notes.pdf', 42)).toBe('that is not a zip file')
+    expect(validateCanvasFilename('holiday-photos.zip', 42)).toBe('that zip is not a review canvas export')
   })
 
   it('names the pull request a canvas was exported for when it is not the one on screen', () => {
     const name = 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
     expect(validateCanvasFilename(name, 42)).toBe('that canvas was exported for PR #99, not #42')
     expect(validateCanvasFilename(name, 99)).toBeNull()
-    expect(validateCanvasFilename(name)).toBeNull()
     // A canvas made before the PR existed names none, so it joins whichever PR imports it.
     expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
   })

@@ -40,6 +40,7 @@ export function dropReducer(state, event) {
   }
 }
 
+/** The export name grammar, as `parseCanvasZipName` in src/canvas/name.ts holds it for the server. */
 const CANVAS_NAME_RE = /^(?:pr-([1-9]\d*)|ref)-.+-canvas\.zip$/i
 
 /**
@@ -47,7 +48,7 @@ const CANVAS_NAME_RE = /^(?:pr-([1-9]\d*)|ref)-.+-canvas\.zip$/i
  * check; the server reads the zip itself and answers CANVAS_INVALID or CANVAS_PR_MISMATCH when it
  * is not one. A canvas exported before the PR existed is named `ref-` and names no PR.
  * @param {string} filename
- * @param {number} [prNumber] the PR the page is on
+ * @param {number} prNumber the PR the page is on
  * @returns {string | null} the problem, or null when the name is fine
  */
 export function validateCanvasFilename(filename, prNumber) {
@@ -59,26 +60,20 @@ export function validateCanvasFilename(filename, prNumber) {
     return 'that zip is not a review canvas export'
   }
   const named = match[1] === undefined ? undefined : Number(match[1])
-  if (named !== undefined && prNumber !== undefined && named !== prNumber) {
+  if (named !== undefined && named !== prNumber) {
     return `that canvas was exported for PR #${named}, not #${prNumber}`
   }
   return null
 }
 
 /**
- * Why the attached canvas is not on screen. A zip for another PR or another repository is refused
- * wherever it is dropped, so it is told apart from a download that failed and can be retried.
- * @param {NonNullable<PrBundle['sharedCanvas']>} shared
- * @returns {string}
+ * The refusals no retry can clear: the zip is a canvas, of the wrong thing. Anything else the
+ * discovery reports is a download that failed, which the link and the drop zone can still rescue.
+ * @type {Record<string, string>}
  */
-function sharedCanvasProblem(shared) {
-  if (shared.reason === 'pr-mismatch') {
-    return 'it was exported for another pull request'
-  }
-  if (shared.reason === 'name-mismatch') {
-    return 'it was exported from another repository'
-  }
-  return `could not be downloaded (${esc(shared.reason ?? 'unknown')})`
+const SHARED_CANVAS_REFUSALS = {
+  'pr-mismatch': 'it was exported for another pull request',
+  'name-mismatch': 'it was exported from another repository',
 }
 
 /**
@@ -94,12 +89,14 @@ export function sharedCanvasCalloutHtml(bundle) {
   if (shared.downloadable) {
     return `<div class="callout" role="status">A canvas is attached to this PR (${name}) &mdash; importing&hellip;</div>`
   }
-  const mismatch = shared.reason === 'pr-mismatch' || shared.reason === 'name-mismatch'
-  const next = mismatch
-    ? 'Ask its author for a canvas of this pull request, or generate one. '
-    : `<a href="${esc(shared.url)}" target="_blank" rel="noopener noreferrer">Download it</a> and drop it here. `
+  const refused = SHARED_CANVAS_REFUSALS[shared.reason ?? '']
+  const problem = refused ?? `could not be downloaded (${esc(shared.reason ?? 'unknown')})`
+  const next =
+    refused === undefined
+      ? `<a href="${esc(shared.url)}" target="_blank" rel="noopener noreferrer">Download it</a> and drop it here. `
+      : 'Ask its author for a canvas of this pull request, or generate one. '
   return (
-    `<div class="callout warn" role="status">A canvas is attached to this PR (${name}) but ${sharedCanvasProblem(shared)}. ` +
+    `<div class="callout warn" role="status">A canvas is attached to this PR (${name}) but ${problem}. ` +
     next +
     '<button class="cmd" type="button" id="fetch-shared">fetch again</button></div>'
   )

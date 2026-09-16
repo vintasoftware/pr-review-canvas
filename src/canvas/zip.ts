@@ -14,6 +14,12 @@ export const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const
 export interface CanvasZipContents {
   manifest: CanvasManifest
   artifact: ReviewArtifact
+  /**
+   * The pull request the canvas was made for, once for every reader: the two entries are proved to
+   * agree below, and the two ways of holding "no pull request" are settled into one. A canvas
+   * generated before the pull request existed names none, and joins the PR that imports it.
+   */
+  prNumber?: number
 }
 
 /** A zip that cannot be read as a canvas. `issues` names the problems, never the file's content. */
@@ -131,5 +137,10 @@ export function readCanvasZip(bytes: Uint8Array): CanvasZipContents {
       `${REVIEW_ENTRY} is for #${artifactPr} while ${MANIFEST_ENTRY} says #${manifestPr}`,
     ])
   }
-  return { manifest: manifest.data, artifact: artifact.data }
+  const contents: CanvasZipContents = { manifest: manifest.data, artifact: artifact.data }
+  const prNumber = manifestPr ?? artifactPr
+  if (prNumber !== null) {
+    contents.prNumber = prNumber
+  }
+  return contents
 }

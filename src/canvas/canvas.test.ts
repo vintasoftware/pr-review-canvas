@@ -108,7 +108,7 @@ describe('canvas zip codec', () => {
   it('round-trips the manifest and the artifact', () => {
     const bytes = buildCanvasZip(manifest(), artifact())
     expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04])
-    expect(readCanvasZip(bytes)).toEqual({ manifest: manifest(), artifact: artifact() })
+    expect(readCanvasZip(bytes)).toEqual({ manifest: manifest(), artifact: artifact(), prNumber: 42 })
   })
 
   it('refuses a file that is not a zip', () => {
@@ -229,11 +229,19 @@ describe('canvas zip codec', () => {
     expect(catchZip(() => readCanvasZip(mismatched)).issues).toEqual([
       'review.json is for #42 while manifest.json says #7',
     ])
-    // A canvas generated before the pull request existed carries the number on the manifest only.
+  })
+
+  it('reports the one pull request the entries agree on, and none when neither names it', () => {
+    expect(readCanvasZip(buildCanvasZip(manifest(), artifact())).prNumber).toBe(42)
+    // A canvas generated before the pull request existed carries the number on the manifest only,
+    // and review.json carries it alone in a canvas written before the manifest had the field.
     expect(
-      readCanvasZip(buildCanvasZip(manifest({ prNumber: 7 }), artifact({ pr: prWithoutNumber() }))).manifest
-        .prNumber
+      readCanvasZip(buildCanvasZip(manifest({ prNumber: 7 }), artifact({ pr: prWithoutNumber() }))).prNumber
     ).toBe(7)
+    expect(readCanvasZip(buildCanvasZip(beforeThePr(), artifact())).prNumber).toBe(42)
+    expect(
+      readCanvasZip(buildCanvasZip(beforeThePr(), artifact({ pr: prWithoutNumber() }))).prNumber
+    ).toBeUndefined()
   })
 
   it('refuses a zip whose two entries name different commits', () => {

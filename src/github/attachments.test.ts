@@ -152,6 +152,20 @@ describe('candidate collection and ranking', () => {
     expect(ranked[0]?.parsed.shaPrefix).toBe('aaaaaaaa')
   })
 
+  it('sorts a name of another pull request below every usable attachment', () => {
+    const url = (n: string) => `https://github.com/user-attachments/files/1/${n}`
+    // The wrong PR on the right commit: it would win on the sha alone, and import refuses it, so
+    // it may not take a place in the try budget from the older canvas of this pull request.
+    const wrongPr = `pr-99-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
+    const ours = 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip'
+    const payload = comments({ issueComments: [issue(1, url(wrongPr)), issue(2, url(ours))] })
+    const ranked = rankCandidates(
+      collectCandidates({ body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload }, TEST_REPO),
+      { headSha: HEAD_SHA, prNumber: 42 }
+    )
+    expect(ranked.map(c => c.name)).toEqual([ours, wrongPr])
+  })
+
   it('puts the canvas for the head first, then this PR, then the newest link', () => {
     const url = (n: string) => `https://github.com/user-attachments/files/1/${n}`
     const forHead = `pr-42-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
