@@ -222,15 +222,19 @@ export function setDisabledReason(el, reason) {
   }
 }
 
+/** One command that swaps the box between writing and previewing; its label is the mode it goes to. */
 export function previewControlsHtml() {
-  return '<div class="preview-controls" role="group" aria-label="Markdown editor"><button class="cmd" type="button" data-act="markdown-write" aria-pressed="true">Write</button><button class="cmd" type="button" data-act="markdown-preview" aria-pressed="false">Preview</button></div><div class="markdown-preview prose" hidden></div>'
+  return '<div class="preview-controls"><button class="cmd" type="button" data-act="markdown-toggle">preview</button></div><div class="markdown-preview prose" hidden></div>'
 }
 
-/** @param {HTMLElement} button @param {boolean} preview */
-export function toggleMarkdownPreview(button, preview) {
-  const host = button.closest('.composer-box, .signoff-dialog')
-  const textarea = host?.querySelector('textarea')
-  const output = host?.querySelector('.markdown-preview')
+/**
+ * Puts one editor into write or preview mode.
+ * @param {Element} host the `.composer-box` or `.signoff-dialog` that holds the editor
+ * @param {boolean} preview
+ */
+export function setMarkdownPreview(host, preview) {
+  const textarea = host.querySelector('textarea')
+  const output = host.querySelector('.markdown-preview')
   if (!(textarea instanceof HTMLTextAreaElement) || !(output instanceof HTMLElement)) return
   if (preview)
     output.innerHTML = textarea.value.trim()
@@ -238,7 +242,15 @@ export function toggleMarkdownPreview(button, preview) {
       : '<p class="muted">Nothing to preview.</p>'
   textarea.hidden = preview
   output.hidden = !preview
-  host?.querySelector('[data-act="markdown-write"]')?.setAttribute('aria-pressed', String(!preview))
-  host?.querySelector('[data-act="markdown-preview"]')?.setAttribute('aria-pressed', String(preview))
+  const toggle = host.querySelector('[data-act="markdown-toggle"]')
+  if (toggle !== null) toggle.textContent = preview ? 'write' : 'preview'
   if (!preview) textarea.focus()
+}
+
+/** @param {HTMLElement} button */
+export function toggleMarkdownPreview(button) {
+  const host = button.closest('.composer-box, .signoff-dialog')
+  if (host === null) return
+  const output = host.querySelector('.markdown-preview')
+  setMarkdownPreview(host, output instanceof HTMLElement && output.hidden)
 }

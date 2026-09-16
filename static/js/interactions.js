@@ -616,8 +616,7 @@ export function wireReview(root, session, opts = {}) {
         postFromComposer(el, box)
       }
     },
-    'markdown-preview': el => toggleMarkdownPreview(el, true),
-    'markdown-write': el => toggleMarkdownPreview(el, false),
+    'markdown-toggle': el => toggleMarkdownPreview(el),
     'composer-cancel': () => {
       closeComposers(root)
     },
