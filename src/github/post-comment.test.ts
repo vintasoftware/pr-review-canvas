@@ -4,7 +4,7 @@ import { PostCommentInputSchema } from '../contract/comments.js'
 import { toFileEntry } from '../git/diff-collector.js'
 import { createFakeGh, ghPost, ghPostError, TEST_REPO } from '../testing/fakes.js'
 import { HEAD_SHA, SYNTHETIC_FILES } from '../testing/synthetic.js'
-import { GitHubApiError } from './gh.js'
+import { HostCliError } from '../host/client.js'
 import { checkInlineTarget, commentRequest, ghSide, postComment } from './post-comment.js'
 
 const FILES = SYNTHETIC_FILES.map(toFileEntry)
@@ -184,12 +184,12 @@ describe('postComment', () => {
     const gh = createFakeGh({
       postRoutes: {
         'repos/acme/widgets/pulls/42/comments/1001/replies': ghPostError(
-          new GitHubApiError('replies', 'gh: Unprocessable Entity (HTTP 422)', 1)
+          new HostCliError('gh', 'replies', 'gh: Unprocessable Entity (HTTP 422)', 1)
         ),
       },
     })
     await expect(
       postComment(gh, TEST_REPO, 42, HEAD_SHA, { kind: 'reply', inReplyToId: 1001, body: 'x' })
-    ).rejects.toThrow(GitHubApiError)
+    ).rejects.toThrow(HostCliError)
   })
 })

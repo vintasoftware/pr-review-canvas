@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createFakeGh, ghError, ghJson, TEST_REPO } from '../testing/fakes.js'
-import { GitHubApiError } from '../github/gh.js'
+import { HostCliError } from '../host/client.js'
 import { decideGitlabCapabilities, probeGitlabCapabilities } from './capabilities.js'
 
 describe('decideGitlabCapabilities', () => {
@@ -44,7 +44,7 @@ describe('probeGitlabCapabilities', () => {
     const gh = createFakeGh({
       routes: {
         user: ghJson({ username: 'alice' }),
-        'projects/acme%2Fwidgets': ghError(new GitHubApiError('x', 'HTTP 403', 1)),
+        'projects/acme%2Fwidgets': ghError(new HostCliError('gh', 'x', 'HTTP 403', 1)),
       },
     })
     expect(await probeGitlabCapabilities(gh, TEST_REPO)).toMatchObject({

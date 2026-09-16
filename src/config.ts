@@ -2,11 +2,9 @@ import path from 'node:path'
 import type { Repo } from './contract/review-artifact.js'
 import { isChatAgent, type SettingsOverrides } from './contract/settings.js'
 import { type Git, GitError } from './git/git.js'
-import type { HostInfo } from './host/host.js'
-import { parseOriginRemote } from './host/remote.js'
+import type { Host } from './host/host.js'
+import { type OriginRemote, parseOriginRemote } from './host/remote.js'
 import { resolveDataDir } from './store/data-dir.js'
-
-export { parseGithubRemote } from './host/remote.js'
 
 export const DEFAULT_PORT = 3010
 
@@ -26,7 +24,8 @@ export interface RuntimeConfig {
   commonDir: string
   dataDir: string
   repo: Repo
-  host: HostInfo
+  /** The forge origin points at, which owns every request or answer that differs between them. */
+  host: Host
   /** Dev only: every PR reports `ready` with this artifact re-keyed to the live head. */
   fixtureCanvasPath: string | null
   /** Chat agent and model the flags force for this run, if any. */
@@ -66,35 +65,19 @@ export async function resolveCommonDir(git: Git): Promise<string> {
   return git.commonDir()
 }
 
-export async function resolveOrigin(
-  git: Git,
-  env: NodeJS.ProcessEnv = {}
-): Promise<{
-  repo: Repo
-  host: HostInfo
-}> {
+export const ORIGIN_HINT =
+  'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab for self-hosted GitLab'
+
+export async function resolveOrigin(git: Git, env: NodeJS.ProcessEnv = {}): Promise<OriginRemote> {
   const url = await git.remoteUrl('origin')
   if (url === null) {
-    throw new ConfigError(
-      'NO_ORIGIN',
-      'the repository has no "origin" remote',
-      'add a github.com or GitLab origin'
-    )
+    throw new ConfigError('NO_ORIGIN', 'the repository has no "origin" remote', ORIGIN_HINT)
   }
   const parsed = parseOriginRemote(url, env)
   if (parsed === null) {
-    throw new ConfigError(
-      'NO_ORIGIN',
-      `origin is not a GitHub or GitLab URL: ${url}`,
-      'use github.com, GitLab, or set PR_REVIEW_HOST=gitlab for self-hosted GitLab'
-    )
+    throw new ConfigError('NO_ORIGIN', `origin is not a GitHub or GitLab URL: ${url}`, ORIGIN_HINT)
   }
-  return { repo: parsed.repo, host: parsed.host }
-}
-
-/** @deprecated Use resolveOrigin. Kept for tests that still name the GitHub-only helper. */
-export async function resolveGithubRepo(git: Git): Promise<Repo> {
-  return (await resolveOrigin(git)).repo
+  return parsed
 }
 
 /** `--agent` names one of the agents the chat knows; anything else is a usage error. */

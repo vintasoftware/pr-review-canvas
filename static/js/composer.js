@@ -145,12 +145,9 @@ export function closeComposers(root) {
   return closed
 }
 
-/** What a command says when this login may not post. */
-export const NO_POSTING_TITLE = noPostingTitle()
-
 /**
  * Disables everything that posts when the probe said no, and enables it otherwise. A token
- * whose rights cannot be read ('unknown') stays enabled: GitHub answers for itself.
+ * whose rights cannot be read ('unknown') stays enabled: the host answers for itself.
  *
  * A command can be disabled for a reason of its own (the approve command before every layer is
  * read, a command whose request is still running). Those keep their state: this only adds and

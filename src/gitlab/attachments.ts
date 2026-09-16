@@ -1,85 +1,40 @@
 import type { Repo } from '../contract/review-artifact.js'
-import type { AttachmentLink } from '../github/attachments.js'
-import type { HostInfo } from '../host/host.js'
+import type { HostAttachments } from '../host/host.js'
 
 const MARKDOWN_LINK_RE = /\[([A-Za-z0-9._-]+\.zip)\]\(([^)\s]+)\)/g
-const BARE_UPLOAD_RE = /https?:\/\/[^\s)]+\/uploads\/[A-Za-z0-9/_-]+\/([A-Za-z0-9._-]+\.zip)/gi
-const RELATIVE_UPLOAD_RE = /(?:^|[\s(])(\/uploads\/[A-Za-z0-9/_-]+\/([A-Za-z0-9._-]+\.zip))/g
-
-function projectBase(host: HostInfo, repo: Repo): string {
-  return `${host.webBase}/${repo.owner}/${repo.name}`
-}
-
-function resolveLink(raw: string, host: HostInfo, repo: Repo): string | null {
-  try {
-    const href = raw.startsWith('/uploads/') ? `${projectBase(host, repo)}${raw}` : raw
-    const url = new URL(href, `${projectBase(host, repo)}/`)
-    if (url.protocol !== 'https:') {
-      return null
-    }
-    if (url.hostname.toLowerCase() !== host.hostname.toLowerCase()) {
-      return null
-    }
-    return url.toString()
-  } catch {
-    return null
-  }
-}
+const UPLOAD_URL_RE = /https?:\/\/[^\s)]+\/uploads\/[A-Za-z0-9/_-]+\/([A-Za-z0-9._-]+\.zip)/gi
+const UPLOAD_PATH_RE = /(?:^|[\s(])(\/uploads\/[A-Za-z0-9/_-]+\/([A-Za-z0-9._-]+\.zip))/g
 
 /**
- * Zip links in GitLab markdown: `[name.zip](url)`, a `/uploads/.../name.zip` path, or a full
- * URL on this GitLab host.
+ * Zip links in GitLab markdown: `[name.zip](url)`, a project-relative `/uploads/.../name.zip`
+ * path as the editor inserts it, or a full URL on this instance. The instance serves its uploads
+ * itself, so that one hostname is the whole allow list and the token goes in a Bearer header.
  */
-export function findGitlabAttachmentLinks(text: string, host: HostInfo, repo: Repo): AttachmentLink[] {
-  const links: AttachmentLink[] = []
-  const seen = new Set<string>()
-  const add = (url: string, name: string) => {
-    if (seen.has(url)) {
-      return
-    }
-    seen.add(url)
-    links.push({ url, name })
-  }
-  for (const m of text.matchAll(MARKDOWN_LINK_RE)) {
-    const name = m[1]
-    const href = m[2]
-    if (name === undefined || href === undefined) {
-      continue
-    }
-    const url = resolveLink(href, host, repo)
-    if (url !== null) {
-      add(url, name)
+export function gitlabAttachments(hostname: string, webBase: string): HostAttachments {
+  const resolve = (raw: string, repo: Repo): string | null => {
+    const projectBase = `${webBase}/${repo.owner}/${repo.name}`
+    try {
+      const url = new URL(raw.startsWith('/uploads/') ? `${projectBase}${raw}` : raw, `${projectBase}/`)
+      return url.protocol === 'https:' && url.hostname === hostname ? url.toString() : null
+    } catch {
+      return null
     }
   }
-  for (const m of text.matchAll(BARE_UPLOAD_RE)) {
-    const url = m[0]
-    const name = m[1]
-    if (name === undefined) {
-      continue
-    }
-    const resolved = resolveLink(url, host, repo)
-    if (resolved !== null) {
-      add(resolved, name)
-    }
+  return {
+    findLinks(text, repo) {
+      const found = new Map<string, string>()
+      const add = (href: string | undefined, name: string | undefined): void => {
+        const url = href === undefined || name === undefined ? null : resolve(href, repo)
+        if (url !== null && !found.has(url)) {
+          found.set(url, name as string)
+        }
+      }
+      for (const m of text.matchAll(MARKDOWN_LINK_RE)) add(m[2], m[1])
+      for (const m of text.matchAll(UPLOAD_URL_RE)) add(m[0], m[1])
+      for (const m of text.matchAll(UPLOAD_PATH_RE)) add(m[1], m[2])
+      return [...found].map(([url, name]) => ({ url, name }))
+    },
+    allowedHosts: new Set([hostname]),
+    authHeader: token => ({ authorization: `Bearer ${token}` }),
   }
-  for (const m of text.matchAll(RELATIVE_UPLOAD_RE)) {
-    const path = m[1]
-    const name = m[2]
-    if (path === undefined || name === undefined) {
-      continue
-    }
-    const url = resolveLink(path, host, repo)
-    if (url !== null) {
-      add(url, name)
-    }
-  }
-  return links
-}
-
-export function gitlabAttachmentHosts(host: HostInfo): Set<string> {
-  return new Set([host.hostname])
-}
-
-export function gitlabAuthHeaders(token: string): Record<string, string> {
-  return { authorization: `Bearer ${token}` }
 }

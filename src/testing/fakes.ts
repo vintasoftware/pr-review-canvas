@@ -5,11 +5,11 @@ import os from 'node:os'
 import path from 'node:path'
 import type { AgentRunner } from '../acpx/acpx.js'
 import type { RuntimeConfig } from '../config.js'
-import { GITHUB_HOST } from '../host/host.js'
+import { GITHUB_HOST, type Host } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../github/capabilities.js'
-import { type GhResponse, GitHubApiError, type GitHubClient } from '../github/gh.js'
+import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
 import { DEFAULT_PROJECT_CONFIG, type LoadedProjectConfig } from '../project-config.js'
 import {
   type AppContext,
@@ -153,7 +153,7 @@ export interface FakeGhOptions {
   /** `path` → route; unknown paths answer like GitHub's 404. */
   routes?: Record<string, FakeGhRoute>
   /** `path` → what `gh api -i` answers. */
-  rawRoutes?: Record<string, GhResponse | Error>
+  rawRoutes?: Record<string, CliResponse | Error>
   /** `path` → what a POST answers. */
   postRoutes?: Record<string, FakePostRoute>
   /** GraphQL pages in call order. */
@@ -163,7 +163,7 @@ export interface FakeGhOptions {
   token?: string | null
 }
 
-export interface FakeGh extends GitHubClient {
+export interface FakeGh extends HostClient {
   calls: Array<{
     kind: 'api' | 'raw' | 'post' | 'graphql' | 'auth'
     path: string
@@ -181,7 +181,7 @@ export function createFakeGh(options: FakeGhOptions = {}): FakeGh {
       calls.push({ kind: 'api', path: p, params })
       const route = options.routes?.[p]
       if (route === undefined) {
-        throw new GitHubApiError(p, 'gh: Not Found (HTTP 404)', 1)
+        throw new HostCliError('gh', p, 'gh: Not Found (HTTP 404)', 1)
       }
       switch (route.kind) {
         case 'json':
@@ -196,7 +196,7 @@ export function createFakeGh(options: FakeGhOptions = {}): FakeGh {
       calls.push({ kind: 'raw', path: p, params: {} })
       const route = options.rawRoutes?.[p]
       if (route === undefined) {
-        throw new GitHubApiError(p, 'gh: Not Found (HTTP 404)', 1)
+        throw new HostCliError('gh', p, 'gh: Not Found (HTTP 404)', 1)
       }
       if (route instanceof Error) {
         throw route
@@ -207,7 +207,7 @@ export function createFakeGh(options: FakeGhOptions = {}): FakeGh {
       calls.push({ kind: 'post', path: p, params: {}, body })
       const route = options.postRoutes?.[p]
       if (route === undefined) {
-        throw new GitHubApiError(p, 'gh: Not Found (HTTP 404)', 1)
+        throw new HostCliError('gh', p, 'gh: Not Found (HTTP 404)', 1)
       }
       if (route.kind === 'error') {
         throw route.error
@@ -218,7 +218,7 @@ export function createFakeGh(options: FakeGhOptions = {}): FakeGh {
       calls.push({ kind: 'graphql', path: query.slice(0, 20), params: variables })
       const page = options.graphql?.[gqlCall++]
       if (page === undefined) {
-        throw new GitHubApiError('graphql', 'no more pages', 1)
+        throw new HostCliError('gh', 'graphql', 'no more pages', 1)
       }
       if (page instanceof Error) {
         throw page
@@ -245,7 +245,9 @@ const notFetched: typeof fetch = input => {
 
 export interface TestContextOptions {
   git?: Git
-  gh?: GitHubClient
+  gh?: HostClient
+  /** The forge the context serves; GitHub unless a test says otherwise. */
+  host?: Host
   capabilities?: CapabilityProbe
   fetch?: typeof fetch
   fixtureArtifact?: ReviewArtifact | null
@@ -276,7 +278,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     commonDir: '/repo/.git',
     dataDir,
     repo: TEST_REPO,
-    host: GITHUB_HOST,
+    host: opts.host ?? GITHUB_HOST,
     fixtureCanvasPath: null,
     chatOverrides: opts.chatOverrides ?? {},
   }
@@ -290,7 +292,8 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     projectConfig: opts.projectConfig ?? { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
     git,
     gh,
-    capabilities: opts.capabilities ?? createCapabilityProbe(gh, TEST_REPO, now),
+    capabilities:
+      opts.capabilities ?? createCapabilityProbe(() => config.host.probeCapabilities(gh, TEST_REPO), now),
     fetch: opts.fetch ?? notFetched,
     ...stores,
     ...createChatSet(

@@ -18,10 +18,7 @@ import {
 import { ConfigError, loadRuntimeConfig, parsePort, readEnv, resolveRepoRoot } from './config.js'
 import { type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { createGit } from './git/git.js'
-import { createGitHubClient } from './github/gh.js'
 import { createHostClient } from './host/client.js'
-import { GITHUB_HOST } from './host/host.js'
-import { parseOriginRemote } from './host/remote.js'
 import { loadProjectConfig } from './project-config.js'
 import { checkSkill } from './review/doctor.js'
 import { type AppContext, createAppContext, readPackageVersion } from './server/context.js'
@@ -132,24 +129,11 @@ async function serve(argv: string[]): Promise<number> {
 async function doctorCommand(argv: string[]): Promise<number> {
   const { repo, dataDir, rest } = splitCommonFlags(argv)
   const cwd = process.cwd()
-  const git = createGit(repo === undefined ? cwd : path.resolve(cwd, repo))
-  let host = GITHUB_HOST
-  let client = createGitHubClient()
-  try {
-    const url = await git.remoteUrl('origin')
-    const parsed = url === null ? null : parseOriginRemote(url, process.env)
-    if (parsed !== null) {
-      host = parsed.host
-      client = createHostClient(host)
-    }
-  } catch {
-    // Origin is reported by doctor itself; a missing remote still checks the GitHub CLI.
-  }
   return runDoctor(
     {
-      git,
-      gh: client,
-      host,
+      git: createGit(repo === undefined ? cwd : path.resolve(cwd, repo)),
+      env: process.env,
+      client: host => createHostClient(host.cli),
       version: readPackageVersion(),
       acpxVersion: () => createAgentRunner().acpxVersion(),
       dataDirOverride: dataDir ?? readEnv(process.env, 'PR_REVIEW_DATA_DIR'),

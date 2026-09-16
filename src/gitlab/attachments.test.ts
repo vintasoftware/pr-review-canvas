@@ -1,31 +1,32 @@
 // @vitest-environment node
 import { TEST_REPO } from '../testing/fakes.js'
-import { gitlabHost } from '../host/host.js'
-import { findGitlabAttachmentLinks, gitlabAttachmentHosts, gitlabAuthHeaders } from './attachments.js'
+import { gitlabAttachments } from './attachments.js'
 
-const HOST = gitlabHost('gitlab.com')
+const ATTACHMENTS = gitlabAttachments('gitlab.com', 'https://gitlab.com')
 const NAME = 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
 
-describe('findGitlabAttachmentLinks', () => {
-  it('reads markdown, relative uploads, and full URLs on this host', () => {
+describe('gitlabAttachments', () => {
+  it('reads markdown links, project-relative uploads, and full URLs on this instance, once each', () => {
     const text = [
       `[${NAME}](/uploads/abc/${NAME})`,
+      `/uploads/abc/${NAME}`,
       `https://gitlab.com/acme/widgets/uploads/def/${NAME}`,
       `[other.zip](https://github.com/acme/widgets/uploads/x/other.zip)`,
     ].join('\n')
-    expect(findGitlabAttachmentLinks(text, HOST, TEST_REPO)).toEqual([
-      {
-        url: `https://gitlab.com/acme/widgets/uploads/abc/${NAME}`,
-        name: NAME,
-      },
-      {
-        url: `https://gitlab.com/acme/widgets/uploads/def/${NAME}`,
-        name: NAME,
-      },
+    expect(ATTACHMENTS.findLinks(text, TEST_REPO)).toEqual([
+      { url: `https://gitlab.com/acme/widgets/uploads/abc/${NAME}`, name: NAME },
+      { url: `https://gitlab.com/acme/widgets/uploads/def/${NAME}`, name: NAME },
     ])
-    expect(findGitlabAttachmentLinks('[x.zip](not a url)', HOST, TEST_REPO)).toEqual([])
-    expect(findGitlabAttachmentLinks('[x.zip](http://gitlab.com/x.zip)', HOST, TEST_REPO)).toEqual([])
-    expect(gitlabAttachmentHosts(HOST)).toEqual(new Set(['gitlab.com']))
-    expect(gitlabAuthHeaders('tok')).toEqual({ authorization: 'Bearer tok' })
+  })
+
+  it('refuses links that are not https on this instance', () => {
+    expect(ATTACHMENTS.findLinks('[x.zip](not a url)', TEST_REPO)).toEqual([])
+    expect(ATTACHMENTS.findLinks('[x.zip](http://gitlab.com/x.zip)', TEST_REPO)).toEqual([])
+    expect(ATTACHMENTS.findLinks('[x.zip](https://evil.example/uploads/a/x.zip)', TEST_REPO)).toEqual([])
+  })
+
+  it('allows the instance alone and sends the token as a Bearer header', () => {
+    expect(ATTACHMENTS.allowedHosts).toEqual(new Set(['gitlab.com']))
+    expect(ATTACHMENTS.authHeader('tok')).toEqual({ authorization: 'Bearer tok' })
   })
 })

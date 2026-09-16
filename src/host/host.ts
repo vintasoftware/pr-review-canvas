@@ -1,53 +1,123 @@
-import type { Repo } from '../contract/review-artifact.js'
+import type { Capabilities, PublicHost, ReviewSummary } from '../contract/api.js'
+import type { PostCommentInput, PostCommentResult } from '../contract/comments.js'
+import type { FileEntry, Repo } from '../contract/review-artifact.js'
+import { GITHUB_ATTACHMENTS } from '../github/attachments.js'
+import { probeCapabilities } from '../github/capabilities.js'
+import { type FetchCommentsResult, fetchComments } from '../github/comments.js'
+import { postComment } from '../github/post-comment.js'
+import { type ReviewEvent, postReview } from '../github/post-review.js'
+import { fetchPrMeta, type PrMeta } from '../github/pr.js'
+import { gitlabAttachments } from '../gitlab/attachments.js'
+import { probeGitlabCapabilities } from '../gitlab/capabilities.js'
+import { fetchGitlabComments } from '../gitlab/comments.js'
+import { fetchMrMeta } from '../gitlab/mr.js'
+import { postGitlabComment } from '../gitlab/post-comment.js'
+import { postGitlabReview } from '../gitlab/post-review.js'
+import type { AttachmentLink } from './attachments.js'
+import { GH_CLI, glabCli, type HostClient, type HostCliSpec } from './client.js'
 
-export const HOST_KINDS = ['github', 'gitlab'] as const
-export type HostKind = (typeof HOST_KINDS)[number]
+export type HostKind = PublicHost['kind']
 
-export interface HostInfo {
-  kind: HostKind
-  hostname: string
-  label: string
-  cliName: string
-  webBase: string
+/** How canvas zips attached to a review are found and fetched on one forge. */
+export interface HostAttachments {
+  /** Zip links in one markdown text, as absolute URLs this host serves. */
+  findLinks(text: string, repo: Repo): AttachmentLink[]
+  /** Where an attachment may be served from. Everything else is refused before any request. */
+  allowedHosts: ReadonlySet<string>
+  /** The header that carries the CLI token to the forge itself; a storage redirect gets none. */
+  authHeader(token: string): Record<string, string>
 }
 
-export const GITHUB_HOST: HostInfo = {
+/**
+ * One forge: the words the page uses for it, the CLI that talks to it, and every operation whose
+ * request or answer differs between GitHub and GitLab. Everything that is the same for both (the
+ * local refs, the stored Pr, the download loop, the routes) takes a Host and never asks its kind.
+ */
+export interface Host {
+  kind: HostKind
+  hostname: string
+  /** `GitHub` or `GitLab`, for messages. */
+  label: string
+  cli: HostCliSpec
+  webBase: string
+  /** `pull request` or `merge request`, and its abbreviation. */
+  noun: string
+  nounShort: string
+  /** The remote ref that holds a review's head, fetched into the same local ref for both hosts. */
+  remoteHeadRef(number: number): string
+  compareUrl(repo: Repo, base: string, head: string): string
+  fetchPrMeta(client: HostClient, repo: Repo, number: number): Promise<PrMeta>
+  fetchComments(
+    client: HostClient,
+    repo: Repo,
+    number: number,
+    headSha: string,
+    now: () => Date
+  ): Promise<FetchCommentsResult>
+  /** `files` is the derived diff of the head, which GitLab needs for a renamed file's old path. */
+  postComment(
+    client: HostClient,
+    repo: Repo,
+    number: number,
+    headSha: string,
+    input: PostCommentInput,
+    files: ReadonlyArray<FileEntry>
+  ): Promise<PostCommentResult>
+  postReview(
+    client: HostClient,
+    repo: Repo,
+    number: number,
+    headSha: string,
+    input: { event: ReviewEvent; body: string }
+  ): Promise<ReviewSummary>
+  probeCapabilities(client: HostClient, repo: Repo): Promise<Capabilities>
+  attachments: HostAttachments
+}
+
+export const GITHUB_HOST: Host = {
   kind: 'github',
   hostname: 'github.com',
   label: 'GitHub',
-  cliName: 'gh',
+  cli: GH_CLI,
   webBase: 'https://github.com',
+  noun: 'pull request',
+  nounShort: 'PR',
+  remoteHeadRef: number => `pull/${number}/head`,
+  compareUrl: (repo, base, head) => `https://github.com/${repo.owner}/${repo.name}/compare/${base}...${head}`,
+  fetchPrMeta,
+  fetchComments,
+  postComment: (client, repo, number, headSha, input) => postComment(client, repo, number, headSha, input),
+  postReview,
+  probeCapabilities,
+  attachments: GITHUB_ATTACHMENTS,
 }
 
-export function gitlabHost(hostname: string): HostInfo {
+/** A GitLab instance. `hostname` is gitlab.com or the self-hosted instance the origin names. */
+export function gitlabHost(hostname: string): Host {
+  const webBase = `https://${hostname}`
   return {
     kind: 'gitlab',
     hostname,
     label: 'GitLab',
-    cliName: 'glab',
-    webBase: `https://${hostname}`,
+    cli: glabCli(hostname),
+    webBase,
+    noun: 'merge request',
+    nounShort: 'MR',
+    remoteHeadRef: number => `merge-requests/${number}/head`,
+    compareUrl: (repo, base, head) => `${webBase}/${repo.owner}/${repo.name}/-/compare/${base}...${head}`,
+    fetchPrMeta: fetchMrMeta,
+    fetchComments: (client, repo, number, headSha, now) =>
+      fetchGitlabComments(client, repo, number, headSha, now, webBase),
+    postComment: (client, repo, number, headSha, input, files) =>
+      postGitlabComment(client, repo, number, headSha, input, { webBase, files }),
+    postReview: (client, repo, number, headSha, input) =>
+      postGitlabReview(client, repo, number, headSha, input, webBase),
+    probeCapabilities: probeGitlabCapabilities,
+    attachments: gitlabAttachments(hostname, webBase),
   }
 }
 
-export function reviewNoun(host: HostInfo): string {
-  return host.kind === 'gitlab' ? 'merge request' : 'pull request'
-}
-
-export function reviewNounShort(host: HostInfo): string {
-  return host.kind === 'gitlab' ? 'MR' : 'PR'
-}
-
-export function compareUrl(host: HostInfo, repo: Repo, base: string, head: string): string {
-  const basePath = `${host.webBase}/${repo.owner}/${repo.name}`
-  return host.kind === 'gitlab'
-    ? `${basePath}/-/compare/${base}...${head}`
-    : `${basePath}/compare/${base}...${head}`
-}
-
-export function authorProfileUrl(host: HostInfo, author: string): string {
-  return `${host.webBase}/${author}`
-}
-
-export function publicHost(host: HostInfo): { kind: HostKind; label: string; cliName: string } {
-  return { kind: host.kind, label: host.label, cliName: host.cliName }
+/** The part of a Host the page and the health endpoint are told. */
+export function publicHost(host: Host): PublicHost {
+  return { kind: host.kind, label: host.label, webBase: host.webBase }
 }

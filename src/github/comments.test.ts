@@ -2,7 +2,7 @@
 import { createFakeGh, ghHandler, ghJson, TEST_REPO } from '../testing/fakes.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, GH_THREADS_PAGE, HEAD_SHA } from '../testing/synthetic.js'
 import { COMMENTS_PAGE_SIZE, fetchComments, mapIssueComment, mapReviewComment } from './comments.js'
-import { GitHubApiError } from './gh.js'
+import { HostCliError } from '../host/client.js'
 import { fetchResolvedCommentIds, THREADS_QUERY } from './threads.js'
 
 const now = () => new Date('2026-09-10T12:00:00.000Z')
@@ -164,7 +164,7 @@ describe('fetchComments', () => {
   })
 
   it('degrades to resolved: false with a warning when GraphQL fails', async () => {
-    const gh = createFakeGh({ routes, graphql: [new GitHubApiError('graphql', 'rate limited', 1)] })
+    const gh = createFakeGh({ routes, graphql: [new HostCliError('gh', 'graphql', 'rate limited', 1)] })
     const { payload, warnings } = await fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)
     expect(payload.reviewComments.every(c => c.resolved === false)).toBe(true)
     expect(warnings).toEqual(['resolved state unavailable: gh api graphql failed (1): rate limited'])
@@ -172,7 +172,7 @@ describe('fetchComments', () => {
 
   it('propagates a REST failure', async () => {
     const gh = createFakeGh({ routes: {}, graphql: [GH_THREADS_PAGE] })
-    await expect(fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)).rejects.toBeInstanceOf(GitHubApiError)
+    await expect(fetchComments(gh, TEST_REPO, 42, HEAD_SHA, now)).rejects.toBeInstanceOf(HostCliError)
   })
 })
 

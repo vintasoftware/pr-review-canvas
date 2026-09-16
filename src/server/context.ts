@@ -12,10 +12,7 @@ import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { createGit, type Git } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../github/capabilities.js'
-import type { GitHubClient } from '../github/gh.js'
-import { createHostClient } from '../host/client.js'
-import { GITHUB_HOST } from '../host/host.js'
-import { probeHostCapabilities } from '../host/operations.js'
+import { createHostClient, type HostClient } from '../host/client.js'
 import { PACKAGE_ROOT, STATIC_DIR } from '../paths.js'
 import type { LoadedProjectConfig } from '../project-config.js'
 import { type CanvasStore, createCanvasStore } from '../store/canvas-store.js'
@@ -43,7 +40,8 @@ export interface AppContext {
   config: RuntimeConfig
   projectConfig: LoadedProjectConfig
   git: Git
-  gh: GitHubClient
+  /** The host CLI client: `gh` or `glab`, whichever `config.host` names. */
+  gh: HostClient
   /** The only outbound HTTP the tool makes: attachment downloads. Tests inject a fake. */
   fetch: typeof fetch
   canvases: CanvasStore
@@ -115,7 +113,7 @@ export interface CreateAppContextOptions {
   projectConfig: LoadedProjectConfig
   fixtureArtifact: ReviewArtifact | null
   git?: Git
-  gh?: GitHubClient
+  gh?: HostClient
   fetch?: typeof fetch
   runner?: AgentRunner
   now?: () => Date
@@ -162,8 +160,8 @@ export function createChatSet(
 export function createAppContext(opts: CreateAppContextOptions): AppContext {
   const git = opts.git ?? createGit(opts.config.repoRoot)
   const now = opts.now ?? (() => new Date())
-  const host = opts.config.host ?? GITHUB_HOST
-  const gh = opts.gh ?? createHostClient(host)
+  const { host, repo } = opts.config
+  const gh = opts.gh ?? createHostClient(host.cli)
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
   return {
     config: opts.config,
@@ -171,9 +169,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
     projectConfig: opts.projectConfig,
     git,
     gh,
-    capabilities: createCapabilityProbe(gh, opts.config.repo, now, undefined, (client, repo) =>
-      probeHostCapabilities(client, host, repo)
-    ),
+    capabilities: createCapabilityProbe(() => host.probeCapabilities(gh, repo), now),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     ...stores,
     ...createChatSet(

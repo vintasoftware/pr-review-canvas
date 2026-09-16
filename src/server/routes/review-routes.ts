@@ -6,7 +6,6 @@ import { PostCommentInputSchema, type PostCommentResult } from '../../contract/c
 import type { FileEntry, Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { checkInlineTarget } from '../../github/post-comment.js'
 import { PostReviewInputSchema } from '../../github/post-review.js'
-import { postHostComment, postHostReview } from '../../host/operations.js'
 import { buildReviewBody, stateForHead, unreviewedLayers } from '../../github/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -148,7 +147,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting()
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
-    let files: FileEntry[] | undefined
+    let files: FileEntry[] = []
     if (input.kind === 'inline') {
       const derived = await ctx.derived.read(pr.headSha)
       if (derived === null) {
@@ -165,9 +164,8 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       }
       files = derived.files
     }
-    const posted = await postHostComment(
+    const posted = await ctx.config.host.postComment(
       ctx.gh,
-      ctx.config.host,
       ctx.config.repo,
       number,
       pr.headSha,
@@ -218,7 +216,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body = input.body ?? buildReviewBody({ artifact, state, comments, headSha: pr.headSha })
-    const review = await postHostReview(ctx.gh, ctx.config.host, ctx.config.repo, number, pr.headSha, {
+    const review = await ctx.config.host.postReview(ctx.gh, ctx.config.repo, number, pr.headSha, {
       event: input.event,
       body,
     })

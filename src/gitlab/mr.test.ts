@@ -1,10 +1,12 @@
 // @vitest-environment node
+import { fetchPrRefs, PrNotFoundError, prBaseRef, prHeadRef, toPr } from '../github/pr.js'
+import { HostCliError } from '../host/client.js'
+import { gitlabHost } from '../host/host.js'
 import { createFakeGh, createFakeGit, ghError, ghJson, TEST_REPO } from '../testing/fakes.js'
 import { BASE_SHA, HEAD_SHA } from '../testing/synthetic.js'
-import { GitHubApiError } from '../github/gh.js'
-import { PrNotFoundError, prBaseRef, prHeadRef } from '../github/pr.js'
-import { fetchMrMeta, fetchMrRefs, mapMergeRequest, MR_STATS_QUERY, toPr } from './mr.js'
+import { fetchMrDiffRefs, fetchMrMeta, mapMergeRequest, MR_STATS_QUERY } from './mr.js'
 
+const GL = gitlabHost('gitlab.com')
 const GL_MR = {
   iid: 42,
   title: 'feat: add b',
@@ -21,93 +23,131 @@ const GL_MR = {
   diff_refs: { base_sha: BASE_SHA, head_sha: HEAD_SHA, start_sha: BASE_SHA },
   changes_count: '7',
 }
+const STATS = {
+  project: { mergeRequest: { diffStatsSummary: { additions: 7, deletions: 5, fileCount: 7 } } },
+}
 
 describe('mapMergeRequest', () => {
-  it('maps opened, merged, and a missing author', () => {
-    expect(mapMergeRequest(GL_MR, { additions: 7, deletions: 5, changedFiles: 7 })).toMatchObject({
+  it('maps an open MR onto the PrMeta the rest of the tool reads', () => {
+    expect(mapMergeRequest(GL_MR, { additions: 7, deletions: 5 })).toEqual({
       number: 42,
-      state: 'open',
+      title: 'feat: add b',
+      body: 'Adds b()',
       author: 'octocat',
+      url: GL_MR.web_url,
+      state: 'open',
+      draft: false,
+      updatedAt: '2026-09-09T09:00:00Z',
+      baseRef: 'main',
+      headRef: 'feat/b',
       headSha: HEAD_SHA,
       mergeCommitSha: null,
-      diffRefs: { baseSha: BASE_SHA, startSha: BASE_SHA, headSha: HEAD_SHA },
+      additions: 7,
+      deletions: 5,
+      changedFiles: 7,
     })
+  })
+
+  it('maps merged, locked, a draft, a missing author and description, and a capped file count', () => {
     const merge = 'c'.repeat(40)
     expect(
       mapMergeRequest(
-        { ...GL_MR, state: 'merged', merge_commit_sha: merge, author: null, description: null },
-        { additions: 0, deletions: 0, changedFiles: 0 }
+        {
+          ...GL_MR,
+          state: 'merged',
+          merge_commit_sha: merge,
+          author: null,
+          description: null,
+          changes_count: '1000+',
+        },
+        { additions: 0, deletions: 0 }
       )
-    ).toMatchObject({ state: 'merged', mergeCommitSha: merge, author: 'ghost', body: '' })
+    ).toMatchObject({ state: 'merged', mergeCommitSha: merge, author: 'ghost', body: '', changedFiles: 1000 })
     expect(
       mapMergeRequest(
-        { ...GL_MR, state: 'locked', draft: true },
-        { additions: 0, deletions: 0, changedFiles: 0 }
-      ).state
-    ).toBe('closed')
-  })
-
-  it('copies shas onto the stored Pr', () => {
-    const meta = mapMergeRequest(GL_MR, { additions: 1, deletions: 1, changedFiles: 1 })
-    expect(toPr(meta, TEST_REPO, { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).toMatchObject({
-      number: 42,
-      headSha: HEAD_SHA,
-      mergeBaseSha: BASE_SHA,
-      repo: TEST_REPO,
-    })
+        { ...GL_MR, state: 'locked', draft: true, diff_refs: null },
+        { additions: 0, deletions: 0 }
+      )
+    ).toMatchObject({ state: 'closed', draft: true, headSha: HEAD_SHA })
   })
 })
 
 describe('fetchMrMeta', () => {
-  it('reads the MR and GraphQL stats', async () => {
+  it('reads the MR and its GraphQL line counts together', async () => {
     const gh = createFakeGh({
       routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson(GL_MR) },
-      graphql: [
-        {
-          project: {
-            mergeRequest: { diffStatsSummary: { additions: 7, deletions: 5, fileCount: 7 } },
-          },
-        },
-      ],
+      graphql: [STATS],
     })
-    const meta = await fetchMrMeta(gh, TEST_REPO, 42)
-    expect(meta).toMatchObject({ number: 42, additions: 7, deletions: 5, changedFiles: 7 })
-    expect(gh.calls[1]).toMatchObject({ kind: 'graphql', params: { path: 'acme/widgets', iid: '42' } })
+    expect(await fetchMrMeta(gh, TEST_REPO, 42)).toMatchObject({
+      number: 42,
+      additions: 7,
+      deletions: 5,
+      changedFiles: 7,
+    })
+    expect(gh.calls.find(c => c.kind === 'graphql')).toMatchObject({
+      params: { path: 'acme/widgets', iid: '42' },
+    })
     expect(MR_STATS_QUERY).toContain('diffStatsSummary')
   })
 
   it('turns a 404 into PrNotFoundError', async () => {
     const gh = createFakeGh({
       routes: {
-        'projects/acme%2Fwidgets/merge_requests/42': ghError(new GitHubApiError('x', 'HTTP 404', 1)),
+        'projects/acme%2Fwidgets/merge_requests/42': ghError(new HostCliError('glab', 'x', 'HTTP 404', 1)),
       },
     })
     await expect(fetchMrMeta(gh, TEST_REPO, 42)).rejects.toBeInstanceOf(PrNotFoundError)
   })
 
-  it('uses changes_count when GraphQL stats are missing', async () => {
-    const gh = createFakeGh({
-      routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson({ ...GL_MR, changes_count: 4 }) },
+  it('keeps the REST file count and shows +0 −0 when GraphQL refuses or has no summary', async () => {
+    const refused = createFakeGh({
+      routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson({ ...GL_MR, changes_count: '4' }) },
       graphql: [new Error('no graphql')],
     })
-    expect(await fetchMrMeta(gh, TEST_REPO, 42)).toMatchObject({ changedFiles: 4, additions: 0 })
+    expect(await fetchMrMeta(refused, TEST_REPO, 42)).toMatchObject({
+      changedFiles: 4,
+      additions: 0,
+      deletions: 0,
+    })
+    const empty = createFakeGh({
+      routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson(GL_MR) },
+      graphql: [{ project: { mergeRequest: { diffStatsSummary: null } } }],
+    })
+    expect(await fetchMrMeta(empty, TEST_REPO, 42)).toMatchObject({ changedFiles: 7, additions: 0 })
   })
 })
 
-describe('fetchMrRefs', () => {
-  it('fetches GitLab merge-request refs into the same local pr refs', async () => {
+describe('fetchMrDiffRefs', () => {
+  it('reads the live diff refs, and says so when GitLab has none yet', async () => {
+    const gh = createFakeGh({ routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson(GL_MR) } })
+    expect(await fetchMrDiffRefs(gh, TEST_REPO, 42)).toEqual({
+      baseSha: BASE_SHA,
+      startSha: BASE_SHA,
+      headSha: HEAD_SHA,
+    })
+    const none = createFakeGh({
+      routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson({ ...GL_MR, diff_refs: null }) },
+    })
+    await expect(fetchMrDiffRefs(none, TEST_REPO, 42)).rejects.toThrow(/no diff refs/)
+  })
+})
+
+describe('fetchPrRefs for a GitLab host', () => {
+  it('fetches the merge-request head into the same local refs GitHub uses', async () => {
     const git = createFakeGit({
       refs: { 'merge-requests/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA },
       mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA },
     })
-    const meta = mapMergeRequest(GL_MR, { additions: 0, deletions: 0, changedFiles: 0 })
-    expect(await fetchMrRefs(git, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
+    const meta = mapMergeRequest(GL_MR, { additions: 0, deletions: 0 })
+    const shas = await fetchPrRefs(git, GL, meta)
+    expect(shas).toEqual({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     expect(git.calls[0]).toEqual([
       'fetch',
       'origin',
       `+merge-requests/42/head:${prHeadRef(42)}`,
       `+refs/heads/main:${prBaseRef(42)}`,
     ])
+    expect(toPr(meta, TEST_REPO, shas)).toMatchObject({ number: 42, headSha: HEAD_SHA, repo: TEST_REPO })
   })
 
   it('diffs a merged MR against the merge commit parent', async () => {
@@ -119,8 +159,8 @@ describe('fetchMrRefs', () => {
     })
     const meta = mapMergeRequest(
       { ...GL_MR, state: 'merged', merge_commit_sha: merge },
-      { additions: 0, deletions: 0, changedFiles: 0 }
+      { additions: 0, deletions: 0 }
     )
-    expect(await fetchMrRefs(git, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: fork })
+    expect(await fetchPrRefs(git, GL, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: fork })
   })
 })

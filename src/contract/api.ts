@@ -92,10 +92,18 @@ export interface SharedCanvasFetchResponse {
 /** A canvas zip found on the pull request. Shaped by the schema the discovery cache stores. */
 export type SharedCanvasInfo = z.infer<typeof SharedCanvasInfoSchema>
 
+/** The forge the server talks to, as the page and the health endpoint learn it. */
+export interface PublicHost {
+  kind: 'github' | 'gitlab'
+  /** `GitHub` or `GitLab`, for the words on the page. */
+  label: string
+  /** `https://github.com` or the GitLab instance, for links to profiles. */
+  webBase: string
+}
+
 export interface PrBundle {
   status: BundleStatus
   pr: Pr
-  host?: { kind: 'github' | 'gitlab'; label: string; cliName: string }
   files: FileEntry[]
   derivable: boolean
   artifact?: ReviewArtifact
@@ -177,7 +185,7 @@ export interface HealthResponse {
     agentAuth?: HealthCheck
   }
   repo: { owner: string; name: string } | null
-  host?: { kind: 'github' | 'gitlab'; label: string }
+  host: PublicHost
   dataDir: string
   chat: ChatStatus
 }

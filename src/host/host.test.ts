@@ -1,41 +1,48 @@
 // @vitest-environment node
 import { TEST_REPO } from '../testing/fakes.js'
-import {
-  authorProfileUrl,
-  compareUrl,
-  GITHUB_HOST,
-  gitlabHost,
-  publicHost,
-  reviewNoun,
-  reviewNounShort,
-} from './host.js'
+import { GITHUB_HOST, gitlabHost, publicHost } from './host.js'
 
-describe('host labels and URLs', () => {
-  it('names GitHub and GitLab reviews', () => {
-    expect(reviewNoun(GITHUB_HOST)).toBe('pull request')
-    expect(reviewNounShort(GITHUB_HOST)).toBe('PR')
-    expect(reviewNoun(gitlabHost('gitlab.com'))).toBe('merge request')
-    expect(reviewNounShort(gitlabHost('gitlab.com'))).toBe('MR')
-  })
-
-  it('builds compare and profile URLs', () => {
-    expect(compareUrl(GITHUB_HOST, TEST_REPO, 'main', 'feat')).toBe(
+describe('hosts', () => {
+  it('describe GitHub and a GitLab instance in their own words, CLI, and URLs', () => {
+    expect(GITHUB_HOST).toMatchObject({
+      kind: 'github',
+      hostname: 'github.com',
+      label: 'GitHub',
+      noun: 'pull request',
+      nounShort: 'PR',
+      cli: { cli: 'gh', env: {} },
+    })
+    expect(GITHUB_HOST.remoteHeadRef(42)).toBe('pull/42/head')
+    expect(GITHUB_HOST.compareUrl(TEST_REPO, 'main', 'feat')).toBe(
       'https://github.com/acme/widgets/compare/main...feat'
     )
-    expect(compareUrl(gitlabHost('gitlab.com'), TEST_REPO, 'main', 'feat')).toBe(
-      'https://gitlab.com/acme/widgets/-/compare/main...feat'
-    )
-    expect(authorProfileUrl(GITHUB_HOST, 'octocat')).toBe('https://github.com/octocat')
-    expect(authorProfileUrl(gitlabHost('gitlab.example.com'), 'alice')).toBe(
-      'https://gitlab.example.com/alice'
+
+    const gitlab = gitlabHost('gitlab.example.com')
+    expect(gitlab).toMatchObject({
+      kind: 'gitlab',
+      hostname: 'gitlab.example.com',
+      label: 'GitLab',
+      webBase: 'https://gitlab.example.com',
+      noun: 'merge request',
+      nounShort: 'MR',
+      cli: { cli: 'glab', env: { GITLAB_HOST: 'gitlab.example.com' } },
+    })
+    expect(gitlab.remoteHeadRef(42)).toBe('merge-requests/42/head')
+    expect(gitlab.compareUrl(TEST_REPO, 'main', 'feat')).toBe(
+      'https://gitlab.example.com/acme/widgets/-/compare/main...feat'
     )
   })
 
-  it('exposes the public host fields the page needs', () => {
+  it('tells the page only what it needs', () => {
     expect(publicHost(gitlabHost('gitlab.com'))).toEqual({
       kind: 'gitlab',
       label: 'GitLab',
-      cliName: 'glab',
+      webBase: 'https://gitlab.com',
+    })
+    expect(JSON.parse(JSON.stringify(publicHost(GITHUB_HOST)))).toEqual({
+      kind: 'github',
+      label: 'GitHub',
+      webBase: 'https://github.com',
     })
   })
 })

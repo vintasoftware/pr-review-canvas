@@ -2,7 +2,7 @@ import type { PostCommentInput, PostCommentResult } from '../contract/comments.j
 import type { FileEntry, Repo, Side } from '../contract/review-artifact.js'
 import { hunkForLine } from '../git/patch-lines.js'
 import { mapIssueComment, mapReviewComment } from './comments.js'
-import type { GitHubClient } from './gh.js'
+import type { HostClient } from '../host/client.js'
 
 /** GitHub names the two sides of a diff LEFT and RIGHT. */
 export function ghSide(side: Side): 'LEFT' | 'RIGHT' {
@@ -92,7 +92,7 @@ export function commentRequest(
 
 /** Posts one comment and maps GitHub's answer into the shape the page already renders. */
 export async function postComment(
-  gh: GitHubClient,
+  gh: HostClient,
   repo: Repo,
   number: number,
   headSha: string,

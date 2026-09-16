@@ -10,6 +10,7 @@ import type {
   SharedCanvasFetchResponse,
 } from '../../contract/api.js'
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
+import { publicHost } from '../../host/host.js'
 import { createPrLoader, resolveBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
@@ -156,7 +157,7 @@ export function apiRoutes(ctx: AppContext): Hono {
           : {}),
       },
       repo: ctx.config.repo,
-      host: { kind: ctx.config.host.kind, label: ctx.config.host.label },
+      host: publicHost(ctx.config.host),
       dataDir: ctx.config.dataDir,
       chat: {
         enabled: chatEnabled,

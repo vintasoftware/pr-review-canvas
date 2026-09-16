@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ReviewSummary } from './../contract/api.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { GitHubClient } from './gh.js'
+import type { HostClient } from '../host/client.js'
 
 export const REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES'] as const
 export const ReviewEventSchema = z.enum(REVIEW_EVENTS)
@@ -28,7 +28,7 @@ const GhReviewSchema = z.object({
 
 /** Posts the review. GitHub decides what the event means; the tool only fills the body and sha. */
 export async function postReview(
-  gh: GitHubClient,
+  gh: HostClient,
   repo: Repo,
   number: number,
   headSha: string,

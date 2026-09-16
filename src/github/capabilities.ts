@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Capabilities } from '../contract/api.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { GhResponse, GitHubClient } from './gh.js'
+import type { CliResponse, HostClient } from '../host/client.js'
 
 const UserSchema = z.object({ login: z.string() })
 const RepoBodySchema = z.object({
@@ -26,7 +26,7 @@ export const CAPABILITY_TTL_MS = 10 * 60 * 1000
  * permissions. A token without a scopes header is a fine-grained or app token, whose rights this
  * check cannot read: posting stays enabled and GitHub's own answer decides.
  */
-export function decideCapabilities(login: string | null, response: GhResponse): Capabilities {
+export function decideCapabilities(login: string | null, response: CliResponse): Capabilities {
   const parsed = RepoBodySchema.safeParse(response.body)
   const body = parsed.success ? parsed.data : {}
   const canPull = body.permissions?.pull === true
@@ -67,7 +67,7 @@ export function decideCapabilities(login: string | null, response: GhResponse): 
 }
 
 /** The probe itself: who the token belongs to, and what it may do here. */
-export async function probeCapabilities(gh: GitHubClient, repo: Repo): Promise<Capabilities> {
+export async function probeCapabilities(gh: HostClient, repo: Repo): Promise<Capabilities> {
   let login: string | null = null
   try {
     login = UserSchema.parse(await gh.api('user')).login
@@ -96,11 +96,9 @@ export interface CapabilityProbe {
  * changed their token.
  */
 export function createCapabilityProbe(
-  gh: GitHubClient,
-  repo: Repo,
+  probe: () => Promise<Capabilities>,
   now: () => Date,
-  ttlMs = CAPABILITY_TTL_MS,
-  probe: (client: GitHubClient, repo: Repo) => Promise<Capabilities> = probeCapabilities
+  ttlMs = CAPABILITY_TTL_MS
 ): CapabilityProbe {
   let cached: { at: number; value: Capabilities } | null = null
   return {
@@ -109,7 +107,7 @@ export function createCapabilityProbe(
       if (!opts.refresh && cached !== null && at - cached.at < ttlMs) {
         return cached.value
       }
-      const value = await probe(gh, repo)
+      const value = await probe()
       cached = { at, value }
       return value
     },

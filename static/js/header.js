@@ -3,7 +3,7 @@
 /** @typedef {import('./contract-types.js').RiskTag} RiskTag */
 import { setDisabledReason } from './composer.js'
 import { esc, timeAgo } from './dom.js'
-import { authorProfileUrl, currentHost, forgeLabel } from './host.js'
+import { authorProfileUrl, currentHost, hostLabel } from './host.js'
 import { refreshRail } from './layers.js'
 import { progressSummary } from './progress.js'
 import { approveBlockedReason } from './signoff.js'
@@ -69,8 +69,8 @@ export function renderHeader(bundle, opts) {
     `<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
     '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
     `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for this PR" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
-    `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(forgeLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
-    `<button class="cmd" type="button" id="refresh" title="Fetch the latest PR, comments, and shared canvas from ${esc(forgeLabel())}">refresh</button>` +
+    `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
+    `<button class="cmd" type="button" id="refresh" title="Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}">refresh</button>` +
     `<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog"${bundle.chat.enabled || bundle.chat.acpx ? ' title="Configure the AI chat agent, model, and limits"' : ' disabled title="acpx is not installed"'}>settings</button>` +
     '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
     `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal and GitHub styling">${esc(skinLabel(opts.skin))}</button>` +
@@ -96,13 +96,13 @@ export function progressHtml(artifact, state) {
   const p = progressSummary(artifact, state)
   const blocked = approveBlockedReason(artifact, state)
   const approve =
-    `<button class="cmd" type="button" id="approve" data-tooltip="Write and preview an approving review on ${esc(forgeLabel())}" data-act="signoff" data-event="APPROVE" data-needs-post` +
-    `${blocked === null ? ` title="Write and preview an approving review on ${esc(forgeLabel())}"` : ` disabled data-disabled-reason="${esc(blocked)}" title="${esc(blocked)}"`}>approve on ${esc(currentHost().kind)}</button>`
+    `<button class="cmd" type="button" id="approve" data-tooltip="Write and preview an approving review on ${esc(hostLabel())}" data-act="signoff" data-event="APPROVE" data-needs-post` +
+    `${blocked === null ? ` title="Write and preview an approving review on ${esc(hostLabel())}"` : ` disabled data-disabled-reason="${esc(blocked)}" title="${esc(blocked)}"`}>approve on ${esc(currentHost().kind)}</button>`
   return (
     `<div class="progress"><div class="pline" role="progressbar" aria-valuenow="${p.done}" aria-valuemin="0" aria-valuemax="${p.total}" aria-label="Layers reviewed"><span style="width:${p.percent}%"></span></div>` +
     `<span class="ptext">${p.done} of ${p.total} layers reviewed</span></div>` +
     `<div class="signoff">${approve}` +
-    `<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on ${esc(forgeLabel())}" title="Write and preview a review requesting changes on ${esc(forgeLabel())}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>` +
+    `<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on ${esc(hostLabel())}" title="Write and preview a review requesting changes on ${esc(hostLabel())}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>` +
     '<span class="capability-note" role="status"></span></div>'
   )
 }

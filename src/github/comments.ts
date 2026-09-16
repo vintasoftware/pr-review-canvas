@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { CommentsPayload, IssueComment, ReviewComment } from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { GitHubClient } from './gh.js'
+import type { HostClient } from '../host/client.js'
 import { fetchResolvedCommentIds } from './threads.js'
 
 const GhReviewCommentSchema = z.object({
@@ -79,7 +79,7 @@ export interface FetchCommentsResult {
 export const COMMENTS_PAGE_SIZE = 100
 
 /** Every item of a REST list endpoint, following `page=` until a page comes back short. */
-export async function fetchAllPages(gh: GitHubClient, path: string): Promise<unknown[]> {
+export async function fetchAllPages(gh: HostClient, path: string): Promise<unknown[]> {
   const out: unknown[] = []
   for (let page = 1; ; page++) {
     const batch = z
@@ -97,7 +97,7 @@ export async function fetchAllPages(gh: GitHubClient, path: string): Promise<unk
  * GraphQL. A GraphQL failure degrades to `resolved: false` everywhere plus a warning.
  */
 export async function fetchComments(
-  gh: GitHubClient,
+  gh: HostClient,
   repo: Repo,
   number: number,
   headSha: string,

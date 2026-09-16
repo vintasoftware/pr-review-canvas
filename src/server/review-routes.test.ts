@@ -2,7 +2,7 @@
 // The routes that change something: local review state, comments, and the sign-off review.
 import type { PostCommentResponse, PostReviewResponse, StateResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
-import { GitHubApiError } from '../github/gh.js'
+import { HostCliError } from '../host/client.js'
 import { REVIEW_BODY_FOOTER } from '../github/review-body.js'
 import {
   createFakeGh,
@@ -341,7 +341,7 @@ describe('POST /api/prs/:n/comments', () => {
       ghFor42({
         postRoutes: {
           'repos/acme/widgets/issues/42/comments': ghPostError(
-            new GitHubApiError('issues', 'gh: Unprocessable Entity (HTTP 422)', 1)
+            new HostCliError('gh', 'issues', 'gh: Unprocessable Entity (HTTP 422)', 1)
           ),
         },
       })

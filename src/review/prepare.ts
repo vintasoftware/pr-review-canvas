@@ -4,8 +4,7 @@ import { appendFile, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { type GenerationContext, isLargePr, type PrepareTarget } from '../contract/generation-context.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
-import { compareUrl } from '../host/host.js'
-import { fetchPrMeta, fetchPrRefs, toPr } from '../host/operations.js'
+import { fetchPrRefs, toPr } from '../github/pr.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
@@ -29,7 +28,7 @@ export interface PrepareResult {
 /** The PR meta, live from GitHub, with the head and base refs fetched into the local clone. */
 async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['log']): Promise<Pr> {
   log('fetch-pr')
-  const meta = await fetchPrMeta(ctx.gh, ctx.config.host, ctx.config.repo, number)
+  const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
   log('fetch-refs')
   const shas = await fetchPrRefs(ctx.git, ctx.config.host, meta)
   const pr = toPr(meta, ctx.config.repo, shas)
@@ -54,7 +53,7 @@ async function resolveRefs(
     title: head,
     body: '',
     author,
-    url: compareUrl(ctx.config.host, repo, base, head),
+    url: ctx.config.host.compareUrl(repo, base, head),
     state: 'pre-pr',
     draft: false,
     updatedAt: ctx.now().toISOString(),

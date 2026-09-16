@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import type { Pr, Repo } from '../contract/review-artifact.js'
 import type { Git } from '../git/git.js'
-import { GitHubApiError, type GitHubClient } from './gh.js'
+import { type HostClient, HostCliError } from '../host/client.js'
+import type { Host } from '../host/host.js'
 
 /** The subset of GitHub's pull request object the tool reads. */
 const GhPullSchema = z.object({
@@ -72,11 +73,11 @@ export function mapPull(raw: unknown): PrMeta {
   }
 }
 
-export async function fetchPrMeta(gh: GitHubClient, repo: Repo, number: number): Promise<PrMeta> {
+export async function fetchPrMeta(client: HostClient, repo: Repo, number: number): Promise<PrMeta> {
   try {
-    return mapPull(await gh.api(`repos/${repo.owner}/${repo.name}/pulls/${number}`))
+    return mapPull(await client.api(`repos/${repo.owner}/${repo.name}/pulls/${number}`))
   } catch (err) {
-    if (err instanceof GitHubApiError && err.notFound) {
+    if (err instanceof HostCliError && err.notFound) {
       throw new PrNotFoundError(number)
     }
     throw err
@@ -92,8 +93,9 @@ export function prBaseRef(number: number): string {
 }
 
 /**
- * Fetches the PR head and base into local refs and resolves the two commits the diff needs.
- * The refs are the same ones the prior-art skill used, so an existing clone keeps working.
+ * Fetches the review's head and base into local refs and resolves the two commits the diff needs.
+ * The local refs are the ones the prior-art skill used, so an existing clone keeps working, and
+ * they are the same for both hosts; only the remote ref that holds the head differs.
  *
  * A merged PR is diffed against the base as it was at merge time: the merge commit's first
  * parent (a merge commit, a squash, or the last rebased commit all sit on the base branch, so
@@ -102,10 +104,11 @@ export function prBaseRef(number: number): string {
  */
 export async function fetchPrRefs(
   git: Git,
+  host: Host,
   meta: PrMeta
 ): Promise<{ headSha: string; mergeBaseSha: string }> {
   await git.fetch('origin', [
-    `+pull/${meta.number}/head:${prHeadRef(meta.number)}`,
+    `+${host.remoteHeadRef(meta.number)}:${prHeadRef(meta.number)}`,
     `+refs/heads/${meta.baseRef}:${prBaseRef(meta.number)}`,
   ])
   const headSha = await git.revParse(prHeadRef(meta.number))

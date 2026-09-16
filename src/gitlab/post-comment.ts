@@ -1,36 +1,31 @@
 import { createHash } from 'node:crypto'
+import { z } from 'zod'
 import type { PostCommentInput, PostCommentResult } from '../contract/comments.js'
-import type { FileEntry, Repo, Side } from '../contract/review-artifact.js'
-import type { GitHubClient } from '../github/gh.js'
-import { findDiscussionId, mapGitLabIssueComment, mapGitLabReviewComment, parseGlNote } from './comments.js'
-import { fetchMrMeta } from './mr.js'
-import { gitlabNoteUrl, gitlabProjectApi } from './project.js'
+import type { FileEntry, Repo } from '../contract/review-artifact.js'
+import type { HostClient } from '../host/client.js'
+import { findDiscussionId, GlNoteSchema, mapGitLabIssueComment, mapGitLabReviewComment } from './comments.js'
+import { fetchMrDiffRefs, type MrDiffRefs } from './mr.js'
+import { gitlabProjectApi } from './project.js'
 
+/** A new discussion comes back as the thread holding its first note. */
+const GlDiscussionSchema = z.object({ notes: z.tuple([GlNoteSchema]).rest(z.unknown()) })
+
+/** GitLab's id for one diff line: the path hash and the line on each side. */
 function lineCode(filePath: string, oldLine: number | null, newLine: number | null): string {
-  const hash = createHash('sha1').update(filePath).digest('hex')
-  return `${hash}_${oldLine ?? ''}_${newLine ?? ''}`
+  return `${createHash('sha1').update(filePath).digest('hex')}_${oldLine ?? ''}_${newLine ?? ''}`
 }
 
-function pathsFor(
-  files: ReadonlyArray<FileEntry> | undefined,
-  path: string
-): {
-  oldPath: string
-  newPath: string
-} {
-  const file = files?.find(f => f.path === path)
-  return { oldPath: file?.oldPath ?? path, newPath: path }
-}
-
-function positionFor(
-  refs: { baseSha: string; startSha: string; headSha: string },
+/** The `position` GitLab anchors an inline comment to. A range names both of its ends by line code. */
+export function inlinePosition(
+  refs: MrDiffRefs,
   input: Extract<PostCommentInput, { kind: 'inline' }>,
-  files: ReadonlyArray<FileEntry> | undefined
+  files: ReadonlyArray<FileEntry>
 ): Record<string, unknown> {
-  const { oldPath, newPath } = pathsFor(files, input.path)
-  const side: Side = input.side
-  const oldLine = side === 'old' ? input.line : null
-  const newLine = side === 'new' ? input.line : null
+  const newPath = input.path
+  const oldPath = files.find(f => f.path === input.path)?.oldPath ?? input.path
+  const at = (line: number): [old: number | null, current: number | null] =>
+    input.side === 'old' ? [line, null] : [null, line]
+  const [oldLine, newLine] = at(input.line)
   const position: Record<string, unknown> = {
     base_sha: refs.baseSha,
     start_sha: refs.startSha,
@@ -38,66 +33,43 @@ function positionFor(
     position_type: 'text',
     old_path: oldPath,
     new_path: newPath,
+    ...(oldLine === null ? {} : { old_line: oldLine }),
+    ...(newLine === null ? {} : { new_line: newLine }),
   }
-  if (newLine !== null) {
-    position['new_line'] = newLine
-  }
-  if (oldLine !== null) {
-    position['old_line'] = oldLine
-  }
-  const startLine = input.startLine
-  if (startLine !== undefined && startLine !== input.line) {
-    const startOld = side === 'old' ? startLine : null
-    const startNew = side === 'new' ? startLine : null
+  if (input.startLine !== undefined && input.startLine !== input.line) {
     position['line_range'] = {
-      start: {
-        line_code: lineCode(newPath, startOld, startNew),
-        type: side === 'old' ? 'old' : 'new',
-      },
-      end: {
-        line_code: lineCode(newPath, oldLine, newLine),
-        type: side === 'old' ? 'old' : 'new',
-      },
+      start: { line_code: lineCode(newPath, ...at(input.startLine)), type: input.side },
+      end: { line_code: lineCode(newPath, oldLine, newLine), type: input.side },
     }
   }
   return position
 }
 
-function firstNote(raw: unknown): unknown {
-  if (raw !== null && typeof raw === 'object' && 'notes' in raw) {
-    const notes = (raw as { notes?: unknown[] }).notes
-    if (Array.isArray(notes) && notes[0] !== undefined) {
-      return notes[0]
-    }
-  }
-  return raw
-}
-
+/**
+ * Posts one comment and maps GitLab's answer into the shape the page already renders. An inline
+ * comment opens a discussion positioned on the live diff refs; a reply joins the discussion that
+ * holds its parent; a review-level comment is a plain note.
+ */
 export async function postGitlabComment(
-  client: GitHubClient,
+  client: HostClient,
   repo: Repo,
   number: number,
   headSha: string,
   input: PostCommentInput,
-  opts: { webBase: string; files?: ReadonlyArray<FileEntry> }
+  opts: { webBase: string; files: ReadonlyArray<FileEntry> }
 ): Promise<PostCommentResult> {
   const base = `${gitlabProjectApi(repo)}/merge_requests/${number}`
+  const mapped = { webBase: opts.webBase, repo, iid: number, headSha }
   switch (input.kind) {
     case 'inline': {
-      const meta = await fetchMrMeta(client, repo, number)
-      const refs = meta.diffRefs ?? {
-        baseSha: meta.mergeCommitSha ?? headSha,
-        startSha: meta.mergeCommitSha ?? headSha,
-        headSha,
-      }
+      const refs = await fetchMrDiffRefs(client, repo, number)
       const raw = await client.post(`${base}/discussions`, {
         body: input.body,
-        position: positionFor(refs, input, opts.files),
+        position: inlinePosition(refs, input, opts.files),
       })
-      const note = parseGlNote(firstNote(raw))
       return {
         kind: 'review',
-        comment: mapGitLabReviewComment(note, { webBase: opts.webBase, repo, iid: number, headSha }),
+        comment: mapGitLabReviewComment(GlDiscussionSchema.parse(raw).notes[0], mapped),
       }
     }
     case 'reply': {
@@ -106,29 +78,15 @@ export async function postGitlabComment(
         throw new Error(`no GitLab discussion contains note ${input.inReplyToId}`)
       }
       const raw = await client.post(`${base}/discussions/${discussionId}/notes`, { body: input.body })
-      const note = parseGlNote(firstNote(raw))
+      const note = GlNoteSchema.parse(raw)
       return {
         kind: 'review',
-        comment: mapGitLabReviewComment(note, {
-          webBase: opts.webBase,
-          repo,
-          iid: number,
-          headSha,
-          inReplyToId: input.inReplyToId,
-        }),
+        comment: mapGitLabReviewComment(note, { ...mapped, inReplyToId: input.inReplyToId }),
       }
     }
     case 'issue': {
       const raw = await client.post(`${base}/notes`, { body: input.body })
-      const note = parseGlNote(firstNote(raw))
-      return {
-        kind: 'issue',
-        comment: mapGitLabIssueComment(note, { webBase: opts.webBase, repo, iid: number }),
-      }
+      return { kind: 'issue', comment: mapGitLabIssueComment(GlNoteSchema.parse(raw), mapped) }
     }
   }
-}
-
-export function postedCommentUrl(webBase: string, repo: Repo, number: number, commentId: number): string {
-  return gitlabNoteUrl(webBase, repo, number, commentId)
 }

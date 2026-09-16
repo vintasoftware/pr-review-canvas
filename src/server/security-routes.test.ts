@@ -5,7 +5,7 @@
 import { readdir, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Pr } from '../contract/review-artifact.js'
-import { discoverSharedCanvas } from '../github/attachments.js'
+import { discoverSharedCanvas } from '../host/attachments.js'
 import { createFakeGh, makeTempDir, makeTestContext, type TestContext } from '../testing/fakes.js'
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { createApp } from './app.js'

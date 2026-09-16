@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { createFakeGh, createFakeGit, ghError, ghJson, TEST_REPO } from '../testing/fakes.js'
 import { BASE_SHA, GH_PULL, HEAD_SHA } from '../testing/synthetic.js'
-import { GitHubApiError } from './gh.js'
+import { HostCliError } from '../host/client.js'
+import { GITHUB_HOST } from '../host/host.js'
 import { fetchPrMeta, fetchPrRefs, mapPull, PrNotFoundError, prBaseRef, prHeadRef, toPr } from './pr.js'
 
 describe('mapPull', () => {
@@ -60,14 +61,14 @@ describe('fetchPrMeta', () => {
 
   it('turns a 404 into PrNotFoundError and passes other errors through', async () => {
     const gh = createFakeGh({
-      routes: { 'repos/acme/widgets/pulls/7': ghError(new GitHubApiError('x', 'HTTP 500', 1)) },
+      routes: { 'repos/acme/widgets/pulls/7': ghError(new HostCliError('gh', 'x', 'HTTP 500', 1)) },
     })
     await expect(fetchPrMeta(gh, TEST_REPO, 42)).rejects.toBeInstanceOf(PrNotFoundError)
     await expect(fetchPrMeta(gh, TEST_REPO, 42)).rejects.toMatchObject({
       number: 42,
       message: 'pull request #42 not found',
     })
-    await expect(fetchPrMeta(gh, TEST_REPO, 7)).rejects.toBeInstanceOf(GitHubApiError)
+    await expect(fetchPrMeta(gh, TEST_REPO, 7)).rejects.toBeInstanceOf(HostCliError)
   })
 })
 
@@ -78,7 +79,7 @@ describe('fetchPrRefs and toPr', () => {
       mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA },
     })
     const meta = mapPull(GH_PULL)
-    const shas = await fetchPrRefs(git, meta)
+    const shas = await fetchPrRefs(git, GITHUB_HOST, meta)
     expect(shas).toEqual({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     expect(git.calls).toEqual([
       ['fetch', 'origin', `+pull/42/head:${prHeadRef(42)}`, `+refs/heads/main:${prBaseRef(42)}`],
@@ -115,7 +116,7 @@ describe('fetchPrRefs and toPr', () => {
       mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: HEAD_SHA, [`${merge}^1..${HEAD_SHA}`]: forkPoint },
     })
     const meta = mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
-    expect(await fetchPrRefs(git, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: forkPoint })
+    expect(await fetchPrRefs(git, GITHUB_HOST, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: forkPoint })
     expect(git.calls[2]).toEqual(['merge-base', `${merge}^1`, HEAD_SHA])
   })
 })

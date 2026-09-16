@@ -1,31 +1,24 @@
 // @ts-check
-// @vitest-environment happy-dom
-import {
-  authorProfileUrl,
-  currentHost,
-  forgeLabel,
-  noPostingTitle,
-  postToLabel,
-  setHost,
-  signoffHostTitle,
-} from './host.js'
+import { authorProfileUrl, currentHost, hostLabel, noPostingTitle, postToLabel, setHost } from './host.js'
 
-describe('host labels', () => {
+describe('host words and links', () => {
   afterEach(() => {
     setHost(undefined)
   })
 
-  it('defaults to GitHub and switches to GitLab', () => {
-    expect(forgeLabel()).toBe('GitHub')
+  it('speaks GitHub until the bootstrap names another host', () => {
+    expect(currentHost().kind).toBe('github')
+    expect(hostLabel()).toBe('GitHub')
     expect(postToLabel()).toBe('post to github')
-    expect(signoffHostTitle('APPROVE')).toBe('Approve on GitHub')
-    setHost({ kind: 'gitlab', label: 'GitLab', cliName: 'glab' })
+    expect(noPostingTitle()).toBe('this GitHub login cannot post on this repository')
+    expect(authorProfileUrl('octocat')).toBe('https://github.com/octocat')
+  })
+
+  it('speaks GitLab, with profile links on the instance the server named', () => {
+    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
     expect(currentHost().kind).toBe('gitlab')
     expect(postToLabel()).toBe('post to gitlab')
     expect(noPostingTitle()).toBe('this GitLab login cannot post on this repository')
-    expect(signoffHostTitle('REQUEST_CHANGES')).toBe('Request changes on GitLab')
-    expect(authorProfileUrl('alice')).toBe('https://gitlab.com/alice')
-    setHost({ kind: 'github', label: 'GitHub' })
-    expect(authorProfileUrl('octocat')).toBe('https://github.com/octocat')
+    expect(authorProfileUrl('alice')).toBe('https://gitlab.example.com/alice')
   })
 })

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ReviewSummary } from '../contract/api.js'
 import type { Repo } from '../contract/review-artifact.js'
 import type { ReviewEvent } from '../github/post-review.js'
-import type { GitHubClient } from '../github/gh.js'
+import type { HostClient } from '../host/client.js'
 import { gitlabMrUrl, gitlabNoteUrl, gitlabProjectApi } from './project.js'
 
 const GlNoteSchema = z.object({
@@ -22,7 +22,7 @@ const GlMrSchema = z.object({
  * the review body as an MR note so the text still lands on the merge request.
  */
 export async function postGitlabReview(
-  client: GitHubClient,
+  client: HostClient,
   repo: Repo,
   number: number,
   headSha: string,
