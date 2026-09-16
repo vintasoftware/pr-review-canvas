@@ -32,6 +32,30 @@ describe('createApp', () => {
     await t?.cleanup()
   })
 
+  it('logs unexpected failures with the request and original stack, but keeps stacks out of responses', async () => {
+    t = await makeTestContext()
+    const logs: string[] = []
+    t.ctx.log = line => logs.push(line)
+    const failure = new Error('disk unavailable', { cause: new Error('underlying failure') })
+    const readSettings = t.ctx.settings.read
+    t.ctx.settings.read = async () => {
+      throw failure
+    }
+    const app = createApp(t.ctx)
+    const response = await app.request('/api/appearance?ignored=private', { headers: LOCAL })
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: { code: 'INTERNAL', message: 'disk unavailable' } })
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toContain('[serve] GET /api/appearance 500 INTERNAL')
+    expect(logs[0]).toContain(failure.stack?.split('\n')[1]?.trim())
+    expect(logs[0]).toContain('underlying failure')
+    expect(logs[0]).not.toContain('private')
+    t.ctx.settings.read = readSettings
+    await app.request('/api/prs/invalid', { headers: LOCAL })
+    await app.request('/not-found', { headers: LOCAL })
+    expect(logs).toHaveLength(1)
+  })
+
   describe('security', () => {
     beforeEach(async () => {
       t = await makeTestContext()

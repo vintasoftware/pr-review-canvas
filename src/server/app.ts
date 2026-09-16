@@ -1,7 +1,7 @@
 import { type Context, Hono } from 'hono'
 import type { AppContext } from './context.js'
 import type { AppEnv } from './env.js'
-import { AppError, toAppError } from './errors.js'
+import { AppError, logRequestError, toAppError } from './errors.js'
 import { errorPage } from './html.js'
 import { apiRoutes } from './routes/api.js'
 import { appearanceFor, appearanceQuery, pageRoutes } from './routes/pages.js'
@@ -37,7 +37,10 @@ export function createApp(ctx: AppContext): Hono<AppEnv> {
     return res
   }
 
-  app.onError((err, c) => errorResponse(c, toAppError(err)))
+  app.onError((err, c) => {
+    logRequestError(ctx.log, c.req, err)
+    return errorResponse(c, toAppError(err))
+  })
 
   app.notFound(c =>
     errorResponse(c, new AppError('NOT_FOUND', `no route for ${c.req.method} ${c.req.path}`, 404))

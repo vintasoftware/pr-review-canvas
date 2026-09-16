@@ -4,7 +4,7 @@ import type { AppContext } from './context.js'
 
 /** Binds 127.0.0.1 only. The Host allowlist in security.ts covers the rest. */
 export function startServer(ctx: AppContext, log: (line: string) => void): { close: () => void } {
-  const app = createApp(ctx)
+  const app = createApp({ ...ctx, log })
   const server = serve({ fetch: app.fetch, port: ctx.config.port, hostname: '127.0.0.1' }, info => {
     log(
       `pr-review ${ctx.version} · http://localhost:${info.port}/ · ${ctx.config.repo.owner}/${ctx.config.repo.name}`

@@ -283,6 +283,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
   const gh = opts.gh ?? createFakeGh()
   const stores = createStores(dataDir, config, git, now)
   const ctx: AppContext = {
+    log: () => undefined,
     config,
     projectConfig: opts.projectConfig ?? { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
     git,

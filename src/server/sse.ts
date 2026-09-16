@@ -28,7 +28,8 @@ export function sseFrame(event: ChatEvent): string {
 export function sseStream(
   events: AsyncIterable<ChatEvent>,
   onClose?: () => void,
-  onCancel?: () => void
+  onCancel?: () => void,
+  onError?: (err: unknown) => void
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
   const iterator = events[Symbol.asyncIterator]()
@@ -38,6 +39,7 @@ export function sseStream(
       try {
         next = await iterator.next()
       } catch (err) {
+        onError?.(err)
         controller.enqueue(
           encoder.encode(
             sseFrame({

@@ -62,6 +62,27 @@ afterEach(async () => {
 })
 
 describe('POST /api/prs/:n/chat', () => {
+  it.each([false, true])(
+    'logs a chat failure with its original stack (stream started: %s)',
+    async started => {
+      await warmDerived()
+      const logs: string[] = []
+      t.ctx.log = line => logs.push(line)
+      const failure = new Error('chat storage failed')
+      t.ctx.chat.send = async function* () {
+        if (started) yield { event: 'chunk', text: 'partial answer' }
+        throw failure
+      }
+      const response = await sendChat({ message: 'private question', context: { kind: 'pr' } })
+      expect(response.status).toBe(started ? 200 : 500)
+      expect(await response.text()).toContain('chat storage failed')
+      expect(logs).toHaveLength(1)
+      expect(logs[0]).toContain('[serve] POST /api/prs/42/chat 500 INTERNAL')
+      expect(logs[0]).toContain(failure.stack?.split('\n')[1]?.trim())
+      expect(logs[0]).not.toContain('private question')
+    }
+  )
+
   it('answers with an event stream of the turn', async () => {
     await warmDerived()
     const res = await sendChat({ message: 'is this covered?', context: { kind: 'pr' } })

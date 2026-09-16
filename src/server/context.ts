@@ -36,6 +36,7 @@ export interface VendorRoots {
  * `createAppContext`; tests assemble their own with fakes and a temp data dir.
  */
 export interface AppContext {
+  log: (line: string) => void
   config: RuntimeConfig
   projectConfig: LoadedProjectConfig
   git: Git
@@ -162,6 +163,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
   return {
     config: opts.config,
+    log: line => process.stderr.write(`${line}\n`),
     projectConfig: opts.projectConfig,
     git,
     gh,

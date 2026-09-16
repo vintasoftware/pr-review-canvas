@@ -12,7 +12,7 @@ import type { SettingsResponse } from '../../contract/settings.js'
 import { isChatAgent, SettingsInputSchema } from '../../contract/settings.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
-import { AppError } from '../errors.js'
+import { AppError, logRequestError } from '../errors.js'
 import { SSE_HEADERS, sseStream } from '../sse.js'
 import { parsePrNumber } from './api.js'
 
@@ -186,9 +186,14 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     // A browser that goes away stops the agent; the turn is nobody's answer any more.
     return new Response(
-      sseStream(replayFrom(first, iterator), undefined, () => {
-        void ctx.chat.cancel(number)
-      }),
+      sseStream(
+        replayFrom(first, iterator),
+        undefined,
+        () => {
+          void ctx.chat.cancel(number)
+        },
+        err => logRequestError(ctx.log, c.req, err)
+      ),
       { headers: SSE_HEADERS }
     )
   })
@@ -230,7 +235,8 @@ export function toChatError(err: unknown): AppError {
   if (err instanceof ChatContextError) {
     return new AppError('BAD_REQUEST', err.message, 400)
   }
-  return err instanceof AppError
-    ? err
-    : new AppError('INTERNAL', err instanceof Error ? err.message : String(err), 500)
+  if (err instanceof AppError) return err
+  const error = new AppError('INTERNAL', err instanceof Error ? err.message : String(err), 500)
+  error.cause = err
+  return error
 }
