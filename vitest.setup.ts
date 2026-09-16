@@ -1,11 +1,5 @@
-// Repository pointers, dropped once per worker.
-//
-// The adapter drops them for every call it makes, but a test can reach git without the adapter:
-// through a tool it shells out to, or through a helper written before this rule existed. The suite
-// runs under the pre-commit hook, which in a linked worktree points these at the repository being
-// committed to, so anything that misses the adapter would work on this repository instead of its
-// own temporary one. Dropping them here leaves nothing to point at.
-import { REPO_ENV_VARS } from './src/git/git.js'
+// Tests and their child processes must not inherit the hook's repository pointers.
+import { REPO_ENV_VARS } from './src/git/environment.mjs'
 
 for (const name of REPO_ENV_VARS) {
   delete process.env[name]

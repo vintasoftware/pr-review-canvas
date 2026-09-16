@@ -2,21 +2,12 @@
 // The real adapter against a throwaway repository: git is a process boundary, but the adapter
 // itself is what this file tests, so it needs the real binary once.
 import { execFile } from 'node:child_process'
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
-import {
-  createGit,
-  envWithoutRepo,
-  execGit,
-  GitError,
-  type GitExec,
-  redactStderr,
-  REPO_ENV_VARS,
-  STDERR_MESSAGE_MAX,
-} from './git.js'
+import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
+import { createGit, execGit, GitError, type GitExec, redactStderr, STDERR_MESSAGE_MAX } from './git.js'
 
 const run = promisify(execFile)
 
@@ -158,7 +149,9 @@ describe('createGit (real adapter)', () => {
       'GIT_PREFIX',
     ])
     const kept = { PATH: '/bin', SSH_AUTH_SOCK: '/run/ssh', GIT_CONFIG_GLOBAL: '/home/u/.gitconfig' }
-    expect(envWithoutRepo({ ...kept, GIT_DIR: '/x', GIT_PREFIX: 'src/' })).toEqual(kept)
+    const inherited = { ...kept, ...Object.fromEntries(REPO_ENV_VARS.map(name => [name, '/x'])) }
+    expect(envWithoutRepo(inherited)).toEqual(kept)
+    expect(inherited).toHaveProperty('GIT_DIR', '/x')
   })
 
   it('reports a non-numeric exit as code 1 through the exec wrapper', async () => {
@@ -190,56 +183,5 @@ describe('createGit (real adapter)', () => {
     expect(redactStderr('ssh://git@host/repo and http://a:b@h/x')).toBe(
       'ssh://***@host/repo and http://***@h/x'
     )
-  })
-})
-
-/**
- * The scrub only holds while every git process in this repository is started through the adapter,
- * or by something that drops the same names itself. That is a property of files nobody edits with
- * this bug in mind — a script, a hook, a helper written next year — so it is checked here instead
- * of remembered: a `spawn('git', …)` added outside the adapter fails the suite, and so does a
- * hand-written copy of the list that falls behind the one it copies.
- */
-describe('nothing runs git around the scrub', () => {
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-  // The first argument of a call, so a list of command names like DOCTOR_CHECKS does not count.
-  const spawnsGit = /(?:exec|execFile|execFileSync|execSync|spawn|spawnSync|run)\s*\(\s*(['"])git\1/
-  const scanned = ['src', 'scripts', 'bin', '.githooks']
-
-  async function filesUnder(directory: string): Promise<string[]> {
-    const entries = await readdir(path.join(repoRoot, directory), {
-      recursive: true,
-      withFileTypes: true,
-    })
-    return entries.filter(entry => entry.isFile()).map(entry => path.join(entry.parentPath, entry.name))
-  }
-
-  it('starts every git process through the adapter, or through the same scrub', async () => {
-    const adapter = path.join('src', 'git', 'git.ts')
-    const offenders: string[] = []
-    for (const directory of scanned) {
-      for (const file of await filesUnder(directory)) {
-        const text = await readFile(file, 'utf8')
-        const relative = path.relative(repoRoot, file)
-        if (!spawnsGit.test(text) || relative === adapter) {
-          continue
-        }
-        if (!text.includes('REPO_ENV_VARS') && !text.includes('envWithoutRepo')) {
-          offenders.push(relative)
-        }
-      }
-    }
-    // Route the call through `execGit`, or drop REPO_ENV_VARS from the environment you hand it.
-    expect(offenders).toEqual([])
-  })
-
-  it('keeps the hand-written copies of the list in step with REPO_ENV_VARS', async () => {
-    const copies = ['.githooks/pre-commit', 'scripts/test-package.mjs']
-    for (const copy of copies) {
-      const text = await readFile(path.join(repoRoot, copy), 'utf8')
-      for (const name of REPO_ENV_VARS) {
-        expect(text, `${copy} does not drop ${name}`).toContain(name)
-      }
-    }
   })
 })

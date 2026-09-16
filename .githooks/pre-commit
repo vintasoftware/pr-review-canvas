@@ -1,10 +1,5 @@
 #!/bin/sh
-# Git hands a hook the repository it is acting on through the environment, and every process the
-# hook starts inherits it. In a linked worktree GIT_DIR is absolute, so a `git init` run from a
-# throwaway directory lands here instead: that is how this repository was once reinitialized as
-# bare, with the test identity written into its config. The adapter drops these per call (see
-# REPO_ENV_VARS in src/git/git.ts); dropping them here covers everything else the hook reaches —
-# package managers, scripts, and whatever is added later.
+# Child processes must select their repository by cwd, not inherited hook pointers.
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
 	GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX
 exec pnpm precommit

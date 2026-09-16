@@ -6,27 +6,11 @@ import os from 'node:os'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { envWithoutRepo } from '../src/git/environment.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const temp = await mkdtemp(path.join(os.tmpdir(), 'pr-review-package-'))
-/**
- * The same names as REPO_ENV_VARS in src/git/git.ts, spelled out because this file is plain
- * JavaScript run by node and cannot import the TypeScript source; a test in src/git/git.test.ts
- * fails if the two lists drift. This script runs git in a throwaway package directory, and under
- * the pre-commit hook of a linked worktree it would otherwise be handed this repository.
- */
-const REPO_ENV_VARS = [
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_COMMON_DIR',
-  'GIT_INDEX_FILE',
-  'GIT_OBJECT_DIRECTORY',
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
-  'GIT_NAMESPACE',
-  'GIT_PREFIX',
-]
-const env = { ...process.env }
-for (const name of REPO_ENV_VARS) delete env[name]
+const env = envWithoutRepo()
 
 const run = (command, args, cwd = temp) => {
   const result = spawnSync(command, args, {
