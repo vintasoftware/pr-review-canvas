@@ -155,8 +155,12 @@ describe('dismissed points', () => {
 
     applyDismissed(document, artifact.points, dismissed, ctx)
 
-    expect(document.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded')).toBe(String(expanded))
-    expect(document.querySelector('[data-act="show-dismissed"]')?.textContent).toBe(expanded ? 'hide' : 'show')
+    expect(document.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded')).toBe(
+      String(expanded)
+    )
+    expect(document.querySelector('[data-act="show-dismissed"]')?.textContent).toBe(
+      expanded ? 'hide' : 'show'
+    )
     expect(document.querySelector('ol.dismissed')?.hasAttribute('hidden')).toBe(!expanded)
     expect(document.querySelector('ol.dismissed li')?.getAttribute('data-fingerprint')).toBe('fp-1')
   })

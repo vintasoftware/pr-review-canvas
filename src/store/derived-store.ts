@@ -69,7 +69,11 @@ export function createDerivedStore(canvases: CanvasStore, git: Git, now: () => D
         await writeTextAtomic(path.join(dir, 'patches', `${f.key}.diff`), `${labelPatch(f.key, f.patch)}\n`)
       }
       await materialize(git, { headSha, mergeBaseSha, files: collected, outDir: dir })
-      await writeJsonAtomic(path.join(dir, 'meta.json'), { headSha, mergeBaseSha, builtAt: now().toISOString() })
+      await writeJsonAtomic(path.join(dir, 'meta.json'), {
+        headSha,
+        mergeBaseSha,
+        builtAt: now().toISOString(),
+      })
       return { files, patches }
     },
     read,

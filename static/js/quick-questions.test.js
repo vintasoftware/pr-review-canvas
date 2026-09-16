@@ -51,7 +51,7 @@ const menuEl = () => el(`#${QQ_MENU_ID}`)
 const items = () => Array.from(root.querySelectorAll('.qq-item')).filter(e => e instanceof HTMLElement)
 
 describe('quickMenuHtml', () => {
-  it('offers the four questions and a way to write your own', () => {
+  it('offers the suggested questions and a way to write your own', () => {
     const html = quickMenuHtml()
     for (const q of QUICK_QUESTIONS) {
       expect(html).toContain(q)
@@ -86,7 +86,9 @@ describe('wireQuickQuestions', () => {
 
   it('opens on the context chip too, and "ask something else" sends no question', () => {
     el('#chip').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
-    items()[4]?.click()
+    items()
+      .find(item => item.textContent === ASK_SOMETHING_ELSE)
+      ?.click()
     expect(picked).toEqual([[{ kind: 'file', path: 'src/app.ts' }, null]])
   })
 
@@ -100,7 +102,7 @@ describe('wireQuickQuestions', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
     expect(document.activeElement).toBe(items()[0])
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
-    expect(document.activeElement).toBe(items()[4])
+    expect(document.activeElement).toBe(items().at(-1))
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(menuEl().hidden).toBe(true)
     expect(document.activeElement).toBe(trigger)
@@ -204,18 +206,17 @@ describe('wireQuickQuestions in the odd cases', () => {
 
   it('places itself under the command it opened on', () => {
     const trigger = el('[data-ask-path]')
-    trigger.getBoundingClientRect = () =>
-      /** @type {DOMRect} */ ({
-        left: 120,
-        bottom: 40,
-        top: 20,
-        right: 200,
-        width: 80,
-        height: 20,
-        x: 120,
-        y: 20,
-        toJSON: () => ({}),
-      })
+    trigger.getBoundingClientRect = () => /** @type {DOMRect} */ ({
+      left: 120,
+      bottom: 40,
+      top: 20,
+      right: 200,
+      width: 80,
+      height: 20,
+      x: 120,
+      y: 20,
+      toJSON: () => ({}),
+    })
     trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     expect(menuEl().style.left).toBe('120px')
     expect(menuEl().style.top).toBe('44px')

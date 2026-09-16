@@ -1,6 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import {
+  avatarHtml,
   chevronHtml,
   copyToClipboard,
   detailsSummaryHtml,
@@ -15,7 +16,9 @@ import {
 
 describe('esc', () => {
   it('escapes the five HTML metacharacters and stringifies other values', () => {
-    expect(esc(`<a href="x" title='y'>&</a>`)).toBe('&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;')
+    expect(esc(`<a href="x" title='y'>&</a>`)).toBe(
+      '&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;'
+    )
     expect(esc(12)).toBe('12')
   })
 })
@@ -36,12 +39,14 @@ describe('chevronHtml and detailsSummaryHtml', () => {
     )
   })
 
-  it('puts a collapsed chevron before the title and reports open when asked', () => {
+  it('uses a decorative chevron so the summary handles clicks', () => {
     expect(detailsSummaryHtml('<span>T</span>', 'Toggle T')).toBe(
-      `<summary>${chevronHtml('Toggle T', false)}<span>T</span></summary>`
+      '<summary aria-label="Toggle T"><span class="chev" aria-hidden="true">&gt;</span><span>T</span></summary>'
     )
-    document.body.innerHTML = `<details open>${detailsSummaryHtml('<span>T</span>', 'Toggle T', { open: true })}</details>`
-    expect(document.querySelector('summary > .chev')?.getAttribute('aria-expanded')).toBe('true')
+    document.body.innerHTML = `<details open>${detailsSummaryHtml('<span>T</span>', 'Toggle "T"')}</details>`
+    expect(document.querySelector('summary')?.getAttribute('aria-label')).toBe('Toggle "T"')
+    expect(document.querySelector('summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
+    expect(document.querySelector('summary button')).toBeNull()
     expect(document.querySelector('summary .chev + span')?.textContent).toBe('T')
   })
 })
@@ -96,9 +101,31 @@ describe('copyToClipboard', () => {
     )
     await copyToClipboard('/pr-review-canvas 7', clipboard)
     expect(written).toEqual(['/pr-review-canvas 7'])
-    await expect(copyToClipboard('x', null)).rejects.toThrow('clipboard is not available; copy the command by hand')
-    await expect(copyToClipboard('x', /** @type {Clipboard} */ (/** @type {unknown} */ ({})))).rejects.toThrow(
-      /not available/
+    await expect(copyToClipboard('x', null)).rejects.toThrow(
+      'clipboard is not available; copy the command by hand'
     )
+    await expect(
+      copyToClipboard('x', /** @type {Clipboard} */ (/** @type {unknown} */ ({})))
+    ).rejects.toThrow(/not available/)
   })
+})
+
+describe('avatarHtml', () => {
+  it('uses GitHub avatar images and falls back to initials for missing or untrusted URLs', () => {
+    expect(
+      avatarHtml({ author: 'octocat', avatarUrl: 'https://avatars.githubusercontent.com/u/1' })
+    ).toContain('<img')
+    expect(avatarHtml({ author: 'octocat', avatarUrl: 'https://example.com/tracker' })).not.toContain('<img')
+    expect(avatarHtml({ author: 'octocat', avatarUrl: '' })).toContain('OC')
+  })
+})
+
+it('copies through the browser clipboard when no override is supplied', async () => {
+  const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  try {
+    await copyToClipboard('review command')
+    expect(write).toHaveBeenCalledWith('review command')
+  } finally {
+    write.mockRestore()
+  }
 })

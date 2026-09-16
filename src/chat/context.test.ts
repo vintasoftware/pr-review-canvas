@@ -20,7 +20,8 @@ function sources(overrides: Partial<ContextSources> = {}): ContextSources {
     artifact,
     files,
     patches,
-    readLines: async (_side, _path, from, to) => Array.from({ length: to - from + 1 }, (_v, i) => `line ${from + i}`),
+    readLines: async (_side, _path, from, to) =>
+      Array.from({ length: to - from + 1 }, (_v, i) => `line ${from + i}`),
     ...overrides,
   }
 }
@@ -105,7 +106,9 @@ describe('renderChatContext', () => {
     for (const [context, message] of cases) {
       await expect(renderChatContext(context, sources())).rejects.toThrow(message)
     }
-    await expect(renderChatContext({ kind: 'layer', layerId: 'x' }, sources())).rejects.toBeInstanceOf(ChatContextError)
+    await expect(renderChatContext({ kind: 'layer', layerId: 'x' }, sources())).rejects.toBeInstanceOf(
+      ChatContextError
+    )
   })
 
   it('gives an attention point its text, its kind and level, and the lines it sits on', async () => {

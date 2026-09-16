@@ -22,10 +22,11 @@ repository root.
 
 ### Model choice
 
-Claude Code defaults this skill to Sonnet. If the prepared diff changes authentication, access
-policy, or protected health information (PHI) handling, use an Opus agent for the generation and
-validation steps when available. Pass it the prepared prompt and context paths; it writes the
-same model file. Honor an explicit user model choice. Other hosts keep their selected model.
+Use a mid-tier model, such as Sonnet, by default. If the prepared diff changes authentication,
+access policy, or protected health information (PHI) handling, use a more capable model, such as
+Opus, for the generation and validation steps when available. When delegating to another agent,
+pass it the prepared prompt and context paths; it writes the same model file. Honor an explicit
+user model choice. If the host cannot select models, keep its selected model.
 Record the model that actually generated the canvas when publishing.
 
 ### 1. Prepare
@@ -39,7 +40,14 @@ pr-review prepare --base <ref> --head <ref> [--force]
 Progress goes to stderr. The last stdout line is JSON:
 
 ```json
-{ "canvasDir": "...", "headSha": "...", "mergeBaseSha": "...", "promptPath": "...", "contextPath": "...", "status": "prepared" }
+{
+    "canvasDir": "...",
+    "headSha": "...",
+    "mergeBaseSha": "...",
+    "promptPath": "...",
+    "contextPath": "...",
+    "status": "prepared"
+}
 ```
 
 - `status: "exists"` means a canvas already exists for this head. Stop and tell the user:

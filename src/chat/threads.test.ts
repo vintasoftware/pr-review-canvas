@@ -4,12 +4,26 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ChatThread } from '../contract/state.js'
 import { makeTempDir } from '../testing/fakes.js'
-import { createTranscriptStore, isThreadNameFor, nextThreadIndex, slug, threadName, threadTitle } from './threads.js'
+import {
+  createTranscriptStore,
+  isThreadNameFor,
+  nextThreadIndex,
+  slug,
+  threadName,
+  threadTitle,
+} from './threads.js'
 
 const REPO = { owner: 'Acme Corp', name: 'Widgets.js' }
 
 function thread(name: string): ChatThread {
-  return { name, agent: 'claude', rev: 0, title: 't', createdAt: '2026-09-11T10:00:00.000Z', seededHeadSha: '' }
+  return {
+    name,
+    agent: 'claude',
+    rev: 0,
+    title: 't',
+    createdAt: '2026-09-11T10:00:00.000Z',
+    seededHeadSha: '',
+  }
 }
 
 describe('threadName', () => {
@@ -40,7 +54,9 @@ describe('isThreadNameFor', () => {
 describe('nextThreadIndex', () => {
   it('starts at one and then goes past the highest index in use', () => {
     expect(nextThreadIndex([])).toBe(1)
-    expect(nextThreadIndex([thread('pr-review-a-b-42-claude-t1'), thread('pr-review-a-b-42-codex-t4')])).toBe(5)
+    expect(nextThreadIndex([thread('pr-review-a-b-42-claude-t1'), thread('pr-review-a-b-42-codex-t4')])).toBe(
+      5
+    )
     expect(nextThreadIndex([thread('not-a-thread-name')])).toBe(1)
   })
 })

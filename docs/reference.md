@@ -1,8 +1,7 @@
 # CLI and configuration reference
 
-For installation, the author/reviewer workflow, and basic settings, start with the
-[README](../README.md). This reference covers command options, configuration values, and behavior
-that matters when customizing or troubleshooting a review.
+This reference covers command options, configuration, and troubleshooting for local PR reviews.
+For setup and the basic review workflow, see the [README](../README.md).
 
 - [CLI options](#cli-options)
 - [Project config](#project-config)
@@ -26,14 +25,14 @@ output explains failed checks and installation or repair steps; `--json` prints 
 
 ### Repository and runtime options
 
-| Option | Applies to | Default and behavior |
-|---|---|---|
-| `--repo <dir>` | All commands | Uses the current directory when omitted; resolves the repository root from there |
-| `--data-dir <dir>` | All except `install-skill` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review` |
-| `--port <n>` | `serve` | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535 |
-| `--agent claude\|codex` | `serve` | Overrides the saved chat agent for this run |
-| `--model <id>` | `serve` | Overrides the saved chat model for this run |
-| `--fixture-canvas <review.json>` | `serve` | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
+| Option                           | Applies to                 | Default and behavior                                                                                             |
+| -------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--repo <dir>`                   | All commands               | Uses the current directory when omitted; resolves the repository root from there                                 |
+| `--data-dir <dir>`               | All except `install-skill` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
+| `--port <n>`                     | `serve`                    | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
+| `--agent claude\|codex`          | `serve`                    | Overrides the saved chat agent for this run                                                                      |
+| `--model <id>`                   | `serve`                    | Overrides the saved chat model for this run                                                                      |
+| `--fixture-canvas <review.json>` | `serve`                    | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
 
 Repository operations require an `origin` remote on **github.com**. GitHub Enterprise Server
 hosts are not supported. Fetching a PR does not check out its branch.
@@ -85,17 +84,26 @@ pr-review import <zip> [--pr <n>] [--force]
   the archive; it does not select the commit.
 - `--out` defaults to the data directory's `exports/` folder. Supply an existing directory to
   keep the generated filename, or a full `.zip` file path to choose a name.
+- Generated names follow `pr-<number>-<YYYYMMDDTHHmmssZ>-<sha8>-<owner>-<repo>-canvas.zip`,
+  for example `pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip`. The timestamp is the
+  canvas generation time in UTC, to seconds, so exports sort chronologically within each PR.
+  Before a PR exists, `ref-` replaces `pr-<number>-`. Re-exporting the same canvas keeps its name.
 - Export returns `status`, `path`, `name`, `headSha`, and `prNumber` when supplied or stored.
-- `import --pr` compares the imported canvas with that PR's current head. Without it, import does
-  not check against a live PR.
+- `import --pr` compares the imported canvas with that PR's current head, and refuses a canvas
+  exported for a different pull request with `CANVAS_PR_MISMATCH`. `--force` does not lift that
+  refusal: a canvas is stored under the pull request it names, so importing the same ZIP without
+  `--pr` stores it under its own PR instead. Without `--pr`, import does not check against a live
+  PR. A canvas generated before the PR existed names none and joins the pull request it is
+  imported for.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.
 - `import --force` allows a canvas from another repository. It does not force an older canvas to
-  replace a newer one.
+  replace a newer one, and does not allow a canvas of another pull request.
 
 Imports accept archives up to **20 MiB**. The required `manifest.json` and `review.json` entries
-must be at the archive root and pass format validation. If the necessary commits are missing,
+must be at the archive root, pass format validation, and agree on the commit and the pull request
+they describe. If the necessary commits are missing,
 the tool attempts to fetch them; a failed fetch can leave the notes available without diffs.
 
 ### Skill installation options
@@ -111,8 +119,19 @@ Relative custom paths resolve from the command's working directory. For example:
 pr-review install-skill --codex-dir ~/.codex/skills
 ```
 
-Installation uses relative symlinks on Linux and macOS and copies on Windows. Re-running it
-refreshes its own installation. A customized directory requires `--force` to replace it.
+Installation copies the bundled skill on every platform. The copies and their `.pr-review-install`
+marker files can be committed to Git. Re-running the command refreshes managed copies and replaces
+legacy symlinks. An unmanaged directory requires `--force` to replace it.
+
+Each installed `SKILL.md` records `metadata.body-sha256` in its YAML frontmatter. The SHA-256 hash
+covers the body after the closing frontmatter delimiter, with CRLF normalized to LF. `doctor`
+compares the recorded hash and actual body against the skill bundled with the running CLI. Any
+outdated or modified copy in `.claude/skills` or `.agents/skills` fails the skill check, even if the
+other copy is current. Refresh copies with `pr-review install-skill` (repeat any custom directory
+flags used during installation). Automatic discovery checks the two default directories.
+
+`serve` runs this skill check automatically and prints failures with a repair hint to stderr.
+Warnings do not prevent the server from starting. Use `doctor --all-checks` for full diagnostics.
 The `.gitignore` update always applies to the selected repository root, even with custom skill
 directories.
 
@@ -126,13 +145,13 @@ JSON error. `serve` stays running and writes its startup message to stderr.
 Command failures use `{ "error": { "code", "message", "hint" } }`, with `hint` optional.
 Validation failures from `validate` use its report format instead.
 
-| Exit code | Meaning |
-|---|---|
-| `0` | Success |
-| `1` | Error, including a failed `doctor` check |
-| `2` | Command usage error, such as an unknown command or missing required flag |
-| `4` | GitHub CLI missing or unauthenticated |
-| `5` | Validation failed in `validate` or `publish` |
+| Exit code | Meaning                                                                  |
+| --------- | ------------------------------------------------------------------------ |
+| `0`       | Success                                                                  |
+| `1`       | Error, including a failed `doctor` check                                 |
+| `2`       | Command usage error, such as an unknown command or missing required flag |
+| `4`       | GitHub CLI missing or unauthenticated                                    |
+| `5`       | Validation failed in `validate` or `publish`                             |
 
 `doctor` reports failed checks with exit `1`, including authentication failures.
 
@@ -145,20 +164,20 @@ Lists you supply replace their defaults.
 Path patterns match repository-relative paths. `**` crosses directories; `*` and `?` match
 within one path segment.
 
-| Key | Default | Details |
-|---|---|---|
-| `version` | `1` | The only supported configuration version |
-| `rulebook` | Unset | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards |
-| `layers` | Eight architecture groups | Suggested review groups; each entry has `id`, `title`, `description`, and optional `paths` patterns. The generator may split or reorder groups |
-| `highRisk` | `[]` | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer |
-| `generation.mode` | `strict` | See [generation modes](#generation-modes) |
-| `generation.maxRepairRounds` | `3` | Failed validation rounds allowed by the generation skill |
-| `generation.inlineDiffMaxLines` | `1500` | Maximum diff length to include directly in the generation prompt |
-| `generation.smallPrHunks` | `10` | At or below this hunk count, the prompt asks for one layer unless concerns differ |
-| `generation.caps` | See below | Overrides individual text limits |
-| `tests.patterns` | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels |
-| `chat.enabled` | `true` | Set to `false` to disable AI Chat |
-| `prompts` | Bundled templates | See [prompt customization](../README.md#project-prompt-templates) for supported keys and setup |
+| Key                             | Default                                             | Details                                                                                                                                                                                                                    |
+| ------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                       | `1`                                                 | The only supported configuration version                                                                                                                                                                                   |
+| `rulebook`                      | Unset                                               | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards                                                                               |
+| `layers`                        | `[]`                                                | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change |
+| `highRisk`                      | `[]`                                                | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer                                                                                                           |
+| `generation.mode`               | `strict`                                            | See [generation modes](#generation-modes)                                                                                                                                                                                  |
+| `generation.maxRepairRounds`    | `3`                                                 | Failed validation rounds allowed by the generation skill                                                                                                                                                                   |
+| `generation.inlineDiffMaxLines` | `1500`                                              | Maximum diff length to include directly in the generation prompt                                                                                                                                                           |
+| `generation.smallPrHunks`       | `10`                                                | At or below this hunk count, the prompt asks for one layer unless concerns differ                                                                                                                                          |
+| `generation.caps`               | See below                                           | Overrides individual text limits                                                                                                                                                                                           |
+| `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
+| `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
+| `prompts`                       | Bundled templates                                   | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
 provides no suggested groups; an empty `tests.patterns` list recognizes no files as tests.
@@ -175,23 +194,54 @@ not change an already prepared generation or an existing canvas.
 Both modes read the project rulebook and use the same validation and review controls. The mode
 affects canvas generation; chat answers the reviewer's selected question.
 
+### Prompt templates
+
+The `prompts` map in `pr-review.config.yml` accepts these keys:
+
+| Key                       | Purpose                               |
+| ------------------------- | ------------------------------------- |
+| `generation-format.md`    | Schema and output rules               |
+| `generation-strict.md`    | Instructions for strict mode          |
+| `generation-surfacing.md` | Instructions for surfacing mode       |
+| `quality-standards.md`    | Bundled code standards                |
+| `layering-guidance.md`    | Guidance for grouping related changes |
+| `chat-seed.md`            | Opening AI Chat instructions          |
+
+Each configured file replaces a whole template. Paths resolve from the project root,
+including when running from a subdirectory or using `--repo`. Absolute paths work for
+personal templates shared across projects. Omitted entries use the installed package's
+defaults. A configured file that cannot be read causes an error.
+
+`generation.mode` selects the generation wrapper. The project rulebook takes precedence
+over code standards. Configured layers and caps supply data to the templates.
+
+Preserve `{{TOKENS}}`, including `{{FORMAT}}` in generation wrappers, so generated prompts
+include the context and output requirements. Unknown generation tokens fail rendering;
+chat leaves unknown tokens as written. Prompt edits do not change the output schema or
+validation rules enforced by the tool.
+
+Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
+Restart the server after changing the config; chat template edits apply to new threads.
+Custom templates persist across tool upgrades. Compare them with the new bundled templates
+when upgrading.
+
 ### Text limits
 
 Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
 link targets do not count. `diagram` counts raw Mermaid source characters.
 
-| Key | Default |
-|---|---|
-| `summary` | 1200 |
-| `layerTitle` | 60 |
-| `rationale` | 300 |
-| `decisions` | 600 |
-| `checkByHand` | 400 |
-| `annotation` | 240 |
-| `pointTitle` | 90 |
-| `pointBody` | 600 |
-| `testBehavior` | 120 |
-| `diagram` | 1500 |
+| Key            | Default |
+| -------------- | ------- |
+| `summary`      | 1200    |
+| `layerTitle`   | 60      |
+| `rationale`    | 300     |
+| `decisions`    | 600     |
+| `checkByHand`  | 400     |
+| `annotation`   | 240     |
+| `pointTitle`   | 90      |
+| `pointBody`    | 600     |
+| `testBehavior` | 120     |
+| `diagram`      | 1500    |
 
 The canvas has a separate limit of 12 attention points, including entries generated from missing
 tests. Increasing text caps does not increase that limit.
@@ -202,7 +252,7 @@ Custom patterns replace the JavaScript/TypeScript defaults. For example, a Pytho
 
 ```yaml
 tests:
-  patterns: ['**/test_*.py', '**/tests/**']
+    patterns: ['**/test_*.py', '**/tests/**']
 ```
 
 Test recognition controls ordering, but matching a test to its source file currently follows
@@ -211,18 +261,17 @@ placed in Other while its source is in a regular layer.
 
 ## Local settings and storage
 
-See the [README's settings overview](../README.md#user-local-preferences) for editing preferences
-through the UI. These are the file keys and accepted values:
+The data directory's `settings.yml` accepts these keys and values:
 
-| Key | Default | Accepted values |
-|---|---|---|
-| `version` | `1` | `1` |
-| `skin` | `terminal` | `terminal`, `github` |
-| `theme` | `auto` | `auto`, `light`, `dark` |
-| `agent` | `claude` | `claude`, `codex` |
-| `model` | `null` | A model ID, or `null` for the agent's default |
-| `chatTimeoutSec` | `600` | Integer seconds, 30–3600 |
-| `maxTurns` | `null` | Integer 1–100, or `null` for the agent's default |
+| Key              | Default    | Accepted values                                  |
+| ---------------- | ---------- | ------------------------------------------------ |
+| `version`        | `1`        | `1`                                              |
+| `skin`           | `terminal` | `terminal`, `github`                             |
+| `theme`          | `auto`     | `auto`, `light`, `dark`                          |
+| `agent`          | `claude`   | `claude`, `codex`                                |
+| `model`          | `null`     | A model ID, or `null` for the agent's default    |
+| `chatTimeoutSec` | `600`      | Integer seconds, 30–3600                         |
+| `maxTurns`       | `null`     | Integer 1–100, or `null` for the agent's default |
 
 Invalid settings fall back to defaults. URL parameters `?skin=github&theme=light` can override
 appearance for one page load without saving it.
@@ -241,13 +290,13 @@ Deleting the directory loses saved preferences, canvases, progress, and chat his
 
 Append a fragment to `/review/<pr-number>`:
 
-| Target | Fragment example |
-|---|---|
-| Layer | `#layer:data-access` |
-| File | `#file:src/store.ts` |
-| Hunk | `#hunk:src/store.ts#2` |
-| New-side line range | `#line:src/store.ts:40-52` |
-| Old-side line | `#line:src/store.ts:40:old` |
+| Target              | Fragment example            |
+| ------------------- | --------------------------- |
+| Layer               | `#layer:data-access`        |
+| File                | `#file:src/store.ts`        |
+| Hunk                | `#hunk:src/store.ts#2`      |
+| New-side line range | `#line:src/store.ts:40-52`  |
+| Old-side line       | `#line:src/store.ts:40:old` |
 
 Use the layer key and file path from the canvas. Links open the target file when needed; if a
 line is unavailable, navigation uses the nearest visible row. Recipients need their own running
@@ -269,6 +318,11 @@ Discovery checks the PR description and comments for canvas ZIP links. It prefer
 matching the current head, then the PR number, then the most recently edited source text.
 If a download fails, it tries other matching attachments. Keep the exported filename so the
 canvas can be recognized.
+
+An attachment exported for a different pull request is reported rather than imported, and is not
+downloaded at all when its filename already names the other PR. The page says so and offers the
+drop zone, which applies the same check: a ZIP whose name or manifest belongs to another PR is
+refused.
 
 When automatic download fails, download the archive in GitHub's UI and use the page's drop zone
 or `pr-review import <zip> --pr <n>`.
@@ -335,28 +389,29 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 ## Troubleshooting
 
-| Symptom or code | Next step |
-|---|---|
-| `NOT_A_REPO` | Run inside a Git clone or pass `--repo <dir>` |
-| `NO_ORIGIN` | Check that `origin` points to a repository on github.com |
-| `GH_MISSING` / `GH_UNAUTHENTICATED` | Follow the [GitHub CLI setup](../README.md#install); check authentication in the same environment that runs the server |
-| `GITHUB_API_ERROR` | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems |
-| `PR_NOT_FOUND` | Check the PR number, repository, and your access |
-| `CANVAS_NOT_FOUND` | Generate or import a canvas for the requested commit |
-| `CANVAS_INVALID` | Read the format errors; re-export or regenerate the canvas |
-| `CANVAS_REPO_MISMATCH` | Check which clone is open; use `import --force` only when importing from the other repository is intentional |
-| `CANVAS_TOO_LARGE` | The archive exceeds the 20 MiB import limit |
-| `CANVAS_STALE` | The PR head moved; prepare again for the current commit |
-| `MODEL_INVALID` | Fix the reported problems in `model.json`, validate, then publish again |
-| `SKILL_DIR_EXISTS` | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force` |
-| `CHAT_BUSY` | Wait for the running reply or press **stop** |
-| `AGENT_AUTH_REQUIRED` | Sign in through the selected agent's CLI, then retry |
-| `AGENT_MISSING` or missing chat pane | Check the [chat setup](../README.md#ai-chat-setup), `chat.enabled`, and that the server can find the installed executables |
-| `AGENT_INCOMPLETE` | Retry the message or increase the chat timeout |
-| `COMMENT_FORBIDDEN` | Check the GitHub account's repository access and token permissions |
-| `COMMENT_LINE_NOT_IN_DIFF` | Choose a line shown in the current diff |
-| `SIGNOFF_INCOMPLETE` | Mark every layer except Other reviewed for this head |
-| `FORBIDDEN_HOST` / `CROSS_ORIGIN` | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page |
+| Symptom or code                      | Next step                                                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_A_REPO`                         | Run inside a Git clone or pass `--repo <dir>`                                                                                            |
+| `NO_ORIGIN`                          | Check that `origin` points to a repository on github.com                                                                                 |
+| `GH_MISSING` / `GH_UNAUTHENTICATED`  | Follow the [GitHub CLI setup](../README.md#install); check authentication in the same environment that runs the server                   |
+| `GITHUB_API_ERROR`                   | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                         |
+| `PR_NOT_FOUND`                       | Check the PR number, repository, and your access                                                                                         |
+| `CANVAS_NOT_FOUND`                   | Generate or import a canvas for the requested commit                                                                                     |
+| `CANVAS_INVALID`                     | Read the format errors; re-export or regenerate the canvas                                                                               |
+| `CANVAS_REPO_MISMATCH`               | Check which clone is open; use `import --force` only when importing from the other repository is intentional                             |
+| `CANVAS_PR_MISMATCH`                 | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own |
+| `CANVAS_TOO_LARGE`                   | The archive exceeds the 20 MiB import limit                                                                                              |
+| `CANVAS_STALE`                       | The PR head moved; prepare again for the current commit                                                                                  |
+| `MODEL_INVALID`                      | Fix the reported problems in `model.json`, validate, then publish again                                                                  |
+| `SKILL_DIR_EXISTS`                   | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                |
+| `CHAT_BUSY`                          | Wait for the running reply or press **stop**                                                                                             |
+| `AGENT_AUTH_REQUIRED`                | Sign in through the selected agent's CLI, then retry                                                                                     |
+| `AGENT_MISSING` or missing chat pane | Check the [chat setup](../README.md#ai-chat-setup), `chat.enabled`, and that the server can find the installed executables               |
+| `AGENT_INCOMPLETE`                   | Retry the message or increase the chat timeout                                                                                           |
+| `COMMENT_FORBIDDEN`                  | Check the GitHub account's repository access and token permissions                                                                       |
+| `COMMENT_LINE_NOT_IN_DIFF`           | Choose a line shown in the current diff                                                                                                  |
+| `SIGNOFF_INCOMPLETE`                 | Mark every layer except Other reviewed for this head                                                                                     |
+| `FORBIDDEN_HOST` / `CROSS_ORIGIN`    | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                 |
 
 `pr-review doctor` explains most of the first rows, including whether the data dir
 is writable and the skill is installed. `GET /api/health` reports the four checks a running server
@@ -370,14 +425,14 @@ doctor distinguishes missing dcg from a failed bundled policy and explains how t
 
 Validation reports name the field, file, hunk, or line to fix. Common groups are:
 
-| Codes | What to check |
-|---|---|
-| `SCHEMA`, `TEXT_TOO_LONG` | Required fields, types, and text limits |
-| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN` | Each known hunk belongs to exactly one layer |
-| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN` | Referenced files exist in the relevant diff or PR head |
-| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE` | Layers contain hunks and have unique keys |
-| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER` | At most one Other layer, last, without risk-tagged changes |
-| `TEST_NOT_LAST`, `TEST_IN_OTHER` | Tests follow the code they cover and use the appropriate layer |
-| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff |
-| `TOO_MANY_POINTS` | Count explicit points and missing-test entries together |
-| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT` | Link targets, diagram node IDs, and diagram counts |
+| Codes                                                           | What to check                                                  |
+| --------------------------------------------------------------- | -------------------------------------------------------------- |
+| `SCHEMA`, `TEXT_TOO_LONG`                                       | Required fields, types, and text limits                        |
+| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN`             | Each known hunk belongs to exactly one layer                   |
+| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                             | Referenced files exist in the relevant diff or PR head         |
+| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                            | Layers contain hunks and have unique keys                      |
+| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`            | At most one Other layer, last, without risk-tagged changes     |
+| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                | Tests follow the code they cover and use the appropriate layer |
+| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                |
+| `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together        |
+| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts             |

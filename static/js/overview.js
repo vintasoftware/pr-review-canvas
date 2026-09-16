@@ -2,11 +2,32 @@
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').IssueComment} IssueComment */
 
-import { commentHtml } from './diff-decorations.js'
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
 import { dismissedListHtml, postedUrls, sevsumHtml } from './points.js'
+import { buildThreads } from './threads.js'
+
+/**
+ * @param {PrBundle['comments']['reviewComments']} comments
+ * @param {Date} now
+ */
+function outdatedCommentsHtml(comments, now) {
+  const threads = [...buildThreads(comments).outdated.values()].flat()
+  if (!threads.length) return ''
+  const count = threads.reduce((total, thread) => total + 1 + thread.replies.length, 0)
+  const entries = threads
+    .map(thread => {
+      const line = thread.root.originalLine
+      return (
+        `<div class="body"><p class="muted small">${esc(thread.path)}${line === null ? '' : `:${line} (original)`}${thread.resolved ? ' · resolved' : ''}</p>` +
+        [thread.root, ...thread.replies].map(comment => issueCommentHtml(comment, now)).join('') +
+        '</div>'
+      )
+    })
+    .join('')
+  return `<details class="outdated-comments">${detailsSummaryHtml(`<span>Outdated comments · ${count}</span>`, 'Toggle outdated comments')}${entries}</details>`
+}
 
 /**
  * "What changes": the PR-wide summary as one prose block.
@@ -61,7 +82,12 @@ export function conversationHtml(comments, now) {
  */
 export function renderOverview(bundle, ctx) {
   const artifact = bundle.artifact
-  const active = artifact ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined) : []
+  const reviews = (bundle.comments.reviews ?? []).filter(
+    review => review.state !== 'COMMENTED' || review.body.trim().length > 0
+  )
+  const active = artifact
+    ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined)
+    : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
   const description = bundle.pr.body.trim()
     ? `<details class="pr-desc">${detailsSummaryHtml('<span>PR description (from GitHub)</span>', 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
@@ -72,8 +98,10 @@ export function renderOverview(bundle, ctx) {
     `<div class="body">${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
-    (bundle.comments.reviews ?? []).map(review => `<div class="body"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('') +
-    (bundle.comments.reviewComments.length ? `<details class="body all-review-comments">${detailsSummaryHtml(`<span>All review comments · ${bundle.comments.reviewComments.length}</span>`, 'Toggle all review comments')}${bundle.comments.reviewComments.map(c => `<div><p class="muted small">${esc(c.path)}${c.line ? `:${c.line}` : ''}${c.outdated ? ' · outdated' : ''}${c.resolved ? ' · resolved' : ''}</p>${commentHtml(c, ctx.now)}</div>`).join('')}</details>` : '') +
+    (reviews.length
+      ? `<details class="review-history">${detailsSummaryHtml(`<span>Review history · ${reviews.length}</span>`, 'Toggle review history')}${reviews.map(review => `<div class="body review-entry"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('')}</details>`
+      : '') +
+    outdatedCommentsHtml(bundle.comments.reviewComments, ctx.now) +
     (artifact
       ? dismissedListHtml(artifact.points, bundle.state, {
           paths: ctx.paths,

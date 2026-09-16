@@ -62,7 +62,9 @@ function footerHtml(version, bundle) {
 
 /** @param {ReadonlyArray<string>} warnings */
 function bannerHtml(warnings) {
-  return warnings.length === 0 ? '' : `<div class="banner" role="status">${warnings.map(w => esc(w)).join(' · ')}</div>`
+  return warnings.length === 0
+    ? ''
+    : `<div class="banner" role="status">${warnings.map(w => esc(w)).join(' · ')}</div>`
 }
 
 /**
@@ -369,7 +371,11 @@ export class PrAppElement extends HTMLElement {
       this.viewStale = true
       void this.render(bundle)
     })
-    wireDropZone(this, { prNumber: boot.prNumber, importImpl: importCanvas, onImported: () => void this.reload() })
+    wireDropZone(this, {
+      prNumber: boot.prNumber,
+      importImpl: importCanvas,
+      onImported: () => void this.reload(),
+    })
   }
 
   /**

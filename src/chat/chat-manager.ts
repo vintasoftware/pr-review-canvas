@@ -11,7 +11,13 @@ import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
 import { type ContextSources, renderChatContext } from './context.js'
 import { renderSeed, type SeedPaths } from './seed.js'
-import { NEW_THREAD_TITLE, nextThreadIndex, type TranscriptStore, threadName, threadTitle } from './threads.js'
+import {
+  NEW_THREAD_TITLE,
+  nextThreadIndex,
+  type TranscriptStore,
+  threadName,
+  threadTitle,
+} from './threads.js'
 
 export class ChatBusyError extends Error {
   constructor() {
@@ -189,7 +195,11 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     }
   }
 
-  async function* runTurn(target: ChatTarget, input: ChatSendInput, slot: RunningTurn): AsyncIterable<ChatEvent> {
+  async function* runTurn(
+    target: ChatTarget,
+    input: ChatSendInput,
+    slot: RunningTurn
+  ): AsyncIterable<ChatEvent> {
     const settings = await effectiveSettings()
     const thread = await resolveThread(target.prNumber, settings.agent, input.thread)
     const seeded = thread.seededHeadSha !== target.headSha
@@ -351,7 +361,10 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       if (thread === undefined) {
         return null
       }
-      await deps.state.update(prNumber, current => ({ ...current, chat: { ...current.chat, activeThread: name } }))
+      await deps.state.update(prNumber, current => ({
+        ...current,
+        chat: { ...current.chat, activeThread: name },
+      }))
       return thread
     },
     send,
@@ -372,8 +385,10 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
 
 async function seedPaths(deps: ChatManagerDeps, target: ChatTarget): Promise<SeedPaths> {
   const [headDir, baseDir, patchDir, repoRoot] = await Promise.all([
-    agentPathAsync(`${target.derivedDir}/head`), agentPathAsync(`${target.derivedDir}/base`),
-    agentPathAsync(`${target.derivedDir}/patches`), agentPathAsync(deps.repoRoot),
+    agentPathAsync(`${target.derivedDir}/head`),
+    agentPathAsync(`${target.derivedDir}/base`),
+    agentPathAsync(`${target.derivedDir}/patches`),
+    agentPathAsync(deps.repoRoot),
   ])
   return { headDir, baseDir, patchDir, repoRoot }
 }

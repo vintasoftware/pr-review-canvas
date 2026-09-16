@@ -1,0 +1,71 @@
+import { expect, test } from './fixtures.js'
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/prs/42', async route => {
+    const response = await route.fetch()
+    const bundle = await response.json()
+    bundle.chat.enabled = true
+    await route.fulfill({ response, json: bundle })
+  })
+  await page.route('**/api/prs/42/chat/threads', route =>
+    route.fulfill({ json: { threads: [], activeThread: null } })
+  )
+})
+
+test('floats on smaller screens and preserves drafts across minimizing and resizing', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 800 })
+  await page.goto(reviewUrl)
+  const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
+  const dialog = page.locator('#chat-dialog')
+  await expect(page.locator('.chat')).toBeHidden()
+  await launcher.click()
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveCSS('position', 'fixed')
+  expect(await dialog.evaluate(el => el.matches(':modal'))).toBe(false)
+  const bounds = await dialog.boundingBox()
+  expect(bounds!.x + bounds!.width).toBe(1080)
+  expect(bounds!.y + bounds!.height).toBe(780)
+  await page.locator('#msg').fill('Keep my draft')
+  await page.getByRole('button', { name: 'Minimize AI Chat' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(launcher).toBeFocused()
+  await launcher.click()
+  await expect(page.locator('#msg')).toHaveValue('Keep my draft')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expect(page.locator('.layout > .chat')).toBeVisible()
+  await expect(dialog).toBeHidden()
+  await expect(launcher).toBeHidden()
+  await expect(page.locator('#msg')).toHaveValue('Keep my draft')
+  await page.setViewportSize({ width: 390, height: 700 })
+  await expect(dialog).toBeVisible()
+  expect(await dialog.evaluate(el => el.matches(':modal'))).toBe(true)
+  await expect(page.locator('#msg')).toHaveValue('Keep my draft')
+})
+
+test('opens a mobile modal with focus containment and Escape to minimize', async ({ page, reviewUrl }) => {
+  await page.setViewportSize({ width: 390, height: 700 })
+  await page.goto(reviewUrl)
+  const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
+  await launcher.click()
+  const dialog = page.locator('#chat-dialog')
+  expect(await dialog.evaluate(el => el.matches(':modal'))).toBe(true)
+  await expect(page.locator('#msg')).toBeFocused()
+  await page.locator('#chat-send').focus()
+  await page.keyboard.press('Tab')
+  expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true)
+  const bounds = await dialog.boundingBox()
+  expect(bounds!.x).toBeGreaterThanOrEqual(0)
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(700)
+  await page.locator('#msg').fill('Mobile draft')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(launcher).toBeFocused()
+  await launcher.click()
+  await expect(page.locator('#msg')).toHaveValue('Mobile draft')
+  await page.getByRole('button', { name: 'Minimize AI Chat' }).click()
+  await expect(dialog).toBeHidden()
+})

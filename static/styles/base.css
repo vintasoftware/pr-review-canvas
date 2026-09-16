@@ -22,8 +22,10 @@
   --s4: var(--v4);
   --s5: var(--v5);
   --s6: var(--v6);
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
   --v1: light-dark(#ffd43b, #ffe066);
   --v2: light-dark(#ffa94d, #ffc078);
@@ -31,7 +33,15 @@
   --v4: light-dark(#da77f2, #e599f7);
   --v5: light-dark(#9775fa, #b197fc);
   --v6: light-dark(#748ffc, #91a7ff);
-  --stripe-y: linear-gradient(180deg, var(--v1) 0 1px, var(--v2) 1px 2px, var(--v3) 2px 3px, var(--v4) 3px 4px, var(--v5) 4px 5px, var(--v6) 5px 6px);
+  --stripe-y: linear-gradient(
+    180deg,
+    var(--v1) 0 1px,
+    var(--v2) 1px 2px,
+    var(--v3) 2px 3px,
+    var(--v4) 3px 4px,
+    var(--v5) 4px 5px,
+    var(--v6) 5px 6px
+  );
 
   --bg: light-dark(#ffffff, #1e1f2b);
   --panel: light-dark(#ffffff, #282a3a);
@@ -80,10 +90,10 @@
 
 /* The server writes `data-theme` for every load. `auto` matches neither rule, which leaves the
    `color-scheme: light dark` above to follow the operating system. */
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   color-scheme: dark;
 }
-:root[data-theme="light"] {
+:root[data-theme='light'] {
   color-scheme: light;
 }
 
@@ -218,6 +228,6 @@ strong {
 }
 
 /* The hidden attribute takes priority over component layout styles. */
-[hidden]:not([hidden="until-found"]) {
+[hidden]:not([hidden='until-found']) {
   display: none !important;
 }

@@ -8,7 +8,12 @@ const PATCH = ['@@ -1,4 +1,5 @@', ' a', '+b', ' c', '@@ -10 +11,2 @@ ctx', ' x',
 describe('parseHunkHeader', () => {
   it('reads counts and defaults a missing count to 1', () => {
     expect(parseHunkHeader('@@ -1,4 +1,5 @@')).toEqual({ oldStart: 1, oldLines: 4, newStart: 1, newLines: 5 })
-    expect(parseHunkHeader('@@ -10 +11,2 @@ ctx')).toEqual({ oldStart: 10, oldLines: 1, newStart: 11, newLines: 2 })
+    expect(parseHunkHeader('@@ -10 +11,2 @@ ctx')).toEqual({
+      oldStart: 10,
+      oldLines: 1,
+      newStart: 11,
+      newLines: 2,
+    })
     expect(parseHunkHeader('@@ -0,0 +1,3 @@')).toEqual({ oldStart: 0, oldLines: 0, newStart: 1, newLines: 3 })
   })
 
@@ -38,7 +43,6 @@ describe('hunkForLine', () => {
     expect(hunkForLine(added, 'old', 0)?.id).toBe('k#1')
   })
 })
-
 
 describe('hunkLineRanges', () => {
   it('lists separate spans and zero-length anchors on the requested side', () => {

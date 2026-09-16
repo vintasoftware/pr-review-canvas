@@ -51,7 +51,10 @@ describe('parsePatch', () => {
     ])
     expect(hunks[1]?.entries).toHaveLength(4)
     expect(parsePatch('')).toEqual([])
-    expect(parsePatch('garbage before header\n@@ -1 +1 @@\n-a\n+b')[0]?.entries.map(e => e.code)).toEqual(['a', 'b'])
+    expect(parsePatch('garbage before header\n@@ -1 +1 @@\n-a\n+b')[0]?.entries.map(e => e.code)).toEqual([
+      'a',
+      'b',
+    ])
   })
 })
 
@@ -106,15 +109,37 @@ describe('detectMoves', () => {
       ['to', 'exact', 3],
     ])
     const edited = parsePatch(
-      ['@@ -1,4 +1,4 @@', '-one()', '-two()', '-three()', '-four()', '+one()', '+two()', '+three()', '+five()'].join(
-        '\n'
-      )
+      [
+        '@@ -1,4 +1,4 @@',
+        '-one()',
+        '-two()',
+        '-three()',
+        '-four()',
+        '+one()',
+        '+two()',
+        '+three()',
+        '+five()',
+      ].join('\n')
     )
     // One changed line makes the whole block an edited move, so it is shown instead of folded.
     expect(detectMoves(edited).map(m => m.kind)).toEqual(['edited'])
     expect(edited[0]?.entries.every(e => e.move?.kind === 'edited')).toBe(true)
     const twoBlocks = parsePatch(
-      ['@@ -1,6 +1,6 @@', '-a1', '-a2', '-a3', '-b1', '-b2', '-b3', '+b1', '+b2', '+b3', '+a1', '+a2', '+a3'].join('\n')
+      [
+        '@@ -1,6 +1,6 @@',
+        '-a1',
+        '-a2',
+        '-a3',
+        '-b1',
+        '-b2',
+        '-b3',
+        '+b1',
+        '+b2',
+        '+b3',
+        '+a1',
+        '+a2',
+        '+a3',
+      ].join('\n')
     )
     expect(detectMoves(twoBlocks).map(m => m.id)).toEqual([1, 2])
     expect(twoBlocks[0]?.entries.every(e => e.move?.kind === 'exact')).toBe(true)
@@ -164,13 +189,17 @@ describe('detectMoves', () => {
       [7, 'from', 8],
     ])
     // The blank line the move gained is folded with the rest of the added block.
-    expect(entries.filter(e => e.type === 'add' && e.move !== null).map(e => e.newLine)).toEqual([2, 3, 4, 5, 6, 7, 8])
+    expect(entries.filter(e => e.type === 'add' && e.move !== null).map(e => e.newLine)).toEqual([
+      2, 3, 4, 5, 6, 7, 8,
+    ])
   })
 
   it('refuses a match made of context alone', () => {
     // Three identical closing lines around one changed line are not a move.
     const hunks = parsePatch(
-      ['@@ -1,8 +1,8 @@', '-  alpha()', '   }', '   }', '   }', '+  omega()', '+  }', '+  }', '+  }'].join('\n')
+      ['@@ -1,8 +1,8 @@', '-  alpha()', '   }', '   }', '   }', '+  omega()', '+  }', '+  }', '+  }'].join(
+        '\n'
+      )
     )
     expect(detectMoves(hunks)).toEqual([])
     expect(hunks[0]?.entries.every(e => e.move === null)).toBe(true)
@@ -178,9 +207,17 @@ describe('detectMoves', () => {
 
   it('marks the words an edited move changed on the way, and leaves an exact move unmarked', () => {
     const edited = prepareHunks(
-      ['@@ -1,4 +1,4 @@', '-one()', '-two()', '-three()', '-four()', '+one()', '+two()', '+three()', '+five()'].join(
-        '\n'
-      )
+      [
+        '@@ -1,4 +1,4 @@',
+        '-one()',
+        '-two()',
+        '-three()',
+        '-four()',
+        '+one()',
+        '+two()',
+        '+three()',
+        '+five()',
+      ].join('\n')
     )
     const entries = edited[0]?.entries ?? []
     expect(entries.slice(0, 3).every(e => e.marks === null)).toBe(true)
@@ -195,7 +232,9 @@ describe('detectMoves', () => {
 
 describe('pairChangedLines and wordDiff', () => {
   it('pairs equal-length del/add runs and leaves unequal runs alone', () => {
-    const hunks = parsePatch(['@@ -1,5 +1,4 @@', '-a', '-b', '+A', '+B', ' c', '-d', '-e', '+D', ' f'].join('\n'))
+    const hunks = parsePatch(
+      ['@@ -1,5 +1,4 @@', '-a', '-b', '+A', '+B', ' c', '-d', '-e', '+D', ' f'].join('\n')
+    )
     const pairs = pairChangedLines(hunks[0]?.entries ?? [])
     expect(pairs.map(p => [p.del.code, p.add.code])).toEqual([
       ['a', 'A'],
@@ -341,8 +380,12 @@ describe('rowHtml and buildRows', () => {
     const from = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
     expect(from).toContain('<tr class="more fold move">')
     expect(from).toContain('&#8943; 3 lines moved to <button')
-    expect(from).toContain('data-act="jump-line" data-key="k" data-side="new" data-line="18">line 18</button>')
-    expect(from).toContain('<button class="cmd" type="button" data-act="show-fold" aria-expanded="false">show</button>')
+    expect(from).toContain(
+      'data-act="jump-line" data-key="k" data-side="new" data-line="18">line 18</button>'
+    )
+    expect(from).toContain(
+      '<button class="cmd" type="button" data-act="show-fold" aria-expanded="false">show</button>'
+    )
     expect(from).toContain('<tr class="del folded move-from" id="L-k-old-1">')
     const to = buildRows(hunks[1] ?? EMPTY_HUNK, 'k')
     expect(to).toContain('&#8943; 3 lines moved from <button')
@@ -352,14 +395,24 @@ describe('rowHtml and buildRows', () => {
 
   it('opens an edited move and says so, with one summary per block', () => {
     const hunks = prepareHunks(
-      ['@@ -1,4 +1,4 @@', '-one()', '-two()', '-three()', '-four()', '+one()', '+two()', '+three()', '+five()'].join(
-        '\n'
-      )
+      [
+        '@@ -1,4 +1,4 @@',
+        '-one()',
+        '-two()',
+        '-three()',
+        '-four()',
+        '+one()',
+        '+two()',
+        '+three()',
+        '+five()',
+      ].join('\n')
     )
     const rows = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
     expect(rows).toContain('&#8943; 4 lines moved to <button')
     expect(rows).toContain('>line 1</button>, edited')
-    expect(rows).toContain('<button class="cmd" type="button" data-act="show-fold" aria-expanded="true">hide</button>')
+    expect(rows).toContain(
+      '<button class="cmd" type="button" data-act="show-fold" aria-expanded="true">hide</button>'
+    )
     expect(rows.match(/class="more fold move"/g)).toHaveLength(2)
     expect(rows).toContain('<tr class="del folded shown move-from" id="L-k-old-1">')
     expect(rows).toContain('<tr class="add folded shown move-to" id="L-k-new-1">')
@@ -379,7 +432,9 @@ describe('renderDiff', () => {
     expect(tables[0]?.getAttribute('data-key')).toBe('src_app_ts')
     expect(tables[0]?.querySelectorAll('th').length).toBe(4)
     expect(tables[0]?.querySelector('tr.hunk td.code')?.textContent).toBe('@@ -1,4 +1,5 @@')
-    expect([...document.querySelectorAll('#L-src_app_ts-new-4 .wa')].map(s => s.textContent).join('')).toBe(' + b()')
+    expect([...document.querySelectorAll('#L-src_app_ts-new-4 .wa')].map(s => s.textContent).join('')).toBe(
+      ' + b()'
+    )
     expect(document.querySelector('#L-src_app_ts-old-3')).not.toBeNull()
     expect(document.querySelectorAll('button.plus').length).toBe(10)
   })
@@ -396,8 +451,58 @@ describe('renderDiff', () => {
   })
 
   it('keeps </script> in code as text', () => {
-    const html = renderDiff({ key: 'k', path: 'x.ts' }, '@@ -0,0 +1 @@\n+// </script><script>alert(1)</script>')
+    const html = renderDiff(
+      { key: 'k', path: 'x.ts' },
+      '@@ -0,0 +1 @@\n+// </script><script>alert(1)</script>'
+    )
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;/script&gt;')
+  })
+})
+
+describe('move detection boundaries', () => {
+  it('does not treat whitespace-only additions as moved code', () => {
+    const hunks = parsePatch('@@ -1,3 +1,3 @@\n-a()\n-b()\n-c()\n+  \n+\n+  ')
+    expect(detectMoves(hunks)).toEqual([])
+  })
+
+  it('uses an added block only once when two deleted blocks contain the same code', () => {
+    const hunks = parsePatch(
+      [
+        '@@ -1,3 +0,0 @@',
+        '-a()',
+        '-b()',
+        '-c()',
+        '@@ -10,3 +6,0 @@',
+        '-a()',
+        '-b()',
+        '-c()',
+        '@@ -20,0 +14,3 @@',
+        '+a()',
+        '+b()',
+        '+c()',
+      ].join('\n')
+    )
+    expect(detectMoves(hunks)).toHaveLength(1)
+    expect(hunks[1]?.entries.every(entry => entry.move === null)).toBe(true)
+  })
+
+  it.each(
+    [
+      ['a()', 'b()'],
+      ['a()', 'other()', 'changed()', 'd()'],
+      ['a()', 'b()', 'c()', 'other()', 'changed()'],
+    ].map(added => ({ added }))
+  )('requires three matching lines and at least 70% similarity: $added', ({ added }) => {
+    const removed = ['a()', 'b()', 'c()', 'd()', 'e()']
+    const hunks = parsePatch(
+      [
+        '@@ -1,5 +0,0 @@',
+        ...removed.map(line => '-' + line),
+        `@@ -10,0 +5,${added.length} @@`,
+        ...added.map(line => '+' + line),
+      ].join('\n')
+    )
+    expect(detectMoves(hunks)).toEqual([])
   })
 })

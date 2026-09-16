@@ -554,7 +554,8 @@ export function initDiagrams(root, opts = {}) {
         if (activateNodeLink(event)) {
           return
         }
-        const chevron = event.target instanceof Element ? event.target.closest('.diagram > .diagram-h > .chev') : null
+        const chevron =
+          event.target instanceof Element ? event.target.closest('.diagram > .diagram-h > .chev') : null
         const node = chevron?.closest('.diagram')
         if (node instanceof HTMLElement) {
           void toggleDiagram(node, pass)

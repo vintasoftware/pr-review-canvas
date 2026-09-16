@@ -96,7 +96,11 @@ describe('CanvasStore.findForPr', () => {
     const s = await store({})
     await put(s, OLD, '2026-09-09T10:00:00.000Z', 42)
     await put(s, FORCE_PUSHED, '2026-09-10T18:00:00.000Z', 42)
-    expect(await s.findForPr(42, HEAD)).toEqual({ status: 'stale', headSha: FORCE_PUSHED, relation: 'unrelated' })
+    expect(await s.findForPr(42, HEAD)).toEqual({
+      status: 'stale',
+      headSha: FORCE_PUSHED,
+      relation: 'unrelated',
+    })
   })
 
   it('matches a canvas exported before the PR existed, and skips other PRs', async () => {

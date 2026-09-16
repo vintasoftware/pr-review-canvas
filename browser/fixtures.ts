@@ -47,7 +47,9 @@ export const test = base.extend<{ reviewUrl: string }>({
         if ('closeAllConnections' in server) {
           server.closeAllConnections()
         }
-        await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
+        await new Promise<void>((resolve, reject) =>
+          server.close(error => (error ? reject(error) : resolve()))
+        )
       } finally {
         await t.cleanup()
       }

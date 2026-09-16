@@ -83,9 +83,18 @@ describe('drop state', () => {
   })
 
   it('accepts a canvas export and names the problem with anything else', () => {
-    expect(validateCanvasFilename('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')).toBeNull()
-    expect(validateCanvasFilename('notes.pdf')).toBe('that is not a zip file')
-    expect(validateCanvasFilename('holiday-photos.zip')).toBe('that zip is not a review canvas export')
+    expect(validateCanvasFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
+    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
+    expect(validateCanvasFilename('notes.pdf', 42)).toBe('that is not a zip file')
+    expect(validateCanvasFilename('holiday-photos.zip', 42)).toBe('that zip is not a review canvas export')
+  })
+
+  it('names the pull request a canvas was exported for when it is not the one on screen', () => {
+    const name = 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    expect(validateCanvasFilename(name, 42)).toBe('that canvas was exported for PR #99, not #42')
+    expect(validateCanvasFilename(name, 99)).toBeNull()
+    // A canvas made before the PR existed names none, so it joins whichever PR imports it.
+    expect(validateCanvasFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBeNull()
   })
 })
 
@@ -119,9 +128,9 @@ describe('drop zone', () => {
       onImported: result => sent.push([0, result.status]),
     })
     expect(zone).not.toBeNull()
-    await zone?.send(zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'))
+    await zone?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
     expect(sent).toEqual([
-      [42, 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'],
+      [42, 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'],
       [0, 'ready'],
     ])
     expect(zone?.state()).toEqual({ phase: 'idle', progress: 1, error: null })
@@ -132,10 +141,11 @@ describe('drop zone', () => {
     const root = mount(renderEmptyState(bundle()))
     const zone = wireDropZone(root, {
       prNumber: 42,
-      importImpl: () => Promise.reject(new ApiError({ code: 'CANVAS_INVALID', message: 'not a canvas' }, 400)),
+      importImpl: () =>
+        Promise.reject(new ApiError({ code: 'CANVAS_INVALID', message: 'not a canvas' }, 400)),
       onImported: () => undefined,
     })
-    await zone?.send(zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'))
+    await zone?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
     expect(document.querySelector('.cmd-err')?.textContent).toBe('not a canvas')
     expect(zone?.state().error).toBe('not a canvas')
     const thrown = wireDropZone(mount(renderEmptyState(bundle())), {
@@ -144,7 +154,7 @@ describe('drop zone', () => {
       importImpl: () => Promise.reject('boom'),
       onImported: () => undefined,
     })
-    await thrown?.send(zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'))
+    await thrown?.send(zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
     expect(document.querySelector('.cmd-err')?.textContent).toBe('boom')
   })
 
@@ -162,6 +172,11 @@ describe('drop zone', () => {
     await zone?.send(zipFile('notes.pdf'))
     expect(called).toBe(0)
     expect(document.querySelector('.cmd-err')?.textContent).toBe('that is not a zip file')
+    await zone?.send(zipFile('pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'))
+    expect(called).toBe(0)
+    expect(document.querySelector('.cmd-err')?.textContent).toBe(
+      'that canvas was exported for PR #99, not #42'
+    )
   })
 
   it('marks the zone while a file is dragged over it and sends the dropped file', async () => {
@@ -183,13 +198,13 @@ describe('drop zone', () => {
     expect(label?.classList.contains('over')).toBe(false)
     const input = document.querySelector('#zip')
     if (input instanceof HTMLInputElement) {
-      const file = zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')
+      const file = zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
       Object.defineProperty(input, 'files', { value: [file], configurable: true })
       input.dispatchEvent(new Event('change'))
       await Promise.resolve()
       await Promise.resolve()
     }
-    expect(sent).toEqual(['pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'])
+    expect(sent).toEqual(['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'])
   })
 
   it('sends a file dropped on the zone and ignores a drop with no file', async () => {
@@ -204,7 +219,7 @@ describe('drop zone', () => {
       },
       onImported: () => undefined,
     })
-    const file = zipFile('pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip')
+    const file = zipFile('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     const drop = new DragEvent('drop', { bubbles: true, cancelable: true })
     Object.defineProperty(drop, 'dataTransfer', { value: { files: [file] } })
     zone?.element.dispatchEvent(drop)
@@ -214,7 +229,7 @@ describe('drop zone', () => {
     Object.defineProperty(empty, 'dataTransfer', { value: { files: [] } })
     zone?.element.dispatchEvent(empty)
     zone?.element.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }))
-    expect(sent).toEqual(['pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip'])
+    expect(sent).toEqual(['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'])
   })
 
   it('returns null on a screen without a drop zone', () => {
@@ -233,13 +248,15 @@ describe('drop zone', () => {
 
 describe('stale screen', () => {
   it('says how far behind the canvas is, in both relations', () => {
-    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 1 })).toBe(
-      'The canvas is for eeeeeee, 1 commit behind the head aaaaaaa.'
+    expect(
+      staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 1 })
+    ).toBe('The canvas is for eeeeeee, 1 commit behind the head aaaaaaa.')
+    expect(
+      staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 4 })
+    ).toBe('The canvas is for eeeeeee, 4 commits behind the head aaaaaaa.')
+    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor' })).toContain(
+      '0 commits'
     )
-    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor', commitsBehind: 4 })).toBe(
-      'The canvas is for eeeeeee, 4 commits behind the head aaaaaaa.'
-    )
-    expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'ancestor' })).toContain('0 commits')
     expect(staleSummary({ canvasHeadSha: OLD, currentHeadSha: HEAD, relation: 'unrelated' })).toBe(
       'The canvas is for eeeeeee, which is not in this branch any more; the head is aaaaaaa.'
     )
@@ -274,10 +291,29 @@ describe('stale screen', () => {
     expect(bar?.querySelector('#stale-generate')).not.toBeNull()
   })
 
+  it('says a canvas of another pull request cannot be used, without offering to drop it', () => {
+    const shared = {
+      url: 'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      matchesHead: true,
+      downloadable: false,
+      reason: /** @type {const} */ ('pr-mismatch'),
+    }
+    document.body.innerHTML = sharedCanvasCalloutHtml(bundle({ sharedCanvas: shared }))
+    const callout = document.querySelector('.callout.warn')
+    expect(callout?.textContent).toContain('exported for another pull request')
+    expect(callout?.querySelector('a')).toBeNull()
+    expect(document.querySelector('#fetch-shared')).not.toBeNull()
+    document.body.innerHTML = sharedCanvasCalloutHtml(
+      bundle({ sharedCanvas: { ...shared, reason: 'name-mismatch' } })
+    )
+    expect(document.querySelector('.callout.warn')?.textContent).toContain('exported from another repository')
+  })
+
   it('offers to fetch the shared canvas again when the download failed', () => {
     const shared = {
-      url: 'https://github.com/user-attachments/files/1/pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
-      name: 'pr-review-canvas-acme-widgets-pr42-aaaaaaa.zip',
+      url: 'https://github.com/user-attachments/files/1/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       matchesHead: true,
       downloadable: false,
       reason: /** @type {const} */ ('auth-required'),
@@ -378,7 +414,9 @@ describe('upload and download', () => {
     const urls = []
     const fetchImpl = async (/** @type {string} */ url, /** @type {RequestInit} */ init) => {
       urls.push(`${init.method} ${url}`)
-      return new Response(JSON.stringify({ imported: false, status: 'missing', sharedCanvas: null, warnings: [] }))
+      return new Response(
+        JSON.stringify({ imported: false, status: 'missing', sharedCanvas: null, warnings: [] })
+      )
     }
     const body = await fetchSharedCanvas(42, { fetchImpl: /** @type {never} */ (fetchImpl) })
     expect(body.status).toBe('missing')
@@ -418,7 +456,9 @@ describe('upload and download', () => {
   it('reports the envelope of a failed export', async () => {
     /** @type {typeof fetch} */
     const fetchImpl = async () =>
-      new Response(JSON.stringify({ error: { code: 'CANVAS_NOT_FOUND', message: 'no canvas' } }), { status: 404 })
+      new Response(JSON.stringify({ error: { code: 'CANVAS_NOT_FOUND', message: 'no canvas' } }), {
+        status: 404,
+      })
     await expect(fetchCanvasZip(42, { fetchImpl })).rejects.toMatchObject({ code: 'CANVAS_NOT_FOUND' })
     /** @type {typeof fetch} */
     const plain = async () => new Response('boom', { status: 500 })
@@ -431,7 +471,9 @@ describe('upload and download', () => {
     expect(document.querySelector('a')).toBeNull()
     const original = globalThis.fetch
     globalThis.fetch = async () =>
-      new Response(new Uint8Array([1]), { headers: { 'content-disposition': 'attachment; filename="b.zip"' } })
+      new Response(new Uint8Array([1]), {
+        headers: { 'content-disposition': 'attachment; filename="b.zip"' },
+      })
     try {
       expect(await exportCanvasZip(42)).toBe('b.zip')
     } finally {
@@ -446,4 +488,18 @@ describe('upload and download', () => {
     })
     expect(result).toEqual({ ok: true })
   })
+})
+
+it('uses the browser upload transport without forcing a cross-repository import', async () => {
+  const xhr = fakeXhr(200, JSON.stringify({ status: 'ready' }))
+  vi.stubGlobal('XMLHttpRequest', function () {
+    return xhr
+  })
+  try {
+    expect(await importCanvas(42, new File(['zip'], 'canvas.zip'))).toEqual({ status: 'ready' })
+    expect(xhr.sent?.get('force')).toBeNull()
+    expect(xhr.url).toBe('/api/prs/42/import')
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

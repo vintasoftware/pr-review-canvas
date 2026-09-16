@@ -190,7 +190,8 @@ export function applyDismissed(root, points, state, ctx) {
   }
   const host = root.querySelector('.dismissed-list')
   if (host !== null) {
-    const expanded = host.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded') === 'true'
+    const expanded =
+      host.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded') === 'true'
     const template = document.createElement('template')
     template.innerHTML = dismissedListHtml(points, state, ctx, expanded)
     const next = template.content.firstElementChild
@@ -219,7 +220,7 @@ export function pointRowHtml(p, ctx) {
   const dismissed = ctx.state?.dismissed[p.fingerprint] !== undefined
   const posted = postedFor(p, ctx)
   return (
-    `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}><td class="ln" colspan="3"></td><td class="code x">` +
+    `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}><td class="code x" colspan="4">` +
     `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
     `${pointCommandsHtml(p, { postedUrl: posted })}</td></tr>`

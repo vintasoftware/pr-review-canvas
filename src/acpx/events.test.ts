@@ -30,10 +30,24 @@ function eventsOf(messages: unknown[]): AgentEvent[] {
 describe('mapAcpxMessage', () => {
   it('shows dcg’s denial in the failed tool status without retaining unrelated output', () => {
     const reason = 'Blocked by dcg (cloud.aws:s3-rb): aws s3 rb removes the entire S3 bucket.'
-    expect(mapAcpxMessage({ method: 'session/update', params: { update: {
-      sessionUpdate: 'tool_call_update', toolCallId: 'guarded', status: 'failed',
-      content: [{ type: 'content', content: { type: 'text', text: `Private tool output\n${reason}\nMore private output` } }],
-    } } })).toEqual({ type: 'tool', id: 'guarded', status: 'failed', title: reason })
+    expect(
+      mapAcpxMessage({
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'guarded',
+            status: 'failed',
+            content: [
+              {
+                type: 'content',
+                content: { type: 'text', text: `Private tool output\n${reason}\nMore private output` },
+              },
+            ],
+          },
+        },
+      })
+    ).toEqual({ type: 'tool', id: 'guarded', status: 'failed', title: reason })
   })
 
   it('maps a real claude turn to chunks, tool calls, usage, and the stop reason', async () => {
@@ -55,7 +69,11 @@ describe('mapAcpxMessage', () => {
       'usage',
       'done',
     ])
-    expect(events.filter(e => e.type === 'chunk').map(e => e.text)).toEqual(['`', '@vinta-bb/', 'building-blocks`'])
+    expect(events.filter(e => e.type === 'chunk').map(e => e.text)).toEqual([
+      '`',
+      '@vinta-bb/',
+      'building-blocks`',
+    ])
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' })
     expect(events.find(e => e.type === 'tool')).toEqual({
       type: 'tool',
@@ -81,9 +99,16 @@ describe('mapAcpxMessage', () => {
     expect(
       mapAcpxMessage(update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'hmm' } }))
     ).toEqual({ type: 'thought', text: 'hmm' })
-    expect(mapAcpxMessage(update({ sessionUpdate: 'plan', entries: [1, 2, 3] }))).toEqual({ type: 'plan', entries: 3 })
+    expect(mapAcpxMessage(update({ sessionUpdate: 'plan', entries: [1, 2, 3] }))).toEqual({
+      type: 'plan',
+      entries: 3,
+    })
     expect(mapAcpxMessage(update({ sessionUpdate: 'plan' }))).toEqual({ type: 'plan', entries: 0 })
-    expect(mapAcpxMessage(update({ sessionUpdate: 'usage_update' }))).toEqual({ type: 'usage', used: 0, size: 0 })
+    expect(mapAcpxMessage(update({ sessionUpdate: 'usage_update' }))).toEqual({
+      type: 'usage',
+      used: 0,
+      size: 0,
+    })
   })
 
   it('reads a tool call that names only its kind, and content that is not text', () => {
@@ -98,7 +123,9 @@ describe('mapAcpxMessage', () => {
       type: 'chunk',
       text: '',
     })
-    expect(mapAcpxMessage(update({ sessionUpdate: 'agent_message_chunk', content: { type: 'image' } }))).toEqual({
+    expect(
+      mapAcpxMessage(update({ sessionUpdate: 'agent_message_chunk', content: { type: 'image' } }))
+    ).toEqual({
       type: 'chunk',
       text: '',
     })
@@ -108,7 +135,10 @@ describe('mapAcpxMessage', () => {
     expect(mapAcpxMessage({ jsonrpc: '2.0', id: 0, method: 'initialize', params: {} })).toBeNull()
     expect(mapAcpxMessage({ jsonrpc: '2.0', id: 0, result: { protocolVersion: 1 } })).toBeNull()
     expect(
-      mapAcpxMessage({ method: 'session/update', params: { update: { sessionUpdate: 'session_info_update' } } })
+      mapAcpxMessage({
+        method: 'session/update',
+        params: { update: { sessionUpdate: 'session_info_update' } },
+      })
     ).toBeNull()
     expect(mapAcpxMessage({ method: 'session/update', params: {} })).toBeNull()
     expect(mapAcpxMessage({ method: 'session/cancel', params: {} })).toBeNull()
@@ -203,13 +233,19 @@ describe('scrubForLog', () => {
 
   it('drops the command list and anything that is not a message', () => {
     expect(
-      scrubForLog({ method: 'session/update', params: { update: { sessionUpdate: 'available_commands_update' } } })
+      scrubForLog({
+        method: 'session/update',
+        params: { update: { sessionUpdate: 'available_commands_update' } },
+      })
     ).toBeNull()
     expect(scrubForLog('nope')).toBeNull()
   })
 
   it('keeps an ordinary chunk as it is, arrays included', () => {
-    const line = { method: 'session/update', params: { update: { sessionUpdate: 'plan', entries: [{ n: 1 }] } } }
+    const line = {
+      method: 'session/update',
+      params: { update: { sessionUpdate: 'plan', entries: [{ n: 1 }] } },
+    }
     expect(scrubForLog(line)).toEqual(line)
   })
 })

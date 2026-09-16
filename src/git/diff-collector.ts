@@ -79,7 +79,8 @@ export function parseBlock(lines: string[]): Omit<CollectedFile, 'key'> | null {
     return null
   }
 
-  const isBinary = header.some(l => l.startsWith('Binary files ')) || header.some(l => l === 'GIT binary patch')
+  const isBinary =
+    header.some(l => l.startsWith('Binary files ')) || header.some(l => l === 'GIT binary patch')
   let status: FileStatus
   if (renameFrom !== null) {
     status = 'renamed'

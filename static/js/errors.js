@@ -71,6 +71,10 @@ export const ERROR_CARDS = {
     title: 'That canvas belongs to another repository',
     action: 'Import a canvas exported from this repository.',
   },
+  CANVAS_PR_MISMATCH: {
+    title: 'That canvas belongs to another pull request',
+    action: 'Import the canvas exported for this PR, or generate one for it with the skill.',
+  },
   CANVAS_TOO_LARGE: {
     title: 'That canvas is too large',
     action: 'A canvas zip holds two JSON files and stays under 20 MB. Export it again.',

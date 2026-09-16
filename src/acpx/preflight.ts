@@ -16,7 +16,11 @@ export interface PreflightProbe {
  * Is acpx on PATH? The answer barely changes while the server runs, so it is asked once and
  * reused; the page shows a banner and hides the chat when it says no.
  */
-export function createPreflightProbe(runner: AgentRunner, now: () => Date, ttlMs = PREFLIGHT_TTL_MS): PreflightProbe {
+export function createPreflightProbe(
+  runner: AgentRunner,
+  now: () => Date,
+  ttlMs = PREFLIGHT_TTL_MS
+): PreflightProbe {
   let cached: { at: number; value: AcpxPreflight } | null = null
   let inFlight: Promise<AcpxPreflight> | null = null
   return {

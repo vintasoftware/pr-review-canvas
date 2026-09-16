@@ -111,7 +111,10 @@ describe('two saves that arrive together', () => {
   it('both land, instead of one overwriting the other', async () => {
     const store = createSettingsStore(dataDir)
     await store.ensureFile()
-    const [agent, timeout] = await Promise.all([store.write({ agent: 'codex' }), store.write({ chatTimeoutSec: 900 })])
+    const [agent, timeout] = await Promise.all([
+      store.write({ agent: 'codex' }),
+      store.write({ chatTimeoutSec: 900 }),
+    ])
     expect(agent.agent).toBe('codex')
     expect(timeout.chatTimeoutSec).toBe(900)
     expect(await store.read()).toEqual({

@@ -66,7 +66,9 @@ function guardTitle(update: Record<string, unknown>): string | undefined {
   for (const block of content) {
     if (!isRecord(block)) continue
     const text = contentText(read(block, 'content'))
-    const reason = text.match(/Blocked by dcg \([a-z0-9_.:-]+\): [^\r\n]+|Chat command guard could not verify this command[^\r\n]*/)?.[0]
+    const reason = text.match(
+      /Blocked by dcg \([a-z0-9_.:-]+\): [^\r\n]+|Chat command guard could not verify this command[^\r\n]*/
+    )?.[0]
     if (reason) return reason.slice(0, 350)
   }
   return undefined
@@ -78,7 +80,11 @@ function guardTitle(update: Record<string, unknown>): string | undefined {
  */
 export function mapAcpxMessage(message: unknown): AgentEvent | null {
   if (!isRecord(message)) {
-    return { type: 'error', code: 'AGENT_PROTOCOL_INVALID', message: 'the agent wrote a line that is not a message' }
+    return {
+      type: 'error',
+      code: 'AGENT_PROTOCOL_INVALID',
+      message: 'the agent wrote a line that is not a message',
+    }
   }
   const error = read(message, 'error')
   if (isRecord(error)) {

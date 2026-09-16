@@ -3,7 +3,6 @@ import { copyFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { TEXT_CAPS } from './contract/review-artifact.js'
 import {
-  DEFAULT_LAYERS,
   DEFAULT_PROJECT_CONFIG,
   loadProjectConfig,
   mergeProjectConfig,
@@ -23,16 +22,7 @@ describe('mergeProjectConfig', () => {
 
   it('fills every missing key from the defaults', () => {
     expect(mergeProjectConfig({})).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [] })
-    expect(DEFAULT_LAYERS.map(l => l.id)).toEqual([
-      'contracts',
-      'data-access',
-      'mappers',
-      'hooks-state',
-      'views',
-      'routes-wiring',
-      'policy-config',
-      'mechanical',
-    ])
+    expect(mergeProjectConfig({}).config.layers).toEqual([])
   })
 
   it('takes user values and keeps caps overrides', () => {
@@ -65,7 +55,9 @@ describe('mergeProjectConfig', () => {
     expect(mergeProjectConfig({ generation: { caps: { unknown: 1 } } }).config.generation.caps).toEqual({})
     const noTests = mergeProjectConfig({ tests: { patterns: [] } })
     expect(noTests.config.tests).toEqual({ patterns: [] })
-    expect(noTests.warnings).toEqual(['pr-review.config.yml: "tests.patterns" is empty, so no file counts as a test'])
+    expect(noTests.warnings).toEqual([
+      'pr-review.config.yml: "tests.patterns" is empty, so no file counts as a test',
+    ])
     expect(mergeProjectConfig({ tests: { patterns: ['**/test_*.py'] } }).config.tests).toEqual({
       patterns: ['**/test_*.py'],
     })
@@ -91,6 +83,14 @@ describe('mergeProjectConfig', () => {
     expect(result.warnings).toEqual([expect.stringContaining('generation.mode')])
   })
 
+  it.each([null, [], 'layers: []'])('warns and uses defaults for a non-object config: %j', raw => {
+    const result = mergeProjectConfig(raw)
+    expect(result.config).toEqual(DEFAULT_PROJECT_CONFIG)
+    expect(result.warnings).toEqual([
+      expect.stringMatching(/^pr-review\.config\.yml is invalid, using defaults: \(root\): /),
+    ])
+  })
+
   it('falls back to defaults with a warning when the shape is wrong', () => {
     const { config, warnings } = mergeProjectConfig({ layers: 'nope', generation: { maxRepairRounds: -1 } })
     expect(config).toEqual(DEFAULT_PROJECT_CONFIG)
@@ -99,10 +99,8 @@ describe('mergeProjectConfig', () => {
     expect(warnings[0]).toMatch(/generation\.maxRepairRounds/)
   })
 
-  it('warns about empty layers and duplicate ids', () => {
-    expect(mergeProjectConfig({ layers: [] }).warnings).toEqual([
-      'pr-review.config.yml: "layers" is empty, the model gets no default taxonomy',
-    ])
+  it('accepts empty layers and warns about duplicate ids', () => {
+    expect(mergeProjectConfig({ layers: [] })).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [] })
     const dup = { id: 'a', title: 'A', description: '' }
     expect(mergeProjectConfig({ layers: [dup, dup] }).warnings).toEqual([
       'pr-review.config.yml: duplicate layer id "a"',
@@ -118,7 +116,11 @@ describe('loadProjectConfig', () => {
   afterEach(() => rm(dir, { recursive: true, force: true }))
 
   it('returns defaults when the file is absent', async () => {
-    expect(await loadProjectConfig(dir)).toEqual({ config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null })
+    expect(await loadProjectConfig(dir)).toEqual({
+      config: DEFAULT_PROJECT_CONFIG,
+      warnings: [],
+      source: null,
+    })
   })
 
   it('reads YAML and reports the source file', async () => {
@@ -139,11 +141,14 @@ describe('loadProjectConfig', () => {
   })
 
   it('loads the shipped example without warnings', async () => {
-    await copyFile(path.join(PACKAGE_ROOT, 'pr-review.config.example.yml'), path.join(dir, 'pr-review.config.yml'))
+    await copyFile(
+      path.join(PACKAGE_ROOT, 'pr-review.config.example.yml'),
+      path.join(dir, 'pr-review.config.yml')
+    )
     const loaded = await loadProjectConfig(dir)
     expect(loaded.warnings).toEqual([])
     expect(loaded.config.generation).toEqual(DEFAULT_PROJECT_CONFIG.generation)
-    expect(loaded.config.layers.map(layer => layer.id)).toEqual(DEFAULT_LAYERS.map(layer => layer.id))
+    expect(loaded.config.layers).toEqual([])
     expect(loaded.config.highRisk).toEqual([
       { pattern: '**/migrations/**', label: 'schema' },
       { pattern: '**/*auth*', label: 'auth' },

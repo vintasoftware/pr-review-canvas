@@ -26,10 +26,14 @@ for await (const line of createInterface({ input: process.stdin })) {
       } catch (error) {
         text = `blocked: ${error.code}`
       }
-      send({ jsonrpc: '2.0', method: 'session/update', params: {
-        sessionId: message.params.sessionId,
-        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } },
-      } })
+      send({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          sessionId: message.params.sessionId,
+          update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } },
+        },
+      })
       result = { stopReason: 'end_turn' }
       break
     }

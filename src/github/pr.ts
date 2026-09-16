@@ -100,7 +100,10 @@ export function prBaseRef(number: number): string {
  * it is local once the base was fetched). Today's base tip would contain the PR and give an
  * empty diff.
  */
-export async function fetchPrRefs(git: Git, meta: PrMeta): Promise<{ headSha: string; mergeBaseSha: string }> {
+export async function fetchPrRefs(
+  git: Git,
+  meta: PrMeta
+): Promise<{ headSha: string; mergeBaseSha: string }> {
   await git.fetch('origin', [
     `+pull/${meta.number}/head:${prHeadRef(meta.number)}`,
     `+refs/heads/${meta.baseRef}:${prBaseRef(meta.number)}`,

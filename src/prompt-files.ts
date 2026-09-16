@@ -15,9 +15,10 @@ export async function loadPromptFile(
   project?: ProjectPrompts
 ): Promise<string> {
   const override = project?.overrides?.[name]
-  const file = project !== undefined && override !== undefined
-    ? path.resolve(project.repoRoot, override)
-    : path.join(dir, name)
+  const file =
+    project !== undefined && override !== undefined
+      ? path.resolve(project.repoRoot, override)
+      : path.join(dir, name)
   try {
     return await readFile(file, 'utf8')
   } catch (cause) {

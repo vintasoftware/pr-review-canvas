@@ -195,7 +195,9 @@ export function artifactToModelOutput(artifact: ReviewArtifact): ModelOutput {
     summary: artifact.summary,
     layers: artifact.layers.map(layer => {
       const { id: _id, risk, files, ...rest } = layer
-      const modelRisk = risk.filter(r => r.source === 'model').map(r => ({ label: r.label, reason: r.reason ?? '' }))
+      const modelRisk = risk
+        .filter(r => r.source === 'model')
+        .map(r => ({ label: r.label, reason: r.reason ?? '' }))
       const out: ModelLayer = { ...rest, files: files.map(({ isTest: _isTest, ...f }) => f) }
       if (modelRisk.length > 0) {
         out.risk = modelRisk

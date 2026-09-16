@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { createFakeGit } from '../testing/fakes.js'
 import { BASE_SHA, HEAD_SHA, SYNTHETIC_DIFF } from '../testing/synthetic.js'
-import { collectDiffs, parseBlock, parseUnifiedDiff, splitBlocks, toFileEntry, toPatchMap } from './diff-collector.js'
+import {
+  collectDiffs,
+  parseBlock,
+  parseUnifiedDiff,
+  splitBlocks,
+  toFileEntry,
+  toPatchMap,
+} from './diff-collector.js'
 
 describe('parseUnifiedDiff', () => {
   const files = parseUnifiedDiff(SYNTHETIC_DIFF)
@@ -86,7 +93,9 @@ describe('parseUnifiedDiff', () => {
 
   it('starts each patch at its first @@ and keeps the no-newline marker', () => {
     expect(files[0]?.patch.startsWith('@@ -1,4 +1,5 @@')).toBe(true)
-    expect(files[2]?.patch).toBe('@@ -1,2 +0,0 @@\n-export const old = 1\n-// bye\n\\ No newline at end of file')
+    expect(files[2]?.patch).toBe(
+      '@@ -1,2 +0,0 @@\n-export const old = 1\n-// bye\n\\ No newline at end of file'
+    )
     expect(files[4]?.patch).toBe('')
     expect(files[5]?.patch).toBe('')
   })
@@ -141,9 +150,9 @@ describe('splitBlocks and parseBlock', () => {
   })
 
   it('treats a GIT binary patch as binary', () => {
-    expect(parseBlock(['diff --git a/i.png b/i.png', '--- a/i.png', '+++ b/i.png', 'GIT binary patch'])?.status).toBe(
-      'binary'
-    )
+    expect(
+      parseBlock(['diff --git a/i.png b/i.png', '--- a/i.png', '+++ b/i.png', 'GIT binary patch'])?.status
+    ).toBe('binary')
   })
 })
 

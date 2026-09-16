@@ -1,8 +1,14 @@
 # Chat policy is evaluated from this read-only directory, without personal allowlists.
 [packs]
 enabled = [
-  "core.git", "core.filesystem",
-  "cloud.aws", "cloud.gcp", "cloud.azure",
-  "kubernetes", "infrastructure.terraform",
-  "database", "cicd.github_actions", "cdn.cloudflare_workers",
+  "core.git",
+  "core.filesystem",
+  "cloud.aws",
+  "cloud.gcp",
+  "cloud.azure",
+  "kubernetes",
+  "infrastructure.terraform",
+  "database",
+  "cicd.github_actions",
+  "cdn.cloudflare_workers",
 ]

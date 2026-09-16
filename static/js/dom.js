@@ -20,7 +20,7 @@ export function esc(value) {
  * in interactions.js reads `data-act` and toggles the card this button belongs to.
  * @param {string} label
  * @param {boolean} [expanded]
- * @param {{ act?: string }} [opts] `act` is omitted inside a <details>, which toggles itself
+ * @param {{ act?: string }} [opts]
  */
 export function chevronHtml(label, expanded = true, opts = {}) {
   const act = opts.act === undefined ? '' : ` data-act="${esc(opts.act)}"`
@@ -29,14 +29,12 @@ export function chevronHtml(label, expanded = true, opts = {}) {
 
 /**
  * The <summary> of a collapsible <details> block: a chevron, then the title. The block relies on the
- * native <details> toggle, so a click anywhere on the summary opens or closes it. Pass `open` when
- * the <details> carries the `open` attribute so the chevron reports the same state.
+ * native <details> toggle. The decorative chevron lets clicks activate the summary.
  * @param {string} titleHtml already escaped
- * @param {string} label the chevron's accessible name
- * @param {{ open?: boolean }} [opts]
+ * @param {string} label the summary's accessible name
  */
-export function detailsSummaryHtml(titleHtml, label, opts = {}) {
-  return `<summary>${chevronHtml(label, opts.open === true)}${titleHtml}</summary>`
+export function detailsSummaryHtml(titleHtml, label) {
+  return `<summary aria-label="${esc(label)}"><span class="chev" aria-hidden="true">&gt;</span>${titleHtml}</summary>`
 }
 
 /**

@@ -3,7 +3,13 @@
 import { toPatchMap } from '../../src/git/diff-collector.js'
 import { SYNTHETIC_FILES } from '../../src/testing/synthetic.js'
 import { renderDiff } from './diff-renderer.js'
-import { lineRefFromEvent, markSelection, selectionLabel, selectionReducer, selectionToolbarHtml } from './selection.js'
+import {
+  lineRefFromEvent,
+  markSelection,
+  selectionLabel,
+  selectionReducer,
+  selectionToolbarHtml,
+} from './selection.js'
 
 const KEY = 'src_app_ts'
 const PATH = 'src/app.ts'
@@ -16,7 +22,15 @@ const line2 = { key: KEY, path: PATH, side: 'new', line: 2 }
 const otherFile = { key: 'src_new_ts', path: 'src/new.ts', side: 'new', line: 1 }
 
 function single(line = 4, dragging = false) {
-  return { key: KEY, path: PATH, side: /** @type {const} */ ('new'), anchor: line, start: line, end: line, dragging }
+  return {
+    key: KEY,
+    path: PATH,
+    side: /** @type {const} */ ('new'),
+    anchor: line,
+    start: line,
+    end: line,
+    dragging,
+  }
 }
 
 describe('selectionReducer', () => {
@@ -177,7 +191,9 @@ describe('lineRefFromEvent', () => {
     expect(
       lineRefFromEvent(/** @type {Event} */ (eventOn(document.querySelector('tr.hunk td.ln'))), pathForKey)
     ).toBeNull()
-    expect(lineRefFromEvent(/** @type {Event} */ (eventOn(document.querySelector('td.code'))), pathForKey)).toBeNull()
+    expect(
+      lineRefFromEvent(/** @type {Event} */ (eventOn(document.querySelector('td.code'))), pathForKey)
+    ).toBeNull()
     expect(lineRefFromEvent(/** @type {Event} */ (eventOn(null)), pathForKey)).toBeNull()
     const cell = document.querySelector('#L-src_app_ts-new-4 td.ln:nth-child(2)')
     expect(lineRefFromEvent(/** @type {Event} */ (eventOn(cell)), () => undefined)).toBeNull()

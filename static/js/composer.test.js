@@ -10,6 +10,7 @@ import {
   focusComposer,
   NO_POSTING_TITLE,
   setDisabledReason,
+  toggleMarkdownPreview,
 } from './composer.js'
 
 /** @param {string} html */
@@ -50,15 +51,16 @@ describe('composerHtml', () => {
     expect(box.hasAttribute('data-start-line')).toBe(false)
     expect(box.querySelector('label')?.getAttribute('for')).toBe('c1-t')
     expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
-      'markdown-write',
-      'markdown-preview',
+      'markdown-toggle',
       'composer-post',
       'composer-cancel',
     ])
   })
 
   it('escapes the draft and the label it is given', () => {
-    const box = mount(composerHtml({ id: 'c1', label: '<b>x</b>', kind: 'issue', body: '<script>bad()</script>' }))
+    const box = mount(
+      composerHtml({ id: 'c1', label: '<b>x</b>', kind: 'issue', body: '<script>bad()</script>' })
+    )
     expect(box.querySelector('script')).toBeNull()
     expect(composerBody(box)).toBe('<script>bad()</script>')
     expect(box.querySelector('label')?.textContent).toBe('<b>x</b>')
@@ -74,7 +76,15 @@ describe('composerHtml', () => {
 describe('composerInput', () => {
   it('builds an inline comment, with the range only when it spans lines', () => {
     const box = mount(
-      composerHtml({ id: 'c1', label: 'x', kind: 'inline', path: 'src/app.ts', line: 4, side: 'old', startLine: 2 })
+      composerHtml({
+        id: 'c1',
+        label: 'x',
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 4,
+        side: 'old',
+        startLine: 2,
+      })
     )
     type(box, '  look here  ')
     expect(composerInput(box)).toEqual({
@@ -86,7 +96,15 @@ describe('composerInput', () => {
       body: 'look here',
     })
     const single = mount(
-      composerHtml({ id: 'c2', label: 'x', kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', startLine: 4 })
+      composerHtml({
+        id: 'c2',
+        label: 'x',
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 4,
+        side: 'new',
+        startLine: 4,
+      })
     )
     type(single, 'one line')
     expect(composerInput(single)).toEqual({
@@ -130,7 +148,9 @@ describe('composerInput', () => {
     type(reply, 'hi')
     reply.setAttribute('data-in-reply-to', 'nope')
     expect(composerInput(reply)).toBeNull()
-    const inline = mount(composerHtml({ id: 'c3', label: 'x', kind: 'inline', path: 'a.ts', line: 4, side: 'new' }))
+    const inline = mount(
+      composerHtml({ id: 'c3', label: 'x', kind: 'inline', path: 'a.ts', line: 4, side: 'new' })
+    )
     type(inline, 'hi')
     inline.removeAttribute('data-path')
     expect(composerInput(inline)).toBeNull()
@@ -185,7 +205,9 @@ describe('applyCapabilityGating', () => {
   it('falls back to a general reason and enables everything again', () => {
     applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null })
     expect(document.querySelector('button[data-needs-post]')?.getAttribute('title')).toBe(NO_POSTING_TITLE)
-    expect(applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })).toBe(false)
+    expect(
+      applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
+    ).toBe(false)
     const button = document.querySelector('button[data-needs-post]')
     expect(button?.hasAttribute('disabled')).toBe(false)
     expect(button?.hasAttribute('title')).toBe(false)
@@ -197,8 +219,15 @@ describe('applyCapabilityGating', () => {
   })
 
   it('says in plain sight why posting is off, and takes the line back', () => {
-    applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null, reason: 'no repo scope' })
-    expect(document.querySelector('.capability-note')?.textContent).toBe('Posting to GitHub is off: no repo scope')
+    applyCapabilityGating(document, {
+      canComment: false,
+      tokenKind: 'classic',
+      login: null,
+      reason: 'no repo scope',
+    })
+    expect(document.querySelector('.capability-note')?.textContent).toBe(
+      'Posting to GitHub is off: no repo scope'
+    )
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     expect(document.querySelector('.capability-note')?.textContent).toBe('')
   })
@@ -207,7 +236,12 @@ describe('applyCapabilityGating', () => {
     const button = document.querySelector('button[data-needs-post]')
     setDisabledReason(button, 'every layer must be read first')
     expect(button?.hasAttribute('disabled')).toBe(true)
-    applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null, reason: 'no scope' })
+    applyCapabilityGating(document, {
+      canComment: false,
+      tokenKind: 'classic',
+      login: null,
+      reason: 'no scope',
+    })
     expect(button?.getAttribute('title')).toBe('no scope')
     // Posting becomes allowed, but the command's own reason still holds.
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
@@ -231,5 +265,44 @@ describe('applyCapabilityGating', () => {
   it('ignores an element that is not a command', () => {
     setDisabledReason(document.querySelector('span[data-needs-post]'), 'nope')
     expect(document.querySelector('span[data-needs-post]')?.hasAttribute('data-disabled-reason')).toBe(false)
+  })
+})
+
+describe('Markdown preview', () => {
+  it('renders a draft safely, reports an empty preview, and returns focus to the unchanged draft', () => {
+    const box = mount(composerHtml({ id: 'preview', label: 'Comment', kind: 'issue' }))
+    const textarea = type(box, '**hello** <script>bad()</script>')
+    const button = box.querySelector('[data-act="markdown-toggle"]')
+    if (!(button instanceof HTMLElement)) throw new Error('missing preview button')
+    expect(button.textContent).toBe('preview')
+    toggleMarkdownPreview(button)
+    expect(textarea.hidden).toBe(true)
+    expect(box.querySelector('.markdown-preview strong')?.textContent).toBe('hello')
+    expect(box.querySelector('.markdown-preview script')).toBeNull()
+    expect(button.textContent).toBe('write')
+    toggleMarkdownPreview(button)
+    expect(textarea.hidden).toBe(false)
+    expect(button.textContent).toBe('preview')
+    expect(document.activeElement).toBe(textarea)
+    expect(textarea.value).toBe('**hello** <script>bad()</script>')
+    textarea.value = '  '
+    toggleMarkdownPreview(button)
+    expect(box.querySelector('.markdown-preview')?.textContent).toBe('Nothing to preview.')
+  })
+
+  it('ignores a preview command after its editor has been removed', () => {
+    const button = document.createElement('button')
+    expect(() => toggleMarkdownPreview(button)).not.toThrow()
+  })
+
+  it('keeps capability restrictions when a local disabled reason changes', () => {
+    const box = mount(composerHtml({ id: 'blocked', label: 'Comment', kind: 'issue' }))
+    const button = box.querySelector('[data-act="composer-post"]')
+    applyCapabilityGating(box, { canComment: false, tokenKind: 'classic', login: null, reason: 'no scope' })
+    setDisabledReason(button, 'saving')
+    expect(button?.getAttribute('title')).toBe('no scope')
+    setDisabledReason(button, null)
+    expect(button?.hasAttribute('disabled')).toBe(true)
+    expect(button?.getAttribute('title')).toBe('no scope')
   })
 })

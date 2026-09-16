@@ -1,6 +1,21 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  constants,
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -48,11 +63,20 @@ export function macosProfile(stateDir: string): string {
 
 function runtimeEnv(root: string): string[] {
   return [
-    '-u', 'SSH_AUTH_SOCK', '-u', 'DBUS_SESSION_BUS_ADDRESS',
-    `HOME=${root}/home`, `CODEX_HOME=${root}/home/.codex`, `CLAUDE_CONFIG_DIR=${root}/home/.claude`,
-    `XDG_CONFIG_HOME=${root}/home/.config`, `XDG_CACHE_HOME=${root}/cache`,
-    `XDG_STATE_HOME=${root}/state`, `XDG_DATA_HOME=${root}/data`, `XDG_RUNTIME_DIR=${root}/run`,
-    `TMPDIR=${root}/tmp`, `npm_config_cache=${root}/cache/npm`,
+    '-u',
+    'SSH_AUTH_SOCK',
+    '-u',
+    'DBUS_SESSION_BUS_ADDRESS',
+    `HOME=${root}/home`,
+    `CODEX_HOME=${root}/home/.codex`,
+    `CLAUDE_CONFIG_DIR=${root}/home/.claude`,
+    `XDG_CONFIG_HOME=${root}/home/.config`,
+    `XDG_CACHE_HOME=${root}/cache`,
+    `XDG_STATE_HOME=${root}/state`,
+    `XDG_DATA_HOME=${root}/data`,
+    `XDG_RUNTIME_DIR=${root}/run`,
+    `TMPDIR=${root}/tmp`,
+    `npm_config_cache=${root}/cache/npm`,
   ]
 }
 
@@ -63,47 +87,87 @@ function wslArgs(): string[] {
 
 /** Auth and version probes must inspect the same installation that runs chat. */
 export function hostCommand(file: string, args: string[]): { file: string; args: string[] } {
-  return process.platform === 'win32' ? { file: 'wsl.exe', args: [...wslArgs(), file, ...args] } : { file, args }
+  return process.platform === 'win32'
+    ? { file: 'wsl.exe', args: [...wslArgs(), file, ...args] }
+    : { file, args }
 }
 
 export function agentPath(file: string): string {
   if (process.platform !== 'win32') return file
   try {
-    return execFileSync('wsl.exe', [...wslArgs(), 'wslpath', '-a', '-u', file], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    return execFileSync('wsl.exe', [...wslArgs(), 'wslpath', '-a', '-u', file], {
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
   } catch {
-    throw new SandboxError('Cannot translate the review path into WSL. Install Ubuntu WSL2 and check PR_REVIEW_WSL_DISTRO.')
+    throw new SandboxError(
+      'Cannot translate the review path into WSL. Install Ubuntu WSL2 and check PR_REVIEW_WSL_DISTRO.'
+    )
   }
 }
 
-function windowsSandboxCommand(file: string, args: string[], cwd: string, action = 'launch', options: SandboxOptions = {}): { file: string; args: string[] } {
+function windowsSandboxCommand(
+  file: string,
+  args: string[],
+  cwd: string,
+  action = 'launch',
+  options: SandboxOptions = {}
+): { file: string; args: string[] } {
   const linuxCwd = agentPath(cwd)
-  const linuxArgs = args.map((arg, index) => args[index - 1] === '--cwd' ? linuxCwd : arg)
+  const linuxArgs = args.map((arg, index) => (args[index - 1] === '--cwd' ? linuxCwd : arg))
   const sandbox = {
     ...(options.stateRoot ? { stateRoot: agentPath(options.stateRoot) } : {}),
     ...(options.home ? { home: agentPath(options.home) } : {}),
   }
-  const request = Buffer.from(JSON.stringify({ action, file: path.isAbsolute(file) ? agentPath(file) : file, args: linuxArgs, cwd: linuxCwd, sandbox })).toString('base64')
+  const request = Buffer.from(
+    JSON.stringify({
+      action,
+      file: path.isAbsolute(file) ? agentPath(file) : file,
+      args: linuxArgs,
+      cwd: linuxCwd,
+      sandbox,
+    })
+  ).toString('base64')
   // Node's built-in type stripping lets this dependency-free module run inside WSL without
   // loading Windows node_modules. Arguments and prompt stdin never pass through a shell.
-  return { file: 'wsl.exe', args: [...wslArgs(), 'node', agentPath(fileURLToPath(new URL('./wsl-sandbox.mjs', import.meta.url))), '--pr-review-sandbox', request] }
+  return {
+    file: 'wsl.exe',
+    args: [
+      ...wslArgs(),
+      'node',
+      agentPath(fileURLToPath(new URL('./wsl-sandbox.mjs', import.meta.url))),
+      '--pr-review-sandbox',
+      request,
+    ],
+  }
 }
 
 export function dcgVersion(): string {
   let version: string
   try {
     const command = hostCommand('dcg', ['--version'])
-    version = execFileSync(command.file, command.args, { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    version = execFileSync(command.file, command.args, {
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
     if (!version) throw new Error('empty version')
   } catch {
     throw new SandboxError(DCG_INSTALL_HINT)
   }
   try {
-    const probe = hostCommand('node', [agentPath(fileURLToPath(new URL('./dcg-guard.mjs', import.meta.url))), '--check'])
+    const probe = hostCommand('node', [
+      agentPath(fileURLToPath(new URL('./dcg-guard.mjs', import.meta.url))),
+      '--check',
+    ])
     execFileSync(probe.file, probe.args, { timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] })
     return `${version}; required chat policy verified`
   } catch (error) {
     const stderr = (error as { stderr?: Buffer | string }).stderr?.toString().trim().slice(0, 2000)
-    throw new DcgPolicyError(`${version} is installed, but the required chat policy failed. ${stderr || 'Could not evaluate the bundled remote-service rules.'}`)
+    throw new DcgPolicyError(
+      `${version} is installed, but the required chat policy failed. ${stderr || 'Could not evaluate the bundled remote-service rules.'}`
+    )
   }
 }
 
@@ -111,22 +175,64 @@ export function dcgVersion(): string {
 export function sandboxArgs(stateDir: string, cwd: string): string[] {
   if (process.platform !== 'linux') throw new SandboxError(SANDBOX_INSTALL_HINT)
   const args = [
-    '--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
-    '--cap-drop', 'ALL', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev',
-    '--tmpfs', '/run', '--bind', stateDir, RUNTIME,
-    '--setenv', 'HOME', `${RUNTIME}/home`,
-    '--setenv', 'CODEX_HOME', `${RUNTIME}/home/.codex`,
-    '--setenv', 'CLAUDE_CONFIG_DIR', `${RUNTIME}/home/.claude`,
-    '--setenv', 'XDG_CONFIG_HOME', `${RUNTIME}/home/.config`,
-    '--setenv', 'XDG_CACHE_HOME', `${RUNTIME}/cache`,
-    '--setenv', 'XDG_STATE_HOME', `${RUNTIME}/state`,
-    '--setenv', 'XDG_DATA_HOME', `${RUNTIME}/data`,
-    '--setenv', 'XDG_RUNTIME_DIR', `${RUNTIME}/run`,
-    '--setenv', 'TMPDIR', `${RUNTIME}/tmp`,
-    '--setenv', 'npm_config_cache', `${RUNTIME}/cache/npm`,
-    '--unsetenv', 'SSH_AUTH_SOCK', '--unsetenv', 'DBUS_SESSION_BUS_ADDRESS',
-    '--unsetenv', 'WSL_INTEROP',
-    '--chdir', cwd,
+    '--die-with-parent',
+    '--new-session',
+    '--unshare-user',
+    '--unshare-pid',
+    '--unshare-ipc',
+    '--unshare-uts',
+    '--cap-drop',
+    'ALL',
+    '--ro-bind',
+    '/',
+    '/',
+    '--proc',
+    '/proc',
+    '--dev',
+    '/dev',
+    '--tmpfs',
+    '/run',
+    '--bind',
+    stateDir,
+    RUNTIME,
+    '--setenv',
+    'HOME',
+    `${RUNTIME}/home`,
+    '--setenv',
+    'CODEX_HOME',
+    `${RUNTIME}/home/.codex`,
+    '--setenv',
+    'CLAUDE_CONFIG_DIR',
+    `${RUNTIME}/home/.claude`,
+    '--setenv',
+    'XDG_CONFIG_HOME',
+    `${RUNTIME}/home/.config`,
+    '--setenv',
+    'XDG_CACHE_HOME',
+    `${RUNTIME}/cache`,
+    '--setenv',
+    'XDG_STATE_HOME',
+    `${RUNTIME}/state`,
+    '--setenv',
+    'XDG_DATA_HOME',
+    `${RUNTIME}/data`,
+    '--setenv',
+    'XDG_RUNTIME_DIR',
+    `${RUNTIME}/run`,
+    '--setenv',
+    'TMPDIR',
+    `${RUNTIME}/tmp`,
+    '--setenv',
+    'npm_config_cache',
+    `${RUNTIME}/cache/npm`,
+    '--unsetenv',
+    'SSH_AUTH_SOCK',
+    '--unsetenv',
+    'DBUS_SESSION_BUS_ADDRESS',
+    '--unsetenv',
+    'WSL_INTEROP',
+    '--chdir',
+    cwd,
   ]
   // WSL's interop interpreter can launch an unsandboxed Windows process. Mask it as well
   // as /run (which contains the interop sockets), even if a caller restores WSL_INTEROP.
@@ -175,10 +281,17 @@ function queueDirectory(runtimeRoot: string): void {
 function codexPolicy(): string {
   const temporaryHome = mkdtempSync(path.join(os.tmpdir(), 'pr-review-codex-policy-'))
   try {
-    return execFileSync(process.execPath, [fileURLToPath(new URL('./codex-chat.mjs', import.meta.url)), '--policy'], {
-      cwd: temporaryHome, env: { ...process.env, CODEX_HOME: temporaryHome },
-      encoding: 'utf8', timeout: 25_000, stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    return execFileSync(
+      process.execPath,
+      [fileURLToPath(new URL('./codex-chat.mjs', import.meta.url)), '--policy'],
+      {
+        cwd: temporaryHome,
+        env: { ...process.env, CODEX_HOME: temporaryHome },
+        encoding: 'utf8',
+        timeout: 25_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
   } catch {
     // Claude remains usable without Codex. The Codex launcher/doctor rejects missing trust.
     return '# Codex hook trust unavailable. Install a supported Codex and reset the chat runtime.\n'
@@ -192,14 +305,27 @@ function initializeRuntime(stateDir: string, configs: Map<string, string>, impor
   if (existsSync(stateDir)) return
   const staging = mkdtempSync(`${stateDir}.preparing-`)
   try {
-    for (const dir of ['home', 'home/.acpx', 'home/.codex', 'home/.claude', 'home/.config/dcg', 'cache', 'state', 'data', 'run', 'tmp', 'ipc']) {
+    for (const dir of [
+      'home',
+      'home/.acpx',
+      'home/.codex',
+      'home/.claude',
+      'home/.config/dcg',
+      'cache',
+      'state',
+      'data',
+      'run',
+      'tmp',
+      'ipc',
+    ]) {
       privateDirectory(path.join(staging, dir))
     }
     for (const [name, content] of configs) {
       writeFileSync(path.join(staging, name), content, { flag: 'wx', mode: 0o600 })
     }
     for (const [source, target] of imports) {
-      if (source && target && existsSync(source) && statSync(source).isFile()) copyOnce(source, path.join(staging, target))
+      if (source && target && existsSync(source) && statSync(source).isFile())
+        copyOnce(source, path.join(staging, target))
     }
     writeFileSync(path.join(staging, '.initialized'), '', { flag: 'wx', mode: 0o600 })
     try {
@@ -222,9 +348,15 @@ export interface SandboxCommand {
 function prepareSandbox(options: SandboxOptions, cwd: string): SandboxCommand {
   const home = options.home ?? os.homedir()
   const root = options.stateRoot ?? path.join(home, '.local', 'state', 'pr-review-canvas', 'chat')
-  const codexHome = options.home ? path.join(home, '.codex') : process.env['CODEX_HOME'] ?? path.join(home, '.codex')
-  const claudeHome = options.home ? path.join(home, '.claude') : process.env['CLAUDE_CONFIG_DIR'] ?? path.join(home, '.claude')
-  const configHome = options.home ? path.join(home, '.config') : process.env['XDG_CONFIG_HOME'] ?? path.join(home, '.config')
+  const codexHome = options.home
+    ? path.join(home, '.codex')
+    : (process.env['CODEX_HOME'] ?? path.join(home, '.codex'))
+  const claudeHome = options.home
+    ? path.join(home, '.claude')
+    : (process.env['CLAUDE_CONFIG_DIR'] ?? path.join(home, '.claude'))
+  const configHome = options.home
+    ? path.join(home, '.config')
+    : (process.env['XDG_CONFIG_HOME'] ?? path.join(home, '.config'))
   const repo = realpathSync(cwd)
   dcgVersion()
   checkSandbox()
@@ -251,23 +383,36 @@ function prepareSandbox(options: SandboxOptions, cwd: string): SandboxCommand {
     throw new SandboxError(`Chat runtime directory must not be a symlink: ${stateDir}`)
   }
   if (!existsSync(path.join(stateDir, '.initialized'))) {
-    throw new SandboxError(`Chat runtime initialization is incomplete: ${stateDir}. Stop the server and remove this directory before retrying.`)
+    throw new SandboxError(
+      `Chat runtime initialization is incomplete: ${stateDir}. Stop the server and remove this directory before retrying.`
+    )
   }
   for (const [name, content] of protectedConfigs) {
     const parts = ['home', 'home/.codex', name].map(part => path.join(stateDir, part))
-    if (parts.some(part => !existsSync(part) || lstatSync(part).isSymbolicLink()) || readFileSync(path.join(stateDir, name), 'utf8') !== content) {
-      throw new SandboxError('Chat guard configuration changed. Stop the server, remove this checkout’s chat runtime, and retry.')
+    if (
+      parts.some(part => !existsSync(part) || lstatSync(part).isSymbolicLink()) ||
+      readFileSync(path.join(stateDir, name), 'utf8') !== content
+    ) {
+      throw new SandboxError(
+        'Chat guard configuration changed. Stop the server, remove this checkout’s chat runtime, and retry.'
+      )
     }
   }
   const canonicalState = realpathSync(stateDir)
   queueDirectory(process.platform === 'darwin' ? canonicalState : RUNTIME)
-  const prefix = process.platform === 'darwin'
-    ? { file: '/usr/bin/sandbox-exec', args: ['-p', macosProfile(canonicalState), '/usr/bin/env', ...runtimeEnv(canonicalState)] }
-    : { file: 'bwrap', args: sandboxArgs(canonicalState, repo) }
+  const prefix =
+    process.platform === 'darwin'
+      ? {
+          file: '/usr/bin/sandbox-exec',
+          args: ['-p', macosProfile(canonicalState), '/usr/bin/env', ...runtimeEnv(canonicalState)],
+        }
+      : { file: 'bwrap', args: sandboxArgs(canonicalState, repo) }
   if (process.platform === 'linux') {
     // Ancestor mount points prevent renaming the guard through a writable parent.
-    for (const name of ['home', 'home/.codex']) prefix.args.push('--bind', path.join(canonicalState, name), `${RUNTIME}/${name}`)
-    for (const name of protectedConfigs.keys()) prefix.args.push('--ro-bind', path.join(canonicalState, name), `${RUNTIME}/${name}`)
+    for (const name of ['home', 'home/.codex'])
+      prefix.args.push('--bind', path.join(canonicalState, name), `${RUNTIME}/${name}`)
+    for (const name of protectedConfigs.keys())
+      prefix.args.push('--ro-bind', path.join(canonicalState, name), `${RUNTIME}/${name}`)
     for (const [source, target] of configs) {
       if (source && target && existsSync(source) && statSync(source).isFile()) {
         prefix.args.push('--ro-bind', realpathSync(source), `${RUNTIME}/${target}`)
@@ -283,7 +428,9 @@ export function appendSandboxCommand(prefix: SandboxCommand, file: string, args:
 }
 
 /** Synchronous entry for the doctor CLI and containment fixtures. Chat uses sandbox-client.ts. */
-export function createSandbox(options: SandboxOptions = {}): (file: string, args: string[], cwd: string) => SandboxCommand {
+export function createSandbox(
+  options: SandboxOptions = {}
+): (file: string, args: string[], cwd: string) => SandboxCommand {
   const prepared = new Map<string, SandboxCommand>()
   return (file, args, cwd) => {
     if (process.platform === 'win32') return windowsSandboxCommand(file, args, cwd, 'launch', options)
@@ -306,14 +453,39 @@ export function checkSandbox(): void {
       return
     }
     if (process.platform === 'darwin') {
-      execFileSync('/usr/bin/sandbox-exec', ['-p', macosProfile('/nonexistent-pr-review-probe'), '/usr/bin/true'], { timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] })
+      execFileSync(
+        '/usr/bin/sandbox-exec',
+        ['-p', macosProfile('/nonexistent-pr-review-probe'), '/usr/bin/true'],
+        { timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] }
+      )
       return
     }
     if (process.platform !== 'linux') throw new SandboxError(SANDBOX_INSTALL_HINT)
-    execFileSync('bwrap', [
-      '--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
-      '--cap-drop', 'ALL', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/run', '--', '/bin/true',
-    ], { timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] })
+    execFileSync(
+      'bwrap',
+      [
+        '--die-with-parent',
+        '--new-session',
+        '--unshare-user',
+        '--unshare-pid',
+        '--unshare-ipc',
+        '--unshare-uts',
+        '--cap-drop',
+        'ALL',
+        '--ro-bind',
+        '/',
+        '/',
+        '--proc',
+        '/proc',
+        '--dev',
+        '/dev',
+        '--tmpfs',
+        '/run',
+        '--',
+        '/bin/true',
+      ],
+      { timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'] }
+    )
   } catch (error) {
     const detail = (error as { stderr?: Buffer | string }).stderr?.toString().trim()
     throw new SandboxError(`${SANDBOX_INSTALL_HINT}${detail ? `: ${detail}` : ''}`)
@@ -324,7 +496,11 @@ export function checkSandbox(): void {
 export function checkChatGuards(cwd: string): string {
   if (process.platform === 'win32') {
     const command = windowsSandboxCommand('', [], cwd, 'checkGuards')
-    return execFileSync(command.file, command.args, { encoding: 'utf8', timeout: 90_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    return execFileSync(command.file, command.args, {
+      encoding: 'utf8',
+      timeout: 90_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
   }
   const sandbox = createSandbox()
   const results: string[] = []
@@ -334,14 +510,28 @@ export function checkChatGuards(cwd: string): string {
     } catch {
       continue
     }
-    const command = sandbox(process.execPath, [fileURLToPath(new URL(`./${agent}-chat.mjs`, import.meta.url)), '--check'], cwd)
+    const command = sandbox(
+      process.execPath,
+      [fileURLToPath(new URL(`./${agent}-chat.mjs`, import.meta.url)), '--check'],
+      cwd
+    )
     try {
-      results.push(execFileSync(command.file, command.args, { cwd, encoding: 'utf8', timeout: 45_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim())
+      results.push(
+        execFileSync(command.file, command.args, {
+          cwd,
+          encoding: 'utf8',
+          timeout: 45_000,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }).trim()
+      )
     } catch {
-      throw new SandboxError(`${agent} could not activate the required dcg chat hook. Check the supported versions and reset this checkout’s chat runtime after upgrading; see README.`)
+      throw new SandboxError(
+        `${agent} could not activate the required dcg chat hook. Check the supported versions and reset this checkout’s chat runtime after upgrading; see README.`
+      )
     }
   }
-  if (!results.length) throw new SandboxError('Install Claude Code or Codex in the chat environment before checking chat hooks.')
+  if (!results.length)
+    throw new SandboxError('Install Claude Code or Codex in the chat environment before checking chat hooks.')
   return results.join('; ')
 }
 
@@ -349,7 +539,11 @@ export function checkChatGuards(cwd: string): string {
 if (process.argv[2] === '--pr-review-sandbox') {
   try {
     const request = JSON.parse(Buffer.from(process.argv[3] ?? '', 'base64').toString('utf8')) as {
-      action: string; file: string; args: string[]; cwd: string; sandbox?: SandboxOptions
+      action: string
+      file: string
+      args: string[]
+      cwd: string
+      sandbox?: SandboxOptions
     }
     if (request.action === 'check') {
       checkSandbox()

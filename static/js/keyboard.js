@@ -35,7 +35,10 @@ export function isTypingTarget(target) {
   }
   const tag = target.tagName.toLowerCase()
   return (
-    tag === 'input' || tag === 'textarea' || tag === 'select' || target.closest('[contenteditable="true"]') !== null
+    tag === 'input' ||
+    tag === 'textarea' ||
+    tag === 'select' ||
+    target.closest('[contenteditable="true"]') !== null
   )
 }
 
@@ -97,7 +100,9 @@ export function keyAction(event, opts = {}) {
 export const HELP_DIALOG_ID = 'help-dialog'
 
 export function helpDialogHtml() {
-  const rows = KEY_HELP.map(r => `<tr><td class="mono">${esc(r.keys)}</td><td>${esc(r.what)}</td></tr>`).join('')
+  const rows = KEY_HELP.map(r => `<tr><td class="mono">${esc(r.keys)}</td><td>${esc(r.what)}</td></tr>`).join(
+    ''
+  )
   return (
     `<dialog id="${HELP_DIALOG_ID}" class="help" aria-labelledby="help-h"><form method="dialog">` +
     '<h2 id="help-h">Keyboard</h2>' +

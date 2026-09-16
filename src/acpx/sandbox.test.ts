@@ -34,18 +34,32 @@ it('contains native writes in ensure, exec, prompt, and cancel while keeping ses
   const snapshots = path.join(fixture, 'snapshots')
   const home = path.join(fixture, 'host-home')
   await Promise.all([repo, snapshots, home].map(dir => mkdir(dir)))
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: 'pipe' })
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: 'pipe' })
   git('init')
   await writeFile(path.join(repo, 'tracked.txt'), 'committed')
   git('add', 'tracked.txt')
-  git('-c', 'user.name=Containment Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'fixture')
+  git(
+    '-c',
+    'user.name=Containment Test',
+    '-c',
+    'user.email=test@example.invalid',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-m',
+    'fixture'
+  )
   await writeFile(path.join(repo, 'tracked.txt'), 'uncommitted work')
   const outside = path.join(fixture, 'outside.txt')
   const snapshot = path.join(snapshots, 'file.txt')
   await writeFile(outside, 'outside work')
   await writeFile(snapshot, 'snapshot content')
   await symlink(outside, path.join(repo, 'outside-link'))
-  await writeFile(path.join(repo, 'containment.json'), JSON.stringify({ snapshot: agentPath(snapshot), outside: agentPath(outside) }))
+  await writeFile(
+    path.join(repo, 'containment.json'),
+    JSON.stringify({ snapshot: agentPath(snapshot), outside: agentPath(outside) })
+  )
   const before = git('status', '--porcelain')
   const head = git('rev-parse', 'HEAD')
   const bin = path.join(fixture, 'acpx')
@@ -70,14 +84,26 @@ it('contains native writes in ensure, exec, prompt, and cancel while keeping ses
     const results = JSON.parse(await readFile(path.join(runtime, 'home', `${stage}.json`), 'utf8'))
     expect(results.scratch).toBe('allowed')
     expect(results.queueSocket).toBe('allowed')
-    for (const action of ['overwrite', 'deletion', 'snapshotOverwrite', 'snapshotDeletion', 'outsideOverwrite', 'outsideCreation', 'symlinkOverwrite', 'guardOverwrite']) {
-      expect(['EROFS', 'EPERM', 'EACCES'], `${stage}: ${action} was ${results[action]}`).toContain(results[action])
+    for (const action of [
+      'overwrite',
+      'deletion',
+      'snapshotOverwrite',
+      'snapshotDeletion',
+      'outsideOverwrite',
+      'outsideCreation',
+      'symlinkOverwrite',
+      'guardOverwrite',
+    ]) {
+      expect(['EROFS', 'EPERM', 'EACCES'], `${stage}: ${action} was ${results[action]}`).toContain(
+        results[action]
+      )
     }
     expect(results.gitReset, `${stage}: git reset`).not.toBe('allowed')
     expect(results.guardDeletion, `${stage}: guard deletion`).not.toBe('allowed')
     expect(results.guardDirectoryRename, `${stage}: guard directory rename`).not.toBe('allowed')
     expect(results.hardlinkOverwrite, `${stage}: hardlink`).not.toBe('allowed')
-    if (results.windowsInterop !== undefined) expect(results.windowsInterop, `${stage}: Windows interop`).not.toBe('allowed')
+    if (results.windowsInterop !== undefined)
+      expect(results.windowsInterop, `${stage}: Windows interop`).not.toBe('allowed')
   }
   expect(await readFile(path.join(repo, 'tracked.txt'), 'utf8')).toBe('uncommitted work')
   expect(await readFile(outside, 'utf8')).toBe('outside work')
@@ -91,10 +117,20 @@ it('fails closed before running an agent when dcg is missing', async () => {
   if (process.platform === 'win32') vi.stubEnv('PR_REVIEW_WSL_DISTRO', 'pr-review-missing-distribution-test')
   const runner = createAgentRunner({ sandbox: { stateRoot, home: fixture } })
   const options = { cwd: fixture, agent: 'claude', session: 'missing-dcg', prompt: 'hello', timeoutSec: 5 }
-  expect(await runner.exec(options)).toMatchObject({ ok: false, code: 'AGENT_PERMISSION_DENIED', message: expect.stringMatching(/Install (Destructive Command Guard|Ubuntu WSL2)/) })
+  expect(await runner.exec(options)).toMatchObject({
+    ok: false,
+    code: 'AGENT_PERMISSION_DENIED',
+    message: expect.stringMatching(/Install (Destructive Command Guard|Ubuntu WSL2)/),
+  })
   const events = []
   for await (const event of runner.run(options).events) events.push(event)
-  expect(events).toEqual([{ type: 'error', code: 'AGENT_PERMISSION_DENIED', message: expect.stringMatching(/Install (Destructive Command Guard|Ubuntu WSL2)/) }])
+  expect(events).toEqual([
+    {
+      type: 'error',
+      code: 'AGENT_PERMISSION_DENIED',
+      message: expect.stringMatching(/Install (Destructive Command Guard|Ubuntu WSL2)/),
+    },
+  ])
 }, 30_000)
 
 it('rejects runtime directory symlinks before importing settings', async () => {
@@ -119,12 +155,31 @@ it('resumes two real acpx turns with writable session storage and denied native 
   const launch = createSandbox({ stateRoot, home: fixture })
   const adapter = agentPath(fileURLToPath(new URL('../testing/sandbox-agent.mjs', import.meta.url)))
   const agent = `node '${adapter.replaceAll("'", "'\\''")}'`
-  const common = ['--cwd', repo, '--format', 'json', '--approve-reads', '--no-terminal',
-    '--non-interactive-permissions', 'deny', '--timeout', '20', '--ttl', '1', '--agent', agent]
+  const common = [
+    '--cwd',
+    repo,
+    '--format',
+    'json',
+    '--approve-reads',
+    '--no-terminal',
+    '--non-interactive-permissions',
+    'deny',
+    '--timeout',
+    '20',
+    '--ttl',
+    '1',
+    '--agent',
+    agent,
+  ]
   const call = (args: string[]): string => {
     const command = launch('acpx', [...common, ...args], repo)
     try {
-      return execFileSync(command.file, command.args, { cwd: repo, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] })
+      return execFileSync(command.file, command.args, {
+        cwd: repo,
+        encoding: 'utf8',
+        timeout: 30_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
     } catch (error) {
       const failure = error as { stdout?: string; stderr?: string }
       throw new Error(`${failure.stdout ?? ''}\n${failure.stderr ?? ''}`, { cause: error })
@@ -139,29 +194,43 @@ it('resumes two real acpx turns with writable session storage and denied native 
   expect(await readFile(path.join(repo, 'victim.txt'), 'utf8')).toBe('preserve')
 }, 120_000)
 
-it.runIf(process.platform !== 'win32')('runs the dependency-free WSL bridge without loading node_modules', () => {
-  const request = Buffer.from(JSON.stringify({
-    action: 'launch', file: 'node', args: ['-e', 'console.log("bridge ready")'], cwd: fixture,
-    sandbox: { stateRoot, home: fixture },
-  })).toString('base64')
-  const output = execFileSync(process.execPath, [
-    fileURLToPath(new URL('./wsl-sandbox.mjs', import.meta.url)), '--pr-review-sandbox', request,
-  ], { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'pipe'] })
-  expect(output.trim()).toBe('bridge ready')
-}, 30_000)
+it.runIf(process.platform !== 'win32')(
+  'runs the dependency-free WSL bridge without loading node_modules',
+  () => {
+    const request = Buffer.from(
+      JSON.stringify({
+        action: 'launch',
+        file: 'node',
+        args: ['-e', 'console.log("bridge ready")'],
+        cwd: fixture,
+        sandbox: { stateRoot, home: fixture },
+      })
+    ).toString('base64')
+    const output = execFileSync(
+      process.execPath,
+      [fileURLToPath(new URL('./wsl-sandbox.mjs', import.meta.url)), '--pr-review-sandbox', request],
+      { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    expect(output.trim()).toBe('bridge ready')
+  },
+  30_000
+)
 
-it.runIf(process.platform !== 'win32')('does not import credentials through links from a previous runtime', async () => {
-  const home = path.join(fixture, 'host-home')
-  const outside = path.join(fixture, 'outside')
-  await mkdir(path.join(home, '.codex'), { recursive: true })
-  await mkdir(outside)
-  const options = { stateRoot, home }
-  createSandbox(options)('/bin/true', [], fixture)
-  const key = createHash('sha256').update(`dcg-v1:${fixture}`).digest('hex')
-  const agentHome = path.join(options.stateRoot, key, 'home', '.codex')
-  await rm(agentHome, { recursive: true })
-  await symlink(outside, agentHome)
-  await writeFile(path.join(home, '.codex', 'auth.json'), '{"fixture":true}')
-  expect(() => createSandbox(options)('/bin/true', [], fixture)).toThrow('Chat guard configuration changed')
-  expect(await readdir(outside)).toEqual([])
-})
+it.runIf(process.platform !== 'win32')(
+  'does not import credentials through links from a previous runtime',
+  async () => {
+    const home = path.join(fixture, 'host-home')
+    const outside = path.join(fixture, 'outside')
+    await mkdir(path.join(home, '.codex'), { recursive: true })
+    await mkdir(outside)
+    const options = { stateRoot, home }
+    createSandbox(options)('/bin/true', [], fixture)
+    const key = createHash('sha256').update(`dcg-v1:${fixture}`).digest('hex')
+    const agentHome = path.join(options.stateRoot, key, 'home', '.codex')
+    await rm(agentHome, { recursive: true })
+    await symlink(outside, agentHome)
+    await writeFile(path.join(home, '.codex', 'auth.json'), '{"fixture":true}')
+    expect(() => createSandbox(options)('/bin/true', [], fixture)).toThrow('Chat guard configuration changed')
+    expect(await readdir(outside)).toEqual([])
+  }
+)

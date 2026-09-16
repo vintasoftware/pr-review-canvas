@@ -207,9 +207,10 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
     opts.execFileImpl ??
     (async (file, args, options) => {
       // Version and login probes do not start an agent session.
-      const command = file === bin && args[0] !== '--version'
-        ? await chatCommand(file, args, options.cwd ?? process.cwd())
-        : hostCommand(file, args)
+      const command =
+        file === bin && args[0] !== '--version'
+          ? await chatCommand(file, args, options.cwd ?? process.cwd())
+          : hostCommand(file, args)
       return execFileAsync(command.file, command.args, { ...options, encoding: 'utf8', shell: false })
     })
 
@@ -241,22 +242,30 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
 
   return {
     run(options) {
-      const start = (spawnImpl: SpawnImpl) => startRun(
-        bin,
-        spawnImpl,
-        options,
-        // The cancel call gets its own timeout, and SIGKILL when it elapses: a cancel that hangs
-        // must neither hold the kill back nor stay behind as a process of its own.
-        agentArgs =>
-          execQuiet(bin, agentArgs, { cwd: options.cwd, timeoutSec: CANCEL_TIMEOUT_SEC, killSignal: 'SIGKILL' }),
-        slackMs,
-        cancelGraceMs
-      )
+      const start = (spawnImpl: SpawnImpl) =>
+        startRun(
+          bin,
+          spawnImpl,
+          options,
+          // The cancel call gets its own timeout, and SIGKILL when it elapses: a cancel that hangs
+          // must neither hold the kill back nor stay behind as a process of its own.
+          agentArgs =>
+            execQuiet(bin, agentArgs, {
+              cwd: options.cwd,
+              timeoutSec: CANCEL_TIMEOUT_SEC,
+              killSignal: 'SIGKILL',
+            }),
+          slackMs,
+          cancelGraceMs
+        )
       if (opts.spawnImpl) return start(opts.spawnImpl)
-      return prepareRun(async () => {
-        const command = await chatCommand(bin, buildPromptArgs(options), options.cwd)
-        return () => start((_file, _args, spawnOptions) => spawn(command.file, command.args, spawnOptions))
-      }, options.timeoutSec * 1000 + slackMs)
+      return prepareRun(
+        async () => {
+          const command = await chatCommand(bin, buildPromptArgs(options), options.cwd)
+          return () => start((_file, _args, spawnOptions) => spawn(command.file, command.args, spawnOptions))
+        },
+        options.timeoutSec * 1000 + slackMs
+      )
     },
 
     async ensureSession(options) {
@@ -289,11 +298,18 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
           text: '',
           // A failed call never exits 0, so the table always names a code here.
           code: exitCodeToAgentCode(code) ?? 'AGENT_FAILED',
-          message: missingBinary(result.error) ? `${bin} is not installed` : result.stderr.trim() || exitCodeMessage(code),
+          message: missingBinary(result.error)
+            ? `${bin} is not installed`
+            : result.stderr.trim() || exitCodeMessage(code),
         }
       }
       if (!ended) {
-        return { ok: false, text: '', code: 'AGENT_INCOMPLETE', message: 'the agent stopped before finishing' }
+        return {
+          ok: false,
+          text: '',
+          code: 'AGENT_INCOMPLETE',
+          message: 'the agent stopped before finishing',
+        }
       }
       return text === ''
         ? { ok: false, text: '', code: 'AGENT_INCOMPLETE', message: 'the agent replied nothing' }
@@ -400,7 +416,12 @@ function prepareRun(prepare: () => Promise<() => AgentRun>, timeoutMs: number): 
       run = start()
       for await (const event of run.events) queue.push(event)
     } catch (error) {
-      if (!stopped) queue.push({ type: 'error', code: error instanceof SandboxError ? 'AGENT_PERMISSION_DENIED' : 'AGENT_FAILED', message: error instanceof Error ? error.message : String(error) })
+      if (!stopped)
+        queue.push({
+          type: 'error',
+          code: error instanceof SandboxError ? 'AGENT_PERMISSION_DENIED' : 'AGENT_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+        })
     } finally {
       clearTimeout(deadline)
       queue.end()
@@ -589,11 +610,19 @@ function startRun(
     const exit = code ?? 1
     const mapped = exitCodeToAgentCode(exit)
     if (mapped !== null) {
-      finish({ type: 'error', code: mapped, message: stderr.trim() === '' ? exitCodeMessage(exit) : stderr.trim() })
+      finish({
+        type: 'error',
+        code: mapped,
+        message: stderr.trim() === '' ? exitCodeMessage(exit) : stderr.trim(),
+      })
       return
     }
     // acpx 0.13.2 exits 0 when its own --timeout elapses, without a terminal event.
-    finish({ type: 'error', code: 'AGENT_INCOMPLETE', message: 'the agent stopped before finishing its answer' })
+    finish({
+      type: 'error',
+      code: 'AGENT_INCOMPLETE',
+      message: 'the agent stopped before finishing its answer',
+    })
   })
 
   child.stdin?.on('error', () => undefined)

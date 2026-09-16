@@ -3,7 +3,13 @@ import { rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createFakeGh, createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
-import { createAppContext, PACKAGE_ROOT, readPackageVersion, resolveVendorRoots, STATIC_DIR } from './context.js'
+import {
+  createAppContext,
+  PACKAGE_ROOT,
+  readPackageVersion,
+  resolveVendorRoots,
+  STATIC_DIR,
+} from './context.js'
 
 describe('context', () => {
   it('resolves the vendored browser libraries to files that exist', async () => {

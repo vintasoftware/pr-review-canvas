@@ -27,13 +27,25 @@ import { flash, scrollIntoViewSafe } from './dom.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
 import { pointAnchorId, sanitizeKey } from './keys.js'
-import { getRenderContext, pathSet, setCardRenderedHook, setRenderContext, updateRenderState } from './layers.js'
+import {
+  getRenderContext,
+  pathSet,
+  setCardRenderedHook,
+  setRenderContext,
+  updateRenderState,
+} from './layers.js'
 import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from './nav.js'
 import { issueCommentHtml } from './overview.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
 import { layerProgress } from './progress.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
-import { fillSignoffDialog, openSignoffDialog, showSignoffError, showSignoffResult, signoffBody } from './signoff.js'
+import {
+  fillSignoffDialog,
+  openSignoffDialog,
+  showSignoffError,
+  showSignoffResult,
+  signoffBody,
+} from './signoff.js'
 
 /** @typedef {NonNullable<ReturnType<typeof import('./chat.js').wireChat>>} ChatHandle */
 
@@ -148,7 +160,8 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     if (item === undefined || item.kind !== kind || item.other) {
       continue
     }
-    const id = item.kind === 'file' ? `layer:${item.layerId}/file:${sanitizeKey(item.path)}` : `layer:${item.layerId}`
+    const id =
+      item.kind === 'file' ? `layer:${item.layerId}/file:${sanitizeKey(item.path)}` : `layer:${item.layerId}`
     if (!session.isReviewed(id)) {
       return root.querySelector(`#${cssEscape(item.id)}`)
     }
@@ -167,7 +180,13 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
  */
 export function askTargetFor(root, focusId, focusPointId, selection) {
   if (selection !== null) {
-    return { kind: 'lines', path: selection.path, side: selection.side, start: selection.start, end: selection.end }
+    return {
+      kind: 'lines',
+      path: selection.path,
+      side: selection.side,
+      start: selection.start,
+      end: selection.end,
+    }
   }
   if (focusPointId !== null) {
     const el = root.querySelector(`[data-point="${cssEscape(focusPointId)}"] [data-act="ask"]`)
@@ -213,7 +232,8 @@ export function wireReview(root, session, opts = {}) {
 
   const paths = () => pathSet(getRenderContext()?.files ?? [])
   /** The diff key of a path, which is what the row ids are built from. */
-  const keyForPath = (/** @type {string} */ path) => getRenderContext()?.files.find(f => f.path === path)?.key ?? null
+  const keyForPath = (/** @type {string} */ path) =>
+    getRenderContext()?.files.find(f => f.path === path)?.key ?? null
   /** The time the page was drawn, which the comments it adds are timed against. */
   const renderNow = () => getRenderContext()?.now ?? new Date()
 
@@ -263,7 +283,10 @@ export function wireReview(root, session, opts = {}) {
     const answer = await session.postComment(input)
     const ctx = getRenderContext()
     if (answer.kind === 'review' && ctx !== null) {
-      setRenderContext({ ...ctx, comments: [...ctx.comments.filter(c => c.id !== answer.comment.id), answer.comment] })
+      setRenderContext({
+        ...ctx,
+        comments: [...ctx.comments.filter(c => c.id !== answer.comment.id), answer.comment],
+      })
       onState(session.state)
     }
     return answer
@@ -325,7 +348,8 @@ export function wireReview(root, session, opts = {}) {
    */
   const openComposer = (anchor, options, shape) => {
     closeComposers(root)
-    const node = shape === 'row' ? rowFrom(doc, composerRowHtml(options)) : nodeFrom(doc, composerHtml(options))
+    const node =
+      shape === 'row' ? rowFrom(doc, composerRowHtml(options)) : nodeFrom(doc, composerHtml(options))
     if (node === null) {
       return null
     }
@@ -364,7 +388,10 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /** The inline comment that a posted review comment becomes on the page. */
-  const insertPostedReviewComment = (/** @type {Element} */ composerNode, /** @type {ReviewComment} */ comment) => {
+  const insertPostedReviewComment = (
+    /** @type {Element} */ composerNode,
+    /** @type {ReviewComment} */ comment
+  ) => {
     const thread = root.querySelector(
       `tr.thread[data-thread="${cssEscape(String(comment.inReplyToId ?? comment.id))}"]`
     )
@@ -461,9 +488,9 @@ export function wireReview(root, session, opts = {}) {
    * @param {string} id
    * @param {boolean} reviewed
    * @param {'layer' | 'file'} kind
-   * @param {{ quiet?: boolean }} [opts] `quiet` keeps a checkbox label intact while it runs
+   * @param {{ quiet?: boolean }} [reviewOptions] `quiet` keeps a checkbox label intact while it runs
    */
-  const markReviewed = (button, id, reviewed, kind, opts = {}) => {
+  const markReviewed = (button, id, reviewed, kind, reviewOptions = {}) => {
     const run = async () => {
       await session.setReviewed(id, reviewed)
       const parts = cardForReviewedId(root, id)
@@ -479,7 +506,7 @@ export function wireReview(root, session, opts = {}) {
       }
       toast(root, reviewed ? `${kind} marked reviewed` : `${kind} reopened`)
     }
-    void (opts.quiet === true
+    void (reviewOptions.quiet === true
       ? runControl(button, run)
       : runCommand(button, run, { pendingLabel: reviewed ? 'marking…' : 'unmarking…' }))
   }
@@ -589,8 +616,7 @@ export function wireReview(root, session, opts = {}) {
         postFromComposer(el, box)
       }
     },
-    'markdown-preview': el => toggleMarkdownPreview(el, true),
-    'markdown-write': el => toggleMarkdownPreview(el, false),
+    'markdown-toggle': el => toggleMarkdownPreview(el),
     'composer-cancel': () => {
       closeComposers(root)
     },
@@ -641,7 +667,11 @@ export function wireReview(root, session, opts = {}) {
         return
       }
       composerSeq += 1
-      openComposer(full, { id: `composer-${composerSeq}`, label: 'Reply', kind: 'reply', inReplyToId: id }, 'block')
+      openComposer(
+        full,
+        { id: `composer-${composerSeq}`, label: 'Reply', kind: 'reply', inReplyToId: id },
+        'block'
+      )
     },
     'pr-comment': () => {
       const host = root.querySelector('.conversation .pr-composer-host')
@@ -733,7 +763,10 @@ export function wireReview(root, session, opts = {}) {
     }
     event.preventDefault()
     setSelection(
-      selectionReducer(selection, event.shiftKey ? { type: 'shift-click', target } : { type: 'click', target })
+      selectionReducer(
+        selection,
+        event.shiftKey ? { type: 'shift-click', target } : { type: 'click', target }
+      )
     )
     if (selection !== null && !event.shiftKey) {
       setSelection(selectionReducer(selection, { type: 'drag-start', target }))
@@ -807,12 +840,18 @@ export function wireReview(root, session, opts = {}) {
         const item = order.find(i => i.id === focusId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =
-          item?.kind === wanted ? item : wanted === 'layer' && focusId !== null ? layerOf(order, focusId) : null
+          item?.kind === wanted
+            ? item
+            : wanted === 'layer' && focusId !== null
+              ? layerOf(order, focusId)
+              : null
         if (found === null || found === undefined || found.kind === 'overview') {
           break
         }
         const id =
-          found.kind === 'file' ? `layer:${found.layerId}/file:${sanitizeKey(found.path)}` : `layer:${found.layerId}`
+          found.kind === 'file'
+            ? `layer:${found.layerId}/file:${sanitizeKey(found.path)}`
+            : `layer:${found.layerId}`
         const parts = cardForReviewedId(root, id)
         const box = parts?.card.querySelector('input[data-reviewed-id]')
         if (box instanceof HTMLElement) {

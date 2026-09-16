@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "arrowParens": "avoid",
+  "printWidth": 110,
+  "sortImports": false,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "__fixtures__/**",
+    "static/js/__fixtures__/**",
+    "static/vendor/**",
+    ".agents/**",
+    ".codex/**",
+    "prompts/**"
+  ],
+  "embeddedLanguageFormatting": "off",
+  "proseWrap": "preserve"
+}

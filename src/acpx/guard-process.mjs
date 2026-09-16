@@ -8,15 +8,24 @@ export function executable(name) {
   for (const directory of (process.env.PATH ?? '').split(path.delimiter)) {
     if (!directory || !path.isAbsolute(directory)) continue
     const candidate = path.join(directory, name)
-    try { accessSync(candidate, constants.X_OK); return realpathSync(candidate) } catch { /* Try next directory. */ }
+    try {
+      accessSync(candidate, constants.X_OK)
+      return realpathSync(candidate)
+    } catch {
+      /* Try next directory. */
+    }
   }
   throw new Error(`AI Chat requires ${name} on PATH inside its containment environment.`)
 }
 
-export function quote(value) { return `'${value.replaceAll("'", "'\\''")}'` }
+export function quote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
 export const guardFile = fileURLToPath(new URL('./dcg-guard.mjs', import.meta.url))
 export const guardCommand = `${quote(process.execPath)} ${quote(guardFile)}`
-export const preToolUse = [{ matcher: '^Bash$', hooks: [{ type: 'command', command: guardCommand, timeout: 15 }] }]
+export const preToolUse = [
+  { matcher: '^Bash$', hooks: [{ type: 'command', command: guardCommand, timeout: 15 }] },
+]
 
 /** Preserve stdio and cancellation through the CLI wrappers. */
 export function run(file, args, env = process.env, transformLine) {
@@ -27,7 +36,12 @@ export function run(file, args, env = process.env, transformLine) {
     })
   }
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => child.kill(signal))
-  child.on('error', error => { process.stderr.write(`Chat command guard: ${error.message}\n`); process.exitCode = 1 })
-  child.on('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0) })
+  child.on('error', error => {
+    process.stderr.write(`Chat command guard: ${error.message}\n`)
+    process.exitCode = 1
+  })
+  child.on('exit', (code, signal) => {
+    process.exitCode = code ?? (signal ? 1 : 0)
+  })
   return child
 }

@@ -55,7 +55,7 @@ describe('validateModelOutput', () => {
 
   it('keeps descriptive fold fields in the validated JSON', () => {
     const output = clean()
-    const file = output.layers.flatMap(layer => layer.files).find(file => file.path === 'src/app.test.ts')
+    const file = output.layers.flatMap(entry => entry.files).find(entry => entry.path === 'src/app.test.ts')
     if (file === undefined) {
       throw new Error('missing test file')
     }
@@ -100,19 +100,19 @@ describe('validateModelOutput', () => {
     expect(result.errors).toEqual([expect.objectContaining({ code: 'SCHEMA' })])
   })
 
-  it.each(['x'.repeat(TEXT_CAPS.pointTitle + 1), `[run](https://example.com/${'x'.repeat(TEXT_CAPS.pointTitle)})`])(
-    'counts the whole plain-text fold title toward its cap: %s',
-    title => {
-      const output = clean()
-      const file = output.layers[0]?.files.find(file => file.path === 'src/app.test.ts')
-      if (file === undefined) {
-        throw new Error('missing test file')
-      }
-
-      file.folds = [{ title, side: 'new', startLine: 2, endLine: 4 }]
-      expect(errorsOf(output)).toEqual([expect.objectContaining({ code: 'TEXT_TOO_LONG' })])
+  it.each([
+    'x'.repeat(TEXT_CAPS.pointTitle + 1),
+    `[run](https://example.com/${'x'.repeat(TEXT_CAPS.pointTitle)})`,
+  ])('counts the whole plain-text fold title toward its cap: %s', title => {
+    const output = clean()
+    const file = output.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')
+    if (file === undefined) {
+      throw new Error('missing test file')
     }
-  )
+
+    file.folds = [{ title, side: 'new', startLine: 2, endLine: 4 }]
+    expect(errorsOf(output)).toEqual([expect.objectContaining({ code: 'TEXT_TOO_LONG' })])
+  })
 
   it('passes the clean synthetic output and returns the parsed output', () => {
     const result = validateModelOutput(clean(), input())
@@ -121,7 +121,11 @@ describe('validateModelOutput', () => {
 
   it('SCHEMA: names the field and stops before the semantic rules', () => {
     expect(errorsOf({ summary: 1, layers: [], points: 'x' })).toEqual([
-      { code: 'SCHEMA', where: 'summary', message: 'summary: Invalid input: expected string, received number' },
+      {
+        code: 'SCHEMA',
+        where: 'summary',
+        message: 'summary: Invalid input: expected string, received number',
+      },
       { code: 'SCHEMA', where: 'layers', message: 'layers: Too small: expected array to have >=1 items' },
       { code: 'SCHEMA', where: 'points', message: 'points: Invalid input: expected array, received string' },
     ])
@@ -262,7 +266,9 @@ describe('validateModelOutput', () => {
     const l = layer(twice, 0)
     l.diagram = { mermaid: 'flowchart LR\n  A --> B', links: {} }
     l.rationale = 'Read the swap.\n\n```mermaid\nflowchart LR\n  C --> D\n```'
-    expect(errorsOf(twice).map(formatValidationError)).toEqual(['DIAGRAM_LIMIT layer run-path: 2 diagrams, at most 1'])
+    expect(errorsOf(twice).map(formatValidationError)).toEqual([
+      'DIAGRAM_LIMIT layer run-path: 2 diagrams, at most 1',
+    ])
     // One of the two on its own passes, wherever it sits.
     const field = clean()
     layer(field, 0).diagram = { mermaid: 'flowchart LR\n  A --> B', links: {} }
@@ -272,11 +278,16 @@ describe('validateModelOutput', () => {
     expect(errorsOf(fence)).toEqual([])
     const summary = clean()
     summary.summary = '```mermaid\nflowchart LR\n  A --> B\n```\n\n```mermaid\nflowchart LR\n  C --> D\n```'
-    expect(errorsOf(summary).map(formatValidationError)).toEqual(['DIAGRAM_LIMIT summary: 2 diagrams, at most 1'])
+    expect(errorsOf(summary).map(formatValidationError)).toEqual([
+      'DIAGRAM_LIMIT summary: 2 diagrams, at most 1',
+    ])
     // The Other layer has a bucket of its own.
     const spread = clean()
-    layer(spread, 1).rationale = '```mermaid\nflowchart LR\n  A --> B\n```\n\n```mermaid\nflowchart LR\n  C --> D\n```'
-    expect(errorsOf(spread).map(formatValidationError)).toEqual(['DIAGRAM_LIMIT other: 2 diagrams, at most 1'])
+    layer(spread, 1).rationale =
+      '```mermaid\nflowchart LR\n  A --> B\n```\n\n```mermaid\nflowchart LR\n  C --> D\n```'
+    expect(errorsOf(spread).map(formatValidationError)).toEqual([
+      'DIAGRAM_LIMIT other: 2 diagrams, at most 1',
+    ])
     expect(errorsOf(clean(), { limits: { ...LIMITS, maxDiagramsPerLayer: 2 } })).toEqual([])
   })
 
@@ -379,7 +390,14 @@ describe('validateModelOutput', () => {
 
   it('LAYER_EMPTY: a layer with no files', () => {
     const output = clean()
-    output.layers.splice(1, 0, { key: 'empty', title: 'Empty', rationale: '', kind: 'layer', tests: [], files: [] })
+    output.layers.splice(1, 0, {
+      key: 'empty',
+      title: 'Empty',
+      rationale: '',
+      kind: 'layer',
+      tests: [],
+      files: [],
+    })
     expect(errorsOf(output)).toEqual([
       { code: 'LAYER_EMPTY', where: 'layer:empty', message: 'layer empty has no hunks' },
     ])
@@ -424,7 +442,11 @@ describe('validateModelOutput', () => {
     const output = clean()
     output.layers.reverse()
     expect(errorsOf(output)).toEqual([
-      { code: 'OTHER_NOT_LAST', where: 'layer:other', message: 'layer other (kind other) must be the last layer' },
+      {
+        code: 'OTHER_NOT_LAST',
+        where: 'layer:other',
+        message: 'layer other (kind other) must be the last layer',
+      },
     ])
   })
 
@@ -435,7 +457,9 @@ describe('validateModelOutput', () => {
     if (file) {
       file.annotations = [{ side: 'new', startLine: 1, endLine: 1, text: 'context line' }]
     }
-    output.points = [{ kind: 'question', level: 'fyi', title: 'Context', path: 'src/app.ts', line: 5, body: 'b' }]
+    output.points = [
+      { kind: 'question', level: 'fyi', title: 'Context', path: 'src/app.ts', line: 5, body: 'b' },
+    ]
     expect(errorsOf(output)).toEqual([])
   })
 
@@ -521,10 +545,12 @@ describe('validateModelOutput', () => {
   it('reports old-side ranges for an annotation on deleted code', () => {
     const output = clean()
     layer(output, 0).files[0]!.annotations = [{ side: 'old', startLine: 99, endLine: 100, text: 'outside' }]
-    expect(errorsOf(output)).toEqual([expect.objectContaining({
-      code: 'ANNOTATION_OUTSIDE_HUNK',
-      message: expect.stringContaining('(old-side lines 1-4, 10-12)'),
-    })])
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({
+        code: 'ANNOTATION_OUTSIDE_HUNK',
+        message: expect.stringContaining('(old-side lines 1-4, 10-12)'),
+      }),
+    ])
   })
 
   it('POINT_OUTSIDE_DIFF: unknown path, a line outside every hunk, and a range that leaves its hunk', () => {
@@ -597,7 +623,8 @@ describe('validateModelOutput', () => {
     const l = layer(output, 0)
     l.rationale = 'See #file:src/nope.ts.'
     l.decisions = 'See [h](#hunk:src/app.ts#9).'
-    l.checkByHand = 'See [l](#line:src/nope.ts:4) and [m](#line:src/app.ts:400-410) and [o](#line:src/app.ts:8:old).'
+    l.checkByHand =
+      'See [l](#line:src/nope.ts:4) and [m](#line:src/app.ts:400-410) and [o](#line:src/app.ts:8:old).'
     l.tests[0] = {
       behavior: 'run() adds b()',
       status: 'covered',
@@ -627,6 +654,28 @@ describe('validateModelOutput', () => {
     ])
   })
 
+  it('reports unknown nodes when a diagram source has no recognized kind', () => {
+    const output = clean()
+    layer(output, 0).diagram = {
+      mermaid: '%% comment without a diagram',
+      links: { missing: '#file:src/app.ts' },
+    }
+    expect(errorsOf(output).map(formatValidationError)).toContain(
+      'DIAGRAM_NODE_UNKNOWN layer run-path diagram: "missing" is not a node of the source'
+    )
+  })
+
+  it('identifies each oversized diagram when a field contains several', () => {
+    const output = clean()
+    const source = 'flowchart LR\n  A --> B'
+    output.summary = ['```mermaid', source, '```', '', '```mermaid', source, '```'].join('\n')
+    const errors = errorsOf(output, { caps: { ...TEXT_CAPS, diagram: 10 } })
+    expect(errors.filter(error => error.code === 'TEXT_TOO_LONG').map(error => error.where)).toEqual([
+      'summary.diagram.1',
+      'summary.diagram.2',
+    ])
+  })
+
   it('DIAGRAM_NODE_UNKNOWN: a sidecar key names a node the source does not draw', () => {
     const output = clean()
     layer(output, 0).diagram = {
@@ -650,7 +699,10 @@ describe('validateModelOutput', () => {
     ])
     // A value that is not a canvas link at all fails the schema, so nothing else runs.
     const external = clean()
-    layer(external, 0).diagram = { mermaid: 'flowchart LR\n  store --> serve', links: { store: 'https://x.test' } }
+    layer(external, 0).diagram = {
+      mermaid: 'flowchart LR\n  store --> serve',
+      links: { store: 'https://x.test' },
+    }
     expect(errorsOf(external).map(e => e.code)).toEqual(['SCHEMA'])
   })
 
@@ -673,7 +725,9 @@ describe('validateModelOutput', () => {
     expect(errorsOf(output).map(formatValidationError)).toEqual([
       `DIAGRAM_LIMIT layer run-path diagram: ${LIMITS.maxDiagramLinks + 1} node links, at most ${LIMITS.maxDiagramLinks}`,
     ])
-    expect(errorsOf(output, { limits: { ...LIMITS, maxDiagramLinks: LIMITS.maxDiagramLinks + 1 } })).toEqual([])
+    expect(errorsOf(output, { limits: { ...LIMITS, maxDiagramLinks: LIMITS.maxDiagramLinks + 1 } })).toEqual(
+      []
+    )
   })
 
   it('names every code once', () => {
@@ -684,9 +738,7 @@ describe('validateModelOutput', () => {
     const artifact = ReviewArtifactSchema.parse(
       JSON.parse(await readFile(path.join(PACKAGE_ROOT, '__fixtures__/pr-278/review.json'), 'utf8'))
     )
-    const { config } = await import('../project-config.js').then(m =>
-      m.loadProjectConfig(PACKAGE_ROOT)
-    )
+    const { config } = await import('../project-config.js').then(m => m.loadProjectConfig(PACKAGE_ROOT))
     const result = validateModelOutput(artifactToModelOutput(artifact), {
       files: artifact.files,
       caps: TEXT_CAPS,

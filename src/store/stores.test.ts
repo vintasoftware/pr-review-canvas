@@ -6,7 +6,13 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { emptyComments } from '../contract/comments.js'
 import { emptyState } from '../contract/state.js'
 import { createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
-import { BASE_SHA, HEAD_SHA, SYNTHETIC_BLOBS, SYNTHETIC_DIFF, syntheticArtifact } from '../testing/synthetic.js'
+import {
+  BASE_SHA,
+  HEAD_SHA,
+  SYNTHETIC_BLOBS,
+  SYNTHETIC_DIFF,
+  syntheticArtifact,
+} from '../testing/synthetic.js'
 import { isNotFound, readJson, readText, writeJsonAtomic, writeTextAtomic } from './atomic-json.js'
 import { createCanvasStore } from './canvas-store.js'
 import { ensureDataDir, repoDir, resolveDataDir } from './data-dir.js'
@@ -50,7 +56,9 @@ describe('data-dir', () => {
   it('sits next to the git common dir, or where the override says', () => {
     expect(resolveDataDir({ commonDir: '/work/repo/.git' })).toBe('/work/repo/.pr-review')
     expect(resolveDataDir({ commonDir: '/work/repo/.git/worktrees/x/../..' })).toBe('/work/repo/.pr-review')
-    expect(resolveDataDir({ override: '/elsewhere/data', commonDir: '/work/repo/.git' })).toBe('/elsewhere/data')
+    expect(resolveDataDir({ override: '/elsewhere/data', commonDir: '/work/repo/.git' })).toBe(
+      '/elsewhere/data'
+    )
     expect(resolveDataDir({ override: '', commonDir: '/work/repo/.git' })).toBe('/work/repo/.pr-review')
     expect(repoDir('/d', TEST_REPO)).toBe('/d/repos/acme__widgets')
   })
@@ -158,10 +166,9 @@ describe('derived-store', () => {
     ])
     expect(Object.keys(first.patches)).toEqual(first.files.map(f => f.key))
     const derived = store.derivedDir(HEAD_SHA)
-    expect((await readFile(path.join(derived, 'patches', 'src_app_ts.diff'), 'utf8')).split('\n').slice(0, 2)).toEqual([
-      '### hunk src_app_ts#1',
-      '@@ -1,4 +1,5 @@',
-    ])
+    expect(
+      (await readFile(path.join(derived, 'patches', 'src_app_ts.diff'), 'utf8')).split('\n').slice(0, 2)
+    ).toEqual(['### hunk src_app_ts#1', '@@ -1,4 +1,5 @@'])
     expect((await stat(path.join(derived, 'head', 'src', 'app.ts'))).isFile()).toBe(true)
     expect((await stat(path.join(derived, 'base', 'src', 'gone.ts'))).isFile()).toBe(true)
     const diffCalls = g.calls.filter(c => c[0] === 'diff').length
@@ -199,7 +206,10 @@ describe('derived-store', () => {
       '  return a()',
       '}',
     ])
-    expect(await store.readLines(HEAD_SHA, 'base', 'src/gone.ts', 1, 5)).toEqual(['export const old = 1', '// bye'])
+    expect(await store.readLines(HEAD_SHA, 'base', 'src/gone.ts', 1, 5)).toEqual([
+      'export const old = 1',
+      '// bye',
+    ])
     expect(await store.readLines(HEAD_SHA, 'head', 'src/missing.ts', 1, 2)).toBeNull()
     expect(await store.readLines(HEAD_SHA, 'head', '../../package.json', 1, 2)).toBeNull()
   })

@@ -1,13 +1,14 @@
 // Report each prerequisite separately so a broken setup still explains what needs fixing.
 import { randomBytes } from 'node:crypto'
-import { rm, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { DCG_INSTALL_HINT, DCG_POLICY_HINT, DcgPolicyError, SANDBOX_INSTALL_HINT } from '../acpx/sandbox.js'
 import { parseGithubRemote } from '../config.js'
 import type { Git } from '../git/git.js'
 import type { GitHubClient } from '../github/gh.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME } from './install-skill.js'
+import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
+import { skillContent } from './skill-content.js'
 
 export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill', 'dcg'] as const
 export type DoctorCheckName = (typeof DOCTOR_CHECKS)[number]
@@ -21,7 +22,11 @@ export interface DoctorCheck {
 export interface DoctorReport {
   ok: boolean
   version: string
-  checks: Record<DoctorCheckName, DoctorCheck> & { acpx?: DoctorCheck; sandbox?: DoctorCheck; chatGuards?: DoctorCheck }
+  checks: Record<DoctorCheckName, DoctorCheck> & {
+    acpx?: DoctorCheck
+    sandbox?: DoctorCheck
+    chatGuards?: DoctorCheck
+  }
 }
 
 export interface DoctorDeps {
@@ -34,8 +39,7 @@ export interface DoctorDeps {
   checkChatGuards: (cwd: string) => Promise<string>
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
   dataDirOverride?: string | undefined
-  /** Answers whether a file can be read; the skill check asks for the SKILL.md inside. */
-  exists: (file: string) => Promise<boolean>
+  readSkill?: (file: string) => Promise<string | null>
 }
 
 function message(err: unknown): string {
@@ -59,17 +63,42 @@ async function checkDataDir(dir: string): Promise<DoctorCheck> {
 }
 
 /** The skill the generation flow needs, in either harness's directory. */
-async function checkSkill(repoRoot: string | null, exists: DoctorDeps['exists']): Promise<DoctorCheck> {
+export async function checkSkill(
+  repoRoot: string | null,
+  readSkill: NonNullable<DoctorDeps['readSkill']> = file => readFile(file, 'utf8')
+): Promise<DoctorCheck> {
   if (repoRoot === null) {
     return { ok: false, detail: 'no repository, so no skill directory to look in', hint: 'run from a clone' }
   }
   const targets = [CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR].map(dir => path.join(repoRoot, dir, SKILL_NAME))
   const found: string[] = []
+  const stale: string[] = []
+  let expected: string
+  try {
+    expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
+  } catch (err) {
+    return { ok: false, detail: message(err), hint: 'reinstall the pr-review package' }
+  }
   for (const target of targets) {
-    // The file the harness reads, not the directory: an empty directory, a dangling link, and
-    // an unreadable file all install nothing.
-    if (await exists(path.join(target, 'SKILL.md'))) {
+    try {
+      const text = await readSkill(path.join(target, 'SKILL.md'))
+      if (text === null) continue
       found.push(path.relative(repoRoot, target))
+      const { hash, frontmatter } = skillContent(text)
+      if (hash !== expected || frontmatter.getIn(['metadata', 'body-sha256']) !== expected) {
+        stale.push(path.relative(repoRoot, target))
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        stale.push(`${path.relative(repoRoot, target)}: ${message(err)}`)
+      }
+    }
+  }
+  if (stale.length > 0) {
+    return {
+      ok: false,
+      detail: `outdated or modified skill: ${stale.join(', ')}`,
+      hint: 'run `pr-review install-skill`',
     }
   }
   if (found.length === 0) {
@@ -95,7 +124,10 @@ async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {
 }
 
 /** Runs core checks and, with allChecks, checks acpx for AI Chat. */
-export async function runDoctorChecks(deps: DoctorDeps, options: { allChecks?: boolean } = {}): Promise<DoctorReport> {
+export async function runDoctorChecks(
+  deps: DoctorDeps,
+  options: { allChecks?: boolean } = {}
+): Promise<DoctorReport> {
   let repoRoot: string | null = null
   let git: DoctorCheck
   try {
@@ -133,13 +165,19 @@ export async function runDoctorChecks(deps: DoctorDeps, options: { allChecks?: b
     dataDir = { ok: false, detail: message(err), hint: 'pass --data-dir <dir>' }
   }
 
-  const skill = await checkSkill(repoRoot, deps.exists)
+  const skill = await checkSkill(repoRoot, deps.readSkill)
   let dcg: DoctorCheck
   try {
     const version = (await deps.dcgVersion()).trim()
-    dcg = version ? { ok: true, detail: version } : { ok: false, detail: 'dcg did not report a version', hint: DCG_INSTALL_HINT }
+    dcg = version
+      ? { ok: true, detail: version }
+      : { ok: false, detail: 'dcg did not report a version', hint: DCG_INSTALL_HINT }
   } catch (err) {
-    dcg = { ok: false, detail: message(err), hint: err instanceof DcgPolicyError ? DCG_POLICY_HINT : DCG_INSTALL_HINT }
+    dcg = {
+      ok: false,
+      detail: message(err),
+      hint: err instanceof DcgPolicyError ? DCG_POLICY_HINT : DCG_INSTALL_HINT,
+    }
   }
   const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill, dcg }
   if (options.allChecks) {
@@ -151,31 +189,59 @@ export async function runDoctorChecks(deps: DoctorDeps, options: { allChecks?: b
       checks.sandbox = { ok: false, detail: message(err), hint: SANDBOX_INSTALL_HINT }
     }
     try {
-      if (!repoRoot || !checks.sandbox.ok || !dcg.ok) throw new Error('Fix the repository, sandbox, and dcg checks before checking chat hooks.')
+      if (!repoRoot || !checks.sandbox.ok || !dcg.ok)
+        throw new Error('Fix the repository, sandbox, and dcg checks before checking chat hooks.')
       checks.chatGuards = { ok: true, detail: await deps.checkChatGuards(repoRoot) }
     } catch (err) {
-      checks.chatGuards = { ok: false, detail: message(err), hint: 'see README AI Chat setup; chat requires active dcg hooks' }
+      checks.chatGuards = {
+        ok: false,
+        detail: message(err),
+        hint: 'see README AI Chat setup; chat requires active dcg hooks',
+      }
     }
   }
   return { ok: Object.values(checks).every(check => check.ok), version: deps.version, checks }
 }
 
 const CHECK_LABELS: Record<keyof DoctorReport['checks'], string> = {
-  git: 'Git repository', origin: 'GitHub origin', gh: 'GitHub CLI', ghAuth: 'GitHub login',
-  dataDir: 'Canvas storage', skill: 'Review skill', dcg: 'dcg and required chat policy',
-  acpx: 'acpx', sandbox: 'Filesystem sandbox', chatGuards: 'Native chat hooks',
+  git: 'Git repository',
+  origin: 'GitHub origin',
+  gh: 'GitHub CLI',
+  ghAuth: 'GitHub login',
+  dataDir: 'Canvas storage',
+  skill: 'Review skill',
+  dcg: 'dcg and required chat policy',
+  acpx: 'acpx',
+  sandbox: 'Filesystem sandbox',
+  chatGuards: 'Native chat hooks',
 }
 
 /** Plain text works in terminals, pasted bug reports, and agent prompts. */
-export function formatDoctorReport(report: DoctorReport, platform: NodeJS.Platform = process.platform): string {
+export function formatDoctorReport(
+  report: DoctorReport,
+  platform: NodeJS.Platform = process.platform
+): string {
   const windows = platform === 'win32'
   const mac = platform === 'darwin'
   const installs: Partial<Record<keyof DoctorReport['checks'], string>> = {
-    git: windows ? 'Install Git for Windows from https://git-scm.com/downloads/win.' : mac ? 'Install Git with `xcode-select --install`.' : 'Install Git with `sudo apt-get update` then `sudo apt-get install git`.',
-    gh: windows ? 'Install GitHub CLI with `winget install --id GitHub.cli`.' : mac ? 'Install GitHub CLI with `brew install gh`, or use https://cli.github.com.' : 'Install GitHub CLI using https://github.com/cli/cli/blob/trunk/docs/install_linux.md.',
+    git: windows
+      ? 'Install Git for Windows from https://git-scm.com/downloads/win.'
+      : mac
+        ? 'Install Git with `xcode-select --install`.'
+        : 'Install Git with `sudo apt-get update` then `sudo apt-get install git`.',
+    gh: windows
+      ? 'Install GitHub CLI with `winget install --id GitHub.cli`.'
+      : mac
+        ? 'Install GitHub CLI with `brew install gh`, or use https://cli.github.com.'
+        : 'Install GitHub CLI using https://github.com/cli/cli/blob/trunk/docs/install_linux.md.',
     acpx: 'Install acpx with `npm install -g acpx@0.13.2`, then check `acpx --version`.',
-    sandbox: windows ? 'Install Ubuntu WSL2 from PowerShell with `wsl --install -d Ubuntu`. Inside Ubuntu, run `sudo apt-get update` then `sudo apt-get install bubblewrap`.' : mac ? 'Check that `/usr/bin/sandbox-exec` is available and permitted by your macOS security policy.' : 'Run `sudo apt-get update` then `sudo apt-get install bubblewrap`. If installed, check whether your OS permits unprivileged user namespaces.',
-    chatGuards: 'Install at least one supported agent: `npm install -g @openai/codex@0.154.0` or `npm install -g @anthropic-ai/claude-code@2.1.272`. Sign in with `codex login` or `claude auth login`. If already installed, follow the reported hook/configuration repair instructions.',
+    sandbox: windows
+      ? 'Install Ubuntu WSL2 from PowerShell with `wsl --install -d Ubuntu`. Inside Ubuntu, run `sudo apt-get update` then `sudo apt-get install bubblewrap`.'
+      : mac
+        ? 'Check that `/usr/bin/sandbox-exec` is available and permitted by your macOS security policy.'
+        : 'Run `sudo apt-get update` then `sudo apt-get install bubblewrap`. If installed, check whether your OS permits unprivileged user namespaces.',
+    chatGuards:
+      'Install at least one supported agent: `npm install -g @openai/codex@0.154.0` or `npm install -g @anthropic-ai/claude-code@2.1.272`. Sign in with `codex login` or `claude auth login`. If already installed, follow the reported hook/configuration repair instructions.',
   }
   const lines = [`pr-review doctor ${report.version}`, '']
   const failures: string[] = []
@@ -184,13 +250,27 @@ export function formatDoctorReport(report: DoctorReport, platform: NodeJS.Platfo
     lines.push(`${check.ok ? 'PASS' : 'FAIL'} ${CHECK_LABELS[name]}: ${check.detail}`)
     if (!check.ok) {
       const steps = [installs[name], check.hint].filter((step): step is string => Boolean(step))
-      failures.push(`${failures.length + 1}. ${CHECK_LABELS[name]}\n${steps.map(step => `   ${step}`).join('\n')}`)
+      failures.push(
+        `${failures.length + 1}. ${CHECK_LABELS[name]}\n${steps.map(step => `   ${step}`).join('\n')}`
+      )
     }
   }
   if (failures.length) lines.push('', 'Next steps', ...failures)
-  if (windows) lines.push('', 'Windows 11: the review app uses Windows Git/GitHub CLI. Chat uses Ubuntu WSL2: install Node 22.18+ or 24+, dcg, acpx, and your agent there. Check `wsl --exec node --version` and `wsl --exec dcg --version`. A Windows-only installation does not satisfy chat checks.')
-  lines.push('', report.ok ? 'All requested checks passed.' : `${failures.length} check(s) failed. Fix the items above and rerun the same doctor command.`)
-  if (!report.checks.acpx) lines.push('Run `pr-review doctor --all-checks` to also check chat dependencies, containment, and native hooks.')
+  if (windows)
+    lines.push(
+      '',
+      'Windows 11: the review app uses Windows Git/GitHub CLI. Chat uses Ubuntu WSL2: install Node 22.18+ or 24+, dcg, acpx, and your agent there. Check `wsl --exec node --version` and `wsl --exec dcg --version`. A Windows-only installation does not satisfy chat checks.'
+    )
+  lines.push(
+    '',
+    report.ok
+      ? 'All requested checks passed.'
+      : `${failures.length} check(s) failed. Fix the items above and rerun the same doctor command.`
+  )
+  if (!report.checks.acpx)
+    lines.push(
+      'Run `pr-review doctor --all-checks` to also check chat dependencies, containment, and native hooks.'
+    )
   lines.push('Use `--json` for the structured report.')
   return lines.join('\n')
 }

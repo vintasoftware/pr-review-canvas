@@ -78,7 +78,11 @@ describe('validateFolds', () => {
         where,
         message: `${where}: a file with annotations or attention points must start expanded`,
       },
-      { code: 'FOLD_INVALID', where, message: `${where}: fold 1 would hide an annotation or attention point` },
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message: `${where}: fold 1 would hide an annotation or attention point`,
+      },
     ])
   })
 
@@ -97,7 +101,11 @@ describe('validateFolds', () => {
     ]
 
     expect(validateFolds(output, files)).toEqual([
-      { code: 'FOLD_INVALID', where, message: `${where}: fold 1 would hide an annotation or attention point` },
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message: `${where}: fold 1 would hide an annotation or attention point`,
+      },
     ])
   })
 
@@ -113,7 +121,11 @@ describe('validateFolds', () => {
         where,
         message: `${where}: a file with annotations or attention points must start expanded`,
       },
-      { code: 'FOLD_INVALID', where, message: `${where}: fold 1 would hide an annotation or attention point` },
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message: `${where}: fold 1 would hide an annotation or attention point`,
+      },
     ])
   })
 

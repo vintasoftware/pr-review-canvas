@@ -11,35 +11,16 @@ version: 1
 #   generation-strict.md: review-prompts/generation-strict.md
 #   generation-surfacing.md: review-prompts/generation-surfacing.md
 #   quality-standards.md: review-prompts/quality-standards.md
-#   layers-default.md: review-prompts/layers-default.md
+#   layering-guidance.md: review-prompts/layering-guidance.md
 #   chat-seed.md: review-prompts/chat-seed.md
 
-# Default layer taxonomy, in review order. Ids are referenced by `defaultLayerId` in a canvas.
-layers:
-  - id: contracts
-    title: Contracts and schemas
-    description: Types, schemas, and the shapes two modules must agree on.
-  - id: data-access
-    title: Data access
-    description: Queries, repositories, migrations, storage.
-  - id: mappers
-    title: Mappers and DTOs
-    description: Code that turns records into view models and back.
-  - id: hooks-state
-    title: Hooks and state
-    description: Hooks, query definitions, stores, state machines.
-  - id: views
-    title: Views
-    description: Components, screens, styles, copy.
-  - id: routes-wiring
-    title: Routes and wiring
-    description: Route files, providers, shells, entry points.
-  - id: policy-config
-    title: Policy and config
-    description: Access policies, environment variables, feature flags, CI, deployment, docs.
-  - id: mechanical
-    title: Mechanical changes
-    description: Renames, lockfiles, generated files, formatting, moved code.
+# Optional layer guidance. Omit or leave empty for agent-chosen semantic sections.
+layers: []
+# layers:
+#   - id: checkout
+#     title: Checkout
+#     description: Cart totals, payment processing, and order creation.
+#     paths: ['src/checkout/**']
 
 # Blast radius tags. Glob patterns against changed paths; the label shows in the header and the rail.
 highRisk:
@@ -49,10 +30,10 @@ highRisk:
     label: auth
 
 generation:
-  mode: strict          # strict: quality review; surfacing: walkthrough that audits as it reads
-  maxRepairRounds: 3      # publish retries the skill may make after a failed validation
+  mode: strict # strict: quality review; surfacing: walkthrough that audits as it reads
+  maxRepairRounds: 3 # publish retries the skill may make after a failed validation
   inlineDiffMaxLines: 1500 # diffs longer than this are read per file instead of inlined in the prompt
-  smallPrHunks: 10         # at most this many hunks: one layer unless concerns differ, fewer annotations
+  smallPrHunks: 10 # at most this many hunks: one layer unless concerns differ, fewer annotations
   # caps:                  # override the text caps (characters)
   #   summary: 1800
   #   rationale: 300
@@ -65,4 +46,4 @@ tests:
   patterns: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**']
 
 chat:
-  enabled: true            # false removes the chat pane and its routes
+  enabled: true # false removes the chat pane and its routes

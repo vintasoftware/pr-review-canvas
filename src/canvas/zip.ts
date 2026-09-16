@@ -14,6 +14,12 @@ export const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const
 export interface CanvasZipContents {
   manifest: CanvasManifest
   artifact: ReviewArtifact
+  /**
+   * The pull request the canvas was made for, once for every reader: the two entries are proved to
+   * agree below, and the two ways of holding "no pull request" are settled into one. A canvas
+   * generated before the pull request existed names none, and joins the PR that imports it.
+   */
+  prNumber?: number
 }
 
 /** A zip that cannot be read as a canvas. `issues` names the problems, never the file's content. */
@@ -66,7 +72,10 @@ function decode(entry: Uint8Array | undefined, name: string, issues: string[]): 
  */
 export function readCanvasZip(bytes: Uint8Array): CanvasZipContents {
   if (bytes.length > CANVAS_ZIP_MAX_BYTES) {
-    throw new CanvasZipError('CANVAS_TOO_LARGE', `the canvas zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`)
+    throw new CanvasZipError(
+      'CANVAS_TOO_LARGE',
+      `the canvas zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`
+    )
   }
   if (!hasZipMagic(bytes)) {
     throw new CanvasZipError('CANVAS_INVALID', 'this file is not a zip', [
@@ -119,5 +128,19 @@ export function readCanvasZip(bytes: Uint8Array): CanvasZipContents {
       `${REVIEW_ENTRY} is for ${artifact.data.pr.headSha.slice(0, 7)} while ${MANIFEST_ENTRY} says ${manifest.data.headSha.slice(0, 7)}`,
     ])
   }
-  return { manifest: manifest.data, artifact: artifact.data }
+  // A canvas generated before the pull request existed carries no number in review.json, and the
+  // export stamps one on the manifest; only two numbers that are both there must agree.
+  const artifactPr = artifact.data.pr.number
+  const manifestPr = manifest.data.prNumber
+  if (artifactPr !== null && manifestPr !== undefined && artifactPr !== manifestPr) {
+    throw new CanvasZipError('CANVAS_INVALID', 'the zip is not a review canvas', [
+      `${REVIEW_ENTRY} is for #${artifactPr} while ${MANIFEST_ENTRY} says #${manifestPr}`,
+    ])
+  }
+  const contents: CanvasZipContents = { manifest: manifest.data, artifact: artifact.data }
+  const prNumber = manifestPr ?? artifactPr
+  if (prNumber !== null) {
+    contents.prNumber = prNumber
+  }
+  return contents
 }

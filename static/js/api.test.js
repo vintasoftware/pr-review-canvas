@@ -98,7 +98,10 @@ describe('pollBundle', () => {
     const impl = async url => {
       urls.push(String(url))
       const a = answers[Math.min(i++, answers.length - 1)] ?? { status: 500, body: null }
-      return new Response(JSON.stringify(a.body), { status: a.status, headers: { 'content-type': 'application/json' } })
+      return new Response(JSON.stringify(a.body), {
+        status: a.status,
+        headers: { 'content-type': 'application/json' },
+      })
     }
     return { impl, urls }
   }
@@ -260,7 +263,9 @@ describe('the review routes', () => {
   })
 
   it('passes the server refusal on as an ApiError', async () => {
-    const f = fakeFetch(409, { error: { code: 'SIGNOFF_INCOMPLETE', message: '1 layer is not reviewed yet' } })
+    const f = fakeFetch(409, {
+      error: { code: 'SIGNOFF_INCOMPLETE', message: '1 layer is not reviewed yet' },
+    })
     await expect(postReview(42, { event: 'APPROVE' }, { fetchImpl: f.impl })).rejects.toMatchObject({
       code: 'SIGNOFF_INCOMPLETE',
       status: 409,
@@ -271,7 +276,10 @@ describe('the review routes', () => {
 describe('saveAppearance', () => {
   it("puts the skin and the theme on their own route, and uses the page's fetch when none is given", async () => {
     const f = fakeFetch(200, { skin: 'github', theme: 'auto' })
-    expect(await saveAppearance({ skin: 'github' }, { fetchImpl: f.impl })).toEqual({ skin: 'github', theme: 'auto' })
+    expect(await saveAppearance({ skin: 'github' }, { fetchImpl: f.impl })).toEqual({
+      skin: 'github',
+      theme: 'auto',
+    })
     expect(f.calls[0]?.url).toBe('/api/appearance')
     expect(f.calls[0]?.init?.method).toBe('PUT')
     expect(f.calls[0]?.init?.body).toBe('{"skin":"github"}')
@@ -363,12 +371,19 @@ describe('streamChat', () => {
     /** @type {typeof fetch} */
     const impl = async () =>
       new Response(
-        streamOf(['event: chunk\ndata: {"text":"a"}\n\n', 'event: done\ndata: {"stopReason":"end_turn"}\n\n']),
+        streamOf([
+          'event: chunk\ndata: {"text":"a"}\n\n',
+          'event: done\ndata: {"stopReason":"end_turn"}\n\n',
+        ]),
         {
           status: 200,
         }
       )
-    await streamChat(42, { message: 'x', context: { kind: 'pr' } }, { onEvent: e => seen.push(e), fetchImpl: impl })
+    await streamChat(
+      42,
+      { message: 'x', context: { kind: 'pr' } },
+      { onEvent: e => seen.push(e), fetchImpl: impl }
+    )
     expect(seen).toEqual([
       { event: 'chunk', data: { text: 'a' } },
       { event: 'done', data: { stopReason: 'end_turn' } },
@@ -424,4 +439,23 @@ describe('streamChat', () => {
       streamChat(42, { message: 'x', context: { kind: 'pr' } }, { onEvent: () => undefined, fetchImpl: impl })
     ).resolves.toBeUndefined()
   })
+})
+
+it('pins reviewed-state writes to the selected canvas commit', async () => {
+  const f = fakeFetch(200, {})
+  await putReviewed(42, 'layer:1', true, { headSha: 'abc123', fetchImpl: f.impl })
+  expect(JSON.parse(String(f.calls[0]?.init?.body))).toEqual({ reviewed: true, headSha: 'abc123' })
+})
+
+it('streams chat using the browser fetch when no override is supplied', async () => {
+  const impl = vi.fn().mockResolvedValue(new Response('event: done\ndata: {"ok":true}\n\n'))
+  vi.stubGlobal('fetch', impl)
+  try {
+    const onEvent = vi.fn()
+    await streamChat(42, { message: 'hello', context: { kind: 'pr' } }, { onEvent })
+    expect(impl).toHaveBeenCalledTimes(1)
+    expect(onEvent).toHaveBeenCalledWith({ event: 'done', data: { ok: true } })
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

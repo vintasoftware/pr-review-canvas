@@ -10,7 +10,8 @@ let tops
 /** @type {() => void} */
 let resized
 
-const selected = () => Array.from(document.querySelectorAll('.rail a[aria-current]'), a => a.getAttribute('href'))
+const selected = () =>
+  Array.from(document.querySelectorAll('.rail a[aria-current]'), a => a.getAttribute('href'))
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -22,7 +23,9 @@ beforeEach(() => {
     <main><section id="overview"></section><section id="layer-auth"></section>
     <section id="layer-storage"></section><section id="layer-other"></section></main>`
   for (const section of document.querySelectorAll('main section')) {
-    vi.spyOn(section, 'getBoundingClientRect').mockImplementation(() => new DOMRect(240, tops[section.id], 800, 400))
+    vi.spyOn(section, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(240, tops[section.id], 800, 400)
+    )
   }
   vi.stubGlobal(
     'ResizeObserver',

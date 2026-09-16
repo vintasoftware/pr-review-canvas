@@ -35,7 +35,9 @@ attempt('hardlinkOverwrite', () => {
   writeFileSync(link, 'destroyed')
 })
 if (process.env.WSL_DISTRO_NAME) {
-  attempt('windowsInterop', () => execFileSync('/mnt/c/Windows/System32/cmd.exe', ['/c', 'exit', '0'], { stdio: 'pipe' }))
+  attempt('windowsInterop', () =>
+    execFileSync('/mnt/c/Windows/System32/cmd.exe', ['/c', 'exit', '0'], { stdio: 'pipe' })
+  )
 }
 attempt('scratch', () => writeFileSync(path.join(process.env.TMPDIR, 'scratch.txt'), 'scratch works'))
 const queueHash = createHash('sha256').update(process.env.HOME).digest('hex').slice(0, 10)
@@ -46,9 +48,25 @@ await new Promise((resolve, reject) => {
 })
 await new Promise(resolve => queue.close(resolve))
 results.queueSocket = 'allowed'
-const stage = args.includes('ensure') ? 'ensure' : args.includes('cancel') ? 'cancel' : args.includes('exec') ? 'exec' : 'prompt'
+const stage = args.includes('ensure')
+  ? 'ensure'
+  : args.includes('cancel')
+    ? 'cancel'
+    : args.includes('exec')
+      ? 'exec'
+      : 'prompt'
 writeFileSync(path.join(process.env.HOME, `${stage}.json`), JSON.stringify(results))
-console.log(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: {
-  sessionId: 'containment', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: JSON.stringify(results) } },
-} }))
+console.log(
+  JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'session/update',
+    params: {
+      sessionId: 'containment',
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text: JSON.stringify(results) },
+      },
+    },
+  })
+)
 console.log(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { stopReason: 'end_turn' } }))

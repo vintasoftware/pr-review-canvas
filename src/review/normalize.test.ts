@@ -31,7 +31,7 @@ function input(): NormalizeInput {
 describe('normalize', () => {
   it('preserves fold descriptions when converting between model output and a saved artifact', () => {
     const output = artifactToModelOutput(syntheticArtifact())
-    const file = output.layers[0]?.files.find(file => file.path === 'src/app.test.ts')
+    const file = output.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')
     if (file === undefined) {
       throw new Error('missing test file')
     }
@@ -41,7 +41,7 @@ describe('normalize', () => {
     const saved = normalize(output, input())
     const restored = artifactToModelOutput(saved)
 
-    expect(restored.layers[0]?.files.find(file => file.path === 'src/app.test.ts')).toEqual(file)
+    expect(restored.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')).toEqual(file)
   })
 
   it('assigns ids, marks tests, tags risk from config and model, and adds one point per missing test', () => {
@@ -194,12 +194,40 @@ describe('normalize', () => {
     expect(layerIdForLine(layers, FILES, 'nope.ts', 'new', 1)).toBeUndefined()
   })
 
+  it('preserves model risk reasons across a saved-artifact round trip and excludes config tags', () => {
+    const saved = syntheticArtifact()
+    saved.layers[0]!.risk = [
+      { label: 'auth', source: 'config' },
+      { label: 'perf', source: 'model', reason: 'hot path' },
+      { label: 'data', source: 'model' },
+    ]
+    const model = artifactToModelOutput(saved)
+    expect(model.layers[0]?.risk).toEqual([
+      { label: 'perf', reason: 'hot path' },
+      { label: 'data', reason: '' },
+    ])
+    expect(normalize(model, { ...input(), highRisk: [] }).layers[0]?.risk).toEqual([
+      { label: 'perf', source: 'model', reason: 'hot path' },
+      { label: 'data', source: 'model', reason: '' },
+    ])
+  })
+
+  it('skips synthetic missing-test points when the layer has no files to anchor them to', () => {
+    const model = artifactToModelOutput(syntheticArtifact())
+    model.layers[0]!.files = []
+    const saved = normalize(model, input())
+    expect(saved.points.some(point => point.origin === 'tests')).toBe(false)
+  })
+
   it('round-trips through artifactToModelOutput and normalize', () => {
     const original = syntheticArtifact()
     const model = artifactToModelOutput(original)
     expect(model.layers[0]?.risk).toBeUndefined()
     expect(model.points.map(p => p.title)).toEqual(['Sum instead of product', 'Deleted file had no owner'])
-    const again = normalize(model, { ...input(), highRisk: [{ pattern: 'src/new-name.ts', label: 'schema' }] })
+    const again = normalize(model, {
+      ...input(),
+      highRisk: [{ pattern: 'src/new-name.ts', label: 'schema' }],
+    })
     expect(again.layers.map(l => ({ ...l, risk: undefined }))).toEqual(
       original.layers.map(l => ({ ...l, risk: undefined }))
     )

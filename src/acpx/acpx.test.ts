@@ -21,11 +21,12 @@ import {
 import type { AgentEvent } from './events.js'
 
 // Process protocol tests inject unsandboxed transports; sandbox.test.ts exercises containment.
-const createAgentRunner: typeof createProductionAgentRunner = options => createProductionAgentRunner({
-  spawnImpl: spawn,
-  execFileImpl: (file, args, opts) => promisify(execFile)(file, args, { ...opts, encoding: 'utf8' }),
-  ...options,
-})
+const createAgentRunner: typeof createProductionAgentRunner = options =>
+  createProductionAgentRunner({
+    spawnImpl: spawn,
+    execFileImpl: (file, args, opts) => promisify(execFile)(file, args, { ...opts, encoding: 'utf8' }),
+    ...options,
+  })
 
 const FAKE = path.join(PACKAGE_ROOT, 'src', 'testing', 'fake-acpx.mjs')
 
@@ -44,7 +45,12 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  for (const key of ['FAKE_ACPX_MODE', 'FAKE_ACPX_ARGV_FILE', 'FAKE_ACPX_PROMPT_FILE', 'FAKE_ACPX_CANCEL_FILE']) {
+  for (const key of [
+    'FAKE_ACPX_MODE',
+    'FAKE_ACPX_ARGV_FILE',
+    'FAKE_ACPX_PROMPT_FILE',
+    'FAKE_ACPX_CANCEL_FILE',
+  ]) {
     delete process.env[key]
   }
   await rm(tmp, { recursive: true, force: true })
@@ -90,18 +96,9 @@ describe('argument building', () => {
   })
 
   it('puts the model, the turn cap, the agent, and the session on the prompt command line', () => {
-    expect(buildPromptArgs({ ...RUN, cwd: '/repo', model: 'claude-opus-5', maxTurns: 4 }).slice(-10)).toEqual([
-      '--model',
-      'claude-opus-5',
-      '--max-turns',
-      '4',
-      'claude',
-      '-s',
-      RUN.session,
-      'prompt',
-      '-f',
-      '-',
-    ])
+    expect(buildPromptArgs({ ...RUN, cwd: '/repo', model: 'claude-opus-5', maxTurns: 4 }).slice(-10)).toEqual(
+      ['--model', 'claude-opus-5', '--max-turns', '4', 'claude', '-s', RUN.session, 'prompt', '-f', '-']
+    )
     expect(buildPromptArgs({ ...RUN, cwd: '/repo', model: '' }).slice(-6)).toEqual([
       'claude',
       '-s',
@@ -181,7 +178,9 @@ describe('createAgentRunner().run', () => {
   it('reports a usage error with the exit code acpx used', async () => {
     env.FAKE_ACPX_MODE = 'usage'
     const events = await collect(runner().run(RUN).events)
-    expect(events).toEqual([{ type: 'error', code: 'AGENT_USAGE', message: "error: unknown option '--nope'" }])
+    expect(events).toEqual([
+      { type: 'error', code: 'AGENT_USAGE', message: "error: unknown option '--nope'" },
+    ])
   })
 
   it('rejects a line that is not a message', async () => {
@@ -281,14 +280,18 @@ describe('createAgentRunner().run', () => {
 
   it('reports a binary that is not there', async () => {
     const events = await collect(createAgentRunner({ bin: path.join(tmp, 'no-such-acpx') }).run(RUN).events)
-    expect(events).toEqual([{ type: 'error', code: 'AGENT_MISSING', message: expect.stringContaining('ENOENT') }])
+    expect(events).toEqual([
+      { type: 'error', code: 'AGENT_MISSING', message: expect.stringContaining('ENOENT') },
+    ])
   })
 })
 
 describe('createAgentRunner().exec', () => {
   it('returns the agent reply of a one-shot run', async () => {
     env.FAKE_ACPX_MODE = 'ok'
-    expect(await runner().exec({ agent: 'claude', prompt: 'Reply OK', cwd: PACKAGE_ROOT, timeoutSec: 30 })).toEqual({
+    expect(
+      await runner().exec({ agent: 'claude', prompt: 'Reply OK', cwd: PACKAGE_ROOT, timeoutSec: 30 })
+    ).toEqual({
       ok: true,
       text: 'Yes. Covered at `src/a.ts:10`.',
     })
@@ -296,7 +299,12 @@ describe('createAgentRunner().exec', () => {
 
   it('returns the failure code when the agent is not logged in', async () => {
     env.FAKE_ACPX_MODE = 'auth'
-    const result = await runner().exec({ agent: 'codex', prompt: 'Reply OK', cwd: PACKAGE_ROOT, timeoutSec: 30 })
+    const result = await runner().exec({
+      agent: 'codex',
+      prompt: 'Reply OK',
+      cwd: PACKAGE_ROOT,
+      timeoutSec: 30,
+    })
     expect(result).toMatchObject({ ok: false, code: 'AGENT_AUTH_REQUIRED' })
   })
 
@@ -323,7 +331,11 @@ describe('createAgentRunner().exec', () => {
   it('reports a missing binary as such', async () => {
     const missing = createAgentRunner({ bin: path.join(tmp, 'no-such-acpx') })
     const result = await missing.exec({ agent: 'claude', prompt: 'x', cwd: PACKAGE_ROOT, timeoutSec: 5 })
-    expect(result).toMatchObject({ ok: false, code: 'AGENT_FAILED', message: expect.stringContaining('not installed') })
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'AGENT_FAILED',
+      message: expect.stringContaining('not installed'),
+    })
   })
 
   it('calls a run that never finished incomplete, even when it wrote an answer', async () => {
@@ -425,13 +437,13 @@ describe('createAgentRunner().acpxVersion and .availability', () => {
 
 describe('the runner in the odd cases', () => {
   it('reports a spawn that throws instead of failing later', async () => {
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: 'acpx',
       spawnImpl: () => {
         throw new Error('no processes left')
       },
     })
-    const run = runner.run(RUN)
+    const run = agentRunner.run(RUN)
     expect(await collect(run.events)).toEqual([
       { type: 'error', code: 'AGENT_MISSING', message: 'no processes left' },
     ])
@@ -441,7 +453,7 @@ describe('the runner in the odd cases', () => {
 
   it('reports a child that fails for a reason other than a missing binary', async () => {
     env.FAKE_ACPX_MODE = 'ok'
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: FAKE,
       spawnImpl: (file, args, options) => {
         const child = spawn(file, args, options)
@@ -449,26 +461,31 @@ describe('the runner in the odd cases', () => {
         return child
       },
     })
-    const events = await collect(runner.run(RUN).events)
+    const events = await collect(agentRunner.run(RUN).events)
     expect(events.at(-1)).toEqual({ type: 'error', code: 'AGENT_FAILED', message: 'boom' })
   })
 
   it('reports the exit code when the child says nothing on stderr', async () => {
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: process.execPath,
       spawnImpl: (_file, _args, options) => spawn(process.execPath, ['-e', 'process.exit(5)'], options),
     })
-    expect(await collect(runner.run(RUN).events)).toEqual([
-      { type: 'error', code: 'AGENT_PERMISSION_DENIED', message: 'the agent was denied a permission it needed' },
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      {
+        type: 'error',
+        code: 'AGENT_PERMISSION_DENIED',
+        message: 'the agent was denied a permission it needed',
+      },
     ])
   })
 
   it('rejects a partial line left behind when the child ends', async () => {
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: process.execPath,
-      spawnImpl: (_file, _args, options) => spawn(process.execPath, ['-e', 'process.stdout.write("{oops")'], options),
+      spawnImpl: (_file, _args, options) =>
+        spawn(process.execPath, ['-e', 'process.stdout.write("{oops")'], options),
     })
-    expect(await collect(runner.run(RUN).events)).toEqual([
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
       { type: 'error', code: 'AGENT_PROTOCOL_INVALID', message: expect.stringContaining('not JSON') },
     ])
   })
@@ -476,15 +493,15 @@ describe('the runner in the odd cases', () => {
   it('passes a timeout to the one-shot call and runs it in the repository', async () => {
     /** @type {Array<{ file: string; args: string[]; options: { cwd?: string; timeout?: number } }>} */
     const calls: Array<{ file: string; args: string[]; options: { cwd?: string; timeout?: number } }> = []
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: 'acpx',
       execFileImpl: async (file, args, options) => {
         calls.push({ file, args, options })
         return { stdout: '', stderr: '' }
       },
     })
-    await runner.exec({ agent: 'claude', prompt: 'Reply OK', cwd: '/repo', timeoutSec: 30 })
-    await runner.acpxVersion()
+    await agentRunner.exec({ agent: 'claude', prompt: 'Reply OK', cwd: '/repo', timeoutSec: 30 })
+    await agentRunner.acpxVersion()
     expect(calls[0]?.options).toEqual({ cwd: '/repo', timeout: 45_000, maxBuffer: 4 * 1024 * 1024 })
     expect(calls[1]?.options).toEqual({ timeout: 20_000, maxBuffer: 4 * 1024 * 1024 })
   })
@@ -516,27 +533,37 @@ describe('createAgentRunner().ensureSession', () => {
   it('asks acpx to create the named session', async () => {
     /** The arguments the call was made with. */
     const calls: string[][] = []
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: 'acpx',
       execFileImpl: async (_file, args) => {
         calls.push(args)
         return { stdout: '', stderr: '' }
       },
     })
-    await runner.ensureSession({ agent: 'codex', session: 'pr-review-a-b-42-codex-t1', cwd: '/repo', timeoutSec: 60 })
+    await agentRunner.ensureSession({
+      agent: 'codex',
+      session: 'pr-review-a-b-42-codex-t1',
+      cwd: '/repo',
+      timeoutSec: 60,
+    })
     expect(calls[0]?.slice(-5)).toEqual(['codex', 'sessions', 'ensure', '-s', 'pr-review-a-b-42-codex-t1'])
     expect(calls[0]).toContain('--no-terminal')
   })
 
   it('says nothing when acpx refuses, so the prompt can report the real failure', async () => {
-    const runner = createAgentRunner({
+    const agentRunner = createAgentRunner({
       bin: 'acpx',
       execFileImpl: async () => {
         throw Object.assign(new Error('nope'), { code: 1 })
       },
     })
     await expect(
-      runner.ensureSession({ agent: 'claude', session: 'pr-review-a-b-42-claude-t1', cwd: '/repo', timeoutSec: 60 })
+      agentRunner.ensureSession({
+        agent: 'claude',
+        session: 'pr-review-a-b-42-claude-t1',
+        cwd: '/repo',
+        timeoutSec: 60,
+      })
     ).resolves.toBeUndefined()
   })
 })

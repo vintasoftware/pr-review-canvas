@@ -37,7 +37,12 @@ async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['l
 }
 
 /** A change set before a PR exists: the refs must already be in the clone. */
-async function resolveRefs(ctx: AppContext, base: string, head: string, log: PrepareOptions['log']): Promise<Pr> {
+async function resolveRefs(
+  ctx: AppContext,
+  base: string,
+  head: string,
+  log: PrepareOptions['log']
+): Promise<Pr> {
   log('fetch-refs')
   const headSha = await ctx.git.revParse(head)
   const mergeBaseSha = await ctx.git.mergeBase(base, headSha)
@@ -93,7 +98,11 @@ async function clearCanvasDir(canvasDir: string): Promise<void> {
   }
 }
 
-export async function prepare(ctx: AppContext, target: PrepareTarget, opts: PrepareOptions): Promise<PrepareResult> {
+export async function prepare(
+  ctx: AppContext,
+  target: PrepareTarget,
+  opts: PrepareOptions
+): Promise<PrepareResult> {
   const pr =
     target.kind === 'pr'
       ? await resolvePr(ctx, target.number, opts.log)
@@ -116,7 +125,8 @@ export async function prepare(ctx: AppContext, target: PrepareTarget, opts: Prep
   const derived = await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)
   const additions = derived.files.reduce((n, f) => n + f.additions, 0)
   const deletions = derived.files.reduce((n, f) => n + f.deletions, 0)
-  const fullPr: Pr = target.kind === 'pr' ? pr : { ...pr, additions, deletions, changedFiles: derived.files.length }
+  const fullPr: Pr =
+    target.kind === 'pr' ? pr : { ...pr, additions, deletions, changedFiles: derived.files.length }
   const derivedDir = ctx.derived.derivedDir(pr.headSha)
   const config = ctx.projectConfig.config
 
@@ -152,14 +162,20 @@ export async function prepare(ctx: AppContext, target: PrepareTarget, opts: Prep
     largePr: isLargePr({ files: derived.files.length, additions, deletions }),
     preparedAt: ctx.now().toISOString(),
   }
-  const sources = opts.promptSources ?? (await loadPromptSources(undefined, {
-    repoRoot: ctx.config.repoRoot,
-    overrides: ctx.projectConfig.config.prompts,
-  }))
+  const sources =
+    opts.promptSources ??
+    (await loadPromptSources(undefined, {
+      repoRoot: ctx.config.repoRoot,
+      overrides: ctx.projectConfig.config.prompts,
+    }))
   await clearCanvasDir(canvasDir)
   await writeTextAtomic(promptPath, renderPrompt(context, derived.patches, sources))
   await writeJsonAtomic(contextPath, context)
   // The log keeps the whole history; publish counts attempts from this line on.
-  await appendFile(path.join(canvasDir, 'publish.log'), `${context.preparedAt} prepared ${pr.headSha}\n`, 'utf8')
+  await appendFile(
+    path.join(canvasDir, 'publish.log'),
+    `${context.preparedAt} prepared ${pr.headSha}\n`,
+    'utf8'
+  )
   return { ...result, status: 'prepared' }
 }

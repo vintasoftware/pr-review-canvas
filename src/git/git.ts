@@ -59,13 +59,56 @@ interface ExecResult {
   code: number
 }
 
+/**
+ * The repository state git hands to the processes a hook starts. Every one of them wins over the
+ * working directory, so a tool run from a hook — or from a shell that exported GIT_DIR — would
+ * otherwise read and write a repository nobody asked for. Dropping them is what lets the directory
+ * the caller passes name the repository.
+ *
+ * Other variables can redirect git too, and are deliberately kept. GIT_CONFIG_GLOBAL and
+ * GIT_CONFIG_SYSTEM relocate the files config is read from; unsetting them does not strip the
+ * credential helpers and proxies `fetch` needs, it sends git back to ~/.gitconfig and
+ * /etc/gitconfig, which is what breaks anyone who moved them on purpose — a container with no
+ * HOME, a CI image. GIT_CEILING_DIRECTORIES and GIT_DISCOVERY_ACROSS_FILESYSTEM are usually a
+ * deliberate fence around slow mounts; obeying one costs a clear "not a git repository", while
+ * overriding it sends git walking somewhere the user shut off. The inline config of
+ * GIT_CONFIG_COUNT needs no exception: git never hands it to a hook, so the rule above leaves it.
+ */
+export const REPO_ENV_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+] as const
+
+/**
+ * `env` without those variables. Everything else is kept, so ssh agents, credential helpers,
+ * proxies, and PATH still reach `fetch`.
+ */
+export function envWithoutRepo(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env }
+  for (const name of REPO_ENV_VARS) {
+    delete clean[name]
+  }
+  return clean
+}
+
 /** Runs git with an argument array; never a shell. */
 export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
   return new Promise(resolve => {
-    execFile('git', args, { cwd, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 }, (error, stdout, stderr) => {
-      const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
-      resolve({ stdout, stderr: stderr.toString('utf8'), code })
-    })
+    execFile(
+      'git',
+      args,
+      { cwd, env: envWithoutRepo(), encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
+        resolve({ stdout, stderr: stderr.toString('utf8'), code })
+      }
+    )
   })
 }
 

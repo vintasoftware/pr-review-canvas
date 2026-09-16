@@ -57,7 +57,10 @@ describe('readCappedBody', () => {
   })
 
   it('reads a body whose declared length fits', async () => {
-    const message = { headers: new Headers({ 'content-length': '2' }), body: streamOf(new Uint8Array([7, 8])) }
+    const message = {
+      headers: new Headers({ 'content-length': '2' }),
+      body: streamOf(new Uint8Array([7, 8])),
+    }
     expect(Array.from(await readCappedBody(message, 10))).toEqual([7, 8])
   })
 

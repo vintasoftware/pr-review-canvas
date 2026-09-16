@@ -14,7 +14,10 @@ try {
     env.PR_REVIEW_CLAUDE_BIN = executable('claude')
     env.CLAUDE_CODE_EXECUTABLE = fileURLToPath(new URL('./claude-chat.mjs', import.meta.url))
   }
-  const adapter = agent === 'codex' ? '@agentclientprotocol/codex-acp@1.11.0' : '@agentclientprotocol/claude-agent-acp@0.60.0'
+  const adapter =
+    agent === 'codex'
+      ? '@agentclientprotocol/codex-acp@1.11.0'
+      : '@agentclientprotocol/claude-agent-acp@0.60.0'
   run(executable('npx'), ['--yes', adapter], env)
 } catch (error) {
   process.stderr.write(`Chat command guard: ${error.message}\n`)

@@ -6,8 +6,22 @@ const PATCH = ['@@ -1,4 +1,5 @@', ' a', '+b', ' c', '@@ -10 +11,2 @@ ctx', ' x',
 describe('splitHunks', () => {
   it('splits a patch into hunks with their body lines', () => {
     expect(splitHunks(PATCH)).toEqual([
-      { header: '@@ -1,4 +1,5 @@', oldStart: 1, oldLines: 4, newStart: 1, newLines: 5, lines: [' a', '+b', ' c'] },
-      { header: '@@ -10 +11,2 @@ ctx', oldStart: 10, oldLines: 1, newStart: 11, newLines: 2, lines: [' x', '+y'] },
+      {
+        header: '@@ -1,4 +1,5 @@',
+        oldStart: 1,
+        oldLines: 4,
+        newStart: 1,
+        newLines: 5,
+        lines: [' a', '+b', ' c'],
+      },
+      {
+        header: '@@ -10 +11,2 @@ ctx',
+        oldStart: 10,
+        oldLines: 1,
+        newStart: 11,
+        newLines: 2,
+        lines: [' x', '+y'],
+      },
     ])
   })
 
@@ -31,9 +45,17 @@ describe('buildHunkIndex', () => {
 describe('labelPatch', () => {
   it('puts a hunk-id line before every header so a patch file names its hunks', () => {
     expect(labelPatch('k', PATCH)).toBe(
-      ['### hunk k#1', '@@ -1,4 +1,5 @@', ' a', '+b', ' c', '### hunk k#2', '@@ -10 +11,2 @@ ctx', ' x', '+y'].join(
-        '\n'
-      )
+      [
+        '### hunk k#1',
+        '@@ -1,4 +1,5 @@',
+        ' a',
+        '+b',
+        ' c',
+        '### hunk k#2',
+        '@@ -10 +11,2 @@ ctx',
+        ' x',
+        '+y',
+      ].join('\n')
     )
     expect(labelPatch('k', '')).toBe('')
   })

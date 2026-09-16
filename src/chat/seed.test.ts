@@ -2,7 +2,14 @@
 import { describe, expect, it } from 'vitest'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { syntheticArtifact } from '../testing/synthetic.js'
-import { layersMarkdown, loadSeedTemplate, pointsMarkdown, prMetaMarkdown, renderSeed, testsMarkdown } from './seed.js'
+import {
+  layersMarkdown,
+  loadSeedTemplate,
+  pointsMarkdown,
+  prMetaMarkdown,
+  renderSeed,
+  testsMarkdown,
+} from './seed.js'
 
 const artifact = syntheticArtifact()
 const PATHS = {

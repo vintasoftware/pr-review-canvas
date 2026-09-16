@@ -42,7 +42,9 @@ export function pointsMarkdown(artifact: ReviewArtifact): string {
   if (artifact.points.length === 0) {
     return '_none_'
   }
-  return artifact.points.map(p => `- ${p.level} · ${p.kind} · ${p.title} (\`${p.path}:${p.line}\`)`).join('\n')
+  return artifact.points
+    .map(p => `- ${p.level} · ${p.kind} · ${p.title} (\`${p.path}:${p.line}\`)`)
+    .join('\n')
 }
 
 export function testsMarkdown(artifact: ReviewArtifact): string {

@@ -1,12 +1,16 @@
 // @vitest-environment node
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { DcgPolicyError } from '../acpx/sandbox.js'
 import { type CliIo, runDoctor } from '../commands.js'
 import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
 import { type DoctorDeps, formatDoctorReport, runDoctorChecks } from './doctor.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME } from './install-skill.js'
+import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
 
+import { stampSkill } from './skill-content.js'
+
+const bundled = await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')
+const installed = stampSkill(bundled)
 const REPO = '/repo'
 
 function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
@@ -22,51 +26,98 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     dcgVersion: async () => '0.6.5',
     checkSandbox: async () => undefined,
     checkChatGuards: async () => 'chat hooks active',
-    exists: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md'),
+    readSkill: async file =>
+      file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md') ? installed : null,
     ...over,
   }
 }
 
 describe('runDoctorChecks', () => {
   it('explains how to repair remote-service rules when dcg is already installed', async () => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(),
-      dcgVersion: async () => { throw new DcgPolicyError('dcg is installed, but cloud.aws:s3-rb was not blocked') },
-    }))
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        dcgVersion: async () => {
+          throw new DcgPolicyError('dcg is installed, but cloud.aws:s3-rb was not blocked')
+        },
+      })
+    )
     expect(report.checks.dcg).toMatchObject({ ok: false, detail: expect.stringContaining('cloud.aws:s3-rb') })
     expect(report.checks.dcg.hint).toContain('no personal dcg configuration is needed')
     expect(report.checks.dcg.hint).toContain('restore or reinstall the app’s bundled policy')
   })
 
   it('fails all-checks when dcg is installed but an agent hook is inactive', async () => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(),
-      checkChatGuards: async () => { throw new Error('Codex hook is untrusted') },
-    }), { allChecks: true })
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        checkChatGuards: async () => {
+          throw new Error('Codex hook is untrusted')
+        },
+      }),
+      { allChecks: true }
+    )
     expect(report.ok).toBe(false)
     expect(report.checks.dcg.ok).toBe(true)
     expect(report.checks.chatGuards).toMatchObject({ ok: false, detail: 'Codex hook is untrusted' })
   })
 
   it.each(['missing', 'empty'])('requires dcg in the default doctor checks: %s', async mode => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(),
-      dcgVersion: async () => {
-        if (mode === 'missing') throw new Error('spawn dcg ENOENT')
-        return '   '
-      },
-    }))
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        dcgVersion: async () => {
+          if (mode === 'missing') throw new Error('spawn dcg ENOENT')
+          return '   '
+        },
+      })
+    )
     expect(report.ok).toBe(false)
-    expect(report.checks.dcg).toMatchObject({ ok: false, hint: expect.stringContaining('Install Destructive Command Guard') })
+    expect(report.checks.dcg).toMatchObject({
+      ok: false,
+      hint: expect.stringContaining('Install Destructive Command Guard'),
+    })
   })
 
   it('fails all-checks when the sandbox is installed but unusable', async () => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(),
-      checkSandbox: async () => { throw new Error('user namespaces disabled') },
-    }), { allChecks: true })
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        checkSandbox: async () => {
+          throw new Error('user namespaces disabled')
+        },
+      }),
+      { allChecks: true }
+    )
     expect(report.ok).toBe(false)
     expect(report.checks.sandbox).toMatchObject({ ok: false, detail: 'user namespaces disabled' })
+  })
+
+  it.each([
+    ['unstamped', bundled],
+    ['edited body with unchanged hash', installed + '\nlocal edit'],
+    ['older release', stampSkill(bundled + '\nold instructions')],
+    ['invalid frontmatter', 'broken'],
+  ])('reports a %s copy even when the other harness is current', async (_, stale) => {
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        readSkill: async file => (file.includes(CLAUDE_SKILLS_DIR) ? installed : stale),
+      })
+    )
+    expect(report.checks.skill.ok).toBe(false)
+    expect(report.checks.skill.detail).toContain(CODEX_SKILLS_DIR)
+    expect(report.checks.skill.hint).toBe('run `pr-review install-skill`')
+  })
+
+  it('accepts copies after Git converts line endings to CRLF', async () => {
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        readSkill: async () => installed.replace(/\n/g, '\r\n'),
+      })
+    )
+    expect(report.checks.skill.ok).toBe(true)
   })
 
   it('reports every check green on a working setup', async () => {
@@ -93,18 +144,20 @@ describe('runDoctorChecks', () => {
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: await makeTempDir(),
-        exists: async file => file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME),
+        readSkill: async () => {
+          throw Object.assign(new Error('is a directory'), { code: 'EISDIR' })
+        },
       })
     )
     expect(report.checks.skill.ok).toBe(false)
   })
 
-  it('names both skill directories when the skill is linked into both', async () => {
+  it('names both skill directories when the skill is copied into both', async () => {
     const dataDir = await makeTempDir()
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: dataDir,
-        exists: async () => true,
+        readSkill: async () => installed,
       })
     )
     expect(report.checks.skill).toEqual({
@@ -123,13 +176,17 @@ describe('runDoctorChecks', () => {
         git: createFakeGit({ commonDir: '/repo/.git', remotes: {} }),
         gh: createFakeGh({ auth: { installed: false, authenticated: false, detail: 'gh is not on PATH' } }),
         dataDirOverride: blocked,
-        exists: async () => false,
+        readSkill: async () => null,
       })
     )
     expect(report.ok).toBe(false)
     expect(report.checks.git.ok).toBe(false)
     expect(report.checks.git.hint).toBe('run from a clone or pass --repo <dir>')
-    expect(report.checks.origin).toEqual({ ok: false, detail: 'no origin remote', hint: 'add a github.com origin' })
+    expect(report.checks.origin).toEqual({
+      ok: false,
+      detail: 'no origin remote',
+      hint: 'add a github.com origin',
+    })
     expect(report.checks.gh).toEqual({
       ok: false,
       detail: 'gh is not on PATH',
@@ -156,7 +213,7 @@ describe('runDoctorChecks', () => {
           remotes: { origin: 'https://gitlab.com/acme/widgets.git' },
         }),
         dataDirOverride: dataDir,
-        exists: async () => false,
+        readSkill: async () => null,
       })
     )
     expect(report.checks.origin).toEqual({
@@ -178,7 +235,7 @@ describe('runDoctorChecks', () => {
         git: {
           ...git,
           topLevel: async (): Promise<string> => {
-            // eslint-disable-next-line no-throw-literal -- a child process can reject with a string
+            // A child process can reject with a string.
             throw 'not an Error'
           },
         },
@@ -221,10 +278,16 @@ describe('pr-review doctor', () => {
   })
 
   it('prints readable checks and installation instructions by default', async () => {
-    const code = await runDoctor(deps({
-      dataDirOverride: await makeTempDir(),
-      dcgVersion: async () => { throw new Error('dcg not found') },
-    }), [], io)
+    const code = await runDoctor(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        dcgVersion: async () => {
+          throw new Error('dcg not found')
+        },
+      }),
+      [],
+      io
+    )
     expect(code).toBe(1)
     expect(lines.join('\n')).toContain('PASS Git repository')
     expect(lines.join('\n')).toContain('FAIL dcg and required chat policy: dcg not found')
@@ -234,13 +297,21 @@ describe('pr-review doctor', () => {
   })
 
   it.each(['linux', 'darwin', 'win32'] as const)('gives installation instructions for %s', async platform => {
-    const report = await runDoctorChecks(deps({
-      dataDirOverride: await makeTempDir(), acpxVersion: async () => null,
-      checkSandbox: async () => { throw new Error('sandbox unavailable') },
-    }), { allChecks: true })
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        acpxVersion: async () => null,
+        checkSandbox: async () => {
+          throw new Error('sandbox unavailable')
+        },
+      }),
+      { allChecks: true }
+    )
     const text = formatDoctorReport(report, platform)
     expect(text).toContain('npm install -g acpx@0.13.2')
-    expect(text).toContain(platform === 'darwin' ? '/usr/bin/sandbox-exec' : 'sudo apt-get install bubblewrap')
+    expect(text).toContain(
+      platform === 'darwin' ? '/usr/bin/sandbox-exec' : 'sudo apt-get install bubblewrap'
+    )
     if (platform === 'win32') {
       expect(text).toContain('wsl --install -d Ubuntu')
       expect(text).toContain('A Windows-only installation does not satisfy chat checks')
@@ -267,12 +338,24 @@ describe('pr-review doctor', () => {
       exit: 1,
     })),
   ])('checks acpx with --all-checks when its version is $version', async ({ version, check, exit }) => {
-    const dependencies = deps({ dataDirOverride: await makeTempDir(), acpxVersion: vi.fn(async () => version) })
+    const dependencies = deps({
+      dataDirOverride: await makeTempDir(),
+      acpxVersion: vi.fn(async () => version),
+    })
     const core = await runDoctorChecks(dependencies)
     const code = await runDoctor(dependencies, ['--all-checks', '--json'], io)
     expect(code).toBe(exit)
     expect(lines.map(line => JSON.parse(line))).toEqual([
-      { ...core, ok: exit === 0, checks: { ...core.checks, chatGuards: { ok: true, detail: 'chat hooks active' }, sandbox: { ok: true, detail: 'filesystem containment is available' }, acpx: check } },
+      {
+        ...core,
+        ok: exit === 0,
+        checks: {
+          ...core.checks,
+          chatGuards: { ok: true, detail: 'chat hooks active' },
+          sandbox: { ok: true, detail: 'filesystem containment is available' },
+          acpx: check,
+        },
+      },
     ])
     expect(dependencies.acpxVersion).toHaveBeenCalledOnce()
   })
@@ -305,11 +388,20 @@ describe('pr-review doctor', () => {
   })
 
   it('keeps core failures when acpx is installed', async () => {
-    const dependencies = deps({ dataDirOverride: await makeTempDir(), exists: async () => false })
+    const dependencies = deps({ dataDirOverride: await makeTempDir(), readSkill: async () => null })
     const core = await runDoctorChecks(dependencies)
     expect(await runDoctor(dependencies, ['--all-checks', '--json'], io)).toBe(1)
     expect(lines.map(line => JSON.parse(line))).toEqual([
-      { ...core, ok: false, checks: { ...core.checks, chatGuards: { ok: true, detail: 'chat hooks active' }, sandbox: { ok: true, detail: 'filesystem containment is available' }, acpx: { ok: true, detail: '0.13.2' } } },
+      {
+        ...core,
+        ok: false,
+        checks: {
+          ...core.checks,
+          chatGuards: { ok: true, detail: 'chat hooks active' },
+          sandbox: { ok: true, detail: 'filesystem containment is available' },
+          acpx: { ok: true, detail: '0.13.2' },
+        },
+      },
     ])
   })
 

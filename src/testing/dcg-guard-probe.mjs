@@ -32,5 +32,9 @@ try {
   process.env.DCG_PACKS_DISABLE = 'core,cloud,kubernetes,infrastructure,database'
   writeFileSync(process.env.DCG_CONFIG, '[packs]\nenabled=[]\n')
   assert.equal(evaluate('aws s3 rb s3://pr-review-disposable-probe --force').allowed, false)
-  process.stdout.write('dcg policy, explanations, invalid input, missing evaluator, invalid output, timeout, and override isolation passed\n')
-} finally { rmSync(fixture, { recursive: true, force: true }) }
+  process.stdout.write(
+    'dcg policy, explanations, invalid input, missing evaluator, invalid output, timeout, and override isolation passed\n'
+  )
+} finally {
+  rmSync(fixture, { recursive: true, force: true })
+}

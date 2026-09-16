@@ -57,7 +57,9 @@ export const GenerationContextSchema = z.object({
   }),
   /** The globs that make a file a test here. Defaulted, so a context written before this
    * field existed still reads. */
-  tests: z.object({ patterns: z.array(z.string().min(1)) }).default(() => ({ patterns: [...DEFAULT_TEST_PATTERNS] })),
+  tests: z
+    .object({ patterns: z.array(z.string().min(1)) })
+    .default(() => ({ patterns: [...DEFAULT_TEST_PATTERNS] })),
   /** At most `generation.smallPrHunks` hunks: one layer unless concerns differ, fewer annotations. */
   smallPr: z.boolean(),
   /** More than 400 files or 50 000 changed lines: the prompt inlines nothing and tightens the caps. */

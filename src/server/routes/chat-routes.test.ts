@@ -62,6 +62,27 @@ afterEach(async () => {
 })
 
 describe('POST /api/prs/:n/chat', () => {
+  it.each([false, true])(
+    'logs a chat failure with its original stack (stream started: %s)',
+    async started => {
+      await warmDerived()
+      const logs: string[] = []
+      t.ctx.log = line => logs.push(line)
+      const failure = new Error('chat storage failed')
+      t.ctx.chat.send = async function* () {
+        if (started) yield { event: 'chunk', text: 'partial answer' }
+        throw failure
+      }
+      const response = await sendChat({ message: 'private question', context: { kind: 'pr' } })
+      expect(response.status).toBe(started ? 200 : 500)
+      expect(await response.text()).toContain('chat storage failed')
+      expect(logs).toHaveLength(1)
+      expect(logs[0]).toContain('[serve] POST /api/prs/42/chat 500 INTERNAL')
+      expect(logs[0]).toContain(failure.stack?.split('\n')[1]?.trim())
+      expect(logs[0]).not.toContain('private question')
+    }
+  )
+
   it('answers with an event stream of the turn', async () => {
     await warmDerived()
     const res = await sendChat({ message: 'is this covered?', context: { kind: 'pr' } })
@@ -79,7 +100,10 @@ describe('POST /api/prs/:n/chat', () => {
   it('sends the line range the reader selected to the agent', async () => {
     await warmDerived()
     await (
-      await sendChat({ message: 'why?', context: { kind: 'lines', path: 'src/app.ts', side: 'new', start: 2, end: 3 } })
+      await sendChat({
+        message: 'why?',
+        context: { kind: 'lines', path: 'src/app.ts', side: 'new', start: 2, end: 3 },
+      })
     ).text()
     expect(runner.runs[0]?.prompt).toContain('## Context: src/app.ts lines 2–3')
   })
@@ -111,6 +135,7 @@ describe('POST /api/prs/:n/chat', () => {
     await reader.read()
     await reader.cancel()
     expect(runner.cancelled).toEqual([T1])
+    await expect.poll(() => t.ctx.chat.busy(42)).toBe(false)
   })
 
   it('refuses a context the canvas does not have, with a status rather than a stream', async () => {
@@ -123,7 +148,11 @@ describe('POST /api/prs/:n/chat', () => {
   it('rejects a body that is not a message with a context', async () => {
     const bad = await sendChat({ message: '' })
     expect(bad.status).toBe(400)
-    const notJson = await createApp(t.ctx).request('/api/prs/42/chat', { method: 'POST', headers: POST, body: '{' })
+    const notJson = await createApp(t.ctx).request('/api/prs/42/chat', {
+      method: 'POST',
+      headers: POST,
+      body: '{',
+    })
     expect(notJson.status).toBe(400)
   })
 
@@ -166,7 +195,9 @@ describe('the chat thread routes', () => {
   })
 
   it('refuses a thread name that is not one of this pull request', async () => {
-    const res = await createApp(t.ctx).request('/api/prs/42/chat/threads/..%2F..%2Fetc/history', { headers: LOCAL })
+    const res = await createApp(t.ctx).request('/api/prs/42/chat/threads/..%2F..%2Fetc/history', {
+      headers: LOCAL,
+    })
     expect(res.status).toBe(404)
   })
 
@@ -200,7 +231,7 @@ describe('the settings routes', () => {
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
       smallPrHunks: 10,
-      layers: 8,
+      layers: 0,
       highRisk: 0,
     })
   })
@@ -259,7 +290,10 @@ describe('the settings routes', () => {
   })
 
   it('refuses to probe an agent it does not know', async () => {
-    const res = await createApp(t.ctx).request('/api/settings/agents/gemini/probe', { method: 'POST', headers: POST })
+    const res = await createApp(t.ctx).request('/api/settings/agents/gemini/probe', {
+      method: 'POST',
+      headers: POST,
+    })
     expect(res.status).toBe(400)
   })
 })
@@ -326,7 +360,9 @@ describe('the health check', () => {
       await createApp(t.ctx).request('/api/prs/42', { headers: LOCAL })
     )
     expect(bundle.chat).toEqual({ enabled: false, acpx: false, agent: 'claude', model: null })
-    expect(bundle.warnings).toContain('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
+    expect(bundle.warnings).toContain(
+      'acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on'
+    )
   })
 })
 

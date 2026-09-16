@@ -37,7 +37,12 @@ export async function buildCanvasZipFor(
   const number = prNumber ?? stored.prNumber
   const manifest: CanvasManifest = number === undefined ? stored : { ...stored, prNumber: number }
   const zip: CanvasZip = {
-    name: buildCanvasZipName({ repo: manifest.repo, headSha, prNumber: number }),
+    name: buildCanvasZipName({
+      repo: manifest.repo,
+      headSha,
+      prNumber: number,
+      generatedAt: manifest.generatedAt,
+    }),
     bytes: buildCanvasZip(manifest, artifact),
     headSha,
   }
@@ -64,7 +69,11 @@ async function isDirectory(target: string): Promise<boolean> {
 }
 
 /** `--out` names a file when it ends in `.zip` or is not an existing directory. */
-export async function resolveOutPath(out: string | undefined, defaultDir: string, name: string): Promise<string> {
+export async function resolveOutPath(
+  out: string | undefined,
+  defaultDir: string,
+  name: string
+): Promise<string> {
   if (out === undefined) {
     return path.join(defaultDir, name)
   }

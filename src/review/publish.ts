@@ -75,7 +75,11 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
   const file = path.join(canvasDir, 'model.json')
   const text = await readText(file)
   if (text === null) {
-    throw new PublishError('NOT_FOUND', `${file} does not exist`, 'write the model output there and publish again')
+    throw new PublishError(
+      'NOT_FOUND',
+      `${file} does not exist`,
+      'write the model output there and publish again'
+    )
   }
   return parseModelText(text, 'model.json')
 }
@@ -141,7 +145,11 @@ export async function validationInput(
   }
 }
 
-export function buildManifest(context: GenerationContext, artifact: ReviewArtifact, version: string): CanvasManifest {
+export function buildManifest(
+  context: GenerationContext,
+  artifact: ReviewArtifact,
+  version: string
+): CanvasManifest {
   const manifest: CanvasManifest = {
     formatVersion: 1,
     tool: { name: 'pr-review', version },
@@ -159,7 +167,11 @@ export function buildManifest(context: GenerationContext, artifact: ReviewArtifa
   return manifest
 }
 
-export async function publish(ctx: AppContext, canvasDir: string, opts: PublishOptions): Promise<PublishResult> {
+export async function publish(
+  ctx: AppContext,
+  canvasDir: string,
+  opts: PublishOptions
+): Promise<PublishResult> {
   const context = await readContext(canvasDir)
   if (!opts.allowStale) {
     const head = await currentHead(ctx, context)

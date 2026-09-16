@@ -39,7 +39,8 @@ export function createPrStore(repoRoot: string): PrStore {
     writeComments: (number, comments) => writeJsonAtomic(path.join(prDir(number), 'comments.json'), comments),
     readDiscovery: number =>
       readJsonOrDefault(path.join(prDir(number), 'discovery.json'), DiscoveryCacheSchema, () => null),
-    writeDiscovery: (number, discovery) => writeJsonAtomic(path.join(prDir(number), 'discovery.json'), discovery),
+    writeDiscovery: (number, discovery) =>
+      writeJsonAtomic(path.join(prDir(number), 'discovery.json'), discovery),
     listRecent: async limit => {
       let names: string[]
       try {

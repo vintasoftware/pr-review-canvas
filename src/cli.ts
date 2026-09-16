@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { createAgentRunner } from './acpx/acpx.js'
@@ -22,12 +21,22 @@ import { type ReviewArtifact, ReviewArtifactSchema } from './contract/review-art
 import { createGit } from './git/git.js'
 import { createGitHubClient } from './github/gh.js'
 import { loadProjectConfig } from './project-config.js'
+import { checkSkill } from './review/doctor.js'
 import { type AppContext, createAppContext, readPackageVersion } from './server/context.js'
 import { startServer } from './server/node-server.js'
 import { readJson } from './store/atomic-json.js'
 import { ensureDataDir } from './store/data-dir.js'
 
-const SUBCOMMANDS = ['serve', 'prepare', 'validate', 'publish', 'export', 'import', 'install-skill', 'doctor'] as const
+const SUBCOMMANDS = [
+  'serve',
+  'prepare',
+  'validate',
+  'publish',
+  'export',
+  'import',
+  'install-skill',
+  'doctor',
+] as const
 
 const USAGE = `usage: pr-review <command> [flags]
 
@@ -79,7 +88,8 @@ async function buildContext(
   )
   const projectConfig = await loadProjectConfig(config.repoRoot)
   await ensureDataDir(config.dataDir)
-  const fixtureArtifact = config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
+  const fixtureArtifact =
+    config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
   return createAppContext({ config, projectConfig, fixtureArtifact })
 }
 
@@ -110,6 +120,8 @@ async function serve(argv: string[]): Promise<number> {
     agent: values.agent,
     model: values.model,
   })
+  const skill = await checkSkill(ctx.config.repoRoot)
+  if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)
   startServer(ctx, line => process.stderr.write(`${line}\n`))
   return EXIT.ok
 }
@@ -127,17 +139,8 @@ async function doctorCommand(argv: string[]): Promise<number> {
       acpxVersion: () => createAgentRunner().acpxVersion(),
       dcgVersion: async () => dcgVersion(),
       checkSandbox: async () => checkSandbox(),
-      checkChatGuards: async cwd => checkChatGuards(cwd),
+      checkChatGuards: async repoRoot => checkChatGuards(repoRoot),
       dataDirOverride: dataDir ?? readEnv(process.env, 'PR_REVIEW_DATA_DIR'),
-      exists: async file => {
-        try {
-          // A read, so a dangling symlink and a directory both answer no.
-          await readFile(file)
-          return true
-        } catch {
-          return false
-        }
-      },
     },
     rest,
     io
@@ -148,7 +151,7 @@ async function installSkillCommand(argv: string[]): Promise<number> {
   const { repo, rest } = splitCommonFlags(argv)
   const cwd = process.cwd()
   const repoRoot = await resolveRepoRoot(createGit(repo === undefined ? cwd : path.resolve(cwd, repo)))
-  return runInstallSkill({ repoRoot, cwd, platform: process.platform }, rest, io)
+  return runInstallSkill({ repoRoot, cwd }, rest, io)
 }
 
 export async function main(argv: string[]): Promise<number> {

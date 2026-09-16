@@ -50,7 +50,9 @@ export function createNdjsonSplitter(lineMax: number = NDJSON_LINE_MAX): NdjsonS
         const raw = buffer.slice(0, at)
         buffer = buffer.slice(at + 1)
         if (raw.length > lineMax) {
-          throw new NdjsonError(`the agent wrote a line of ${raw.length} characters, over the ${lineMax} limit`)
+          throw new NdjsonError(
+            `the agent wrote a line of ${raw.length} characters, over the ${lineMax} limit`
+          )
         }
         out.push(...take(raw))
         at = buffer.indexOf('\n')

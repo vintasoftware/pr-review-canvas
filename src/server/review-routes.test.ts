@@ -113,13 +113,20 @@ describe('state routes', () => {
 
   it('marks one file of a layer reviewed through the id with a slash', async () => {
     const app = createApp(t.ctx)
-    const res = await app.request(...put('/api/prs/42/reviewed/layer:layer-1/file:src_app_ts', { reviewed: true }))
+    const res = await app.request(
+      ...put('/api/prs/42/reviewed/layer:layer-1/file:src_app_ts', { reviewed: true })
+    )
     expect((await json<StateResponse>(res)).state.reviewed).toEqual({ 'layer:layer-1/file:src_app_ts': true })
   })
 
   it('refuses a reviewed id that is not a layer or layer file', async () => {
     const app = createApp(t.ctx)
-    for (const id of ['nope:layer-1', 'layer:layer-1/file:a/b', 'layer:layer-1/nope:x', encodeURIComponent('../x')]) {
+    for (const id of [
+      'nope:layer-1',
+      'layer:layer-1/file:a/b',
+      'layer:layer-1/nope:x',
+      encodeURIComponent('../x'),
+    ]) {
       const res = await app.request(...put(`/api/prs/42/reviewed/${id}`, { reviewed: true }))
       expect([id, res.status]).toEqual([id, 400])
       expect((await json<{ error: { code: string } }>(res)).error.code).toBe('BAD_REQUEST')
@@ -140,7 +147,9 @@ describe('state routes', () => {
 
   it('dismisses a point with a reason and restores it', async () => {
     const app = createApp(t.ctx)
-    const off = await app.request(...put('/api/prs/42/points/fp-1/dismissed', { dismissed: true, reason: 'fine' }))
+    const off = await app.request(
+      ...put('/api/prs/42/points/fp-1/dismissed', { dismissed: true, reason: 'fine' })
+    )
     expect((await json<StateResponse>(off)).state.dismissed['fp-1']).toEqual({
       at: '2026-09-10T12:00:00.000Z',
       reason: 'fine',
@@ -234,7 +243,9 @@ describe('POST /api/prs/:n/comments', () => {
     const body = await json<PostCommentResponse>(res)
     expect(body.kind).toBe('review')
     expect(body.comment.id).toBe(5001)
-    expect(body.state.posted).toEqual([{ commentId: 5001, pointFingerprint: 'fp-1', at: '2026-09-10T12:00:00.000Z' }])
+    expect(body.state.posted).toEqual([
+      { commentId: 5001, pointFingerprint: 'fp-1', at: '2026-09-10T12:00:00.000Z' },
+    ])
     expect(gh.calls.filter(c => c.kind === 'post')[0]?.body).toEqual({
       body: 'Look at this',
       commit_id: HEAD_SHA,
@@ -250,7 +261,9 @@ describe('POST /api/prs/:n/comments', () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
-    const reply = await app.request(...post('/api/prs/42/comments', { kind: 'reply', inReplyToId: 1001, body: 'ok' }))
+    const reply = await app.request(
+      ...post('/api/prs/42/comments', { kind: 'reply', inReplyToId: 1001, body: 'ok' })
+    )
     expect((await json<PostCommentResponse>(reply)).comment.id).toBe(5002)
     const issue = await app.request(...post('/api/prs/42/comments', { kind: 'issue', body: 'Overall fine' }))
     const issueBody = await json<PostCommentResponse>(issue)
@@ -263,7 +276,13 @@ describe('POST /api/prs/:n/comments', () => {
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     const res = await app.request(
-      ...post('/api/prs/42/comments', { kind: 'inline', path: 'src/app.ts', line: 400, side: 'new', body: 'x' })
+      ...post('/api/prs/42/comments', {
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 400,
+        side: 'new',
+        body: 'x',
+      })
     )
     expect(res.status).toBe(422)
     expect(await json(res)).toEqual({
@@ -377,7 +396,9 @@ describe('POST /api/prs/:n/comments', () => {
     })
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
-    const caps = await json<{ canComment: string }>(await app.request('/api/prs/42/capabilities', { headers: LOCAL }))
+    const caps = await json<{ canComment: string }>(
+      await app.request('/api/prs/42/capabilities', { headers: LOCAL })
+    )
     expect(caps.canComment).toBe('unknown')
     const res = await app.request(...post('/api/prs/42/comments', { kind: 'issue', body: 'x' }))
     expect(res.status).toBe(201)
@@ -400,7 +421,9 @@ describe('POST /api/prs/:n/comments', () => {
     })
     expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
     // The head the page names is the one it was drawn for, so the post goes through.
-    const ok = await app.request(...post('/api/prs/42/comments', { kind: 'issue', body: 'x', headSha: HEAD_SHA }))
+    const ok = await app.request(
+      ...post('/api/prs/42/comments', { kind: 'issue', body: 'x', headSha: HEAD_SHA })
+    )
     expect(ok.status).toBe(201)
   })
 
@@ -500,7 +523,9 @@ describe('POST /api/prs/:n/review', () => {
     const app = createApp(t.ctx)
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
     expect(res.status).toBe(409)
-    expect((await json<{ error: { message: string } }>(res)).error.message).toBe('2 layers are not reviewed yet')
+    expect((await json<{ error: { message: string } }>(res)).error.message).toBe(
+      '2 layers are not reviewed yet'
+    )
   })
 
   it('approves with the generated body once every layer is reviewed', async () => {
@@ -544,7 +569,9 @@ describe('POST /api/prs/:n/review', () => {
     const gh = ghFor42({ postRoutes: POST_ROUTES })
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
-    const res = await app.request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES', body: 'edited by hand' }))
+    const res = await app.request(
+      ...post('/api/prs/42/review', { event: 'REQUEST_CHANGES', body: 'edited by hand' })
+    )
     expect(res.status).toBe(201)
     expect(gh.calls.find(c => c.kind === 'post')?.body).toEqual({
       event: 'REQUEST_CHANGES',
@@ -567,7 +594,9 @@ describe('POST /api/prs/:n/review', () => {
     const gh = ghFor42({ postRoutes: POST_ROUTES })
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
-    const res = await app.request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES', headSha: 'c'.repeat(40) }))
+    const res = await app.request(
+      ...post('/api/prs/42/review', { event: 'REQUEST_CHANGES', headSha: 'c'.repeat(40) })
+    )
     expect(res.status).toBe(409)
     expect((await json<{ error: { code: string } }>(res)).error.code).toBe('CANVAS_STALE')
     expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
@@ -619,7 +648,9 @@ describe('POST /api/prs/:n/review', () => {
       await app.request('/api/prs/42', { headers: LOCAL })
     )
     expect(bundle.state.reviewed).toEqual({})
-    const body = await json<{ body: string }>(await app.request('/api/prs/42/review/body', { headers: LOCAL }))
+    const body = await json<{ body: string }>(
+      await app.request('/api/prs/42/review/body', { headers: LOCAL })
+    )
     expect(body.body).toContain('Reviewed 0 of 1 layer')
   })
 

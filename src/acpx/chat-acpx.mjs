@@ -11,7 +11,8 @@ try {
   if (index < 2) throw new Error('Missing chat command options.')
   while (args[index] === '--model' || args[index] === '--max-turns') index += 2
   const agent = args[index]
-  if (agent !== 'claude' && agent !== 'codex') throw new Error('AI Chat only supports the guarded Claude and Codex adapters.')
+  if (agent !== 'claude' && agent !== 'codex')
+    throw new Error('AI Chat only supports the guarded Claude and Codex adapters.')
   const launcher = fileURLToPath(new URL('./guarded-agent.mjs', import.meta.url))
   args.splice(index, 1, '--agent', `${quote(process.execPath)} ${quote(launcher)} ${agent}`)
   run(executable('acpx'), args)

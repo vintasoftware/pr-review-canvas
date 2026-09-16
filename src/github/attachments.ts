@@ -89,14 +89,25 @@ export function collectCandidates(sources: DiscoverySources, repo: Repo): Attach
   return candidates
 }
 
-/** The canvas for this head wins, then one exported for this PR, then the one attached last. */
+/** True when the name names a pull request, and it is not the one being looked at. */
+function namesAnotherPr(c: AttachmentCandidate, prNumber: number): boolean {
+  return c.parsed.prNumber !== undefined && c.parsed.prNumber !== prNumber
+}
+
+/**
+ * The canvas for this head wins, then one exported for this PR, then the one attached last. A name
+ * that carries another pull request's number sorts below all of them: import refuses it, so it may
+ * never take a place in the try budget from an attachment that could be used.
+ */
 export function rankCandidates(
   candidates: AttachmentCandidate[],
   target: { headSha: string; prNumber: number }
 ): AttachmentCandidate[] {
-  const sha7 = target.headSha.slice(0, 7)
+  const shaPrefix = target.headSha.slice(0, 8)
   const score = (c: AttachmentCandidate): number =>
-    (c.parsed.sha7 === sha7 ? 2 : 0) + (c.parsed.prNumber === target.prNumber ? 1 : 0)
+    namesAnotherPr(c, target.prNumber)
+      ? -1
+      : (c.parsed.shaPrefix === shaPrefix ? 2 : 0) + (c.parsed.prNumber === target.prNumber ? 1 : 0)
   return [...candidates].sort(
     (a, b) => score(b) - score(a) || b.postedAt.localeCompare(a.postedAt) || b.order - a.order
   )
@@ -203,6 +214,9 @@ export function importFailureReason(err: unknown): DownloadFailure {
   if (err.code === 'CANVAS_TOO_LARGE') {
     return 'too-large'
   }
+  if (err.code === 'CANVAS_PR_MISMATCH') {
+    return 'pr-mismatch'
+  }
   return err.code === 'CANVAS_REPO_MISMATCH' ? 'name-mismatch' : 'not-zip'
 }
 
@@ -261,7 +275,16 @@ async function tryCandidate(
   const shared = {
     url: candidate.url,
     name: candidate.name,
-    matchesHead: candidate.parsed.sha7 === pr.headSha.slice(0, 7),
+    matchesHead: candidate.parsed.shaPrefix === pr.headSha.slice(0, 8),
+  }
+  // A name that carries another pull request's number is a zip attached to the wrong PR. Import
+  // would refuse it anyway, so it is reported without spending a download on it.
+  if (namesAnotherPr(candidate, prNumber)) {
+    return {
+      sharedCanvas: { ...shared, downloadable: false, reason: 'pr-mismatch' },
+      imported: null,
+      warnings: [`${candidate.name} was exported for #${candidate.parsed.prNumber}, not #${prNumber}`],
+    }
   }
   const download = await downloadAttachment(ctx, candidate.url)
   if (!download.ok) {

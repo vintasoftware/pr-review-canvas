@@ -33,7 +33,11 @@ export const THREADS_QUERY = `query($owner: String!, $name: String!, $number: In
  * The ids of every review comment that sits in a resolved thread. REST has no resolved flag,
  * so this one GraphQL query is joined to the REST comments by id.
  */
-export async function fetchResolvedCommentIds(gh: GitHubClient, repo: Repo, number: number): Promise<Set<number>> {
+export async function fetchResolvedCommentIds(
+  gh: GitHubClient,
+  repo: Repo,
+  number: number
+): Promise<Set<number>> {
   const resolved = new Set<number>()
   let after: string | null = null
   for (;;) {

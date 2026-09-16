@@ -40,10 +40,8 @@ Sign in to GitHub with `gh auth login`.
 Install the command globally once, for use in any project:
 
 ```bash
-npm install -g git+ssh://git@github.com/vintasoftware/pr-review-canvas.git
+npm install -g @vintasoftware/pr-review-canvas
 ```
-
-The repository is currently private, so you need repository access and GitHub SSH authentication.
 
 ## Set up a project
 
@@ -54,12 +52,14 @@ pr-review doctor --all-checks
 ```
 
 `install-skill` sets up **both Claude Code and Codex** in one command: `.claude/skills/pr-review-canvas`
-and `.agents/skills/pr-review-canvas`, respectively. It also adds `.pr-review/settings.yml` to the
+and `.agents/skills/pr-review-canvas`, respectively. These are portable copies you can commit to Git.
+Re-run `pr-review install-skill` after upgrading the CLI to refresh them. It also adds `.pr-review/settings.yml` to the
 project's `.gitignore`. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
 `doctor` checks Git, your GitHub remote, the GitHub CLI and its login, write access to the local
-canvas directory, the review skill, and **Destructive Command Guard (`dcg`)**. Install dcg using
+canvas directory, whether installed skills match the current package, and **Destructive Command
+Guard (`dcg`)**. Install dcg using
 the [upstream installation instructions](https://github.com/Dicklesworthstone/destructive_command_guard#quick-install)
 and verify `dcg --version`. Doctor fails with exit code `1` and an installation hint when dcg
 is missing, fails to run, or fails the required chat policy probes. The probes evaluate command
@@ -71,6 +71,9 @@ Use `pr-review doctor --json` for the structured report, or
 Chat enables remote-service rules through its bundled dcg policy, even if your personal dcg
 configuration leaves them disabled. You do not install these rules separately. If the installed
 dcg cannot evaluate them, doctor fails and explains how to upgrade dcg or restore the app's policy.
+
+`serve` automatically runs the skill check and warns on stderr if a skill is missing, outdated,
+or modified. The warning includes the reinstall command and does not block startup.
 
 ### AI Chat setup
 
@@ -201,60 +204,65 @@ Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKIL
 
 ### Project prompt templates
 
-A global install reads `pr-review.config.yml` from the project root. Use its `prompts`
-map to replace individual templates with files you keep in the project's Git repository:
+Customize generation and AI Chat prompts with the `prompts` map in your project's
+`pr-review.config.yml`:
 
 ```yaml
 prompts:
-  generation-format.md: review-prompts/generation-format.md
-  generation-surfacing.md: review-prompts/generation-surfacing.md
-  chat-seed.md: review-prompts/chat-seed.md
+    generation-format.md: review-prompts/generation-format.md
+    generation-surfacing.md: review-prompts/generation-surfacing.md
+    chat-seed.md: review-prompts/chat-seed.md
 ```
 
-To start from the installed templates (for an npm global install):
+Copy the installed templates to start editing (for an npm global install):
 
 ```bash
 mkdir -p review-prompts
-cp "$(npm root -g)/pr-review-canvas/prompts/"*.md review-prompts/
+cp "$(npm root -g)/@vintasoftware/pr-review-canvas/prompts/"*.md review-prompts/
 ```
 
-Edit the copies and add entries only for the templates you want to override. Commit
-`pr-review.config.yml` and the referenced files together. Paths resolve from the project
-root, including when running from a subdirectory or using `--repo`. Absolute paths also
-work for personal templates shared across projects. Omitted entries use the installed
-package's defaults; a configured file that cannot be read causes an error.
-
-The six supported keys are `generation-format.md` (schema and output rules),
-`generation-strict.md` and `generation-surfacing.md` (mode wrappers),
-`quality-standards.md` (bundled code standards), `layers-default.md` (taxonomy prose),
-and `chat-seed.md` (the opening AI Chat instructions). `generation.mode` still selects
-the wrapper. The rulebook still takes precedence over code standards, and configured
-layers and caps still supply the template data.
-
-Each file replaces a whole template. Preserve its `{{TOKENS}}`, including `{{FORMAT}}`
-in generation wrappers, to keep the generated context and output contract. Unknown
-generation tokens fail rendering. Chat leaves unknown tokens as written. Prompt edits
-do not change the output schema or validation rules enforced by the tool. Overrides
-remain yours across tool upgrades; compare them with new bundled templates when upgrading.
+Edit the copies and configure only the templates you want to replace. Paths are relative
+to the project root. Omitted entries use the bundled defaults. Keep each template's
+`{{TOKENS}}`, including `{{FORMAT}}` in generation wrappers. Commit the config and
+referenced files together.
 
 Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
 Restart the server after changing the config; chat template edits apply to new threads.
+
+See the [prompt template reference](docs/reference.md#prompt-templates) for supported keys,
+path rules, validation, and upgrades.
+
+## Website
+
+The [project website](https://vintasoftware.github.io/pr-review-canvas/) introduces the review workflow with a real PR walkthrough. See [website development and publishing](docs/website.md) for local preview commands and the GitHub Pages deployment workflow.
 
 ## Contributing
 
 In a clone of this tool, use pnpm for the shared lockfile and development checks:
 
 ```bash
-pnpm install
-pnpm test
-pnpm typecheck
-pnpm exec playwright install chromium
-pnpm test:browser
-pnpm start --repo /path/to/your-project
+corepack pnpm --version
+corepack pnpm install --frozen-lockfile
+corepack pnpm hooks:install
+corepack pnpm exec playwright install --with-deps chromium
+corepack pnpm verify
+corepack pnpm start --repo /path/to/your-project
 ```
+
+The pre-commit hook runs `pnpm precommit`: lint, formatting, strict type checks, and tests.
+Any failure blocks the commit. Run `pnpm hooks:install`
+once per clone to enable it. Use `pnpm lint:fix` and `pnpm format` to apply automatic fixes.
+CI runs the same checks through `pnpm verify`, with coverage executing the unit tests once.
+
+Run the full `pnpm verify` before pushing. Keep branch coverage at least 96% when adding or
+changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful failure and boundary
+cases rather than lowering thresholds. Each CI job uploads `coverage-node-<version>` with branch
+locations and a summary; locally, these reports are in `coverage/` after `pnpm coverage`.
 
 Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`
 directory; keep it out of Git.
+
+See [Publishing to npm](docs/publishing.md) for release checks and first-publish instructions.
 
 ## License
 
