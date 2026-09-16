@@ -41,7 +41,7 @@ export function insertNoteRow(card, key, a) {
   }
   const range = a.startLine === a.endLine ? `line ${a.startLine}` : `lines ${a.startLine}–${a.endLine}`
   const html =
-    `<tr class="annot ann${approx ? ' is-approx' : ''}" ${DECORATION}="note"><td class="ln" colspan="3"></td><td class="code x">` +
+    `<tr class="annot ann${approx ? ' is-approx' : ''}" ${DECORATION}="note"><td class="code x" colspan="4">` +
     `<span class="lbl">Annotation · ${esc(range)}${a.side === 'old' ? ' (old)' : ''}</span>` +
     `<div class="prose">${renderMarkdown(a.text)}</div></td></tr>`
   last.insertAdjacentElement('afterend', firstRow(html))
@@ -102,7 +102,7 @@ export function threadRowHtml(t, opts) {
     : `<button class="cmd" type="button" data-act="thread-hide" data-thread="${rootId}">hide</button>`
   return (
     `<tr class="thread${t.resolved ? ' resolved' : ''}${hidden ? ' hidden-thread' : ''}" data-thread="${rootId}">` +
-    '<td class="ln" colspan="3"></td><td class="code x">' +
+    '<td class="code x" colspan="4">' +
     `<div class="thread-full"${collapsed ? ' hidden' : ''}>${comments}` +
     `<span class="tbtns"><button class="cmd" type="button" data-act="thread-reply" data-thread="${rootId}" data-needs-post>reply</button>${hide}</span></div>` +
     `<div class="thread-collapsed"${collapsed ? '' : ' hidden'}>${label} · ` +

@@ -61,8 +61,8 @@ export function composerHtml(opts) {
  */
 export function composerRowHtml(opts) {
   return (
-    `<tr class="composer" data-decoration="composer"><td class="ln" colspan="3"></td>` +
-    `<td class="code x">${composerHtml(opts)}</td></tr>`
+    `<tr class="composer" data-decoration="composer">` +
+    `<td class="code x" colspan="4">${composerHtml(opts)}</td></tr>`
   )
 }
 

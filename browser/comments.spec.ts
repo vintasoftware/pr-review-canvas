@@ -17,7 +17,9 @@ test('opens the editor below the code line and links to the posted comment', asy
     throw new Error('missing code or editor')
   }
   expect(bounds.y).toBeGreaterThanOrEqual(code.y + code.height)
-  expect(bounds.x).toBeGreaterThanOrEqual(code.x)
+  const rowBounds = await line.boundingBox()
+  const cellBounds = await editor.locator('td').boundingBox()
+  expect(Math.abs(cellBounds!.x - rowBounds!.x)).toBeLessThan(1)
   expect(bounds.width).toBeGreaterThan(code.width * 0.8)
   const screenshot = test.info().outputPath('inline-comment-editor.png')
   await page.screenshot({ path: screenshot })
