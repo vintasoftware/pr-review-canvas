@@ -106,7 +106,7 @@ describe('runDoctorChecks', () => {
       })
     )
     expect(report.checks.skill.ok).toBe(false)
-    expect(report.checks.skill.detail).toContain(CODEX_SKILLS_DIR)
+    expect(report.checks.skill.detail).toContain(path.join(CODEX_SKILLS_DIR, SKILL_NAME))
     expect(report.checks.skill.hint).toBe('run `pr-review install-skill`')
   })
 

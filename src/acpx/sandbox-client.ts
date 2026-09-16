@@ -14,6 +14,7 @@ const execute = promisify(execFile)
 
 /** Translate on the WSL side without blocking the Windows server's event loop. */
 export async function agentPathAsync(file: string): Promise<string> {
+  /* v8 ignore next -- @preserve */
   if (process.platform !== 'win32') return file
   try {
     const command = hostCommand('wslpath', ['-a', '-u', file])
@@ -48,11 +49,11 @@ export function createSandboxClient(options: SandboxOptions = {}) {
     const request = Buffer.from(
       JSON.stringify({ action: 'prepare', cwd: directory, sandbox: { stateRoot, home } })
     ).toString('base64')
-    const command = hostCommand(process.platform === 'win32' ? 'node' : process.execPath, [
-      bridge,
-      '--pr-review-sandbox',
-      request,
-    ])
+    const command = hostCommand(
+      /* v8 ignore next -- @preserve */
+      process.platform === 'win32' ? 'node' : process.execPath,
+      [bridge, '--pr-review-sandbox', request]
+    )
     try {
       const { stdout } = await execute(command.file, command.args, {
         cwd,

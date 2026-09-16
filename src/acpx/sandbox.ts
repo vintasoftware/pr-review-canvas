@@ -80,6 +80,9 @@ function runtimeEnv(root: string): string[] {
   ]
 }
 
+/* v8 ignore start -- @preserve */
+// Windows hosts reach the Linux sandbox through WSL. The Windows CI job exercises these paths;
+// the Linux coverage run cannot.
 function wslArgs(): string[] {
   const distro = process.env['PR_REVIEW_WSL_DISTRO']
   return [...(distro ? ['--distribution', distro] : []), '--exec']
@@ -142,6 +145,7 @@ function windowsSandboxCommand(
     ],
   }
 }
+/* v8 ignore stop -- @preserve */
 
 export function dcgVersion(): string {
   let version: string
@@ -173,6 +177,7 @@ export function dcgVersion(): string {
 
 /** Host paths stay read-only, including worktree git directories and external snapshots. */
 export function sandboxArgs(stateDir: string, cwd: string): string[] {
+  /* v8 ignore next -- @preserve */
   if (process.platform !== 'linux') throw new SandboxError(SANDBOX_INSTALL_HINT)
   const args = [
     '--die-with-parent',
@@ -236,6 +241,7 @@ export function sandboxArgs(stateDir: string, cwd: string): string[] {
   ]
   // WSL's interop interpreter can launch an unsandboxed Windows process. Mask it as well
   // as /run (which contains the interop sockets), even if a caller restores WSL_INTEROP.
+  /* v8 ignore next -- @preserve */
   if (existsSync('/init')) args.push('--ro-bind', '/dev/null', '/init')
   return args
 }
@@ -373,6 +379,8 @@ function prepareSandbox(options: SandboxOptions, cwd: string): SandboxCommand {
     [path.join(configHome, 'dcg/config.toml'), 'home/.config/dcg/config.toml'],
   ]
   initializeRuntime(stateDir, protectedConfigs, [
+    // Seatbelt cannot bind-mount the host settings, so macOS copies them into the runtime instead.
+    /* v8 ignore next -- @preserve */
     ...(process.platform === 'darwin' ? configs : []),
     [path.join(home, '.claude.json'), 'home/.claude.json'],
     [path.join(claudeHome, '.credentials.json'), 'home/.claude/.credentials.json'],
@@ -399,8 +407,10 @@ function prepareSandbox(options: SandboxOptions, cwd: string): SandboxCommand {
     }
   }
   const canonicalState = realpathSync(stateDir)
+  /* v8 ignore next -- @preserve */
   queueDirectory(process.platform === 'darwin' ? canonicalState : RUNTIME)
   const prefix =
+    /* v8 ignore next -- @preserve */
     process.platform === 'darwin'
       ? {
           file: '/usr/bin/sandbox-exec',
@@ -419,6 +429,7 @@ function prepareSandbox(options: SandboxOptions, cwd: string): SandboxCommand {
       }
     }
   }
+  /* v8 ignore next -- @preserve */
   if (process.platform !== 'darwin') prefix.args.push('--')
   return prefix
 }
@@ -433,6 +444,7 @@ export function createSandbox(
 ): (file: string, args: string[], cwd: string) => SandboxCommand {
   const prepared = new Map<string, SandboxCommand>()
   return (file, args, cwd) => {
+    /* v8 ignore next -- @preserve */
     if (process.platform === 'win32') return windowsSandboxCommand(file, args, cwd, 'launch', options)
     const repo = realpathSync(cwd)
     let prefix = prepared.get(repo)
@@ -447,6 +459,7 @@ export function createSandbox(
 /** Exercise namespaces and mounts, rather than accepting an installed but unusable binary. */
 export function checkSandbox(): void {
   try {
+    /* v8 ignore start -- @preserve */
     if (process.platform === 'win32') {
       const command = windowsSandboxCommand('', [], process.cwd(), 'check')
       execFileSync(command.file, command.args, { timeout: 20_000, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -461,6 +474,7 @@ export function checkSandbox(): void {
       return
     }
     if (process.platform !== 'linux') throw new SandboxError(SANDBOX_INSTALL_HINT)
+    /* v8 ignore stop -- @preserve */
     execFileSync(
       'bwrap',
       [
@@ -494,6 +508,7 @@ export function checkSandbox(): void {
 
 /** Check hooks for installed agents using the same contained homes and launchers as chat. */
 export function checkChatGuards(cwd: string): string {
+  /* v8 ignore start -- @preserve */
   if (process.platform === 'win32') {
     const command = windowsSandboxCommand('', [], cwd, 'checkGuards')
     return execFileSync(command.file, command.args, {
@@ -502,6 +517,7 @@ export function checkChatGuards(cwd: string): string {
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim()
   }
+  /* v8 ignore stop -- @preserve */
   const sandbox = createSandbox()
   const results: string[] = []
   for (const agent of ['codex', 'claude']) {
@@ -536,6 +552,7 @@ export function checkChatGuards(cwd: string): string {
 }
 
 // The Windows host launches this module with Linux Node (22.18+ or 24+) inside WSL2.
+/* v8 ignore start -- @preserve */
 if (process.argv[2] === '--pr-review-sandbox') {
   try {
     const request = JSON.parse(Buffer.from(process.argv[3] ?? '', 'base64').toString('utf8')) as {
@@ -561,3 +578,4 @@ if (process.argv[2] === '--pr-review-sandbox') {
     process.exitCode = 1
   }
 }
+/* v8 ignore stop -- @preserve */

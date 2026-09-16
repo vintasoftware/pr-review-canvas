@@ -53,6 +53,7 @@ it('activates both native guards inside filesystem containment', async () => {
       expect(output).toContain(agent === 'codex' ? 'hook enabled and trusted' : 'launch hooks verified')
     }
   } finally {
-    await rm(fixture, { recursive: true, force: true })
+    // Windows may still hold the runtime open briefly after the WSL process exits.
+    await rm(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 }, 150_000)

@@ -82,3 +82,19 @@ it.runIf(process.platform !== 'win32')(
   },
   90_000
 )
+
+it.runIf(process.platform === 'linux')(
+  'prepares under the host home when no storage options are given',
+  async () => {
+    const home = path.join(fixture, 'host-home')
+    await mkdir(home)
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('CODEX_HOME', path.join(home, '.codex'))
+    vi.stubEnv('CLAUDE_CONFIG_DIR', path.join(home, '.claude'))
+    vi.stubEnv('XDG_CONFIG_HOME', path.join(home, '.config'))
+    const command = await createSandboxClient()('/bin/true', [], fixture)
+    expect(command.file).toBe('bwrap')
+    expect(await readdir(path.join(home, '.local', 'state', 'pr-review-canvas', 'chat'))).toHaveLength(1)
+  },
+  60_000
+)
