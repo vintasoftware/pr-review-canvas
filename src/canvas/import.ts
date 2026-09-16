@@ -13,12 +13,21 @@ export interface ImportOptions {
   prNumber?: number | undefined
   /** The head the page is looking at. Absent means the canvas is taken as the current one. */
   currentHeadSha?: string | undefined
-  /** Accepts a canvas exported from another repository. */
+  /** Accepts a canvas exported from another repository, or for another pull request. */
   force?: boolean | undefined
 }
 
 function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
   return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
+}
+
+/**
+ * The pull request a canvas was made for: the manifest's number, else the one review.json holds.
+ * A canvas generated before the pull request existed names none, and joins the PR it is imported
+ * for.
+ */
+function canvasPrNumber(manifest: CanvasManifest, artifact: ReviewArtifact): number | undefined {
+  return manifest.prNumber ?? artifact.pr.number ?? undefined
 }
 
 /** The zip error as the HTTP envelope the routes and the CLI both report. */
@@ -98,6 +107,21 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
       )
     }
     warnings.push(`imported a canvas exported from ${from}`)
+  }
+
+  // The wrong zip attached to a pull request is the common mistake, and the head check below does
+  // not catch it: two open pull requests have unrelated heads either way.
+  const canvasPr = canvasPrNumber(manifest, artifact)
+  if (opts.prNumber !== undefined && canvasPr !== undefined && canvasPr !== opts.prNumber) {
+    if (opts.force !== true) {
+      throw new AppError(
+        'CANVAS_PR_MISMATCH',
+        `this canvas was exported for #${canvasPr}, and it is being imported for #${opts.prNumber}`,
+        400,
+        'import it with --force to use it anyway'
+      )
+    }
+    warnings.push(`imported a canvas exported for #${canvasPr}`)
   }
 
   const headSha = manifest.headSha

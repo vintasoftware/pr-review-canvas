@@ -34,6 +34,16 @@ function artifact(over: Partial<ReviewArtifact> = {}): ReviewArtifact {
   return { ...syntheticArtifact(), generatedAt: '2026-09-10T11:00:00.000Z', ...over }
 }
 
+/** A manifest of a canvas generated before the pull request was opened. */
+function beforeThePr(over: Partial<CanvasManifest> = {}): CanvasManifest {
+  const { prNumber: _none, ...rest } = manifest(over)
+  return rest
+}
+
+function prWithoutNumber(): ReviewArtifact['pr'] {
+  return { ...artifact().pr, number: null }
+}
+
 describe('canvas zip name', () => {
   it('builds and parses the PR form and the pre-PR form', () => {
     const withPr = buildCanvasZipName({
@@ -214,6 +224,18 @@ describe('canvas zip codec', () => {
     expect(err.issues).toHaveLength(1)
   })
 
+  it('refuses a zip whose two entries name different pull requests', () => {
+    const mismatched = buildCanvasZip(manifest({ prNumber: 7 }), artifact())
+    expect(catchZip(() => readCanvasZip(mismatched)).issues).toEqual([
+      'review.json is for #42 while manifest.json says #7',
+    ])
+    // A canvas generated before the pull request existed carries the number on the manifest only.
+    expect(
+      readCanvasZip(buildCanvasZip(manifest({ prNumber: 7 }), artifact({ pr: prWithoutNumber() }))).manifest
+        .prNumber
+    ).toBe(7)
+  })
+
   it('refuses a zip whose two entries name different commits', () => {
     const mismatched = buildCanvasZip(manifest({ headSha: OTHER_SHA, mergeBaseSha: BASE_SHA }), artifact())
     expect(catchZip(() => readCanvasZip(mismatched)).issues).toEqual([
@@ -317,7 +339,7 @@ describe('importCanvas', () => {
 
   it('keeps the stored canvas when the zip is not newer, and takes it when it is', async () => {
     t = await contextWithCommits()
-    const first = buildCanvasZip(manifest(), artifact({ summary: 'first' }))
+    const first = buildCanvasZip(beforeThePr(), artifact({ summary: 'first', pr: prWithoutNumber() }))
     await importCanvas(t.ctx, { bytes: first, currentHeadSha: HEAD_SHA })
     const same = await importCanvas(t.ctx, { bytes: first, prNumber: 9, currentHeadSha: HEAD_SHA })
     expect(same.status).toBe('exists')
@@ -355,6 +377,51 @@ describe('importCanvas', () => {
     })
     expect(forced.status).toBe('ready')
     expect(forced.warnings).toEqual(['imported a canvas exported from other/repo'])
+  })
+
+  it('refuses a canvas exported for another pull request unless force is passed', async () => {
+    t = await contextWithCommits()
+    const zip = buildCanvasZip(manifest(), artifact())
+    const err = await catchApp(() =>
+      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHeadSha: HEAD_SHA })
+    )
+    expect([err.code, err.status]).toEqual(['CANVAS_PR_MISMATCH', 400])
+    expect(err.message).toBe('this canvas was exported for #42, and it is being imported for #7')
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+    const forced = await importCanvas(t.ctx, {
+      bytes: zip,
+      prNumber: 7,
+      currentHeadSha: HEAD_SHA,
+      force: true,
+    })
+    expect(forced.status).toBe('ready')
+    expect(forced.warnings).toEqual(['imported a canvas exported for #42'])
+  })
+
+  it('reads the pull request from review.json when the manifest names none', async () => {
+    t = await contextWithCommits()
+    const zip = buildCanvasZip(beforeThePr(), artifact())
+    const err = await catchApp(() =>
+      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHeadSha: HEAD_SHA })
+    )
+    expect(err.code).toBe('CANVAS_PR_MISMATCH')
+  })
+
+  it('takes a canvas exported before the pull request existed, and one imported without a PR', async () => {
+    t = await contextWithCommits()
+    const prePr = buildCanvasZip(beforeThePr(), artifact({ pr: prWithoutNumber() }))
+    const joined = await importCanvas(t.ctx, { bytes: prePr, prNumber: 7, currentHeadSha: HEAD_SHA })
+    expect([joined.status, joined.warnings]).toEqual(['ready', []])
+    expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(7)
+    // `pr-review import <zip>` without --pr has no pull request to disagree with.
+    const anyPr = await importCanvas(t.ctx, {
+      bytes: buildCanvasZip(
+        manifest({ generatedAt: '2026-09-11T09:00:00.000Z' }),
+        artifact({ generatedAt: '2026-09-11T09:00:00.000Z' })
+      ),
+      currentHeadSha: HEAD_SHA,
+    })
+    expect(anyPr.status).toBe('ready')
   })
 
   it('reports the zip errors as the HTTP envelope', async () => {
