@@ -379,7 +379,7 @@ describe('importCanvas', () => {
     expect(forced.warnings).toEqual(['imported a canvas exported from other/repo'])
   })
 
-  it('refuses a canvas exported for another pull request unless force is passed', async () => {
+  it('refuses a canvas exported for another pull request, and force does not open it', async () => {
     t = await contextWithCommits()
     const zip = buildCanvasZip(manifest(), artifact())
     const err = await catchApp(() =>
@@ -387,15 +387,24 @@ describe('importCanvas', () => {
     )
     expect([err.code, err.status]).toEqual(['CANVAS_PR_MISMATCH', 400])
     expect(err.message).toBe('this canvas was exported for #42, and it is being imported for #7')
+    expect(err.hint).toBe('import it without --pr to store it under #42, or generate a canvas for #7')
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
-    const forced = await importCanvas(t.ctx, {
-      bytes: zip,
-      prNumber: 7,
+    // Forcing would only write an index entry that contradicts the zip, so there is no way past.
+    const forced = await catchApp(() =>
+      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHeadSha: HEAD_SHA, force: true })
+    )
+    expect(forced.code).toBe('CANVAS_PR_MISMATCH')
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+  })
+
+  it('stores a canvas of another pull request under its own number when no PR is named', async () => {
+    t = await contextWithCommits()
+    const imported = await importCanvas(t.ctx, {
+      bytes: buildCanvasZip(manifest(), artifact()),
       currentHeadSha: HEAD_SHA,
-      force: true,
     })
-    expect(forced.status).toBe('ready')
-    expect(forced.warnings).toEqual(['imported a canvas exported for #42'])
+    expect(imported.status).toBe('ready')
+    expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(42)
   })
 
   it('reads the pull request from review.json when the manifest names none', async () => {

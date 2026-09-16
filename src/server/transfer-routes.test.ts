@@ -224,7 +224,7 @@ describe('transfer routes', () => {
       expect(forced.status).toBe(200)
     })
 
-    it('answers 400 CANVAS_PR_MISMATCH for a canvas of another pull request, unless forced', async () => {
+    it('answers 400 CANVAS_PR_MISMATCH for a canvas of another pull request, force or not', async () => {
       t = await contextFor()
       const app = createApp(t.ctx)
       const otherPr = buildCanvasZip(
@@ -244,7 +244,7 @@ describe('transfer routes', () => {
         error: {
           code: 'CANVAS_PR_MISMATCH',
           message: 'this canvas was exported for #7, and it is being imported for #42',
-          hint: 'import it with --force to use it anyway',
+          hint: 'import it without --pr to store it under #7, or generate a canvas for #42',
         },
       })
       expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
@@ -253,7 +253,8 @@ describe('transfer routes', () => {
         headers: SAME_ORIGIN,
         body: upload(otherPr, { force: '1' }),
       })
-      expect(forced.status).toBe(200)
+      expect(forced.status).toBe(400)
+      expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
     })
 
     it('rejects a file over the ZIP limit even when the multipart envelope is within its limit', async () => {

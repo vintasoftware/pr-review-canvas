@@ -80,14 +80,16 @@ pr-review import <zip> [--pr <n>] [--force]
   Before a PR exists, `ref-` replaces `pr-<number>-`. Re-exporting the same canvas keeps its name.
 - Export returns `status`, `path`, `name`, `headSha`, and `prNumber` when supplied or stored.
 - `import --pr` compares the imported canvas with that PR's current head, and refuses a canvas
-  exported for a different pull request with `CANVAS_PR_MISMATCH`. Without it, import does
-  not check against a live PR. A canvas generated before the PR existed names none and joins the
-  pull request it is imported for.
+  exported for a different pull request with `CANVAS_PR_MISMATCH`. `--force` does not lift that
+  refusal: a canvas is stored under the pull request it names, so importing the same ZIP without
+  `--pr` stores it under its own PR instead. Without `--pr`, import does not check against a live
+  PR. A canvas generated before the PR existed names none and joins the pull request it is
+  imported for.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.
-- `import --force` allows a canvas from another repository or another pull request. It does not
-  force an older canvas to replace a newer one.
+- `import --force` allows a canvas from another repository. It does not force an older canvas to
+  replace a newer one, and does not allow a canvas of another pull request.
 
 Imports accept archives up to **20 MiB**. The required `manifest.json` and `review.json` entries
 must be at the archive root, pass format validation, and agree on the commit and the pull request
@@ -362,7 +364,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `CANVAS_NOT_FOUND`                   | Generate or import a canvas for the requested commit                                                                                     |
 | `CANVAS_INVALID`                     | Read the format errors; re-export or regenerate the canvas                                                                               |
 | `CANVAS_REPO_MISMATCH`               | Check which clone is open; use `import --force` only when importing from the other repository is intentional                             |
-| `CANVAS_PR_MISMATCH`                 | The ZIP was exported for another pull request; import the canvas of this PR, or use `import --force` when that is intentional            |
+| `CANVAS_PR_MISMATCH`                 | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own |
 | `CANVAS_TOO_LARGE`                   | The archive exceeds the 20 MiB import limit                                                                                              |
 | `CANVAS_STALE`                       | The PR head moved; prepare again for the current commit                                                                                  |
 | `MODEL_INVALID`                      | Fix the reported problems in `model.json`, validate, then publish again                                                                  |
