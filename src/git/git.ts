@@ -59,13 +59,42 @@ interface ExecResult {
   code: number
 }
 
+/**
+ * The environment variables that point git at a repository. They win over the working directory,
+ * and git exports them to every process it starts, so a tool run from a hook, or from a shell that
+ * exported GIT_DIR, would otherwise read and write a repository nobody asked for. All of them are
+ * dropped: the directory the caller passes is what picks the repository.
+ */
+export const REPO_ENV_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+] as const
+
+/**
+ * `env` without those variables. Everything else is kept, so ssh agents, credential helpers,
+ * proxies, and PATH still reach `fetch`.
+ */
+export function envWithoutRepo(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env }
+  for (const name of REPO_ENV_VARS) {
+    delete clean[name]
+  }
+  return clean
+}
+
 /** Runs git with an argument array; never a shell. */
 export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
   return new Promise(resolve => {
     execFile(
       'git',
       args,
-      { cwd, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
+      { cwd, env: envWithoutRepo(), encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
         resolve({ stdout, stderr: stderr.toString('utf8'), code })
