@@ -8,10 +8,12 @@ import type { ImportResult, SharedCanvasInfo } from '../contract/api.js'
 import type { CommentsPayload } from '../contract/comments.js'
 import type { Pr, Repo } from '../contract/review-artifact.js'
 import { BodyTooLargeError, readCappedBody } from '../server/capped-body.js'
+import { findGitlabAttachmentLinks, gitlabAttachmentHosts, gitlabAuthHeaders } from '../gitlab/attachments.js'
+import type { HostInfo } from '../host/host.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 
-/** Where an attachment may be served from. Everything else is refused before any request. */
+/** Where a GitHub attachment may be served from. Everything else is refused before any request. */
 export const ALLOWED_ATTACHMENT_HOSTS = new Set(['github.com', 'objects.githubusercontent.com'])
 export const MAX_REDIRECTS = 3
 export const DOWNLOAD_TIMEOUT_MS = 30_000
@@ -31,7 +33,7 @@ const ASSET_LINK_RE =
  * Zip links in one markdown text. GitHub serves an attachment either under `files/<id>/<name>`,
  * where the name is in the URL, or under `assets/<uuid>`, where only the markdown label has it.
  */
-export function findAttachmentLinks(text: string): AttachmentLink[] {
+export function findGithubAttachmentLinks(text: string): AttachmentLink[] {
   const links: AttachmentLink[] = []
   const seen = new Set<string>()
   for (const m of text.matchAll(FILE_LINK_RE)) {
@@ -49,6 +51,13 @@ export function findAttachmentLinks(text: string): AttachmentLink[] {
     }
   }
   return links
+}
+
+export function findAttachmentLinks(text: string, host?: HostInfo, repo?: Repo): AttachmentLink[] {
+  if (host?.kind === 'gitlab' && repo !== undefined) {
+    return findGitlabAttachmentLinks(text, host, repo)
+  }
+  return findGithubAttachmentLinks(text)
 }
 
 export interface AttachmentCandidate extends AttachmentLink {
@@ -70,7 +79,11 @@ export interface DiscoverySources {
 }
 
 /** Every link in the PR body and its comments whose name is a canvas zip of this repository. */
-export function collectCandidates(sources: DiscoverySources, repo: Repo): AttachmentCandidate[] {
+export function collectCandidates(
+  sources: DiscoverySources,
+  repo: Repo,
+  host?: HostInfo
+): AttachmentCandidate[] {
   const texts: Array<{ text: string; postedAt: string }> = [
     { text: sources.body, postedAt: sources.bodyUpdatedAt },
     ...sources.comments.issueComments.map(c => ({ text: c.body, postedAt: c.updatedAt })),
@@ -79,7 +92,7 @@ export function collectCandidates(sources: DiscoverySources, repo: Repo): Attach
   const candidates: AttachmentCandidate[] = []
   let order = 0
   for (const { text, postedAt } of texts) {
-    for (const link of findAttachmentLinks(text)) {
+    for (const link of findAttachmentLinks(text, host, repo)) {
       const parsed = parseCanvasZipName(link.name, repo)
       if (parsed !== null) {
         candidates.push({ ...link, parsed, postedAt, order: order++ })
@@ -132,14 +145,28 @@ export function discoveryFingerprint(body: string, comments: CommentsPayload, he
 
 export type DownloadResult = { ok: true; bytes: Uint8Array } | { ok: false; reason: DownloadFailure }
 
-function allowedUrl(raw: string, base?: string): URL | null {
+function allowedHosts(ctx: AppContext): Set<string> {
+  return ctx.config.host.kind === 'gitlab' ? gitlabAttachmentHosts(ctx.config.host) : ALLOWED_ATTACHMENT_HOSTS
+}
+
+function allowedUrl(raw: string, hosts: ReadonlySet<string>, base?: string): URL | null {
   let url: URL
   try {
     url = new URL(raw, base)
   } catch {
     return null
   }
-  return url.protocol === 'https:' && ALLOWED_ATTACHMENT_HOSTS.has(url.hostname) ? url : null
+  return url.protocol === 'https:' && hosts.has(url.hostname) ? url : null
+}
+
+function authHeaders(ctx: AppContext, token: string, hostname: string): Record<string, string> {
+  if (ctx.config.host.kind === 'gitlab' && hostname === ctx.config.host.hostname) {
+    return gitlabAuthHeaders(token)
+  }
+  if (hostname === 'github.com') {
+    return { authorization: `token ${token}` }
+  }
+  return {}
 }
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
@@ -150,7 +177,8 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
  * both a signature and a token.
  */
 export async function downloadAttachment(ctx: AppContext, rawUrl: string): Promise<DownloadResult> {
-  const first = allowedUrl(rawUrl)
+  const hosts = allowedHosts(ctx)
+  const first = allowedUrl(rawUrl, hosts)
   if (first === null) {
     return { ok: false, reason: 'network' }
   }
@@ -159,22 +187,21 @@ export async function downloadAttachment(ctx: AppContext, rawUrl: string): Promi
     return { ok: false, reason: 'auth-required' }
   }
   let url = first
-  // Storage refuses a request that carries both a signature and a token, and the token has no
-  // business there anyway: only github.com is ever asked with it.
-  let withToken = url.hostname === 'github.com'
-  // One deadline for the redirects and the body together, so three slow hops cannot add up.
+  // Storage refuses a request that carries both a signature and a token. The forge host is the
+  // only one asked with credentials; redirects to object storage drop them.
+  let withToken = true
   const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       const accept = 'application/octet-stream'
-      const headers = withToken ? { accept, authorization: `token ${token}` } : { accept }
+      const headers = withToken ? { accept, ...authHeaders(ctx, token, url.hostname) } : { accept }
       const res: Response = await ctx.fetch(url, {
         headers,
         redirect: 'manual',
         signal: deadline,
       })
       if (REDIRECT_STATUSES.has(res.status)) {
-        const next = allowedUrl(res.headers.get('location') ?? '', url.toString())
+        const next = allowedUrl(res.headers.get('location') ?? '', hosts, url.toString())
         if (next === null) {
           return { ok: false, reason: 'network' }
         }
@@ -239,7 +266,7 @@ export async function discoverSharedCanvas(
     return { sharedCanvas: null, imported: null, warnings: [] }
   }
   const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
-  const ranked = rankCandidates(collectCandidates(sources, ctx.config.repo), {
+  const ranked = rankCandidates(collectCandidates(sources, ctx.config.repo, ctx.config.host), {
     headSha: pr.headSha,
     prNumber: pr.number,
   })

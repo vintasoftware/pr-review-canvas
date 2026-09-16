@@ -3,9 +3,10 @@
 import { randomBytes } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { parseGithubRemote } from '../config.js'
 import type { Git } from '../git/git.js'
 import type { GitHubClient } from '../github/gh.js'
+import { GITHUB_HOST, type HostInfo } from '../host/host.js'
+import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
 import { skillContent } from './skill-content.js'
@@ -28,6 +29,7 @@ export interface DoctorReport {
 export interface DoctorDeps {
   git: Git
   gh: GitHubClient
+  host?: HostInfo
   version: string
   acpxVersion: () => Promise<string | null>
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
@@ -130,25 +132,39 @@ export async function runDoctorChecks(
     git = { ok: false, detail: message(err), hint: 'run from a clone or pass --repo <dir>' }
   }
 
+  const host = deps.host ?? GITHUB_HOST
   let origin: DoctorCheck
   try {
     const url = await deps.git.remoteUrl('origin')
-    const repo = url === null ? null : parseGithubRemote(url)
+    const parsed = url === null ? null : parseOriginRemote(url, process.env)
     origin =
-      repo === null
-        ? { ok: false, detail: url ?? 'no origin remote', hint: 'add a github.com origin' }
-        : { ok: true, detail: `${repo.owner}/${repo.name}` }
+      parsed === null
+        ? {
+            ok: false,
+            detail: url ?? 'no origin remote',
+            hint: 'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab',
+          }
+        : { ok: true, detail: `${parsed.repo.owner}/${parsed.repo.name} (${parsed.host.label})` }
   } catch (err) {
-    origin = { ok: false, detail: message(err), hint: 'add a github.com origin' }
+    origin = {
+      ok: false,
+      detail: message(err),
+      hint: 'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab',
+    }
   }
 
   const status = await deps.gh.authStatus()
+  const cliHint =
+    host.kind === 'gitlab'
+      ? 'install it from https://gitlab.com/gitlab-org/cli'
+      : 'install it from https://cli.github.com'
+  const authHint = host.kind === 'gitlab' ? 'run `glab auth login`' : 'run `gh auth login`'
   const gh: DoctorCheck = status.installed
     ? { ok: true, detail: status.detail }
-    : { ok: false, detail: status.detail, hint: 'install it from https://cli.github.com' }
+    : { ok: false, detail: status.detail, hint: cliHint }
   const ghAuth: DoctorCheck = status.authenticated
     ? { ok: true, detail: status.detail }
-    : { ok: false, detail: status.detail, hint: 'run `gh auth login`' }
+    : { ok: false, detail: status.detail, hint: authHint }
 
   let dataDir: DoctorCheck
   try {

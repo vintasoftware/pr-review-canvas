@@ -31,6 +31,7 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           repo: ctx.config.repo.name,
           version: ctx.version,
           port: ctx.config.port,
+          host: { kind: ctx.config.host.kind, label: ctx.config.host.label },
         },
         c.get('cspNonce'),
         await appearanceFor(ctx, appearanceQuery(c))
@@ -55,7 +56,13 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
     }
     return c.html(
       reviewPage(
-        { prNumber, owner: ctx.config.repo.owner, repo: ctx.config.repo.name, version: ctx.version },
+        {
+          prNumber,
+          owner: ctx.config.repo.owner,
+          repo: ctx.config.repo.name,
+          version: ctx.version,
+          host: { kind: ctx.config.host.kind, label: ctx.config.host.label },
+        },
         c.get('cspNonce'),
         await appearanceFor(ctx, appearanceQuery(c))
       )

@@ -156,6 +156,7 @@ export function apiRoutes(ctx: AppContext): Hono {
           : {}),
       },
       repo: ctx.config.repo,
+      host: { kind: ctx.config.host.kind, label: ctx.config.host.label },
       dataDir: ctx.config.dataDir,
       chat: {
         enabled: chatEnabled,

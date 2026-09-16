@@ -16,6 +16,9 @@ export const ERROR_CODES = [
   'GH_MISSING',
   'GH_UNAUTHENTICATED',
   'GITHUB_API_ERROR',
+  'GLAB_MISSING',
+  'GLAB_UNAUTHENTICATED',
+  'GITLAB_API_ERROR',
   'PR_NOT_FOUND',
   'CANVAS_NOT_FOUND',
   'CANVAS_INVALID',
@@ -92,6 +95,7 @@ export type SharedCanvasInfo = z.infer<typeof SharedCanvasInfoSchema>
 export interface PrBundle {
   status: BundleStatus
   pr: Pr
+  host?: { kind: 'github' | 'gitlab'; label: string; cliName: string }
   files: FileEntry[]
   derivable: boolean
   artifact?: ReviewArtifact
@@ -173,6 +177,7 @@ export interface HealthResponse {
     agentAuth?: HealthCheck
   }
   repo: { owner: string; name: string } | null
+  host?: { kind: 'github' | 'gitlab'; label: string }
   dataDir: string
   chat: ChatStatus
 }

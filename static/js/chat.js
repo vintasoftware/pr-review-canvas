@@ -23,6 +23,7 @@ import { postedCommentUrl, viewCommentHtml } from './comment-link.js'
 import { esc, qs } from './dom.js'
 import { getRenderContext } from './layers.js'
 import { renderMarkdown } from './markdown.js'
+import { postToLabel } from './host.js'
 import { splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
 
 export const CHAT_WIDTH_KEY = 'pr-review.chat-width'
@@ -179,7 +180,7 @@ export function proposedCommentHtml(comment, id, postedUrl) {
     `<div class="prose">${renderMarkdown(comment.body)}</div>` +
     '<span class="tbtns">' +
     (postedUrl === undefined
-      ? `<button class="cmd fill" type="button" data-act="proposed-post" data-proposed="${esc(id)}" data-needs-post>post to github</button>`
+      ? `<button class="cmd fill" type="button" data-act="proposed-post" data-proposed="${esc(id)}" data-needs-post>${postToLabel()}</button>`
       : viewCommentHtml(postedUrl, true)) +
     `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post>edit</button>` +
     `<button class="cmd" type="button" data-copy="${esc(comment.body)}">copy</button>` +

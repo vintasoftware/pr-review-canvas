@@ -3,6 +3,7 @@ import { ConfigError } from '../config.js'
 import { GitError } from '../git/git.js'
 import { GitHubApiError } from '../github/gh.js'
 import { PrNotFoundError } from '../github/pr.js'
+import { GitLabApiError } from '../gitlab/glab.js'
 import { AppError, toAppError } from './errors.js'
 
 describe('toAppError', () => {
@@ -22,6 +23,14 @@ describe('toAppError', () => {
       status: 500,
       message: 'the GitHub CLI (gh) is not installed',
       hint: 'install it from https://cli.github.com',
+    })
+    expect(toAppError(new GitLabApiError('user', 'glab: command not found', 1, true))).toMatchObject({
+      code: 'GLAB_MISSING',
+      hint: 'install it from https://gitlab.com/gitlab-org/cli',
+    })
+    expect(toAppError(new GitLabApiError('user', '401 Unauthorized', 1))).toMatchObject({
+      code: 'GLAB_UNAUTHENTICATED',
+      hint: 'run `glab auth login`',
     })
     expect(toAppError(new GitError(['diff'], 'bad', 128))).toMatchObject({ code: 'GIT_ERROR', status: 500 })
     expect(toAppError(new ConfigError('NO_ORIGIN', 'no origin', 'add one'))).toMatchObject({

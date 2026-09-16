@@ -99,7 +99,8 @@ export function createCapabilityProbe(
   gh: GitHubClient,
   repo: Repo,
   now: () => Date,
-  ttlMs = CAPABILITY_TTL_MS
+  ttlMs = CAPABILITY_TTL_MS,
+  probe: (client: GitHubClient, repo: Repo) => Promise<Capabilities> = probeCapabilities
 ): CapabilityProbe {
   let cached: { at: number; value: Capabilities } | null = null
   return {
@@ -108,7 +109,7 @@ export function createCapabilityProbe(
       if (!opts.refresh && cached !== null && at - cached.at < ttlMs) {
         return cached.value
       }
-      const value = await probeCapabilities(gh, repo)
+      const value = await probe(gh, repo)
       cached = { at, value }
       return value
     },

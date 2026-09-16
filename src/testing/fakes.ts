@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { AgentRunner } from '../acpx/acpx.js'
 import type { RuntimeConfig } from '../config.js'
+import { GITHUB_HOST } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../github/capabilities.js'
@@ -275,6 +276,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     commonDir: '/repo/.git',
     dataDir,
     repo: TEST_REPO,
+    host: GITHUB_HOST,
     fixtureCanvasPath: null,
     chatOverrides: opts.chatOverrides ?? {},
   }

@@ -138,7 +138,7 @@ describe('createApp', () => {
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
       expect(html).toContain(
-        '{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test"}</script>'
+        '{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub"}}</script>'
       )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
@@ -245,6 +245,7 @@ describe('createApp', () => {
           agentAuth: { ok: true },
         },
         repo: { owner: 'acme', name: 'widgets' },
+        host: { kind: 'github', label: 'GitHub' },
         dataDir: t.dataDir,
         chat: { enabled: true, acpx: true, agent: 'claude', model: null },
       })

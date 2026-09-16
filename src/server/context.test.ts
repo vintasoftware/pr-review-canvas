@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { rm, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { GITHUB_HOST } from '../host/host.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createFakeGh, createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
 import {
@@ -40,6 +41,7 @@ describe('context', () => {
           commonDir: '/r/.git',
           dataDir,
           repo: TEST_REPO,
+          host: GITHUB_HOST,
           fixtureCanvasPath: null,
           chatOverrides: {},
         },
@@ -70,6 +72,7 @@ describe('context', () => {
           commonDir: '/r/.git',
           dataDir,
           repo: TEST_REPO,
+          host: GITHUB_HOST,
           fixtureCanvasPath: null,
           chatOverrides: {},
         },

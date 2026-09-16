@@ -2,7 +2,11 @@ import path from 'node:path'
 import type { Repo } from './contract/review-artifact.js'
 import { isChatAgent, type SettingsOverrides } from './contract/settings.js'
 import { type Git, GitError } from './git/git.js'
+import type { HostInfo } from './host/host.js'
+import { parseOriginRemote } from './host/remote.js'
 import { resolveDataDir } from './store/data-dir.js'
+
+export { parseGithubRemote } from './host/remote.js'
 
 export const DEFAULT_PORT = 3010
 
@@ -22,6 +26,7 @@ export interface RuntimeConfig {
   commonDir: string
   dataDir: string
   repo: Repo
+  host: HostInfo
   /** Dev only: every PR reports `ready` with this artifact re-keyed to the live head. */
   fixtureCanvasPath: string | null
   /** Chat agent and model the flags force for this run, if any. */
@@ -61,36 +66,35 @@ export async function resolveCommonDir(git: Git): Promise<string> {
   return git.commonDir()
 }
 
-/** Parses the two URL forms GitHub gives out: ssh (`git@github.com:o/r.git`) and https. */
-export function parseGithubRemote(url: string): Repo | null {
-  const m =
-    /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https?:\/\/(?:[^@/]+@)?github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
-      url.trim()
-    )
-  if (!m || m[1] === undefined || m[2] === undefined) {
-    return null
-  }
-  return { owner: m[1], name: m[2] }
-}
-
-export async function resolveGithubRepo(git: Git): Promise<Repo> {
+export async function resolveOrigin(
+  git: Git,
+  env: NodeJS.ProcessEnv = {}
+): Promise<{
+  repo: Repo
+  host: HostInfo
+}> {
   const url = await git.remoteUrl('origin')
   if (url === null) {
     throw new ConfigError(
       'NO_ORIGIN',
       'the repository has no "origin" remote',
-      'add one that points at GitHub'
+      'add a github.com or GitLab origin'
     )
   }
-  const repo = parseGithubRemote(url)
-  if (repo === null) {
+  const parsed = parseOriginRemote(url, env)
+  if (parsed === null) {
     throw new ConfigError(
       'NO_ORIGIN',
-      `origin is not a GitHub URL: ${url}`,
-      'only github.com repositories are supported'
+      `origin is not a GitHub or GitLab URL: ${url}`,
+      'use github.com, GitLab, or set PR_REVIEW_HOST=gitlab for self-hosted GitLab'
     )
   }
-  return repo
+  return { repo: parsed.repo, host: parsed.host }
+}
+
+/** @deprecated Use resolveOrigin. Kept for tests that still name the GitHub-only helper. */
+export async function resolveGithubRepo(git: Git): Promise<Repo> {
+  return (await resolveOrigin(git)).repo
 }
 
 /** `--agent` names one of the agents the chat knows; anything else is a usage error. */
@@ -139,7 +143,7 @@ export async function loadRuntimeConfig(
 ): Promise<RuntimeConfig> {
   const repoRoot = await resolveRepoRoot(git)
   const commonDir = await resolveCommonDir(git)
-  const repo = await resolveGithubRepo(git)
+  const { repo, host } = await resolveOrigin(git, env)
   const port = flags.port ?? parsePort(readEnv(env, 'PR_REVIEW_PORT'), DEFAULT_PORT)
   const dataDir = resolveDataDir({ override: flags.dataDir ?? readEnv(env, 'PR_REVIEW_DATA_DIR'), commonDir })
   return {
@@ -148,6 +152,7 @@ export async function loadRuntimeConfig(
     commonDir,
     dataDir,
     repo,
+    host,
     fixtureCanvasPath: flags.fixtureCanvas === undefined ? null : path.resolve(cwd, flags.fixtureCanvas),
     chatOverrides: parseChatOverrides(flags),
   }

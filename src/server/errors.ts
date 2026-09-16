@@ -5,6 +5,7 @@ import type { ErrorCode, ErrorEnvelope } from '../contract/api.js'
 import { GitError } from '../git/git.js'
 import { GitHubApiError } from '../github/gh.js'
 import { PrNotFoundError } from '../github/pr.js'
+import { GitLabApiError } from '../gitlab/glab.js'
 
 export class AppError extends Error {
   readonly code: ErrorCode
@@ -66,6 +67,20 @@ export function toAppError(err: unknown): AppError {
       return new AppError('GH_UNAUTHENTICATED', 'gh is not logged in', 401, 'run `gh auth login`')
     }
     return new AppError('GITHUB_API_ERROR', err.message, 502)
+  }
+  if (err instanceof GitLabApiError) {
+    if (err.missingBinary) {
+      return new AppError(
+        'GLAB_MISSING',
+        'the GitLab CLI (glab) is not installed',
+        500,
+        'install it from https://gitlab.com/gitlab-org/cli'
+      )
+    }
+    if (err.unauthenticated) {
+      return new AppError('GLAB_UNAUTHENTICATED', 'glab is not logged in', 401, 'run `glab auth login`')
+    }
+    return new AppError('GITLAB_API_ERROR', err.message, 502)
   }
   if (err instanceof GitError) {
     return new AppError('GIT_ERROR', err.message, 500)

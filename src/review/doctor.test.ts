@@ -2,6 +2,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type CliIo, runDoctor } from '../commands.js'
+import { gitlabHost } from '../host/host.js'
 import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
 import { type DoctorDeps, runDoctorChecks } from './doctor.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
@@ -66,7 +67,7 @@ describe('runDoctorChecks', () => {
       version: '0.0.0-test',
       checks: {
         git: { ok: true, detail: REPO },
-        origin: { ok: true, detail: 'acme/widgets' },
+        origin: { ok: true, detail: 'acme/widgets (GitHub)' },
         gh: { ok: true, detail: 'Logged in to github.com' },
         ghAuth: { ok: true, detail: 'Logged in to github.com' },
         dataDir: { ok: true, detail: dataDir },
@@ -120,7 +121,7 @@ describe('runDoctorChecks', () => {
     expect(report.checks.origin).toEqual({
       ok: false,
       detail: 'no origin remote',
-      hint: 'add a github.com origin',
+      hint: 'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab',
     })
     expect(report.checks.gh).toEqual({
       ok: false,
@@ -138,7 +139,23 @@ describe('runDoctorChecks', () => {
     })
   })
 
-  it('reports a remote that is not GitHub and a missing skill', async () => {
+  it('points GitLab setups at glab when the CLI is missing', async () => {
+    const report = await runDoctorChecks(
+      deps({
+        host: gitlabHost('gitlab.com'),
+        gh: createFakeGh({ auth: { installed: false, authenticated: false, detail: 'glab is not on PATH' } }),
+        dataDirOverride: await makeTempDir(),
+      })
+    )
+    expect(report.checks.gh).toEqual({
+      ok: false,
+      detail: 'glab is not on PATH',
+      hint: 'install it from https://gitlab.com/gitlab-org/cli',
+    })
+    expect(report.checks.ghAuth.hint).toBe('run `glab auth login`')
+  })
+
+  it('accepts a GitLab origin and still reports a missing skill', async () => {
     const dataDir = await makeTempDir()
     const report = await runDoctorChecks(
       deps({
@@ -152,9 +169,8 @@ describe('runDoctorChecks', () => {
       })
     )
     expect(report.checks.origin).toEqual({
-      ok: false,
-      detail: 'https://gitlab.com/acme/widgets.git',
-      hint: 'add a github.com origin',
+      ok: true,
+      detail: 'acme/widgets (GitLab)',
     })
     expect(report.checks.skill).toEqual({
       ok: false,
@@ -195,7 +211,7 @@ describe('runDoctorChecks', () => {
     expect(report.checks.origin).toEqual({
       ok: false,
       detail: 'fatal: no remotes',
-      hint: 'add a github.com origin',
+      hint: 'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab',
     })
     expect(report.checks.dataDir).toEqual({
       ok: false,

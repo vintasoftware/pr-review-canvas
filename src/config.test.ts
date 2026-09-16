@@ -6,8 +6,10 @@ import {
   parseGithubRemote,
   parsePort,
   resolveGithubRepo,
+  resolveOrigin,
   resolveRepoRoot,
 } from './config.js'
+import { GITHUB_HOST, gitlabHost } from './host/host.js'
 import { createFakeGit } from './testing/fakes.js'
 
 describe('parseGithubRemote', () => {
@@ -49,11 +51,14 @@ describe('resolveRepoRoot and resolveGithubRepo', () => {
       code: 'NO_ORIGIN',
     })
     await expect(
-      resolveGithubRepo(createFakeGit({ remotes: { origin: 'git@gitlab.com:a/b.git' } }))
+      resolveOrigin(createFakeGit({ remotes: { origin: 'git@bitbucket.org:a/b.git' } }))
     ).rejects.toMatchObject({
       code: 'NO_ORIGIN',
-      message: 'origin is not a GitHub URL: git@gitlab.com:a/b.git',
+      message: 'origin is not a GitHub or GitLab URL: git@bitbucket.org:a/b.git',
     })
+    await expect(
+      resolveGithubRepo(createFakeGit({ remotes: { origin: 'git@gitlab.com:a/b.git' } }))
+    ).resolves.toEqual({ owner: 'a', name: 'b' })
   })
 
   it('passes unknown errors through', async () => {
@@ -80,8 +85,21 @@ describe('loadRuntimeConfig', () => {
       commonDir: '/work/repo/.git',
       dataDir: '/work/repo/.pr-review',
       repo: { owner: 'acme', name: 'widgets' },
+      host: GITHUB_HOST,
       fixtureCanvasPath: null,
       chatOverrides: {},
+    })
+  })
+
+  it('classifies a GitLab origin', async () => {
+    const gitlabGit = createFakeGit({
+      topLevel: '/work/repo',
+      commonDir: '/work/repo/.git',
+      remotes: { origin: 'git@gitlab.com:acme/widgets.git' },
+    })
+    expect(await loadRuntimeConfig({}, {}, gitlabGit, '/cwd')).toMatchObject({
+      repo: { owner: 'acme', name: 'widgets' },
+      host: gitlabHost('gitlab.com'),
     })
   })
 

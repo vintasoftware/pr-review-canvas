@@ -68,7 +68,13 @@ ${opts.app ? html`<script type="module" src="/static/js/app.js"></script>` : ''}
 }
 
 export function reviewPage(
-  bootstrap: { prNumber: number; owner: string; repo: string; version: string },
+  bootstrap: {
+    prNumber: number
+    owner: string
+    repo: string
+    version: string
+    host: { kind: string; label: string }
+  },
   nonce: string,
   appearance: Appearance
 ): Html {
@@ -84,13 +90,20 @@ export function reviewPage(
 }
 
 export function homePage(
-  data: HomeData & { owner: string; repo: string; version: string; port: number },
+  data: HomeData & {
+    owner: string
+    repo: string
+    version: string
+    port: number
+    host: { kind: string; label: string }
+  },
   nonce: string,
   appearance: Appearance
 ): Html {
+  const requestNoun = data.host.kind === 'gitlab' ? 'merge request' : 'pull request'
   return pageShell({
     title: 'PR review canvas',
-    bootstrap: { owner: data.owner, repo: data.repo, version: data.version },
+    bootstrap: { owner: data.owner, repo: data.repo, version: data.version, host: data.host },
     nonce,
     appearance,
     app: false,
@@ -100,18 +113,18 @@ export function homePage(
 <div class="hdr-actions"><a class="cmd" href="/api/health">health</a></div></div>
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>${data.owner}/${data.repo}</h1></div>
-<p class="meta"><span>Open a pull request by number. Diffs come from your local clone; the canvas from a published review.</span></p></div>
+<p class="meta"><span>Open a ${requestNoun} by number. Diffs come from your local clone; the canvas from a published review.</span></p></div>
 </header>
 <main id="main" class="home">
-<section class="panel"><div class="panel-h"><h2>Open a pull request</h2></div>
+<section class="panel"><div class="panel-h"><h2>Open a ${requestNoun}</h2></div>
 <form class="body home-form" method="get" action="/review">
-<label>PR number <input name="n" type="number" min="1" required inputmode="numeric"></label>
+<label>${data.host.kind === 'gitlab' ? 'MR' : 'PR'} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
 <button class="cmd fill" type="submit">open</button>
 </form></section>
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${
   data.recentPrs.length === 0
-    ? html`<div class="body muted">No pull requests opened yet.</div>`
+    ? html`<div class="body muted">No ${requestNoun}s opened yet.</div>`
     : html`<ul class="plain body">${data.recentPrs.map(
         p =>
           html`<li><a href="/review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a></li>`
@@ -119,7 +132,7 @@ ${
 }
 </section>
 </main>
-<footer><span>pr-review ${data.version}</span><span>localhost only · nothing leaves this machine except GitHub posts you confirm</span></footer>
+<footer><span>pr-review ${data.version}</span><span>localhost only · nothing leaves this machine except ${data.host.label} posts you confirm</span></footer>
 </div>`,
   })
 }

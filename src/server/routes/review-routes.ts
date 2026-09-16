@@ -3,9 +3,10 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
-import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
-import { checkInlineTarget, postComment } from '../../github/post-comment.js'
-import { PostReviewInputSchema, postReview } from '../../github/post-review.js'
+import type { FileEntry, Pr, ReviewArtifact } from '../../contract/review-artifact.js'
+import { checkInlineTarget } from '../../github/post-comment.js'
+import { PostReviewInputSchema } from '../../github/post-review.js'
+import { postHostComment, postHostReview } from '../../host/operations.js'
 import { buildReviewBody, stateForHead, unreviewedLayers } from '../../github/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -84,7 +85,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     if (caps.canComment === false) {
       throw new AppError(
         'COMMENT_FORBIDDEN',
-        caps.reason ?? 'this GitHub login cannot post on this repository',
+        caps.reason ?? `this ${ctx.config.host.label} login cannot post on this repository`,
         403,
         caps.hint
       )
@@ -147,6 +148,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting()
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
+    let files: FileEntry[] | undefined
     if (input.kind === 'inline') {
       const derived = await ctx.derived.read(pr.headSha)
       if (derived === null) {
@@ -161,8 +163,17 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       if (problem !== null) {
         throw new AppError('COMMENT_LINE_NOT_IN_DIFF', problem, 422, 'comment on a line the diff shows')
       }
+      files = derived.files
     }
-    const posted = await postComment(ctx.gh, ctx.config.repo, number, pr.headSha, input)
+    const posted = await postHostComment(
+      ctx.gh,
+      ctx.config.host,
+      ctx.config.repo,
+      number,
+      pr.headSha,
+      input,
+      files
+    )
     await appendComment(ctx, number, posted)
     const entry =
       input.kind === 'inline' && input.pointFingerprint !== undefined
@@ -207,7 +218,10 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body = input.body ?? buildReviewBody({ artifact, state, comments, headSha: pr.headSha })
-    const review = await postReview(ctx.gh, ctx.config.repo, number, pr.headSha, { event: input.event, body })
+    const review = await postHostReview(ctx.gh, ctx.config.host, ctx.config.repo, number, pr.headSha, {
+      event: input.event,
+      body,
+    })
     return c.json({ review }, 201)
   })
 
