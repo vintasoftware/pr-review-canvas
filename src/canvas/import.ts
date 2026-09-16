@@ -1,11 +1,9 @@
 // One import path for the three ways a canvas arrives: the drop zone, `pr-review import`, and a
 // zip discovered on the pull request. Everything is checked here, so no caller can skip a step.
 import type { CanvasRelation, ImportResult } from '../contract/api.js'
-import type { CanvasManifest } from '../contract/canvas-manifest.js'
-import type { ReviewArtifact } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { CanvasZipError, readCanvasZip } from './zip.js'
+import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
 
 export interface ImportOptions {
   bytes: Uint8Array
@@ -19,15 +17,6 @@ export interface ImportOptions {
 
 function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
   return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
-}
-
-/**
- * The pull request a canvas was made for: the manifest's number, else the one review.json holds.
- * A canvas generated before the pull request existed names none, and joins the PR it is imported
- * for.
- */
-function canvasPrNumber(manifest: CanvasManifest, artifact: ReviewArtifact): number | undefined {
-  return manifest.prNumber ?? artifact.pr.number ?? undefined
 }
 
 /** The zip error as the HTTP envelope the routes and the CLI both report. */
@@ -88,13 +77,13 @@ async function relateToHead(
  * canvas already on disk is kept unless the incoming one was generated later.
  */
 export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promise<ImportResult> {
-  let contents: { manifest: CanvasManifest; artifact: ReviewArtifact }
+  let contents: CanvasZipContents
   try {
     contents = readCanvasZip(opts.bytes)
   } catch (err) {
     throw err instanceof CanvasZipError ? toAppErrorFromZip(err) : err
   }
-  const { manifest, artifact } = contents
+  const { manifest, artifact, prNumber: canvasPr } = contents
   const warnings: string[] = []
   if (!sameRepo(manifest.repo, ctx.config.repo)) {
     const from = `${manifest.repo.owner}/${manifest.repo.name}`
@@ -110,10 +99,9 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   }
 
   // The wrong zip attached to a pull request is the common mistake, and the head check below does
-  // not catch it: two open pull requests have unrelated heads either way. There is no way to force
-  // this one: the canvas is stored under the pull request it names, and calling it another PR's
-  // canvas would be a record that contradicts the zip it came from.
-  const canvasPr = canvasPrNumber(manifest, artifact)
+  // not catch it: two open pull requests have unrelated heads either way. This is the one check
+  // --force cannot lift: a canvas that names a pull request may only be stored under that one, so
+  // forcing could only write an index entry that contradicts the zip it came from.
   if (opts.prNumber !== undefined && canvasPr !== undefined && canvasPr !== opts.prNumber) {
     throw new AppError(
       'CANVAS_PR_MISMATCH',
