@@ -118,8 +118,9 @@ git push origin "v${release_version}"
 ```
 
 From a project clone, run `pr-review install-skill`, then `pr-review serve` and open
-http://localhost:3010. `pr-review doctor` checks GitHub access and local setup;
-`doctor --all-checks` additionally requires the optional `acpx` installation.
+http://localhost:3010. `pr-review doctor` checks GitHub access, local setup, and the required
+`dcg` installation; `doctor --all-checks` additionally requires `acpx`, a working filesystem
+sandbox, and an installed agent whose native dcg hook activates.
 
 Create a GitHub release for the new tag using its section of
 [CHANGELOG.md](../CHANGELOG.md).

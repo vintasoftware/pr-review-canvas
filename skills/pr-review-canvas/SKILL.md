@@ -54,7 +54,7 @@ Progress goes to stderr. The last stdout line is JSON:
   "canvas already exists for <headSha>; run with --force to regenerate".
 - A line of the form `{ "error": { "code", "message", "hint" } }` means prepare failed. Report the
   code, message, and hint verbatim and stop. `pr-review doctor` names which of git, origin,
-  `gh`, the data dir, and the skill install is missing.
+  `gh`, the data dir, the skill install, and `dcg` is missing.
 
 ### 2. Read the task
 

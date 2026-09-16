@@ -476,9 +476,14 @@ pr-review doctor</code></pre>
               <span>+</span>
               <h3>Add optional AI Chat</h3>
             </div>
-            <p>Install <code>acpx</code> and sign in to Claude Code or Codex on the same machine.</p>
+            <p>
+              Install
+              <a href="https://github.com/Dicklesworthstone/destructive_command_guard#quick-install">dcg</a>
+              and <code>acpx</code>, then sign in to Claude Code or Codex in the same environment. Chat runs
+              the agent inside a read-only sandbox on macOS, Ubuntu, and Windows 11 through Ubuntu WSL2.
+            </p>
             <div class="command-block">
-              <pre><code>npm install -g acpx
+              <pre><code>npm install -g acpx@0.13.2
 pr-review doctor --all-checks</code></pre>
               <button type="button" class="copy-button" aria-label="Copy chat setup commands">Copy</button>
             </div>
