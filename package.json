@@ -10,6 +10,7 @@
     "dev": "tsx watch --clear-screen=false --ignore '**/.pr-review/**' src/cli.ts serve",
     "start": "tsx src/cli.ts serve",
     "test": "vitest run",
+    "hooks:install": "git config core.hooksPath .githooks",
     "test:watch": "vitest",
     "test:browser": "playwright test",
     "coverage": "vitest run --coverage",

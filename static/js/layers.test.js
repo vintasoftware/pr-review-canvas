@@ -181,7 +181,7 @@ describe('layer sections', () => {
     const other = document.querySelector('section.panel#layer-other')
     expect(other?.querySelector('details summary h2')?.textContent).toBe('Other changes — 3 files, ignored')
     const otherChevron = other?.querySelector('details summary > .chev')
-    expect(otherChevron?.getAttribute('aria-expanded')).toBe('false')
+    expect(otherChevron?.getAttribute('aria-hidden')).toBe('true')
     expect(otherChevron?.nextElementSibling?.tagName).toBe('H2')
     expect(other?.querySelector('details summary .cmd')).toBeNull()
     expect(other?.querySelector('details')?.hasAttribute('open')).toBe(false)

@@ -168,10 +168,14 @@ In a clone of this tool, use pnpm for the shared lockfile and development checks
 ```bash
 corepack pnpm --version
 corepack pnpm install --frozen-lockfile
+corepack pnpm hooks:install
 corepack pnpm exec playwright install --with-deps chromium
 corepack pnpm verify
 corepack pnpm start --repo /path/to/your-project
 ```
+
+The pre-commit hook runs `pnpm test` and blocks the commit if tests fail. Run `pnpm hooks:install`
+once per clone to enable it.
 
 Run the full `pnpm verify` before pushing. Keep branch coverage at least 96% when adding or
 changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful failure and boundary

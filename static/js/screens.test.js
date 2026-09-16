@@ -287,7 +287,7 @@ describe('overview', () => {
     expect(document.querySelector('.cmt .who b')?.textContent).toBe('reviewer')
     expect(document.querySelector('.cmt .prose strong')?.textContent).toBe('good')
     expect(document.querySelector('details.bots summary .chev + span')?.textContent).toBe('1 bot comment')
-    expect(document.querySelector('details.bots summary > .chev')?.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('details.bots summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(document.querySelector('details.bots')?.hasAttribute('open')).toBe(false)
     expect(document.querySelector('details.bots summary .cmd')).toBeNull()
     expect(document.querySelector('button.cmd[data-act="pr-comment"]')?.textContent).toBe('comment')
@@ -324,7 +324,7 @@ describe('overview', () => {
     expect(panel?.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
       'PR description (from GitHub)'
     )
-    expect(panel?.querySelector('details.pr-desc summary > .chev')?.getAttribute('aria-expanded')).toBe('false')
+    expect(panel?.querySelector('details.pr-desc summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(panel?.querySelector('details.pr-desc')?.hasAttribute('open')).toBe(false)
     expect(panel?.querySelector('details.pr-desc summary .cmd')).toBeNull()
     expect(panel?.querySelector('details.pr-desc a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')

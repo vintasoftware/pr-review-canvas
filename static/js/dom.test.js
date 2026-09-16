@@ -37,12 +37,14 @@ describe('chevronHtml and detailsSummaryHtml', () => {
     )
   })
 
-  it('puts a collapsed chevron before the title and reports open when asked', () => {
+  it('uses a decorative chevron so the summary handles clicks', () => {
     expect(detailsSummaryHtml('<span>T</span>', 'Toggle T')).toBe(
-      `<summary>${chevronHtml('Toggle T', false)}<span>T</span></summary>`
+      '<summary aria-label="Toggle T"><span class="chev" aria-hidden="true">&gt;</span><span>T</span></summary>'
     )
-    document.body.innerHTML = `<details open>${detailsSummaryHtml('<span>T</span>', 'Toggle T', { open: true })}</details>`
-    expect(document.querySelector('summary > .chev')?.getAttribute('aria-expanded')).toBe('true')
+    document.body.innerHTML = `<details open>${detailsSummaryHtml('<span>T</span>', 'Toggle "T"')}</details>`
+    expect(document.querySelector('summary')?.getAttribute('aria-label')).toBe('Toggle "T"')
+    expect(document.querySelector('summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
+    expect(document.querySelector('summary button')).toBeNull()
     expect(document.querySelector('summary .chev + span')?.textContent).toBe('T')
   })
 })
