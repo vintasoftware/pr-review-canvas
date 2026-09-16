@@ -9,22 +9,20 @@ current=$(git rev-parse --show-toplevel)
 [ "$current" != "$primary" ] || exit 0
 [ -d "$primary/.git" ] || exit 0
 
-for source in \
-	"$primary"/.agents/skills/* \
-	"$primary"/.claude/skills/* \
-	"$primary"/.codex/skills/* \
-	"$primary"/.github/skills/* \
-	"$primary"/.claude/agents/impeccable-*.md \
-	"$primary/.claude/settings.local.json" \
-	"$primary/.codex/hooks.json" \
-	"$primary"/.github/agents/impeccable-*.agent.md \
-	"$primary/.github/hooks/impeccable.json"
+for provider in .agents .claude .codex .github
 do
-	[ -e "$source" ] || continue
-	relative=${source#"$primary/"}
-	destination="$current/$relative"
-	# Preserve worktree-specific installations and settings, including symlinks.
-	[ ! -e "$destination" ] && [ ! -L "$destination" ] || continue
-	mkdir -p "$(dirname "$destination")"
-	ln -s "$source" "$destination"
+	for source in \
+		"$primary/$provider"/skills/* \
+		"$primary/$provider"/agents/* \
+		"$primary/$provider"/hooks/* \
+		"$primary/$provider/hooks.json"
+	do
+		[ -e "$source" ] || continue
+		relative=${source#"$primary/"}
+		destination="$current/$relative"
+		# Preserve existing worktree files, including symlinks.
+		[ ! -e "$destination" ] && [ ! -L "$destination" ] || continue
+		mkdir -p "$(dirname "$destination")"
+		ln -s "$source" "$destination"
+	done
 done
