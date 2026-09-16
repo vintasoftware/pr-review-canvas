@@ -100,8 +100,8 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
 
   // The wrong zip attached to a pull request is the common mistake, and the head check below does
   // not catch it: two open pull requests have unrelated heads either way. This is the one check
-  // --force cannot lift: a canvas that names a pull request may only be stored under that one, so
-  // forcing could only write an index entry that contradicts the zip it came from.
+  // --force cannot lift: the canvas in this zip may only be stored under the pull request it
+  // names, so forcing could only write an index entry that contradicts the zip it came from.
   if (opts.prNumber !== undefined && canvasPr !== undefined && canvasPr !== opts.prNumber) {
     throw new AppError(
       'CANVAS_PR_MISMATCH',

@@ -40,7 +40,10 @@ export function dropReducer(state, event) {
   }
 }
 
-/** The export name grammar, as `parseCanvasZipName` in src/canvas/name.ts holds it for the server. */
+/**
+ * A looser form of the export name grammar `parseCanvasZipName` (src/canvas/name.ts) holds for the
+ * server: enough to catch the wrong file before it is uploaded, never a second copy of the check.
+ */
 const CANVAS_NAME_RE = /^(?:pr-([1-9]\d*)|ref)-.+-canvas\.zip$/i
 
 /**
