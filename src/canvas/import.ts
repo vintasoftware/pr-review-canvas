@@ -13,7 +13,7 @@ export interface ImportOptions {
   prNumber?: number | undefined
   /** The head the page is looking at. Absent means the canvas is taken as the current one. */
   currentHeadSha?: string | undefined
-  /** Accepts a canvas exported from another repository, or for another pull request. */
+  /** Accepts a canvas exported from another repository. */
   force?: boolean | undefined
 }
 
@@ -110,18 +110,17 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   }
 
   // The wrong zip attached to a pull request is the common mistake, and the head check below does
-  // not catch it: two open pull requests have unrelated heads either way.
+  // not catch it: two open pull requests have unrelated heads either way. There is no way to force
+  // this one: the canvas is stored under the pull request it names, and calling it another PR's
+  // canvas would be a record that contradicts the zip it came from.
   const canvasPr = canvasPrNumber(manifest, artifact)
   if (opts.prNumber !== undefined && canvasPr !== undefined && canvasPr !== opts.prNumber) {
-    if (opts.force !== true) {
-      throw new AppError(
-        'CANVAS_PR_MISMATCH',
-        `this canvas was exported for #${canvasPr}, and it is being imported for #${opts.prNumber}`,
-        400,
-        'import it with --force to use it anyway'
-      )
-    }
-    warnings.push(`imported a canvas exported for #${canvasPr}`)
+    throw new AppError(
+      'CANVAS_PR_MISMATCH',
+      `this canvas was exported for #${canvasPr}, and it is being imported for #${opts.prNumber}`,
+      400,
+      `import it without --pr to store it under #${canvasPr}, or generate a canvas for #${opts.prNumber}`
+    )
   }
 
   const headSha = manifest.headSha
