@@ -11,8 +11,9 @@ import { gitlabProjectApi } from './project.js'
 const GlDiscussionSchema = z.object({ notes: z.tuple([GlNoteSchema]).rest(z.unknown()) })
 
 /** GitLab's id for one diff line: the path hash and the line on each side. */
-function lineCode(filePath: string, oldLine: number | null, newLine: number | null): string {
-  return `${createHash('sha1').update(filePath).digest('hex')}_${oldLine ?? ''}_${newLine ?? ''}`
+function lineCode(filePath: string, side: 'old' | 'new', line: number): string {
+  const hash = createHash('sha1').update(filePath).digest('hex')
+  return side === 'old' ? `${hash}_${line}_` : `${hash}__${line}`
 }
 
 /** The `position` GitLab anchors an inline comment to. A range names both of its ends by line code. */
@@ -23,23 +24,17 @@ export function inlinePosition(
 ): Record<string, unknown> {
   const newPath = input.path
   const oldPath = files.find(f => f.path === input.path)?.oldPath ?? input.path
-  const at = (line: number): [old: number | null, current: number | null] =>
-    input.side === 'old' ? [line, null] : [null, line]
-  const [oldLine, newLine] = at(input.line)
   const position: Record<string, unknown> = {
-    base_sha: refs.baseSha,
-    start_sha: refs.startSha,
-    head_sha: refs.headSha,
+    ...refs,
     position_type: 'text',
     old_path: oldPath,
     new_path: newPath,
-    ...(oldLine === null ? {} : { old_line: oldLine }),
-    ...(newLine === null ? {} : { new_line: newLine }),
+    ...(input.side === 'old' ? { old_line: input.line } : { new_line: input.line }),
   }
   if (input.startLine !== undefined && input.startLine !== input.line) {
     position['line_range'] = {
-      start: { line_code: lineCode(newPath, ...at(input.startLine)), type: input.side },
-      end: { line_code: lineCode(newPath, oldLine, newLine), type: input.side },
+      start: { line_code: lineCode(newPath, input.side, input.startLine), type: input.side },
+      end: { line_code: lineCode(newPath, input.side, input.line), type: input.side },
     }
   }
   return position

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { CommentsPayload, IssueComment, ReviewComment } from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { HostClient } from '../host/client.js'
+import { fetchAllPages, type HostClient } from '../host/client.js'
 import { fetchResolvedCommentIds } from './threads.js'
 
 const GhReviewCommentSchema = z.object({
@@ -74,22 +74,6 @@ export function mapIssueComment(raw: unknown): IssueComment {
 export interface FetchCommentsResult {
   payload: CommentsPayload
   warnings: string[]
-}
-
-export const COMMENTS_PAGE_SIZE = 100
-
-/** Every item of a REST list endpoint, following `page=` until a page comes back short. */
-export async function fetchAllPages(gh: HostClient, path: string): Promise<unknown[]> {
-  const out: unknown[] = []
-  for (let page = 1; ; page++) {
-    const batch = z
-      .array(z.unknown())
-      .parse(await gh.api(path, { per_page: String(COMMENTS_PAGE_SIZE), page: String(page) }))
-    out.push(...batch)
-    if (batch.length < COMMENTS_PAGE_SIZE) {
-      return out
-    }
-  }
 }
 
 /**

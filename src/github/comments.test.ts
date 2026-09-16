@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { createFakeGh, ghHandler, ghJson, TEST_REPO } from '../testing/fakes.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, GH_THREADS_PAGE, HEAD_SHA } from '../testing/synthetic.js'
-import { COMMENTS_PAGE_SIZE, fetchComments, mapIssueComment, mapReviewComment } from './comments.js'
-import { HostCliError } from '../host/client.js'
+import { fetchComments, mapIssueComment, mapReviewComment } from './comments.js'
+import { COMMENTS_PAGE_SIZE, HostCliError } from '../host/client.js'
 import { fetchResolvedCommentIds, THREADS_QUERY } from './threads.js'
 
 const now = () => new Date('2026-09-10T12:00:00.000Z')

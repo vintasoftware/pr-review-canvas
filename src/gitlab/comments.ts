@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import type { IssueComment, ReviewComment } from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
-import { type FetchCommentsResult, fetchAllPages } from '../github/comments.js'
-import type { HostClient } from '../host/client.js'
+import type { FetchCommentsResult } from '../github/comments.js'
+import { fetchAllPages, type HostClient } from '../host/client.js'
 import { gitlabNoteUrl, gitlabProjectApi } from './project.js'
 
 const GlPositionSchema = z.object({
@@ -72,10 +72,7 @@ export function mapGitLabReviewComment(note: GlNote, ctx: NoteContext): ReviewCo
   const pos = note.position ?? null
   const loc = pos === null ? { side: 'new' as const, line: null, originalLine: null } : sideAndLine(pos)
   const comment: ReviewComment = {
-    id: note.id,
-    author: note.author?.username ?? 'ghost',
-    ...(note.author?.avatar_url ? { avatarUrl: note.author.avatar_url } : {}),
-    body: note.body ?? '',
+    ...mapGitLabIssueComment(note, ctx),
     path: pos?.new_path || pos?.old_path || '',
     line: loc.line,
     originalLine: loc.originalLine,
@@ -84,9 +81,6 @@ export function mapGitLabReviewComment(note: GlNote, ctx: NoteContext): ReviewCo
     // current one, or that lost its line, is about code the diff no longer shows.
     outdated: loc.line === null || (pos?.head_sha !== undefined && pos.head_sha !== ctx.headSha),
     commitId: pos?.head_sha ?? ctx.headSha,
-    createdAt: note.created_at,
-    updatedAt: note.updated_at ?? note.created_at,
-    url: gitlabNoteUrl(ctx.webBase, ctx.repo, ctx.iid, note.id),
     resolved: note.resolved === true,
   }
   if (loc.startLine !== undefined) {

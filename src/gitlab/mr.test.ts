@@ -24,7 +24,7 @@ const GL_MR = {
   changes_count: '7',
 }
 const STATS = {
-  project: { mergeRequest: { diffStatsSummary: { additions: 7, deletions: 5, fileCount: 7 } } },
+  project: { mergeRequest: { diffStatsSummary: { additions: 7, deletions: 5 } } },
 }
 
 describe('mapMergeRequest', () => {
@@ -121,9 +121,9 @@ describe('fetchMrDiffRefs', () => {
   it('reads the live diff refs, and says so when GitLab has none yet', async () => {
     const gh = createFakeGh({ routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson(GL_MR) } })
     expect(await fetchMrDiffRefs(gh, TEST_REPO, 42)).toEqual({
-      baseSha: BASE_SHA,
-      startSha: BASE_SHA,
-      headSha: HEAD_SHA,
+      base_sha: BASE_SHA,
+      start_sha: BASE_SHA,
+      head_sha: HEAD_SHA,
     })
     const none = createFakeGh({
       routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson({ ...GL_MR, diff_refs: null }) },

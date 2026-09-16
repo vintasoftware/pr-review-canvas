@@ -14,7 +14,6 @@ const GlMrSchema = z.object({
   id: z.number().int().optional(),
   iid: z.number().int().optional(),
   web_url: z.string().optional(),
-  approved: z.boolean().optional(),
 })
 
 /**

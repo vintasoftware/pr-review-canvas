@@ -1,12 +1,7 @@
 import type { Repo } from '../contract/review-artifact.js'
 
-/** URL-encoded `group/subgroup/project` as GitLab's `:id` path parameter. */
-export function gitlabProjectPath(repo: Repo): string {
-  return encodeURIComponent(`${repo.owner}/${repo.name}`)
-}
-
 export function gitlabProjectApi(repo: Repo): string {
-  return `projects/${gitlabProjectPath(repo)}`
+  return `projects/${encodeURIComponent(`${repo.owner}/${repo.name}`)}`
 }
 
 export function gitlabMrUrl(webBase: string, repo: Repo, iid: number): string {

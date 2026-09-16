@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { z } from 'zod'
 
 /**
  * The forge operations the tool needs, all through the host's own CLI (`gh` or `glab`) so the
@@ -224,5 +225,21 @@ export function createHostClient(spec: HostCliSpec, exec: CliExec = execCli): Ho
       const token = r.stdout.trim()
       return r.code === 0 && token !== '' ? token : null
     },
+  }
+}
+
+export const COMMENTS_PAGE_SIZE = 100
+
+/** Every item of a REST list endpoint, following `page=` until a page comes back short. */
+export async function fetchAllPages(client: HostClient, path: string): Promise<unknown[]> {
+  const out: unknown[] = []
+  for (let page = 1; ; page++) {
+    const batch = z
+      .array(z.unknown())
+      .parse(await client.api(path, { per_page: String(COMMENTS_PAGE_SIZE), page: String(page) }))
+    out.push(...batch)
+    if (batch.length < COMMENTS_PAGE_SIZE) {
+      return out
+    }
   }
 }

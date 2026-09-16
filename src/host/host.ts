@@ -86,7 +86,7 @@ export const GITHUB_HOST: Host = {
   compareUrl: (repo, base, head) => `https://github.com/${repo.owner}/${repo.name}/compare/${base}...${head}`,
   fetchPrMeta,
   fetchComments,
-  postComment: (client, repo, number, headSha, input) => postComment(client, repo, number, headSha, input),
+  postComment,
   postReview,
   probeCapabilities,
   attachments: GITHUB_ATTACHMENTS,

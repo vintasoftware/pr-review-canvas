@@ -30,7 +30,7 @@ const GlMergeRequestSchema = z.object({
 export const MR_STATS_QUERY = `query($path: ID!, $iid: String!) {
   project(fullPath: $path) {
     mergeRequest(iid: $iid) {
-      diffStatsSummary { additions deletions fileCount }
+      diffStatsSummary { additions deletions }
     }
   }
 }`
@@ -40,9 +40,7 @@ const DiffStatsSchema = z.object({
     .object({
       mergeRequest: z
         .object({
-          diffStatsSummary: z
-            .object({ additions: z.number().int(), deletions: z.number().int(), fileCount: z.number().int() })
-            .nullable(),
+          diffStatsSummary: z.object({ additions: z.number().int(), deletions: z.number().int() }).nullable(),
         })
         .nullable(),
     })
@@ -50,11 +48,7 @@ const DiffStatsSchema = z.object({
 })
 
 /** The three commits GitLab anchors an inline comment to. */
-export interface MrDiffRefs {
-  baseSha: string
-  startSha: string
-  headSha: string
-}
+export type MrDiffRefs = NonNullable<z.infer<typeof GlMergeRequestSchema>['diff_refs']>
 
 const STATES: Record<z.infer<typeof GlMergeRequestSchema>['state'], string> = {
   opened: 'open',
@@ -117,5 +111,5 @@ export async function fetchMrDiffRefs(client: HostClient, repo: Repo, number: nu
   if (refs === undefined || refs === null) {
     throw new Error(`merge request !${number} reports no diff refs; GitLab may still be computing its diff`)
   }
-  return { baseSha: refs.base_sha, startSha: refs.start_sha, headSha: refs.head_sha }
+  return refs
 }
