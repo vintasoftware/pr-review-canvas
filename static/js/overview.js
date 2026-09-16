@@ -61,6 +61,7 @@ export function conversationHtml(comments, now) {
  */
 export function renderOverview(bundle, ctx) {
   const artifact = bundle.artifact
+  const reviews = bundle.comments.reviews ?? []
   const active = artifact ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
   const description = bundle.pr.body.trim()
@@ -72,7 +73,7 @@ export function renderOverview(bundle, ctx) {
     `<div class="body">${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
-    (bundle.comments.reviews ?? []).map(review => `<div class="body"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('') +
+    (reviews.length ? `<details class="review-history">${detailsSummaryHtml(`<span>Review history · ${reviews.length}</span>`, 'Toggle review history')}${reviews.map(review => `<div class="body review-entry"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('')}</details>` : '') +
     (bundle.comments.reviewComments.length ? `<details class="body all-review-comments">${detailsSummaryHtml(`<span>All review comments · ${bundle.comments.reviewComments.length}</span>`, 'Toggle all review comments')}${bundle.comments.reviewComments.map(c => `<div><p class="muted small">${esc(c.path)}${c.line ? `:${c.line}` : ''}${c.outdated ? ' · outdated' : ''}${c.resolved ? ' · resolved' : ''}</p>${commentHtml(c, ctx.now)}</div>`).join('')}</details>` : '') +
     (artifact
       ? dismissedListHtml(artifact.points, bundle.state, {
