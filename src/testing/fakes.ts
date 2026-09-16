@@ -8,7 +8,7 @@ import type { RuntimeConfig } from '../config.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { type Git, GitError } from '../git/git.js'
-import { type CapabilityProbe, createCapabilityProbe } from '../github/capabilities.js'
+import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
 import { DEFAULT_PROJECT_CONFIG, type LoadedProjectConfig } from '../project-config.js'
 import {

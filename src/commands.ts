@@ -10,7 +10,7 @@ import type { ErrorCode } from './contract/api.js'
 import type { GenerationContext, PrepareTarget } from './contract/generation-context.js'
 import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
-import { fetchPrRefs } from './github/pr.js'
+import { fetchPrRefs } from './git/pr-refs.js'
 import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
 import {
   CLAUDE_SKILLS_DIR,

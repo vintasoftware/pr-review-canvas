@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { CommentsPayload, IssueComment, ReviewComment } from '../contract/comments.js'
+import type { FetchCommentsResult, IssueComment, ReviewComment } from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
 import { fetchAllPages, type HostClient } from '../host/client.js'
 import { fetchResolvedCommentIds } from './threads.js'
@@ -69,11 +69,6 @@ export function mapIssueComment(raw: unknown): IssueComment {
     updatedAt: c.updated_at ?? c.created_at,
     url: c.html_url,
   }
-}
-
-export interface FetchCommentsResult {
-  payload: CommentsPayload
-  warnings: string[]
 }
 
 /**

@@ -3,22 +3,9 @@
 import { createFakeGh, ghPost, ghPostError, TEST_REPO } from '../testing/fakes.js'
 import { HEAD_SHA } from '../testing/synthetic.js'
 import { HostCliError } from '../host/client.js'
-import { PostReviewInputSchema, postReview, REVIEW_EVENTS } from './post-review.js'
+import { postReview } from './post-review.js'
 
 const PATH = 'repos/acme/widgets/pulls/42/reviews'
-
-describe('PostReviewInputSchema', () => {
-  it('takes the two events and an optional body', () => {
-    expect(PostReviewInputSchema.parse({ event: 'APPROVE' })).toEqual({ event: 'APPROVE' })
-    expect(PostReviewInputSchema.parse({ event: 'REQUEST_CHANGES', body: 'x' })).toEqual({
-      event: 'REQUEST_CHANGES',
-      body: 'x',
-    })
-    expect(PostReviewInputSchema.safeParse({ event: 'COMMENT' }).success).toBe(false)
-    expect(PostReviewInputSchema.safeParse({ event: 'APPROVE', body: '' }).success).toBe(false)
-    expect(REVIEW_EVENTS).toEqual(['APPROVE', 'REQUEST_CHANGES'])
-  })
-})
 
 describe('postReview', () => {
   it('sends the event, the body, and the commit it reviews', async () => {

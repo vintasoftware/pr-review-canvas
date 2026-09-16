@@ -1,44 +1,11 @@
 import type { PostCommentInput, PostCommentResult } from '../contract/comments.js'
-import type { FileEntry, Repo, Side } from '../contract/review-artifact.js'
-import { hunkForLine } from '../git/patch-lines.js'
+import type { Repo, Side } from '../contract/review-artifact.js'
 import { mapIssueComment, mapReviewComment } from './comments.js'
 import type { HostClient } from '../host/client.js'
 
 /** GitHub names the two sides of a diff LEFT and RIGHT. */
 export function ghSide(side: Side): 'LEFT' | 'RIGHT' {
   return side === 'old' ? 'LEFT' : 'RIGHT'
-}
-
-export interface InlineTarget {
-  path: string
-  line: number
-  side: Side
-  startLine?: number | undefined
-}
-
-/**
- * Whether GitHub will accept a comment on these lines: the file is in the diff, and the whole
- * range sits inside one hunk on that side. Returns the reason when it will not, so the route can
- * refuse before the request leaves the machine.
- */
-export function checkInlineTarget(files: ReadonlyArray<FileEntry>, target: InlineTarget): string | null {
-  const file = files.find(f => f.path === target.path)
-  if (file === undefined) {
-    return `${target.path} is not in the diff`
-  }
-  const hunk = hunkForLine(file.hunks, target.side, target.line)
-  if (hunk === null) {
-    return `${target.path}:${target.line} (${target.side}) is not in the diff`
-  }
-  if (target.startLine !== undefined) {
-    if (target.startLine > target.line) {
-      return `the first line of the range must come before ${target.line}`
-    }
-    if (hunkForLine(file.hunks, target.side, target.startLine) !== hunk) {
-      return `${target.path}:${target.startLine}-${target.line} (${target.side}) spans more than one hunk`
-    }
-  }
-  return null
 }
 
 /** The fields GitHub reads for a comment on a diff line. */

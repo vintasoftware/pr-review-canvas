@@ -40,18 +40,21 @@ describe('postGitlabReview', () => {
     })
   })
 
-  it('falls back to the MR url when approve returns an unexpected body', async () => {
-    const gh = createFakeGh({
-      postRoutes: { 'projects/acme%2Fwidgets/merge_requests/42/approve': ghPost(() => 'nope') },
-    })
-    expect(
-      await postGitlabReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: '' }, WEB)
-    ).toMatchObject({
-      id: 42,
-      state: 'APPROVED',
-      url: `${WEB}/acme/widgets/-/merge_requests/42`,
-    })
-  })
+  it.each(['nope', null, {}, { id: 'invalid', web_url: 'https://gitlab.com/ignored' }])(
+    'falls back to the MR number and URL for approval response %j',
+    async response => {
+      const gh = createFakeGh({
+        postRoutes: { 'projects/acme%2Fwidgets/merge_requests/42/approve': ghPost(() => response) },
+      })
+      expect(
+        await postGitlabReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: '' }, WEB)
+      ).toMatchObject({
+        id: 42,
+        state: 'APPROVED',
+        url: `${WEB}/acme/widgets/-/merge_requests/42`,
+      })
+    }
+  )
 
   it('approves without posting an empty body', async () => {
     const gh = createFakeGh({

@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { fetchPrRefs, PrNotFoundError, prBaseRef, prHeadRef, toPr } from '../github/pr.js'
+import { fetchPrRefs, prBaseRef, prHeadRef } from '../git/pr-refs.js'
+import { PrNotFoundError, toPr } from '../host/pr.js'
 import { HostCliError } from '../host/client.js'
 import { gitlabHost } from '../host/host.js'
 import { createFakeGh, createFakeGit, ghError, ghJson, TEST_REPO } from '../testing/fakes.js'

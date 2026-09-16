@@ -18,7 +18,7 @@ import {
 import { ConfigError } from './config.js'
 import { GitError } from './git/git.js'
 import { HostCliError } from './host/client.js'
-import { PrNotFoundError } from './github/pr.js'
+import { PrNotFoundError } from './host/pr.js'
 import { SkillDirExistsError } from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
 import { ModelInvalidError, PublishError } from './review/publish.js'

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ReviewSummary } from '../contract/api.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { ReviewEvent } from '../github/post-review.js'
+import type { ReviewEvent } from '../contract/reviews.js'
 import type { HostClient } from '../host/client.js'
 import { gitlabMrUrl, gitlabNoteUrl, gitlabProjectApi } from './project.js'
 
@@ -35,11 +35,11 @@ export async function postGitlabReview(
       await client.post(`${base}/notes`, { body: input.body })
     }
     const raw = await client.post(`${base}/approve`, { sha: headSha })
-    const mr = GlMrSchema.safeParse(raw)
+    const mr = GlMrSchema.safeParse(raw).data ?? {}
     return {
-      id: mr.success ? (mr.data.id ?? mr.data.iid ?? number) : number,
+      id: mr.id ?? mr.iid ?? number,
       state: 'APPROVED',
-      url: mr.success ? (mr.data.web_url ?? mrUrl) : mrUrl,
+      url: mr.web_url ?? mrUrl,
       submittedAt: new Date().toISOString(),
     }
   }

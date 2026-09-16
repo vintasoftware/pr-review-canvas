@@ -2,7 +2,7 @@
 import { ConfigError } from '../config.js'
 import { GitError } from '../git/git.js'
 import { HostCliError } from '../host/client.js'
-import { PrNotFoundError } from '../github/pr.js'
+import { PrNotFoundError } from '../host/pr.js'
 import { AppError, toAppError } from './errors.js'
 
 describe('toAppError', () => {

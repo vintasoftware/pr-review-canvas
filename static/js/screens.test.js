@@ -2,7 +2,7 @@
 // @vitest-environment happy-dom
 // Header, overview, empty state, and AI Chat shell over the synthetic bundle.
 import { emptyState } from '../../src/contract/state.js'
-import { UNKNOWN_CAPABILITIES } from '../../src/github/capabilities.js'
+import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'

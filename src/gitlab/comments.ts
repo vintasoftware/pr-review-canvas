@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { IssueComment, ReviewComment } from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { FetchCommentsResult } from '../github/comments.js'
+import type { FetchCommentsResult } from '../contract/comments.js'
 import { fetchAllPages, type HostClient } from '../host/client.js'
 import { gitlabNoteUrl, gitlabProjectApi } from './project.js'
 

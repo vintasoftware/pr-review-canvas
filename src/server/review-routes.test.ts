@@ -3,7 +3,7 @@
 import type { PostCommentResponse, PostReviewResponse, StateResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { HostCliError } from '../host/client.js'
-import { REVIEW_BODY_FOOTER } from '../github/review-body.js'
+import { REVIEW_BODY_FOOTER } from '../review/review-body.js'
 import {
   createFakeGh,
   type FakeGh,

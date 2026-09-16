@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Repo } from '../contract/review-artifact.js'
-import { type PrMeta, PrNotFoundError } from '../github/pr.js'
+import { type PrMeta, PrNotFoundError } from '../host/pr.js'
 import { type HostClient, HostCliError } from '../host/client.js'
 import { gitlabProjectApi } from './project.js'
 

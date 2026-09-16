@@ -3,7 +3,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ConfigError } from '../config.js'
 import type { ErrorCode, ErrorEnvelope } from '../contract/api.js'
 import { GitError } from '../git/git.js'
-import { PrNotFoundError } from '../github/pr.js'
+import { PrNotFoundError } from '../host/pr.js'
 import { CLI_INFO, type HostCli, HostCliError } from '../host/client.js'
 
 /** The codes each host CLI's failures map to. The front end and the docs name them one by one. */
