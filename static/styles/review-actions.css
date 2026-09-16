@@ -35,6 +35,7 @@ tr.sel-bar .lbl {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
+.preview-controls,
 .composer-actions {
   display: flex;
   gap: 12px;
