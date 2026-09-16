@@ -65,12 +65,14 @@ interface ExecResult {
  * otherwise read and write a repository nobody asked for. Dropping them is what lets the directory
  * the caller passes name the repository.
  *
- * Two families that can also redirect git are deliberately kept, because taking them away breaks
- * more than it protects. GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM and GIT_CONFIG_COUNT carry the
- * credential helpers and proxies `fetch` needs, and a caller who sets them means them. The
- * discovery controls, GIT_CEILING_DIRECTORIES and GIT_DISCOVERY_ACROSS_FILESYSTEM, are usually a
+ * Other variables can redirect git too, and are deliberately kept. GIT_CONFIG_GLOBAL and
+ * GIT_CONFIG_SYSTEM relocate the files config is read from; unsetting them does not strip the
+ * credential helpers and proxies `fetch` needs, it sends git back to ~/.gitconfig and
+ * /etc/gitconfig, which is what breaks anyone who moved them on purpose — a container with no
+ * HOME, a CI image. GIT_CEILING_DIRECTORIES and GIT_DISCOVERY_ACROSS_FILESYSTEM are usually a
  * deliberate fence around slow mounts; obeying one costs a clear "not a git repository", while
- * overriding it sends git walking somewhere the user shut off.
+ * overriding it sends git walking somewhere the user shut off. The inline config of
+ * GIT_CONFIG_COUNT needs no exception: git never hands it to a hook, so the rule above leaves it.
  */
 export const REPO_ENV_VARS = [
   'GIT_DIR',
