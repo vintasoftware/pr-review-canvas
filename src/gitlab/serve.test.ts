@@ -1,6 +1,11 @@
 // @vitest-environment node
 // A GitLab origin served through the same routes as GitHub: the Host adapter is the only thing
 // that changes, so this is where its GitLab side is exercised end to end.
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { artifactToModelOutput } from '../review/normalize.js'
+import { prepare } from '../review/prepare.js'
+import { publish } from '../review/publish.js'
 import type { PostCommentResponse, PrBundle } from '../contract/api.js'
 import { gitlabHost } from '../host/host.js'
 import { createApp } from '../server/app.js'
@@ -13,7 +18,13 @@ import {
   TEST_REPO,
   type TestContext,
 } from '../testing/fakes.js'
-import { BASE_SHA, HEAD_SHA, SYNTHETIC_BLOBS, SYNTHETIC_DIFF } from '../testing/synthetic.js'
+import {
+  BASE_SHA,
+  HEAD_SHA,
+  SYNTHETIC_BLOBS,
+  SYNTHETIC_DIFF,
+  syntheticArtifact,
+} from '../testing/synthetic.js'
 
 const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' }
@@ -93,6 +104,29 @@ describe('a GitLab origin', () => {
   let t: TestContext
   afterEach(async () => {
     await t?.cleanup()
+  })
+
+  it('prepares and publishes an MR canvas, and refuses a changed head', async () => {
+    t = await makeTestContext({ host: GL, gh: glabFor42(), git: gitForMr42() })
+    const { canvasDir } = await prepare(
+      t.ctx,
+      { kind: 'pr', number: 42 },
+      { force: false, log: () => undefined }
+    )
+    await writeFile(join(canvasDir, 'model.json'), JSON.stringify(artifactToModelOutput(syntheticArtifact())))
+    const opts = { agent: 'test', harness: 'other' as const, allowStale: false }
+    const moved = 'e'.repeat(40)
+    t.ctx.gh = createFakeGh({
+      routes: { [MR_API]: ghJson({ ...MR, sha: moved, diff_refs: { ...MR.diff_refs, head_sha: moved } }) },
+    })
+    await expect(publish(t.ctx, canvasDir, opts)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+    t.ctx.gh = glabFor42()
+    await expect(publish(t.ctx, canvasDir, opts)).resolves.toMatchObject({
+      status: 'published',
+      headSha: HEAD_SHA,
+    })
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(true)
   })
 
   it('serves the merge request, its threads, and the login through the GitHub routes', async () => {

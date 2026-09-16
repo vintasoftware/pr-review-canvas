@@ -1,8 +1,12 @@
 // @vitest-environment node
 import { createFakeGh, ghJson, ghPost, TEST_REPO } from '../testing/fakes.js'
+import { createHash } from 'node:crypto'
+import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import type { FileEntry } from '../contract/review-artifact.js'
 import { HEAD_SHA, SYNTHETIC_FILES } from '../testing/synthetic.js'
 import { postGitlabComment } from './post-comment.js'
+
+const DIFF = { files: SYNTHETIC_FILES.map(toFileEntry), patches: toPatchMap(SYNTHETIC_FILES) }
 
 const WEB = 'https://gitlab.com'
 const MR = {
@@ -47,7 +51,7 @@ describe('postGitlabComment', () => {
       42,
       HEAD_SHA,
       { kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', body: 'Look at this' },
-      { webBase: WEB, files: [] }
+      { webBase: WEB, ...DIFF }
     )
     expect(posted.kind).toBe('review')
     expect(posted.comment.id).toBe(5001)
@@ -58,6 +62,57 @@ describe('postGitlabComment', () => {
         new_path: 'src/app.ts',
         new_line: 4,
         head_sha: HEAD_SHA,
+      },
+    })
+  })
+
+  it.each(['old', 'new'] as const)(
+    'posts context lines with both coordinates from the %s side',
+    async side => {
+      const gh = createFakeGh({
+        routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson(MR) },
+        postRoutes: {
+          'projects/acme%2Fwidgets/merge_requests/42/discussions': ghPost(() => ({ notes: [NOTE] })),
+        },
+      })
+      await postGitlabComment(
+        gh,
+        TEST_REPO,
+        42,
+        HEAD_SHA,
+        { kind: 'inline', path: 'src/app.ts', line: side === 'old' ? 2 : 3, side, body: 'context' },
+        { webBase: WEB, ...DIFF }
+      )
+      expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({
+        position: { old_line: 2, new_line: 3 },
+      })
+    }
+  )
+
+  it('resolves each endpoint of a range spanning an added and a context line', async () => {
+    const gh = createFakeGh({
+      routes: { 'projects/acme%2Fwidgets/merge_requests/42': ghJson(MR) },
+      postRoutes: {
+        'projects/acme%2Fwidgets/merge_requests/42/discussions': ghPost(() => ({ notes: [NOTE] })),
+      },
+    })
+    await postGitlabComment(
+      gh,
+      TEST_REPO,
+      42,
+      HEAD_SHA,
+      { kind: 'inline', path: 'src/app.ts', startLine: 2, line: 3, side: 'new', body: 'range' },
+      { webBase: WEB, ...DIFF }
+    )
+    const hash = createHash('sha1').update('src/app.ts').digest('hex')
+    expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({
+      position: {
+        old_line: 2,
+        new_line: 3,
+        line_range: {
+          start: { line_code: `${hash}__2`, type: 'new', new_line: 2 },
+          end: { line_code: `${hash}_2_3`, type: 'old', old_line: 2, new_line: 3 },
+        },
       },
     })
   })
@@ -84,7 +139,7 @@ describe('postGitlabComment', () => {
       42,
       HEAD_SHA,
       { kind: 'reply', inReplyToId: 1001, body: 'reply' },
-      { webBase: WEB, files: [] }
+      { webBase: WEB, ...DIFF }
     )
     expect(posted.kind).toBe('review')
     expect(posted.comment.id).toBe(1002)
@@ -118,7 +173,7 @@ describe('postGitlabComment', () => {
       42,
       HEAD_SHA,
       { kind: 'inline', path: 'src/app.ts', line: 3, startLine: 1, side: 'old', body: 'old' },
-      { webBase: WEB, files: [] }
+      { webBase: WEB, ...DIFF }
     )
     expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({
       position: { old_line: 3, line_range: { start: { type: 'old' }, end: { type: 'old' } } },
@@ -139,7 +194,7 @@ describe('postGitlabComment', () => {
       42,
       HEAD_SHA,
       { kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', body: 'moved' },
-      { webBase: WEB, files }
+      { webBase: WEB, ...DIFF, files }
     )
     expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({
       position: { old_path: 'src/old.ts', new_path: 'src/app.ts' },
@@ -154,7 +209,7 @@ describe('postGitlabComment', () => {
         42,
         HEAD_SHA,
         { kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', body: 'x' },
-        { webBase: WEB, files: [] }
+        { webBase: WEB, ...DIFF }
       )
     ).rejects.toThrow(/no diff refs/)
   })
@@ -170,7 +225,7 @@ describe('postGitlabComment', () => {
         42,
         HEAD_SHA,
         { kind: 'reply', inReplyToId: 99, body: 'x' },
-        { webBase: WEB, files: [] }
+        { webBase: WEB, ...DIFF }
       )
     ).rejects.toThrow(/no GitLab discussion/)
   })
@@ -192,7 +247,7 @@ describe('postGitlabComment', () => {
       42,
       HEAD_SHA,
       { kind: 'issue', body: 'Overall looks fine' },
-      { webBase: WEB, files: [] }
+      { webBase: WEB, ...DIFF }
     )
     expect(posted).toMatchObject({ kind: 'issue', comment: { id: 6001, body: 'Overall looks fine' } })
   })

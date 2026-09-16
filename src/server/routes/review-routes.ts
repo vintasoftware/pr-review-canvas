@@ -3,11 +3,12 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
-import type { FileEntry, Pr, ReviewArtifact } from '../../contract/review-artifact.js'
+import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { checkInlineTarget } from '../../github/post-comment.js'
 import { PostReviewInputSchema } from '../../github/post-review.js'
 import { buildReviewBody, stateForHead, unreviewedLayers } from '../../github/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
+import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
@@ -147,7 +148,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting()
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
-    let files: FileEntry[] = []
+    let diff: Derived = { files: [], patches: {} }
     if (input.kind === 'inline') {
       const derived = await ctx.derived.read(pr.headSha)
       if (derived === null) {
@@ -162,16 +163,9 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       if (problem !== null) {
         throw new AppError('COMMENT_LINE_NOT_IN_DIFF', problem, 422, 'comment on a line the diff shows')
       }
-      files = derived.files
+      diff = derived
     }
-    const posted = await ctx.config.host.postComment(
-      ctx.gh,
-      ctx.config.repo,
-      number,
-      pr.headSha,
-      input,
-      files
-    )
+    const posted = await ctx.config.host.postComment(ctx.gh, ctx.config.repo, number, pr.headSha, input, diff)
     await appendComment(ctx, number, posted)
     const entry =
       input.kind === 'inline' && input.pointFingerprint !== undefined

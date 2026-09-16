@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { PostCommentInput, PostCommentResult } from '../contract/comments.js'
-import type { FileEntry, Repo } from '../contract/review-artifact.js'
+import type { Repo, Side } from '../contract/review-artifact.js'
+import { splitHunks } from '../git/patch-lines.js'
+import type { Derived } from '../store/derived-store.js'
 import type { HostClient } from '../host/client.js'
 import { findDiscussionId, GlNoteSchema, mapGitLabIssueComment, mapGitLabReviewComment } from './comments.js'
 import { fetchMrDiffRefs, type MrDiffRefs } from './mr.js'
@@ -10,32 +12,54 @@ import { gitlabProjectApi } from './project.js'
 /** A new discussion comes back as the thread holding its first note. */
 const GlDiscussionSchema = z.object({ notes: z.tuple([GlNoteSchema]).rest(z.unknown()) })
 
-/** GitLab's id for one diff line: the path hash and the line on each side. */
-function lineCode(filePath: string, side: 'old' | 'new', line: number): string {
-  const hash = createHash('sha1').update(filePath).digest('hex')
-  return side === 'old' ? `${hash}_${line}_` : `${hash}__${line}`
+/** Context lines need both coordinates, including offsets introduced by earlier changes. */
+function diffLine(patch: string, side: Side, line: number): { old_line?: number; new_line?: number } {
+  for (const hunk of splitHunks(patch)) {
+    let oldLine = hunk.oldStart
+    let newLine = hunk.newStart
+    for (const text of hunk.lines) {
+      if (![' ', '+', '-'].includes(text[0] ?? '')) continue
+      const point = {
+        ...(text.startsWith('+') ? {} : { old_line: oldLine++ }),
+        ...(text.startsWith('-') ? {} : { new_line: newLine++ }),
+      }
+      if ((side === 'old' ? point.old_line : point.new_line) === line) return point
+    }
+  }
+  throw new Error(`${side}-side line ${line} is not in the patch`)
 }
 
 /** The `position` GitLab anchors an inline comment to. A range names both of its ends by line code. */
 export function inlinePosition(
   refs: MrDiffRefs,
   input: Extract<PostCommentInput, { kind: 'inline' }>,
-  files: ReadonlyArray<FileEntry>
+  diff: Derived
 ): Record<string, unknown> {
   const newPath = input.path
-  const oldPath = files.find(f => f.path === input.path)?.oldPath ?? input.path
+  const file = diff.files.find(f => f.path === input.path)
+  const patch = file === undefined ? undefined : diff.patches[file.key]
+  if (file === undefined || patch === undefined) {
+    throw new Error(`no diff available for ${input.path}`)
+  }
+  const oldPath = file.oldPath ?? input.path
   const position: Record<string, unknown> = {
     ...refs,
     position_type: 'text',
     old_path: oldPath,
     new_path: newPath,
-    ...(input.side === 'old' ? { old_line: input.line } : { new_line: input.line }),
+    ...diffLine(patch, input.side, input.line),
   }
   if (input.startLine !== undefined && input.startLine !== input.line) {
-    position['line_range'] = {
-      start: { line_code: lineCode(newPath, input.side, input.startLine), type: input.side },
-      end: { line_code: lineCode(newPath, input.side, input.line), type: input.side },
+    const hash = createHash('sha1').update(newPath).digest('hex')
+    const endpoint = (line: number) => {
+      const point = diffLine(patch, input.side, line)
+      return {
+        ...point,
+        line_code: `${hash}_${point.old_line ?? ''}_${point.new_line ?? ''}`,
+        type: point.old_line === undefined ? 'new' : 'old',
+      }
     }
+    position['line_range'] = { start: endpoint(input.startLine), end: endpoint(input.line) }
   }
   return position
 }
@@ -51,7 +75,7 @@ export async function postGitlabComment(
   number: number,
   headSha: string,
   input: PostCommentInput,
-  opts: { webBase: string; files: ReadonlyArray<FileEntry> }
+  opts: Derived & { webBase: string }
 ): Promise<PostCommentResult> {
   const base = `${gitlabProjectApi(repo)}/merge_requests/${number}`
   const mapped = { webBase: opts.webBase, repo, iid: number, headSha }
@@ -60,7 +84,7 @@ export async function postGitlabComment(
       const refs = await fetchMrDiffRefs(client, repo, number)
       const raw = await client.post(`${base}/discussions`, {
         body: input.body,
-        position: inlinePosition(refs, input, opts.files),
+        position: inlinePosition(refs, input, opts),
       })
       return {
         kind: 'review',

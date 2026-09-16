@@ -1,6 +1,6 @@
 import type { Capabilities, PublicHost, ReviewSummary } from '../contract/api.js'
 import type { PostCommentInput, PostCommentResult } from '../contract/comments.js'
-import type { FileEntry, Repo } from '../contract/review-artifact.js'
+import type { Repo } from '../contract/review-artifact.js'
 import { GITHUB_ATTACHMENTS } from '../github/attachments.js'
 import { probeCapabilities } from '../github/capabilities.js'
 import { type FetchCommentsResult, fetchComments } from '../github/comments.js'
@@ -13,6 +13,7 @@ import { fetchGitlabComments } from '../gitlab/comments.js'
 import { fetchMrMeta } from '../gitlab/mr.js'
 import { postGitlabComment } from '../gitlab/post-comment.js'
 import { postGitlabReview } from '../gitlab/post-review.js'
+import type { Derived } from '../store/derived-store.js'
 import type { AttachmentLink } from './attachments.js'
 import { GH_CLI, glabCli, type HostClient, type HostCliSpec } from './client.js'
 
@@ -54,14 +55,14 @@ export interface Host {
     headSha: string,
     now: () => Date
   ): Promise<FetchCommentsResult>
-  /** `files` is the derived diff of the head, which GitLab needs for a renamed file's old path. */
+  /** GitLab needs the diff for renamed paths and both coordinates of context lines. */
   postComment(
     client: HostClient,
     repo: Repo,
     number: number,
     headSha: string,
     input: PostCommentInput,
-    files: ReadonlyArray<FileEntry>
+    diff: Derived
   ): Promise<PostCommentResult>
   postReview(
     client: HostClient,
@@ -108,8 +109,8 @@ export function gitlabHost(hostname: string): Host {
     fetchPrMeta: fetchMrMeta,
     fetchComments: (client, repo, number, headSha, now) =>
       fetchGitlabComments(client, repo, number, headSha, now, webBase),
-    postComment: (client, repo, number, headSha, input, files) =>
-      postGitlabComment(client, repo, number, headSha, input, { webBase, files }),
+    postComment: (client, repo, number, headSha, input, diff) =>
+      postGitlabComment(client, repo, number, headSha, input, { webBase, ...diff }),
     postReview: (client, repo, number, headSha, input) =>
       postGitlabReview(client, repo, number, headSha, input, webBase),
     probeCapabilities: probeGitlabCapabilities,
