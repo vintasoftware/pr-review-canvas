@@ -33,7 +33,7 @@ export function buildCanvasZipName(opts: BuildNameOptions): string {
   return `${target}-${timestamp}-${opts.headSha.slice(0, 8)}-${repoSlug(opts.repo)}-canvas.zip`
 }
 
-/** The same grammar the drop zone applies to a picked file (`validateCanvasFilename`). */
+/** The strict form of the grammar the drop zone applies to a picked file (`validateCanvasFilename`). */
 const NAME_RE = /^(?:pr-([1-9]\d*)|ref)-\d{8}t\d{6}z-([0-9a-f]{8})$/
 
 /**
