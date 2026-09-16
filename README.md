@@ -161,6 +161,10 @@ Restart the server after changing the config; chat template edits apply to new t
 See the [prompt template reference](docs/reference.md#prompt-templates) for supported keys,
 path rules, validation, and upgrades.
 
+## Website
+
+The [project website](https://vintasoftware.github.io/pr-review-canvas/) introduces the review workflow with a real PR walkthrough. See [website development and publishing](docs/website.md) for local preview commands and the GitHub Pages deployment workflow.
+
 ## Contributing
 
 In a clone of this tool, use pnpm for the shared lockfile and development checks:
