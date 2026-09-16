@@ -60,10 +60,17 @@ interface ExecResult {
 }
 
 /**
- * The environment variables that point git at a repository. They win over the working directory,
- * and git exports them to every process it starts, so a tool run from a hook, or from a shell that
- * exported GIT_DIR, would otherwise read and write a repository nobody asked for. All of them are
- * dropped: the directory the caller passes is what picks the repository.
+ * The repository state git hands to the processes a hook starts. Every one of them wins over the
+ * working directory, so a tool run from a hook — or from a shell that exported GIT_DIR — would
+ * otherwise read and write a repository nobody asked for. Dropping them is what lets the directory
+ * the caller passes name the repository.
+ *
+ * Two families that can also redirect git are deliberately kept, because taking them away breaks
+ * more than it protects. GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM and GIT_CONFIG_COUNT carry the
+ * credential helpers and proxies `fetch` needs, and a caller who sets them means them. The
+ * discovery controls, GIT_CEILING_DIRECTORIES and GIT_DISCOVERY_ACROSS_FILESYSTEM, are usually a
+ * deliberate fence around slow mounts; obeying one costs a clear "not a git repository", while
+ * overriding it sends git walking somewhere the user shut off.
  */
 export const REPO_ENV_VARS = [
   'GIT_DIR',
