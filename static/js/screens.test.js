@@ -75,7 +75,7 @@ describe('header', () => {
       now: NOW,
     })
     const hdr = document.querySelector('header.hdr')
-    expect(hdr?.querySelector('.brand .box')?.textContent).toBe('PR review canvas')
+    expect(hdr?.querySelector('.brand-wordmark')?.textContent).toBe('PR review canvas')
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
       'regenerate',
       'export zip',

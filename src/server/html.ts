@@ -96,7 +96,7 @@ export function homePage(
     app: false,
     body: html`<div class="page">
 <header class="hdr">
-<div class="hdr-bar"><div class="brand"><span class="box">PR review canvas</span><span class="mono muted">localhost:${String(data.port)}</span></div>
+<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">localhost:${String(data.port)}</span></div>
 <div class="hdr-actions"><a class="cmd" href="/api/health">health</a></div></div>
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>${data.owner}/${data.repo}</h1></div>
@@ -132,7 +132,7 @@ export function errorPage(error: ErrorEnvelope['error'], nonce: string, appearan
     appearance,
     app: false,
     body: html`<div class="page"><header class="hdr">
-<div class="hdr-bar"><div class="brand"><span class="box">PR review canvas</span></div><div class="hdr-actions"><a class="cmd" href="/">home</a></div></div>
+<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span></div><div class="hdr-actions"><a class="cmd" href="/">home</a></div></div>
 <div class="stripe" aria-hidden="true"></div></header>
 <main id="main" class="home"><section class="panel error-card"><div class="panel-h"><h2><span class="mono">${error.code}</span></h2></div>
 <div class="body"><p>${error.message}</p>${error.hint ? html`<p class="muted">${error.hint}</p>` : ''}</div></section></main></div>`,

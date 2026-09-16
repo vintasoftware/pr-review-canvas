@@ -78,13 +78,6 @@
   text-transform: none;
   letter-spacing: normal;
   font-size: 14px;
-  align-items: center;
-}
-[data-skin="github"] .brand .box {
-  border-width: 1px;
-  border-radius: var(--r);
-  background: var(--panel-2);
-  padding: 3px 8px;
 }
 /* The rainbow bar becomes the hairline that runs under GitHub's page header. */
 [data-skin="github"] .stripe {
