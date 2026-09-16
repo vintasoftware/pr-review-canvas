@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" shape-rendering="crispEdges">
+  <title>PR review canvas</title>
+  <path fill="#7661a8" d="M12 7h31v35H12z"/>
+  <path fill="#aa96d2" d="M39 9h2v24h-2z"/>
+  <path fill="#292b3d" d="M3 3h35v41H3z"/>
+  <path fill="#fff0cf" d="M5 12h31v30H5z"/>
+  <path fill="#45465c" d="M5 5h31v5H5z"/>
+  <path fill="#ffe08a" d="M22 8h3v1h-3z"/>
+  <path fill="#ffffff" d="M27 6h3v3h-3zm1 1v1h1V7z" fill-rule="evenodd"/>
+  <path fill="#ffb3ab" d="M32 6h1v1h1V6h1v1h-1v1h1v1h-1V8h-1v1h-1V8h1V7h-1z"/>
+  <path fill="#b44a45" d="M9 17h9v3H9z"/>
+  <path fill="#e8ddc4" d="M20 15h1v19h-1z"/>
+  <path fill="#827b70" d="M23 17h10v2H23zM23 26h10v2H23zM9 36h16v2H9z"/>
+  <path fill="#437d68" d="M12 23h3v3h3v3h-3v3h-3v-3H9v-3h3z"/>
+  <g transform="scale(0.5)" shape-rendering="geometricPrecision">
+    <path fill="#292b3d" d="M56 68H58V66H60V64H62V62H68V64H70V66H72V68H76V64H78V60H80V56H82V52H84V50H90V52H92V54H94V56H96V62H94V66H92V70H90V74H88V78H86V82H84V86H82V90H80V92H72V90H70V88H68V86H66V84H64V82H62V80H60V78H58V76H56z"/>
+    <path fill="#8bc79a" d="M58 70H60V68H62V66H64V64H66V66H68V68H70V70H72V72H74V74H76V70H78V66H80V62H82V58H84V54H86V52H88V54H90V56H92V58H94V60H92V64H90V68H88V72H86V76H84V80H82V84H80V88H78V90H74V88H72V86H70V84H68V82H66V80H64V78H62V76H60V74H58z"/>
+  </g>
+</svg>

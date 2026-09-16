@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f2" />
+    <meta
+      name="description"
+      content="Review large GitHub pull requests by intent. Semantic layers, collapsible diffs, and contextual AI chat in a local app using your existing Claude Code or Codex subscription. Built by Vinta Software."
+    />
+    <meta property="og:title" content="PR Review Canvas — Big PR. Clear picture." />
+    <meta
+      property="og:description"
+      content="A local review workspace for understanding large changes. Semantic layers, mechanical-change folds, and AI chat with the coding agent you already use."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vintasoftware.github.io/pr-review-canvas/" />
+    <link rel="canonical" href="https://vintasoftware.github.io/pr-review-canvas/" />
+    <link rel="icon" type="image/svg+xml" href="./brand.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>PR Review Canvas — Big PR. Clear picture.</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <a class="brand" href="#" aria-label="PR Review Canvas home"
+        ><img src="./brand.svg" width="34" height="34" alt="" /><span
+          >PR Review <strong>Canvas</strong></span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="#layers">The approach</a><a href="#local">Why local</a><a href="#configuration">Configure</a>
+        <a class="nav-cta" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-heading">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot"></span> Open source. On your machine.</p>
+          <h1 id="hero-heading">Big PR.<br /><em>Clear picture.</em></h1>
+        </div>
+        <div class="hero-intro">
+          <p class="lede">Follow the intent behind the diff.</p>
+          <p>
+            Turn a large pull request into semantic layers you can actually work through. Related changes
+            together. Mechanical changes folded away. Your AI agent, right beside the code.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#get-started">Start reviewing <span aria-hidden="true">↗</span></a
+            ><a class="text-link" href="https://github.com/vintasoftware/pr-review-canvas"
+              >View on GitHub <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <p class="credit">
+            Built by <a href="https://www.vintasoftware.com/">Vinta Software</a><br />as part of our
+            <strong>AI-Native SDLC initiatives.</strong>
+          </p>
+        </div>
+      </section>
+
+      <section class="demo-section wrap" aria-labelledby="demo-heading">
+        <div class="section-kicker">
+          <h2 id="demo-heading">A little context changes the whole review.</h2>
+          <span class="mono">REAL PR · INTERACTIVE WALKTHROUGH</span>
+        </div>
+        <div class="canvas-demo">
+          <div class="canvas-toolbar">
+            <span
+              ><span class="pr-icon" aria-hidden="true">⑂</span> <strong>TanStack Query</strong>
+              <a href="https://github.com/TanStack/query/pull/9612">#9612</a>
+              <span class="pr-stats">+471 −51 · 18 files</span></span
+            ><span class="local-badge">EXCERPTS FROM A REAL PR</span>
+          </div>
+          <div class="canvas-grid">
+            <aside class="layer-nav" aria-label="Sample semantic layers">
+              <p class="panel-label">REVIEW BY INTENT</p>
+              <p class="nav-hint">One PR. Three concerns.</p>
+              <div class="layer-buttons" role="group" aria-label="Choose a sample layer">
+                <button
+                  type="button"
+                  class="layer-button"
+                  data-layer="provider"
+                  aria-pressed="true"
+                  aria-controls="sample-layer"
+                >
+                  <span class="layer-number">01</span
+                  ><span><strong>Timer provider</strong><small>API + tests + exports</small></span
+                  ><span class="layer-check" aria-hidden="true"></span>
+                </button>
+                <button
+                  type="button"
+                  class="layer-button"
+                  data-layer="timers"
+                  aria-pressed="false"
+                  aria-controls="sample-layer"
+                >
+                  <span class="layer-number">02</span
+                  ><span><strong>Query lifecycle</strong><small>Create + clear timers</small></span
+                  ><span class="layer-check" aria-hidden="true"></span>
+                </button>
+                <button
+                  type="button"
+                  class="layer-button"
+                  data-layer="scheduling"
+                  aria-pressed="false"
+                  aria-controls="sample-layer"
+                >
+                  <span class="layer-number">03</span
+                  ><span><strong>Next-tick scheduling</strong><small>Notifications + persister</small></span
+                  ><span class="layer-check" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="demo-progress">
+                <span id="sample-progress" role="status">0 of 3 sample layers reviewed</span>
+                <div class="progress-track"><span id="progress-fill"></span></div>
+              </div>
+            </aside>
+            <article class="sample-layer" id="sample-layer" aria-labelledby="sample-title">
+              <div class="layer-heading">
+                <span class="pill" id="sample-category">PROVIDER API</span
+                ><button class="small-button" id="review-layer" type="button" aria-pressed="false">
+                  Mark reviewed
+                </button>
+              </div>
+              <h3 id="sample-title">Make the timer provider replaceable.</h3>
+              <p id="sample-summary">
+                A manager delegates timer creation and cancellation to a configurable provider. Its new tests
+                check that calls reach the provider.
+              </p>
+              <div class="sample-file">
+                <div class="file-heading">
+                  <span id="sample-path">query-core/src/timeoutManager.ts</span
+                  ><span class="add-count">DIFF EXCERPT</span>
+                </div>
+                <pre
+                  class="diff-code"
+                  tabindex="0"
+                  aria-label="Sample code diff"
+                ><code id="sample-code"><span class="addition">+  setTimeout(callback: TimeoutCallback, delay: number): ManagedTimerId {</span><span class="addition">+    if (process.env.NODE_ENV !== 'production') {</span><span class="addition">+      this.#providerCalled = true</span><span class="addition">+    }</span><span class="addition">+    return this.#provider.setTimeout(callback, delay)</span><span class="addition">+  }</span><span class="addition">+</span><span class="addition">+  clearTimeout(timeoutId: ManagedTimerId | undefined): void {</span><span class="addition">+    this.#provider.clearTimeout(timeoutId)</span></code></pre>
+              </div>
+              <div class="related-file">
+                <span class="file-symbol" aria-hidden="true">↳</span
+                ><span id="sample-related">query-core/src/__tests__/timeoutManager.test.tsx</span
+                ><span class="pill">SAME LAYER</span>
+              </div>
+              <div class="test-row">
+                <span aria-hidden="true">↳</span
+                ><span id="sample-test">Added test: proxies calls to the configured timeout provider</span>
+              </div>
+              <a
+                id="sample-source"
+                class="sample-source"
+                href="https://github.com/TanStack/query/blob/7922966810988298e6c40761b8888597d6e0e0d7/packages/query-core/src/timeoutManager.ts#L101-L109"
+                >Read this excerpt in the source ↗</a
+              >
+            </article>
+            <aside class="sample-context" aria-label="Sample review context">
+              <p class="panel-label">WORTH A CLOSER LOOK</p>
+              <div class="attention">
+                <span class="attention-label">CHECK</span>
+                <h4 id="sample-point">When can a provider change?</h4>
+                <p id="sample-point-body">
+                  Check what happens to existing timer IDs if a different provider is installed after timers
+                  have started.
+                </p>
+              </div>
+              <div class="context-bottom">
+                <span class="mono">ASK WITH CONTEXT</span>
+                <p>A question can start from this layer, a file, or the exact lines you're reviewing.</p>
+                <a href="#chat" class="text-link">Try the chat example <span aria-hidden="true">↘</span></a>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div class="demo-caption">
+          <span><span aria-hidden="true">↖</span> Pick a layer. Follow one concern across files.</span
+          ><span
+            >Editorial grouping · scripted interactions ·
+            <a href="./tanstack-query-LICENSE.txt">TanStack MIT license</a></span
+          >
+        </div>
+        <p class="source-note">
+          Based on
+          <a href="https://github.com/TanStack/query/pull/9612">TanStack/query #9612: configurable timers</a>,
+          merged September 5, 2025. Excerpts pinned to <code>7922966</code>; paths are relative to
+          <code>packages/</code>. This is a hand-curated walkthrough of selected changes, not a full generated
+          canvas or a TanStack endorsement.
+        </p>
+        <noscript
+          ><p class="notice">
+            JavaScript enables the layer switcher and scripted chat. The default example and all documentation
+            remain readable without it.
+          </p></noscript
+        >
+      </section>
+
+      <div class="proof-strip wrap" aria-label="At a glance">
+        <span>Runs on localhost</span><span>Claude Code or Codex</span
+        ><span>GitHub comments &amp; reviews</span><span>Apache-2.0 licensed</span>
+      </div>
+
+      <section id="layers" class="feature-section wrap" aria-labelledby="layers-heading">
+        <div class="section-intro">
+          <p class="eyebrow">01 / SEMANTIC LAYERS</p>
+          <h2 id="layers-heading">Understand the change.<br /><em>One concern at a time.</em></h2>
+        </div>
+        <div class="feature-columns">
+          <div class="prose">
+            <p class="large-copy">
+              A large PR can tell several stories at once. Layers give each one a place.
+            </p>
+            <p>
+              A new capability might touch a schema, an endpoint, a client, and a test. The canvas groups the
+              relevant <strong>diff hunks by behavior or decision</strong>, so you can follow that capability
+              across the codebase.
+            </p>
+            <p>
+              Layers aren't directories, commits, or separate PRs. Different hunks in the same file can belong
+              to different layers. Every hunk is assigned exactly once during validation, and tests follow the
+              code they cover.
+            </p>
+            <p>
+              Each layer can include rationale, trade-offs, test notes, checks to do by hand, and a diagram
+              when it helps explain the change. You review the source and mark your progress as you go.
+            </p>
+            <a href="#demo-heading" class="text-link"
+              >Explore the sample layers <span aria-hidden="true">↑</span></a
+            >
+          </div>
+          <div class="intent-map">
+            <div class="map-heading">
+              <span class="mono">ONE CONCERN</span><span class="pill">Query lifecycle timers</span>
+            </div>
+            <ol>
+              <li>
+                <span class="map-step">1</span>
+                <div><strong>Introduce the provider</strong><code>timeoutManager.ts</code></div>
+                <span class="map-note">How timers are managed</span>
+              </li>
+              <li>
+                <span class="map-step">2</span>
+                <div><strong>Schedule stale checks</strong><code>queryObserver.ts</code></div>
+                <span class="map-note">When results go stale</span>
+              </li>
+              <li>
+                <span class="map-step">3</span>
+                <div><strong>Schedule garbage collection</strong><code>removable.ts</code></div>
+                <span class="map-note">When cached data expires</span>
+              </li>
+              <li>
+                <span class="map-step">4</span>
+                <div><strong>Check the provider</strong><code>timeoutManager.test.tsx</code></div>
+                <span class="map-note">What the tests cover</span>
+              </li>
+            </ol>
+            <p>Related changes, in a useful reading order.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="folds" class="feature-section wrap" aria-labelledby="folds-heading">
+        <div class="feature-columns">
+          <div class="fold-example">
+            <div class="file-heading">
+              <span>query-core/src/queryObserver.ts</span><span class="mono">REAL DIFF EXCERPTS</span>
+            </div>
+            <details class="code-fold">
+              <summary>
+                <span class="fold-chevron" aria-hidden="true">›</span><span>Import-only change</span
+                ><span class="fold-count">2 additions folded</span>
+              </summary>
+              <pre
+                tabindex="0"
+                aria-label="Expanded import-only diff"
+              ><code><span class="context">   shallowEqualObjects,</span><span class="context">   timeUntilStale,</span><span class="context"> } from './utils'</span><span class="addition">+import { timeoutManager } from './timeoutManager'</span><span class="addition">+import type { ManagedTimerId } from './timeoutManager'</span><span class="context"> import type { FetchOptions, Query, QueryState } from './query'</span></code></pre>
+            </details>
+            <div class="excerpt-gap">⋯ separate hunk · timer cancellation</div>
+            <pre
+              class="diff-code"
+              tabindex="0"
+              aria-label="Visible behavior change"
+            ><code><span class="context">   #clearStaleTimeout(): void {</span><span class="context">     if (this.#staleTimeoutId) {</span><span class="deletion">-      clearTimeout(this.#staleTimeoutId)</span><span class="addition">+      timeoutManager.clearTimeout(this.#staleTimeoutId)</span><span class="context">       this.#staleTimeoutId = undefined</span><span class="context">     }</span><span class="context">   }</span></code></pre>
+            <p class="fold-caption">
+              The behavior change stays in view.<br /><strong>Click the fold to inspect the imports.</strong>
+              <a href="https://github.com/TanStack/query/pull/9612/files">View the full PR diff ↗</a>
+            </p>
+          </div>
+          <div class="prose">
+            <p class="eyebrow">02 / MECHANICAL-CHANGE FOLDS</p>
+            <h2 id="folds-heading">Less scrolling.<br /><em>More signal.</em></h2>
+            <p>
+              Import-only edits, whitespace changes, moved code within a file, and ranges selected by the
+              generator can start collapsed. A small summary holds their place.
+            </p>
+            <p>
+              Expand a fold whenever you need the details. Edited moves keep their changed text visible, and
+              links into folded code reveal the target. Moves between files still appear as deletions and
+              additions.
+            </p>
+            <p class="callout">Folded means tucked away, never reviewed on your behalf.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="chat" class="feature-section wrap" aria-labelledby="chat-heading">
+        <div class="feature-columns">
+          <div class="prose">
+            <p class="eyebrow">03 / AI CHAT, IN CONTEXT</p>
+            <h2 id="chat-heading">Ask where<br /><em>the question starts.</em></h2>
+            <p>
+              Choose <strong>Ask</strong> on a layer, file, attention point, or selected lines. The chat gets
+              that review context, so you can dig into a decision or edge case without assembling another
+              prompt from scratch.
+            </p>
+            <p>
+              Use your locally installed, signed-in Claude Code or Codex agent through <code>acpx</code>.
+              Choose an agent and optional model in settings. You can stop a response, retry, and return to
+              earlier threads.
+            </p>
+            <p>
+              Chat can propose an inline GitHub comment. You decide whether to edit, copy, or post it. Answers
+              and attention points guide your investigation; the review judgment stays with you.
+            </p>
+            <a href="#chat-setup" class="text-link"
+              >Set up optional AI Chat <span aria-hidden="true">↘</span></a
+            >
+          </div>
+          <div class="chat-demo">
+            <div class="chat-demo-header">
+              <strong>Ask the canvas</strong><span class="pill">SCRIPTED EXAMPLE</span>
+            </div>
+            <div class="chat-scope">
+              <span class="status-dot"></span> Context: TanStack Query · timer provider
+            </div>
+            <div role="group" aria-label="Choose a sample question" class="question-choices">
+              <button type="button" data-question="scheduling" aria-pressed="true">
+                Notification scheduling</button
+              ><button type="button" data-question="switching" aria-pressed="false">
+                Switching providers
+              </button>
+            </div>
+            <div class="chat-message user-message" id="chat-question">
+              Does changing the timer provider also change notification scheduling?
+            </div>
+            <div class="chat-message agent-message">
+              <span class="agent-label">EXAMPLE RESPONSE</span>
+              <p id="chat-answer">
+                No. The default notification scheduler uses systemSetTimeoutZero, which calls global
+                setTimeout(callback, 0) directly. The provider controls managed timers. The added test checks
+                that zero-delay scheduling still uses the global timer after a custom provider is installed.
+              </p>
+              <a
+                class="chat-code-ref"
+                id="chat-reference"
+                href="https://github.com/TanStack/query/blob/7922966810988298e6c40761b8888597d6e0e0d7/packages/query-core/src/__tests__/timeoutManager.test.tsx#L113-L131"
+                >Read the zero-delay scheduling test ↗</a
+              >
+            </div>
+            <p class="chat-disclosure">
+              Scripted explanations grounded in the linked PR, not a live agent conversation. This website
+              makes no AI requests.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="local" class="local-section" aria-labelledby="local-heading">
+        <div class="wrap">
+          <div class="local-top">
+            <div>
+              <p class="eyebrow">YOUR MACHINE. YOUR AGENT.</p>
+              <h2 id="local-heading">Put the subscription<br />you already have <em>to work.</em></h2>
+            </div>
+            <p>
+              A cost-effective review workflow built around your existing Claude Code or Codex subscription.
+              PR Review Canvas is open source, with no separate Canvas subscription or per-review fee.
+            </p>
+          </div>
+          <div class="local-facts">
+            <article>
+              <span class="fact-number">01</span>
+              <h3>A local review workspace</h3>
+              <p>
+                The app runs on localhost. Canvases, preferences, review progress, and chat history are saved
+                in your project's <code>.pr-review/</code> directory.
+              </p>
+            </article>
+            <article>
+              <span class="fact-number">02</span>
+              <h3>Your existing AI account</h3>
+              <p>
+                Generation and optional chat use your installed coding agent and its account. Your provider's
+                plan limits and any usage charges still apply.
+              </p>
+            </article>
+            <article>
+              <span class="fact-number">03</span>
+              <h3>GitHub stays in the loop</h3>
+              <p>
+                Fetch PR data and shared canvases, then post comments, replies, approvals, or requests for
+                changes using your GitHub CLI login.
+              </p>
+            </article>
+          </div>
+          <div class="local-boundary">
+            <span class="boundary-icon" aria-hidden="true">↗</span>
+            <p>
+              <strong>Local app, connected services.</strong> Generation and chat send review context to your
+              selected AI provider. GitHub requests fetch PR data and submit feedback you choose to post.
+              “Local” describes where the app and review state live; it doesn't mean offline AI.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="get-started" class="feature-section wrap" aria-labelledby="start-heading">
+        <div class="section-intro">
+          <p class="eyebrow">FROM INSTALL TO FIRST REVIEW</p>
+          <h2 id="start-heading">Bring a PR.<br /><em>Build some context.</em></h2>
+          <p>
+            You'll need Node.js 22+, npm, Git, and an authenticated GitHub CLI.<br />Use Claude Code or Codex
+            to generate a canvas.
+          </p>
+        </div>
+        <div class="setup-grid">
+          <article class="setup-step">
+            <div class="step-heading">
+              <span>01</span>
+              <h3>Install &amp; set up a project</h3>
+            </div>
+            <p>Install the CLI once. Set up the skill in each repository you want to review.</p>
+            <div class="command-block">
+              <pre><code>npm install -g @vintasoftware/pr-review-canvas
+cd /path/to/your-project
+gh auth login
+pr-review install-skill
+pr-review doctor</code></pre>
+              <button type="button" class="copy-button" aria-label="Copy installation commands">Copy</button>
+            </div>
+            <p class="fine-print">
+              The skill is installed for both Claude Code and Codex. Restart your agent if it doesn't appear.
+            </p>
+          </article>
+          <article class="setup-step">
+            <div class="step-heading">
+              <span>02</span>
+              <h3>Author: generate &amp; share</h3>
+            </div>
+            <p>In your coding agent, run the skill with your PR number:</p>
+            <div class="command-block">
+              <pre><code>/pr-review-canvas 123</code></pre>
+              <button type="button" class="copy-button" aria-label="Copy generation command">Copy</button>
+            </div>
+            <p>
+              Open the returned local URL to check the canvas. Then drag the exported ZIP into the
+              <strong>PR description</strong> in GitHub and save. Uploading is a manual browser step.
+            </p>
+          </article>
+          <article class="setup-step">
+            <div class="step-heading">
+              <span>03</span>
+              <h3>Reviewer: open &amp; review</h3>
+            </div>
+            <p>From your own clone of the project, start the local server:</p>
+            <div class="command-block">
+              <pre><code>pr-review serve</code></pre>
+              <button type="button" class="copy-button" aria-label="Copy review command">Copy</button>
+            </div>
+            <p>
+              Open <code>http://localhost:3010</code>, enter the PR number, and leave the terminal running.
+              The app discovers the shared canvas and gets source diffs from your clone.
+            </p>
+          </article>
+          <article class="setup-step" id="chat-setup">
+            <div class="step-heading">
+              <span>+</span>
+              <h3>Add optional AI Chat</h3>
+            </div>
+            <p>Install <code>acpx</code> and sign in to Claude Code or Codex on the same machine.</p>
+            <div class="command-block">
+              <pre><code>npm install -g acpx
+pr-review doctor --all-checks</code></pre>
+              <button type="button" class="copy-button" aria-label="Copy chat setup commands">Copy</button>
+            </div>
+            <p>
+              Restart the server. In <strong>settings</strong>, choose your agent, optionally set a model,
+              click <strong>Test agent</strong>, and save. Reading a canvas doesn't require chat.
+            </p>
+          </article>
+        </div>
+        <div class="workflow-note">
+          <strong>After new commits</strong>
+          <p>
+            Authors rerun the skill and replace the ZIP; reviewers click <strong>refresh</strong>. An outdated
+            canvas remains readable, but posting is disabled until you're reviewing the current head.
+          </p>
+        </div>
+      </section>
+
+      <section id="configuration" class="feature-section wrap" aria-labelledby="config-heading">
+        <div class="feature-columns">
+          <div class="prose">
+            <p class="eyebrow">MAKE IT FIT YOUR CODEBASE</p>
+            <h2 id="config-heading">Your review standards.<br /><em>Your canvas.</em></h2>
+            <p>
+              Commit <code>pr-review.config.yml</code> to share review guidance with the team. Keep personal
+              preferences in the Git-ignored <code>.pr-review/settings.yml</code>.
+            </p>
+            <dl class="config-list">
+              <div>
+                <dt>Shape the review</dt>
+                <dd>
+                  Supply a rulebook, suggest layers by concern and path, and flag high-risk changes. Layer
+                  hints guide the agent; it can split, combine, or reorder them.
+                </dd>
+              </div>
+              <div>
+                <dt>Tune generation</dt>
+                <dd>
+                  Choose strict quality review or a surfacing walkthrough. Define test-file patterns, adjust
+                  text caps, and replace prompt templates, including the chat seed.
+                </dd>
+              </div>
+              <div>
+                <dt>Make it yours</dt>
+                <dd>
+                  Choose a skin, light or dark theme, chat agent, model, timeout, and turn limit. Projects can
+                  disable chat entirely.
+                </dd>
+              </div>
+            </dl>
+            <a
+              class="text-link"
+              href="https://github.com/vintasoftware/pr-review-canvas/blob/main/docs/reference.md#project-config"
+              >Full configuration reference <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <div class="config-example">
+            <div class="file-heading">
+              <span>pr-review.config.yml</span><span class="pill">SHARED WITH YOUR TEAM</span>
+            </div>
+            <pre tabindex="0"><code><span class="code-comment"># A starting point for your project</span>
+version: 1
+
+layers:
+  - id: caching
+    title: Cache behavior
+    description: Query caching and invalidation
+    paths: ['src/cache/**']
+
+highRisk:
+  - pattern: '**/migrations/**'
+    label: schema
+
+generation:
+  mode: surfacing
+
+tests:
+  patterns: ['**/*.test.*', '**/*.spec.*']
+
+chat:
+  enabled: true</code></pre>
+            <p>Optional settings. Start with the defaults, then add the guidance your project needs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="faq-section wrap" aria-labelledby="faq-heading">
+        <div>
+          <p class="eyebrow">A FEW PRACTICAL DETAILS</p>
+          <h2 id="faq-heading">Before your<br /><em>first review.</em></h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Does this replace my GitHub workflow?</summary>
+            <p>
+              Your PR and feedback still live on GitHub. The canvas is another way to read the changes and
+              post comments or reviews. Teammates can keep reviewing directly in GitHub.
+            </p>
+          </details>
+          <details>
+            <summary>What's inside the shared ZIP?</summary>
+            <p>
+              PR description, file and hunk metadata, and generated review notes. Source diffs come from each
+              reviewer's clone, and chat history stays local. Check the archive before sharing because its
+              metadata and notes may contain private information.
+            </p>
+          </details>
+          <details>
+            <summary>Can I review without AI Chat?</summary>
+            <p>
+              Yes. The author uses a coding agent to generate the canvas, but a reviewer can read the shared
+              canvas and diffs without installing acpx or enabling chat.
+            </p>
+          </details>
+          <details>
+            <summary>How does review completion work?</summary>
+            <p>
+              Track progress as you inspect each layer. Approval requires every layer except Other changes to
+              be reviewed for the current head. Requesting changes doesn't require completion. Preview and
+              edit the review body before posting.
+            </p>
+          </details>
+          <details>
+            <summary>How much does it cost?</summary>
+            <p>
+              PR Review Canvas is free, Apache-2.0 open-source software. Reuse your existing Claude Code or
+              Codex subscription for generation and chat. Provider usage limits and charges still apply;
+              there's no separate Canvas subscription.
+            </p>
+          </details>
+          <details>
+            <summary>Where can I find the complete documentation?</summary>
+            <p>
+              See the <a href="https://github.com/vintasoftware/pr-review-canvas#readme">README</a> for setup
+              and the
+              <a href="https://github.com/vintasoftware/pr-review-canvas/blob/main/docs/reference.md"
+                >CLI and configuration reference</a
+              >
+              for commands, settings, and troubleshooting.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <section class="closing wrap">
+        <p class="eyebrow">BUILT FOR THE HUMAN DOING THE REVIEW</p>
+        <h2>Your next big PR<br />could use <em>a canvas.</em></h2>
+        <div class="actions">
+          <a class="button primary" href="#get-started">Get started <span aria-hidden="true">↗</span></a
+          ><a class="text-link" href="https://github.com/vintasoftware/pr-review-canvas"
+            >Explore the source <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer wrap">
+      <div>
+        <a class="footer-vinta" href="https://www.vintasoftware.com/"
+          >Vinta Software <span aria-hidden="true">↗</span></a
+        >
+        <p>
+          Built as part of our AI-Native SDLC initiatives.<br />Tools for teams shipping software with AI.
+        </p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/vintasoftware/pr-review-canvas">GitHub</a
+        ><a href="https://github.com/vintasoftware/pr-review-canvas/blob/main/docs/reference.md"
+          >Documentation</a
+        ><a href="https://github.com/vintasoftware/pr-review-canvas/blob/main/LICENSE">Apache-2.0</a>
+      </div>
+    </footer>
+    <p id="copy-status" class="sr-only" role="status"></p>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

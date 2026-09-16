@@ -1,0 +1,3 @@
+# Keep the public website separate from the local review app
+
+The developer-facing website combines a landing page, high-level documentation, and an attributed walkthrough of a real public pull request, published as static files through GitHub Pages Actions. The sample pins its excerpts to a commit, retains the upstream license, and uses scripted interactions so visitors can explore semantic layers, folds, and contextual chat without authenticating or sending code to an AI provider; real reviews continue to run in the local app. Public copy emphasizes reuse of existing Claude Code or Codex subscriptions while explicitly distinguishing local storage from requests to GitHub and the selected AI provider.
