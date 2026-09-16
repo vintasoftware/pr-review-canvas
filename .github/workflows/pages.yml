@@ -2,9 +2,7 @@ name: GitHub Pages
 
 on:
   push:
-    # The feature branch permits the first publication without merging app changes.
-    # Remove it after the landing-page PR is merged; main then owns publication.
-    branches: [main, feat/github-pages]
+    branches: [main]
     paths:
       - 'site/**'
       - 'package.json'
@@ -53,7 +51,7 @@ jobs:
 
   deploy:
     name: Publish to GitHub Pages
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/github-pages')
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
