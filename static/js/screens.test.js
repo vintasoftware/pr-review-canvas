@@ -3,7 +3,8 @@
 // Header, overview, empty state, and AI Chat shell over the synthetic bundle.
 import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/github/capabilities.js'
-import { GH_ISSUE_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
+import { mapReviewComment } from '../../src/github/comments.js'
+import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'
 import { renderEmptyState, sharedCanvasCalloutHtml } from './empty-state.js'
 import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
@@ -65,6 +66,58 @@ function bundle(over = {}) {
   }
   return /** @type {PrBundle} */ (merged)
 }
+
+describe('review history', () => {
+  it('shows outdated threads and their replies below review history, excluding current threads', () => {
+    const data = bundle()
+    data.comments.reviewComments = GH_REVIEW_COMMENTS.map(comment => mapReviewComment(comment, new Set()))
+    const root = data.comments.reviewComments.find(comment => comment.outdated)
+    if (!root) throw new Error('Missing outdated fixture')
+    data.comments.reviewComments.push({ ...root, id: 9999, inReplyToId: root.id, body: 'Outdated reply', resolved: true })
+    data.comments.reviews = [{ ...root, state: 'APPROVED', body: '' }]
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    const section = document.querySelector('.outdated-comments')
+    expect(document.querySelector('.review-history')?.nextElementSibling).toBe(section)
+    expect(section?.querySelector('summary')?.textContent).toContain('Outdated comments · 2')
+    expect(section?.querySelectorAll('.cmt')).toHaveLength(2)
+    expect(section?.textContent).toContain('src/app.ts:2 (original) · resolved')
+    expect(section?.textContent).toContain('Outdated remark')
+    expect(section?.textContent).toContain('Outdated reply')
+    expect(section?.textContent).not.toContain('Why not')
+    expect(section?.querySelector('a')?.getAttribute('href')).toBe(root.url)
+
+    data.comments.reviewComments = data.comments.reviewComments.filter(comment => !comment.outdated)
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    expect(document.querySelector('.outdated-comments')).toBeNull()
+  })
+
+  it('hides empty commented events and retains written reviews and decisions', () => {
+    const data = bundle()
+    data.comments.reviews = [
+      { state: 'COMMENTED', body: '' },
+      { state: 'COMMENTED', body: ' \n\t' },
+      { state: 'COMMENTED', body: 'Please check the migration.' },
+      { state: 'APPROVED', body: '' },
+      { state: 'CHANGES_REQUESTED', body: '' },
+      { state: 'DISMISSED', body: '' },
+    ].map((review, id) => ({
+      id, author: 'reviewer', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(),
+      url: `https://github.com/acme/widgets/pull/42#pullrequestreview-${id}`, ...review,
+    }))
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    const history = document.querySelector('.review-history')
+    expect(history?.querySelector('summary')?.textContent).toContain('Review history · 4')
+    expect([...document.querySelectorAll('.review-entry .pill')].map(el => el.textContent))
+      .toEqual(['commented', 'approved', 'changes requested', 'dismissed'])
+    expect(history?.textContent).toContain('Please check the migration.')
+    expect(history?.textContent).not.toContain('Coverage 99%')
+    expect(document.querySelector('.conversation')?.textContent).toContain('Coverage 99%')
+
+    data.comments.reviews = data.comments.reviews.slice(0, 2)
+    document.body.innerHTML = renderOverview(data, { paths: new Set(), now: NOW })
+    expect(document.querySelector('.review-history')).toBeNull()
+  })
+})
 
 describe('header', () => {
   it('renders brand, commands, title, meta, risk line, progress, and the sign-off gate for a ready bundle', () => {
