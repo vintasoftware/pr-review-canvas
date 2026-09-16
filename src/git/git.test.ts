@@ -6,13 +6,24 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
-import { createGit, execGit, GitError, type GitExec, redactStderr, STDERR_MESSAGE_MAX } from './git.js'
+import {
+  createGit,
+  envWithoutRepo,
+  execGit,
+  GitError,
+  type GitExec,
+  redactStderr,
+  REPO_ENV_VARS,
+  STDERR_MESSAGE_MAX,
+} from './git.js'
 
 const run = promisify(execFile)
 
 async function initRepo(): Promise<{ dir: string; sha1: string; sha2: string }> {
   const dir = await makeTempDir('pr-review-git-')
-  const g = (...args: string[]) => run('git', args, { cwd: dir })
+  // The same scrub the adapter does: this file also runs under the pre-commit hook, which exports
+  // the variables that would send this setup at the repository being committed to.
+  const g = (...args: string[]) => run('git', args, { cwd: dir, env: envWithoutRepo() })
   await g('init', '-q', '-b', 'main')
   await g('config', 'user.email', 'test@example.com')
   await g('config', 'user.name', 'Test')
@@ -84,13 +95,34 @@ describe('createGit (real adapter)', () => {
   it('fetches from a local remote', async () => {
     const clone = await makeTempDir('pr-review-clone-')
     try {
-      await run('git', ['clone', '-q', repo.dir, clone])
+      await run('git', ['clone', '-q', repo.dir, clone], { env: envWithoutRepo() })
       const git = createGit(clone)
       await git.fetch('origin', ['+refs/heads/main:refs/pr/1/head'])
       expect(await git.revParse('refs/pr/1/head')).toBe(repo.sha2)
     } finally {
       await rm(clone, { recursive: true, force: true })
     }
+  })
+
+  it('reads the directory it was given even when the environment points elsewhere', async () => {
+    // What a git hook hands its children: every command would go to that repository instead. The
+    // pre-commit hook of this project is how the suite meets them.
+    const before = { ...process.env }
+    process.env['GIT_DIR'] = path.join(repo.dir, 'not-a-repository')
+    process.env['GIT_WORK_TREE'] = repo.dir
+    process.env['GIT_INDEX_FILE'] = path.join(repo.dir, 'not-an-index')
+    try {
+      expect(await createGit(repo.dir).revParse('HEAD')).toBe(repo.sha2)
+    } finally {
+      process.env = before
+    }
+  })
+
+  it('keeps everything that is not a repository pointer', () => {
+    const clean = envWithoutRepo({ ...Object.fromEntries(REPO_ENV_VARS.map(n => [n, 'x'])), PATH: '/bin' })
+    expect(Object.keys(clean)).toEqual(['PATH'])
+    // The default reads the live environment, which no test may be left holding.
+    expect(REPO_ENV_VARS.some(name => name in envWithoutRepo())).toBe(false)
   })
 
   it('reports a non-numeric exit as code 1 through the exec wrapper', async () => {
