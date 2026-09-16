@@ -19,23 +19,34 @@ import {
 
 const run = promisify(execFile)
 
+/**
+ * Every git command this file runs goes through the adapter's own runner, so the setup cannot
+ * drift from what is under test: the scrub is not a rule a test author has to remember. It matters
+ * here, because this file runs under the pre-commit hook, which exports the variables that would
+ * send a throwaway repository at the repository being committed to.
+ */
+async function g(cwd: string, ...args: string[]): Promise<string> {
+  const r = await execGit(cwd, args)
+  if (r.code !== 0) {
+    throw new GitError(args, r.stderr, r.code)
+  }
+  return r.stdout.toString('utf8').trim()
+}
+
 async function initRepo(): Promise<{ dir: string; sha1: string; sha2: string }> {
   const dir = await makeTempDir('pr-review-git-')
-  // The same scrub the adapter does: this file also runs under the pre-commit hook, which exports
-  // the variables that would send this setup at the repository being committed to.
-  const g = (...args: string[]) => run('git', args, { cwd: dir, env: envWithoutRepo() })
-  await g('init', '-q', '-b', 'main')
-  await g('config', 'user.email', 'test@example.com')
-  await g('config', 'user.name', 'Test')
-  await g('remote', 'add', 'origin', '/nonexistent/pr-review-test/widgets.git')
+  await g(dir, 'init', '-q', '-b', 'main')
+  await g(dir, 'config', 'user.email', 'test@example.com')
+  await g(dir, 'config', 'user.name', 'Test')
+  await g(dir, 'remote', 'add', 'origin', '/nonexistent/pr-review-test/widgets.git')
   await mkdir(path.join(dir, 'src'), { recursive: true })
   await writeFile(path.join(dir, 'src/a.ts'), 'export const a = 1\n')
-  await g('add', '.')
-  await g('commit', '-q', '-m', 'one')
-  const sha1 = (await g('rev-parse', 'HEAD')).stdout.trim()
+  await g(dir, 'add', '.')
+  await g(dir, 'commit', '-q', '-m', 'one')
+  const sha1 = await g(dir, 'rev-parse', 'HEAD')
   await writeFile(path.join(dir, 'src/a.ts'), 'export const a = 2\n')
-  await g('commit', '-q', '-am', 'two')
-  const sha2 = (await g('rev-parse', 'HEAD')).stdout.trim()
+  await g(dir, 'commit', '-q', '-am', 'two')
+  const sha2 = await g(dir, 'rev-parse', 'HEAD')
   return { dir, sha1, sha2 }
 }
 
@@ -95,7 +106,7 @@ describe('createGit (real adapter)', () => {
   it('fetches from a local remote', async () => {
     const clone = await makeTempDir('pr-review-clone-')
     try {
-      await run('git', ['clone', '-q', repo.dir, clone], { env: envWithoutRepo() })
+      await g(clone, 'clone', '-q', repo.dir, clone)
       const git = createGit(clone)
       await git.fetch('origin', ['+refs/heads/main:refs/pr/1/head'])
       expect(await git.revParse('refs/pr/1/head')).toBe(repo.sha2)
@@ -106,23 +117,40 @@ describe('createGit (real adapter)', () => {
 
   it('reads the directory it was given even when the environment points elsewhere', async () => {
     // What a git hook hands its children: every command would go to that repository instead. The
-    // pre-commit hook of this project is how the suite meets them.
-    const before = { ...process.env }
-    process.env['GIT_DIR'] = path.join(repo.dir, 'not-a-repository')
-    process.env['GIT_WORK_TREE'] = repo.dir
-    process.env['GIT_INDEX_FILE'] = path.join(repo.dir, 'not-an-index')
+    // pre-commit hook of this project is how the suite meets them. Only these three keys are put
+    // back, since `process.env` is shared with everything else running in this worker.
+    const poisoned = {
+      GIT_DIR: path.join(repo.dir, 'not-a-repository'),
+      GIT_WORK_TREE: repo.dir,
+      GIT_INDEX_FILE: path.join(repo.dir, 'not-an-index'),
+    }
+    for (const [name, value] of Object.entries(poisoned)) {
+      vi.stubEnv(name, value)
+    }
     try {
       expect(await createGit(repo.dir).revParse('HEAD')).toBe(repo.sha2)
+      // The default argument reads that live environment, and drops the same names from it.
+      expect(Object.keys(poisoned).some(name => name in envWithoutRepo())).toBe(false)
     } finally {
-      process.env = before
+      vi.unstubAllEnvs()
     }
   })
 
-  it('keeps everything that is not a repository pointer', () => {
-    const clean = envWithoutRepo({ ...Object.fromEntries(REPO_ENV_VARS.map(n => [n, 'x'])), PATH: '/bin' })
-    expect(Object.keys(clean)).toEqual(['PATH'])
-    // The default reads the live environment, which no test may be left holding.
-    expect(REPO_ENV_VARS.some(name => name in envWithoutRepo())).toBe(false)
+  it('names every variable it drops, and keeps everything else', () => {
+    // Spelled out rather than derived from the list: the content of the list is the whole risk,
+    // and a name quietly deleted from it has to fail here.
+    expect([...REPO_ENV_VARS]).toEqual([
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_COMMON_DIR',
+      'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY',
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+      'GIT_NAMESPACE',
+      'GIT_PREFIX',
+    ])
+    const kept = { PATH: '/bin', SSH_AUTH_SOCK: '/run/ssh', GIT_CONFIG_GLOBAL: '/home/u/.gitconfig' }
+    expect(envWithoutRepo({ ...kept, GIT_DIR: '/x', GIT_PREFIX: 'src/' })).toEqual(kept)
   })
 
   it('reports a non-numeric exit as code 1 through the exec wrapper', async () => {
