@@ -25,20 +25,20 @@ export function sameChangeSet(a: Derived, b: Derived): boolean {
   return isDeepStrictEqual(a, b)
 }
 
-/** The diffs of one commit against its merge base: stored, or built when the clone has both. */
+/**
+ * The diffs of one commit against its merge base. Built when the clone has both commits, which
+ * also refreshes a stored copy made against an older base; otherwise the stored copy, which is
+ * all an imported canvas has until its commits are fetched.
+ */
 export async function readOrBuildDerived(
   ctx: AppContext,
   headSha: string,
   mergeBaseSha: string | undefined
 ): Promise<Derived | null> {
-  const stored = await ctx.derived.read(headSha)
-  if (stored !== null || mergeBaseSha === undefined) {
-    return stored
+  if (mergeBaseSha !== undefined && (await ctx.derived.derivable(headSha, mergeBaseSha))) {
+    return ctx.derived.ensure(headSha, mergeBaseSha)
   }
-  if (!(await ctx.derived.derivable(headSha, mergeBaseSha))) {
-    return null
-  }
-  return ctx.derived.ensure(headSha, mergeBaseSha)
+  return ctx.derived.read(headSha)
 }
 
 /**

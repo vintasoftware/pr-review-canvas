@@ -11,6 +11,7 @@ import { DEFAULT_PROJECT_CONFIG, type ProjectConfig } from '../project-config.js
 import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import {
   createFakeGit,
+  type FakeGit,
   type FakeGitOptions,
   makeTestContext,
   TEST_REPO,
@@ -176,6 +177,25 @@ describe('a canvas whose head moved without changing the diff', () => {
     const b = await bundle()
     expect(b.status).toBe('stale')
     expect(b.derivable).toBe(false)
+  })
+
+  it('rebuilds the head diff when the base branch advanced under a fixed head', async () => {
+    await withOldCanvas()
+    expect((await bundle()).status).toBe('ready')
+    // main moved on and now contains everything but the change to src/app.ts.
+    const newBase = 'f'.repeat(40)
+    const git = t.ctx.git as FakeGit
+    git.options.refs['refs/heads/main'] = newBase
+    git.options.mergeBases[`refs/pr/42/base..${HEAD_SHA}`] = newBase
+    git.options.diffs[`${newBase}..${HEAD_SHA}`] = SYNTHETIC_DIFF.split('diff --git a/src/new.ts')[0] ?? ''
+    const b = await json<PrBundle>(
+      await createApp(t.ctx).request('/api/prs/42?refresh=1', { headers: LOCAL })
+    )
+    expect(b.pr.mergeBaseSha).toBe(newBase)
+    // The head's diff was rebuilt against the new base, so the canvas no longer explains it.
+    expect((await t.ctx.derived.read(HEAD_SHA))?.files.map(f => f.path)).toEqual(['src/app.ts'])
+    expect(b.status).toBe('stale')
+    expect(b.stale?.canvasHeadSha).toBe(OLD_SHA)
   })
 
   it('carries the reviewer marks over to the new head, once', async () => {
