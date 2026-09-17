@@ -85,7 +85,7 @@ export function checkInlineTarget(files: ReadonlyArray<FileEntry>, target: Inlin
       return `the first line of the range must come before ${target.line}`
     }
     if (hunkForLine(file.hunks, target.side, target.startLine) !== hunk) {
-      return `${target.path}:${target.startLine}-${target.line} (${target.side}) spans more than one hunk`
+      return `${target.path}:${target.startLine}-${target.line} (${target.side}) spans more than one chunk`
     }
   }
   return null

@@ -686,7 +686,7 @@ describe('node links', () => {
       label: 'src/app.ts',
     })
     expect(linkAttrs(node.querySelector('#pr-diagram-flowchart-flowchart-serve-3')).label).toBe(
-      'src/app.ts hunk 2'
+      'src/app.ts chunk 2'
     )
     expect(node.querySelector('#pr-diagram-flowchart-flowchart-ingest-0')?.hasAttribute('data-link')).toBe(
       false

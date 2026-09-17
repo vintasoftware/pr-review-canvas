@@ -109,7 +109,7 @@ export const ERROR_CARDS = {
   },
   COMMENT_LINE_NOT_IN_DIFF: {
     title: 'Comments must sit on lines the diff shows',
-    action: 'Pick a line inside a hunk of this pull request.',
+    action: 'Pick a line inside a chunk of this pull request.',
   },
   SIGNOFF_INCOMPLETE: {
     title: 'Some layers are not reviewed yet',

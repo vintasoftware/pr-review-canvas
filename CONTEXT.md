@@ -12,6 +12,9 @@ _Avoid_: Hosted review, automated approval
 A group of related changes that explains one behavior, concern, or decision, even when those changes span files. Different parts of one file can belong to different layers.
 _Avoid_: Directory, commit, stacked PR
 
+**Chunk**:
+A contiguous section of a file’s diff, including its changed lines and surrounding context. Each chunk belongs to exactly one semantic layer in a canvas.
+
 **Fold**:
 A collapsed range of a diff that a reviewer can expand to inspect. Folding a change does not mean it has been reviewed.
 _Avoid_: Excluded code, deleted context

@@ -6,19 +6,102 @@
     <meta name="theme-color" content="#f7f7f2" />
     <meta
       name="description"
-      content="Review large GitHub pull requests by intent. Semantic layers, collapsible diffs, and contextual AI chat in a local app using your existing Claude Code or Codex subscription. Built by Vinta Software."
+      content="Review GitHub pull requests and GitLab merge requests locally with semantic diff layers and optional AI chat. Free, open-source software by Vinta Software."
     />
-    <meta property="og:title" content="PR Review Canvas — Big PR. Clear picture." />
+    <meta property="og:title" content="PR Review Canvas — Open-source AI code review tool" />
     <meta
       property="og:description"
-      content="A local review workspace for understanding large changes. Semantic layers, mechanical-change folds, and AI chat with the coding agent you already use."
+      content="Review GitHub pull requests and GitLab merge requests locally with semantic diff layers and optional AI chat. Free, open-source software by Vinta Software."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://vintasoftware.github.io/pr-review-canvas/" />
+    <meta property="og:site_name" content="PR Review Canvas" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://vintasoftware.github.io/pr-review-canvas/social-preview.png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta
+      property="og:image:alt"
+      content="PR Review Canvas: understand large PRs, one layer at a time. A selected semantic layer beside its code diff and review context."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PR Review Canvas — Open-source AI code review tool" />
+    <meta
+      name="twitter:description"
+      content="Review GitHub pull requests and GitLab merge requests locally with semantic diff layers and optional AI chat. Free, open-source software by Vinta Software."
+    />
+    <meta
+      name="twitter:image"
+      content="https://vintasoftware.github.io/pr-review-canvas/social-preview.png"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="PR Review Canvas: understand large PRs, one layer at a time. A selected semantic layer beside its code diff and review context."
+    />
+    <link rel="sitemap" type="application/xml" href="./sitemap.xml" />
     <link rel="canonical" href="https://vintasoftware.github.io/pr-review-canvas/" />
     <link rel="icon" type="image/svg+xml" href="./brand.svg" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>PR Review Canvas — Big PR. Clear picture.</title>
+    <title>PR Review Canvas — Open-source AI code review tool</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.vintasoftware.com/#organization",
+            "name": "Vinta Software",
+            "url": "https://www.vintasoftware.com/",
+            "logo": "https://vintasoftware.github.io/pr-review-canvas/vinta-software.svg"
+          },
+          {
+            "@type": [
+              "SoftwareApplication",
+              "SoftwareSourceCode"
+            ],
+            "@id": "https://vintasoftware.github.io/pr-review-canvas/#software",
+            "name": "PR Review Canvas",
+            "url": "https://vintasoftware.github.io/pr-review-canvas/",
+            "description": "Review GitHub pull requests and GitLab merge requests locally with semantic diff layers and optional AI chat. Free, open-source software by Vinta Software.",
+            "applicationCategory": "DeveloperApplication",
+            "runtimePlatform": "Node.js 22+",
+            "codeRepository": "https://github.com/vintasoftware/pr-review-canvas",
+            "downloadUrl": "https://www.npmjs.com/package/@vintasoftware/pr-review-canvas",
+            "license": "https://github.com/vintasoftware/pr-review-canvas/blob/main/LICENSE",
+            "isAccessibleForFree": true,
+            "author": {
+              "@id": "https://www.vintasoftware.com/#organization"
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "featureList": [
+              "Semantic diff layers across files",
+              "Collapsible mechanical changes",
+              "Optional contextual AI chat",
+              "GitHub pull request and GitLab merge request review",
+              "Local review workspace"
+            ]
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://vintasoftware.github.io/pr-review-canvas/#webpage",
+            "url": "https://vintasoftware.github.io/pr-review-canvas/",
+            "name": "PR Review Canvas \u2014 Open-source AI code review tool",
+            "description": "Review GitHub pull requests and GitLab merge requests locally with semantic diff layers and optional AI chat. Free, open-source software by Vinta Software.",
+            "inLanguage": "en",
+            "mainEntity": {
+              "@id": "https://vintasoftware.github.io/pr-review-canvas/#software"
+            },
+            "publisher": {
+              "@id": "https://www.vintasoftware.com/#organization"
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -36,17 +119,20 @@
     <main id="main">
       <section class="hero wrap" aria-labelledby="hero-heading">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="status-dot"></span> Open source. On your machine.</p>
+          <p class="eyebrow">
+            <span class="status-dot"></span> PR Review Canvas · Open source. On your machine.
+          </p>
           <h1 id="hero-heading">Big PR.<br /><em>Clear picture.</em></h1>
         </div>
         <div class="hero-intro">
           <p class="lede">Follow the intent behind the diff.</p>
           <p>
-            Turn a large pull request into semantic layers you can actually work through. Follow related
-            changes across files, fold away minor edits, and ask an AI agent in your browser.
+            Turn a large pull request into a guided canvas. Review semantic layers one by one. Follow changes
+            across files, inspect focused diffs, and make informed decisions with an AI copilot by your side.
           </p>
           <div class="actions">
-            <a class="button primary" href="#demo-heading">Try the canvas<span aria-hidden="true">↗</span></a
+            <a class="button primary" href="#demo-heading"
+              >Explore a sample review<span aria-hidden="true">↗</span></a
             ><a class="text-link" href="https://github.com/vintasoftware/pr-review-canvas"
               >View on GitHub <span aria-hidden="true">↗</span></a
             >
@@ -57,7 +143,7 @@
 
       <section class="demo-section wrap" aria-labelledby="demo-heading">
         <div class="section-kicker">
-          <h2 id="demo-heading">A little context changes the whole review.</h2>
+          <h2 id="demo-heading">See one PR organized by intent.</h2>
           <span class="mono">REAL PR · INTERACTIVE WALKTHROUGH</span>
         </div>
         <div class="canvas-demo">
@@ -151,7 +237,6 @@
               >
             </article>
             <aside class="sample-context" aria-label="Sample review context">
-              <p class="panel-label">WORTH A CLOSER LOOK</p>
               <div class="attention">
                 <span class="attention-label">CHECK</span>
                 <h4 id="sample-point">When can a provider change?</h4>
@@ -160,20 +245,34 @@
                   have started.
                 </p>
               </div>
-              <div class="context-bottom">
-                <span class="mono">ASK WITH CONTEXT</span>
-                <p>A question can start from this layer, a file, or the exact lines you're reviewing.</p>
-                <a href="#chat" class="text-link">Try the chat example <span aria-hidden="true">↘</span></a>
-              </div>
             </aside>
+          </div>
+          <div class="canvas-chat-dock" hidden>
+            <button
+              class="canvas-chat-launcher"
+              type="button"
+              aria-expanded="false"
+              aria-controls="canvas-chat-panel"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path d="M20 11.5a8 8 0 0 1-8 8H4l1.8-3.6A8 8 0 1 1 20 11.5Z" />
+                <path d="M8 10h8M8 14h5" />
+              </svg>
+              AI Chat
+            </button>
           </div>
         </div>
         <div class="demo-caption">
           <span><span aria-hidden="true">↖</span> Pick a layer. Follow one concern across files.</span
-          ><span
-            >Editorial grouping · scripted interactions ·
-            <a href="./tanstack-query-LICENSE.txt">TanStack MIT license</a></span
-          >
+          ><span><a href="./tanstack-query-LICENSE.txt">TanStack MIT license</a></span>
         </div>
         <p class="source-note">
           Based on
@@ -200,13 +299,10 @@
         </div>
         <div class="feature-columns">
           <div class="prose">
-            <p class="large-copy">
-              A large PR can tell several stories at once. Layers give each one a place.
-            </p>
+            <p class="large-copy">Follow a change from schema to test.</p>
             <p>
-              A new capability might touch a schema, an endpoint, a client, and a test. The canvas groups the
-              relevant <strong>diff hunks by behavior</strong>, so you can follow that capability across the
-              codebase.
+              A feature can span a migration, an endpoint, a client, and tests. Semantic layers bring those
+              related changes together so you can review one concern at a time.
             </p>
             <p>The same file can belong to different layers depending on semantics.</p>
             <p>
@@ -219,31 +315,20 @@
           </div>
           <div class="intent-map">
             <div class="map-heading">
-              <span class="mono">ONE CONCERN</span><span class="pill">Query lifecycle timers</span>
+              <span class="mono">LAYER 2 OF 3</span><span class="pill">Query lifecycle</span>
             </div>
-            <ol>
+            <p class="map-summary">One layer brings related changes across files into a single review.</p>
+            <ul aria-label="Files in the query lifecycle layer">
               <li>
-                <span class="map-step">1</span>
-                <div><strong>Introduce the provider</strong><code>timeoutManager.ts</code></div>
-                <span class="map-note">How timers are managed</span>
+                <span class="map-step" aria-hidden="true">↳</span>
+                <div><strong>Create and clear stale timers</strong><code>queryObserver.ts</code></div>
               </li>
               <li>
-                <span class="map-step">2</span>
-                <div><strong>Schedule stale checks</strong><code>queryObserver.ts</code></div>
-                <span class="map-note">When results go stale</span>
-              </li>
-              <li>
-                <span class="map-step">3</span>
+                <span class="map-step" aria-hidden="true">↳</span>
                 <div><strong>Schedule garbage collection</strong><code>removable.ts</code></div>
-                <span class="map-note">When cached data expires</span>
               </li>
-              <li>
-                <span class="map-step">4</span>
-                <div><strong>Check the provider</strong><code>timeoutManager.test.tsx</code></div>
-                <span class="map-note">What the tests cover</span>
-              </li>
-            </ol>
-            <p>Related changes, in a useful reading order.</p>
+            </ul>
+            <p>Two files from the same layer. One concern: timer lifecycle.</p>
           </div>
         </div>
       </section>
@@ -264,7 +349,7 @@
                 aria-label="Expanded import-only diff"
               ><code><span class="context">   shallowEqualObjects,</span><span class="context">   timeUntilStale,</span><span class="context"> } from './utils'</span><span class="addition">+import { timeoutManager } from './timeoutManager'</span><span class="addition">+import type { ManagedTimerId } from './timeoutManager'</span><span class="context"> import type { FetchOptions, Query, QueryState } from './query'</span></code></pre>
             </details>
-            <div class="excerpt-gap">⋯ separate hunk · timer cancellation</div>
+            <div class="excerpt-gap">⋯ separate chunk · timer cancellation</div>
             <pre
               class="diff-code"
               tabindex="0"
@@ -308,7 +393,7 @@
           </div>
           <div class="chat-demo">
             <div class="chat-demo-header">
-              <strong>Ask the canvas</strong><span class="pill">SCRIPTED EXAMPLE</span>
+              <strong>AI Chat</strong><span class="pill">SCRIPTED EXAMPLE</span>
             </div>
             <div class="chat-scope">
               <span class="status-dot"></span> Context: TanStack Query · timer provider
@@ -548,12 +633,38 @@ chat:
         </div>
       </section>
 
-      <section class="faq-section wrap" aria-labelledby="faq-heading">
+      <section id="faq" class="faq-section wrap" aria-labelledby="faq-heading">
         <div>
           <p class="eyebrow">A FEW PRACTICAL DETAILS</p>
-          <h2 id="faq-heading">Before your<br /><em>first review.</em></h2>
+          <h2 id="faq-heading">Frequently Asked Questions</h2>
         </div>
         <div class="faq-list">
+          <details>
+            <summary>What is PR Review Canvas?</summary>
+            <p>
+              PR Review Canvas is a free, open-source code review tool built by Vinta Software. It runs
+              locally and groups GitHub pull request or GitLab merge request diffs into semantic layers so
+              reviewers can follow related changes across files. Authors generate a canvas with Claude Code or
+              Codex; reviewers open it in their browser.
+            </p>
+          </details>
+          <details>
+            <summary>What are semantic layers in code review?</summary>
+            <p>
+              Semantic layers group diff chunks by the behavior or concern they change, even when those chunks
+              span multiple files. A single layer can connect a schema change, endpoint, client, and tests.
+              Each layer includes review context and tracks your progress.
+            </p>
+          </details>
+          <details>
+            <summary>Does PR Review Canvas support GitLab?</summary>
+            <p>
+              Yes. PR Review Canvas supports GitHub pull requests and GitLab merge requests. Use the
+              authenticated GitHub CLI (<code>gh</code>) or GitLab CLI (<code>glab</code>) for your host. See
+              the <a href="https://github.com/vintasoftware/pr-review-canvas#install">installation guide</a>
+              for GitLab and self-hosted GitLab setup.
+            </p>
+          </details>
           <details>
             <summary>Does this replace my GitHub workflow?</summary>
             <p>
@@ -564,7 +675,7 @@ chat:
           <details>
             <summary>What's shared in the canvas comment?</summary>
             <p>
-              PR description, file and hunk metadata, and generated review notes. Source diffs come from each
+              PR description, file and chunk metadata, and generated review notes. Source diffs come from each
               reviewer's clone, and chat history stays local. The compressed payload is readable by anyone
               with access to the PR or MR. A ZIP upload carries the same data when automatic sharing fails.
             </p>
@@ -620,7 +731,10 @@ chat:
     <footer class="site-footer wrap">
       <div>
         <a class="footer-vinta" href="https://www.vintasoftware.com/"
-          >Vinta Software <span aria-hidden="true">↗</span></a
+          ><img src="./vinta-software.svg" alt="Vinta Software" width="201" height="44" loading="lazy" /><span
+            aria-hidden="true"
+            >↗</span
+          ></a
         >
         <p>
           Built as part of our AI-Native SDLC initiatives.<br />Tools for teams shipping software with AI.
