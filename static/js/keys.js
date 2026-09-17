@@ -1,6 +1,6 @@
 // @ts-check
 // File keys and DOM anchor ids. One implementation for the server (re-exported by
-// src/contract/keys.ts) and the browser, so chunk ids and line anchors never drift.
+// src/contract/keys.ts) and the browser, so hunk ids and line anchors never drift.
 
 /**
  * Turns a repo path into a key safe for ids and file names: every character that is not a
@@ -32,10 +32,10 @@ export function uniqueKey(base, used) {
 
 /**
  * @param {string} key
- * @param {number} n 1-based position of the chunk in the file's patch
+ * @param {number} n 1-based position of the hunk in the file's patch
  * @returns {string}
  */
-export function chunkId(key, n) {
+export function hunkId(key, n) {
   return `${key}#${n}`
 }
 
@@ -43,7 +43,7 @@ export function chunkId(key, n) {
  * @param {string} id
  * @returns {{ key: string, n: number } | null}
  */
-export function parseChunkId(id) {
+export function parseHunkId(id) {
   const m = /^(.+)#(\d+)$/.exec(id)
   if (!m || m[1] === undefined || m[2] === undefined) {
     return null
@@ -82,8 +82,8 @@ export function fileAnchorId(key) {
  * @param {string} key
  * @param {number} n
  */
-export function chunkAnchorId(key, n) {
-  return `chunk-${key}-${n}`
+export function hunkAnchorId(key, n) {
+  return `hunk-${key}-${n}`
 }
 
 /** @param {string} layerKey */

@@ -112,7 +112,7 @@ export function splitChatAnswer(markdown, targets) {
 }
 
 /**
- * The lines a diff shows, as the card's check needs them: every chunk's line numbers per side.
+ * The lines a diff shows, as the card's check needs them: every hunk's line numbers per side.
  * @param {ReadonlyArray<import('./contract-types.js').FileEntry>} files
  * @returns {CommentTargets}
  */
@@ -125,9 +125,9 @@ export function targetsFromFiles(files) {
       if (entry === undefined) {
         return false
       }
-      return entry.chunks.some(h => {
+      return entry.hunks.some(h => {
         const start = side === 'new' ? h.newStart : h.oldStart
-        // A chunk that adds lines shows none on the old side, and the other way round.
+        // A hunk that adds lines shows none on the old side, and the other way round.
         const count = side === 'new' ? h.newLines : h.oldLines
         return count > 0 && line >= start && line < start + count
       })

@@ -4,17 +4,10 @@ import { extractLinks, linkLabel, linkTargetId, parseLink, resolveLink } from '.
 const keyFor = (p: string): string => p.replace(/[^a-zA-Z0-9]/g, '_')
 
 describe('parseLink', () => {
-  it('extracts and resolves old chunk links against the current contract', () => {
-    const links = extractLinks('[code](#hunk:src/app.ts#1) and #hunk:src/app.ts#2.')
-    expect(links).toEqual(['#hunk:src/app.ts#1', '#hunk:src/app.ts#2'])
-    expect(parseLink(links[0]!)).toEqual({ kind: 'chunk', path: 'src/app.ts', n: 1 })
-    expect(parseLink('#hunk:broken')).toBe(null)
-  })
-
   it('parses the four link forms', () => {
     expect(parseLink('#layer:auth-session')).toEqual({ kind: 'layer', layerKey: 'auth-session' })
     expect(parseLink('#file:packages/x.ts')).toEqual({ kind: 'file', path: 'packages/x.ts' })
-    expect(parseLink('#chunk:packages/x.ts#3')).toEqual({ kind: 'chunk', path: 'packages/x.ts', n: 3 })
+    expect(parseLink('#hunk:packages/x.ts#3')).toEqual({ kind: 'hunk', path: 'packages/x.ts', n: 3 })
     expect(parseLink('#line:packages/x.ts:40')).toEqual({
       kind: 'line',
       path: 'packages/x.ts',
@@ -48,8 +41,8 @@ describe('parseLink', () => {
   it('returns null for malformed links', () => {
     expect(parseLink('#layer:')).toBeNull()
     expect(parseLink('#file:')).toBeNull()
-    expect(parseLink('#chunk:packages/x.ts')).toBeNull()
-    expect(parseLink('#chunk:packages/x.ts#x')).toBeNull()
+    expect(parseLink('#hunk:packages/x.ts')).toBeNull()
+    expect(parseLink('#hunk:packages/x.ts#x')).toBeNull()
     expect(parseLink('#line:packages/x.ts')).toBeNull()
     expect(parseLink('#line:packages/x.ts:9-3')).toBeNull()
     expect(parseLink('#line:packages/x.ts:abc')).toBeNull()
@@ -61,8 +54,8 @@ describe('parseLink', () => {
 describe('extractLinks', () => {
   it('finds markdown-wrapped and bare links in order', () => {
     const md =
-      'See [the mapper](#chunk:packages/x.ts#2) and #layer:auth then\n#line:a/b.ts:3-4:old. Not #overview.'
-    expect(extractLinks(md)).toEqual(['#chunk:packages/x.ts#2', '#layer:auth', '#line:a/b.ts:3-4:old'])
+      'See [the mapper](#hunk:packages/x.ts#2) and #layer:auth then\n#line:a/b.ts:3-4:old. Not #overview.'
+    expect(extractLinks(md)).toEqual(['#hunk:packages/x.ts#2', '#layer:auth', '#line:a/b.ts:3-4:old'])
   })
 
   it('returns an empty list when there are no links', () => {
@@ -71,7 +64,7 @@ describe('extractLinks', () => {
 })
 
 describe('resolveLink', () => {
-  const chunk = (oldStart: number, oldLines: number, newStart: number, newLines: number) => ({
+  const hunk = (oldStart: number, oldLines: number, newStart: number, newLines: number) => ({
     oldStart,
     oldLines,
     newStart,
@@ -82,7 +75,7 @@ describe('resolveLink', () => {
     files: [
       {
         path: 'packages/x.ts',
-        chunks: [chunk(1, 4, 1, 5), chunk(10, 3, 11, 4), chunk(30, 0, 32, 2), chunk(50, 2, 54, 0)],
+        hunks: [hunk(1, 4, 1, 5), hunk(10, 3, 11, 4), hunk(30, 0, 32, 2), hunk(50, 2, 54, 0)],
       },
     ],
   }
@@ -90,7 +83,7 @@ describe('resolveLink', () => {
   it('resolves links that exist', () => {
     expect(resolveLink({ kind: 'layer', layerKey: 'auth' }, targets)).toEqual({ ok: true })
     expect(resolveLink({ kind: 'file', path: 'packages/x.ts' }, targets)).toEqual({ ok: true })
-    expect(resolveLink({ kind: 'chunk', path: 'packages/x.ts', n: 4 }, targets)).toEqual({ ok: true })
+    expect(resolveLink({ kind: 'hunk', path: 'packages/x.ts', n: 4 }, targets)).toEqual({ ok: true })
     expect(
       resolveLink({ kind: 'line', path: 'packages/x.ts', start: 1, end: 2, side: 'new' }, targets)
     ).toEqual({
@@ -108,7 +101,7 @@ describe('resolveLink', () => {
     })
   })
 
-  it('rejects a line range outside every chunk, across two chunks, or on the wrong side', () => {
+  it('rejects a line range outside every hunk, across two hunks, or on the wrong side', () => {
     expect(
       resolveLink({ kind: 'line', path: 'packages/x.ts', start: 400, end: 410, side: 'new' }, targets)
     ).toEqual({
@@ -141,11 +134,11 @@ describe('resolveLink', () => {
       ok: false,
       message: 'packages/y.ts is not in the diff',
     })
-    expect(resolveLink({ kind: 'chunk', path: 'packages/x.ts', n: 9 }, targets)).toEqual({
+    expect(resolveLink({ kind: 'hunk', path: 'packages/x.ts', n: 9 }, targets)).toEqual({
       ok: false,
       message: 'packages/x.ts#9 does not exist (file has 4 chunks)',
     })
-    expect(resolveLink({ kind: 'chunk', path: 'packages/x.ts', n: 0 }, targets)).toEqual({
+    expect(resolveLink({ kind: 'hunk', path: 'packages/x.ts', n: 0 }, targets)).toEqual({
       ok: false,
       message: 'packages/x.ts#0 does not exist (file has 4 chunks)',
     })
@@ -156,7 +149,7 @@ describe('linkTargetId and linkLabel', () => {
   it('builds the DOM ids the renderer emits', () => {
     expect(linkTargetId({ kind: 'layer', layerKey: 'auth' }, keyFor)).toBe('layer-auth')
     expect(linkTargetId({ kind: 'file', path: 'a/b.ts' }, keyFor)).toBe('file-a_b_ts')
-    expect(linkTargetId({ kind: 'chunk', path: 'a/b.ts', n: 2 }, keyFor)).toBe('chunk-a_b_ts-2')
+    expect(linkTargetId({ kind: 'hunk', path: 'a/b.ts', n: 2 }, keyFor)).toBe('hunk-a_b_ts-2')
     expect(linkTargetId({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' }, keyFor)).toBe(
       'L-a_b_ts-old-5'
     )
@@ -165,7 +158,7 @@ describe('linkTargetId and linkLabel', () => {
   it('labels links for text that had none', () => {
     expect(linkLabel({ kind: 'layer', layerKey: 'auth' })).toBe('auth')
     expect(linkLabel({ kind: 'file', path: 'a/b.ts' })).toBe('a/b.ts')
-    expect(linkLabel({ kind: 'chunk', path: 'a/b.ts', n: 2 })).toBe('a/b.ts chunk 2')
+    expect(linkLabel({ kind: 'hunk', path: 'a/b.ts', n: 2 })).toBe('a/b.ts chunk 2')
     expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 5, side: 'new' })).toBe('a/b.ts:5')
     expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' })).toBe(
       'a/b.ts:5-9 (old)'

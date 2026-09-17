@@ -1,4 +1,4 @@
-Choose semantic sections from the actual change: group chunks that explain one behavior, concern,
+Choose semantic sections from the actual change: group hunks that explain one behavior, concern,
 or decision, even when they span files or directories. Give each layer a specific title that tells
 the reviewer what to understand.
 
@@ -8,7 +8,7 @@ sections yourself without assuming an architecture or a fixed list of categories
 
 Order sections by reviewer value. Lead with the main behavior changes, algorithms, state
 transitions, or API changes. Follow with the integration and wiring that support them. Put
-mechanical or low-importance chunks in Other at the end, subject to the eligibility rules below.
+mechanical or low-importance hunks in Other at the end, subject to the eligibility rules below.
 Bring a prerequisite earlier when it helps explain the main change. These priorities guide the
 reading order; choose the number and names of sections to suit this diff.
 

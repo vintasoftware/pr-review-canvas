@@ -78,11 +78,11 @@ describe('applyCodeFolds', () => {
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('opens the folds of a linked chunk', () => {
+  it('opens the folds of a linked hunk', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [FOLD])
 
-    expect(followLink('#chunk:src/app.ts#1', document.body)).toBe(true)
+    expect(followLink('#hunk:src/app.ts#1', document.body)).toBe(true)
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
   })
 
@@ -102,7 +102,7 @@ describe('applyCodeFolds', () => {
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('keeps a chunk with a GitHub discussion open even outside the requested range', () => {
+  it('keeps a hunk with a GitHub discussion open even outside the requested range', () => {
     const card = mount()
     const discussion = document.createElement('tr')
     discussion.setAttribute('data-decoration', 'thread')

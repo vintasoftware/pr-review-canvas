@@ -62,3 +62,5 @@ The page includes a descriptive title, canonical URL, Open Graph and Twitter pre
 `site/public/sitemap.xml` lists the production canonical URL. Submit https://vintasoftware.github.io/pr-review-canvas/sitemap.xml in Google Search Console after deployment. A project-level `robots.txt` would not control crawling: robots rules must live at https://vintasoftware.github.io/robots.txt, outside this project's Pages path.
 
 `site/public/social-preview.png` is the 1200 × 630 sharing image. Update its text when changing the product positioning. The footer uses the [official Vinta SVG wordmark](https://cdn.prod.website-files.com/64b9f7763232fd7832edb0c8/681a89078f700d7ca9e6b76c_vinta-wordmark-copy.svg), downloaded from Vinta's homepage and served locally.
+
+The UI and site call diff sections **chunks**. Internal identifiers, stored fields, configuration options, and link targets retain Git’s **hunk** terminology.

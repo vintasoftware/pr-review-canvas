@@ -52,7 +52,7 @@ function settingsResponse(ctx: AppContext, settings: SettingsResponse['settings'
       rulebook: project.rulebook ?? null,
       maxRepairRounds: project.generation.maxRepairRounds,
       inlineDiffMaxLines: project.generation.inlineDiffMaxLines,
-      smallPrChunks: project.generation.smallPrChunks,
+      smallPrHunks: project.generation.smallPrHunks,
       layers: project.layers.length,
       highRisk: project.highRisk.length,
     },

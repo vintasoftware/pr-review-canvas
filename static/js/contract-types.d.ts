@@ -35,7 +35,7 @@ export type {
   CodeFold,
   Diagram,
   FileEntry,
-  Chunk,
+  Hunk,
   Layer,
   LayerFile,
   Point,

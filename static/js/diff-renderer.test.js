@@ -4,12 +4,12 @@ import {
   buildRows,
   codeHtml,
   detectMoves,
-  highlightChunk,
+  highlightHunk,
   isImport,
   markNoise,
   pairChangedLines,
   parsePatch,
-  prepareChunks,
+  prepareHunks,
   renderDiff,
   rowHtml,
   sameIgnoringWhitespace,
@@ -35,13 +35,13 @@ const PATCH = [
 ].join('\n')
 
 describe('parsePatch', () => {
-  it('numbers lines from the chunk headers and tracks consecutive changes', () => {
-    const chunks = parsePatch(PATCH)
-    expect(chunks.map(h => [h.oldStart, h.oldLines, h.newStart, h.newLines])).toEqual([
+  it('numbers lines from the hunk headers and tracks consecutive changes', () => {
+    const hunks = parsePatch(PATCH)
+    expect(hunks.map(h => [h.oldStart, h.oldLines, h.newStart, h.newLines])).toEqual([
       [1, 4, 1, 5],
       [10, 3, 11, 4],
     ])
-    expect(chunks[0]?.entries.map(e => [e.type, e.oldLine, e.newLine, e.consecutive])).toEqual([
+    expect(hunks[0]?.entries.map(e => [e.type, e.oldLine, e.newLine, e.consecutive])).toEqual([
       ['ctx', 1, 1, false],
       ['add', null, 2, false],
       ['ctx', 2, 3, false],
@@ -49,7 +49,7 @@ describe('parsePatch', () => {
       ['add', null, 4, false],
       ['ctx', 4, 5, false],
     ])
-    expect(chunks[1]?.entries).toHaveLength(4)
+    expect(hunks[1]?.entries).toHaveLength(4)
     expect(parsePatch('')).toEqual([])
     expect(parsePatch('garbage before header\n@@ -1 +1 @@\n-a\n+b')[0]?.entries.map(e => e.code)).toEqual([
       'a',
@@ -65,11 +65,11 @@ describe('noise', () => {
     expect(isImport("from './a' import x")).toBe(true)
     expect(isImport('const x = 1')).toBe(false)
     expect(sameIgnoringWhitespace('a  =1', 'a = 1')).toBe(true)
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       ['@@ -1,3 +1,4 @@', '-a=1', '-b=2', '+a = 1', '+b = 2', ' z', "+import x from 'y'"].join('\n')
     )
-    markNoise(chunks)
-    expect(chunks[0]?.entries.map(e => e.noise)).toEqual([true, true, true, true, false, true])
+    markNoise(hunks)
+    expect(hunks[0]?.entries.map(e => e.noise)).toEqual([true, true, true, true, false, true])
     const mixed = parsePatch(['@@ -1,2 +1,2 @@', '-a=1', '+a = 2', ' z'].join('\n'))
     markNoise(mixed)
     expect(mixed[0]?.entries.map(e => e.noise)).toEqual([false, false, false])
@@ -78,7 +78,7 @@ describe('noise', () => {
 
 describe('detectMoves', () => {
   it('pairs blocks of three or more lines that moved, and points each end at the other', () => {
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       [
         '@@ -1,4 +1,1 @@',
         '-one()',
@@ -92,17 +92,17 @@ describe('detectMoves', () => {
         '+three()',
       ].join('\n')
     )
-    const moves = detectMoves(chunks)
+    const moves = detectMoves(hunks)
     expect(moves.map(m => [m.id, m.kind, m.pairs.length])).toEqual([[1, 'exact', 3]])
     // The deleted block says where the code went; the added block says where it came from.
     // Each line points at the line it matches, so a fold run names its own counterpart.
-    expect(chunks[0]?.entries.map(e => e.move && [e.move.side, e.move.kind, e.move.line])).toEqual([
+    expect(hunks[0]?.entries.map(e => e.move && [e.move.side, e.move.kind, e.move.line])).toEqual([
       ['from', 'exact', 18],
       ['from', 'exact', 19],
       ['from', 'exact', 20],
       null,
     ])
-    expect(chunks[1]?.entries.map(e => e.move && [e.move.side, e.move.kind, e.move.line])).toEqual([
+    expect(hunks[1]?.entries.map(e => e.move && [e.move.side, e.move.kind, e.move.line])).toEqual([
       null,
       ['to', 'exact', 1],
       ['to', 'exact', 2],
@@ -155,7 +155,7 @@ describe('detectMoves', () => {
     // The shape of a function body lifted into a helper: git keeps `return false` and `}` as
     // context on the old side and the new side gains a blank line, so neither run of deletions
     // reaches three lines on its own.
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       [
         '@@ -1,8 +1,9 @@',
         '+function check(request, expected) {',
@@ -176,9 +176,9 @@ describe('detectMoves', () => {
         '-  return equal(actual, expected)',
       ].join('\n')
     )
-    const moves = detectMoves(chunks)
+    const moves = detectMoves(hunks)
     expect(moves.map(m => [m.kind, m.pairs.length])).toEqual([['exact', 4]])
-    const entries = chunks[0]?.entries ?? []
+    const entries = hunks[0]?.entries ?? []
     // The two bridged context lines keep their place: they are still on both sides of the diff.
     expect(entries.filter(e => e.type === 'ctx').every(e => e.move === null)).toBe(true)
     // Every deleted line of the move points at the added line it became.
@@ -196,17 +196,17 @@ describe('detectMoves', () => {
 
   it('refuses a match made of context alone', () => {
     // Three identical closing lines around one changed line are not a move.
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       ['@@ -1,8 +1,8 @@', '-  alpha()', '   }', '   }', '   }', '+  omega()', '+  }', '+  }', '+  }'].join(
         '\n'
       )
     )
-    expect(detectMoves(chunks)).toEqual([])
-    expect(chunks[0]?.entries.every(e => e.move === null)).toBe(true)
+    expect(detectMoves(hunks)).toEqual([])
+    expect(hunks[0]?.entries.every(e => e.move === null)).toBe(true)
   })
 
   it('marks the words an edited move changed on the way, and leaves an exact move unmarked', () => {
-    const edited = prepareChunks(
+    const edited = prepareHunks(
       [
         '@@ -1,4 +1,4 @@',
         '-one()',
@@ -223,7 +223,7 @@ describe('detectMoves', () => {
     expect(entries.slice(0, 3).every(e => e.marks === null)).toBe(true)
     expect(entries[3]?.marks).toEqual([[0, 4]])
     expect(entries[7]?.marks).toEqual([[0, 4]])
-    const exact = prepareChunks(
+    const exact = prepareHunks(
       ['@@ -1,7 +1,7 @@', '-one()', '-two()', '-three()', ' keep', '+one()', '+two()', '+three()'].join('\n')
     )
     expect(exact[0]?.entries.every(e => e.marks === null)).toBe(true)
@@ -232,10 +232,10 @@ describe('detectMoves', () => {
 
 describe('pairChangedLines and wordDiff', () => {
   it('pairs equal-length del/add runs and leaves unequal runs alone', () => {
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       ['@@ -1,5 +1,4 @@', '-a', '-b', '+A', '+B', ' c', '-d', '-e', '+D', ' f'].join('\n')
     )
-    const pairs = pairChangedLines(chunks[0]?.entries ?? [])
+    const pairs = pairChangedLines(hunks[0]?.entries ?? [])
     expect(pairs.map(p => [p.del.code, p.add.code])).toEqual([
       ['a', 'A'],
       ['b', 'B'],
@@ -269,22 +269,22 @@ describe('splitHighlightedLines and wrapRanges', () => {
   })
 })
 
-describe('highlightChunk and codeHtml', () => {
-  it('highlights both sides of a chunk and skips unknown languages', () => {
-    const [chunk] = parsePatch(PATCH)
-    if (!chunk) {
-      throw new Error('no chunk')
+describe('highlightHunk and codeHtml', () => {
+  it('highlights both sides of a hunk and skips unknown languages', () => {
+    const [hunk] = parsePatch(PATCH)
+    if (!hunk) {
+      throw new Error('no hunk')
     }
-    highlightChunk(chunk, 'typescript')
-    expect(chunk.entries.every(e => typeof e.html === 'string')).toBe(true)
-    expect(chunk.entries[2]?.html).toContain('hljs-keyword')
+    highlightHunk(hunk, 'typescript')
+    expect(hunk.entries.every(e => typeof e.html === 'string')).toBe(true)
+    expect(hunk.entries[2]?.html).toContain('hljs-keyword')
     const [plain] = parsePatch(PATCH)
     if (!plain) {
-      throw new Error('no chunk')
+      throw new Error('no hunk')
     }
-    highlightChunk(plain, 'no-such-language')
+    highlightHunk(plain, 'no-such-language')
     expect(plain.entries.every(e => e.html === null)).toBe(true)
-    highlightChunk(plain, undefined)
+    highlightHunk(plain, undefined)
     expect(
       codeHtml({
         type: 'add',
@@ -314,14 +314,14 @@ describe('highlightChunk and codeHtml', () => {
   })
 })
 
-const EMPTY_CHUNK = { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines: 0, entries: [] }
+const EMPTY_HUNK = { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines: 0, entries: [] }
 
 describe('rowHtml and buildRows', () => {
   it('emits ids per side, data-old on context rows, and the gutter button', () => {
-    const [chunk] = parsePatch(PATCH)
-    const ctx = chunk?.entries[0]
-    const add = chunk?.entries[1]
-    const del = chunk?.entries[3]
+    const [hunk] = parsePatch(PATCH)
+    const ctx = hunk?.entries[0]
+    const add = hunk?.entries[1]
+    const del = hunk?.entries[3]
     if (!(ctx && add && del)) {
       throw new Error('no entries')
     }
@@ -343,27 +343,27 @@ describe('rowHtml and buildRows', () => {
   })
 
   it('folds noise behind a show row and leaves code outside the diff out of the table', () => {
-    const chunks = prepareChunks(PATCH)
+    const hunks = prepareHunks(PATCH)
     const first = buildRows(
-      chunks[0] ?? { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines: 0, entries: [] },
+      hunks[0] ?? { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines: 0, entries: [] },
       'k'
     )
-    expect(first).toContain('<tr class="chunk">')
+    expect(first).toContain('<tr class="hunk">')
     expect(first).toContain('1 line hidden (imports, whitespace)')
     expect(first).toContain(
       '<button class="cmd" type="button" data-act="show-fold" aria-expanded="false">show</button>'
     )
     expect(first).toContain('<tr class="add folded noise" id="L-k-new-2">')
-    // A chunk starting below line 1 gets no row for the code above it.
+    // A hunk starting below line 1 gets no row for the code above it.
     const second = buildRows(
-      chunks[1] ?? { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines: 0, entries: [] },
+      hunks[1] ?? { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines: 0, entries: [] },
       'k'
     )
     expect(second).not.toContain('class="more expand"')
   })
 
   it('folds each end of an exact move behind a summary naming the other end', () => {
-    const chunks = prepareChunks(
+    const hunks = prepareHunks(
       [
         '@@ -1,4 +1,1 @@',
         '-one()',
@@ -377,7 +377,7 @@ describe('rowHtml and buildRows', () => {
         '+three()',
       ].join('\n')
     )
-    const from = buildRows(chunks[0] ?? EMPTY_CHUNK, 'k')
+    const from = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
     expect(from).toContain('<tr class="more fold move">')
     expect(from).toContain('&#8943; 3 lines moved to <button')
     expect(from).toContain(
@@ -387,14 +387,14 @@ describe('rowHtml and buildRows', () => {
       '<button class="cmd" type="button" data-act="show-fold" aria-expanded="false">show</button>'
     )
     expect(from).toContain('<tr class="del folded move-from" id="L-k-old-1">')
-    const to = buildRows(chunks[1] ?? EMPTY_CHUNK, 'k')
+    const to = buildRows(hunks[1] ?? EMPTY_HUNK, 'k')
     expect(to).toContain('&#8943; 3 lines moved from <button')
     expect(to).toContain('data-side="old" data-line="1">line 1</button>')
     expect(to).toContain('<tr class="add folded move-to" id="L-k-new-18">')
   })
 
   it('opens an edited move and says so, with one summary per block', () => {
-    const chunks = prepareChunks(
+    const hunks = prepareHunks(
       [
         '@@ -1,4 +1,4 @@',
         '-one()',
@@ -407,7 +407,7 @@ describe('rowHtml and buildRows', () => {
         '+five()',
       ].join('\n')
     )
-    const rows = buildRows(chunks[0] ?? EMPTY_CHUNK, 'k')
+    const rows = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
     expect(rows).toContain('&#8943; 4 lines moved to <button')
     expect(rows).toContain('>line 1</button>, edited')
     expect(rows).toContain(
@@ -422,16 +422,16 @@ describe('rowHtml and buildRows', () => {
 describe('renderDiff', () => {
   const file = { key: 'src_app_ts', path: 'src/app.ts', lang: 'typescript' }
 
-  it('renders one table per chunk with ids, a header row, and word marks', () => {
+  it('renders one table per hunk with ids, a header row, and word marks', () => {
     const html = renderDiff(file, PATCH)
     document.body.innerHTML = html
     const tables = document.querySelectorAll('table.diff')
     expect(tables.length).toBe(2)
-    expect(tables[0]?.id).toBe('chunk-src_app_ts-1')
-    expect(tables[0]?.getAttribute('data-chunk')).toBe('src_app_ts#1')
+    expect(tables[0]?.id).toBe('hunk-src_app_ts-1')
+    expect(tables[0]?.getAttribute('data-hunk')).toBe('src_app_ts#1')
     expect(tables[0]?.getAttribute('data-key')).toBe('src_app_ts')
     expect(tables[0]?.querySelectorAll('th').length).toBe(4)
-    expect(tables[0]?.querySelector('tr.chunk td.code')?.textContent).toBe('@@ -1,4 +1,5 @@')
+    expect(tables[0]?.querySelector('tr.hunk td.code')?.textContent).toBe('@@ -1,4 +1,5 @@')
     expect([...document.querySelectorAll('#L-src_app_ts-new-4 .wa')].map(s => s.textContent).join('')).toBe(
       ' + b()'
     )
@@ -439,12 +439,12 @@ describe('renderDiff', () => {
     expect(document.querySelectorAll('button.plus').length).toBe(10)
   })
 
-  it('renders only the requested chunks, highlighted, and a placeholder when none match', () => {
-    document.body.innerHTML = renderDiff(file, PATCH, { chunkIds: new Set(['src_app_ts#2']) })
+  it('renders only the requested hunks, highlighted, and a placeholder when none match', () => {
+    document.body.innerHTML = renderDiff(file, PATCH, { hunkIds: new Set(['src_app_ts#2']) })
     expect(document.querySelectorAll('table.diff').length).toBe(1)
-    expect(document.querySelector('table.diff')?.id).toBe('chunk-src_app_ts-2')
+    expect(document.querySelector('table.diff')?.id).toBe('hunk-src_app_ts-2')
     expect(document.querySelectorAll('table.diff .hljs-keyword').length).toBeGreaterThan(0)
-    expect(renderDiff(file, PATCH, { chunkIds: new Set(['src_app_ts#9']) })).toBe(
+    expect(renderDiff(file, PATCH, { hunkIds: new Set(['src_app_ts#9']) })).toBe(
       '<div class="unavailable">No diff to show.</div>'
     )
     expect(renderDiff(file, '')).toBe('<div class="unavailable">No diff to show.</div>')
@@ -462,12 +462,12 @@ describe('renderDiff', () => {
 
 describe('move detection boundaries', () => {
   it('does not treat whitespace-only additions as moved code', () => {
-    const chunks = parsePatch('@@ -1,3 +1,3 @@\n-a()\n-b()\n-c()\n+  \n+\n+  ')
-    expect(detectMoves(chunks)).toEqual([])
+    const hunks = parsePatch('@@ -1,3 +1,3 @@\n-a()\n-b()\n-c()\n+  \n+\n+  ')
+    expect(detectMoves(hunks)).toEqual([])
   })
 
   it('uses an added block only once when two deleted blocks contain the same code', () => {
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       [
         '@@ -1,3 +0,0 @@',
         '-a()',
@@ -483,8 +483,8 @@ describe('move detection boundaries', () => {
         '+c()',
       ].join('\n')
     )
-    expect(detectMoves(chunks)).toHaveLength(1)
-    expect(chunks[1]?.entries.every(entry => entry.move === null)).toBe(true)
+    expect(detectMoves(hunks)).toHaveLength(1)
+    expect(hunks[1]?.entries.every(entry => entry.move === null)).toBe(true)
   })
 
   it.each(
@@ -495,7 +495,7 @@ describe('move detection boundaries', () => {
     ].map(added => ({ added }))
   )('requires three matching lines and at least 70% similarity: $added', ({ added }) => {
     const removed = ['a()', 'b()', 'c()', 'd()', 'e()']
-    const chunks = parsePatch(
+    const hunks = parsePatch(
       [
         '@@ -1,5 +0,0 @@',
         ...removed.map(line => '-' + line),
@@ -503,6 +503,6 @@ describe('move detection boundaries', () => {
         ...added.map(line => '+' + line),
       ].join('\n')
     )
-    expect(detectMoves(chunks)).toEqual([])
+    expect(detectMoves(hunks)).toEqual([])
   })
 })

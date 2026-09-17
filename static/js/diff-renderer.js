@@ -1,13 +1,13 @@
 // @ts-check
-// Unified diff → one <table class="diff"> per chunk. Port of the prior-art renderer.js: import
-// filter, whitespace-only collapse, moved-code detection, per-chunk highlight.js; plus jsdiff
-// word-level marks on paired changed lines. Line numbers come from the chunk headers and are
+// Unified diff → one <table class="diff"> per hunk. Port of the prior-art renderer.js: import
+// filter, whitespace-only collapse, moved-code detection, per-hunk highlight.js; plus jsdiff
+// word-level marks on paired changed lines. Line numbers come from the hunk headers and are
 // never shifted by filtering: filtered lines are folded (hidden rows), not dropped.
 import { diffWordsWithSpace } from 'diff'
 import hljs from 'hljs'
 import { esc } from './dom.js'
-import { parseChunkHeader } from './chunks.js'
-import { buildLineId, chunkAnchorId, chunkId } from './keys.js'
+import { parseHunkHeader } from './hunks.js'
+import { buildLineId, hunkAnchorId, hunkId } from './keys.js'
 
 /**
  * Where one line of a move sits. `side` is which end of the move this line is: `from` for the
@@ -29,7 +29,7 @@ import { buildLineId, chunkAnchorId, chunkId } from './keys.js'
  * }} Entry
  */
 /**
- * @typedef {{ header: string, oldStart: number, oldLines: number, newStart: number, newLines: number, entries: Entry[] }} ChunkBlock
+ * @typedef {{ header: string, oldStart: number, oldLines: number, newStart: number, newLines: number, entries: Entry[] }} HunkBlock
  */
 /**
  * One matched move, as the changed lines of each side paired by position. Context lines the block
@@ -60,29 +60,29 @@ function normWs(s) {
 }
 
 /**
- * Splits a patch (from its first `@@`) into chunks with numbered entries.
+ * Splits a patch (from its first `@@`) into hunks with numbered entries.
  * @param {string} patch
- * @returns {ChunkBlock[]}
+ * @returns {HunkBlock[]}
  */
 export function parsePatch(patch) {
-  /** @type {ChunkBlock[]} */
-  const chunks = []
+  /** @type {HunkBlock[]} */
+  const hunks = []
   if (!patch) {
-    return chunks
+    return hunks
   }
-  /** @type {ChunkBlock | null} */
+  /** @type {HunkBlock | null} */
   let cur = null
   let oL = 0
   let nL = 0
   let prevAdd = false
   let prevDel = false
   for (const line of patch.split('\n')) {
-    const head = parseChunkHeader(line)
+    const head = parseHunkHeader(line)
     if (head) {
       oL = head.oldStart
       nL = head.newStart
       cur = { header: line, ...head, entries: [] }
-      chunks.push(cur)
+      hunks.push(cur)
       prevAdd = false
       prevDel = false
       continue
@@ -125,16 +125,16 @@ export function parsePatch(patch) {
       prevDel = false
     }
   }
-  return chunks
+  return hunks
 }
 
 /**
  * Marks the lines a reviewer rarely needs: import-only changes and whitespace-only rewrites.
  * They stay in the table, folded behind a "show N hidden lines" row.
- * @param {ChunkBlock[]} chunks
+ * @param {HunkBlock[]} hunks
  */
-export function markNoise(chunks) {
-  for (const h of chunks) {
+export function markNoise(hunks) {
+  for (const h of hunks) {
     const e = h.entries
     for (let i = 0; i < e.length; i++) {
       const cur = e[i]
@@ -183,7 +183,7 @@ const MOVE_MAX_BLOCK = 40
  * the same over the new file. Git routinely leaves a line the move did not touch as context and
  * splits the changed lines around it, so a block that stopped at the first context line would
  * find no move; a short run of context is bridged instead. The block ends on a `type` line.
- * @param {Entry[]} entries one chunk's entries
+ * @param {Entry[]} entries one hunk's entries
  * @param {number} from index of a `type` entry
  * @param {'add' | 'del'} type
  * @param {ReadonlySet<Entry>} taken lines another move already claimed
@@ -288,29 +288,29 @@ function counterpartLine(counterpart, side) {
  * Every added block of the file, in reading order, under the first line it would be compared by.
  * A move begins on a line that moved, so a deleted block only has to look at the added blocks
  * that open on the same line instead of at all of them.
- * @param {ChunkBlock[]} chunks
+ * @param {HunkBlock[]} hunks
  * @returns {Map<string, AddStart[]>}
  */
-function indexAddStarts(chunks) {
+function indexAddStarts(hunks) {
   /** @type {Map<string, AddStart[]>} */
   const byFirstLine = new Map()
   /** @type {Set<Entry>} */
   const none = new Set()
-  for (const chunk of chunks) {
-    for (let index = 0; index < chunk.entries.length; index++) {
-      const start = chunk.entries[index]
+  for (const hunk of hunks) {
+    for (let index = 0; index < hunk.entries.length; index++) {
+      const start = hunk.entries[index]
       if (start?.type !== 'add') {
         continue
       }
-      const text = comparable(blockFrom(chunk.entries, index, 'add', none))[0]?.text
+      const text = comparable(blockFrom(hunk.entries, index, 'add', none))[0]?.text
       if (text === undefined) {
         continue
       }
       const starts = byFirstLine.get(text)
       if (starts === undefined) {
-        byFirstLine.set(text, [{ entries: chunk.entries, index, start }])
+        byFirstLine.set(text, [{ entries: hunk.entries, index, start }])
       } else {
-        starts.push({ entries: chunk.entries, index, start })
+        starts.push({ entries: hunk.entries, index, start })
       }
     }
   }
@@ -390,25 +390,25 @@ function markSide(block, own, other, ml, move, taken) {
 
 /**
  * Blocks of three or more deleted lines that reappear (70%+ equal after whitespace
- * normalization) as a block of additions are moves, not edits. Runs across all chunks of a file.
+ * normalization) as a block of additions are moves, not edits. Runs across all hunks of a file.
  * Both ends of a match learn which line of the other end they match, so each can be folded behind
  * a summary that says where the code went or came from.
- * @param {ChunkBlock[]} chunks
+ * @param {HunkBlock[]} hunks
  * @returns {MoveBlock[]}
  */
-export function detectMoves(chunks) {
-  const addStarts = indexAddStarts(chunks)
+export function detectMoves(hunks) {
+  const addStarts = indexAddStarts(hunks)
   /** @type {Set<Entry>} */
   const taken = new Set()
   /** @type {MoveBlock[]} */
   const moves = []
-  for (const chunk of chunks) {
-    for (let di = 0; di < chunk.entries.length; di++) {
-      const start = chunk.entries[di]
+  for (const hunk of hunks) {
+    for (let di = 0; di < hunk.entries.length; di++) {
+      const start = hunk.entries[di]
       if (start === undefined || start.type !== 'del' || taken.has(start)) {
         continue
       }
-      const block = blockFrom(chunk.entries, di, 'del', taken)
+      const block = blockFrom(hunk.entries, di, 'del', taken)
       const dc = comparable(block)
       if (dc.length < MOVE_MIN_LINES) {
         continue
@@ -582,16 +582,16 @@ function highlightSide(side, lang, which) {
 }
 
 /**
- * A chunk holds two versions of the code. Each is rebuilt and highlighted on its own.
- * @param {ChunkBlock} chunk
+ * A hunk holds two versions of the code. Each is rebuilt and highlighted on its own.
+ * @param {HunkBlock} hunk
  * @param {string | undefined} lang
  */
-export function highlightChunk(chunk, lang) {
+export function highlightHunk(hunk, lang) {
   if (!(lang && hljs.getLanguage(lang))) {
     return
   }
-  const oldSide = chunk.entries.filter(e => e.type !== 'add')
-  const newSide = chunk.entries.filter(e => e.type !== 'del')
+  const oldSide = hunk.entries.filter(e => e.type !== 'add')
+  const newSide = hunk.entries.filter(e => e.type !== 'del')
   highlightSide(oldSide, lang, 'old')
   highlightSide(newSide, lang, 'new')
 }
@@ -655,14 +655,14 @@ export function wrapRanges(html, ranges, cls) {
 
 /**
  * Parse + noise + moves + word pairs, in one call. Noise and moves need the whole file, so this
- * runs over every chunk; highlighting is per chunk and happens in renderDiff for the shown ones.
+ * runs over every hunk; highlighting is per hunk and happens in renderDiff for the shown ones.
  * @param {string} patch
- * @returns {ChunkBlock[]}
+ * @returns {HunkBlock[]}
  */
-export function prepareChunks(patch) {
-  const chunks = parsePatch(patch)
-  markNoise(chunks)
-  const moves = detectMoves(chunks)
+export function prepareHunks(patch) {
+  const hunks = parsePatch(patch)
+  markNoise(hunks)
+  const moves = detectMoves(hunks)
   // A move that changed on the way is shown rather than folded, so its two ends carry word marks
   // and the reader sees the edit instead of re-reading the block.
   for (const move of moves) {
@@ -678,7 +678,7 @@ export function prepareChunks(patch) {
       add.marks = marks.add
     }
   }
-  for (const h of chunks) {
+  for (const h of hunks) {
     for (const { del, add } of pairChangedLines(h.entries)) {
       if (del.noise || add.noise || del.move || add.move) {
         continue
@@ -688,7 +688,7 @@ export function prepareChunks(patch) {
       add.marks = marks.add
     }
   }
-  return chunks
+  return hunks
 }
 
 /** @param {Entry} e */
@@ -790,28 +790,28 @@ export function foldSummaryHtml(first, n, key) {
 }
 
 /**
- * Rows for one chunk: the header row, folds, and one row per line.
- * @param {ChunkBlock} chunk
+ * Rows for one hunk: the header row, folds, and one row per line.
+ * @param {HunkBlock} hunk
  * @param {string} key
  * @returns {string}
  */
-export function buildRows(chunk, key) {
+export function buildRows(hunk, key) {
   /** @type {string[]} */
   const rows = []
   rows.push(
-    `<tr class="chunk"><td class="ln" colspan="2"></td><td class="gut"></td><td class="code">${esc(chunk.header)}</td></tr>`
+    `<tr class="hunk"><td class="ln" colspan="2"></td><td class="gut"></td><td class="code">${esc(hunk.header)}</td></tr>`
   )
   let i = 0
-  while (i < chunk.entries.length) {
-    const e = chunk.entries[i]
+  while (i < hunk.entries.length) {
+    const e = hunk.entries[i]
     if (e === undefined) {
       break
     }
     const fold = foldKey(e)
     if (fold !== null) {
       let j = i
-      while (j < chunk.entries.length) {
-        const next = chunk.entries[j]
+      while (j < hunk.entries.length) {
+        const next = hunk.entries[j]
         if (next === undefined || foldKey(next) !== fold) {
           break
         }
@@ -819,7 +819,7 @@ export function buildRows(chunk, key) {
       }
       rows.push(foldSummaryHtml(e, j - i, key))
       for (let k = i; k < j; k++) {
-        const x = chunk.entries[k]
+        const x = hunk.entries[k]
         if (x) {
           rows.push(rowHtml(x, key))
         }
@@ -839,22 +839,22 @@ const THEAD =
 /**
  * @param {{ key: string, path: string, lang?: string | undefined }} file
  * @param {string} patch
- * @param {{ chunkIds?: ReadonlySet<string> }} [opts] only these chunk ids; all when omitted
- * @returns {string} HTML: one table per chunk inside .diff-wrap
+ * @param {{ hunkIds?: ReadonlySet<string> }} [opts] only these hunk ids; all when omitted
+ * @returns {string} HTML: one table per hunk inside .diff-wrap
  */
 export function renderDiff(file, patch, opts = {}) {
-  const chunks = prepareChunks(patch)
+  const hunks = prepareHunks(patch)
   /** @type {string[]} */
   const tables = []
-  chunks.forEach((h, i) => {
+  hunks.forEach((h, i) => {
     const n = i + 1
-    const id = chunkId(file.key, n)
-    if (opts.chunkIds && !opts.chunkIds.has(id)) {
+    const id = hunkId(file.key, n)
+    if (opts.hunkIds && !opts.hunkIds.has(id)) {
       return
     }
-    highlightChunk(h, file.lang)
+    highlightHunk(h, file.lang)
     tables.push(
-      `<table class="diff" id="${esc(chunkAnchorId(file.key, n))}" data-chunk="${esc(id)}" data-key="${esc(file.key)}">` +
+      `<table class="diff" id="${esc(hunkAnchorId(file.key, n))}" data-hunk="${esc(id)}" data-key="${esc(file.key)}">` +
         `<caption class="sr">Chunk ${n} of ${esc(file.path)}</caption>${THEAD}<tbody>${buildRows(h, file.key)}</tbody></table>`
     )
   })

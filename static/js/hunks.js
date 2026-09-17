@@ -1,18 +1,18 @@
 // @ts-check
-// Chunk header parsing and the chunk-for-line lookup. One implementation for the browser and the
-// server (src/git/patch-lines.ts re-exports it), so both sides agree on which chunk owns a line.
+// Hunk header parsing and the hunk-for-line lookup. One implementation for the browser and the
+// server (src/git/patch-lines.ts re-exports it), so both sides agree on which hunk owns a line.
 /** @typedef {import('./contract-types.js').Side} Side */
-/** @typedef {{ oldStart: number, oldLines: number, newStart: number, newLines: number }} ChunkRange */
+/** @typedef {{ oldStart: number, oldLines: number, newStart: number, newLines: number }} HunkRange */
 
-export const CHUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
+export const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
 
 /**
- * Line numbers and counts of a unified-diff chunk header; a missing count means 1.
+ * Line numbers and counts of a unified-diff hunk header; a missing count means 1.
  * @param {string} line
- * @returns {ChunkRange | null} null when the line is not a chunk header
+ * @returns {HunkRange | null} null when the line is not a hunk header
  */
-export function parseChunkHeader(line) {
-  const m = CHUNK_HEADER_RE.exec(line)
+export function parseHunkHeader(line) {
+  const m = HUNK_HEADER_RE.exec(line)
   if (!m) {
     return null
   }
@@ -25,15 +25,15 @@ export function parseChunkHeader(line) {
 }
 
 /**
- * The chunk that covers `line` on `side`, or null when the line is outside the diff.
- * @template {ChunkRange} H
- * @param {ReadonlyArray<H>} chunks
+ * The hunk that covers `line` on `side`, or null when the line is outside the diff.
+ * @template {HunkRange} H
+ * @param {ReadonlyArray<H>} hunks
  * @param {Side} side
  * @param {number} line
  * @returns {H | null}
  */
-export function chunkForLine(chunks, side, line) {
-  for (const h of chunks) {
+export function hunkForLine(hunks, side, line) {
+  for (const h of hunks) {
     const start = side === 'new' ? h.newStart : h.oldStart
     const count = side === 'new' ? h.newLines : h.oldLines
     // A zero-length range (pure deletion or pure addition) still anchors on its start line.
@@ -46,13 +46,13 @@ export function chunkForLine(chunks, side, line) {
 }
 
 /**
- * Valid anchor ranges, using the same zero-length anchor rule as chunkForLine.
- * @param {ReadonlyArray<ChunkRange>} chunks
+ * Valid anchor ranges, using the same zero-length anchor rule as hunkForLine.
+ * @param {ReadonlyArray<HunkRange>} hunks
  * @param {Side} side
  * @returns {string}
  */
-export function chunkLineRanges(chunks, side) {
-  const ranges = chunks.map(h => {
+export function hunkLineRanges(hunks, side) {
+  const ranges = hunks.map(h => {
     const start = side === 'new' ? h.newStart : h.oldStart
     const count = side === 'new' ? h.newLines : h.oldLines
     const end = start + Math.max(count, 1) - 1

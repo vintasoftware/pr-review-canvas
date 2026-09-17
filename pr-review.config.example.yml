@@ -33,7 +33,7 @@ generation:
   mode: strict # strict: quality review; surfacing: walkthrough that audits as it reads
   maxRepairRounds: 3 # publish retries the skill may make after a failed validation
   inlineDiffMaxLines: 1500 # diffs longer than this are read per file instead of inlined in the prompt
-  smallPrChunks: 10 # at most this many chunks: one layer unless concerns differ, fewer annotations
+  smallPrHunks: 10 # at most this many hunks: one layer unless concerns differ, fewer annotations
   # caps:                  # override the text caps (characters)
   #   summary: 1800
   #   rationale: 300

@@ -16,7 +16,7 @@ const FILES = [
     status: 'modified',
     additions: 2,
     deletions: 1,
-    chunks: [
+    hunks: [
       { id: 'src_app_ts#1', header: '@@ -1,4 +1,5 @@', oldStart: 1, oldLines: 4, newStart: 1, newLines: 5 },
       {
         id: 'src_app_ts#2',
@@ -89,7 +89,7 @@ describe('parseProposedComment', () => {
 })
 
 describe('targetsFromFiles', () => {
-  it('knows the lines each chunk shows, per side', () => {
+  it('knows the lines each hunk shows, per side', () => {
     expect(targets.hasPath('src/app.ts')).toBe(true)
     expect(targets.hasPath('nope.ts')).toBe(false)
     expect(targets.hasLine('src/app.ts', 'new', 5)).toBe(true)
@@ -168,7 +168,7 @@ describe('the target checks at the edges', () => {
     ).toEqual({ reason: 'src/app.ts:6 is not a line the diff shows' })
   })
 
-  it('shows no lines on a side a chunk does not touch', () => {
+  it('shows no lines on a side a hunk does not touch', () => {
     const added = targetsFromFiles([
       {
         path: 'src/new.ts',
@@ -176,7 +176,7 @@ describe('the target checks at the edges', () => {
         status: 'added',
         additions: 2,
         deletions: 0,
-        chunks: [
+        hunks: [
           {
             id: 'src_new_ts#1',
             header: '@@ -0,0 +1,2 @@',

@@ -13,16 +13,6 @@ import { PACKAGE_ROOT } from './server/context.js'
 import { makeTempDir } from './testing/fakes.js'
 
 describe('mergeProjectConfig', () => {
-  it('preserves an older chunk limit and gives the current option precedence', () => {
-    const previous = mergeProjectConfig({ generation: { smallPrHunks: 25 } })
-    expect(previous.warnings).toEqual([])
-    expect(previous.config.generation.smallPrChunks).toBe(25)
-    expect(previous.config.generation).not.toHaveProperty('smallPrHunks')
-    const current = mergeProjectConfig({ generation: { smallPrHunks: 25, smallPrChunks: 7 } })
-    expect(current.config.generation.smallPrChunks).toBe(7)
-    expect(mergeProjectConfig({ generation: { smallPrHunks: -1 } }).warnings[0]).toContain('smallPrChunks')
-  })
-
   it('keeps prompt overrides and rejects misspelled template names or empty paths', () => {
     const prompts = { 'generation-format.md': 'docs/prompts/format.md', 'chat-seed.md': '/shared/chat.md' }
     expect(mergeProjectConfig({ prompts }).config.prompts).toEqual(prompts)
@@ -53,7 +43,7 @@ describe('mergeProjectConfig', () => {
         mode: 'strict',
         maxRepairRounds: 5,
         inlineDiffMaxLines: 1500,
-        smallPrChunks: 10,
+        smallPrHunks: 10,
         caps: { rationale: 500 },
       },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
@@ -75,9 +65,9 @@ describe('mergeProjectConfig', () => {
       mode: 'strict',
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
-      smallPrChunks: 10,
+      smallPrHunks: 10,
     })
-    expect(mergeProjectConfig({ generation: { smallPrChunks: 25 } }).config.generation.smallPrChunks).toBe(25)
+    expect(mergeProjectConfig({ generation: { smallPrHunks: 25 } }).config.generation.smallPrHunks).toBe(25)
   })
 
   it.each(['strict', 'surfacing'] as const)('accepts the %s generation mode', mode => {

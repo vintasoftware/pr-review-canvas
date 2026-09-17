@@ -2,7 +2,7 @@
 // Every value is checked against the canvas first, so a made-up path never reaches a file read.
 import type { ChatContext } from '../contract/chat.js'
 import { chatContextLabel } from '../contract/chat.js'
-import type { FileEntry, Chunk, Layer, ReviewArtifact } from '../contract/review-artifact.js'
+import type { FileEntry, Hunk, Layer, ReviewArtifact } from '../contract/review-artifact.js'
 
 /** A file's patch goes into the message up to this many lines; past it the agent reads the file. */
 export const INLINE_PATCH_MAX_LINES = 400
@@ -40,11 +40,11 @@ function fileByPath(sources: ContextSources, path: string): FileEntry {
   return entry
 }
 
-/** The chunk a line sits in, on the side the reader selected. */
-export function enclosingChunk(entry: FileEntry, side: 'new' | 'old', line: number): Chunk | undefined {
-  return entry.chunks.find(h => {
+/** The hunk a line sits in, on the side the reader selected. */
+export function enclosingHunk(entry: FileEntry, side: 'new' | 'old', line: number): Hunk | undefined {
+  return entry.hunks.find(h => {
     const start = side === 'new' ? h.newStart : h.oldStart
-    // A chunk that adds lines shows none on the old side, and the other way round.
+    // A hunk that adds lines shows none on the old side, and the other way round.
     const count = side === 'new' ? h.newLines : h.oldLines
     return count > 0 && line >= start && line < start + count
   })
@@ -77,7 +77,7 @@ export async function renderChatContext(context: ChatContext, sources: ContextSo
       return '## Context: the whole pull request\n\nThe reader is asking about the pull request as a whole.'
     case 'layer': {
       const layer = layerById(sources.artifact, context.layerId)
-      const files = layer.files.map(f => `- \`${f.path}\` (${f.chunks.join(', ')})`).join('\n')
+      const files = layer.files.map(f => `- \`${f.path}\` (${f.hunks.join(', ')})`).join('\n')
       return [`## Context: ${label}`, '', layer.rationale, '', files === '' ? '_no files_' : files].join('\n')
     }
     case 'file': {
@@ -142,7 +142,7 @@ async function renderLines(
   return `## Context: ${label}\n\n${await linesBody(context, sources)}`
 }
 
-/** The quoted lines and the chunk around them, with no heading of their own. */
+/** The quoted lines and the hunk around them, with no heading of their own. */
 async function linesBody(
   context: Extract<ChatContext, { kind: 'lines' }>,
   sources: ContextSources
@@ -156,12 +156,12 @@ async function linesBody(
   const entry = fileByPath(sources, context.path)
   const side = context.side === 'new' ? 'head' : 'base'
   const lines = await sources.readLines(side, entry.path, context.start, context.end)
-  const chunk = enclosingChunk(entry, context.side, context.start)
+  const hunk = enclosingHunk(entry, context.side, context.start)
   const numbered =
     lines === null || lines.length === 0
       ? '_these lines are not available locally_'
       : fence(lines.map((text, i) => `${context.start + i}: ${text}`).join('\n'))
-  const chunkBlock =
-    chunk === undefined ? '' : `\n\nThe chunk around them is \`${chunk.id}\` (\`${chunk.header}\`).`
-  return `${numbered}${chunkBlock}`
+  const hunkBlock =
+    hunk === undefined ? '' : `\n\nThe hunk around them is \`${hunk.id}\` (\`${hunk.header}\`).`
+  return `${numbered}${hunkBlock}`
 }

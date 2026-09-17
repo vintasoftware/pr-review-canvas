@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import { readChunkLimit } from './contract/chunk-compat.js'
 import type { TextCaps } from './contract/review-artifact.js'
 import { DEFAULT_TEST_PATTERNS } from './review/test-paths.js'
 import { readText } from './store/atomic-json.js'
@@ -59,8 +58,8 @@ export const ProjectConfigSchema = z.object({
     mode: GenerationModeSchema.default('strict'),
     maxRepairRounds: z.number().int().positive(),
     inlineDiffMaxLines: z.number().int().positive(),
-    /** A change set with at most this many chunks is "small": one layer unless concerns differ. */
-    smallPrChunks: z.number().int().positive(),
+    /** A change set with at most this many hunks is "small": one layer unless concerns differ. */
+    smallPrHunks: z.number().int().positive(),
     caps: z.object(capsShape).optional(),
   }),
   /** Which paths count as tests, for the layering rules and the `isTest` flag on a file. */
@@ -77,16 +76,13 @@ const PartialProjectConfigSchema = z.object({
   layers: z.array(DefaultLayerSchema).optional(),
   highRisk: z.array(HighRiskRuleSchema).optional(),
   generation: z
-    .preprocess(
-      readChunkLimit,
-      z.object({
-        mode: GenerationModeSchema.optional(),
-        maxRepairRounds: z.number().int().positive().optional(),
-        inlineDiffMaxLines: z.number().int().positive().optional(),
-        smallPrChunks: z.number().int().positive().optional(),
-        caps: z.object(capsShape).optional(),
-      })
-    )
+    .object({
+      mode: GenerationModeSchema.optional(),
+      maxRepairRounds: z.number().int().positive().optional(),
+      inlineDiffMaxLines: z.number().int().positive().optional(),
+      smallPrHunks: z.number().int().positive().optional(),
+      caps: z.object(capsShape).optional(),
+    })
     .optional(),
   tests: z.object({ patterns: z.array(z.string().min(1)).optional() }).optional(),
   chat: z.object({ enabled: z.boolean().optional() }).optional(),
@@ -96,7 +92,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   version: 1,
   layers: [],
   highRisk: [],
-  generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrChunks: 10 },
+  generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
 }
@@ -127,7 +123,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     maxRepairRounds: user.generation?.maxRepairRounds ?? DEFAULT_PROJECT_CONFIG.generation.maxRepairRounds,
     inlineDiffMaxLines:
       user.generation?.inlineDiffMaxLines ?? DEFAULT_PROJECT_CONFIG.generation.inlineDiffMaxLines,
-    smallPrChunks: user.generation?.smallPrChunks ?? DEFAULT_PROJECT_CONFIG.generation.smallPrChunks,
+    smallPrHunks: user.generation?.smallPrHunks ?? DEFAULT_PROJECT_CONFIG.generation.smallPrHunks,
   }
   if (user.generation?.caps !== undefined) {
     generation.caps = user.generation.caps

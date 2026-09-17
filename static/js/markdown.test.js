@@ -112,11 +112,11 @@ describe('renderMarkdown', () => {
   it('keeps canvas links, labels empty ones, and linkifies path:line only for diff paths', () => {
     const paths = new Set(['src/app.ts'])
     const html = renderMarkdown(
-      'See [the swap](#chunk:src/app.ts#2), src/app.ts:4-6, other/file.ts:9 and `src/app.ts:1`.',
+      'See [the swap](#hunk:src/app.ts#2), src/app.ts:4-6, other/file.ts:9 and `src/app.ts:1`.',
       { paths }
     )
     expect(html).toContain(
-      '<a href="#chunk:src/app.ts#2" class="loc" data-link="#chunk:src/app.ts#2">the swap</a>'
+      '<a href="#hunk:src/app.ts#2" class="loc" data-link="#hunk:src/app.ts#2">the swap</a>'
     )
     expect(html).toContain(
       '<a href="#line:src/app.ts:4-6" class="loc" data-link="#line:src/app.ts:4-6">src/app.ts:4-6</a>'

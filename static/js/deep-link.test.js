@@ -20,7 +20,7 @@ function page() {
     <main>
       <section class="layer" id="layer-auth"></section>
       <article class="file" id="file-src_app_ts"><div class="file-body" hidden>
-      <table class="diff" id="chunk-src_app_ts-1" data-key="src_app_ts"><tbody>
+      <table class="diff" id="hunk-src_app_ts-1" data-key="src_app_ts"><tbody>
         <tr id="L-src_app_ts-new-1" class="ctx"></tr>
         <tr id="L-src_app_ts-new-2" class="add folded noise"></tr>
         <tr id="L-src_app_ts-new-3" class="add"></tr>
@@ -88,11 +88,6 @@ describe('followLink', () => {
     expect(document.querySelector('#L-src_app_ts-new-3')?.classList.contains('is-target')).toBe(true)
   })
 
-  it('follows an older chunk bookmark to the current anchor', () => {
-    expect(followLink('#hunk:src/app.ts#1')).toBe(true)
-    expect(document.querySelector('#chunk-src_app_ts-1')?.classList.contains('is-target')).toBe(true)
-  })
-
   it('jumps to a layer on a page that has no rail', () => {
     document.body.innerHTML = '<section class="layer" id="layer-auth"></section>'
     expect(followLink('#layer:auth')).toBe(true)
@@ -103,7 +98,7 @@ describe('followLink', () => {
     expect(followLink('')).toBe(false)
     expect(followLink('#file:src/gone.ts')).toBe(false)
     expect(followLink('#line:src/gone.ts:1')).toBe(false)
-    expect(followLink('#chunk:src/app.ts#9')).toBe(false)
+    expect(followLink('#hunk:src/app.ts#9')).toBe(false)
   })
 
   it('keeps a percent escape that belongs to the path', () => {

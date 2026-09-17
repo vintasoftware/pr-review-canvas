@@ -28,8 +28,8 @@ export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectProm
   return { format, layeringGuidance, qualityStandards, generation: { strict, surfacing } }
 }
 
-/** The line ranges of a chunk header; the trailing function context can hold backticks. */
-export function chunkRange(header: string): string {
+/** The line ranges of a hunk header; the trailing function context can hold backticks. */
+export function hunkRange(header: string): string {
   const m = /^(@@ [^@]*@@)/.exec(header)
   return m?.[1] ?? header
 }
@@ -39,8 +39,8 @@ export function manifestMarkdown(files: readonly FileEntry[]): string {
     .map(f => {
       const rename = f.oldPath === undefined ? '' : ` (from \`${f.oldPath}\`)`
       const head = `- \`${f.path}\`${rename} — ${f.status}, +${f.additions} −${f.deletions}`
-      const chunks = f.chunks.map(h => `  - \`${h.id}\` \`${chunkRange(h.header)}\``)
-      return [head, ...chunks].join('\n')
+      const hunks = f.hunks.map(h => `  - \`${h.id}\` \`${hunkRange(h.header)}\``)
+      return [head, ...hunks].join('\n')
     })
     .join('\n')
 }
@@ -139,11 +139,11 @@ function diffsMarkdown(ctx: GenerationContext, patches: Record<string, string>):
   const lines = patchLineCount(patches)
   const inline = !ctx.largePr && lines <= ctx.generation.inlineDiffMaxLines
   if (inline) {
-    return `The whole diff follows (${lines} lines). Every chunk is labeled with its id.\n\n${inlineDiffs(ctx.files, patches)}`
+    return `The whole diff follows (${lines} lines). Every hunk is labeled with its id.\n\n${inlineDiffs(ctx.files, patches)}`
   }
   return (
     `The diff has ${lines} lines, above the ${ctx.generation.inlineDiffMaxLines}-line inline limit${ctx.largePr ? ' (large PR)' : ''}, so it is not inlined. ` +
-    'Read one file at a time from `<patches>/<key>.diff`; each file carries the same `### chunk <id>` labels the manifest uses. ' +
+    'Read one file at a time from `<patches>/<key>.diff`; each file carries the same `### hunk <id>` labels the manifest uses. ' +
     'Open a patch only for a file you need to judge; the manifest is enough to plan the layers.'
   )
 }
@@ -159,13 +159,13 @@ function pathsMarkdown(ctx: GenerationContext): string {
 }
 
 function smallPrMarkdown(ctx: GenerationContext): string {
-  const chunks = ctx.files.reduce((n, f) => n + f.chunks.length, 0)
-  const limit = ctx.generation.smallPrChunks
+  const hunks = ctx.files.reduce((n, f) => n + f.hunks.length, 0)
+  const limit = ctx.generation.smallPrHunks
   if (!ctx.smallPr) {
-    return `This ${ctx.target.kind === 'pr' ? 'pull request' : 'change set'} has ${chunks} chunks, above the ${limit}-chunk small-change limit, so the layering rules above apply in full.`
+    return `This ${ctx.target.kind === 'pr' ? 'pull request' : 'change set'} has ${hunks} hunks, above the ${limit}-hunk small-change limit, so the layering rules above apply in full.`
   }
   return (
-    `**Small change set.** This ${ctx.target.kind === 'pr' ? 'pull request' : 'change set'} has ${chunks} chunks, at most ${limit}, so:\n\n` +
+    `**Small change set.** This ${ctx.target.kind === 'pr' ? 'pull request' : 'change set'} has ${hunks} hunks, at most ${limit}, so:\n\n` +
     '- Use one layer unless the concerns truly differ; do not split merely to fill suggested groups.\n' +
     '- Annotate only where the diff does not speak for itself; zero annotations is a fine answer.\n' +
     '- Keep the summary self-contained: state the behavior change and the one relationship or decision worth understanding.'

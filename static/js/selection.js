@@ -174,7 +174,7 @@ export function lineRefFromEvent(event, pathForKey) {
   const row = target.closest('tr')
   const table = row?.closest('table.diff')
   const key = table?.getAttribute('data-key')
-  if (!(row && key) || row.classList.contains('chunk') || row.classList.contains('more')) {
+  if (!(row && key) || row.classList.contains('hunk') || row.classList.contains('more')) {
     return null
   }
   // The column decides the side: the left one is the old file, the right one the new file.

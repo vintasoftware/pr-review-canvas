@@ -70,7 +70,7 @@ export function settingsDialogHtml(data, agents) {
     `<li>high-risk patterns: ${project.highRisk}</li>` +
     `<li>max repair rounds: ${project.maxRepairRounds}</li>` +
     `<li>inline diff max lines: ${project.inlineDiffMaxLines}</li>` +
-    `<li>small change set: ${project.smallPrChunks} chunks</li></ul>` +
+    `<li>small change set: ${project.smallPrHunks} chunks</li></ul>` +
     `<p class="muted small mono">${esc(project.file ?? 'built-in defaults (no pr-review.config.yml)')}</p></div>` +
     '<p class="probe-result" role="status"></p>' +
     '<div class="dialog-actions">' +

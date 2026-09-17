@@ -14,7 +14,7 @@ import {
 } from '../contract/review-artifact.js'
 import { collectDiffs, toFileEntry } from '../git/diff-collector.js'
 import { createGit } from '../git/git.js'
-import { chunkForLine } from '../git/patch-lines.js'
+import { hunkForLine } from '../git/patch-lines.js'
 import { diagramNodeIds } from '../review/diagram-nodes.js'
 import { PACKAGE_ROOT } from '../server/context.js'
 
@@ -32,24 +32,24 @@ const liveDiffAvailable =
 const isTestPath = (p: string): boolean => /(\.test\.|\.spec\.|__tests__\/)/.test(p)
 
 describe('PR #278 fixture', () => {
-  it('describes PR 278 at the recorded head with unique chunk ids', () => {
+  it('describes PR 278 at the recorded head with unique hunk ids', () => {
     expect(artifact.pr.number).toBe(278)
     expect(artifact.pr.headSha).toBe('b8d1e6bf717aeab6c113cc9855e79fb49355760a')
-    const ids = artifact.files.flatMap(f => f.chunks.map(h => h.id))
+    const ids = artifact.files.flatMap(f => f.hunks.map(h => h.id))
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('puts every chunk in exactly one layer', () => {
+  it('puts every hunk in exactly one layer', () => {
     const seen = new Map<string, string>()
     for (const layer of artifact.layers) {
       for (const f of layer.files) {
-        for (const id of f.chunks) {
+        for (const id of f.hunks) {
           expect(seen.has(id), `${id} appears in ${seen.get(id)} and ${layer.key}`).toBe(false)
           seen.set(id, layer.key)
         }
       }
     }
-    const allIds = artifact.files.flatMap(f => f.chunks.map(h => h.id))
+    const allIds = artifact.files.flatMap(f => f.hunks.map(h => h.id))
     expect([...seen.keys()].sort()).toEqual([...allIds].sort())
   })
 
@@ -147,7 +147,7 @@ describe('PR #278 fixture', () => {
     expect(artifact.points.filter(p => p.origin === 'tests')).toHaveLength(missing.length)
   })
 
-  it('anchors every attention point and annotation inside a chunk of its layer', () => {
+  it('anchors every attention point and annotation inside a hunk of its layer', () => {
     const byPath = new Map(artifact.files.map(f => [f.path, f]))
     expect(artifact.points.length).toBeGreaterThanOrEqual(6)
     expect(artifact.points.length).toBeLessThanOrEqual(LIMITS.maxPoints)
@@ -158,11 +158,11 @@ describe('PR #278 fixture', () => {
     for (const p of artifact.points) {
       const file = byPath.get(p.path)
       expect(file, p.path).toBeDefined()
-      const chunk = chunkForLine(file?.chunks ?? [], p.side ?? 'new', p.line)
-      expect(chunk, `${p.id} ${p.path}:${p.line}`).not.toBeNull()
+      const hunk = hunkForLine(file?.hunks ?? [], p.side ?? 'new', p.line)
+      expect(hunk, `${p.id} ${p.path}:${p.line}`).not.toBeNull()
       const layer = artifact.layers.find(l => l.id === p.layerId)
       expect(
-        layer?.files.some(f => f.chunks.includes(chunk?.id ?? '')),
+        layer?.files.some(f => f.hunks.includes(hunk?.id ?? '')),
         `${p.id} layer ${p.layerId}`
       ).toBe(true)
       expect(new Set(artifact.points.map(x => x.fingerprint)).size).toBe(artifact.points.length)
@@ -171,11 +171,11 @@ describe('PR #278 fixture', () => {
       for (const f of layer.files) {
         const entry = byPath.get(f.path)
         for (const a of f.annotations) {
-          const start = chunkForLine(entry?.chunks ?? [], a.side, a.startLine)
-          const end = chunkForLine(entry?.chunks ?? [], a.side, a.endLine)
+          const start = hunkForLine(entry?.hunks ?? [], a.side, a.startLine)
+          const end = hunkForLine(entry?.hunks ?? [], a.side, a.endLine)
           expect(start?.id, `${f.path}:${a.startLine}`).toBeDefined()
           expect(end?.id).toBe(start?.id)
-          expect(f.chunks).toContain(start?.id)
+          expect(f.hunks).toContain(start?.id)
         }
       }
     }
@@ -203,7 +203,7 @@ describe('PR #278 fixture', () => {
   })
 
   it.skipIf(!liveDiffAvailable)(
-    'lists exactly the files and chunks of the live diff of refs/pr/278/head',
+    'lists exactly the files and hunks of the live diff of refs/pr/278/head',
     async () => {
       const live = (await collectDiffs(git, artifact.pr.mergeBaseSha, artifact.pr.headSha)).map(toFileEntry)
       expect(live).toEqual(artifact.files)

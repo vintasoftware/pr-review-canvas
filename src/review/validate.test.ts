@@ -143,17 +143,17 @@ describe('validateModelOutput', () => {
     expect(errorsOf(output)[0]?.message).toContain('layers.0.rationale: 301 visible chars, cap 300;')
     expect(errorsOf(output)[0]?.message).toContain('what fits ends at "...rrrr')
     layer(output, 1).files.pop()
-    expect(errorsOf(output).map(e => e.code)).toEqual(['TEXT_TOO_LONG', 'CHUNK_UNASSIGNED'])
+    expect(errorsOf(output).map(e => e.code)).toEqual(['TEXT_TOO_LONG', 'HUNK_UNASSIGNED'])
     expect(validateModelOutput(output, input()).output).toBeNull()
     const capped = errorsOf(clean(), { caps: { ...TEXT_CAPS, summary: 50 } })
     expect(capped.map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'summary']])
     expect(capped[0]?.message).toContain(`summary: ${visibleLength(clean().summary)} visible chars, cap 50;`)
     // A long link target and backticks do not count; only the text a reader sees does.
     const linked = clean()
-    layer(linked, 0).rationale = `${'r'.repeat(280)} [see](#chunk:${'p'.repeat(200)}/x.ts#1) \`code\``
+    layer(linked, 0).rationale = `${'r'.repeat(280)} [see](#hunk:${'p'.repeat(200)}/x.ts#1) \`code\``
     // 484 raw characters, 291 visible: only the unknown link target is reported.
     expect(errorsOf(linked).map(e => e.code)).toEqual(['LINK_UNRESOLVED'])
-    layer(linked, 0).rationale = `${'r'.repeat(297)} [see](#chunk:src/app.ts#1)`
+    layer(linked, 0).rationale = `${'r'.repeat(297)} [see](#hunk:src/app.ts#1)`
     expect(errorsOf(linked).map(formatValidationError)[0]).toContain(
       'TEXT_TOO_LONG layers.0.rationale: 301 visible chars, cap 300;'
     )
@@ -331,36 +331,36 @@ describe('validateModelOutput', () => {
     expect(errorsOf(title).map(e => e.code)).toEqual(['TEXT_TOO_LONG'])
   })
 
-  it('CHUNK_UNASSIGNED: names the chunk, its file, and its header', () => {
+  it('HUNK_UNASSIGNED: names the hunk, its file, and its header', () => {
     const output = clean()
     layer(output, 1).files = layer(output, 1).files.filter(f => f.path !== 'src/new.ts')
     expect(errorsOf(output)).toEqual([
       {
-        code: 'CHUNK_UNASSIGNED',
-        where: 'chunk:src_new_ts#1',
+        code: 'HUNK_UNASSIGNED',
+        where: 'hunk:src_new_ts#1',
         message: 'src_new_ts#1 in src/new.ts (@@ -0,0 +1,2 @@) is in no layer',
       },
     ])
   })
 
-  it('CHUNK_DUPLICATE: names both layers', () => {
+  it('HUNK_DUPLICATE: names both layers', () => {
     const output = clean()
-    layer(output, 1).files[0]?.chunks.push('src_app_ts#1')
+    layer(output, 1).files[0]?.hunks.push('src_app_ts#1')
     expect(errorsOf(output)).toEqual([
       {
-        code: 'CHUNK_DUPLICATE',
+        code: 'HUNK_DUPLICATE',
         where: 'layer:other',
         message: 'src_app_ts#1 (@@ -1,4 +1,5 @@) is in layer run-path and other',
       },
     ])
   })
 
-  it('CHUNK_UNKNOWN: a chunk number past the file, and a chunk id filed under another path', () => {
+  it('HUNK_UNKNOWN: a hunk number past the file, and a hunk id filed under another path', () => {
     const output = clean()
-    layer(output, 0).files[0]?.chunks.push('src_app_ts#9')
+    layer(output, 0).files[0]?.hunks.push('src_app_ts#9')
     expect(errorsOf(output)).toEqual([
       {
-        code: 'CHUNK_UNKNOWN',
+        code: 'HUNK_UNKNOWN',
         where: 'layer:run-path',
         message: 'layer run-path: src_app_ts#9 does not exist (src/app.ts has 2 chunks)',
       },
@@ -369,11 +369,11 @@ describe('validateModelOutput', () => {
     const first = layer(wrongFile, 0).files[0]
     const second = layer(wrongFile, 0).files[1]
     if (first && second) {
-      second.chunks = ['src_new_name_ts#1', 'src_app_ts#2']
-      first.chunks = ['src_app_ts#1']
+      second.hunks = ['src_new_name_ts#1', 'src_app_ts#2']
+      first.hunks = ['src_app_ts#1']
     }
-    layer(wrongFile, 1).files[0] = { path: 'src/app.ts', chunks: ['src_app_ts#2'], annotations: [] }
-    expect(errorsOf(wrongFile).map(e => e.code)).toEqual(['CHUNK_UNKNOWN'])
+    layer(wrongFile, 1).files[0] = { path: 'src/app.ts', hunks: ['src_app_ts#2'], annotations: [] }
+    expect(errorsOf(wrongFile).map(e => e.code)).toEqual(['HUNK_UNKNOWN'])
     expect(errorsOf(wrongFile)[0]?.message).toBe(
       'layer run-path: src_app_ts#2 belongs to src/app.ts, not src/new-name.ts'
     )
@@ -381,10 +381,10 @@ describe('validateModelOutput', () => {
 
   it('PATH_UNKNOWN: a file that is not in the diff', () => {
     const output = clean()
-    layer(output, 1).files.push({ path: 'src/elsewhere.ts', chunks: ['src_elsewhere_ts#1'], annotations: [] })
+    layer(output, 1).files.push({ path: 'src/elsewhere.ts', hunks: ['src_elsewhere_ts#1'], annotations: [] })
     expect(errorsOf(output)).toEqual([
       { code: 'PATH_UNKNOWN', where: 'layer:other', message: 'other: src/elsewhere.ts is not in the diff' },
-      { code: 'CHUNK_UNKNOWN', where: 'layer:other', message: 'other: src_elsewhere_ts#1 does not exist' },
+      { code: 'HUNK_UNKNOWN', where: 'layer:other', message: 'other: src_elsewhere_ts#1 does not exist' },
     ])
   })
 
@@ -450,7 +450,7 @@ describe('validateModelOutput', () => {
     ])
   })
 
-  it('accepts annotation and point anchors on unchanged context lines inside a chunk', () => {
+  it('accepts annotation and point anchors on unchanged context lines inside a hunk', () => {
     const output = clean()
     // src_app_ts#1 is @@ -1,4 +1,5 @@; line 1 (`import { a }`) and line 5 (`}`) are context lines.
     const file = layer(output, 0).files[0]
@@ -494,9 +494,9 @@ describe('validateModelOutput', () => {
     const other = layer(together, 1)
     const run = layer(together, 0)
     other.files = [
-      { path: 'src/app.ts', chunks: ['src_app_ts#1', 'src_app_ts#2'], annotations: [] },
+      { path: 'src/app.ts', hunks: ['src_app_ts#1', 'src_app_ts#2'], annotations: [] },
       ...other.files.filter(f => f.path !== 'src/app.ts'),
-      { path: 'src/app.test.ts', chunks: ['src_app_test_ts#1'], annotations: [] },
+      { path: 'src/app.test.ts', hunks: ['src_app_test_ts#1'], annotations: [] },
     ]
     run.files = run.files.filter(f => f.path === 'src/new-name.ts')
     run.tests = []
@@ -522,7 +522,7 @@ describe('validateModelOutput', () => {
     ])
   })
 
-  it('ANNOTATION_OUTSIDE_CHUNK: outside the diff, across chunks, reversed, and in a chunk of another layer', () => {
+  it('ANNOTATION_OUTSIDE_HUNK: outside the diff, across hunks, reversed, and in a hunk of another layer', () => {
     const output = clean()
     const file = layer(output, 0).files[0]
     if (!file) {
@@ -530,15 +530,15 @@ describe('validateModelOutput', () => {
     }
     file.annotations = [
       { side: 'new', startLine: 40, endLine: 41, text: 'far away' },
-      { side: 'new', startLine: 4, endLine: 12, text: 'spans two chunks' },
+      { side: 'new', startLine: 4, endLine: 12, text: 'spans two hunks' },
       { side: 'new', startLine: 4, endLine: 3, text: 'reversed' },
-      { side: 'new', startLine: 12, endLine: 12, text: 'other layer chunk' },
+      { side: 'new', startLine: 12, endLine: 12, text: 'other layer hunk' },
     ]
     expect(errorsOf(output).map(formatValidationError)).toEqual([
-      'ANNOTATION_OUTSIDE_CHUNK layer run-path src/app.ts:40-41 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
-      'ANNOTATION_OUTSIDE_CHUNK layer run-path src/app.ts:4-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
-      'ANNOTATION_OUTSIDE_CHUNK layer run-path src/app.ts:4-3 (new): endLine is before startLine',
-      'ANNOTATION_OUTSIDE_CHUNK layer run-path src/app.ts:12 (new) is in src_app_ts#2, which this layer does not list',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:40-41 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-3 (new): endLine is before startLine',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:12 (new) is in src_app_ts#2, which this layer does not list',
     ])
   })
 
@@ -547,13 +547,13 @@ describe('validateModelOutput', () => {
     layer(output, 0).files[0]!.annotations = [{ side: 'old', startLine: 99, endLine: 100, text: 'outside' }]
     expect(errorsOf(output)).toEqual([
       expect.objectContaining({
-        code: 'ANNOTATION_OUTSIDE_CHUNK',
+        code: 'ANNOTATION_OUTSIDE_HUNK',
         message: expect.stringContaining('(old-side lines 1-4, 10-12)'),
       }),
     ])
   })
 
-  it('POINT_OUTSIDE_DIFF: unknown path, a line outside every chunk, and a range that leaves its chunk', () => {
+  it('POINT_OUTSIDE_DIFF: unknown path, a line outside every hunk, and a range that leaves its hunk', () => {
     const output = clean()
     output.points = [
       { kind: 'risk', level: 'check', title: 'Nowhere', path: 'src/nope.ts', line: 1, body: 'b' },
@@ -622,19 +622,19 @@ describe('validateModelOutput', () => {
     output.summary = 'See [x](#layer:nope).'
     const l = layer(output, 0)
     l.rationale = 'See #file:src/nope.ts.'
-    l.decisions = 'See [h](#chunk:src/app.ts#9).'
+    l.decisions = 'See [h](#hunk:src/app.ts#9).'
     l.checkByHand =
       'See [l](#line:src/nope.ts:4) and [m](#line:src/app.ts:400-410) and [o](#line:src/app.ts:8:old).'
     l.tests[0] = {
       behavior: 'run() adds b()',
       status: 'covered',
       testPath: 'src/app.test.ts',
-      note: '[t](#chunk:src/app.ts#3)',
+      note: '[t](#hunk:src/app.ts#3)',
     }
     const file = l.files[0]
     if (file) {
       file.note = '[n](#layer:zzz)'
-      file.annotations[0] = { side: 'new', startLine: 3, endLine: 4, text: '[a](#chunk:nope)' }
+      file.annotations[0] = { side: 'new', startLine: 3, endLine: 4, text: '[a](#hunk:nope)' }
     }
     const p = output.points[0]
     if (p) {
@@ -643,13 +643,13 @@ describe('validateModelOutput', () => {
     expect(errorsOf(output).map(formatValidationError)).toEqual([
       'LINK_UNRESOLVED summary: #layer:nope layer nope does not exist',
       'LINK_UNRESOLVED layer run-path rationale: #file:src/nope.ts src/nope.ts is not in the diff',
-      'LINK_UNRESOLVED layer run-path decisions: #chunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 chunks)',
+      'LINK_UNRESOLVED layer run-path decisions: #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 chunks)',
       'LINK_UNRESOLVED layer run-path checkByHand: #line:src/nope.ts:4 src/nope.ts is not in the diff',
       'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:400-410 src/app.ts:400-410 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
       'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:8:old src/app.ts:8 (old) is not inside one chunk of the diff (old-side lines 1-4, 10-12)',
-      'LINK_UNRESOLVED layer run-path test "run() adds b()": #chunk:src/app.ts#3 src/app.ts#3 does not exist (file has 2 chunks)',
+      'LINK_UNRESOLVED layer run-path test "run() adds b()": #hunk:src/app.ts#3 src/app.ts#3 does not exist (file has 2 chunks)',
       'LINK_UNRESOLVED layer run-path src/app.ts note: #layer:zzz layer zzz does not exist',
-      'LINK_UNRESOLVED layer run-path src/app.ts annotation 1: #chunk:nope is not one of the four link forms',
+      'LINK_UNRESOLVED layer run-path src/app.ts annotation 1: #hunk:nope is not one of the four link forms',
       'LINK_UNRESOLVED point 1 "Sum instead of product": #file:src/zzz.ts src/zzz.ts is not in the diff',
     ])
   })
@@ -691,10 +691,10 @@ describe('validateModelOutput', () => {
     const output = clean()
     layer(output, 0).diagram = {
       mermaid: 'flowchart LR\n  store --> serve',
-      links: { store: '#chunk:src/app.ts#9', serve: '#layer:nope' },
+      links: { store: '#hunk:src/app.ts#9', serve: '#layer:nope' },
     }
     expect(errorsOf(output).map(formatValidationError)).toEqual([
-      'LINK_UNRESOLVED layer run-path diagram node "store": #chunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 chunks)',
+      'LINK_UNRESOLVED layer run-path diagram node "store": #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 chunks)',
       'LINK_UNRESOLVED layer run-path diagram node "serve": #layer:nope layer nope does not exist',
     ])
     // A value that is not a canvas link at all fails the schema, so nothing else runs.
@@ -710,7 +710,7 @@ describe('validateModelOutput', () => {
     const output = clean()
     layer(output, 0).diagram = {
       mermaid: 'flowchart LR\n  store[The store] --> serve{Serve}\n  serve --> app',
-      links: { store: '#file:src/app.ts', serve: '#chunk:src/app.ts#1', app: '#line:src/app.ts:3-4' },
+      links: { store: '#file:src/app.ts', serve: '#hunk:src/app.ts#1', app: '#line:src/app.ts:3-4' },
     }
     expect(errorsOf(output)).toEqual([])
   })
@@ -734,7 +734,7 @@ describe('validateModelOutput', () => {
     expect(new Set(VALIDATION_CODES).size).toBe(VALIDATION_CODES.length)
   })
 
-  it('accepts the committed PR #278 canvas against its own chunk index', async () => {
+  it('accepts the committed PR #278 canvas against its own hunk index', async () => {
     const artifact = ReviewArtifactSchema.parse(
       JSON.parse(await readFile(path.join(PACKAGE_ROOT, '__fixtures__/pr-278/review.json'), 'utf8'))
     )

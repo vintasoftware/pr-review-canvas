@@ -47,7 +47,7 @@
   --del-bg: light-dark(#ffebe9, rgba(229, 83, 75, 0.15));
   --del-w: light-dark(#ffc1c0, rgba(229, 83, 75, 0.4));
   --mv-bg: light-dark(#fbefff, rgba(152, 110, 226, 0.1));
-  --chunk-bg: light-dark(#ddf4ff, #253142);
+  --hunk-bg: light-dark(#ddf4ff, #253142);
 
   /* Buttons. GitHub's default button is a filled box with a hairline; the primary one is green. */
   --btn-bg: light-dark(#f6f8fa, #2a313c);
@@ -255,7 +255,7 @@
   border-color: var(--line);
   background: var(--panel-2);
 }
-[data-skin='github'] tr.chunk td {
+[data-skin='github'] tr.hunk td {
   color: light-dark(#0550ae, #9198a1);
 }
 

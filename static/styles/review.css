@@ -462,7 +462,7 @@ details[open] > summary .chev {
 .note p {
   max-width: 100ch;
 }
-.more-chunks {
+.more-hunks {
   padding: 8px 14px;
   font-size: 12px;
   color: var(--fg-muted);

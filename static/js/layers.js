@@ -1,7 +1,7 @@
 // @ts-check
 // The rail, the layer sections, and the file cards. A layer section holds the judgment text
 // (rationale, decisions, check by hand), its test map, its attention point cards, and its files.
-// A file card shows only the chunks of its layer; the diff is rendered lazily by <pr-file> from
+// A file card shows only the hunks of its layer; the diff is rendered lazily by <pr-file> from
 // the shared render context.
 /** @typedef {import('./contract-types.js').FileEntry} FileEntry */
 /** @typedef {import('./contract-types.js').Layer} Layer */
@@ -18,7 +18,7 @@ import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
-import { chunkForLine } from './chunks.js'
+import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { pointCardHtml, postedUrls } from './points.js'
@@ -77,16 +77,16 @@ export function pathSet(files) {
 }
 
 /**
- * Layer title per chunk id, so a file card can say "2 more chunks in layer 4".
+ * Layer title per hunk id, so a file card can say "2 more chunks in layer 4".
  * @param {ReviewArtifact} artifact
  * @returns {Map<string, { layer: Layer, index: number }>}
  */
-export function chunkLayerIndex(artifact) {
+export function hunkLayerIndex(artifact) {
   /** @type {Map<string, { layer: Layer, index: number }>} */
   const out = new Map()
   artifact.layers.forEach((layer, index) => {
     for (const f of layer.files) {
-      for (const id of f.chunks) {
+      for (const id of f.hunks) {
         out.set(id, { layer, index })
       }
     }
@@ -245,7 +245,7 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
- * @param {{ chunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, keepOpen?: boolean }} ctx
+ * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, keepOpen?: boolean }} ctx
  * @returns {string}
  */
 export function renderFileCard(lf, entry, layer, ctx) {
@@ -270,34 +270,34 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const note = lf.note
     ? `<div class="note"><span class="lbl">Reviewer note</span><div class="prose">${renderMarkdown(lf.note, { paths: ctx.paths })}</div></div>`
     : ''
-  const elsewhere = elsewhereHtml(lf, entry, layer, ctx.chunkIndex)
+  const elsewhere = elsewhereHtml(lf, entry, layer, ctx.hunkIndex)
   return (
     `<pr-file><article class="file${lf.isTest ? ' test' : ''}${cardReviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-key="${esc(key)}" data-path="${esc(lf.path)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
     `<div class="file-h">${chevronHtml('Collapse file', !collapsed, { act: 'toggle-card' })}<h3 id="${esc(id)}-h" class="path">${path}${testTag}</h3>${status}${pills}` +
     `<label class="chk"><input type="checkbox" data-reviewed-id="${esc(cardReviewedId)}"${cardReviewed ? ' checked' : ''}> reviewed</label>` +
     `<span class="tbtns">${askButtonHtml({ kind: 'file', path: lf.path })}</span></div>` +
-    `<div class="file-body"${collapsed ? ' hidden' : ''}>${note}<div class="diff-host" data-key="${esc(key)}" data-chunks="${esc(lf.chunks.join(','))}"><div class="loading">Loading diff…</div></div>${elsewhere}</div></article></pr-file>`
+    `<div class="file-body"${collapsed ? ' hidden' : ''}>${note}<div class="diff-host" data-key="${esc(key)}" data-hunks="${esc(lf.hunks.join(','))}"><div class="loading">Loading diff…</div></div>${elsewhere}</div></article></pr-file>`
   )
 }
 
 /**
- * "2 more chunks in layer 4 · title" when a file's other chunks live in other layers.
+ * "2 more chunks in layer 4 · title" when a file's other hunks live in other layers.
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
- * @param {Map<string, { layer: Layer, index: number }>} chunkIndex
+ * @param {Map<string, { layer: Layer, index: number }>} hunkIndex
  */
-export function elsewhereHtml(lf, entry, layer, chunkIndex) {
+export function elsewhereHtml(lf, entry, layer, hunkIndex) {
   if (!entry) {
     return ''
   }
   /** @type {Map<string, { n: number, layer: Layer, index: number }>} */
   const others = new Map()
-  for (const h of entry.chunks) {
-    if (lf.chunks.includes(h.id)) {
+  for (const h of entry.hunks) {
+    if (lf.hunks.includes(h.id)) {
       continue
     }
-    const where = chunkIndex.get(h.id)
+    const where = hunkIndex.get(h.id)
     if (!where || where.layer.id === layer.id) {
       continue
     }
@@ -312,7 +312,7 @@ export function elsewhereHtml(lf, entry, layer, chunkIndex) {
     o =>
       `${o.n} more ${o.n === 1 ? 'chunk' : 'chunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? esc(o.layer.title) : `layer ${o.index + 1} · ${esc(o.layer.title)}`}</a>`
   )
-  return `<div class="more-chunks">${parts.join(' · ')}</div>`
+  return `<div class="more-hunks">${parts.join(' · ')}</div>`
 }
 
 /**
@@ -321,7 +321,7 @@ export function elsewhereHtml(lf, entry, layer, chunkIndex) {
  * @param {ReviewArtifact} artifact
  * @param {ReadonlyArray<FileEntry>} files
  * @param {PrState} state
- * @param {{ chunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, commentPaths?: ReadonlySet<string> }} ctx
+ * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, commentPaths?: ReadonlySet<string> }} ctx
  * @returns {string}
  */
 export function renderLayerSection(layer, index, artifact, files, state, ctx) {
@@ -380,7 +380,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
  */
 export function renderLayers(artifact, files, state, comments = []) {
   const ctx = {
-    chunkIndex: chunkLayerIndex(artifact),
+    hunkIndex: hunkLayerIndex(artifact),
     paths: pathSet(files),
     firstCardFor: new Set(),
     state,
@@ -455,15 +455,15 @@ export function hydrateFileCard(card, ctx, opts = {}) {
     host.replaceChildren(panel)
     return { rendered: false, deferred: true, placed: 0, missed: 0 }
   }
-  const chunkIds = new Set((host.getAttribute('data-chunks') ?? '').split(',').filter(Boolean))
-  host.innerHTML = renderDiff({ key: entry.key, path: entry.path, lang: entry.lang }, patch, { chunkIds })
+  const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
+  host.innerHTML = renderDiff({ key: entry.key, path: entry.path, lang: entry.lang }, patch, { hunkIds })
   const layer = ctx.artifact.layers.find(l => l.id === layerId)
   const lf = layer?.files.find(f => f.path === entry.path)
   const annotations = lf?.annotations ?? []
   const points = ctx.artifact.points.filter(
-    p => p.path === entry.path && chunkIds.has(chunkIdForPoint(p, entry))
+    p => p.path === entry.path && hunkIds.has(hunkIdForPoint(p, entry))
   )
-  const threads = threadsForChunks(ctx.comments, entry, chunkIds)
+  const threads = threadsForHunks(ctx.comments, entry, hunkIds)
   const { placed, missed } = applyDecorations(card, key, {
     annotations,
     points,
@@ -481,27 +481,27 @@ export function hydrateFileCard(card, ctx, opts = {}) {
 }
 
 /**
- * The chunk id that contains a point's line on its side, or '' when outside every chunk.
+ * The hunk id that contains a point's line on its side, or '' when outside every hunk.
  * @param {Point} p
  * @param {FileEntry} entry
  */
-export function chunkIdForPoint(p, entry) {
-  return chunkForLine(entry.chunks, p.side ?? 'new', p.line)?.id ?? ''
+export function hunkIdForPoint(p, entry) {
+  return hunkForLine(entry.hunks, p.side ?? 'new', p.line)?.id ?? ''
 }
 
 /**
- * Threads anchored on lines of the given chunks.
+ * Threads anchored on lines of the given hunks.
  * @param {ReadonlyArray<ReviewComment>} comments
  * @param {FileEntry} entry
- * @param {ReadonlySet<string>} chunkIds
+ * @param {ReadonlySet<string>} hunkIds
  * @returns {Thread[]}
  */
-export function threadsForChunks(comments, entry, chunkIds) {
+export function threadsForHunks(comments, entry, hunkIds) {
   const { byAnchor } = buildThreads(comments.filter(c => c.path === entry.path))
   /** @type {Thread[]} */
   const out = []
-  for (const h of entry.chunks) {
-    if (!chunkIds.has(h.id)) {
+  for (const h of entry.hunks) {
+    if (!hunkIds.has(h.id)) {
       continue
     }
     for (const side of /** @type {const} */ (['new', 'old'])) {

@@ -2,7 +2,7 @@
 // The canvas link scheme. Four forms, used in markdown, diagrams, and chat:
 //   #layer:<layerKey>
 //   #file:<path>
-//   #chunk:<path>#<n>
+//   #hunk:<path>#<n>
 //   #line:<path>:<start>[-<end>][:old]
 // The server validates links with this parser (src/contract/links.ts re-exports it) and the
 // browser turns them into anchors, so both sides agree on what a link means.
@@ -10,22 +10,17 @@
 /**
  * @typedef {{ kind: 'layer', layerKey: string }
  *   | { kind: 'file', path: string }
- *   | { kind: 'chunk', path: string, n: number }
+ *   | { kind: 'hunk', path: string, n: number }
  *   | { kind: 'line', path: string, start: number, end: number, side: 'new' | 'old' }} ParsedLink
  */
 
 /**
  * @typedef {{
  *   layers: ReadonlyArray<{ key: string }>,
- *   files: ReadonlyArray<{ path: string, chunks: ReadonlyArray<import('./chunks.js').ChunkRange> }>,
+ *   files: ReadonlyArray<{ path: string, hunks: ReadonlyArray<import('./hunks.js').HunkRange> }>,
  * }} LinkTargets
  */
-import { chunkForLine, chunkLineRanges } from './chunks.js'
-
-/** Keep links in existing canvases, chat history, and bookmarks usable. @param {string} href */
-export function canonicalChunkLink(href) {
-  return href.replace(/^#hunk:/, '#chunk:')
-}
+import { hunkForLine, hunkLineRanges } from './hunks.js'
 
 const LINE_RE = /^([^\n]+?):(\d+)(?:-(\d+))?(:old)?$/
 
@@ -35,7 +30,6 @@ const LINE_RE = /^([^\n]+?):(\d+)(?:-(\d+))?(:old)?$/
  * @returns {ParsedLink | null}
  */
 export function parseLink(href) {
-  href = canonicalChunkLink(href)
   if (href.startsWith('#layer:')) {
     const layerKey = href.slice('#layer:'.length)
     return layerKey ? { kind: 'layer', layerKey } : null
@@ -44,12 +38,12 @@ export function parseLink(href) {
     const path = href.slice('#file:'.length)
     return path ? { kind: 'file', path } : null
   }
-  if (href.startsWith('#chunk:')) {
-    const m = /^(.+)#(\d+)$/.exec(href.slice('#chunk:'.length))
+  if (href.startsWith('#hunk:')) {
+    const m = /^(.+)#(\d+)$/.exec(href.slice('#hunk:'.length))
     if (!m || m[1] === undefined || m[2] === undefined) {
       return null
     }
-    return { kind: 'chunk', path: m[1], n: Number(m[2]) }
+    return { kind: 'hunk', path: m[1], n: Number(m[2]) }
   }
   if (href.startsWith('#line:')) {
     const m = LINE_RE.exec(href.slice('#line:'.length))
@@ -75,8 +69,7 @@ export function parseLink(href) {
 export function extractLinks(markdown) {
   /** @type {string[]} */
   const out = []
-  const re =
-    /\]\((#(?:layer|file|chunk|hunk|line):[^)\s]+)\)|(?:^|\s)(#(?:layer|file|chunk|hunk|line):[^\s)]+)/g
+  const re = /\]\((#(?:layer|file|hunk|line):[^)\s]+)\)|(?:^|\s)(#(?:layer|file|hunk|line):[^\s)]+)/g
   for (const m of markdown.matchAll(re)) {
     if (m[1] !== undefined) {
       out.push(m[1])
@@ -105,20 +98,20 @@ export function resolveLink(link, targets) {
   if (!file) {
     return { ok: false, message: `${link.path} is not in the diff` }
   }
-  if (link.kind === 'chunk' && (link.n < 1 || link.n > file.chunks.length)) {
+  if (link.kind === 'hunk' && (link.n < 1 || link.n > file.hunks.length)) {
     return {
       ok: false,
-      message: `${link.path}#${link.n} does not exist (file has ${file.chunks.length} chunks)`,
+      message: `${link.path}#${link.n} does not exist (file has ${file.hunks.length} chunks)`,
     }
   }
   if (link.kind === 'line') {
-    const start = chunkForLine(file.chunks, link.side, link.start)
-    const end = chunkForLine(file.chunks, link.side, link.end)
+    const start = hunkForLine(file.hunks, link.side, link.start)
+    const end = hunkForLine(file.hunks, link.side, link.end)
     if (start === null || start !== end) {
       const range = link.end === link.start ? `${link.start}` : `${link.start}-${link.end}`
       return {
         ok: false,
-        message: `${link.path}:${range} (${link.side}) is not inside one chunk of the diff (${chunkLineRanges(file.chunks, link.side)})`,
+        message: `${link.path}:${range} (${link.side}) is not inside one chunk of the diff (${hunkLineRanges(file.hunks, link.side)})`,
       }
     }
   }
@@ -137,8 +130,8 @@ export function linkTargetId(link, keyFor) {
       return `layer-${link.layerKey}`
     case 'file':
       return `file-${keyFor(link.path)}`
-    case 'chunk':
-      return `chunk-${keyFor(link.path)}-${link.n}`
+    case 'hunk':
+      return `hunk-${keyFor(link.path)}-${link.n}`
     case 'line':
       return `L-${keyFor(link.path)}-${link.side}-${link.start}`
   }
@@ -155,7 +148,7 @@ export function linkLabel(link) {
       return link.layerKey
     case 'file':
       return link.path
-    case 'chunk':
+    case 'hunk':
       return `${link.path} chunk ${link.n}`
     case 'line':
       return `${link.path}:${link.start}${link.end !== link.start ? `-${link.end}` : ''}${link.side === 'old' ? ' (old)' : ''}`

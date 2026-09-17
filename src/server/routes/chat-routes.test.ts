@@ -230,7 +230,7 @@ describe('the settings routes', () => {
       rulebook: null,
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
-      smallPrChunks: 10,
+      smallPrHunks: 10,
       layers: 0,
       highRisk: 0,
     })

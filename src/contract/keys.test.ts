@@ -2,10 +2,10 @@
 import {
   buildLineId,
   fileAnchorId,
-  chunkAnchorId,
-  chunkId,
+  hunkAnchorId,
+  hunkId,
   layerAnchorId,
-  parseChunkId,
+  parseHunkId,
   parseLineId,
   pointAnchorId,
   sanitizeKey,
@@ -28,11 +28,11 @@ describe('keys', () => {
     expect([...used]).toEqual(['a_b_ts', 'a_b_ts_2', 'a_b_ts_3'])
   })
 
-  it('round-trips chunk ids', () => {
-    expect(chunkId('a_b_ts', 3)).toBe('a_b_ts#3')
-    expect(parseChunkId('a_b_ts#3')).toEqual({ key: 'a_b_ts', n: 3 })
-    expect(parseChunkId('a_b_ts')).toBeNull()
-    expect(parseChunkId('#3')).toBeNull()
+  it('round-trips hunk ids', () => {
+    expect(hunkId('a_b_ts', 3)).toBe('a_b_ts#3')
+    expect(parseHunkId('a_b_ts#3')).toEqual({ key: 'a_b_ts', n: 3 })
+    expect(parseHunkId('a_b_ts')).toBeNull()
+    expect(parseHunkId('#3')).toBeNull()
   })
 
   it('round-trips line ids on both sides', () => {
@@ -45,7 +45,7 @@ describe('keys', () => {
 
   it('builds the other anchor ids', () => {
     expect(fileAnchorId('a_b_ts')).toBe('file-a_b_ts')
-    expect(chunkAnchorId('a_b_ts', 2)).toBe('chunk-a_b_ts-2')
+    expect(hunkAnchorId('a_b_ts', 2)).toBe('hunk-a_b_ts-2')
     expect(layerAnchorId('auth')).toBe('layer-auth')
     expect(pointAnchorId('p-1')).toBe('point-p-1')
   })

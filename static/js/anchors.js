@@ -8,10 +8,10 @@ import { linkTargetId, parseLink } from './links.js'
 export {
   buildLineId,
   fileAnchorId,
-  chunkAnchorId,
-  chunkId,
+  hunkAnchorId,
+  hunkId,
   layerAnchorId,
-  parseChunkId,
+  parseHunkId,
   parseLineId,
   pointAnchorId,
   sanitizeKey,
