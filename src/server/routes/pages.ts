@@ -56,9 +56,9 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
     if (prNumber === null) {
       throw new AppError(
         'BAD_REQUEST',
-        `"${raw}" is neither a pull request number nor "local"`,
+        `"${raw}" is not a review target`,
         400,
-        'use /review/<number>, or /review/local for work with no pull request yet'
+        'use /review/<number>, /review/branch, or /review/uncommitted'
       )
     }
     return c.html(

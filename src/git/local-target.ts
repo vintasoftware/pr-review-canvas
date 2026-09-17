@@ -75,8 +75,8 @@ export interface DescribeLocalOptions {
 
 /**
  * The local work in the shape the rest of the tool reads a pull request in. `prepare` writes it to
- * `prs/local/pr.json` and the page resolves it again on a refresh, so both have to agree on the
- * head, the title, and the words the header shows; they are decided here, once.
+ * `prs/<branch|uncommitted>/pr.json` and the page resolves it again on a refresh, so both have to
+ * agree on the head, the title, and the words the header shows; they are decided here, once.
  *
  * The line counts are left at zero: only the collected diff knows them, and `prepare` fills them
  * in once it has one.
