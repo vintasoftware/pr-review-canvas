@@ -112,7 +112,7 @@ from that view is disabled. Click **refresh** to check GitHub or GitLab for chan
 
 Merge commits do not outdate a canvas: when the head moved without changing the diff (for
 example, updating the branch from `main`), the canvas still applies and the page says so. Set
-`canvas.ignoreMergeCommits: false` in the project config to treat every commit as a new head.
+`canvas.keepWhenDiffUnchanged: false` in the project config to treat every commit as a new head.
 
 ## Configuration
 

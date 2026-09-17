@@ -19,7 +19,7 @@ import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
 import { esc, qs } from './dom.js'
 import { exportCanvasZip } from './download.js'
-import { mergesBarHtml, renderEmptyState, renderStaleState, staleBarHtml } from './empty-state.js'
+import { renderEmptyState, renderStaleState, staleBarHtml, unchangedDiffBarHtml } from './empty-state.js'
 import { errorCardHtml } from './errors.js'
 import { renderHeader } from './header.js'
 import { wireDropZone } from './import-zone.js'
@@ -229,8 +229,8 @@ export class PrAppElement extends HTMLElement {
       const staleBar =
         bundle.status === 'stale' && bundle.stale
           ? staleBarHtml(bundle.stale)
-          : bundle.mergesSince
-            ? mergesBarHtml(bundle.mergesSince)
+          : bundle.commitsSinceCanvas !== undefined
+            ? unchangedDiffBarHtml({ ...bundle, commitsSinceCanvas: bundle.commitsSinceCanvas })
             : ''
       this.innerHTML =
         header +

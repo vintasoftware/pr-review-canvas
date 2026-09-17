@@ -10,7 +10,7 @@ import { ChatSendSchema } from '../../contract/chat.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { SettingsResponse } from '../../contract/settings.js'
 import { isChatAgent, SettingsInputSchema } from '../../contract/settings.js'
-import { lookupCanvas, readOrBuildDerived } from '../../review/canvas-lookup.js'
+import { resolveCanvas } from '../../review/canvas-lookup.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
@@ -55,7 +55,7 @@ function settingsResponse(ctx: AppContext, settings: SettingsResponse['settings'
       maxRepairRounds: project.generation.maxRepairRounds,
       inlineDiffMaxLines: project.generation.inlineDiffMaxLines,
       smallPrHunks: project.generation.smallPrHunks,
-      ignoreMergeCommits: project.canvas.ignoreMergeCommits,
+      keepWhenDiffUnchanged: project.canvas.keepWhenDiffUnchanged,
       layers: project.layers.length,
       highRisk: project.highRisk.length,
     },
@@ -79,9 +79,9 @@ async function subjectForChat(ctx: AppContext, number: number, pr: Pr): Promise<
   if (ctx.fixtureArtifact !== null) {
     return withDiff({ ...ctx.fixtureArtifact, pr }, pr.headSha, await ctx.derived.read(pr.headSha))
   }
-  const found = await lookupCanvas(ctx, number, pr)
+  const found = await resolveCanvas(ctx, number, pr)
   const artifact = found.status === 'missing' ? null : await ctx.canvases.readArtifact(found.headSha)
-  if (found.status === 'missing' || artifact === null) {
+  if (artifact === null) {
     throw new AppError(
       'CANVAS_NOT_FOUND',
       'there is no canvas for this pull request, so the chat has nothing to talk about',
@@ -89,15 +89,9 @@ async function subjectForChat(ctx: AppContext, number: number, pr: Pr): Promise<
       'generate a canvas for the current head first'
     )
   }
-  if (found.status === 'stale') {
-    const manifest = await ctx.canvases.readManifest(found.headSha)
-    return withDiff(
-      artifact,
-      found.headSha,
-      await readOrBuildDerived(ctx, found.headSha, manifest?.mergeBaseSha)
-    )
-  }
-  return withDiff(artifact, pr.headSha, await ctx.derived.read(pr.headSha))
+  return found.status === 'stale'
+    ? withDiff(artifact, found.headSha, found.diff)
+    : withDiff(artifact, pr.headSha, found.head)
 }
 
 /** The subject with its diff, or the 404 that says the diff is not on this machine. */

@@ -68,9 +68,9 @@ export const ProjectConfigSchema = z.object({
   canvas: z.object({
     /**
      * A canvas still stands for a head that moved on without changing the diff, which is what
-     * merging the base branch in does. False marks the canvas outdated on any commit.
+     * merging the base branch in does. False marks the canvas outdated on any new commit.
      */
-    ignoreMergeCommits: z.boolean(),
+    keepWhenDiffUnchanged: z.boolean(),
   }),
 })
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
@@ -93,7 +93,7 @@ const PartialProjectConfigSchema = z.object({
     .optional(),
   tests: z.object({ patterns: z.array(z.string().min(1)).optional() }).optional(),
   chat: z.object({ enabled: z.boolean().optional() }).optional(),
-  canvas: z.object({ ignoreMergeCommits: z.boolean().optional() }).optional(),
+  canvas: z.object({ keepWhenDiffUnchanged: z.boolean().optional() }).optional(),
 })
 
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
@@ -103,7 +103,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
-  canvas: { ignoreMergeCommits: true },
+  canvas: { keepWhenDiffUnchanged: true },
 }
 
 export interface LoadedProjectConfig {
@@ -145,7 +145,8 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     tests: { patterns: user.tests?.patterns ?? [...DEFAULT_TEST_PATTERNS] },
     chat: { enabled: user.chat?.enabled ?? true },
     canvas: {
-      ignoreMergeCommits: user.canvas?.ignoreMergeCommits ?? DEFAULT_PROJECT_CONFIG.canvas.ignoreMergeCommits,
+      keepWhenDiffUnchanged:
+        user.canvas?.keepWhenDiffUnchanged ?? DEFAULT_PROJECT_CONFIG.canvas.keepWhenDiffUnchanged,
     },
   }
   if (user.rulebook !== undefined) {

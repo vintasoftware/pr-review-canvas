@@ -5,7 +5,7 @@ PR Review Canvas helps authors explain a pull request and reviewers examine its 
 ## Language
 
 **Canvas**:
-A guided review of a particular pull request revision, combining semantic layers, source diffs, and review notes.
+A guided review of a particular pull request change set, combining semantic layers, source diffs, and review notes. It is generated for one head commit and still applies to later commits whose diff against the base is unchanged.
 _Avoid_: Hosted review, automated approval
 
 **Semantic layer**:
@@ -21,7 +21,7 @@ A concern anchored to changed code that asks the reviewer to decide, check, or t
 _Avoid_: Proven bug, automatic finding
 
 **Review progress**:
-The reviewer's record of which changes they have examined for a particular revision.
+The reviewer's record of which changes they have examined for a particular change set. It follows the canvas to a later commit with the same diff.
 _Avoid_: Test coverage, approval
 
 **Local review app**:

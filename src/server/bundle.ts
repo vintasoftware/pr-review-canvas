@@ -4,10 +4,9 @@ import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
-import { lookupCanvas, readOrBuildDerived, reviewStateFor } from '../review/canvas-lookup.js'
+import { type CanvasResolution, resolveCanvas, reviewStateFor } from '../review/canvas-lookup.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
-import type { CanvasLookup } from '../store/canvas-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 
@@ -120,7 +119,7 @@ export function rekeyFixture(fixture: ReviewArtifact, pr: Pr): ReviewArtifact {
  */
 async function loadCanvas(
   ctx: AppContext,
-  found: Extract<CanvasLookup, { headSha: string }>
+  found: Extract<CanvasResolution, { headSha: string }>
 ): Promise<{ artifact: ReviewArtifact; canvas: CanvasInfo } | null> {
   let artifact: ReviewArtifact | null
   try {
@@ -151,17 +150,15 @@ export async function resolveBundle(
   const { pr, comments, warnings } = await loader.load(number, opts)
   const allWarnings = [...ctx.projectConfig.warnings, ...warnings]
 
-  const derivable = await ctx.derived.derivable(pr.headSha, pr.mergeBaseSha)
-  let files: FileEntry[] = []
-  if (derivable) {
-    files = (await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)).files
-  } else {
+  let found = await resolveCanvas(ctx, number, pr)
+  const files = found.head?.files ?? []
+  if (found.head === null) {
     allWarnings.push('the PR head or merge base is not in the local clone; diffs are not available')
   }
 
   const chatEnabled = ctx.projectConfig.config.chat.enabled
   const [state, capabilities, settings, acpx] = await Promise.all([
-    reviewStateFor(ctx, number, pr),
+    reviewStateFor(ctx, number, pr, found.head),
     ctx.capabilities.get(),
     chatEnabled ? ctx.chat.effectiveSettings() : Promise.resolve(null),
     chatEnabled ? ctx.preflight.get() : Promise.resolve({ installed: false, version: null }),
@@ -172,7 +169,7 @@ export async function resolveBundle(
   const base = {
     pr,
     files,
-    derivable,
+    derivable: found.head !== null,
     comments,
     state,
     capabilities,
@@ -200,7 +197,6 @@ export async function resolveBundle(
     }
   }
 
-  let found = await lookupCanvas(ctx, number, pr)
   let sharedCanvas: SharedCanvasInfo | null = null
   // A canvas for this very head beats anything attached to the PR, so discovery runs only
   // when there is none, and its import can turn a stale or missing bundle into a ready one.
@@ -209,7 +205,7 @@ export async function resolveBundle(
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)
     if (discovery.imported) {
-      found = await lookupCanvas(ctx, number, pr)
+      found = await resolveCanvas(ctx, number, pr)
     }
   }
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
@@ -233,8 +229,8 @@ export async function resolveBundle(
   const skillCommand = buildSkillCommand(number, { force: true })
   if (found.status === 'ready') {
     // The head's own diffs are on the page, with the canvas that explains the same change set.
-    const merges = 'mergesSince' in found ? { mergesSince: found.mergesSince } : {}
-    return { ...base, ...shared, ...loaded, ...merges, status: 'ready', skillCommand }
+    const since = found.commitsSince > 0 ? { commitsSinceCanvas: found.commitsSince } : {}
+    return { ...base, ...shared, ...loaded, ...since, status: 'ready', skillCommand }
   }
   const stale: StaleInfo = {
     canvasHeadSha: found.headSha,
@@ -242,20 +238,17 @@ export async function resolveBundle(
     relation: found.relation,
     ...(found.relation === 'ancestor' ? { commitsBehind: found.commitsBehind } : {}),
   }
-  // The page shows the canvas of the older commit, so the files and the diffs are that commit's.
-  // They are rebuilt when the clone has the commits, which is how a canvas imported before the
-  // fetch becomes readable once the commits arrive.
-  const staleDerived = await readOrBuildDerived(ctx, found.headSha, loaded.canvas.manifest?.mergeBaseSha)
-  // A stale canvas describes an older commit, so its own files decide both the diffs and
-  // whether the notice about large change sets belongs on the page.
-  const staleFiles = staleDerived?.files ?? loaded.artifact.files
+  // The page shows the canvas of the older commit, so the files and the diffs are that commit's,
+  // and they decide whether the notice about large change sets belongs on the page. Without the
+  // commits in the clone, the artifact's own file list stands in until they arrive.
+  const staleFiles = found.diff?.files ?? loaded.artifact.files
   return {
     ...base,
     ...shared,
     ...loaded,
     files: staleFiles,
     largePr: largePrOf(staleFiles),
-    derivable: staleDerived !== null,
+    derivable: found.diff !== null,
     status: 'stale',
     stale,
     skillCommand,

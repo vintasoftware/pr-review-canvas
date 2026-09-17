@@ -92,7 +92,7 @@ function gitWithHistory(headDiff: string, extra: FakeGitOptions = {}) {
 
 interface Scenario {
   headDiff?: string
-  ignoreMergeCommits?: boolean
+  keepWhenDiffUnchanged?: boolean
   git?: FakeGitOptions
 }
 
@@ -105,7 +105,7 @@ async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
   runner = createFakeRunner()
   const config: ProjectConfig = {
     ...DEFAULT_PROJECT_CONFIG,
-    canvas: { ignoreMergeCommits: scenario.ignoreMergeCommits ?? true },
+    canvas: { keepWhenDiffUnchanged: scenario.keepWhenDiffUnchanged ?? true },
   }
   t = await makeTestContext({
     git: gitWithHistory(scenario.headDiff ?? SYNTHETIC_DIFF, scenario.git),
@@ -138,7 +138,7 @@ describe('a canvas whose head moved without changing the diff', () => {
     expect(b.canvas?.headSha).toBe(OLD_SHA)
     expect(b.artifact?.pr.headSha).toBe(OLD_SHA)
     expect(b.pr.headSha).toBe(HEAD_SHA)
-    expect(b.mergesSince).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: HEAD_SHA, commitsBehind: 3 })
+    expect(b.commitsSinceCanvas).toBe(3)
     expect(b.files.map(f => f.path)).toContain('src/app.ts')
     expect(b.skillCommand).toBe('/pr-review-canvas 42 --force')
   })
@@ -147,7 +147,7 @@ describe('a canvas whose head moved without changing the diff', () => {
     await withOldCanvas({ headDiff: WITH_SIBLING_FILE })
     const b = await bundle()
     expect(b.status).toBe('stale')
-    expect(b.mergesSince).toBeUndefined()
+    expect(b.commitsSinceCanvas).toBeUndefined()
     expect(b.stale).toEqual({
       canvasHeadSha: OLD_SHA,
       currentHeadSha: HEAD_SHA,
@@ -164,7 +164,7 @@ describe('a canvas whose head moved without changing the diff', () => {
   })
 
   it('is outdated when the project config counts every commit', async () => {
-    await withOldCanvas({ ignoreMergeCommits: false })
+    await withOldCanvas({ keepWhenDiffUnchanged: false })
     expect((await bundle()).status).toBe('stale')
   })
 

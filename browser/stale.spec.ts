@@ -7,15 +7,12 @@ test('notes a canvas that still applies after merge commits, without disabling p
   await page.route(/\/api\/prs\/42(?:\?.*)?$/, async route => {
     const response = await route.fetch()
     const bundle = await response.json()
-    bundle.mergesSince = {
-      canvasHeadSha: 'c'.repeat(40),
-      currentHeadSha: bundle.pr.headSha,
-      commitsBehind: 2,
-    }
+    bundle.canvas = { ...bundle.canvas, headSha: 'c'.repeat(40) }
+    bundle.commitsSinceCanvas = 2
     await route.fulfill({ response, json: bundle })
   })
   await page.goto(reviewUrl)
-  const note = page.locator('#main > .stale-bar.merges-bar')
+  const note = page.locator('#main > .stale-bar.same-diff-bar')
   await expect(note).toBeVisible()
   await expect(note).toContainText('Canvas still applies.')
   await expect(note).toContainText('generated for ccccccc')

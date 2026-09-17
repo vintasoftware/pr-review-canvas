@@ -232,12 +232,12 @@ describe('publish', () => {
     moveFakeHead(git, 'pull/42/head', merged, BASE_SHA, SYNTHETIC_DIFF)
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
-      config: { ...t.ctx.projectConfig.config, canvas: { ignoreMergeCommits: false } },
+      config: { ...t.ctx.projectConfig.config, canvas: { keepWhenDiffUnchanged: false } },
     }
     await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
-      config: { ...t.ctx.projectConfig.config, canvas: { ignoreMergeCommits: true } },
+      config: { ...t.ctx.projectConfig.config, canvas: { keepWhenDiffUnchanged: true } },
     }
     const result = await publish(t.ctx, canvasDir, OPTS)
     expect(result.status).toBe('published')

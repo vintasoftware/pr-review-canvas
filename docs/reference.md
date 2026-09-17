@@ -169,7 +169,7 @@ within one path segment.
 | `generation.caps`               | See below                                           | Overrides individual text limits                                                                                                                                                                                           |
 | `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
 | `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
-| `canvas.ignoreMergeCommits`     | `true`                                              | Keep the canvas current when new commits leave the diff unchanged, as merging the base branch in does; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                     |
+| `canvas.keepWhenDiffUnchanged`  | `true`                                              | Keep the canvas current when new commits leave the diff unchanged, as merging the base branch in does; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                     |
 | `prompts`                       | Bundled templates                                   | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
@@ -341,7 +341,7 @@ Merge commits are the exception. Merging the base branch in (**Update branch**, 
 moves the head without changing what the pull request changes. When the head's diff against the
 base is the canvas's diff, file for file and hunk for hunk, the canvas stays current: the page
 shows the head's diffs under a **Canvas still applies** note, review progress carries over, and
-sign-off, comments, and AI Chat keep working. This needs `canvas.ignoreMergeCommits` (the
+sign-off, comments, and AI Chat keep working. This needs `canvas.keepWhenDiffUnchanged` (the
 default) and both commits in the local clone. A merge that brought in other changes, a base
 commit that shifted the hunks under review, or any ordinary commit changes the diff and marks the
 canvas outdated as before. `pr-review publish` applies the same rule when the head moves while a

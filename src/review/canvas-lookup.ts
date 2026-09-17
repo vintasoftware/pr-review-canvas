@@ -1,25 +1,31 @@
-// Which stored canvas stands for a pull request head. A canvas explains a change set, not a
-// commit: when the head moved on but its diff against the base is the canvas's diff byte for
-// byte (the base branch merged in without touching the files under review), the canvas still
-// applies, and so do the reviewer's marks. Every route that decides this goes through here.
+// Which stored canvas the page shows for a pull request head, with the diff it is shown with. A
+// canvas explains a change set, not a commit: when the head moved on but its diff against the
+// base is the canvas's diff byte for byte (the base branch merged in without touching the files
+// under review), the canvas still applies, and so do the reviewer's marks. The bundle, the
+// sign-off, the chat, and the export all read the same resolution.
 import { isDeepStrictEqual } from 'node:util'
-import type { MergesSinceInfo } from '../contract/api.js'
 import type { Pr } from '../contract/review-artifact.js'
 import type { PrState } from '../contract/state.js'
 import type { AppContext } from '../server/context.js'
-import type { CanvasLookup } from '../store/canvas-store.js'
 import type { Derived } from '../store/derived-store.js'
 import { stateForHead } from './review-body.js'
 
-/** The store's answer, or a canvas of an earlier commit that carries the head's change set. */
-export type ResolvedCanvas = CanvasLookup | { status: 'ready'; headSha: string; mergesSince: MergesSinceInfo }
+/** Where a pull request stands: the head's diff, and the canvas that explains it. */
+export type CanvasResolution = { head: Derived | null } & (
+  | { status: 'missing' }
+  /** `headSha` is the canvas's commit: the head, or `commitsSince` commits before it with the same diff. */
+  | { status: 'ready'; headSha: string; commitsSince: number }
+  /** An outdated canvas is shown with the diff of its own commit, when the clone can build it. */
+  | { status: 'stale'; headSha: string; relation: 'ancestor'; commitsBehind: number; diff: Derived | null }
+  | { status: 'stale'; headSha: string; relation: 'unrelated'; diff: Derived | null }
+)
 
 /** Same files, hunks, and patches: the two commits carry one change set. */
 export function sameChangeSet(a: Derived, b: Derived): boolean {
   return isDeepStrictEqual(a, b)
 }
 
-/** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
+/** The diffs of one commit against its merge base: stored, or built when the clone has both. */
 export async function readOrBuildDerived(
   ctx: AppContext,
   headSha: string,
@@ -36,50 +42,55 @@ export async function readOrBuildDerived(
 }
 
 /**
- * The canvas for this pull request. An outdated canvas of an ancestor commit is current after all
- * when the project ignores merge commits and its diff is the head's diff.
+ * The canvas for this pull request and the diffs around it. An outdated canvas of an ancestor
+ * commit is current after all when the project keeps canvases across unchanged diffs and its
+ * diff is the head's.
  */
-export async function lookupCanvas(ctx: AppContext, number: number, pr: Pr): Promise<ResolvedCanvas> {
-  const found = await ctx.canvases.findForPr(number, pr.headSha)
-  if (
-    found.status !== 'stale' ||
-    found.relation !== 'ancestor' ||
-    !ctx.projectConfig.config.canvas.ignoreMergeCommits
-  ) {
-    return found
-  }
+export async function resolveCanvas(ctx: AppContext, number: number, pr: Pr): Promise<CanvasResolution> {
   const head = await readOrBuildDerived(ctx, pr.headSha, pr.mergeBaseSha)
+  const found = await ctx.canvases.findForPr(number, pr.headSha)
+  if (found.status === 'missing') {
+    return { head, status: 'missing' }
+  }
+  if (found.status === 'ready') {
+    return { head, status: 'ready', headSha: found.headSha, commitsSince: 0 }
+  }
   const manifest = await ctx.canvases.readManifest(found.headSha)
-  const canvas = await readOrBuildDerived(ctx, found.headSha, manifest?.mergeBaseSha)
-  if (head === null || canvas === null || !sameChangeSet(canvas, head)) {
-    return found
+  const diff = await readOrBuildDerived(ctx, found.headSha, manifest?.mergeBaseSha)
+  if (
+    found.relation === 'ancestor' &&
+    ctx.projectConfig.config.canvas.keepWhenDiffUnchanged &&
+    head !== null &&
+    diff !== null &&
+    sameChangeSet(diff, head)
+  ) {
+    return { head, status: 'ready', headSha: found.headSha, commitsSince: found.commitsBehind }
   }
-  return {
-    status: 'ready',
-    headSha: found.headSha,
-    mergesSince: {
-      canvasHeadSha: found.headSha,
-      currentHeadSha: pr.headSha,
-      commitsBehind: found.commitsBehind,
-    },
-  }
+  return { ...found, head, diff }
 }
 
 /**
- * The review marks as they apply to this head. Marks made on a commit whose change set the head
- * still carries move along with it, so a merge commit does not reset the reviewer's progress;
- * marks made on other code count for nothing. The page and the sign-off both read through here.
+ * The review marks as they apply to this head. Marks made on a commit whose diff the head still
+ * carries move along with it, so a merge commit does not reset the reviewer's progress; marks
+ * made on other code count for nothing. The page and the sign-off both read through here.
  */
-export async function reviewStateFor(ctx: AppContext, number: number, pr: Pr): Promise<PrState> {
+export async function reviewStateFor(
+  ctx: AppContext,
+  number: number,
+  pr: Pr,
+  head: Derived | null
+): Promise<PrState> {
   const stored = await ctx.state.read(number)
   const marked = stored.reviewedHeadSha
-  if (marked !== undefined && marked !== pr.headSha && ctx.projectConfig.config.canvas.ignoreMergeCommits) {
+  if (
+    marked !== undefined &&
+    marked !== pr.headSha &&
+    head !== null &&
+    ctx.projectConfig.config.canvas.keepWhenDiffUnchanged
+  ) {
     // The marks were made on a page that had built the diff of `marked`, so it is read, not rebuilt.
-    const [head, then] = await Promise.all([
-      readOrBuildDerived(ctx, pr.headSha, pr.mergeBaseSha),
-      ctx.derived.read(marked),
-    ])
-    if (head !== null && then !== null && sameChangeSet(then, head)) {
+    const then = await ctx.derived.read(marked)
+    if (then !== null && sameChangeSet(then, head)) {
       return ctx.state.moveReviewedHead(number, pr.headSha)
     }
   }

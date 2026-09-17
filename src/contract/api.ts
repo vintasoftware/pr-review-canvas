@@ -69,17 +69,6 @@ export interface StaleInfo {
   commitsBehind?: number
 }
 
-/**
- * A ready canvas generated for an earlier commit: the head moved on (merge commits from the base
- * branch, as a rule) without changing the diff, so the canvas still explains it and the page says so.
- */
-export interface MergesSinceInfo {
-  canvasHeadSha: string
-  currentHeadSha: string
-  /** Every commit the head gained, the merged-in ones included. */
-  commitsBehind: number
-}
-
 /** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */
 export interface ImportResult {
   status: 'ready' | 'stale' | 'exists'
@@ -120,8 +109,11 @@ export interface PrBundle {
   artifact?: ReviewArtifact
   canvas?: CanvasInfo
   stale?: StaleInfo
-  /** Set on a ready bundle whose canvas was generated for an earlier commit of the same change set. */
-  mergesSince?: MergesSinceInfo
+  /**
+   * On a ready bundle whose canvas is for an earlier commit (`canvas.headSha`): how many commits
+   * the head gained since, merge commits from the base branch as a rule, with the diff unchanged.
+   */
+  commitsSinceCanvas?: number
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   comments: CommentsPayload

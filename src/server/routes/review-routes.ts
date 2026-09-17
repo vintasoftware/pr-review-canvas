@@ -4,10 +4,11 @@ import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
+import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
-import { lookupCanvas, reviewStateFor } from '../../review/canvas-lookup.js'
-import { buildReviewBody, unreviewedLayers } from '../../review/review-body.js'
+import { resolveCanvas, reviewStateFor } from '../../review/canvas-lookup.js'
+import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -57,14 +58,21 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
 }
 
 /**
- * The canvas the reviewer is signing off on: the one written for the pull request's head, or
- * for a commit the head only merged onto.
+ * What the reviewer signs off on: the canvas standing for the pull request's head, and the marks
+ * as they apply to that head.
  */
-async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise<ReviewArtifact> {
+async function signOffSubject(
+  ctx: AppContext,
+  number: number,
+  pr: Pr
+): Promise<{ artifact: ReviewArtifact; state: PrState }> {
   if (ctx.fixtureArtifact !== null) {
-    return { ...ctx.fixtureArtifact, pr }
+    return {
+      artifact: { ...ctx.fixtureArtifact, pr },
+      state: stateForHead(await ctx.state.read(number), pr.headSha),
+    }
   }
-  const found = await lookupCanvas(ctx, number, pr)
+  const found = await resolveCanvas(ctx, number, pr)
   if (found.status !== 'ready') {
     throw new AppError(
       'SIGNOFF_INCOMPLETE',
@@ -77,7 +85,7 @@ async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise
   if (artifact === null) {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
-  return artifact
+  return { artifact, state: await reviewStateFor(ctx, number, pr, found.head) }
 }
 
 export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
@@ -182,8 +190,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   api.get('/prs/:n/review/body', async c => {
     const number = parsePrNumber(c.req.param('n'))
     const pr = await loader.currentPr(number)
-    const artifact = await artifactForHead(ctx, number, pr)
-    const state = await reviewStateFor(ctx, number, pr)
+    const { artifact, state } = await signOffSubject(ctx, number, pr)
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body: ReviewBodyResponse = {
       headSha: pr.headSha,
@@ -199,8 +206,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting()
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
-    const artifact = await artifactForHead(ctx, number, pr)
-    const state = await reviewStateFor(ctx, number, pr)
+    const { artifact, state } = await signOffSubject(ctx, number, pr)
     if (input.event === 'APPROVE') {
       const missing = unreviewedLayers(artifact, state)
       if (missing.length > 0) {

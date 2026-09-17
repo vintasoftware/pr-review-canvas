@@ -6,7 +6,6 @@ export type {
   ChatStatus,
   ErrorEnvelope,
   ImportResult,
-  MergesSinceInfo,
   PatchesResponse,
   PostCommentResponse,
   PostReviewResponse,

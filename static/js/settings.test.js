@@ -30,7 +30,7 @@ const SETTINGS = {
     maxRepairRounds: 3,
     inlineDiffMaxLines: 1500,
     smallPrHunks: 10,
-    ignoreMergeCommits: true,
+    keepWhenDiffUnchanged: true,
     layers: 8,
     highRisk: 2,
   },
@@ -127,10 +127,13 @@ describe('settingsDialogHtml', () => {
       AGENTS
     )
     expect(html).toContain('chat enabled: no')
-    expect(html).toContain('canvas outdated by merge commits: no')
+    expect(html).toContain('canvas kept while its diff is unchanged: yes')
     expect(
-      settingsDialogHtml({ ...SETTINGS, project: { ...SETTINGS.project, ignoreMergeCommits: false } }, AGENTS)
-    ).toContain('canvas outdated by merge commits: yes')
+      settingsDialogHtml(
+        { ...SETTINGS, project: { ...SETTINGS.project, keepWhenDiffUnchanged: false } },
+        AGENTS
+      )
+    ).toContain('canvas kept while its diff is unchanged: no')
     expect(html).toContain('--agent codex')
     expect(html).not.toContain('--model')
   })

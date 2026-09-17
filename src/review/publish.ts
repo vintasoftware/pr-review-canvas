@@ -87,8 +87,9 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
 
 /**
  * The current head of the target; a push during generation makes the prepared context stale. A
- * pull request head that still carries the prepared change set (the base branch merged in, say)
- * is not a move when the project ignores merge commits: the canvas stands for it once published.
+ * pull request head whose diff is still the prepared one (the base branch merged in, say) is not
+ * a move when the project keeps canvases across unchanged diffs: the canvas stands for it once
+ * published.
  */
 async function currentHead(
   ctx: AppContext,
@@ -99,7 +100,7 @@ async function currentHead(
     return { headSha, moved: headSha !== context.headSha }
   }
   const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)
-  if (meta.headSha === context.headSha || !ctx.projectConfig.config.canvas.ignoreMergeCommits) {
+  if (meta.headSha === context.headSha || !ctx.projectConfig.config.canvas.keepWhenDiffUnchanged) {
     return { headSha: meta.headSha, moved: meta.headSha !== context.headSha }
   }
   const shas = await fetchPrRefs(ctx.git, ctx.config.host, meta)

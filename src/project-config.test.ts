@@ -48,7 +48,7 @@ describe('mergeProjectConfig', () => {
       },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
       chat: { enabled: false },
-      canvas: { ignoreMergeCommits: true },
+      canvas: { keepWhenDiffUnchanged: true },
     })
     expect(ProjectConfigSchema.parse(config)).toEqual(config)
     const allCaps = Object.fromEntries(Object.keys(TEXT_CAPS).map(k => [k, 1]))
@@ -78,14 +78,14 @@ describe('mergeProjectConfig', () => {
     })
   })
 
-  it('reads the merge-commit setting and defaults it to on', () => {
-    expect(mergeProjectConfig({}).config.canvas).toEqual({ ignoreMergeCommits: true })
-    expect(mergeProjectConfig({ canvas: {} }).config.canvas).toEqual({ ignoreMergeCommits: true })
-    expect(mergeProjectConfig({ canvas: { ignoreMergeCommits: false } }).config.canvas).toEqual({
-      ignoreMergeCommits: false,
+  it('reads the unchanged-diff setting and defaults it to on', () => {
+    expect(mergeProjectConfig({}).config.canvas).toEqual({ keepWhenDiffUnchanged: true })
+    expect(mergeProjectConfig({ canvas: {} }).config.canvas).toEqual({ keepWhenDiffUnchanged: true })
+    expect(mergeProjectConfig({ canvas: { keepWhenDiffUnchanged: false } }).config.canvas).toEqual({
+      keepWhenDiffUnchanged: false,
     })
-    expect(mergeProjectConfig({ canvas: { ignoreMergeCommits: 'no' } }).warnings[0]).toContain(
-      'canvas.ignoreMergeCommits'
+    expect(mergeProjectConfig({ canvas: { keepWhenDiffUnchanged: 'no' } }).warnings[0]).toContain(
+      'canvas.keepWhenDiffUnchanged'
     )
   })
 

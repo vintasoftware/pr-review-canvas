@@ -7,7 +7,7 @@
 - A canvas stays current when the pull request head moved without changing the diff, as it does
   when the base branch is merged in. The page shows the head's diffs under a **Canvas still
   applies** note, review progress carries over, and sign-off keeps working. The new
-  `canvas.ignoreMergeCommits` project setting (default `true`) turns this off.
+  `canvas.keepWhenDiffUnchanged` project setting (default `true`) turns this off.
 - `pr-review publish` accepts a head that carries the prepared change set under the same rule,
   instead of failing with `CANVAS_STALE`.
 

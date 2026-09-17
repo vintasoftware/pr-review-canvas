@@ -4,7 +4,7 @@
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { createFakeGit, makeTestContext, TEST_REPO, type TestContext } from '../testing/fakes.js'
 import { BASE_SHA, SYNTHETIC_DIFF, syntheticArtifact } from '../testing/synthetic.js'
-import { lookupCanvas, reviewStateFor, sameChangeSet } from './canvas-lookup.js'
+import { resolveCanvas, reviewStateFor, sameChangeSet } from './canvas-lookup.js'
 
 const HEAD = 'a'.repeat(40)
 const OLD = 'e'.repeat(40)
@@ -51,15 +51,19 @@ describe('sameChangeSet', () => {
   })
 })
 
-describe('lookupCanvas', () => {
+describe('resolveCanvas', () => {
   it('keeps the strict answer when the head cannot be diffed on this machine', async () => {
     await context()
-    expect(await lookupCanvas(t.ctx, 42, pr)).toEqual({
+    const found = await resolveCanvas(t.ctx, 42, pr)
+    expect(found).toMatchObject({
       status: 'stale',
       headSha: OLD,
       relation: 'ancestor',
       commitsBehind: 1,
+      head: null,
     })
+    // The canvas commit's own diff was built, so the page can still show that canvas.
+    expect(found.status === 'stale' && found.diff?.files.map(f => f.path)).toContain('src/app.ts')
   })
 })
 
@@ -70,7 +74,8 @@ describe('reviewStateFor', () => {
     await t.ctx.derived.ensure(OLD, BASE_SHA)
     const marked = 'c'.repeat(40)
     await t.ctx.state.setReviewed(42, 'layer:layer-1', true, marked)
-    const state = await reviewStateFor(t.ctx, 42, { ...pr, headSha: OLD })
+    const head = await t.ctx.derived.read(OLD)
+    const state = await reviewStateFor(t.ctx, 42, { ...pr, headSha: OLD }, head)
     expect(state.reviewed).toEqual({})
     expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(marked)
   })

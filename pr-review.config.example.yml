@@ -52,4 +52,4 @@ canvas:
   # A canvas stays current when new commits leave the PR diff unchanged, which is what merging the
   # base branch in does when it does not touch the files under review. Set false to mark the
   # canvas outdated on every new commit.
-  ignoreMergeCommits: true
+  keepWhenDiffUnchanged: true
