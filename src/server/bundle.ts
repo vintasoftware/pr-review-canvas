@@ -2,10 +2,10 @@ import type { CanvasInfo, PrBundle, SharedCanvasInfo, StaleInfo } from '../contr
 import type { CommentsPayload } from '../contract/comments.js'
 import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
-import { discoverSharedCanvas, discoveryFingerprint } from '../github/attachments.js'
-import { fetchComments } from '../github/comments.js'
-import { fetchPrMeta, fetchPrRefs, toPr } from '../github/pr.js'
-import { stateForHead } from '../github/review-body.js'
+import { fetchPrRefs } from '../git/pr-refs.js'
+import { toPr } from '../host/pr.js'
+import { stateForHead } from '../review/review-body.js'
+import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
 import type { AppContext } from './context.js'
@@ -62,11 +62,12 @@ export function createPrLoader(ctx: AppContext) {
   async function refreshPr(
     number: number
   ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
-    const meta = await fetchPrMeta(ctx.gh, ctx.config.repo, number)
-    const shas = await fetchPrRefs(ctx.git, meta)
-    const pr = toPr(meta, ctx.config.repo, shas)
+    const { host, repo } = ctx.config
+    const meta = await host.fetchPrMeta(ctx.gh, repo, number)
+    const shas = await fetchPrRefs(ctx.git, host, meta)
+    const pr = toPr(meta, repo, shas)
     await ctx.prs.writePr(pr)
-    const { payload, warnings } = await fetchComments(ctx.gh, ctx.config.repo, number, shas.headSha, ctx.now)
+    const { payload, warnings } = await host.fetchComments(ctx.gh, repo, number, shas.headSha, ctx.now)
     await ctx.prs.writeComments(number, payload)
     refreshed.add(number)
     return { pr, comments: payload, warnings }
@@ -87,7 +88,8 @@ export function createPrLoader(ctx: AppContext) {
     },
     async refreshComments(number: number): Promise<{ comments: CommentsPayload; warnings: string[] }> {
       const pr = (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
-      const { payload, warnings } = await fetchComments(ctx.gh, ctx.config.repo, number, pr.headSha, ctx.now)
+      const { host, repo } = ctx.config
+      const { payload, warnings } = await host.fetchComments(ctx.gh, repo, number, pr.headSha, ctx.now)
       await ctx.prs.writeComments(number, payload)
       return { comments: payload, warnings }
     },

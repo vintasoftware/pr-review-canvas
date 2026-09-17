@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Hosts
+
+- GitLab merge requests work through the [GitLab CLI (`glab`)](https://gitlab.com/gitlab-org/cli),
+  alongside GitHub pull requests through `gh`. Origin detection covers gitlab.com, hostnames that
+  contain `gitlab`, and self-hosted GitLab via `PR_REVIEW_HOST=gitlab`.
+- Nested GitLab groups (`group/subgroup/project`) are stored as the repository owner.
+- Comments, inline discussions, approvals, and canvas-zip discovery use GitLab's REST API.
+  Request-changes posts the review body as a merge request note.
+- New error codes: `GLAB_MISSING`, `GLAB_UNAUTHENTICATED`, `GITLAB_API_ERROR`. Exit code `4` covers
+  both CLIs.
+
 ## 0.3.0
 
 Changes since 0.2.0.

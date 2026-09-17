@@ -6,6 +6,7 @@
 /** @typedef {import('./contract-types.js').ReviewBodyResponse} ReviewBodyResponse */
 import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
 import { esc } from './dom.js'
+import { hostLabel } from './host.js'
 import { layerProgress } from './progress.js'
 
 export const SIGNOFF_DIALOG_ID = 'signoff-dialog'
@@ -35,7 +36,7 @@ export function approveBlockedReason(artifact, state) {
  * @param {'APPROVE' | 'REQUEST_CHANGES'} event
  */
 export function signoffTitle(event) {
-  return event === 'APPROVE' ? 'Approve on GitHub' : 'Request changes on GitHub'
+  return event === 'APPROVE' ? `Approve on ${hostLabel()}` : `Request changes on ${hostLabel()}`
 }
 
 /**
@@ -46,7 +47,7 @@ export function signoffDialogHtml(opts) {
   return (
     `<dialog id="${SIGNOFF_DIALOG_ID}" class="signoff-dialog" aria-labelledby="signoff-h">` +
     `<h2 id="signoff-h">${esc(signoffTitle(opts.event))}</h2>` +
-    '<p class="hint">This posts a review on GitHub as you. Edit the body first if you want to.</p>' +
+    `<p class="hint">This posts a review on ${esc(hostLabel())} as you. Edit the body first if you want to.</p>` +
     '<p class="signoff-target muted mono"></p>' +
     '<label class="sr" for="signoff-body">Review body</label>' +
     previewControlsHtml() +
@@ -131,7 +132,7 @@ export function showSignoffResult(dialog, review) {
   const result = dialog.querySelector('.signoff-result')
   if (result !== null) {
     result.textContent = 'Posted · '
-    result.append(externalLink(review.url, 'see it on GitHub'))
+    result.append(externalLink(review.url, `see it on ${hostLabel()}`))
   }
   return result
 }

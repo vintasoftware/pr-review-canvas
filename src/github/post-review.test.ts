@@ -2,23 +2,10 @@
 // The sign-off call itself: what it sends, and what it makes of the answer.
 import { createFakeGh, ghPost, ghPostError, TEST_REPO } from '../testing/fakes.js'
 import { HEAD_SHA } from '../testing/synthetic.js'
-import { GitHubApiError } from './gh.js'
-import { PostReviewInputSchema, postReview, REVIEW_EVENTS } from './post-review.js'
+import { HostCliError } from '../host/client.js'
+import { postReview } from './post-review.js'
 
 const PATH = 'repos/acme/widgets/pulls/42/reviews'
-
-describe('PostReviewInputSchema', () => {
-  it('takes the two events and an optional body', () => {
-    expect(PostReviewInputSchema.parse({ event: 'APPROVE' })).toEqual({ event: 'APPROVE' })
-    expect(PostReviewInputSchema.parse({ event: 'REQUEST_CHANGES', body: 'x' })).toEqual({
-      event: 'REQUEST_CHANGES',
-      body: 'x',
-    })
-    expect(PostReviewInputSchema.safeParse({ event: 'COMMENT' }).success).toBe(false)
-    expect(PostReviewInputSchema.safeParse({ event: 'APPROVE', body: '' }).success).toBe(false)
-    expect(REVIEW_EVENTS).toEqual(['APPROVE', 'REQUEST_CHANGES'])
-  })
-})
 
 describe('postReview', () => {
   it('sends the event, the body, and the commit it reviews', async () => {
@@ -51,9 +38,11 @@ describe('postReview', () => {
   })
 
   it('passes a refusal from GitHub on to the caller', async () => {
-    const gh = createFakeGh({ postRoutes: { [PATH]: ghPostError(new GitHubApiError(PATH, 'HTTP 422', 1)) } })
+    const gh = createFakeGh({
+      postRoutes: { [PATH]: ghPostError(new HostCliError('gh', PATH, 'HTTP 422', 1)) },
+    })
     await expect(postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: 'x' })).rejects.toThrow(
-      GitHubApiError
+      HostCliError
     )
   })
 })

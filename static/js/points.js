@@ -5,6 +5,7 @@
 import { askButtonHtml } from './ask.js'
 import { viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
+import { postToLabel } from './host.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 
@@ -80,7 +81,7 @@ export function pointCommandsHtml(p, opts = {}) {
     '<span class="tbtns">' +
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}">copy</button>` +
     (opts.postedUrl === undefined
-      ? `<button class="cmd" type="button" data-act="point-post" data-point="${esc(p.id)}" data-needs-post>post to github</button>`
+      ? `<button class="cmd" type="button" data-act="point-post" data-point="${esc(p.id)}" data-needs-post>${postToLabel()}</button>`
       : viewCommentHtml(opts.postedUrl)) +
     askButtonHtml(pointContext(p)) +
     toggle +

@@ -10,7 +10,7 @@ import type { ErrorCode } from './contract/api.js'
 import type { GenerationContext, PrepareTarget } from './contract/generation-context.js'
 import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
-import { fetchPrMeta, fetchPrRefs } from './github/pr.js'
+import { fetchPrRefs } from './git/pr-refs.js'
 import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
 import {
   CLAUDE_SKILLS_DIR,
@@ -32,7 +32,7 @@ import {
 import { applyTitleTrims, type TitleTrim } from './review/trim-caps.js'
 import { validateModelOutput } from './review/validate.js'
 import type { AppContext } from './server/context.js'
-import { AppError, toAppError } from './server/errors.js'
+import { AppError, CLI_SETUP_CODES, toAppError } from './server/errors.js'
 import { readText, writeTextAtomic } from './store/atomic-json.js'
 
 export interface CliIo {
@@ -40,7 +40,7 @@ export interface CliIo {
   stderr(line: string): void
 }
 
-/** Exit codes: 0 ok, 1 error, 2 usage, 4 gh auth or missing, 5 invalid model output. */
+/** Exit codes: 0 ok, 1 error, 2 usage, 4 gh/glab auth or missing, 5 invalid model output. */
 export const EXIT = { ok: 0, error: 1, usage: 2, gh: 4, invalid: 5 } as const
 
 export class UsageError extends Error {
@@ -94,7 +94,7 @@ export function reportFailure(io: CliIo, err: unknown): number {
   }
   const appErr = toAppError(err)
   printErrorEnvelope(io, appErr.code, appErr.message, appErr.hint)
-  return appErr.code === 'GH_UNAUTHENTICATED' || appErr.code === 'GH_MISSING' ? EXIT.gh : EXIT.error
+  return CLI_SETUP_CODES.has(appErr.code) ? EXIT.gh : EXIT.error
 }
 
 /**
@@ -368,8 +368,8 @@ async function resolveHead(
   if (prNumber === undefined) {
     throw new UsageError('export needs --pr <n> or --head <ref|sha>')
   }
-  const meta = await fetchPrMeta(ctx.gh, ctx.config.repo, prNumber)
-  const { headSha } = await fetchPrRefs(ctx.git, meta)
+  const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, prNumber)
+  const { headSha } = await fetchPrRefs(ctx.git, ctx.config.host, meta)
   return { headSha, prNumber }
 }
 
@@ -387,7 +387,7 @@ export async function runExport(ctx: AppContext, argv: string[], io: CliIo): Pro
     out: values.out,
   })
   printJson(io, result)
-  io.stderr(`drag ${result.path} into the pull request description or a comment`)
+  io.stderr(`drag ${result.path} into the ${ctx.config.host.noun} description or a comment`)
   return EXIT.ok
 }
 
@@ -445,9 +445,9 @@ export async function runImport(ctx: AppContext, argv: string[], io: CliIo): Pro
   const options: Parameters<typeof importCanvas>[1] = { bytes, force: values.force === true }
   if (values.pr !== undefined) {
     const prNumber = parsePrNumber(values.pr)
-    const meta = await fetchPrMeta(ctx.gh, ctx.config.repo, prNumber)
+    const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, prNumber)
     options.prNumber = prNumber
-    options.currentHeadSha = (await fetchPrRefs(ctx.git, meta)).headSha
+    options.currentHeadSha = (await fetchPrRefs(ctx.git, ctx.config.host, meta)).headSha
   }
   printJson(io, await importCanvas(ctx, options))
   return EXIT.ok

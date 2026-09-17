@@ -8,10 +8,10 @@ import {
   composerInput,
   composerRowHtml,
   focusComposer,
-  NO_POSTING_TITLE,
   setDisabledReason,
   toggleMarkdownPreview,
 } from './composer.js'
+import { noPostingTitle } from './host.js'
 
 /** @param {string} html */
 function mount(html) {
@@ -204,7 +204,7 @@ describe('applyCapabilityGating', () => {
 
   it('falls back to a general reason and enables everything again', () => {
     applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null })
-    expect(document.querySelector('button[data-needs-post]')?.getAttribute('title')).toBe(NO_POSTING_TITLE)
+    expect(document.querySelector('button[data-needs-post]')?.getAttribute('title')).toBe(noPostingTitle())
     expect(
       applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     ).toBe(false)

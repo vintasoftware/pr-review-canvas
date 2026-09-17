@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   type CliIo,
@@ -17,8 +17,8 @@ import {
 } from './commands.js'
 import { ConfigError } from './config.js'
 import { GitError } from './git/git.js'
-import { GitHubApiError } from './github/gh.js'
-import { PrNotFoundError } from './github/pr.js'
+import { HostCliError } from './host/client.js'
+import { PrNotFoundError } from './host/pr.js'
 import { SkillDirExistsError } from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
 import { ModelInvalidError, PublishError } from './review/publish.js'
@@ -265,9 +265,12 @@ describe('prepare, publish, validate through the CLI layer', () => {
         'CANVAS_STALE',
         'prepare again',
       ],
-      [new GitHubApiError('x', 'HTTP 401', 1), EXIT.gh, 'GH_UNAUTHENTICATED'],
-      [new GitHubApiError('x', 'gh: command not found', 127, true), EXIT.gh, 'GH_MISSING'],
-      [new GitHubApiError('x', 'HTTP 500', 1), EXIT.error, 'GITHUB_API_ERROR'],
+      [new HostCliError('gh', 'x', 'HTTP 401', 1), EXIT.gh, 'GH_UNAUTHENTICATED'],
+      [new HostCliError('gh', 'x', 'gh: command not found', 127, true), EXIT.gh, 'GH_MISSING'],
+      [new HostCliError('gh', 'x', 'HTTP 500', 1), EXIT.error, 'GITHUB_API_ERROR'],
+      [new HostCliError('glab', 'x', '401 Unauthorized', 1), EXIT.gh, 'GLAB_UNAUTHENTICATED'],
+      [new HostCliError('glab', 'x', 'glab: command not found', 127, true), EXIT.gh, 'GLAB_MISSING'],
+      [new HostCliError('glab', 'x', 'HTTP 500', 1), EXIT.error, 'GITLAB_API_ERROR'],
       [new PrNotFoundError(9), EXIT.error, 'PR_NOT_FOUND'],
       [new GitError(['fetch'], 'boom', 128), EXIT.error, 'GIT_ERROR'],
       [new ConfigError('NOT_A_REPO', 'nope', 'cd somewhere'), EXIT.error, 'NOT_A_REPO', 'cd somewhere'],
@@ -386,7 +389,8 @@ describe('install-skill through the CLI layer', () => {
     const paths = (lastJson(custom) as { targets: Array<{ path: string }> }).targets.map(
       target => target.path
     )
-    expect(paths.map(p => path.relative(repoRoot, p))).toEqual([
+    const root = await realpath(repoRoot)
+    expect(paths.map(p => path.relative(root, p))).toEqual([
       'custom/a/pr-review-canvas',
       'custom/b/pr-review-canvas',
     ])

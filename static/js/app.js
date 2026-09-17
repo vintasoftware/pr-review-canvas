@@ -33,8 +33,9 @@ import { initScrollSpy } from './scroll-spy.js'
 import { openSettingsDialog } from './settings.js'
 import { applySkin, nextSkin, readSkin, skinLabel } from './skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
+import { hostLabel, setHost } from './host.js'
 
-/** @typedef {{ prNumber: number, owner: string, repo: string, version: string }} Bootstrap */
+/** @typedef {{ prNumber: number, owner: string, repo: string, version: string, host: import('./contract-types.js').PublicHost }} Bootstrap */
 
 /** @returns {Bootstrap | null} */
 function readBootstrap() {
@@ -57,7 +58,7 @@ function footerHtml(version, bundle) {
   const canvas = bundle?.canvas
     ? `<span>canvas <span class="mono">${esc(bundle.canvas.headSha.slice(0, 7))}</span> · ${esc(bundle.canvas.source)}</span>`
     : ''
-  return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>localhost only · nothing leaves this machine except GitHub posts you confirm</span></footer>`
+  return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>localhost only · nothing leaves this machine except ${esc(hostLabel())} posts you confirm</span></footer>`
 }
 
 /** @param {ReadonlyArray<string>} warnings */
@@ -155,6 +156,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML = errorCardHtml({ code: 'INTERNAL', message: 'missing bootstrap data' })
       return
     }
+    setHost(this.bootstrap.host)
     this.theme = readTheme(document.documentElement)
     this.skin = readSkin(document.documentElement)
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(

@@ -10,6 +10,7 @@ export type {
   PostCommentResponse,
   PostReviewResponse,
   PrBundle,
+  PublicHost,
   ReviewBodyResponse,
   ReviewSummary,
   SharedCanvasFetchResponse,
