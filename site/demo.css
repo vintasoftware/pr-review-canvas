@@ -248,7 +248,7 @@
   flex-direction: column;
 }
 .attention {
-  margin-top: 22px;
+  margin-top: 0;
   padding-left: 12px;
   border-left: 2px solid #bca769;
 }
@@ -264,27 +264,10 @@
   line-height: 1.5;
   margin-block: 7px;
 }
-.attention p,
-.context-bottom p {
+.attention p {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.7;
-}
-.context-bottom {
-  border-top: 1px solid var(--line);
-  margin-top: auto;
-  padding-top: 20px;
-}
-.context-bottom .mono {
-  font-size: 8px;
-}
-.context-bottom p {
-  margin-top: 8px;
-}
-.context-bottom .text-link {
-  display: inline-block;
-  margin-top: 14px;
-  font-size: 10px;
 }
 .demo-caption {
   display: flex;
