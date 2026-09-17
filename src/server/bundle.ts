@@ -198,9 +198,10 @@ export async function resolveBundle(
   }
 
   let sharedCanvas: SharedCanvasInfo | null = null
-  // A canvas for this very head beats anything attached to the PR, so discovery runs only
-  // when there is none, and its import can turn a stale or missing bundle into a ready one.
-  if (found.status !== 'ready') {
+  // A canvas for this very head beats anything attached to the PR, so discovery runs only when
+  // there is none. A ready canvas of an earlier commit does not count: the author may have
+  // regenerated and attached one for the head since, and importing it is the only way to show it.
+  if (found.status !== 'ready' || found.commitsSince > 0) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)

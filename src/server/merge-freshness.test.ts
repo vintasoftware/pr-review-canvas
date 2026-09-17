@@ -4,6 +4,7 @@
 // reading returns as soon as the diff differs, or when the project counts every commit.
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
+import { buildCanvasZip } from '../canvas/zip.js'
 import type { ErrorEnvelope, PrBundle, ReviewBodyResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
@@ -19,6 +20,7 @@ import {
 } from '../testing/fakes.js'
 import {
   BASE_SHA,
+  GH_PULL,
   ghFor42,
   HEAD_SHA,
   SYNTHETIC_BLOBS,
@@ -32,6 +34,9 @@ const SAME_ORIGIN = { ...LOCAL, origin: 'http://localhost:3010', 'sec-fetch-site
 const JSON_POST = { ...SAME_ORIGIN, 'content-type': 'application/json' }
 /** The commit the canvas was generated for; HEAD_SHA is three commits later. */
 const OLD_SHA = 'e'.repeat(40)
+/** A canvas zip for HEAD_SHA itself, attached to the PR after the author merged main. */
+const HEAD_ZIP_URL =
+  'https://github.com/user-attachments/files/12346/pr-42-20260911T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
 
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T
@@ -95,6 +100,8 @@ interface Scenario {
   headDiff?: string
   keepWhenDiffUnchanged?: boolean
   git?: FakeGitOptions
+  /** The PR body names a canvas zip, and this is what downloading it answers. */
+  attachment?: { body: string; fetch: typeof fetch }
 }
 
 let t: TestContext
@@ -108,11 +115,20 @@ async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
     ...DEFAULT_PROJECT_CONFIG,
     canvas: { keepWhenDiffUnchanged: scenario.keepWhenDiffUnchanged ?? true },
   }
+  const attachment = scenario.attachment
   t = await makeTestContext({
     git: gitWithHistory(scenario.headDiff ?? SYNTHETIC_DIFF, scenario.git),
-    gh: ghFor42(),
+    gh:
+      attachment === undefined
+        ? ghFor42()
+        : ghFor42({
+            routes: {
+              'repos/acme/widgets/pulls/42': { kind: 'json', body: { ...GH_PULL, body: attachment.body } },
+            },
+          }),
     runner,
     projectConfig: { config, warnings: [], source: '/repo/pr-review.config.yml' },
+    ...(attachment === undefined ? {} : { fetch: attachment.fetch }),
   })
   await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA), 42)
   return t
@@ -142,6 +158,28 @@ describe('a canvas whose head moved without changing the diff', () => {
     expect(b.commitsSinceCanvas).toBe(3)
     expect(b.files.map(f => f.path)).toContain('src/app.ts')
     expect(b.skillCommand).toBe('/pr-review-canvas 42 --force')
+  })
+
+  it('imports a canvas attached for the head itself over the older one that still applies', async () => {
+    // The README workflow: the author merged main, regenerated the canvas, and attached the zip.
+    const bytes = buildCanvasZip(manifest(HEAD_SHA), artifactFor(HEAD_SHA))
+    let fetches = 0
+    await withOldCanvas({
+      attachment: {
+        body: `canvas: ${HEAD_ZIP_URL}`,
+        fetch: async () => {
+          fetches++
+          return new Response(bytes.slice().buffer as ArrayBuffer, { status: 200 })
+        },
+      },
+    })
+    const b = await bundle()
+    expect(fetches).toBe(1)
+    expect(b.status).toBe('ready')
+    expect(b.canvas?.headSha).toBe(HEAD_SHA)
+    expect(b.canvas?.source).toBe('import')
+    expect(b.commitsSinceCanvas).toBeUndefined()
+    expect(b.sharedCanvas).toMatchObject({ url: HEAD_ZIP_URL, matchesHead: true, downloadable: true })
   })
 
   it('is outdated when a merge brought in code the canvas never saw', async () => {
