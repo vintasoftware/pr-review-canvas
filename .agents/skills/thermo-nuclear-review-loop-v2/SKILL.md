@@ -52,7 +52,11 @@ Reviewer output is a list of leads, not orders. For each finding, verify it your
 
 ## Run the gate
 
-Fix every Fix-bucket finding first. Then, once per iteration, put all Gate items to the user in one batch: each with the finding, the evidence, what handling it would cost, and your recommendation. The default recommendation for triggers 1 and 2 is "reject the finding". Use the host's structured question tool when it has one; otherwise end the turn with the questions in plain text. Wait for the answers.
+Fix every Fix-bucket finding first. Then, once per iteration, put all Gate items to the user in one batch. Each question carries the finding, the evidence, the reviewer's recommendation in its own words, your recommendation, and the cost of each option. The default recommendation for triggers 1 and 2 is "reject the finding". When the reviewer's remedy is labeled `deletes/simplifies` and removes a concept, a contract field, or an external requirement (a tool version, a host API, a dependency), the default recommendation is to take it; argue against it only with evidence of a concrete case it breaks.
+
+**Spike before asking about a design.** When a gate item chooses between two designs (trigger 3 or 4 with a different rule, model, or mechanism on each side), build the alternative on a throwaway branch or worktree far enough to measure it: real diffstat, files touched, external requirements added or removed, and which of the reviewer's cases it handles. Put those measurements in the question. Estimates in line counts are not evidence.
+
+Use the host's structured question tool when it has one; otherwise end the turn with the questions in plain text. Wait for the answers.
 
 Record each answer as a **settled decision**: what was asked, what was decided, and the date. Settled decisions go into every later reviewer prompt. The reviewer may re-raise one only with new evidence; you decide whether the evidence changes the answer, and a re-raise without new evidence is dropped, not fixed.
 
@@ -136,7 +140,7 @@ Every finding carries a label: `deletes/simplifies` when the remedy removes code
 2. **Destructive or irreversible operations.** Hard deletes where the project uses soft deletes, migrations without a rollback step, scripts that touch production without a dry run, non-atomic multi-step updates that can leave state half-applied.
 3. **Drift from project conventions and duplicated judgment.** Bespoke helpers where a canonical one exists, re-implemented framework primitives, a decision (parse, validate, classify) answered in two places, domain-language drift from the project's own terms, logic in the wrong layer or package, hand-edited generated artifacts.
 4. **Structural regressions and missed simplifications.** Ad-hoc conditionals bolted onto unrelated flows, one-off booleans and nullable modes, feature logic leaking into shared paths, thin wrappers and pass-through helpers, magic generic mechanisms hiding simple data shapes, refactors that move complexity without deleting it. Also the reverse: splits that separate code which changes together, trading cohesion for file count and raising the reader's load.
-5. **Brittle or flaky tests.** Timing sleeps, order dependence, real network or clock, assertions rewritten to match new behavior instead of the requirement, tests deleted or skipped, coverage or lint thresholds lowered, tests that restate the implementation or pass vacuously.
+5. **Brittle or flaky tests.** Timing sleeps, order dependence, real network or clock, assertions rewritten to match new behavior instead of the requirement, tests deleted or skipped, coverage or lint thresholds lowered, tests that restate the implementation or pass vacuously. A fake that encodes the answer to the rule under test (a lookup table or boolean the test flips) turns the test into a wiring check; the rule must run on real inputs somewhere in the suite, on every supported environment. Fixtures must describe a state the real system can produce; a fixture that pins an impossible state pins a hazard as expected behavior.
 6. **Boundary and type contracts.** Unnecessary optionality, `any`, `unknown`, casts, silent fallbacks that degrade to a simpler behavior without logging, validation duplicated past the trust boundary, ad-hoc object shapes where a typed model would remove branches.
 7. **Legibility.** Only after the above, and only when a senior engineer would stop on it.
 
@@ -148,7 +152,7 @@ Prioritized findings, each with file:line evidence, failure mode or cost, remedy
 
 ### Pass two and later
 
-Report blockers only. Every new blocker states why the previous pass did not raise it: a regression from the fix, or a concrete miss. Findings equivalent to ones already approved or settled by the human are dropped unless you bring new evidence, which you name. Approve when the bar is met; the loop has no other exit.
+Report blockers only. Every new blocker states why the previous pass did not raise it: a regression from the fix, or a concrete miss. Findings equivalent to ones already approved or settled by the human are dropped unless you bring new evidence, which you name. When a fix changed a rule, re-read the fixtures and fakes that feed its tests: after the change they must still describe states the real system produces, and the rule must still execute on real inputs in at least one test. Approve when the bar is met; the loop has no other exit.
 
 ### Approval bar
 
