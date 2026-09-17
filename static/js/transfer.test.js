@@ -249,13 +249,7 @@ describe('drop zone', () => {
 
 describe('unchanged-diff bar', () => {
   it('says the canvas still applies and which commits it spans', () => {
-    const artifact = syntheticArtifact()
-    const ready = bundle({
-      status: 'ready',
-      artifact,
-      canvas: { headSha: OLD, source: 'local', manifest: null },
-    })
-    document.body.innerHTML = unchangedDiffBarHtml({ ...ready, commitsSinceCanvas: 1 })
+    document.body.innerHTML = unchangedDiffBarHtml(OLD, HEAD, 1)
     const bar = document.querySelector('.stale-bar.same-diff-bar')
     expect(bar?.getAttribute('role')).toBe('status')
     expect(bar?.textContent).toContain('Canvas still applies.')
@@ -263,7 +257,7 @@ describe('unchanged-diff bar', () => {
       'generated for eeeeeee; the 1 commit since left the diff unchanged, so it describes the head aaaaaaa too.'
     )
     expect(bar?.querySelector('#stale-generate')?.textContent).toBe('regenerate anyway')
-    expect(unchangedDiffBarHtml({ ...ready, commitsSinceCanvas: 4 })).toContain('the 4 commits since')
+    expect(unchangedDiffBarHtml(OLD, HEAD, 4)).toContain('the 4 commits since')
   })
 })
 

@@ -30,7 +30,7 @@ export function sameChangeSet(a: Derived, b: Derived): boolean {
  * also refreshes a stored copy made against an older base; otherwise the stored copy, which is
  * all an imported canvas has until its commits are fetched.
  */
-export async function readOrBuildDerived(
+async function readOrBuildDerived(
   ctx: AppContext,
   headSha: string,
   mergeBaseSha: string | undefined

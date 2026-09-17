@@ -174,13 +174,14 @@ export function staleBarHtml(stale) {
 /**
  * The note above a canvas that was generated for an earlier commit: the commits since (merges from
  * the base branch, as a rule) left the diff as it was.
- * @param {PrBundle & { commitsSinceCanvas: number }} bundle
+ * @param {string} canvasHeadSha the commit the canvas was generated for
+ * @param {string} headSha the pull request head
+ * @param {number} n the commits between them
  * @returns {string}
  */
-export function unchangedDiffBarHtml(bundle) {
-  const canvas = (bundle.canvas?.headSha ?? '').slice(0, 7)
-  const head = bundle.pr.headSha.slice(0, 7)
-  const n = bundle.commitsSinceCanvas
+export function unchangedDiffBarHtml(canvasHeadSha, headSha, n) {
+  const canvas = canvasHeadSha.slice(0, 7)
+  const head = headSha.slice(0, 7)
   return (
     `<div class="stale-bar same-diff-bar" role="status"><strong>Canvas still applies.</strong> ` +
     `${esc(`It was generated for ${canvas}; the ${n} commit${n === 1 ? '' : 's'} since left the diff unchanged, so it describes the head ${head} too.`)} ` +

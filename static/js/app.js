@@ -229,8 +229,8 @@ export class PrAppElement extends HTMLElement {
       const staleBar =
         bundle.status === 'stale' && bundle.stale
           ? staleBarHtml(bundle.stale)
-          : bundle.commitsSinceCanvas !== undefined
-            ? unchangedDiffBarHtml({ ...bundle, commitsSinceCanvas: bundle.commitsSinceCanvas })
+          : bundle.commitsSinceCanvas !== undefined && bundle.canvas
+            ? unchangedDiffBarHtml(bundle.canvas.headSha, bundle.pr.headSha, bundle.commitsSinceCanvas)
             : ''
       this.innerHTML =
         header +
