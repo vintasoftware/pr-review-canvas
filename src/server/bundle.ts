@@ -2,11 +2,9 @@ import type { CanvasInfo, PrBundle, SharedCanvasInfo, StaleInfo } from '../contr
 import type { CommentsPayload } from '../contract/comments.js'
 import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
-import type { PrState } from '../contract/state.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
-import { lookupCanvas, standsForHead } from '../review/canvas-lookup.js'
-import { stateForHead } from '../review/review-body.js'
+import { lookupCanvas, reviewStateFor } from '../review/merge-freshness.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -145,20 +143,6 @@ async function loadCanvas(
   return { artifact, canvas }
 }
 
-/**
- * The review marks as they apply to this head. Marks made on a commit the head only merged onto
- * are moved along with the canvas, so a merge commit does not reset the reviewer's progress.
- */
-async function stateForBundle(ctx: AppContext, number: number, pr: Pr): Promise<PrState> {
-  const stored = await ctx.state.read(number)
-  const marked = stored.reviewedHeadSha
-  if (marked !== undefined && marked !== pr.headSha && (await standsForHead(ctx, marked, pr))) {
-    return ctx.state.moveReviewedHead(number, pr.headSha)
-  }
-  // Marks made on another commit describe other code, so the page never shows them as reviewed.
-  return stateForHead(stored, pr.headSha)
-}
-
 /** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
 export async function readOrBuildDerived(
   ctx: AppContext,
@@ -194,7 +178,7 @@ export async function resolveBundle(
 
   const chatEnabled = ctx.projectConfig.config.chat.enabled
   const [state, capabilities, settings, acpx] = await Promise.all([
-    stateForBundle(ctx, number, pr),
+    reviewStateFor(ctx, number, pr),
     ctx.capabilities.get(),
     chatEnabled ? ctx.chat.effectiveSettings() : Promise.resolve(null),
     chatEnabled ? ctx.preflight.get() : Promise.resolve({ installed: false, version: null }),
@@ -274,7 +258,7 @@ export async function resolveBundle(
     currentHeadSha: pr.headSha,
     relation: found.relation,
   }
-  if (found.commitsBehind !== undefined) {
+  if (found.relation === 'ancestor') {
     stale.commitsBehind = found.commitsBehind
   }
   // The page shows the canvas of the older commit, so the files and the diffs are that commit's.

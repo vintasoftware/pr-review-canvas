@@ -70,8 +70,8 @@ export interface StaleInfo {
 }
 
 /**
- * A ready canvas whose head moved on by merge commits only, with no conflicts reported. The
- * change set the canvas explains is the same, so the page keeps it and says so.
+ * A ready canvas whose head only merged the base branch in since, with the host reporting it
+ * mergeable. The change set the canvas explains is the same, so the page keeps it and says so.
  */
 export interface MergesSinceInfo {
   canvasHeadSha: string
@@ -120,7 +120,7 @@ export interface PrBundle {
   artifact?: ReviewArtifact
   canvas?: CanvasInfo
   stale?: StaleInfo
-  /** Set on a ready bundle whose canvas was generated for an earlier commit of the same change set. */
+  /** Set on a ready bundle whose canvas was generated for an earlier commit the head only merged the base onto. */
   mergesSince?: MergesSinceInfo
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string

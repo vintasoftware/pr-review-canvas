@@ -107,7 +107,7 @@ export interface SettingsResponse {
     maxRepairRounds: number
     inlineDiffMaxLines: number
     smallPrHunks: number
-    /** Whether a canvas still stands after the head only merged other branches in. */
+    /** Whether a canvas still stands after the head only merged the base branch in. */
     ignoreMergeCommits: boolean
     layers: number
     highRisk: number

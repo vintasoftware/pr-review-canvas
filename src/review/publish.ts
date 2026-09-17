@@ -6,9 +6,10 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { type GenerationContext, GenerationContextSchema } from '../contract/generation-context.js'
 import type { Generator, ReviewArtifact } from '../contract/review-artifact.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
+import { fetchPrRefs } from '../git/pr-refs.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
-import { onlyMergesSince } from '../store/canvas-store.js'
+import { standsForHead } from './merge-freshness.js'
 import { normalize } from './normalize.js'
 import { coveredTestPaths, type ValidationInput, validateModelOutput } from './validate.js'
 
@@ -86,20 +87,21 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
 
 /**
  * The current head of the target; a push during generation makes the prepared context stale. For
- * a pull request, a head that only merged other branches onto the prepared commit still counts as
- * that commit when the project ignores merge commits and the host reports no conflicts.
+ * a pull request, the head and base are fetched again, and a head that stands for the prepared
+ * commit under the project's merge-commit rule still counts as that commit.
  */
 async function currentHead(
   ctx: AppContext,
   context: GenerationContext
 ): Promise<{ headSha: string; moved: boolean }> {
   if (context.target.kind === 'pr') {
-    const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)
-    const follows = ctx.projectConfig.config.canvas.ignoreMergeCommits && meta.mergeable === true
-    const stands =
-      meta.headSha === context.headSha ||
-      (follows && (await onlyMergesSince(ctx.git, context.headSha, meta.headSha)))
-    return { headSha: meta.headSha, moved: !stands }
+    const { host, repo } = ctx.config
+    const meta = await host.fetchPrMeta(ctx.gh, repo, context.target.number)
+    const head = { ...(await fetchPrRefs(ctx.git, host, meta)), mergeable: meta.mergeable }
+    return {
+      headSha: head.headSha,
+      moved: !(await standsForHead(ctx.git, ctx.projectConfig.config, head, context.headSha)),
+    }
   }
   const headSha = await ctx.git.revParse(context.target.head)
   return { headSha, moved: headSha !== context.headSha }

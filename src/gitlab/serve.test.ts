@@ -86,10 +86,11 @@ function glabFor42() {
   })
 }
 
-function gitForMr42() {
+/** The clone's view of MR 42, with its head fetched at `headSha`. */
+function gitForMr42(headSha = HEAD_SHA) {
   return createFakeGit({
-    refs: { 'merge-requests/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
-    mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA },
+    refs: { 'merge-requests/42/head': headSha, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
+    mergeBases: { [`refs/pr/42/base..${headSha}`]: BASE_SHA },
     diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF },
     blobs: SYNTHETIC_BLOBS,
     topLevel: '/repo',
@@ -119,9 +120,11 @@ describe('a GitLab origin', () => {
     t.ctx.gh = createFakeGh({
       routes: { [MR_API]: ghJson({ ...MR, sha: moved, diff_refs: { ...MR.diff_refs, head_sha: moved } }) },
     })
+    t.ctx.git = gitForMr42(moved)
     await expect(publish(t.ctx, canvasDir, opts)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
     t.ctx.gh = glabFor42()
+    t.ctx.git = gitForMr42()
     await expect(publish(t.ctx, canvasDir, opts)).resolves.toMatchObject({
       status: 'published',
       headSha: HEAD_SHA,

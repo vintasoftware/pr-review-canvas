@@ -6,8 +6,8 @@ import { PostCommentInputSchema, type PostCommentResult } from '../../contract/c
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
-import { lookupCanvas } from '../../review/canvas-lookup.js'
-import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
+import { lookupCanvas, reviewStateFor } from '../../review/merge-freshness.js'
+import { buildReviewBody, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -183,7 +183,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const number = parsePrNumber(c.req.param('n'))
     const pr = await loader.currentPr(number)
     const artifact = await artifactForHead(ctx, number, pr)
-    const state = stateForHead(await ctx.state.read(number), pr.headSha)
+    const state = await reviewStateFor(ctx, number, pr)
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body: ReviewBodyResponse = {
       headSha: pr.headSha,
@@ -200,7 +200,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
     const artifact = await artifactForHead(ctx, number, pr)
-    const state = stateForHead(await ctx.state.read(number), pr.headSha)
+    const state = await reviewStateFor(ctx, number, pr)
     if (input.event === 'APPROVE') {
       const missing = unreviewedLayers(artifact, state)
       if (missing.length > 0) {

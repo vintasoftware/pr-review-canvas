@@ -25,7 +25,7 @@ export interface StateStore {
   setReviewed(number: number, id: string, reviewed: boolean, headSha?: string): Promise<PrState>
   /**
    * Re-keys the marks to another commit that carries the same change set, so a head that only
-   * merged other branches in keeps the reviewer's progress. Does nothing when nothing is marked.
+   * merged the base branch in keeps the reviewer's progress. Does nothing when nothing is marked.
    */
   moveReviewedHead(number: number, headSha: string): Promise<PrState>
   setDismissed(number: number, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>

@@ -11,7 +11,7 @@ import type {
 } from '../../contract/api.js'
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { publicHost } from '../../host/host.js'
-import { lookupCanvas } from '../../review/canvas-lookup.js'
+import { lookupCanvas } from '../../review/merge-freshness.js'
 import { createPrLoader, resolveBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'

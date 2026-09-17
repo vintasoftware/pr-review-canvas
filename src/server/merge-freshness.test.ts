@@ -1,5 +1,5 @@
 // @vitest-environment node
-// A pull request whose head only merged other branches in since its canvas was generated: the
+// A pull request whose head only merged the base branch in since its canvas was generated: the
 // canvas stays current, the reviewer's marks move along, and the chat keeps working. The same
 // routes with the strict reading, when the project or the host's conflict report says so.
 import { rm } from 'node:fs/promises'
@@ -72,7 +72,8 @@ const OLD_DIFF = [
 
 /**
  * PR #42 at HEAD_SHA, three commits after OLD_SHA: one merge commit on the branch's own line, and
- * the two base commits it brought in. `extra` overrides the history, e.g. to add a plain commit.
+ * the two base commits it brought in. `extra` overrides the history, e.g. to add a commit of the
+ * branch's own.
  */
 function gitWithMerge(extra: FakeGitOptions = {}) {
   return createFakeGit({
@@ -82,7 +83,7 @@ function gitWithMerge(extra: FakeGitOptions = {}) {
     blobs: SYNTHETIC_BLOBS,
     ancestors: { [`${OLD_SHA}..${HEAD_SHA}`]: true },
     counts: { [`${OLD_SHA}..${HEAD_SHA}`]: 3 },
-    nonMergeCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 0 },
+    ownCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 0 },
     topLevel: '/repo',
     ...extra,
   })
@@ -160,8 +161,8 @@ describe('a canvas whose head only gained merge commits', () => {
     expect((await bundle()).status).toBe('stale')
   })
 
-  it('is outdated once an ordinary commit sits among the merges', async () => {
-    await withOldCanvas({ git: { nonMergeCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 1 } } })
+  it('is outdated once the head gained a commit the base does not have, its own or from another branch', async () => {
+    await withOldCanvas({ git: { ownCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 1 } } })
     const b = await bundle()
     expect(b.status).toBe('stale')
     expect(b.stale?.commitsBehind).toBe(3)
@@ -196,16 +197,17 @@ describe('a canvas whose head only gained merge commits', () => {
     expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
   })
 
-  it('lets the sign-off routes use the canvas for the current head', async () => {
+  it('lets the sign-off routes use the canvas and the carried-over marks without a page load first', async () => {
     await withOldCanvas()
-    await bundle()
+    await t.ctx.state.setReviewed(42, 'layer:layer-1', true, OLD_SHA)
     const app = createApp(t.ctx)
     const body = await json<ReviewBodyResponse>(
       await app.request('/api/prs/42/review/body', { headers: LOCAL })
     )
     expect(body.headSha).toBe(HEAD_SHA)
-    expect(body.body).toContain(`Reviewed 0 of 1 layer on \`${HEAD_SHA.slice(0, 7)}\``)
-    expect(body.unreviewed).toEqual(['Run path'])
+    expect(body.body).toContain(`Reviewed 1 of 1 layer on \`${HEAD_SHA.slice(0, 7)}\``)
+    expect(body.unreviewed).toEqual([])
+    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(HEAD_SHA)
   })
 
   it('refuses the sign-off when the canvas is outdated', async () => {

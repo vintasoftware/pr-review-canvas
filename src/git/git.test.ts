@@ -57,23 +57,36 @@ describe('createGit (real adapter)', () => {
     expect(await git.commitExists('f'.repeat(40))).toBe(false)
   })
 
-  it('counts the ordinary commits on the first-parent line, so merges alone count zero', async () => {
+  it('counts the commits a head gained that neither a merge nor the base accounts for', async () => {
     const git = createGit(repo.dir)
-    // A branch off `one`, merged onto `two` with a merge commit: `two`'s line gained only the merge.
-    // Both happen on side branches, so `main` still points at `two` for the other tests.
-    await g(repo.dir, 'checkout', '-q', '-b', 'side', repo.sha1)
+    // A feature branch off `one`, while `main` moved on to `two`. Everything happens on side
+    // branches, so `main` still points at `two` for the other tests.
+    await g(repo.dir, 'checkout', '-q', '-b', 'feat', repo.sha1)
+    await writeFile(path.join(repo.dir, 'src/feat.ts'), 'export const feat = true\n')
+    await g(repo.dir, 'add', '.')
+    await g(repo.dir, 'commit', '-q', '-m', 'feat')
+    const canvasSha = await g(repo.dir, 'rev-parse', 'HEAD')
+    // Merging the base in brings `two` and a merge commit: nothing of the branch's own.
+    await g(repo.dir, 'merge', '-q', '--no-ff', '--no-edit', 'main')
+    const mergedBase = await g(repo.dir, 'rev-parse', 'HEAD')
+    expect(await git.countCommitsBetween(canvasSha, mergedBase)).toBe(2)
+    expect(await git.countOwnCommitsSince(canvasSha, mergedBase, repo.sha2)).toBe(0)
+    // Merging any other branch brings code the base does not have, merge commit or not.
+    await g(repo.dir, 'checkout', '-q', '-b', 'side', canvasSha)
     await writeFile(path.join(repo.dir, 'src/side.ts'), 'export const side = true\n')
     await g(repo.dir, 'add', '.')
     await g(repo.dir, 'commit', '-q', '-m', 'side')
-    await g(repo.dir, 'checkout', '-q', '-b', 'trunk', repo.sha2)
+    await g(repo.dir, 'checkout', '-q', 'feat')
     await g(repo.dir, 'merge', '-q', '--no-ff', '--no-edit', 'side')
-    const merged = await g(repo.dir, 'rev-parse', 'HEAD')
+    const mergedSide = await g(repo.dir, 'rev-parse', 'HEAD')
+    expect(await git.countOwnCommitsSince(canvasSha, mergedSide, repo.sha2)).toBe(1)
+    // An ordinary commit on the branch counts too.
+    await writeFile(path.join(repo.dir, 'src/feat.ts'), 'export const feat = false\n')
+    await g(repo.dir, 'commit', '-q', '-am', 'more')
+    const more = await g(repo.dir, 'rev-parse', 'HEAD')
     await g(repo.dir, 'checkout', '-q', 'main')
-    expect(await git.countCommitsBetween(repo.sha2, merged)).toBe(2)
-    expect(await git.countNonMergeCommitsBetween(repo.sha2, merged)).toBe(0)
-    // From `one`, main's own line holds `two` and the merge: one ordinary commit.
-    expect(await git.countNonMergeCommitsBetween(repo.sha1, merged)).toBe(1)
-    expect(await git.isAncestor(repo.sha2, merged)).toBe(true)
+    expect(await git.countOwnCommitsSince(canvasSha, more, repo.sha2)).toBe(2)
+    expect(await git.isAncestor(canvasSha, more)).toBe(true)
   })
 
   it('throws GitError for an unknown ref', async () => {
