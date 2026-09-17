@@ -77,7 +77,9 @@ test('scripted chat switches questions and links to the evidence', async ({ page
   await expect(page.locator('#chat-reference')).toHaveAttribute('href', /timeoutManager.ts#L72-L109$/)
   await page.getByRole('button', { name: 'Notification scheduling', exact: true }).click()
   await expect(page.locator('#chat-answer')).toContainText('setTimeout(callback, 0)')
-  await expect(page.locator('.chat-disclosure')).toContainText('not a live agent conversation')
+  await expect(page.locator('.chat-demo:not(.canvas-chat-panel) .chat-disclosure')).toContainText(
+    'not a live agent conversation'
+  )
 })
 
 test('installation commands can be copied', async ({ page, context }) => {
@@ -102,4 +104,25 @@ test('documentation and real source remain readable without JavaScript', async (
   await expect(page.locator('.faq-list details[open]')).toContainText('no separate Canvas subscription')
   await expect(page.locator('#get-started')).toContainText('pr-review serve')
   await context.close()
+})
+
+test('PR demo chat opens, answers questions, and returns focus when closed', async ({ page }) => {
+  await page.goto('./')
+  const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
+  const panel = page.getByRole('dialog', { name: 'AI Chat about this PR' })
+  await expect(panel).toBeHidden()
+  await launcher.click()
+  await expect(panel).toBeVisible()
+  await expect(launcher).toHaveAttribute('aria-expanded', 'true')
+  await panel.getByRole('button', { name: 'Switching providers' }).click()
+  await expect(panel.locator('.agent-message')).toContainText('neither migrates timers nor blocks the switch')
+  await expect(page.locator('#chat-answer')).toContainText('zero-delay scheduling')
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+  await expect(launcher).toBeFocused()
+  await launcher.click()
+  await expect(panel.locator('.agent-message')).toContainText('neither migrates timers nor blocks the switch')
+  await panel.getByRole('button', { name: 'Close AI chat' }).click()
+  await expect(panel).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

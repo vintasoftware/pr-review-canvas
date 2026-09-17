@@ -51,16 +51,53 @@ document.getElementById('review-layer').addEventListener('click', () => {
   updateProgress()
 })
 
+const chatDock = document.querySelector('.canvas-chat-dock')
+const chatExample = document.querySelector('.chat-demo')
+if (chatDock && chatExample) {
+  const panel = chatExample.cloneNode(true)
+  panel.id = 'canvas-chat-panel'
+  panel.classList.add('canvas-chat-panel')
+  panel.setAttribute('role', 'dialog')
+  panel.setAttribute('aria-label', 'AI Chat about this PR')
+  panel.hidden = true
+  for (const element of panel.querySelectorAll('[id]')) element.id = `canvas-${element.id}`
+  const close = document.createElement('button')
+  close.type = 'button'
+  close.className = 'canvas-chat-close'
+  close.setAttribute('aria-label', 'Close AI chat')
+  close.textContent = '×'
+  panel.querySelector('.chat-demo-header').append(close)
+  chatDock.prepend(panel)
+  chatDock.hidden = false
+  const launcher = chatDock.querySelector('.canvas-chat-launcher')
+  function toggleChat(open) {
+    panel.hidden = !open
+    launcher.setAttribute('aria-expanded', String(open))
+    if (open) close.focus({ preventScroll: true })
+    else launcher.focus({ preventScroll: true })
+  }
+  launcher.addEventListener('click', () => toggleChat(panel.hidden))
+  close.addEventListener('click', () => toggleChat(false))
+  panel.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      toggleChat(false)
+    }
+  })
+}
+
 for (const button of document.querySelectorAll('[data-question]')) {
   button.addEventListener('click', () => {
     const question = questions[button.dataset.question]
-    for (const other of document.querySelectorAll('[data-question]')) {
+    const chat = button.closest('.chat-demo')
+    for (const other of chat.querySelectorAll('[data-question]')) {
       other.setAttribute('aria-pressed', String(other === button))
     }
-    setText('chat-question', question.question)
-    setText('chat-answer', question.answer)
-    setText('chat-reference', question.reference)
-    document.getElementById('chat-reference').href = question.source
+    chat.querySelector('.user-message').textContent = question.question
+    chat.querySelector('.agent-message p').textContent = question.answer
+    const reference = chat.querySelector('.chat-code-ref')
+    reference.textContent = question.reference
+    reference.href = question.source
   })
 }
 

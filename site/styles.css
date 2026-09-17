@@ -317,7 +317,7 @@ dd code {
 .map-heading .pill {
   background: var(--lime);
 }
-.intent-map ol {
+.intent-map ul {
   list-style: none;
   padding: 0;
   margin-block: 6px 20px;
@@ -334,20 +334,14 @@ dd code {
   place-items: center;
   width: 29px;
   height: 29px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--paper);
   border: 1px solid #d0d4c6;
   font-size: 14px;
   z-index: 1;
 }
-.intent-map li:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: 14px;
-  top: 47px;
-  bottom: -33px;
-  border-left: 1px solid #ced2c5;
-}
+
 .intent-map li strong,
 .intent-map li code {
   display: block;
@@ -358,11 +352,6 @@ dd code {
 }
 .intent-map code {
   font-size: 14px;
-  color: var(--muted);
-}
-.map-note {
-  margin-left: auto;
-  font-size: 12px;
   color: var(--muted);
 }
 .intent-map > p {
@@ -676,9 +665,6 @@ dd code {
   .local-facts {
     gap: 30px;
   }
-  .map-note {
-    display: none;
-  }
   .closing {
     margin-inline: 28px;
   }
@@ -831,4 +817,9 @@ dd code {
 .local-top > *,
 .faq-section > * {
   min-width: 0;
+}
+
+.intent-map > .map-summary {
+  text-align: left;
+  border-top: 0;
 }

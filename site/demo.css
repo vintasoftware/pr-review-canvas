@@ -15,6 +15,7 @@
   font-size: 12px;
 }
 .canvas-demo {
+  position: relative;
   border: 1px solid #cfd3c5;
   border-radius: 9px;
   background: #fffefa;
@@ -571,4 +572,60 @@ a.chat-code-ref {
   .local-badge {
     font-size: 12px;
   }
+}
+
+.canvas-demo:has(.canvas-chat-dock:not([hidden])) {
+  padding-bottom: 76px;
+}
+.canvas-chat-dock {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  z-index: 2;
+}
+.canvas-chat-launcher {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 28px;
+  background: var(--ink);
+  color: white;
+  box-shadow: 0 4px 16px #25282125;
+  font-size: 14px;
+  font-weight: 600;
+}
+.canvas-chat-launcher:hover {
+  background: var(--accent);
+}
+.canvas-chat-panel {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  right: 0;
+  width: min(390px, calc(100vw - 84px));
+  max-height: min(440px, 65vh);
+  overflow-y: auto;
+  padding: 18px;
+  background: var(--paper);
+  box-shadow: 0 8px 30px #25282130;
+  border-radius: 12px;
+}
+.canvas-chat-panel .chat-demo-header {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.canvas-chat-close {
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: #e4e3da;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 1;
+}
+.canvas-chat-panel .user-message {
+  margin-left: 12px;
 }

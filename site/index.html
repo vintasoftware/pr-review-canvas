@@ -247,6 +247,28 @@
               </div>
             </aside>
           </div>
+          <div class="canvas-chat-dock" hidden>
+            <button
+              class="canvas-chat-launcher"
+              type="button"
+              aria-expanded="false"
+              aria-controls="canvas-chat-panel"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path d="M20 11.5a8 8 0 0 1-8 8H4l1.8-3.6A8 8 0 1 1 20 11.5Z" />
+                <path d="M8 10h8M8 14h5" />
+              </svg>
+              AI Chat
+            </button>
+          </div>
         </div>
         <div class="demo-caption">
           <span><span aria-hidden="true">↖</span> Pick a layer. Follow one concern across files.</span
@@ -293,31 +315,20 @@
           </div>
           <div class="intent-map">
             <div class="map-heading">
-              <span class="mono">ONE CONCERN</span><span class="pill">Query lifecycle timers</span>
+              <span class="mono">LAYER 2 OF 3</span><span class="pill">Query lifecycle</span>
             </div>
-            <ol>
+            <p class="map-summary">One layer brings related changes across files into a single review.</p>
+            <ul aria-label="Files in the query lifecycle layer">
               <li>
-                <span class="map-step">1</span>
-                <div><strong>Introduce the provider</strong><code>timeoutManager.ts</code></div>
-                <span class="map-note">How timers are managed</span>
+                <span class="map-step" aria-hidden="true">↳</span>
+                <div><strong>Create and clear stale timers</strong><code>queryObserver.ts</code></div>
               </li>
               <li>
-                <span class="map-step">2</span>
-                <div><strong>Schedule stale checks</strong><code>queryObserver.ts</code></div>
-                <span class="map-note">When results go stale</span>
-              </li>
-              <li>
-                <span class="map-step">3</span>
+                <span class="map-step" aria-hidden="true">↳</span>
                 <div><strong>Schedule garbage collection</strong><code>removable.ts</code></div>
-                <span class="map-note">When cached data expires</span>
               </li>
-              <li>
-                <span class="map-step">4</span>
-                <div><strong>Check the provider</strong><code>timeoutManager.test.tsx</code></div>
-                <span class="map-note">What the tests cover</span>
-              </li>
-            </ol>
-            <p>Related changes, in a useful reading order.</p>
+            </ul>
+            <p>Two files from the same layer. One concern: timer lifecycle.</p>
           </div>
         </div>
       </section>
@@ -382,7 +393,7 @@
           </div>
           <div class="chat-demo">
             <div class="chat-demo-header">
-              <strong>Ask the canvas</strong><span class="pill">SCRIPTED EXAMPLE</span>
+              <strong>AI Chat</strong><span class="pill">SCRIPTED EXAMPLE</span>
             </div>
             <div class="chat-scope">
               <span class="status-dot"></span> Context: TanStack Query · timer provider
