@@ -452,8 +452,9 @@ pr-review doctor</code></pre>
               <button type="button" class="copy-button" aria-label="Copy generation command">Copy</button>
             </div>
             <p>
-              Open the returned local URL to check the canvas. Then drag the exported ZIP into the
-              <strong>PR description</strong> in GitHub and save. Uploading is a manual browser step.
+              The skill automatically shares the canvas in a <strong>GitHub PR or GitLab MR comment</strong>.
+              Open the returned local URL to review it. If sharing fails, the skill warns you and gives you a
+              ZIP to upload manually into the PR or MR description.
             </p>
           </article>
           <article class="setup-step">
@@ -491,8 +492,9 @@ pr-review doctor --all-checks</code></pre>
         <div class="workflow-note">
           <strong>After new commits</strong>
           <p>
-            Authors rerun the skill and replace the ZIP; reviewers click <strong>refresh</strong>. An outdated
-            canvas remains readable, but posting is disabled until you're reviewing the current head.
+            Authors rerun the skill to update their canvas comment; reviewers click <strong>refresh</strong>.
+            An outdated canvas remains readable, but posting is disabled until you're reviewing the current
+            head.
           </p>
         </div>
       </section>
@@ -579,11 +581,11 @@ chat:
             </p>
           </details>
           <details>
-            <summary>What's inside the shared ZIP?</summary>
+            <summary>What's shared in the canvas comment?</summary>
             <p>
               PR description, file and hunk metadata, and generated review notes. Source diffs come from each
-              reviewer's clone, and chat history stays local. Check the archive before sharing because its
-              metadata and notes may contain private information.
+              reviewer's clone, and chat history stays local. The compressed payload is readable by anyone
+              with access to the PR or MR. A ZIP upload carries the same data when automatic sharing fails.
             </p>
           </details>
           <details>

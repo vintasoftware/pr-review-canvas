@@ -12,8 +12,8 @@ export interface HostClient {
   api(path: string, params?: Record<string, string>): Promise<unknown>
   /** `<cli> api -i --method GET <path>`: the response headers as well as the body. */
   apiWithHeaders(path: string): Promise<CliResponse>
-  /** `<cli> api --method POST <path> --input -`; the JSON body goes over stdin, never the command line. */
-  post(path: string, body: unknown): Promise<unknown>
+  /** Send JSON over stdin. Defaults to POST; comment edits use PATCH or PUT. */
+  post(path: string, body: unknown, method?: 'POST' | 'PATCH' | 'PUT'): Promise<unknown>
   /** `<cli> api graphql`; returns the parsed `data` object. */
   graphql(query: string, variables: Record<string, string | number>): Promise<unknown>
   /** `<cli> auth status`: is the CLI installed and logged in? */
@@ -192,10 +192,10 @@ export function createHostClient(spec: HostCliSpec, exec: CliExec = execCli): Ho
     },
     apiWithHeaders: async path =>
       parseIncludedResponse((await run(path, ['api', '-i', '--method', 'GET', path])).stdout),
-    post: async (path, body) => {
+    post: async (path, body, method = 'POST') => {
       // The payload goes over stdin, so no comment text ever appears in an argument list. The
       // content type is named because `glab` does not infer it and GitLab answers 415 without it.
-      const args = ['api', '--method', 'POST', path, '--input', '-', '-H', 'Content-Type: application/json']
+      const args = ['api', '--method', method, path, '--input', '-', '-H', 'Content-Type: application/json']
       return JSON.parse((await run(path, args, JSON.stringify(body))).stdout) as unknown
     },
     graphql: async (query, variables) => {

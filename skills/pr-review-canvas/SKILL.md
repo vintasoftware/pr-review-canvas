@@ -1,7 +1,7 @@
 ---
 name: pr-review-canvas
 model: sonnet
-description: Generate a review canvas for a GitHub pull request or GitLab merge request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` until the validator passes. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR.
+description: Generate a review canvas for a GitHub pull request or GitLab merge request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` to validate and automatically share it as a compressed PR/MR comment. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR.
 ---
 
 # pr-review-canvas
@@ -104,7 +104,9 @@ pr-review publish <canvasDir> --agent <your agent id> --model <model id if you k
   anywhere else.
 
 On success the last line is `{ "status": "published", "headSha", "reviewJsonPath", "attempts",
-"reviewUrl" }` (`reviewUrl` is absent for a `--base/--head` run).
+"reviewUrl", "sharing" }` (`reviewUrl` is absent for a `--base/--head` run).
+For PR/MR runs, publish automatically creates or updates your canvas comment using the host CLI login.
+Always inspect `sharing.status`: local validation success does not mean remote sharing succeeded.
 
 On failure the command prints one line per problem, then an error line, and exits 5:
 
@@ -121,36 +123,26 @@ verbatim. Do not weaken the content to pass: shorten text, move hunks, fix links
 If publish prints `CANVAS_STALE`, the branch moved while you worked. Tell the user and offer to run
 prepare again; pass `--allow-stale` only when the user asks for the canvas of the old commit.
 
-### 6. Export the zip
+### 6. Report the sharing result
+
+For a PR/MR run, report the local `reviewUrl` (start it with `pr-review serve`) and inspect `sharing`:
+
+- `status: "shared"`: link to `sharing.url` and say the canvas was shared automatically.
+- `status: "failed"`: clearly warn that automatic sharing failed, quote `sharing.warning`, and
+  give the absolute `sharing.zipPath`. Tell the user to open the PR/MR, edit its description,
+  drag the ZIP into the editor, wait for upload to finish, and save. Replace any older canvas
+  attachment link. Include these instructions in your final response; the local canvas is ready,
+  but reviewers still need the upload. Do not regenerate the model to repair a sharing failure.
+
+For a `--base/--head` run, `sharing.status` is `"local"`. Report the stored commit and export it:
 
 ```bash
-pr-review export --head <headSha> [--pr <n>]
+pr-review export --head <headSha>
 ```
 
-Pass `--pr <n>` when the run had a PR number, so the file name and the manifest carry it. The
-command prints one JSON line with the absolute `path` of the zip.
-
-### 7. Finish
-
-For a PR run, report the `reviewUrl` from publish, the absolute zip path from export, and a link
-to the GitHub PR or GitLab MR from the prepared context. End with upload instructions:
-
-> The canvas is ready at <reviewUrl> (start the server with `pr-review serve` if it is not running).
-> ZIP: <path>
-> If you're happy with the produced canvas, open <PR or MR URL>, edit the description, drag the ZIP
-> into the editor, wait for the upload to finish, and save.
-
-For an update, tell the user to replace the old canvas attachment link with the new one.
-Include these instructions in the final response without asking a question or waiting for a reply.
-
-Uploading and saving the description are manual browser steps. Do not create a release or claim
-the ZIP was uploaded. GitHub's `gh --attach` supports images and video, but not ZIP files
-([supported types](https://github.com/cli/cli/blob/trunk/internal/attachments/userasset.go)).
-GitLab accepts file uploads in the merge request description the same way.
-
-For a `--base/--head` run, say the canvas is stored for `<headSha>`, that the zip has no PR number
-yet, and that `pr-review export --pr <n>` re-exports it once the pull request exists. Include the
-manual upload instructions for when the PR is ready.
+Give the returned absolute ZIP path. Once a PR exists, `pr-review export --head <headSha> --pr <n>`
+stamps its number for manual upload, or rerun this skill for the PR number with `--force` to share
+automatically.
 
 ## Rules the validator enforces (and models tend to break)
 
@@ -181,6 +173,6 @@ manual upload instructions for when the PR is ready.
 ## Updating a shared canvas
 
 After new commits, run this skill again for the PR number. Add `--force` to regenerate a canvas
-for the same commit. Export the new zip and ask the user to replace the attachment in their PR
-description. Reviewers click **refresh** to load it. A canvas for a different
+for the same commit. Publish updates your canvas comment; follow the sharing-result instructions
+above if it fails. Reviewers click **refresh** to load it. A canvas for a different
 PR head shows **Canvas is outdated**; an older canvas remains readable with posting disabled.
