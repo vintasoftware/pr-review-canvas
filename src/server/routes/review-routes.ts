@@ -6,6 +6,7 @@ import { PostCommentInputSchema, type PostCommentResult } from '../../contract/c
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
+import { lookupCanvas } from '../../review/canvas-lookup.js'
 import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
@@ -55,12 +56,15 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
   return parsed.data
 }
 
-/** The canvas the reviewer is signing off on: the one written for the pull request's head. */
+/**
+ * The canvas the reviewer is signing off on: the one written for the pull request's head, or
+ * for a commit the head only merged onto.
+ */
 async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise<ReviewArtifact> {
   if (ctx.fixtureArtifact !== null) {
     return { ...ctx.fixtureArtifact, pr }
   }
-  const found = await ctx.canvases.findForPr(number, pr.headSha)
+  const found = await lookupCanvas(ctx, number, pr)
   if (found.status !== 'ready') {
     throw new AppError(
       'SIGNOFF_INCOMPLETE',

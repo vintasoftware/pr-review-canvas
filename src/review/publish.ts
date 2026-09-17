@@ -8,6 +8,7 @@ import type { Generator, ReviewArtifact } from '../contract/review-artifact.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
+import { onlyMergesSince } from '../store/canvas-store.js'
 import { normalize } from './normalize.js'
 import { coveredTestPaths, type ValidationInput, validateModelOutput } from './validate.js'
 
@@ -83,12 +84,25 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
   return parseModelText(text, 'model.json')
 }
 
-/** The current head of the target; a push during generation makes the prepared context stale. */
-async function currentHead(ctx: AppContext, context: GenerationContext): Promise<string> {
+/**
+ * The current head of the target; a push during generation makes the prepared context stale. For
+ * a pull request, a head that only merged other branches onto the prepared commit still counts as
+ * that commit when the project ignores merge commits and the host reports no conflicts.
+ */
+async function currentHead(
+  ctx: AppContext,
+  context: GenerationContext
+): Promise<{ headSha: string; moved: boolean }> {
   if (context.target.kind === 'pr') {
-    return (await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)).headSha
+    const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)
+    const follows = ctx.projectConfig.config.canvas.ignoreMergeCommits && meta.mergeable === true
+    const stands =
+      meta.headSha === context.headSha ||
+      (follows && (await onlyMergesSince(ctx.git, context.headSha, meta.headSha)))
+    return { headSha: meta.headSha, moved: !stands }
   }
-  return ctx.git.revParse(context.target.head)
+  const headSha = await ctx.git.revParse(context.target.head)
+  return { headSha, moved: headSha !== context.headSha }
 }
 
 /** Publish runs since prepare last wrote a context (its `prepared` line), this one included. */
@@ -174,10 +188,10 @@ export async function publish(
   const context = await readContext(canvasDir)
   if (!opts.allowStale) {
     const head = await currentHead(ctx, context)
-    if (head !== context.headSha) {
+    if (head.moved) {
       throw new PublishError(
         'CANVAS_STALE',
-        `the target moved to ${head.slice(0, 7)} while this canvas was prepared for ${context.headSha.slice(0, 7)}`,
+        `the target moved to ${head.headSha.slice(0, 7)} while this canvas was prepared for ${context.headSha.slice(0, 7)}`,
         'run `pr-review prepare` again, or pass --allow-stale to publish for the old commit'
       )
     }

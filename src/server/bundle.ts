@@ -2,12 +2,15 @@ import type { CanvasInfo, PrBundle, SharedCanvasInfo, StaleInfo } from '../contr
 import type { CommentsPayload } from '../contract/comments.js'
 import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
+import type { PrState } from '../contract/state.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
+import { lookupCanvas, standsForHead } from '../review/canvas-lookup.js'
 import { stateForHead } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
+import type { Derived } from '../store/derived-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 
@@ -142,12 +145,26 @@ async function loadCanvas(
   return { artifact, canvas }
 }
 
+/**
+ * The review marks as they apply to this head. Marks made on a commit the head only merged onto
+ * are moved along with the canvas, so a merge commit does not reset the reviewer's progress.
+ */
+async function stateForBundle(ctx: AppContext, number: number, pr: Pr): Promise<PrState> {
+  const stored = await ctx.state.read(number)
+  const marked = stored.reviewedHeadSha
+  if (marked !== undefined && marked !== pr.headSha && (await standsForHead(ctx, marked, pr))) {
+    return ctx.state.moveReviewedHead(number, pr.headSha)
+  }
+  // Marks made on another commit describe other code, so the page never shows them as reviewed.
+  return stateForHead(stored, pr.headSha)
+}
+
 /** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
-async function readOrBuildDerived(
+export async function readOrBuildDerived(
   ctx: AppContext,
   headSha: string,
   mergeBaseSha: string | undefined
-): Promise<{ files: FileEntry[] } | null> {
+): Promise<Derived | null> {
   const stored = await ctx.derived.read(headSha)
   if (stored !== null || mergeBaseSha === undefined) {
     return stored
@@ -176,8 +193,8 @@ export async function resolveBundle(
   }
 
   const chatEnabled = ctx.projectConfig.config.chat.enabled
-  const [stored, capabilities, settings, acpx] = await Promise.all([
-    ctx.state.read(number),
+  const [state, capabilities, settings, acpx] = await Promise.all([
+    stateForBundle(ctx, number, pr),
     ctx.capabilities.get(),
     chatEnabled ? ctx.chat.effectiveSettings() : Promise.resolve(null),
     chatEnabled ? ctx.preflight.get() : Promise.resolve({ installed: false, version: null }),
@@ -185,8 +202,6 @@ export async function resolveBundle(
   if (chatEnabled && !acpx.installed) {
     allWarnings.push('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
   }
-  // Marks made on another commit describe other code, so the page never shows them as reviewed.
-  const state = stateForHead(stored, pr.headSha)
   const base = {
     pr,
     files,
@@ -218,7 +233,7 @@ export async function resolveBundle(
     }
   }
 
-  let found = await ctx.canvases.findForPr(number, pr.headSha)
+  let found = await lookupCanvas(ctx, number, pr)
   let sharedCanvas: SharedCanvasInfo | null = null
   // A canvas for this very head beats anything attached to the PR, so discovery runs only
   // when there is none, and its import can turn a stale or missing bundle into a ready one.
@@ -227,7 +242,7 @@ export async function resolveBundle(
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)
     if (discovery.imported) {
-      found = await ctx.canvases.findForPr(number, pr.headSha)
+      found = await lookupCanvas(ctx, number, pr)
     }
   }
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
@@ -250,7 +265,9 @@ export async function resolveBundle(
   // A canvas exists for this PR, so regenerating always needs --force.
   const skillCommand = buildSkillCommand(number, { force: true })
   if (found.status === 'ready') {
-    return { ...base, ...shared, ...loaded, status: 'ready', skillCommand }
+    // The head's own diffs are on the page, with the canvas that explains the same change set.
+    const merges = found.mergesSince === undefined ? {} : { mergesSince: found.mergesSince }
+    return { ...base, ...shared, ...loaded, ...merges, status: 'ready', skillCommand }
   }
   const stale: StaleInfo = {
     canvasHeadSha: found.headSha,

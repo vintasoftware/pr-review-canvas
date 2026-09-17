@@ -69,6 +69,17 @@ export interface StaleInfo {
   commitsBehind?: number
 }
 
+/**
+ * A ready canvas whose head moved on by merge commits only, with no conflicts reported. The
+ * change set the canvas explains is the same, so the page keeps it and says so.
+ */
+export interface MergesSinceInfo {
+  canvasHeadSha: string
+  currentHeadSha: string
+  /** Every commit the head gained, the merged-in ones included. */
+  commitsBehind: number
+}
+
 /** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */
 export interface ImportResult {
   status: 'ready' | 'stale' | 'exists'
@@ -109,6 +120,8 @@ export interface PrBundle {
   artifact?: ReviewArtifact
   canvas?: CanvasInfo
   stale?: StaleInfo
+  /** Set on a ready bundle whose canvas was generated for an earlier commit of the same change set. */
+  mergesSince?: MergesSinceInfo
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   comments: CommentsPayload

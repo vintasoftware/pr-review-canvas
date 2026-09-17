@@ -35,6 +35,11 @@ export interface FakeGitOptions {
   ancestors?: Record<string, boolean>
   /** `<a>..<b>` → how many commits b is ahead of a; unlisted pairs count 0. */
   counts?: Record<string, number>
+  /**
+   * `<a>..<b>` → how many non-merge commits lie on b's first-parent line since a. Unlisted pairs
+   * answer their `counts` entry, so a pair that names no merges is all ordinary commits.
+   */
+  nonMergeCounts?: Record<string, number>
   /** Commits the fake origin serves when they are fetched by sha. */
   fetchable?: string[]
 }
@@ -76,6 +81,10 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     countCommitsBetween: async (a, b) => {
       calls.push(['rev-list', '--count', `${a}..${b}`])
       return options.counts?.[`${a}..${b}`] ?? 0
+    },
+    countNonMergeCommitsBetween: async (a, b) => {
+      calls.push(['rev-list', '--first-parent', '--no-merges', '--count', `${a}..${b}`])
+      return options.nonMergeCounts?.[`${a}..${b}`] ?? options.counts?.[`${a}..${b}`] ?? 0
     },
     diff: async (base, head) => {
       calls.push(['diff', base, head])

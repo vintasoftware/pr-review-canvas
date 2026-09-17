@@ -20,6 +20,7 @@ import {
   renderEmptyState,
   renderStaleState,
   sharedCanvasCalloutHtml,
+  mergesBarHtml,
   staleBarHtml,
   staleSummary,
   validateCanvasFilename,
@@ -243,6 +244,22 @@ describe('drop zone', () => {
     expect(
       wireDropZone(mount('<p>nothing</p>'), { prNumber: 42, importImpl: noop, onImported: () => undefined })
     ).toBeNull()
+  })
+})
+
+describe('merges bar', () => {
+  it('says the canvas still applies and which commits it spans', () => {
+    document.body.innerHTML = mergesBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD, commitsBehind: 1 })
+    const bar = document.querySelector('.stale-bar.merges-bar')
+    expect(bar?.getAttribute('role')).toBe('status')
+    expect(bar?.textContent).toContain('Canvas still applies.')
+    expect(bar?.textContent).toContain(
+      'generated for eeeeeee; the head aaaaaaa only merged in other branches since (1 commit, no conflicts)'
+    )
+    expect(bar?.querySelector('#stale-generate')?.textContent).toBe('regenerate anyway')
+    expect(mergesBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD, commitsBehind: 4 })).toContain(
+      '(4 commits,'
+    )
   })
 })
 

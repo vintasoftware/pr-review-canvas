@@ -234,6 +234,7 @@ export function syntheticArtifact(): ReviewArtifact {
       headRef: 'feat/b',
       headSha: HEAD_SHA,
       mergeBaseSha: BASE_SHA,
+      mergeable: null,
       additions: 7,
       deletions: 5,
       changedFiles: 7,

@@ -121,6 +121,12 @@ export const PrSchema = z.object({
   headRef: z.string(),
   headSha: z.string().regex(/^[0-9a-f]{40}$/),
   mergeBaseSha: z.string().regex(/^[0-9a-f]{40}$/),
+  /**
+   * True when the host reports that the head merges into the base without conflicts, false when
+   * it reports conflicts, null while it is still checking. Absent in a canvas written before
+   * this field existed.
+   */
+  mergeable: z.boolean().nullable().optional(),
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
   changedFiles: z.number().int().nonnegative(),

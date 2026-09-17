@@ -65,6 +65,7 @@ export function settingsDialogHtml(data, agents) {
     `<p class="muted small mono">${esc(data.file)}</p>` +
     '<div class="panel-ro"><h3>Project config (read-only)</h3>' +
     `<ul class="plain"><li>chat enabled: ${project.chatEnabled ? 'yes' : 'no'}</li>` +
+    `<li>canvas outdated by merge commits: ${project.ignoreMergeCommits ? 'no' : 'yes'}</li>` +
     `<li>rulebook: ${esc(project.rulebook ?? 'none')}</li>` +
     `<li>configured layer suggestions: ${project.layers}</li>` +
     `<li>high-risk patterns: ${project.highRisk}</li>` +

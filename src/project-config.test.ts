@@ -48,6 +48,7 @@ describe('mergeProjectConfig', () => {
       },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
       chat: { enabled: false },
+      canvas: { ignoreMergeCommits: true },
     })
     expect(ProjectConfigSchema.parse(config)).toEqual(config)
     const allCaps = Object.fromEntries(Object.keys(TEXT_CAPS).map(k => [k, 1]))
@@ -75,6 +76,17 @@ describe('mergeProjectConfig', () => {
       config: { ...DEFAULT_PROJECT_CONFIG, generation: { ...DEFAULT_PROJECT_CONFIG.generation, mode } },
       warnings: [],
     })
+  })
+
+  it('reads the merge-commit setting and defaults it to on', () => {
+    expect(mergeProjectConfig({}).config.canvas).toEqual({ ignoreMergeCommits: true })
+    expect(mergeProjectConfig({ canvas: {} }).config.canvas).toEqual({ ignoreMergeCommits: true })
+    expect(mergeProjectConfig({ canvas: { ignoreMergeCommits: false } }).config.canvas).toEqual({
+      ignoreMergeCommits: false,
+    })
+    expect(mergeProjectConfig({ canvas: { ignoreMergeCommits: 'no' } }).warnings[0]).toContain(
+      'canvas.ignoreMergeCommits'
+    )
   })
 
   it('warns and uses defaults for an unknown generation mode', () => {

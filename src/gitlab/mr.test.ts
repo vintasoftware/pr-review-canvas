@@ -5,7 +5,7 @@ import { HostCliError } from '../host/client.js'
 import { gitlabHost } from '../host/host.js'
 import { createFakeGh, createFakeGit, ghError, ghJson, TEST_REPO } from '../testing/fakes.js'
 import { BASE_SHA, HEAD_SHA } from '../testing/synthetic.js'
-import { fetchMrDiffRefs, fetchMrMeta, mapMergeRequest, MR_STATS_QUERY } from './mr.js'
+import { fetchMrDiffRefs, fetchMrMeta, mapMergeRequest, mergeableOf, MR_STATS_QUERY } from './mr.js'
 
 const GL = gitlabHost('gitlab.com')
 const GL_MR = {
@@ -24,6 +24,20 @@ const GL_MR = {
   diff_refs: { base_sha: BASE_SHA, head_sha: HEAD_SHA, start_sha: BASE_SHA },
   changes_count: '7',
 }
+describe('mergeableOf', () => {
+  it('turns the conflict flag around, and stays open while GitLab has not decided', () => {
+    expect(mergeableOf({ has_conflicts: false, detailed_merge_status: 'mergeable' })).toBe(true)
+    expect(mergeableOf({ has_conflicts: false, detailed_merge_status: 'not_approved' })).toBe(true)
+    expect(mergeableOf({ has_conflicts: true, detailed_merge_status: 'conflict' })).toBe(false)
+    expect(mergeableOf({ has_conflicts: false, detailed_merge_status: 'checking' })).toBeNull()
+    expect(mergeableOf({ has_conflicts: false, detailed_merge_status: 'unchecked' })).toBeNull()
+    expect(mergeableOf({ has_conflicts: false })).toBe(true)
+    expect(mergeableOf({})).toBeNull()
+    expect(mapMergeRequest({ ...GL_MR, has_conflicts: true }, STATS_VALUE).mergeable).toBe(false)
+  })
+})
+
+const STATS_VALUE = { additions: 7, deletions: 5 }
 const STATS = {
   project: { mergeRequest: { diffStatsSummary: { additions: 7, deletions: 5 } } },
 }
@@ -43,6 +57,7 @@ describe('mapMergeRequest', () => {
       headRef: 'feat/b',
       headSha: HEAD_SHA,
       mergeCommitSha: null,
+      mergeable: null,
       additions: 7,
       deletions: 5,
       changedFiles: 7,

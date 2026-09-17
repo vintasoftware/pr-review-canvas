@@ -65,6 +65,13 @@ export const ProjectConfigSchema = z.object({
   /** Which paths count as tests, for the layering rules and the `isTest` flag on a file. */
   tests: z.object({ patterns: z.array(z.string().min(1)) }),
   chat: z.object({ enabled: z.boolean() }),
+  canvas: z.object({
+    /**
+     * A canvas still stands for a head that only merged other branches in since the canvas was
+     * generated, while the host reports no conflicts. False marks the canvas outdated on any commit.
+     */
+    ignoreMergeCommits: z.boolean(),
+  }),
 })
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
 
@@ -86,6 +93,7 @@ const PartialProjectConfigSchema = z.object({
     .optional(),
   tests: z.object({ patterns: z.array(z.string().min(1)).optional() }).optional(),
   chat: z.object({ enabled: z.boolean().optional() }).optional(),
+  canvas: z.object({ ignoreMergeCommits: z.boolean().optional() }).optional(),
 })
 
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
@@ -95,6 +103,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
+  canvas: { ignoreMergeCommits: true },
 }
 
 export interface LoadedProjectConfig {
@@ -135,6 +144,9 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     generation,
     tests: { patterns: user.tests?.patterns ?? [...DEFAULT_TEST_PATTERNS] },
     chat: { enabled: user.chat?.enabled ?? true },
+    canvas: {
+      ignoreMergeCommits: user.canvas?.ignoreMergeCommits ?? DEFAULT_PROJECT_CONFIG.canvas.ignoreMergeCommits,
+    },
   }
   if (user.rulebook !== undefined) {
     config.rulebook = user.rulebook

@@ -2,7 +2,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ReviewArtifactSchema, TEXT_CAPS } from '../contract/review-artifact.js'
-import { createFakeGh, ghJson, makeTestContext, type TestContext } from '../testing/fakes.js'
+import { createFakeGh, createFakeGit, ghJson, makeTestContext, type TestContext } from '../testing/fakes.js'
 import { BASE_SHA, GH_PULL, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { artifactToModelOutput, normalize } from './normalize.js'
 import { prepare } from './prepare.js'
@@ -187,6 +187,50 @@ describe('publish', () => {
     const err = await publish(t.ctx, path.join(t.dataDir, 'nowhere'), OPTS).catch(e => e)
     expect(err).toBeInstanceOf(PublishError)
     expect(err).toMatchObject({ code: 'NOT_FOUND', hint: 'run `pr-review prepare` first' })
+  })
+
+  it('publishes for a head that only merged other branches in, while the host reports no conflicts', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    const merged = 'e'.repeat(40)
+    const pullAt = (mergeable: boolean | null) =>
+      createFakeGh({
+        routes: {
+          'repos/acme/widgets/pulls/42': ghJson({
+            ...GH_PULL,
+            mergeable,
+            head: { ...GH_PULL.head, sha: merged },
+          }),
+        },
+      })
+    const history = {
+      ancestors: { [`${HEAD_SHA}..${merged}`]: true },
+      nonMergeCounts: { [`${HEAD_SHA}..${merged}`]: 0 },
+    }
+    t.ctx.git = createFakeGit({ ...gitFor42().options, ...history })
+    t.ctx.gh = pullAt(null)
+    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
+    t.ctx.gh = pullAt(true)
+    t.ctx.projectConfig = {
+      ...t.ctx.projectConfig,
+      config: { ...t.ctx.projectConfig.config, canvas: { ignoreMergeCommits: false } },
+    }
+    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
+    t.ctx.projectConfig = {
+      ...t.ctx.projectConfig,
+      config: { ...t.ctx.projectConfig.config, canvas: { ignoreMergeCommits: true } },
+    }
+    t.ctx.git = createFakeGit({
+      ...gitFor42().options,
+      ...history,
+      nonMergeCounts: { [`${HEAD_SHA}..${merged}`]: 1 },
+    })
+    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
+    t.ctx.git = createFakeGit({ ...gitFor42().options, ...history })
+    const result = await publish(t.ctx, canvasDir, OPTS)
+    expect(result.status).toBe('published')
+    // The canvas is stored under the commit it was prepared for, which the merged head stands for.
+    expect(result.headSha).toBe(HEAD_SHA)
   })
 
   it('refuses a canvas whose PR head moved unless --allow-stale, and checks refs targets against the ref', async () => {

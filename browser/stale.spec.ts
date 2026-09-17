@@ -1,5 +1,29 @@
 import { expect, test } from './fixtures.js'
 
+test('notes a canvas that still applies after merge commits, without disabling posting', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.route(/\/api\/prs\/42(?:\?.*)?$/, async route => {
+    const response = await route.fetch()
+    const bundle = await response.json()
+    bundle.mergesSince = {
+      canvasHeadSha: 'c'.repeat(40),
+      currentHeadSha: bundle.pr.headSha,
+      commitsBehind: 2,
+    }
+    await route.fulfill({ response, json: bundle })
+  })
+  await page.goto(reviewUrl)
+  const note = page.locator('#main > .stale-bar.merges-bar')
+  await expect(note).toBeVisible()
+  await expect(note).toContainText('Canvas still applies.')
+  await expect(note).toContainText('generated for ccccccc')
+  await expect(note).toContainText('2 commits, no conflicts')
+  await expect(page.locator('section.layer').first()).toBeVisible()
+  await expect(page.locator('#es-h')).toHaveCount(0)
+})
+
 test('warns above an outdated canvas and clears the warning after refresh', async ({ page, reviewUrl }) => {
   let outdated = true
   await page.route(/\/api\/prs\/42(?:\?.*)?$/, async route => {

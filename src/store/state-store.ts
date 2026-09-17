@@ -23,6 +23,11 @@ export interface StateStore {
    * the one the marks describe, the old marks are dropped, because they were about other code.
    */
   setReviewed(number: number, id: string, reviewed: boolean, headSha?: string): Promise<PrState>
+  /**
+   * Re-keys the marks to another commit that carries the same change set, so a head that only
+   * merged other branches in keeps the reviewer's progress. Does nothing when nothing is marked.
+   */
+  moveReviewedHead(number: number, headSha: string): Promise<PrState>
   setDismissed(number: number, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
   setThreadHidden(number: number, rootCommentId: number, hidden: boolean): Promise<PrState>
   addPosted(number: number, entry: PostedEntry): Promise<PrState>
@@ -89,6 +94,13 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
           ? { ...state, reviewed: next }
           : { ...state, reviewed: next, reviewedHeadSha: headSha }
       }),
+    moveReviewedHead: async (number, headSha) => {
+      const current = await read(number)
+      if (current.reviewedHeadSha === undefined || current.reviewedHeadSha === headSha) {
+        return current
+      }
+      return update(number, state => ({ ...state, reviewedHeadSha: headSha }))
+    },
     setDismissed: (number, fingerprint, dismissed, reason) =>
       update(number, state => {
         const next = { ...state.dismissed }

@@ -172,6 +172,23 @@ export function staleBarHtml(stale) {
 }
 
 /**
+ * The note above a canvas that was generated for an earlier commit of the same change set: the
+ * head only merged other branches in since, with no conflicts, so the canvas still applies.
+ * @param {NonNullable<PrBundle['mergesSince']>} merges
+ * @returns {string}
+ */
+export function mergesBarHtml(merges) {
+  const canvas = merges.canvasHeadSha.slice(0, 7)
+  const head = merges.currentHeadSha.slice(0, 7)
+  const n = merges.commitsBehind
+  return (
+    `<div class="stale-bar merges-bar" role="status"><strong>Canvas still applies.</strong> ` +
+    `${esc(`It was generated for ${canvas}; the head ${head} only merged in other branches since (${n} commit${n === 1 ? '' : 's'}, no conflicts). The diffs are the head's.`)} ` +
+    '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button></div>'
+  )
+}
+
+/**
  * The `stale` screen: the same card as the empty state, plus the two ways forward.
  * @param {PrBundle} bundle
  * @returns {string}

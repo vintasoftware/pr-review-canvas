@@ -88,6 +88,10 @@
   box-shadow: 2px 2px 0 var(--shadow);
   font-size: 13px;
 }
+/* The same bar for a canvas that still applies: a note, not a warning. */
+.stale-bar.merges-bar {
+  background: var(--bg);
+}
 .notice {
   margin: 10px 0 0;
   padding: 6px 10px;
