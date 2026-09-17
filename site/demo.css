@@ -64,14 +64,8 @@
   font-weight: 500;
   letter-spacing: 1px;
 }
-.layer-nav > .panel-label,
-.nav-hint {
+.layer-nav > .panel-label {
   padding-inline: 10px;
-}
-.nav-hint {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 4px;
 }
 .layer-buttons {
   margin-top: 25px;
@@ -197,9 +191,6 @@
   color: var(--accent);
   font-size: 8px;
   white-space: nowrap;
-}
-.diff-code {
-  padding-block: 13px;
 }
 .diff-code span,
 .code-fold pre span {
@@ -477,8 +468,7 @@
     border-bottom: 1px solid var(--line);
     padding: 14px 10px;
   }
-  .layer-nav > .panel-label,
-  .nav-hint {
+  .layer-nav > .panel-label {
     display: none;
   }
   .layer-buttons {
