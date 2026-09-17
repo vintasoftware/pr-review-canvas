@@ -6,13 +6,13 @@
   margin-bottom: 15px;
 }
 .section-kicker h2 {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0;
 }
 .section-kicker > span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 .canvas-demo {
   border: 1px solid #cfd3c5;
@@ -30,7 +30,7 @@
   gap: 16px;
   padding: 16px 22px;
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 14px;
 }
 .canvas-toolbar strong {
   font-weight: 600;
@@ -45,7 +45,7 @@
   align-items: center;
   gap: 7px;
   font-family: monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
 .canvas-grid {
   display: grid;
@@ -60,7 +60,7 @@
   flex-direction: column;
 }
 .panel-label {
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 1px;
 }
@@ -92,29 +92,30 @@
 }
 .layer-number {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--muted);
 }
 .layer-button strong {
   display: block;
-  font-size: 12px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
   font-weight: 600;
 }
 .layer-button small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 3px;
   color: var(--muted);
 }
 .layer-check {
   color: var(--accent);
-  font-size: 12px;
+  font-size: 14px;
   margin-left: auto;
 }
 .demo-progress {
   margin-top: auto;
   padding: 32px 10px 0;
-  font-size: 9px;
+  font-size: 14px;
   color: var(--muted);
 }
 .progress-track {
@@ -150,7 +151,7 @@
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 .small-button:hover,
 .small-button[aria-pressed='true'] {
@@ -162,7 +163,7 @@
 }
 .sample-layer > p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   margin-top: 9px;
   line-height: 1.65;
   min-height: 40px;
@@ -182,14 +183,14 @@
   padding: 10px 13px;
   border-bottom: 1px solid var(--line);
   font-family: monospace;
-  font-size: 10px;
+  font-size: 14px;
 }
 .file-heading > span:first-child {
   overflow-wrap: anywhere;
 }
 .add-count {
   color: var(--accent);
-  font-size: 8px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .diff-code span,
@@ -200,7 +201,7 @@
 }
 .diff-code,
 .code-fold pre {
-  font-size: 10px;
+  font-size: 14px;
   line-height: 2;
 }
 .addition {
@@ -219,7 +220,7 @@
   align-items: center;
   gap: 10px;
   font-family: monospace;
-  font-size: 10px;
+  font-size: 14px;
   padding-block: 12px;
   border-bottom: 1px solid var(--line);
 }
@@ -228,7 +229,7 @@
 }
 .related-file .pill {
   margin-left: auto;
-  font-size: 7px;
+  font-size: 12px;
 }
 .file-symbol {
   color: var(--muted);
@@ -237,7 +238,7 @@
   display: flex;
   align-items: baseline;
   gap: 9px;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--accent);
   margin-top: 12px;
 }
@@ -254,18 +255,18 @@
 }
 .attention-label {
   font-family: monospace;
-  font-size: 8px;
+  font-size: 14px;
   letter-spacing: 1px;
   color: #7f6c37;
 }
 .attention h4 {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
   margin-block: 7px;
 }
 .attention p {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.7;
 }
@@ -274,8 +275,11 @@
   justify-content: space-between;
   gap: 15px;
   padding-block: 14px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
+}
+.demo-caption > span:first-child {
+  font-size: 14px;
 }
 .fold-example {
   background: #fffefa;
@@ -284,7 +288,7 @@
   overflow: hidden;
 }
 .fold-example .diff-code {
-  font-size: 11px;
+  font-size: 14px;
   padding-block: 20px;
 }
 .code-fold summary {
@@ -294,7 +298,7 @@
   padding: 13px;
   background: #efecf4;
   color: #655473;
-  font-size: 11px;
+  font-size: 14px;
   list-style: none;
 }
 .code-fold summary::-webkit-details-marker {
@@ -302,7 +306,7 @@
 }
 .fold-count {
   margin-left: auto;
-  font-size: 9px;
+  font-size: 12px;
 }
 .fold-chevron {
   font-size: 19px;
@@ -318,7 +322,7 @@
   border-top: 1px solid var(--line);
   padding: 18px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .fold-caption strong {
   font-weight: 500;
@@ -339,13 +343,13 @@
 }
 .chat-demo-header .pill {
   background: #e4e3da;
-  font-size: 8px;
+  font-size: 12px;
 }
 .chat-scope {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--muted);
   margin-top: 14px;
   padding-block: 10px;
@@ -358,7 +362,7 @@
   margin-block: 12px 22px;
 }
 .question-choices button {
-  font-size: 10px;
+  font-size: 14px;
   background: #f8f8f2;
   border: 1px solid #d5d8cb;
   border-radius: 20px;
@@ -369,7 +373,7 @@
   border-color: #b8c8a1;
 }
 .chat-message {
-  font-size: 12px;
+  font-size: 14px;
   padding: 16px;
   border-radius: 6px;
   line-height: 1.8;
@@ -386,7 +390,7 @@
 }
 .agent-label {
   font-family: monospace;
-  font-size: 8px;
+  font-size: 14px;
   letter-spacing: 1px;
   color: var(--muted);
 }
@@ -396,7 +400,7 @@
 }
 .chat-code-ref {
   font-family: monospace;
-  font-size: 9px;
+  font-size: 14px;
   color: var(--accent);
   border-top: 1px solid var(--line);
   padding-top: 12px;
@@ -404,7 +408,7 @@
   overflow-wrap: anywhere;
 }
 .chat-disclosure {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 18px;
 }
@@ -427,18 +431,18 @@
     display: block;
   }
   .section-kicker h2 {
-    font-size: 12px;
+    font-size: 14px;
     margin-bottom: 5px;
   }
   .section-kicker > span {
-    font-size: 8px;
+    font-size: 12px;
   }
   .canvas-toolbar {
     padding: 12px;
-    font-size: 10px;
+    font-size: 14px;
   }
   .local-badge {
-    font-size: 8px;
+    font-size: 12px;
   }
   .pr-icon {
     display: none;
@@ -466,21 +470,21 @@
     flex-wrap: wrap;
   }
   .layer-button strong {
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.5;
   }
   .layer-button small {
     display: none;
   }
   .layer-number {
-    font-size: 9px;
+    font-size: 14px;
   }
   .layer-check {
-    font-size: 9px;
+    font-size: 14px;
   }
   .demo-progress {
     padding: 12px 6px 0;
-    font-size: 8px;
+    font-size: 14px;
   }
   .progress-track {
     margin-top: 5px;
@@ -496,7 +500,7 @@
   }
   .demo-caption {
     display: block;
-    font-size: 9px;
+    font-size: 12px;
   }
   .demo-caption > span {
     display: block;
@@ -505,13 +509,13 @@
   .file-heading {
     gap: 8px;
     padding-inline: 10px;
-    font-size: 9px;
+    font-size: 14px;
   }
   .fold-example .file-heading .mono {
-    font-size: 8px;
+    font-size: 14px;
   }
   .fold-example .diff-code {
-    font-size: 10px;
+    font-size: 14px;
   }
   .chat-demo {
     padding: 18px;
@@ -521,23 +525,23 @@
   }
   .related-file {
     gap: 6px;
-    font-size: 9px;
+    font-size: 14px;
   }
 }
 .pr-stats {
   font-family: monospace;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   margin-left: 9px;
 }
 .sample-source {
   display: inline-block;
   margin-top: 12px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
 }
 .source-note {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   max-width: 880px;
   padding-bottom: 10px;
@@ -545,14 +549,14 @@
 .excerpt-gap {
   padding: 7px 13px;
   font-family: monospace;
-  font-size: 9px;
+  font-size: 14px;
   color: var(--muted);
   border-block: 1px solid var(--line);
 }
 .fold-caption a {
   display: inline-block;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 a.chat-code-ref {
   display: block;
@@ -562,9 +566,9 @@ a.chat-code-ref {
     display: block;
     margin-left: 0;
     margin-top: 3px;
-    font-size: 8px;
+    font-size: 12px;
   }
   .local-badge {
-    font-size: 7px;
+    font-size: 12px;
   }
 }
