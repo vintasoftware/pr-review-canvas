@@ -96,7 +96,7 @@ test('documentation and real source remain readable without JavaScript', async (
   await page.goto('http://127.0.0.1:4173/pr-review-canvas/')
   const schema = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent())
   expect(schema['@graph'].find(entity => entity['@id'].endsWith('#software')).name).toBe('PR Review Canvas')
-  await expect(page.locator('.hero-intro')).toContainText('guided code reviews')
+  await expect(page.locator('.hero-intro')).toContainText('guided canvas')
   await expect(page.locator('#sample-code')).toContainText('this.#provider.setTimeout')
   await page.locator('.faq-list summary').filter({ hasText: 'How much does it cost?' }).click()
   await expect(page.locator('.faq-list details[open]')).toContainText('no separate Canvas subscription')
