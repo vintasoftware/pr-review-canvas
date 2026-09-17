@@ -41,11 +41,11 @@ Reviewer output is a list of leads, not orders. For each finding, verify it your
 
 - **Fix**: verified, behavior-preserving or a clear bug, and either labeled `deletes/simplifies` or an `adds` whose addition the project's own patterns already call for.
 - **Gate**: verified in principle but depends on a decision that is the human's:
-    1. handling for a scenario no current caller, type, or data can reach;
-    2. a defensive check on data already typed or validated upstream;
-    3. a fix that changes externally observable behavior, including security hardening;
-    4. a product or requirements ambiguity;
-    5. a destructive or irreversible operation in scope (deletes, migrations, production-touching scripts).
+  1. handling for a scenario no current caller, type, or data can reach;
+  2. a defensive check on data already typed or validated upstream;
+  3. a fix that changes externally observable behavior, including security hardening;
+  4. a product or requirements ambiguity;
+  5. a destructive or irreversible operation in scope (deletes, migrations, production-touching scripts).
 - **Reject**: unsupported, pre-existing and outside scope, or fails the evidence bar (see Review Standard). Keep the concrete counter-evidence for the next reviewer prompt and the final report.
 
 **Assumptions belong to the project or the human, never to you or the reviewer.** Before adding machinery for a rare case, look for the project's existing pattern in README, `AGENTS.md`, `CLAUDE.md`, rules, and neighboring code. The existing pattern is the default answer. No pattern means gate, not assume. Typical assumptions (examples; non-functional requirements and rare functional edge cases produce more): backward compatibility with in-flight data or old clients, zero-downtime or online migration, concurrent writers, retries and idempotency, partial-failure recovery, multi-tenant isolation, scale beyond current volume, offline or network-loss handling, locale and timezone, permission tiers beyond those in the code.
@@ -160,9 +160,9 @@ Approve when the scope has: no verified correctness or security defect, no ungua
 - **Codex host, same-host reviewer**: Codex has built-in subagents; spawn one, keep its handle, and message it on later passes. Its structured question tool works only in Plan mode, so ask gate questions by ending the turn in plain text. Under the default workspace-write sandbox a commit may trigger an approval prompt because `.git` can be protected; accept it, the commit is part of the loop.
 - **Cross-host reviewer via acpx**: create one named session and reuse it every pass so context persists; deny ACP writes while keeping reads and terminal:
 
-    ```bash
-    acpx --approve-reads --non-interactive-permissions deny <agent> sessions ensure --name tnr-reviewer
-    acpx --approve-reads --non-interactive-permissions deny <agent> -s tnr-reviewer -f review-prompt.md
-    ```
+  ```bash
+  acpx --approve-reads --non-interactive-permissions deny <agent> sessions ensure --name tnr-reviewer
+  acpx --approve-reads --non-interactive-permissions deny <agent> -s tnr-reviewer -f review-prompt.md
+  ```
 
-    `<agent>` is `claude` or `codex`. Use `--model` to request the Opus-like tier when the adapter advertises models (Codex also takes `--config-option reasoning_effort=xhigh`). From a Codex host, acpx needs network, which the default sandbox blocks: expect one approval prompt. Paste the Review Standard (or `REVIEW.md`) into the prompt file when the reviewer agent cannot read this skill. The tree-integrity check in Spawn the reviewer is the real guard; the flags reduce the chance of needing it.
+  `<agent>` is `claude` or `codex`. Use `--model` to request the Opus-like tier when the adapter advertises models (Codex also takes `--config-option reasoning_effort=xhigh`). From a Codex host, acpx needs network, which the default sandbox blocks: expect one approval prompt. Paste the Review Standard (or `REVIEW.md`) into the prompt file when the reviewer agent cannot read this skill. The tree-integrity check in Spawn the reviewer is the real guard; the flags reduce the chance of needing it.

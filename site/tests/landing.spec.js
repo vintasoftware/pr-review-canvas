@@ -8,7 +8,7 @@ test('built site loads under the Pages subpath with working assets and section l
     if (response.status() >= 400) failed.push(response.url())
   })
   await page.goto('./')
-  await expect(page).toHaveTitle('PR Review Canvas — Big PR. Clear picture.')
+  await expect(page).toHaveTitle('PR Review Canvas — Open-source AI code review tool')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Big PR.Clear picture.')
   await expect(page.getByRole('link', { name: '#9612', exact: true })).toHaveAttribute(
     'href',
@@ -23,6 +23,11 @@ test('built site loads under the Pages subpath with working assets and section l
     )
   expect(brokenAnchors).toEqual([])
   expect(await page.locator('.brand img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true)
+  await page.locator('.footer-vinta').scrollIntoViewIfNeeded()
+  await expect(page.locator('.footer-vinta img')).toBeVisible()
+  await expect
+    .poll(() => page.locator('.footer-vinta img').evaluate(img => img.complete && img.naturalWidth > 0))
+    .toBe(true)
   expect(errors).toEqual([])
   expect(failed).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -89,6 +94,9 @@ test('documentation and real source remain readable without JavaScript', async (
   const context = await browser.newContext({ javaScriptEnabled: false })
   const page = await context.newPage()
   await page.goto('http://127.0.0.1:4173/pr-review-canvas/')
+  const schema = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent())
+  expect(schema['@graph'].find(entity => entity['@id'].endsWith('#software')).name).toBe('PR Review Canvas')
+  await expect(page.locator('.hero-intro')).toContainText('guided code reviews')
   await expect(page.locator('#sample-code')).toContainText('this.#provider.setTimeout')
   await page.locator('.faq-list summary').filter({ hasText: 'How much does it cost?' }).click()
   await expect(page.locator('.faq-list details[open]')).toContainText('no separate Canvas subscription')

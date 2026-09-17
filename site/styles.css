@@ -602,10 +602,17 @@ dd code {
   padding-block: 54px;
 }
 .footer-vinta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   font-size: 20px;
   letter-spacing: -1px;
   font-weight: 750;
   text-decoration: none;
+}
+.footer-vinta img {
+  display: block;
+  object-fit: contain;
 }
 .site-footer p {
   font-size: 12px;

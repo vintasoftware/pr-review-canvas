@@ -54,3 +54,11 @@ The provider's new file and tests each occupy one added hunk in the real diff. T
 The site leads with semantic layers for large PRs, followed by folds, contextual chat, local execution and subscription reuse, setup, and configuration. It credits Vinta Software's AI-Native SDLC initiatives. “Local” describes where the app and saved state run; GitHub and AI provider requests still leave the machine, and the user's provider limits still apply.
 
 Inspiration: [CodeRabbit Change Stack](https://www.coderabbit.ai/blog/introducing-change-stack-the-first-ai-native-code-review-interface) for explaining reviews by intent, [Graphite Chat](https://graphite.com/docs/graphite-chat) for contextual review questions, and [Reviewable's documentation](https://docs.reviewable.io/) for connecting the product story with practical review guidance. The copy, visual design, and sample implementation are original to this site.
+
+## Search and sharing
+
+The page includes a descriptive title, canonical URL, Open Graph and Twitter preview metadata, and static JSON-LD for the software, website page, and Vinta Software. Product explanations and FAQs are in the HTML and remain available without JavaScript. Keep structured data consistent with the visible copy; provider charges are separate from the free software.
+
+`site/public/sitemap.xml` lists the production canonical URL. Submit https://vintasoftware.github.io/pr-review-canvas/sitemap.xml in Google Search Console after deployment. A project-level `robots.txt` would not control crawling: robots rules must live at https://vintasoftware.github.io/robots.txt, outside this project's Pages path.
+
+`site/public/social-preview.png` is the 1200 × 630 sharing image. Update its text when changing the product positioning. The footer uses the [official Vinta SVG wordmark](https://cdn.prod.website-files.com/64b9f7763232fd7832edb0c8/681a89078f700d7ca9e6b76c_vinta-wordmark-copy.svg), downloaded from Vinta's homepage and served locally.
