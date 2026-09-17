@@ -36,6 +36,21 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
 }
 
 describe('runDoctorChecks', () => {
+  it('reports a skill file that exists but cannot be read', async () => {
+    const report = await runDoctorChecks(
+      deps({
+        dataDirOverride: await makeTempDir(),
+        readSkill: async () => {
+          throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+        },
+      })
+    )
+    expect(report.checks.skill).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('permission denied'),
+    })
+  })
+
   it('explains how to repair remote-service rules when dcg is already installed', async () => {
     const report = await runDoctorChecks(
       deps({
@@ -344,6 +359,15 @@ describe('pr-review doctor', () => {
       expect(text).toContain('wsl --install -d Ubuntu')
       expect(text).toContain('A Windows-only installation does not satisfy chat checks')
     }
+  })
+
+  it('prints a passing report without next steps when everything is in place', async () => {
+    const code = await runDoctor(deps({ dataDirOverride: await makeTempDir() }), [], io)
+    expect(code).toBe(0)
+    const text = lines.join('\n')
+    expect(text).toContain('All requested checks passed.')
+    expect(text).not.toContain('Next steps')
+    expect(text).toContain('Run `pr-review doctor --all-checks`')
   })
 
   it('prints one JSON line and exits 0 when everything is in place', async () => {

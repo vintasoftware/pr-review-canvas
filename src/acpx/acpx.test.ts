@@ -19,6 +19,7 @@ import {
   readExecStream,
 } from './acpx.js'
 import type { AgentEvent } from './events.js'
+import { SandboxError } from './sandbox.js'
 
 // Process protocol tests inject unsandboxed transports; sandbox.test.ts exercises containment.
 const createAgentRunner: typeof createProductionAgentRunner = options =>
@@ -451,6 +452,30 @@ describe('the runner in the odd cases', () => {
     await expect(run.cancel()).resolves.toBeUndefined()
   })
 
+  it('names the sandbox when preparing the launch is what throws', async () => {
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      spawnImpl: () => {
+        throw new SandboxError('bubblewrap is not installed')
+      },
+    })
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      { type: 'error', code: 'AGENT_PERMISSION_DENIED', message: 'bubblewrap is not installed' },
+    ])
+  })
+
+  it('describes a spawn that throws something other than an Error', async () => {
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      spawnImpl: () => {
+        throw 'nope'
+      },
+    })
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      { type: 'error', code: 'AGENT_MISSING', message: 'acpx could not be started' },
+    ])
+  })
+
   it('reports a child that fails for a reason other than a missing binary', async () => {
     env.FAKE_ACPX_MODE = 'ok'
     const agentRunner = createAgentRunner({
@@ -476,6 +501,17 @@ describe('the runner in the odd cases', () => {
         code: 'AGENT_PERMISSION_DENIED',
         message: 'the agent was denied a permission it needed',
       },
+    ])
+  })
+
+  it('treats a child killed by a signal as a failed exit', async () => {
+    const agentRunner = createAgentRunner({
+      bin: process.execPath,
+      spawnImpl: (_file, _args, options) =>
+        spawn(process.execPath, ['-e', 'process.kill(process.pid, "SIGTERM")'], options),
+    })
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      { type: 'error', code: 'AGENT_FAILED', message: 'acpx exited with code 1' },
     ])
   })
 

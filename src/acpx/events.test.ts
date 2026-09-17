@@ -50,6 +50,27 @@ describe('mapAcpxMessage', () => {
     ).toEqual({ type: 'tool', id: 'guarded', status: 'failed', title: reason })
   })
 
+  it('keeps the tool title when a failed tool carries no dcg denial', () => {
+    const failed = (content: unknown) => ({
+      method: 'session/update',
+      params: {
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'x',
+          title: 'Bash',
+          status: 'failed',
+          content,
+        },
+      },
+    })
+    const expected = { type: 'tool', id: 'x', status: 'failed', title: 'Bash' }
+    expect(mapAcpxMessage(failed('not a list'))).toEqual(expected)
+    expect(mapAcpxMessage(failed(['not a block']))).toEqual(expected)
+    expect(mapAcpxMessage(failed([{ type: 'content', content: { type: 'text', text: 'exit 1' } }]))).toEqual(
+      expected
+    )
+  })
+
   it('maps a real claude turn to chunks, tool calls, usage, and the stop reason', async () => {
     const events = eventsOf(await fixtureLines('claude-turn.ndjson'))
     const kinds = events.map(e => e.type)
@@ -92,6 +113,10 @@ describe('mapAcpxMessage', () => {
         message: 'agent advertised auth methods [api-key, chat-gpt] but no matching credentials found',
       },
     ])
+  })
+
+  it('ignores a session update whose params are not an object', () => {
+    expect(mapAcpxMessage({ method: 'session/update', params: 'oops' })).toBeNull()
   })
 
   it('maps a thought chunk and a plan', () => {
