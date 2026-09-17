@@ -198,10 +198,12 @@ export async function resolveBundle(
   }
 
   let sharedCanvas: SharedCanvasInfo | null = null
-  // A canvas for this very head beats anything attached to the PR, so discovery runs only when
-  // there is none. A ready canvas of an earlier commit does not count: the author may have
-  // regenerated and attached one for the head since, and importing it is the only way to show it.
-  if (found.status !== 'ready' || found.commitsSince > 0) {
+  // A canvas for this very head beats anything shared on the PR, so ordinary loads keep it and
+  // discovery fills a missing or stale one. Two cases still scan with a ready canvas: one of an
+  // earlier commit, because the author may have shared one for the head since and importing it
+  // is the only way to show it; and refresh, which also checks for a newer generation at the
+  // same head.
+  if (found.status !== 'ready' || found.commitsSince > 0 || opts.refresh) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)

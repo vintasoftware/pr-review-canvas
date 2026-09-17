@@ -1,5 +1,6 @@
 // Finding the canvas zip a human attached to the review and downloading it with the host CLI's
 // token. The token is read per request, sent to the forge alone, and never logged or stored.
+import { readCanvasComment } from '../canvas/comment.js'
 import { createHash } from 'node:crypto'
 import { importCanvas } from '../canvas/import.js'
 import { type ParsedCanvasName, parseCanvasZipName } from '../canvas/name.js'
@@ -23,6 +24,7 @@ export interface AttachmentLink {
 }
 
 export interface AttachmentCandidate extends AttachmentLink {
+  bytes?: Uint8Array
   parsed: ParsedCanvasName
   /**
    * When the text carrying the link was last edited. A link added to an old comment counts from
@@ -59,6 +61,14 @@ export function collectCandidates(
       if (parsed !== null) {
         candidates.push({ ...link, parsed, postedAt, order: order++ })
       }
+    }
+  }
+  for (const comment of sources.comments.issueComments) {
+    const embedded = readCanvasComment(comment.body)
+    if (embedded === null) continue
+    const parsed = parseCanvasZipName(embedded.name, repo)
+    if (parsed !== null) {
+      candidates.push({ ...embedded, url: comment.url, parsed, postedAt: comment.updatedAt, order: order++ })
     }
   }
   return candidates
@@ -259,7 +269,10 @@ async function tryCandidate(
       warnings: [`${candidate.name} was exported for #${candidate.parsed.prNumber}, not #${prNumber}`],
     }
   }
-  const download = await downloadAttachment(ctx, candidate.url)
+  const download: DownloadResult =
+    candidate.bytes === undefined
+      ? await downloadAttachment(ctx, candidate.url)
+      : { ok: true, bytes: candidate.bytes }
   if (!download.ok) {
     return {
       sharedCanvas: { ...shared, downloadable: false, reason: download.reason },

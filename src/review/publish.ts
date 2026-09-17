@@ -1,5 +1,7 @@
 // `pr-review publish`: validate model.json against context.json, normalize, and store the
-// canvas. Nothing is written when the report is not clean.
+// canvas, then share it on the PR/MR. Invalid models are never stored or shared.
+import { buildCanvasComment } from '../canvas/comment.js'
+import { buildCanvasZipFor, exportCanvas } from '../canvas/export.js'
 import { appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
@@ -25,6 +27,10 @@ export interface PublishResult {
   headSha: string
   reviewJsonPath: string
   attempts: number
+  sharing:
+    | { status: 'shared'; url: string }
+    | { status: 'failed'; warning: string; zipPath: string }
+    | { status: 'local' }
   /** Where the canvas shows once the server runs; absent for a change set without a PR. */
   reviewUrl?: string
 }
@@ -229,12 +235,26 @@ export async function publish(
   await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber)
   const published: PublishResult = {
     status: 'published',
+    sharing: { status: 'local' },
     headSha: context.headSha,
     reviewJsonPath: path.join(ctx.canvases.canvasDir(context.headSha), 'review.json'),
     attempts,
   }
   if (context.target.kind === 'pr') {
     published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.number}`
+    try {
+      const zip = await buildCanvasZipFor(ctx, context.headSha, context.target.number)
+      const body = buildCanvasComment(zip, ctx.config.host.canvasCommentLimit)
+      const url = await ctx.config.host.shareCanvas(ctx.gh, ctx.config.repo, context.target.number, body)
+      published.sharing = { status: 'shared', url }
+    } catch (err) {
+      const exported = await exportCanvas(ctx, { headSha: context.headSha, prNumber: context.target.number })
+      published.sharing = {
+        status: 'failed',
+        warning: `Automatic canvas sharing failed: ${err instanceof Error ? err.message : String(err)}. Upload the ZIP to the ${ctx.config.host.noun} description manually.`,
+        zipPath: exported.path,
+      }
+    }
   }
   return published
 }
