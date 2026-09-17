@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+# The main worktree holds the local installation shared by linked worktrees.
+common_dir=$(git rev-parse --git-common-dir)
+common_dir=$(CDPATH= cd "$common_dir" && pwd -P)
+primary=$(dirname "$common_dir")
+current=$(git rev-parse --show-toplevel)
+[ "$current" != "$primary" ] || exit 0
+[ -d "$primary/.git" ] || exit 0
+
+for provider in .agents .claude .codex .github
+do
+	for source in \
+		"$primary/$provider"/skills/* \
+		"$primary/$provider"/agents/* \
+		"$primary/$provider"/hooks/* \
+		"$primary/$provider/hooks.json"
+	do
+		[ -e "$source" ] || continue
+		relative=${source#"$primary/"}
+		destination="$current/$relative"
+		# Preserve existing worktree files, including symlinks.
+		[ ! -e "$destination" ] && [ ! -L "$destination" ] || continue
+		mkdir -p "$(dirname "$destination")"
+		ln -s "$source" "$destination"
+	done
+done
