@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { PostCommentInput, PostCommentResult } from '../contract/comments.js'
 import type { Repo, Side } from '../contract/review-artifact.js'
-import { splitHunks } from '../git/patch-lines.js'
+import { splitChunks } from '../git/patch-lines.js'
 import type { Derived } from '../store/derived-store.js'
 import type { HostClient } from '../host/client.js'
 import { findDiscussionId, GlNoteSchema, mapGitLabIssueComment, mapGitLabReviewComment } from './comments.js'
@@ -14,10 +14,10 @@ const GlDiscussionSchema = z.object({ notes: z.tuple([GlNoteSchema]).rest(z.unkn
 
 /** Context lines need both coordinates, including offsets introduced by earlier changes. */
 function diffLine(patch: string, side: Side, line: number): { old_line?: number; new_line?: number } {
-  for (const hunk of splitHunks(patch)) {
-    let oldLine = hunk.oldStart
-    let newLine = hunk.newStart
-    for (const text of hunk.lines) {
+  for (const chunk of splitChunks(patch)) {
+    let oldLine = chunk.oldStart
+    let newLine = chunk.newStart
+    for (const text of chunk.lines) {
       if (![' ', '+', '-'].includes(text[0] ?? '')) continue
       const point = {
         ...(text.startsWith('+') ? {} : { old_line: oldLine++ }),

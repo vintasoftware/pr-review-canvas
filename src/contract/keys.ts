@@ -3,10 +3,10 @@
 export {
   buildLineId,
   fileAnchorId,
-  hunkAnchorId,
-  hunkId,
+  chunkAnchorId,
+  chunkId,
   layerAnchorId,
-  parseHunkId,
+  parseChunkId,
   parseLineId,
   pointAnchorId,
   sanitizeKey,

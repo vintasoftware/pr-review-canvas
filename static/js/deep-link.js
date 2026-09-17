@@ -1,6 +1,6 @@
 // @ts-check
 // Canvas links as navigation. The markdown, the diagrams and the chat all write links in the
-// canvas scheme (#layer:, #file:, #hunk:, #line:), and the same string works as a URL fragment,
+// canvas scheme (#layer:, #file:, #chunk:, #line:), and the same string works as a URL fragment,
 // so `…/review/278#line:path/to/file.ts:40` opens the page on that line and a click on a link
 // leaves a URL the reader can share. The jump itself is `jumpTo` in anchors.js; this module
 // decides when it runs.

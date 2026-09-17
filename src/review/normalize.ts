@@ -16,7 +16,7 @@ import type {
   TextCaps,
 } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
-import { hunkForLine } from '../git/patch-lines.js'
+import { chunkForLine } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { matchesGlob } from './glob.js'
 import { DEFAULT_TEST_PATTERNS, isTestPath } from './test-paths.js'
@@ -91,7 +91,7 @@ function toLayer(
   }
 }
 
-/** The layer that lists the hunk covering `path:line`, or undefined when no hunk covers it. */
+/** The layer that lists the chunk covering `path:line`, or undefined when no chunk covers it. */
 export function layerIdForLine(
   layers: readonly Layer[],
   files: readonly FileEntry[],
@@ -100,11 +100,11 @@ export function layerIdForLine(
   line: number
 ): string | undefined {
   const entry = files.find(f => f.path === path)
-  const hunk = entry === undefined ? null : hunkForLine(entry.hunks, side, line)
-  if (hunk === null) {
+  const chunk = entry === undefined ? null : chunkForLine(entry.chunks, side, line)
+  if (chunk === null) {
     return undefined
   }
-  return layers.find(l => l.files.some(f => f.hunks.includes(hunk.id)))?.id
+  return layers.find(l => l.files.some(f => f.chunks.includes(chunk.id)))?.id
 }
 
 type Unassigned = Omit<Point, 'id'>
@@ -118,17 +118,17 @@ function modelPoint(p: ModelPoint, layers: readonly Layer[], files: readonly Fil
   return point
 }
 
-/** One `tests` point per missing test entry, anchored on the layer's first hunk. */
+/** One `tests` point per missing test entry, anchored on the layer's first chunk. */
 function testPoints(layer: Layer, files: readonly FileEntry[], titleCap: number): Unassigned[] {
   const out: Unassigned[] = []
   const first = layer.files[0]
   const entry = first === undefined ? undefined : files.find(f => f.path === first.path)
-  const hunk = entry?.hunks.find(h => h.id === first?.hunks[0])
-  if (first === undefined || hunk === undefined) {
+  const chunk = entry?.chunks.find(h => h.id === first?.chunks[0])
+  if (first === undefined || chunk === undefined) {
     return out
   }
-  const side: Side = hunk.newLines === 0 ? 'old' : 'new'
-  const line = side === 'new' ? hunk.newStart : hunk.oldStart
+  const side: Side = chunk.newLines === 0 ? 'old' : 'new'
+  const line = side === 'new' ? chunk.newStart : chunk.oldStart
   for (const t of layer.tests) {
     if (t.status !== 'missing') {
       continue

@@ -98,13 +98,21 @@ describe('GenerationContextSchema', () => {
       highRisk: [],
       caps: TEXT_CAPS,
       limits: LIMITS,
-      generation: { maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
+      generation: { maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrChunks: 10 },
       smallPr: true,
       largePr: false,
       preparedAt: '2026-09-10T12:00:00.000Z',
     })
     expect(context.tests).toEqual({ patterns: [...DEFAULT_TEST_PATTERNS] })
     expect(context.generation.mode).toBe('strict')
+    const { smallPrChunks, ...generation } = context.generation
+    expect(
+      GenerationContextSchema.parse({
+        ...context,
+        generation: { ...generation, smallPrHunks: smallPrChunks },
+        files: context.files.map(({ chunks, ...file }) => ({ ...file, hunks: chunks })),
+      })
+    ).toEqual(context)
     expect(isLargePr({ files: LARGE_PR.files, additions: 1, deletions: 1 })).toBe(false)
     expect(isLargePr({ files: LARGE_PR.files + 1, additions: 0, deletions: 0 })).toBe(true)
     expect(isLargePr({ files: 1, additions: LARGE_PR.lines, deletions: 0 })).toBe(false)

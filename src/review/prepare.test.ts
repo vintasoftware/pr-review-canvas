@@ -79,7 +79,7 @@ describe('prepare', () => {
       highRisk: [],
       caps: TEXT_CAPS,
       limits: { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12 },
-      generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
+      generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrChunks: 10 },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
       smallPr: true,
       largePr: false,
@@ -88,7 +88,7 @@ describe('prepare', () => {
     const prompt = await readFile(result.promptPath, 'utf8')
     expect(prompt).toContain('# Review canvas for a pull request')
     expect(prompt).toContain('Produce a code-quality review')
-    expect(prompt).toContain('### hunk src_app_ts#1')
+    expect(prompt).toContain('### chunk src_app_ts#1')
     expect(prompt).toContain(`\`<model>\` = \`${path.join(canvasDir, 'model.json')}\``)
     expect(prompt).not.toContain('{{')
     // The PR is cached for the server, and derived/ is on disk for the browser.
@@ -194,7 +194,7 @@ describe('prepare', () => {
             mode: 'surfacing',
             maxRepairRounds: 5,
             inlineDiffMaxLines: 10,
-            smallPrHunks: 3,
+            smallPrChunks: 3,
             caps: { summary: 50 },
           },
         },
@@ -212,7 +212,7 @@ describe('prepare', () => {
       mode: 'surfacing',
       maxRepairRounds: 5,
       inlineDiffMaxLines: 10,
-      smallPrHunks: 3,
+      smallPrChunks: 3,
     })
     expect(context.smallPr).toBe(false)
     const prompt = await readFile(result.promptPath, 'utf8')

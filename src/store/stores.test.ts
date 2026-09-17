@@ -169,7 +169,7 @@ describe('derived-store', () => {
     const derived = store.derivedDir(HEAD_SHA)
     expect(
       (await readFile(path.join(derived, 'patches', 'src_app_ts.diff'), 'utf8')).split('\n').slice(0, 2)
-    ).toEqual(['### hunk src_app_ts#1', '@@ -1,4 +1,5 @@'])
+    ).toEqual(['### chunk src_app_ts#1', '@@ -1,4 +1,5 @@'])
     expect((await stat(path.join(derived, 'head', 'src', 'app.ts'))).isFile()).toBe(true)
     expect((await stat(path.join(derived, 'base', 'src', 'gone.ts'))).isFile()).toBe(true)
     const diffCalls = g.calls.filter(c => c[0] === 'diff').length

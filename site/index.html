@@ -348,7 +348,7 @@
                 aria-label="Expanded import-only diff"
               ><code><span class="context">   shallowEqualObjects,</span><span class="context">   timeUntilStale,</span><span class="context"> } from './utils'</span><span class="addition">+import { timeoutManager } from './timeoutManager'</span><span class="addition">+import type { ManagedTimerId } from './timeoutManager'</span><span class="context"> import type { FetchOptions, Query, QueryState } from './query'</span></code></pre>
             </details>
-            <div class="excerpt-gap">⋯ separate hunk · timer cancellation</div>
+            <div class="excerpt-gap">⋯ separate chunk · timer cancellation</div>
             <pre
               class="diff-code"
               tabindex="0"
@@ -650,7 +650,7 @@ chat:
           <details>
             <summary>What are semantic layers in code review?</summary>
             <p>
-              Semantic layers group diff hunks by the behavior or concern they change, even when those hunks
+              Semantic layers group diff chunks by the behavior or concern they change, even when those chunks
               span multiple files. A single layer can connect a schema change, endpoint, client, and tests.
               Each layer includes review context and tracks your progress.
             </p>
@@ -674,7 +674,7 @@ chat:
           <details>
             <summary>What's shared in the canvas comment?</summary>
             <p>
-              PR description, file and hunk metadata, and generated review notes. Source diffs come from each
+              PR description, file and chunk metadata, and generated review notes. Source diffs come from each
               reviewer's clone, and chat history stays local. The compressed payload is readable by anyone
               with access to the PR or MR. A ZIP upload carries the same data when automatic sharing fails.
             </p>

@@ -194,7 +194,7 @@ within one path segment.
 | `generation.mode`               | `strict`                                            | See [generation modes](#generation-modes)                                                                                                                                                                                  |
 | `generation.maxRepairRounds`    | `3`                                                 | Failed validation rounds allowed by the generation skill                                                                                                                                                                   |
 | `generation.inlineDiffMaxLines` | `1500`                                              | Maximum diff length to include directly in the generation prompt                                                                                                                                                           |
-| `generation.smallPrHunks`       | `10`                                                | At or below this hunk count, the prompt asks for one layer unless concerns differ                                                                                                                                          |
+| `generation.smallPrChunks`      | `10`                                                | At or below this chunk count, the prompt asks for one layer unless concerns differ                                                                                                                                         |
 | `generation.caps`               | See below                                           | Overrides individual text limits                                                                                                                                                                                           |
 | `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
 | `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
@@ -315,7 +315,7 @@ Append a fragment to `/review/<pr-number>`:
 | ------------------- | --------------------------- |
 | Layer               | `#layer:data-access`        |
 | File                | `#file:src/store.ts`        |
-| Hunk                | `#hunk:src/store.ts#2`      |
+| Chunk               | `#chunk:src/store.ts#2`     |
 | New-side line range | `#line:src/store.ts:40-52`  |
 | Old-side line       | `#line:src/store.ts:40:old` |
 
@@ -417,16 +417,22 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 ### Validation diagnostics
 
-Validation reports name the field, file, hunk, or line to fix. Common groups are:
+Validation reports name the field, file, chunk, or line to fix. Common groups are:
 
-| Codes                                                           | What to check                                                  |
-| --------------------------------------------------------------- | -------------------------------------------------------------- |
-| `SCHEMA`, `TEXT_TOO_LONG`                                       | Required fields, types, and text limits                        |
-| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN`             | Each known hunk belongs to exactly one layer                   |
-| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                             | Referenced files exist in the relevant diff or PR head         |
-| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                            | Layers contain hunks and have unique keys                      |
-| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`            | At most one Other layer, last, without risk-tagged changes     |
-| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                | Tests follow the code they cover and use the appropriate layer |
-| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                |
-| `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together        |
-| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts             |
+| Codes                                                            | What to check                                                  |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `SCHEMA`, `TEXT_TOO_LONG`                                        | Required fields, types, and text limits                        |
+| `CHUNK_UNASSIGNED`, `CHUNK_DUPLICATE`, `CHUNK_UNKNOWN`           | Each known chunk belongs to exactly one layer                  |
+| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                              | Referenced files exist in the relevant diff or PR head         |
+| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                             | Layers contain chunks and have unique keys                     |
+| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`             | At most one Other layer, last, without risk-tagged changes     |
+| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                 | Tests follow the code they cover and use the appropriate layer |
+| `ANNOTATION_OUTSIDE_CHUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                |
+| `TOO_MANY_POINTS`                                                | Count explicit points and missing-test entries together        |
+| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`       | Link targets, diagram node IDs, and diagram counts             |
+
+## Chunk terminology
+
+The code, generated schemas, and interface use **chunk** for a contiguous section of a file's diff. New canvas data uses `chunks`, links use `#chunk:`, and the small-change threshold is `generation.smallPrChunks`.
+
+Older canvas fields, links, and configuration options remain readable through input compatibility mappings. Update installed skills with `pr-review install-skill` so new canvases use the current names. Teammates should use the updated CLI when sharing newly generated canvases.

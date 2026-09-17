@@ -152,7 +152,7 @@ describe('normalize', () => {
     ])
   })
 
-  it('anchors a tests point on the old side when the first hunk is a pure deletion, and skips a layer with no hunk', () => {
+  it('anchors a tests point on the old side when the first chunk is a pure deletion, and skips a layer with no chunk', () => {
     const output = artifactToModelOutput(syntheticArtifact())
     const other = output.layers[1]
     if (!other) {

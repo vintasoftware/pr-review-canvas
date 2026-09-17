@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { z } from 'zod'
 import { PACKAGE_ROOT } from '../server/context.js'
 import { syntheticArtifact } from '../testing/synthetic.js'
 import {
   ARTIFACT_HARD_CAPS,
   ARTIFACT_MAX_POINTS,
   effectiveCaps,
+  FileEntrySchema,
+  LinkSchema,
   HARD_CAP_FACTOR,
   hardCaps,
   LIMITS,
@@ -23,6 +26,32 @@ async function loadFixture(): Promise<unknown> {
 }
 
 describe('ReviewArtifactSchema', () => {
+  it('reads older canvas fields and diagram links using the current chunk contract', () => {
+    const current = syntheticArtifact()
+    const previous = {
+      ...current,
+      files: current.files.map(({ chunks, ...file }) => ({ ...file, hunks: chunks })),
+      layers: current.layers.map(layer => ({
+        ...layer,
+        files: layer.files.map(({ chunks, ...file }) => ({ ...file, hunks: chunks })),
+      })),
+    }
+    expect(ReviewArtifactSchema.parse(previous)).toEqual(current)
+    expect(LinkSchema.parse('#hunk:src/app.ts#1')).toBe('#chunk:src/app.ts#1')
+    expect(LinkSchema.safeParse(null).success).toBe(false)
+    expect(previous.files[0]).toHaveProperty('hunks')
+    expect(previous.files[0]).not.toHaveProperty('chunks')
+  })
+
+  it('prefers the current field and still validates migrated chunk data', () => {
+    const file = syntheticArtifact().files[0]!
+    expect(FileEntrySchema.parse({ ...file, hunks: 'ignored' })).toEqual(file)
+    const { chunks: _chunks, ...rest } = file
+    for (const invalid of [null, [], 'invalid', { ...rest, hunks: 'invalid' }]) {
+      expect(FileEntrySchema.safeParse(invalid).success).toBe(false)
+    }
+  })
+
   it('accepts the PR #278 fixture unchanged', async () => {
     const raw = await loadFixture()
     const parsed = ReviewArtifactSchema.parse(raw)
@@ -73,8 +102,20 @@ describe('ModelOutputSchema', () => {
     rationale: 'ok',
     kind: 'layer',
     tests: [],
-    files: [{ path: 'src/app.ts', hunks: ['src_app_ts#1'], annotations: [] }],
+    files: [{ path: 'src/app.ts', chunks: ['src_app_ts#1'], annotations: [] }],
   }
+
+  it('reads older model output but publishes only chunk field names in the generation schema', () => {
+    const current = { summary: 'x', layers: [layer], points: [] }
+    const previous = {
+      ...current,
+      layers: [{ ...layer, files: [{ path: 'src/app.ts', hunks: ['src_app_ts#1'], annotations: [] }] }],
+    }
+    expect(ModelOutputSchema.parse(previous)).toEqual(ModelOutputSchema.parse(current))
+    const schema = JSON.stringify(z.toJSONSchema(ModelOutputSchema))
+    expect(schema).toContain('"chunks"')
+    expect(schema).not.toMatch(/(?<!c)hunk/i)
+  })
 
   it('accepts a minimal model output', () => {
     const parsed = ModelOutputSchema.parse({ summary: 'x', layers: [layer], points: [] })
@@ -106,7 +147,7 @@ describe('ModelOutputSchema', () => {
           files: [
             {
               path: 'src/app.ts',
-              hunks: ['src_app_ts#1'],
+              chunks: ['src_app_ts#1'],
               annotations: [
                 { side: 'new', startLine: 1, endLine: 1, text: 'a'.repeat(over(TEXT_CAPS.annotation)) },
               ],

@@ -675,7 +675,7 @@ describe('node links', () => {
   it('links the flowchart nodes the map names and leaves the rest alone', async () => {
     const node = await draw('flowchart', {
       store: '#file:src/app.ts',
-      serve: '#hunk:src/app.ts#2',
+      serve: '#chunk:src/app.ts#2',
       nope: '#file:src/app.ts',
     })
     const store = node.querySelector('#pr-diagram-flowchart-flowchart-store-1')
@@ -686,7 +686,7 @@ describe('node links', () => {
       label: 'src/app.ts',
     })
     expect(linkAttrs(node.querySelector('#pr-diagram-flowchart-flowchart-serve-3')).label).toBe(
-      'src/app.ts hunk 2'
+      'src/app.ts chunk 2'
     )
     expect(node.querySelector('#pr-diagram-flowchart-flowchart-ingest-0')?.hasAttribute('data-link')).toBe(
       false
@@ -706,8 +706,8 @@ describe('node links', () => {
     const state = await draw('state', { active: '#file:src/app.ts', purged: '#line:src/app.ts:3-4' })
     expect(linkAttrs(state.querySelector('#pr-diagram-state-state-active-1')).link).toBe('#file:src/app.ts')
     expect(linkAttrs(state.querySelector('#pr-diagram-state-state-purged-4')).label).toBe('src/app.ts:3-4')
-    const er = await draw('er', { SHL_FILE: '#hunk:src/app.ts#1' })
-    expect(linkAttrs(er.querySelector('#pr-diagram-er-entity-SHL_FILE-1')).link).toBe('#hunk:src/app.ts#1')
+    const er = await draw('er', { SHL_FILE: '#chunk:src/app.ts#1' })
+    expect(linkAttrs(er.querySelector('#pr-diagram-er-entity-SHL_FILE-1')).link).toBe('#chunk:src/app.ts#1')
     expect(er.querySelector('#pr-diagram-er-entity-SHL-0')?.hasAttribute('data-link')).toBe(false)
   })
 

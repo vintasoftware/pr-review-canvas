@@ -168,7 +168,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
       await runValidate(t.ctx, [path.join(canvasDir, 'model.json'), '--canvas', canvasDir, '--human'], human)
     ).toBe(EXIT.invalid)
     expect(human.out).toEqual([
-      'HUNK_UNASSIGNED src_gone_ts#1 in src/gone.ts (@@ -1,2 +0,0 @@) is in no layer',
+      'CHUNK_UNASSIGNED src_gone_ts#1 in src/gone.ts (@@ -1,2 +0,0 @@) is in no layer',
     ])
     const asJson = fakeIo()
     expect(
@@ -178,8 +178,8 @@ describe('prepare, publish, validate through the CLI layer', () => {
       ok: false,
       errors: [
         {
-          code: 'HUNK_UNASSIGNED',
-          where: 'hunk:src_gone_ts#1',
+          code: 'CHUNK_UNASSIGNED',
+          where: 'chunk:src_gone_ts#1',
           message: 'src_gone_ts#1 in src/gone.ts (@@ -1,2 +0,0 @@) is in no layer',
         },
       ],
@@ -190,7 +190,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
     )
     expect(code).toBe(EXIT.invalid)
     expect(publishIo.out).toEqual([
-      'HUNK_UNASSIGNED src_gone_ts#1 in src/gone.ts (@@ -1,2 +0,0 @@) is in no layer',
+      'CHUNK_UNASSIGNED src_gone_ts#1 in src/gone.ts (@@ -1,2 +0,0 @@) is in no layer',
       JSON.stringify({
         error: {
           code: 'MODEL_INVALID',
@@ -294,10 +294,10 @@ describe('prepare, publish, validate through the CLI layer', () => {
       }
     }
     const io = fakeIo()
-    const report = { ok: false, errors: [{ code: 'LAYER_EMPTY' as const, message: 'layer x has no hunks' }] }
+    const report = { ok: false, errors: [{ code: 'LAYER_EMPTY' as const, message: 'layer x has no chunks' }] }
     expect(reportFailure(io, new ModelInvalidError(report, 2))).toBe(EXIT.invalid)
     expect(io.out).toEqual([
-      'LAYER_EMPTY layer x has no hunks',
+      'LAYER_EMPTY layer x has no chunks',
       JSON.stringify({
         error: {
           code: 'MODEL_INVALID',

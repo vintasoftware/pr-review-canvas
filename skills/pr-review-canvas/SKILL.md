@@ -58,7 +58,7 @@ Progress goes to stderr. The last stdout line is JSON:
 
 ### 2. Read the task
 
-Read `promptPath` in full: it holds the pull request, the manifest with every hunk id, the diffs
+Read `promptPath` in full: it holds the pull request, the manifest with every chunk id, the diffs
 (inline or by file path), the layering and length rules, the rulebook, and the JSON schema. Read
 `contextPath` when you need the paths of the head files, the base files, or the patches. Read any
 untouched file with `git show <headSha>:<path>` from the repository root, using the SHA returned
@@ -111,14 +111,14 @@ Always inspect `sharing.status`: local validation success does not mean remote s
 On failure the command prints one line per problem, then an error line, and exits 5:
 
 ```
-HUNK_UNASSIGNED packages_x_ts#3 in packages/x.ts (@@ -40,7 +41,9 @@) is in no layer
+CHUNK_UNASSIGNED packages_x_ts#3 in packages/x.ts (@@ -40,7 +41,9 @@) is in no layer
 TEXT_TOO_LONG layers.0.rationale: 412 visible chars, cap 300
 {"error":{"code":"MODEL_INVALID","message":"model.json has 2 problems","hint":"fix model.json and run publish again"}}
 ```
 
 Fix exactly the named problems in `model.json` and run publish again. Give up after the number of
 failed rounds the prompt states (`maxRepairRounds`, 3 by default) and report the last output
-verbatim. Do not weaken the content to pass: shorten text, move hunks, fix links.
+verbatim. Do not weaken the content to pass: shorten text, move chunks, fix links.
 
 If publish prints `CANVAS_STALE`, the branch moved while you worked. Tell the user and offer to run
 prepare again; pass `--allow-stale` only when the user asks for the canvas of the old commit.
@@ -146,12 +146,12 @@ automatically.
 
 ## Rules the validator enforces (and models tend to break)
 
-- Every hunk id from the manifest appears in exactly one layer. Check the manifest against your
-  layers before you publish; a missed hunk is the most common failure.
+- Every chunk id from the manifest appears in exactly one layer. Check the manifest against your
+  layers before you publish; a missed chunk is the most common failure.
 - At most one layer with `kind: "other"`, last when present, and omitted when there are no
-  mechanical hunks. It carries no risk tag. A test file may sit in Other only when the code it covers
+  mechanical chunks. It carries no risk tag. A test file may sit in Other only when the code it covers
   is in Other too.
-- A small change set (the prompt states the hunk limit) gets one layer unless concerns truly differ.
+- A small change set (the prompt states the chunk limit) gets one layer unless concerns truly differ.
 - Test files come after the files they cover, inside the same layer, never in a layer of their own.
   The prompt's layering rules name the path patterns this project counts as tests; they are the
   ones the validator uses.
@@ -159,15 +159,15 @@ automatically.
   not count). Rationales, notes, and annotations are one or two short sentences.
 - At most 12 attention points, counting one per `missing` test entry.
 - `covered` test entries name a `testPath` that exists at the PR head (changed or not).
-- Annotations and attention points sit on lines inside a hunk, on the side you name.
-- Links use only the four forms `#layer:`, `#file:`, `#hunk:`, `#line:` and must resolve.
+- Annotations and attention points sit on lines inside a chunk, on the side you name.
+- Links use only the four forms `#layer:`, `#file:`, `#chunk:`, `#line:` and must resolve.
 - At most one diagram per layer (its `diagram` field plus a ```mermaid fence in its rationale)
   and one in the summary; a fence in any other field stays a code block. Draw only when relations
   beat prose and most canvases need zero to two diagrams in total, keep labels short, and write no
   `click` directives, HTML labels, `%%{init}%%` blocks, or `---` front matter.
 - `diagram.links` maps a node id of the source to a canvas link, at most 12 per diagram. Spell the
   node id the way the source spells it (`store`, not the label in its brackets; `App`, not the
-  name after `as`), and link only nodes that stand for a layer, a file, or a hunk of this canvas.
+  name after `as`), and link only nodes that stand for a layer, a file, or a chunk of this canvas.
 - Markdown is allowed; headings are not. No prose outside the JSON file.
 
 ## Updating a shared canvas

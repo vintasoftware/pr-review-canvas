@@ -154,7 +154,7 @@ describe('publish', () => {
             code: 'TEXT_TOO_LONG',
             message: expect.stringContaining('summary: 1201 visible chars, cap 1200;'),
           },
-          { code: 'HUNK_UNASSIGNED' },
+          { code: 'CHUNK_UNASSIGNED' },
         ],
       },
     })
@@ -164,15 +164,15 @@ describe('publish', () => {
     expect(second).toMatchObject({
       message: 'model.json has 1 problem',
       attempts: 2,
-      report: { errors: [{ code: 'HUNK_UNASSIGNED' }] },
+      report: { errors: [{ code: 'CHUNK_UNASSIGNED' }] },
     })
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
     expect(await t.ctx.canvases.readIndex()).toEqual({ canvases: {} })
     expect(await readFile(path.join(canvasDir, 'publish.log'), 'utf8')).toBe(
-      `2026-09-10T12:00:00.000Z prepared ${HEAD_SHA}\n2026-09-10T12:00:00.000Z invalid attempts=1 errors=2 TEXT_TOO_LONG,HUNK_UNASSIGNED\n2026-09-10T12:00:00.000Z invalid attempts=2 errors=1 HUNK_UNASSIGNED\n`
+      `2026-09-10T12:00:00.000Z prepared ${HEAD_SHA}\n2026-09-10T12:00:00.000Z invalid attempts=1 errors=2 TEXT_TOO_LONG,CHUNK_UNASSIGNED\n2026-09-10T12:00:00.000Z invalid attempts=2 errors=1 CHUNK_UNASSIGNED\n`
     )
     // The third try succeeds and carries the attempt count.
-    output.layers[1]?.files.push({ path: 'src/gone.ts', hunks: ['src_gone_ts#1'], annotations: [] })
+    output.layers[1]?.files.push({ path: 'src/gone.ts', chunks: ['src_gone_ts#1'], annotations: [] })
     await writeModel(canvasDir, output)
     expect((await publish(t.ctx, canvasDir, OPTS)).attempts).toBe(3)
   })

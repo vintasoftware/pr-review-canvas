@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { canonicalChunkLink } from '../../static/js/links.js'
+import { readChunkFields } from './chunk-compat.js'
 
 /** Character caps applied to model output. Numbers, so the prompt can print them. */
 export const TEXT_CAPS = {
@@ -79,7 +81,7 @@ export const HARNESSES = ['claude-code', 'codex', 'other'] as const
 export const SideSchema = z.enum(['new', 'old'])
 export type Side = z.infer<typeof SideSchema>
 
-export const HunkSchema = z.object({
+export const ChunkSchema = z.object({
   id: z.string().min(1),
   header: z.string(),
   oldStart: z.number().int().nonnegative(),
@@ -87,18 +89,21 @@ export const HunkSchema = z.object({
   newStart: z.number().int().nonnegative(),
   newLines: z.number().int().nonnegative(),
 })
-export type Hunk = z.infer<typeof HunkSchema>
+export type Chunk = z.infer<typeof ChunkSchema>
 
-export const FileEntrySchema = z.object({
-  path: z.string().min(1),
-  oldPath: z.string().min(1).optional(),
-  key: z.string().min(1),
-  status: z.enum(FILE_STATUSES),
-  additions: z.number().int().nonnegative(),
-  deletions: z.number().int().nonnegative(),
-  lang: z.string().optional(),
-  hunks: z.array(HunkSchema),
-})
+export const FileEntrySchema = z.preprocess(
+  readChunkFields,
+  z.object({
+    path: z.string().min(1),
+    oldPath: z.string().min(1).optional(),
+    key: z.string().min(1),
+    status: z.enum(FILE_STATUSES),
+    additions: z.number().int().nonnegative(),
+    deletions: z.number().int().nonnegative(),
+    lang: z.string().optional(),
+    chunks: z.array(ChunkSchema),
+  })
+)
 export type FileEntry = z.infer<typeof FileEntrySchema>
 
 export const RepoSchema = z.object({ owner: z.string().min(1), name: z.string().min(1) })
@@ -136,7 +141,10 @@ export const RiskTagSchema = z.object({
 export type RiskTag = z.infer<typeof RiskTagSchema>
 
 /** A link in one of the four canvas forms. Parsed and resolved by contract/links. */
-export const LinkSchema = z.string().regex(/^#(layer|file|hunk|line):.+/)
+export const LinkSchema = z.preprocess(
+  value => (typeof value === 'string' ? canonicalChunkLink(value) : value),
+  z.string().regex(/^#(layer|file|chunk|line):.+/)
+)
 
 /**
  * One diagram of a layer. `links` maps a node id of the mermaid source to a canvas link, so a
@@ -213,7 +221,7 @@ export type CodeFold = z.infer<typeof CodeFoldSchema>
 function layerFileBase(caps: Caps, foldTitleCap = caps.pointTitle) {
   return {
     path: z.string().min(1),
-    hunks: z.array(z.string().min(1)).min(1),
+    chunks: z.array(z.string().min(1)).min(1),
     note: textOrEmpty(caps, 'annotation').optional(),
     annotations: z.array(annotationSchema(caps)),
     collapsed: z.boolean().optional(),
@@ -221,7 +229,10 @@ function layerFileBase(caps: Caps, foldTitleCap = caps.pointTitle) {
   }
 }
 
-export const LayerFileSchema = z.object({ ...layerFileBase(ARTIFACT_HARD_CAPS), isTest: z.boolean() })
+export const LayerFileSchema = z.preprocess(
+  readChunkFields,
+  z.object({ ...layerFileBase(ARTIFACT_HARD_CAPS), isTest: z.boolean() })
+)
 export type LayerFile = z.infer<typeof LayerFileSchema>
 
 export const LayerKeySchema = z
@@ -272,7 +283,7 @@ export const PointSchema = z.object({
   id: z.string().min(1),
   fingerprint: z.string().min(1),
   origin: z.enum(['model', 'tests']),
-  /** The layer that owns the point's hunk; publish fills it from the file's layer. */
+  /** The layer that owns the point's chunk; publish fills it from the file's layer. */
   layerId: z.string().optional(),
 })
 export type Point = z.infer<typeof PointSchema>
@@ -317,7 +328,7 @@ export function modelOutputSchema(textCaps: TextCaps) {
         z.object({
           ...layerBase(caps),
           risk: z.array(z.object({ label: z.string().min(1), reason: z.string().min(1) })).optional(),
-          files: z.array(z.object(layerFileBase(caps, textCaps.pointTitle))),
+          files: z.array(z.preprocess(readChunkFields, z.object(layerFileBase(caps, textCaps.pointTitle)))),
         })
       )
       .min(1),

@@ -6,7 +6,7 @@ function table() {
   document.body.innerHTML = `
     <section id="layer-auth"></section>
     <article class="file" id="file-src_app_ts"><div class="file-body" hidden>
-    <table class="diff" id="hunk-src_app_ts-1" data-key="src_app_ts"><tbody>
+    <table class="diff" id="chunk-src_app_ts-1" data-key="src_app_ts"><tbody>
       <tr id="L-src_app_ts-new-1" data-old="1" class="ctx"></tr>
       <tr id="L-src_app_ts-old-2" class="del"></tr>
       <tr id="L-src_app_ts-new-2" class="add folded noise"></tr>
@@ -59,19 +59,19 @@ describe('jumpTo', () => {
         drawn += 1
         const body = host?.querySelector('.file-body')
         if (body) {
-          body.innerHTML = '<table class="diff" id="hunk-src_late_ts-1" data-key="src_late_ts"></table>'
+          body.innerHTML = '<table class="diff" id="chunk-src_late_ts-1" data-key="src_late_ts"></table>'
         }
         return true
       },
     })
-    expect(jumpTo('#hunk:src/late.ts#1')).toBe(true)
+    expect(jumpTo('#chunk:src/late.ts#1')).toBe(true)
     expect(drawn).toBe(1)
   })
 
   it('jumps without a card element, and to a target that never appears', () => {
     document.body.innerHTML = '<article class="file" id="file-src_bare_ts"></article>'
     expect(jumpTo('#file:src/bare.ts')).toBe(true)
-    expect(jumpTo('#hunk:src/bare.ts#2')).toBe(false)
+    expect(jumpTo('#chunk:src/bare.ts#2')).toBe(false)
   })
 
   it('scrolls to and flashes the link target, opening a collapsed card', () => {
@@ -80,12 +80,12 @@ describe('jumpTo', () => {
     expect(row?.classList.contains('is-target')).toBe(true)
     expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
     expect(jumpTo('#layer:auth')).toBe(true)
-    expect(jumpTo('#hunk:src/app.ts#1')).toBe(true)
+    expect(jumpTo('#chunk:src/app.ts#1')).toBe(true)
     expect(jumpTo('#file:src/app.ts')).toBe(true)
   })
 
   it('returns false for unknown targets and malformed links', () => {
-    expect(jumpTo('#hunk:src/app.ts#9')).toBe(false)
+    expect(jumpTo('#chunk:src/app.ts#9')).toBe(false)
     expect(jumpTo('#nope')).toBe(false)
   })
 })

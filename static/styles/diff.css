@@ -79,13 +79,13 @@ tr.del td {
 .wd {
   background: var(--del-w);
 }
-tr.hunk td {
-  background: var(--hunk-bg);
+tr.chunk td {
+  background: var(--chunk-bg);
   color: var(--accent);
   padding-top: 2px;
   padding-bottom: 2px;
 }
-tr.hunk .ln {
+tr.chunk .ln {
   border-right-color: transparent;
 }
 tr.ann td.ln:first-child {

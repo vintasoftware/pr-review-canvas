@@ -6,7 +6,7 @@ import { SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import {
   ChatContextError,
   type ContextSources,
-  enclosingHunk,
+  enclosingChunk,
   INLINE_PATCH_MAX_LINES,
   renderChatContext,
 } from './context.js'
@@ -61,7 +61,7 @@ describe('renderChatContext', () => {
     expect(block).toContain('too long to inline')
   })
 
-  it('quotes the exact lines of a selection and names the hunk around them', async () => {
+  it('quotes the exact lines of a selection and names the chunk around them', async () => {
     const block = await renderChatContext(
       { kind: 'lines', path: 'src/app.ts', side: 'new', start: 2, end: 4 },
       sources()
@@ -69,7 +69,7 @@ describe('renderChatContext', () => {
     expect(block).toContain('## Context: src/app.ts lines 2–4')
     expect(block).toContain('2: line 2')
     expect(block).toContain('4: line 4')
-    expect(block).toContain('The hunk around them is `src_app_ts#1`')
+    expect(block).toContain('The chunk around them is `src_app_ts#1`')
   })
 
   it('names the old side in the label and reads the base file', async () => {
@@ -125,7 +125,7 @@ describe('renderChatContext', () => {
         '',
         '```\n4: line 4\n```',
         '',
-        'The hunk around them is `src_app_ts#1` (`@@ -1,4 +1,5 @@`).',
+        'The chunk around them is `src_app_ts#1` (`@@ -1,4 +1,5 @@`).',
       ].join('\n')
     )
     // One context, one heading: the lines come in without a heading of their own.
@@ -138,24 +138,24 @@ describe('renderChatContext', () => {
     )
   })
 
-  it('leaves out the hunk line when the selection sits outside every hunk', async () => {
+  it('leaves out the chunk line when the selection sits outside every chunk', async () => {
     const block = await renderChatContext(
       { kind: 'lines', path: 'src/app.ts', side: 'new', start: 400, end: 400 },
       sources()
     )
-    expect(block).not.toContain('The hunk around them')
+    expect(block).not.toContain('The chunk around them')
   })
 })
 
-describe('enclosingHunk', () => {
-  it('finds the hunk a line sits in, per side', () => {
+describe('enclosingChunk', () => {
+  it('finds the chunk a line sits in, per side', () => {
     const entry = files.find(f => f.path === 'src/app.ts')
     if (entry === undefined) {
       throw new Error('fixture changed')
     }
-    expect(enclosingHunk(entry, 'new', 3)?.id).toBe('src_app_ts#1')
-    expect(enclosingHunk(entry, 'new', 12)?.id).toBe('src_app_ts#2')
-    expect(enclosingHunk(entry, 'old', 1)?.id).toBe('src_app_ts#1')
-    expect(enclosingHunk(entry, 'new', 900)).toBeUndefined()
+    expect(enclosingChunk(entry, 'new', 3)?.id).toBe('src_app_ts#1')
+    expect(enclosingChunk(entry, 'new', 12)?.id).toBe('src_app_ts#2')
+    expect(enclosingChunk(entry, 'old', 1)?.id).toBe('src_app_ts#1')
+    expect(enclosingChunk(entry, 'new', 900)).toBeUndefined()
   })
 })

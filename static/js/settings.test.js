@@ -29,7 +29,7 @@ const SETTINGS = {
     rulebook: 'ai-tools/skills/thermo/SKILL.md',
     maxRepairRounds: 3,
     inlineDiffMaxLines: 1500,
-    smallPrHunks: 10,
+    smallPrChunks: 10,
     layers: 8,
     highRisk: 2,
   },

@@ -96,7 +96,7 @@ pr-review export --pr 123
 The command prints the zip's absolute path. `export` saves locally; `publish` also shares PR/MR
 canvases automatically as compressed comments.
 
-The zip contains `manifest.json` and `review.json`: the PR description, file/hunk metadata,
+The zip contains `manifest.json` and `review.json`: the PR description, file/chunk metadata,
 and generated review notes. Publishing shares this information with everyone who can read the PR/MR. Each reviewer gets source diffs from their own clone; chat history stays local.
 
 ### Update an outdated canvas

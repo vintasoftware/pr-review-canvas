@@ -187,9 +187,9 @@ describe('lineRefFromEvent', () => {
     expect(lineRefFromEvent(/** @type {Event} */ (eventOn(cell)), pathForKey)).toBeNull()
   })
 
-  it('ignores hunk headers, fold rows, cells outside a diff, and unknown files', () => {
+  it('ignores chunk headers, fold rows, cells outside a diff, and unknown files', () => {
     expect(
-      lineRefFromEvent(/** @type {Event} */ (eventOn(document.querySelector('tr.hunk td.ln'))), pathForKey)
+      lineRefFromEvent(/** @type {Event} */ (eventOn(document.querySelector('tr.chunk td.ln'))), pathForKey)
     ).toBeNull()
     expect(
       lineRefFromEvent(/** @type {Event} */ (eventOn(document.querySelector('td.code'))), pathForKey)

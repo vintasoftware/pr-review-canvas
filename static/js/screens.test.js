@@ -309,7 +309,7 @@ describe('overview', () => {
 
   it('renders the summary as one prose block with its links, headings demoted', () => {
     document.body.innerHTML = summaryHtml(syntheticArtifact().summary, paths)
-    expect(document.querySelector('.summary.prose a[href="#hunk:src/app.ts#1"]')?.textContent).toBe('app.ts')
+    expect(document.querySelector('.summary.prose a[href="#chunk:src/app.ts#1"]')?.textContent).toBe('app.ts')
     expect(summaryHtml('plain summary', paths)).toBe(
       '<div class="summary prose"><p>plain summary</p>\n</div>'
     )

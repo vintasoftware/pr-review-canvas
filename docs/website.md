@@ -47,7 +47,7 @@ The interactive sample uses selected excerpts from [TanStack/query #9612](https:
 
 The layer grouping is editorial, the diff excerpts are real, and chat responses are scripted explanations of the linked source. The sample is not a full generated canvas, a live AI conversation, or an endorsement by TanStack. The source is MIT-licensed; its copyright and permission notice ship in `site/public/tanstack-query-LICENSE.txt`.
 
-The provider's new file and tests each occupy one added hunk in the real diff. The sample assigns them to the provider layer and refers back to them from scheduling, rather than implying that the same hunk belongs to multiple layers. The fold contains a real import-only hunk; it does not hide the entire observer change.
+The provider's new file and tests each occupy one added chunk in the real diff. The sample assigns them to the provider layer and refers back to them from scheduling, rather than implying that the same chunk belongs to multiple layers. The fold contains a real import-only chunk; it does not hide the entire observer change.
 
 ## Editorial direction
 

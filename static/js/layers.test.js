@@ -25,8 +25,8 @@ import {
   elsewhereHtml,
   fileCount,
   getRenderContext,
-  hunkIdForPoint,
-  hunkLayerIndex,
+  chunkIdForPoint,
+  chunkLayerIndex,
   hydrateAll,
   hydrateFileCard,
   layerDiagramHtml,
@@ -40,7 +40,7 @@ import {
   setCardRenderedHook,
   setRenderContext,
   testMapHtml,
-  threadsForHunks,
+  threadsForChunks,
 } from './layers.js'
 import { progressSummary } from './progress.js'
 import { buildThreads } from './threads.js'
@@ -146,7 +146,7 @@ describe('layer sections', () => {
       'Decisions and trade-offs',
       'Check by hand',
     ])
-    expect(section?.querySelector('.judgment.decisions a[href="#hunk:src/app.ts#1"]')?.textContent).toBe(
+    expect(section?.querySelector('.judgment.decisions a[href="#chunk:src/app.ts#1"]')?.textContent).toBe(
       'app.ts'
     )
     expect(section?.querySelector('.judgment.check-by-hand .prose')?.textContent?.trim()).toBe(
@@ -181,8 +181,8 @@ describe('layer sections', () => {
     expect(cards[0]?.querySelector('.file-h .chk input')).not.toBeNull()
     expect(cards[2]?.querySelector('.pill.test-tag')?.textContent).toBe('test')
     expect(cards[0]?.querySelector('.note .prose')?.textContent?.trim()).toBe('Read the return first.')
-    expect(cards[0]?.querySelector('.diff-host')?.getAttribute('data-hunks')).toBe('src_app_ts#1')
-    expect(cards[0]?.querySelector('.more-hunks')?.textContent).toBe('1 more hunk in Other changes')
+    expect(cards[0]?.querySelector('.diff-host')?.getAttribute('data-chunks')).toBe('src_app_ts#1')
+    expect(cards[0]?.querySelector('.more-chunks')?.textContent).toBe('1 more chunk in Other changes')
     expect(cards[1]?.querySelector('.path .old')?.textContent).toBe('src/old-name.ts → ')
     expect(cards[1]?.querySelector('.status')?.textContent).toBe('renamed')
     expect(section?.querySelector('.layer-end .cmd')?.textContent).toBe('mark layer as reviewed')
@@ -195,8 +195,8 @@ describe('layer sections', () => {
     expect(other?.querySelector('details')?.hasAttribute('open')).toBe(false)
     expect(fileCount(1)).toBe('1 file')
     expect(other?.querySelector('article.file#file-src_app_ts-other')).not.toBeNull()
-    expect(other?.querySelector('article.file#file-src_app_ts-other .more-hunks')?.textContent).toBe(
-      '1 more hunk in layer 1 · Run path'
+    expect(other?.querySelector('article.file#file-src_app_ts-other .more-chunks')?.textContent).toBe(
+      '1 more chunk in layer 1 · Run path'
     )
   })
 
@@ -207,7 +207,7 @@ describe('layer sections', () => {
     }
     expect(layerDiagramHtml(layer)).toBe('')
     const drawn = { ...layer, diagram: { mermaid: 'stateDiagram-v2\n  [*] --> active', links: {} } }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cctx = { chunkIndex: chunkLayerIndex(artifact), paths, firstCardFor: new Set() }
     document.body.innerHTML = renderLayerSection(drawn, 0, artifact, files, state, cctx)
     const body = document.querySelector('section.layer > .layer-body > .body')
     expect([...(body?.children ?? [])].map(el => el.className)).toEqual([
@@ -231,7 +231,7 @@ describe('layer sections', () => {
       rationale: 'The swap.\n\n```mermaid\nflowchart LR\n  A --> B\n```',
       decisions: 'We kept it.\n\n```mermaid\nflowchart LR\n  C --> D\n```',
     }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cctx = { chunkIndex: chunkLayerIndex(artifact), paths, firstCardFor: new Set() }
     document.body.innerHTML = renderLayerSection(fenced, 0, artifact, files, state, cctx)
     expect([...document.querySelectorAll('.diagram')].map(el => el.getAttribute('data-mermaid'))).toEqual([
       'flowchart LR\n  A --> B',
@@ -246,9 +246,9 @@ describe('layer sections', () => {
     if (!layer) {
       throw new Error('no layer')
     }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cctx = { chunkIndex: chunkLayerIndex(artifact), paths, firstCardFor: new Set() }
     const html = renderFileCard(
-      { path: 'ghost.ts', hunks: ['ghost_ts#1'], isTest: false, annotations: [] },
+      { path: 'ghost.ts', chunks: ['ghost_ts#1'], isTest: false, annotations: [] },
       undefined,
       layer,
       cctx
@@ -257,19 +257,19 @@ describe('layer sections', () => {
     expect(html).not.toContain('pill add')
     expect(
       elsewhereHtml(
-        { path: 'ghost.ts', hunks: [], isTest: false, annotations: [] },
+        { path: 'ghost.ts', chunks: [], isTest: false, annotations: [] },
         undefined,
         layer,
-        cctx.hunkIndex
+        cctx.chunkIndex
       )
     ).toBe('')
-    // A hunk that no layer lists is not reported as living elsewhere.
+    // A chunk that no layer lists is not reported as living elsewhere.
     const entry = files[0]
     if (!entry) {
       throw new Error('no entry')
     }
     expect(
-      elsewhereHtml({ path: entry.path, hunks: [], isTest: false, annotations: [] }, entry, layer, new Map())
+      elsewhereHtml({ path: entry.path, chunks: [], isTest: false, annotations: [] }, entry, layer, new Map())
     ).toBe('')
     const done = { ...state, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
     document.body.innerHTML = renderLayerSection(layer, 0, artifact, files, done, cctx)
@@ -284,12 +284,12 @@ describe('layer sections', () => {
 
     const file = {
       path: 'routine.ts',
-      hunks: ['routine_ts#1'],
+      chunks: ['routine_ts#1'],
       isTest: false,
       annotations: [],
       collapsed: true,
     }
-    const cardContext = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cardContext = { chunkIndex: chunkLayerIndex(artifact), paths, firstCardFor: new Set() }
     document.body.innerHTML = renderFileCard(file, undefined, layer, cardContext)
 
     expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
@@ -322,7 +322,7 @@ describe('hydration', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('renders only the layer hunks and applies annotations, points, and threads', () => {
+  it('renders only the layer chunks and applies annotations, points, and threads', () => {
     const card = document.querySelector('article.file#file-src_app_ts')
     if (!(card instanceof HTMLElement)) {
       throw new Error('no card')
@@ -330,7 +330,7 @@ describe('hydration', () => {
     const result = hydrateFileCard(card, ctx())
     expect(result).toEqual({ rendered: true, deferred: false, placed: 3, missed: 0 })
     expect(card.querySelectorAll('table.diff').length).toBe(1)
-    expect(card.querySelector('table.diff')?.id).toBe('hunk-src_app_ts-1')
+    expect(card.querySelector('table.diff')?.id).toBe('chunk-src_app_ts-1')
     // Lines 3 and 4 carry the band edge, and so does the note row itself.
     expect(card.querySelectorAll('tr.ann').length).toBe(3)
     expect(card.querySelector('tr.annot .lbl')?.textContent).toBe('Annotation · lines 3–4')
@@ -351,13 +351,13 @@ describe('hydration', () => {
     expect(card.querySelectorAll('tr.annot').length).toBe(1)
   })
 
-  it('hydrates the Other card with the second hunk and its tests-kind point', () => {
+  it('hydrates the Other card with the second chunk and its tests-kind point', () => {
     const card = document.querySelector('article.file#file-src_app_ts-other')
     if (!(card instanceof HTMLElement)) {
       throw new Error('no card')
     }
     expect(hydrateFileCard(card, ctx())).toEqual({ rendered: true, deferred: false, placed: 1, missed: 0 })
-    expect(card.querySelector('table.diff')?.id).toBe('hunk-src_app_ts-2')
+    expect(card.querySelector('table.diff')?.id).toBe('chunk-src_app_ts-2')
     expect(card.querySelector('tr.ifind')?.getAttribute('data-point')).toBe('p-2')
   })
 
@@ -389,16 +389,16 @@ describe('hydration', () => {
     expect(hydrateAll(document, ctx())).toBe(5)
   })
 
-  it('finds the hunk of a point and the threads of a hunk set', () => {
+  it('finds the chunk of a point and the threads of a chunk set', () => {
     const entry = files[0]
     const p = artifact.points[0]
     if (!(entry && p)) {
       throw new Error('fixture')
     }
-    expect(hunkIdForPoint(p, entry)).toBe('src_app_ts#1')
-    expect(hunkIdForPoint({ ...p, line: 99 }, entry)).toBe('')
-    expect(threadsForHunks(comments, entry, new Set(['src_app_ts#1'])).map(t => t.root.id)).toEqual([1001])
-    expect(threadsForHunks(comments, entry, new Set(['src_app_ts#2']))).toEqual([])
+    expect(chunkIdForPoint(p, entry)).toBe('src_app_ts#1')
+    expect(chunkIdForPoint({ ...p, line: 99 }, entry)).toBe('')
+    expect(threadsForChunks(comments, entry, new Set(['src_app_ts#1'])).map(t => t.root.id)).toEqual([1001])
+    expect(threadsForChunks(comments, entry, new Set(['src_app_ts#2']))).toEqual([])
   })
 
   /**
@@ -676,8 +676,8 @@ describe('canvas without an Other layer', () => {
     expect(document.querySelectorAll('section.panel#layer-other').length).toBe(0)
     expect(document.querySelector('section.layer h2')?.textContent).toContain('Layer 1 of 1')
     expect(document.querySelectorAll('article.file').length).toBe(3)
-    // The second hunk of src/app.ts belongs to no layer here, so no cross-layer link is drawn.
-    expect(document.querySelector('.more-hunks')).toBeNull()
+    // The second chunk of src/app.ts belongs to no layer here, so no cross-layer link is drawn.
+    expect(document.querySelector('.more-chunks')).toBeNull()
     expect(progressSummary(noOther, state)).toEqual({ done: 0, total: 1, percent: 0 })
   })
 })
@@ -715,7 +715,7 @@ describe('PR #278 fixture render', () => {
       })
       expect(rendered).toBe(document.querySelectorAll('article.file').length)
       expect(document.querySelectorAll('table.diff').length).toBe(
-        fixture.files.reduce((n, f) => n + f.hunks.length, 0)
+        fixture.files.reduce((n, f) => n + f.chunks.length, 0)
       )
       expect(document.querySelectorAll('tr.ifind').length).toBe(fixture.points.length)
       expect(document.querySelectorAll('tr.annot').length).toBe(

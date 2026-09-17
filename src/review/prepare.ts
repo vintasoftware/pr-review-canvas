@@ -156,10 +156,10 @@ export async function prepare(
       mode: config.generation.mode,
       maxRepairRounds: config.generation.maxRepairRounds,
       inlineDiffMaxLines: config.generation.inlineDiffMaxLines,
-      smallPrHunks: config.generation.smallPrHunks,
+      smallPrChunks: config.generation.smallPrChunks,
     },
     tests: { patterns: config.tests.patterns },
-    smallPr: derived.files.reduce((n, f) => n + f.hunks.length, 0) <= config.generation.smallPrHunks,
+    smallPr: derived.files.reduce((n, f) => n + f.chunks.length, 0) <= config.generation.smallPrChunks,
     largePr: isLargePr({ files: derived.files.length, additions, deletions }),
     preparedAt: ctx.now().toISOString(),
   }

@@ -159,7 +159,7 @@ describe('splitBlocks and parseBlock', () => {
 describe('toFileEntry and toPatchMap', () => {
   const files = parseUnifiedDiff(SYNTHETIC_DIFF)
 
-  it('builds the manifest entry with the hunk index', () => {
+  it('builds the manifest entry with the chunk index', () => {
     expect(toFileEntry(files[0] as (typeof files)[number])).toEqual({
       path: 'src/app.ts',
       key: 'src_app_ts',
@@ -167,7 +167,7 @@ describe('toFileEntry and toPatchMap', () => {
       additions: 3,
       deletions: 1,
       lang: 'typescript',
-      hunks: [
+      chunks: [
         { id: 'src_app_ts#1', header: '@@ -1,4 +1,5 @@', oldStart: 1, oldLines: 4, newStart: 1, newLines: 5 },
         {
           id: 'src_app_ts#2',

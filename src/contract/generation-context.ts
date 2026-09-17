@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { readChunkLimit } from './chunk-compat.js'
 import { DefaultLayerSchema, GenerationModeSchema, HighRiskRuleSchema } from '../project-config.js'
 import { DEFAULT_TEST_PATTERNS } from '../review/test-paths.js'
 import { FileEntrySchema, LIMITS, PrSchema, RepoSchema, type TextCaps } from './review-artifact.js'
@@ -25,7 +26,7 @@ const capsShape = {
 
 /**
  * `context.json`: everything the agent and `publish` need about one prepared canvas. Written by
- * `prepare` next to `prompt.md`; `publish` validates `model.json` against the hunk index and the
+ * `prepare` next to `prompt.md`; `publish` validates `model.json` against the chunk index and the
  * caps recorded here, so a config change between the two commands does not change the rules.
  */
 export const GenerationContextSchema = z.object({
@@ -38,7 +39,7 @@ export const GenerationContextSchema = z.object({
   canvasDir: z.string().min(1),
   /** Absolute paths: the PR head files, the merge-base files, and one labeled patch per file. */
   paths: z.object({ head: z.string(), base: z.string(), patches: z.string(), model: z.string() }),
-  /** The manifest: every changed file with its hunk ids and headers. */
+  /** The manifest: every changed file with its chunk ids and headers. */
   files: z.array(FileEntrySchema),
   defaultLayers: z.array(DefaultLayerSchema),
   rulebook: z.object({ path: z.string().nullable(), text: z.string().nullable() }),
@@ -49,18 +50,21 @@ export const GenerationContextSchema = z.object({
     maxDiagramsPerLayer: z.number().int().positive(),
     maxDiagramLinks: z.number().int().positive().default(LIMITS.maxDiagramLinks),
   }),
-  generation: z.object({
-    mode: GenerationModeSchema.default('strict'),
-    maxRepairRounds: z.number().int().positive(),
-    inlineDiffMaxLines: z.number().int().positive(),
-    smallPrHunks: z.number().int().positive(),
-  }),
+  generation: z.preprocess(
+    readChunkLimit,
+    z.object({
+      mode: GenerationModeSchema.default('strict'),
+      maxRepairRounds: z.number().int().positive(),
+      inlineDiffMaxLines: z.number().int().positive(),
+      smallPrChunks: z.number().int().positive(),
+    })
+  ),
   /** The globs that make a file a test here. Defaulted, so a context written before this
    * field existed still reads. */
   tests: z
     .object({ patterns: z.array(z.string().min(1)) })
     .default(() => ({ patterns: [...DEFAULT_TEST_PATTERNS] })),
-  /** At most `generation.smallPrHunks` hunks: one layer unless concerns differ, fewer annotations. */
+  /** At most `generation.smallPrChunks` chunks: one layer unless concerns differ, fewer annotations. */
   smallPr: z.boolean(),
   /** More than 400 files or 50 000 changed lines: the prompt inlines nothing and tightens the caps. */
   largePr: z.boolean(),

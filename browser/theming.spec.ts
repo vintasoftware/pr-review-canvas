@@ -229,7 +229,7 @@ test('matches the GitHub dark screenshot palette', async ({ page, reviewUrl }, t
     'rgb(49, 80, 61)'
   )
   await expect(page.locator('tr.add:not(.folded) > .ln').first()).toHaveCSS('color', 'rgb(209, 215, 224)')
-  await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('background-color', 'rgb(37, 49, 66)')
-  await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('color', 'rgb(145, 152, 161)')
+  await expect(page.locator('tr.chunk > .code').first()).toHaveCSS('background-color', 'rgb(37, 49, 66)')
+  await expect(page.locator('tr.chunk > .code').first()).toHaveCSS('color', 'rgb(145, 152, 161)')
   await page.screenshot({ path: testInfo.outputPath('github-dark.png'), fullPage: true })
 })

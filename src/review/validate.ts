@@ -1,11 +1,11 @@
 // Every rule the client relies on, checked here and nowhere else. Pure: the caller passes the
-// hunk index and the config; the report lists one line per problem and never fixes anything.
+// chunk index and the config; the report lists one line per problem and never fixes anything.
 import type { z } from 'zod'
 import { extractLinks, type LinkTargets, parseLink, resolveLink } from '../contract/links.js'
 import { diagramKind, mermaidBlocks, withoutMermaid } from '../contract/mermaid-fences.js'
 import {
   type FileEntry,
-  type Hunk,
+  type Chunk,
   type Limits,
   type ModelLayer,
   type ModelOutput,
@@ -14,7 +14,7 @@ import {
   type TextCaps,
 } from '../contract/review-artifact.js'
 import type { ValidationCode, ValidationError, ValidationReport } from '../contract/validation.js'
-import { hunkForLine, hunkLineRanges } from '../git/patch-lines.js'
+import { chunkForLine, chunkLineRanges } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { diagramNodeIds } from './diagram-nodes.js'
 import { matchesGlob } from './glob.js'
@@ -96,19 +96,19 @@ class Report {
 
 interface Index {
   byPath: Map<string, FileEntry>
-  byHunkId: Map<string, { file: FileEntry; hunk: Hunk }>
+  byChunkId: Map<string, { file: FileEntry; chunk: Chunk }>
 }
 
 function indexFiles(files: readonly FileEntry[]): Index {
   const byPath = new Map<string, FileEntry>()
-  const byHunkId = new Map<string, { file: FileEntry; hunk: Hunk }>()
+  const byChunkId = new Map<string, { file: FileEntry; chunk: Chunk }>()
   for (const file of files) {
     byPath.set(file.path, file)
-    for (const hunk of file.hunks) {
-      byHunkId.set(hunk.id, { file, hunk })
+    for (const chunk of file.chunks) {
+      byChunkId.set(chunk.id, { file, chunk })
     }
   }
-  return { byPath, byHunkId }
+  return { byPath, byChunkId }
 }
 
 function layerLabel(layer: ModelLayer): string {
@@ -205,7 +205,7 @@ function checkDiagrams(output: ModelOutput, caps: TextCaps, limits: Limits, repo
   })
 }
 
-function checkHunks(output: ModelOutput, index: Index, report: Report): Map<string, ModelLayer> {
+function checkChunks(output: ModelOutput, index: Index, report: Report): Map<string, ModelLayer> {
   const owner = new Map<string, ModelLayer>()
   for (const layer of output.layers) {
     const where = `layer:${layer.key}`
@@ -214,16 +214,16 @@ function checkHunks(output: ModelOutput, index: Index, report: Report): Map<stri
       if (entry === undefined) {
         report.add('PATH_UNKNOWN', where, `${layerLabel(layer)}: ${file.path} is not in the diff`)
       }
-      for (const id of file.hunks) {
-        const hit = index.byHunkId.get(id)
+      for (const id of file.chunks) {
+        const hit = index.byChunkId.get(id)
         if (hit === undefined) {
-          const hint = entry === undefined ? '' : ` (${file.path} has ${entry.hunks.length} hunks)`
-          report.add('HUNK_UNKNOWN', where, `${layerLabel(layer)}: ${id} does not exist${hint}`)
+          const hint = entry === undefined ? '' : ` (${file.path} has ${entry.chunks.length} chunks)`
+          report.add('CHUNK_UNKNOWN', where, `${layerLabel(layer)}: ${id} does not exist${hint}`)
           continue
         }
         if (hit.file.path !== file.path) {
           report.add(
-            'HUNK_UNKNOWN',
+            'CHUNK_UNKNOWN',
             where,
             `${layerLabel(layer)}: ${id} belongs to ${hit.file.path}, not ${file.path}`
           )
@@ -232,9 +232,9 @@ function checkHunks(output: ModelOutput, index: Index, report: Report): Map<stri
         const first = owner.get(id)
         if (first !== undefined) {
           report.add(
-            'HUNK_DUPLICATE',
+            'CHUNK_DUPLICATE',
             where,
-            `${id} (${hit.hunk.header}) is in ${layerLabel(first)} and ${layerLabel(layer)}`
+            `${id} (${hit.chunk.header}) is in ${layerLabel(first)} and ${layerLabel(layer)}`
           )
           continue
         }
@@ -242,12 +242,12 @@ function checkHunks(output: ModelOutput, index: Index, report: Report): Map<stri
       }
     }
   }
-  for (const { file, hunk } of index.byHunkId.values()) {
-    if (!owner.has(hunk.id)) {
+  for (const { file, chunk } of index.byChunkId.values()) {
+    if (!owner.has(chunk.id)) {
       report.add(
-        'HUNK_UNASSIGNED',
-        `hunk:${hunk.id}`,
-        `${hunk.id} in ${file.path} (${hunk.header}) is in no layer`
+        'CHUNK_UNASSIGNED',
+        `chunk:${chunk.id}`,
+        `${chunk.id} in ${file.path} (${chunk.header}) is in no layer`
       )
     }
   }
@@ -269,7 +269,7 @@ function checkLayers(output: ModelOutput, report: Report): void {
       keys.set(layer.key, i)
     }
     if (layer.files.length === 0) {
-      report.add('LAYER_EMPTY', where, `${layerLabel(layer)} has no hunks`)
+      report.add('LAYER_EMPTY', where, `${layerLabel(layer)} has no chunks`)
     }
   })
   // Other is optional: at most one, and last when present.
@@ -366,7 +366,7 @@ function checkRisk(output: ModelOutput, highRisk: readonly HighRiskRule[], repor
     report.add(
       'RISK_IN_OTHER',
       where,
-      `other: carries the risk tag "${tag.label}"; move the hunks to a real layer`
+      `other: carries the risk tag "${tag.label}"; move the chunks to a real layer`
     )
   }
   for (const file of other.files) {
@@ -381,8 +381,8 @@ function checkRisk(output: ModelOutput, highRisk: readonly HighRiskRule[], repor
   }
 }
 
-function hunkAt(file: FileEntry | undefined, side: Side, line: number): Hunk | null {
-  return file === undefined ? null : hunkForLine(file.hunks, side, line)
+function chunkAt(file: FileEntry | undefined, side: Side, line: number): Chunk | null {
+  return file === undefined ? null : chunkForLine(file.chunks, side, line)
 }
 
 function checkAnnotations(output: ModelOutput, index: Index, report: Report): void {
@@ -394,20 +394,20 @@ function checkAnnotations(output: ModelOutput, index: Index, report: Report): vo
         const range = a.startLine === a.endLine ? `${a.startLine}` : `${a.startLine}-${a.endLine}`
         const label = `${layerLabel(layer)} ${file.path}:${range} (${a.side})`
         if (a.endLine < a.startLine) {
-          report.add('ANNOTATION_OUTSIDE_HUNK', where, `${label}: endLine is before startLine`)
+          report.add('ANNOTATION_OUTSIDE_CHUNK', where, `${label}: endLine is before startLine`)
           return
         }
-        const start = hunkAt(entry, a.side, a.startLine)
-        const end = hunkAt(entry, a.side, a.endLine)
+        const start = chunkAt(entry, a.side, a.startLine)
+        const end = chunkAt(entry, a.side, a.endLine)
         if (start === null || end === null || start.id !== end.id) {
           report.add(
-            'ANNOTATION_OUTSIDE_HUNK',
+            'ANNOTATION_OUTSIDE_CHUNK',
             where,
-            `${label} is not inside one hunk of the diff (${hunkLineRanges(entry?.hunks ?? [], a.side)})`
+            `${label} is not inside one chunk of the diff (${chunkLineRanges(entry?.chunks ?? [], a.side)})`
           )
-        } else if (!file.hunks.includes(start.id)) {
+        } else if (!file.chunks.includes(start.id)) {
           report.add(
-            'ANNOTATION_OUTSIDE_HUNK',
+            'ANNOTATION_OUTSIDE_CHUNK',
             where,
             `${label} is in ${start.id}, which this layer does not list`
           )
@@ -434,7 +434,7 @@ function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: 
     const where = `point:${i + 1}`
     const side = p.side ?? 'new'
     const entry = index.byPath.get(p.path)
-    const start = hunkAt(entry, side, p.line)
+    const start = chunkAt(entry, side, p.line)
     if (entry === undefined) {
       report.add('POINT_OUTSIDE_DIFF', where, `point ${i + 1} "${p.title}": ${p.path} is not in the diff`)
       return
@@ -443,7 +443,7 @@ function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: 
       report.add(
         'POINT_OUTSIDE_DIFF',
         where,
-        `point ${i + 1} "${p.title}": ${p.path}:${p.line} (${side}) is not in the diff (${hunkLineRanges(entry.hunks, side)})`
+        `point ${i + 1} "${p.title}": ${p.path}:${p.line} (${side}) is not in the diff (${chunkLineRanges(entry.chunks, side)})`
       )
       return
     }
@@ -451,11 +451,11 @@ function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: 
       report.add('POINT_OUTSIDE_DIFF', where, `point ${i + 1} "${p.title}": endLine is before line`)
       return
     }
-    if (p.endLine !== undefined && hunkAt(entry, side, p.endLine)?.id !== start.id) {
+    if (p.endLine !== undefined && chunkAt(entry, side, p.endLine)?.id !== start.id) {
       report.add(
         'POINT_OUTSIDE_DIFF',
         where,
-        `point ${i + 1} "${p.title}": ${p.path}:${p.line}-${p.endLine} (${side}) crosses out of ${start.id} (${hunkLineRanges(entry.hunks, side)})`
+        `point ${i + 1} "${p.title}": ${p.path}:${p.line}-${p.endLine} (${side}) crosses out of ${start.id} (${chunkLineRanges(entry.chunks, side)})`
       )
     }
   })
@@ -543,7 +543,7 @@ function checkDiagramLinks(
 /**
  * Schema first (a shape failure ends the run, since the rules need a well-formed output; raw text
  * past the hard limit counts as one), then the caps on the visible text and the layering rules
- * against the hunk index, all reported in one round.
+ * against the chunk index, all reported in one round.
  */
 export function validateModelOutput(raw: unknown, input: ValidationInput): ValidationResult {
   const parsed = modelOutputSchema(input.caps).safeParse(raw)
@@ -555,7 +555,7 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
   checkLengths(output, input.caps, report)
   checkDiagrams(output, input.caps, input.limits, report)
   const index = indexFiles(input.files)
-  checkHunks(output, index, report)
+  checkChunks(output, index, report)
   checkLayers(output, report)
   checkTests(output, index, input.headPaths ?? new Set(), input.testPatterns ?? DEFAULT_TEST_PATTERNS, report)
   checkRisk(output, input.highRisk, report)

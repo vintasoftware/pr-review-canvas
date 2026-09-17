@@ -106,7 +106,7 @@ export interface SettingsResponse {
     rulebook: string | null
     maxRepairRounds: number
     inlineDiffMaxLines: number
-    smallPrHunks: number
+    smallPrChunks: number
     layers: number
     highRisk: number
   }

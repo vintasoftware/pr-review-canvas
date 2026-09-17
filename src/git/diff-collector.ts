@@ -3,7 +3,7 @@ import type { FileEntry } from '../contract/review-artifact.js'
 import { FILE_STATUSES } from '../contract/review-artifact.js'
 import type { Git } from './git.js'
 import { langForPath } from './lang.js'
-import { buildHunkIndex } from './patch-lines.js'
+import { buildChunkIndex } from './patch-lines.js'
 
 export type FileStatus = (typeof FILE_STATUSES)[number]
 
@@ -49,9 +49,9 @@ function stripPrefix(p: string | null): string | null {
 
 /** Parses one `diff --git` block. Returns null when no path can be found. */
 export function parseBlock(lines: string[]): Omit<CollectedFile, 'key'> | null {
-  const hunkAt = lines.findIndex(l => l.startsWith('@@'))
-  const header = hunkAt === -1 ? lines : lines.slice(0, hunkAt)
-  const body = hunkAt === -1 ? [] : lines.slice(hunkAt)
+  const chunkAt = lines.findIndex(l => l.startsWith('@@'))
+  const header = chunkAt === -1 ? lines : lines.slice(0, chunkAt)
+  const body = chunkAt === -1 ? [] : lines.slice(chunkAt)
 
   let oldRaw: string | null = null
   let newRaw: string | null = null
@@ -94,7 +94,7 @@ export function parseBlock(lines: string[]): Omit<CollectedFile, 'key'> | null {
     status = 'modified'
   }
 
-  // Trailing empty line from the final "\n" split belongs to no hunk.
+  // Trailing empty line from the final "\n" split belongs to no chunk.
   const bodyLines = body.length > 0 && body[body.length - 1] === '' ? body.slice(0, -1) : body
   const additions = bodyLines.filter(l => l.startsWith('+')).length
   const deletions = bodyLines.filter(l => l.startsWith('-')).length
@@ -128,7 +128,7 @@ export async function collectDiffs(git: Git, base: string, head: string): Promis
   return parseUnifiedDiff(await git.diff(base, head))
 }
 
-/** The manifest entry for a collected file: everything but the patch, plus the hunk index. */
+/** The manifest entry for a collected file: everything but the patch, plus the chunk index. */
 export function toFileEntry(file: CollectedFile): FileEntry {
   const entry: FileEntry = {
     path: file.path,
@@ -136,7 +136,7 @@ export function toFileEntry(file: CollectedFile): FileEntry {
     status: file.status,
     additions: file.additions,
     deletions: file.deletions,
-    hunks: buildHunkIndex(file.key, file.patch),
+    chunks: buildChunkIndex(file.key, file.patch),
   }
   if (file.oldPath !== undefined) {
     entry.oldPath = file.oldPath

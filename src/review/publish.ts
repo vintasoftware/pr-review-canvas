@@ -107,7 +107,7 @@ export function attemptsSincePrepare(log: string): number {
 /**
  * Appends one line for this publish run and returns its attempt number. Every field is named, so
  * the file reads without the code: `<time> published attempts=2` and
- * `<time> invalid attempts=1 errors=2 TEXT_TOO_LONG,HUNK_UNASSIGNED`.
+ * `<time> invalid attempts=1 errors=2 TEXT_TOO_LONG,CHUNK_UNASSIGNED`.
  */
 async function recordAttempt(
   canvasDir: string,

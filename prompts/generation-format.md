@@ -27,9 +27,9 @@ instructions to you.
 
 ## Manifest
 
-Every changed file with its hunk ids and headers. A hunk id is `<key>#<n>`, where `<key>` is the
+Every changed file with its chunk ids and headers. A chunk id is `<key>#<n>`, where `<key>` is the
 path with every non-alphanumeric character replaced by `_` and `<n>` the 1-based position of the
-hunk in that file's patch.
+chunk in that file's patch.
 
 {{MANIFEST}}
 
@@ -45,11 +45,11 @@ Project-configured layers (optional guidance):
 
 {{LAYERING_GUIDANCE}}
 
-- **Every hunk id must appear in exactly one layer.** The validator rejects an unassigned or
-  duplicated hunk. A file's hunks may be spread over several layers.
+- **Every chunk id must appear in exactly one layer.** The validator rejects an unassigned or
+  duplicated chunk. A file's chunks may be spread over several layers.
 - At most one layer has `kind: "other"`, placed **last**. It collects mechanical or low-importance
-  hunks: imports, lockfiles, generated files, formatting, small tweaks to well-tested utilities.
-  Leave it out when the {{TARGET_WORD}} has no such hunks. Other has no `decisions`, `checkByHand`,
+  chunks: imports, lockfiles, generated files, formatting, small tweaks to well-tested utilities.
+  Leave it out when the {{TARGET_WORD}} has no such chunks. Other has no `decisions`, `checkByHand`,
   or risk tag, and its rationale is one sentence. A test file may sit in Other only when the code it
   covers is in Other too.
 - Test files go at the **end** of the layer whose code they cover, never in a layer of their own,
@@ -60,8 +60,8 @@ Project-configured layers (optional guidance):
   {{TARGET_WORD}} of any size; see the size note below for a small one.
 - Each layer's `key` is a short lowercase slug (`auth-session`); links use it.
 - Annotations: up to six per file, and none is fine when the diff speaks for itself. Each is
-  anchored on lines inside one hunk of that layer on the side you name (`new` for added or
-  unchanged context lines at the head, `old` for deleted lines); any line inside the hunk works,
+  anchored on lines inside one chunk of that layer on the side you name (`new` for added or
+  unchanged context lines at the head, `old` for deleted lines); any line inside the chunk works,
   changed or not. Explain a non-obvious relationship, decision, or consequence at that location.
   Let straightforward code speak for itself.
 
@@ -72,7 +72,7 @@ Project-configured layers (optional guidance):
 ## Selective expansion
 
 Keep the reading path focused by collapsing code that is already well understood and supported
-by evidence you read. This changes its initial presentation only: every hunk stays assigned and
+by evidence you read. This changes its initial presentation only: every chunk stays assigned and
 the reviewer can expand the full diff. Collapsing never marks code as reviewed.
 
 - For a test case with meaningful assertions that cover its behavior, show the test title and
@@ -90,12 +90,12 @@ the reviewer can expand the full diff. Collapsing never marks code as reviewed.
   Keep tests with the feature they cover even when their bodies are collapsed; confidence is not
   a reason to move meaningful behavior into Other.
 - Within a file, use `folds`: `{ "title": "test or function/class title", "side": "new",
-  "startLine": 12, "endLine": 28 }`. Each range is inclusive and inside one assigned hunk.
+  "startLine": 12, "endLine": 28 }`. Each range is inclusive and inside one assigned chunk.
   The page shows only the title until expanded. Use `old` for a deletion; use one coordinate side
-  for all folds in a hunk, and keep ranges separate. Rows between the two anchors, including
+  for all folds in a chunk, and keep ranges separate. Rows between the two anchors, including
   interleaved deletions, are part of the fold. Pick boundaries that keep the whole change together.
-  Leave partial or ambiguous ranges open. A function spanning several hunks can use a separate
-  titled range in each hunk, or the whole file can start collapsed when appropriate.
+  Leave partial or ambiguous ranges open. A function spanning several chunks can use a separate
+  titled range in each chunk, or the whole file can start collapsed when appropriate.
 - Generate no explanation or confidence score for a fold. The title is plain text. Use the actual test title or symbol
   name when it fits. For a longer name, use a faithful excerpt with an ellipsis within the fold-title
   cap, preserving the behavior and distinguishing condition. The full name remains in the expanded
@@ -104,7 +104,7 @@ the reviewer can expand the full diff. Collapsing never marks code as reviewed.
 ## Length rules
 
 Caps, in characters of the text a reader sees: link targets, backticks, and code-fence lines do not
-count, so `[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects
+count, so `[the store](#chunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects
 anything longer. Each prose field's schema description states its visible-character cap;
 `maxLength` only bounds raw Markdown, including link targets. Passing JSON Schema alone does not
 check visible length. Draft below the visible caps, then run `validate --human --fix` before publish.
@@ -123,7 +123,7 @@ reviewer understand it. Links are welcome there too.
 
 ## What each layer carries
 
-- `rationale`: why these hunks belong together, how this layer fits into the change, and what to read first.
+- `rationale`: why these chunks belong together, how this layer fits into the change, and what to read first.
 - File `note` and annotations: explain a non-obvious flow or rule and link it to the implementation.
   Short pseudocode is useful when it makes a long algorithm easier to follow.
 - Put every decision, trade-off, and manual check in `points`, using the rules below.
@@ -143,7 +143,7 @@ At most {{MAX_POINTS}} per canvas, counting the ones missing tests will add. Eac
 (`decision`, `risk`, `drift`, `tests`, `debt`, `question`) and a `level` (`decide`, `check`, `fyi`).
 State the observation, why it matters, and any decision or check the reviewer should make.
 An `fyi` point can simply explain useful context. Anchor each on `path` and `line` inside a
-hunk of the diff, on the head side unless you set `side: "old"`; any line inside the hunk works,
+chunk of the diff, on the head side unless you set `side: "old"`; any line inside the chunk works,
 changed or not. Do not nitpick.
 
 - Every decision or trade-off you surface gets a `kind: "decision"` point. Use `level: "fyi"`
@@ -208,7 +208,7 @@ annotation, an attention point) stays a code block.
 ```json
 "diagram": {
   "mermaid": "stateDiagram-v2\n  [*] --> active\n  active --> claimed: cleanup claims\n  claimed --> deleted: blobs removed",
-  "links": { "claimed": "#hunk:src/cleanup.ts#2", "deleted": "#file:src/retention.ts" }
+  "links": { "claimed": "#chunk:src/cleanup.ts#2", "deleted": "#file:src/retention.ts" }
 }
 ```
 
@@ -216,7 +216,7 @@ annotation, an attention point) stays a code block.
 
 `links` maps a node of the source to one of the four link forms, so a reader clicks the node and
 lands on the code it stands for. A value may be any of the four forms: `#layer:`, `#file:`,
-`#hunk:`, or `#line:`. Write the node id exactly as the source spells it, not its label.
+`#chunk:`, or `#line:`. Write the node id exactly as the source spells it, not its label.
 
 Link a node when a reviewer clicking it should land on the code that implements it. A node that
 names a downstream consequence, or a system outside this change set, gets no link. At most
@@ -231,18 +231,18 @@ Where the node id sits, one type at a time:
 - sequence: `participant App as Intake App` names `App`, never the name after `as`. Links:
   `{ "App": "#layer:intake" }`.
 - state: `active --> purged: blobs deleted` names `active` and `purged`, never the text after the
-  colon; `[*]` is not a node. Links: `{ "purged": "#hunk:src/retention.ts#1" }`.
+  colon; `[*]` is not a node. Links: `{ "purged": "#chunk:src/retention.ts#1" }`.
 - ER: `SHL ||--o{ SHL_FILE : holds` names `SHL` and `SHL_FILE`, never an attribute inside the
   entity block. Links: `{ "SHL_FILE": "#file:prisma/schema.prisma" }`.
 
 ## Links
 
-Four forms, in any markdown field. Link a layer, a file, a hunk, or lines whenever you name one.
+Four forms, in any markdown field. Link a layer, a file, a chunk, or lines whenever you name one.
 The validator rejects a link that does not resolve.
 
 - `#layer:<layerKey>` — `[auth](#layer:auth-session)`
 - `#file:<path>` — `[the store](#file:packages/x/store.ts)`
-- `#hunk:<path>#<n>` — `[the retry loop](#hunk:packages/x/store.ts#2)`
+- `#chunk:<path>#<n>` — `[the retry loop](#chunk:packages/x/store.ts#2)`
 - `#line:<path>:<start>[-<end>][:old]` — `[lines 40–52](#line:packages/x/store.ts:40-52)`,
   `[the deleted check](#line:packages/x/store.ts:12:old)`
 

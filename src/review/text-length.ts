@@ -1,6 +1,6 @@
 /**
  * The length a reader sees. Caps measure this, so a long link target or a code fence does not eat
- * the budget: `[text](#hunk:a/very/long/path.ts#2)` counts as `text`, backticks and fence lines
+ * the budget: `[text](#chunk:a/very/long/path.ts#2)` counts as `text`, backticks and fence lines
  * count as nothing.
  */
 export function visibleText(markdown: string): string {

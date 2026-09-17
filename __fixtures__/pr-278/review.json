@@ -28,7 +28,7 @@
       "status": "modified",
       "additions": 12,
       "deletions": 7,
-      "hunks": [
+      "chunks": [
         {
           "id": "_env_example#1",
           "header": "@@ -86,11 +86,11 @@ SHL_SERVER_URL=http://localhost:3030",
@@ -62,7 +62,7 @@
       "additions": 28,
       "deletions": 3,
       "lang": "yaml",
-      "hunks": [
+      "chunks": [
         {
           "id": "_github_workflows_vercel_deploy_reusable_yml#1",
           "header": "@@ -211,22 +211,47 @@ jobs:",
@@ -80,7 +80,7 @@
       "additions": 3,
       "deletions": 2,
       "lang": "markdown",
-      "hunks": [
+      "chunks": [
         {
           "id": "AGENTS_md#1",
           "header": "@@ -386,9 +386,10 @@ SHL_SERVER_SUPABASE_SERVICE_ROLE_KEY # shl-server only — Supabase service role",
@@ -98,7 +98,7 @@
       "additions": 76,
       "deletions": 13,
       "lang": "markdown",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_README_md#1",
           "header": "@@ -75,7 +75,7 @@ Create a new SHL from a FHIR bundle. Returns the SHL URI and internal id.",
@@ -196,7 +196,7 @@
       "additions": 42,
       "deletions": 0,
       "lang": "sql",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_prisma_migrations_20260707000000_shl_lifecycle_audit_migration_sql#1",
           "header": "@@ -0,0 +1,42 @@",
@@ -214,7 +214,7 @@
       "additions": 35,
       "deletions": 0,
       "lang": "sql",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_prisma_migrations_20260914000000_sync_shl_expiry_migration_sql#1",
           "header": "@@ -0,0 +1,35 @@",
@@ -232,7 +232,7 @@
       "additions": 33,
       "deletions": 0,
       "lang": "prisma",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_prisma_schema_prisma#1",
           "header": "@@ -19,11 +19,26 @@ model Shl {",
@@ -266,7 +266,7 @@
       "additions": 45,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___app_test_ts#1",
           "header": "@@ -110,4 +110,49 @@ describe('app wiring', () => {",
@@ -284,7 +284,7 @@
       "additions": 479,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___cleanup_test_ts#1",
           "header": "@@ -0,0 +1,479 @@",
@@ -302,7 +302,7 @@
       "additions": 8,
       "deletions": 8,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___config_test_ts#1",
           "header": "@@ -11,7 +11,7 @@",
@@ -344,7 +344,7 @@
       "additions": 325,
       "deletions": 26,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___db_integration_test_ts#1",
           "header": "@@ -6,7 +6,9 @@",
@@ -378,7 +378,7 @@
       "additions": 45,
       "deletions": 183,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___describe_test_ts#1",
           "header": "@@ -5,165 +5,28 @@",
@@ -444,7 +444,7 @@
       "additions": 9,
       "deletions": 176,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___file_endpoint_test_ts#1",
           "header": "@@ -5,161 +5,29 @@",
@@ -478,7 +478,7 @@
       "additions": 103,
       "deletions": 9,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___file_handlers_test_ts#1",
           "header": "@@ -18,6 +18,7 @@ describe('file-handlers', () => {",
@@ -560,7 +560,7 @@
       "additions": 319,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___helpers_mock_db_ts#1",
           "header": "@@ -0,0 +1,319 @@",
@@ -578,7 +578,7 @@
       "additions": 61,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___helpers_mock_supabase_ts#1",
           "header": "@@ -0,0 +1,61 @@",
@@ -596,7 +596,7 @@
       "additions": 20,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___helpers_test_env_ts#1",
           "header": "@@ -0,0 +1,20 @@",
@@ -614,7 +614,7 @@
       "additions": 230,
       "deletions": 193,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___manifest_test_ts#1",
           "header": "@@ -5,7 +5,7 @@",
@@ -736,7 +736,7 @@
       "additions": 157,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___migration_integration_test_ts#1",
           "header": "@@ -0,0 +1,157 @@",
@@ -754,7 +754,7 @@
       "additions": 59,
       "deletions": 3,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___shl_test_ts#1",
           "header": "@@ -30,6 +30,10 @@ const mockPrisma = vi.hoisted(() => ({",
@@ -844,7 +844,7 @@
       "additions": 420,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src___tests___update_test_ts#1",
           "header": "@@ -0,0 +1,420 @@",
@@ -862,7 +862,7 @@
       "additions": 247,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_api_cleanup_ts#1",
           "header": "@@ -0,0 +1,247 @@",
@@ -880,7 +880,7 @@
       "additions": 20,
       "deletions": 35,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_api_describe_ts#1",
           "header": "@@ -1,9 +1,9 @@",
@@ -930,7 +930,7 @@
       "additions": 40,
       "deletions": 42,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_api_manifest_ts#1",
           "header": "@@ -1,16 +1,11 @@",
@@ -980,7 +980,7 @@
       "additions": 12,
       "deletions": 44,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_api_shl_ts#1",
           "header": "@@ -1,11 +1,11 @@",
@@ -1022,7 +1022,7 @@
       "additions": 85,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_api_update_ts#1",
           "header": "@@ -0,0 +1,85 @@",
@@ -1040,7 +1040,7 @@
       "additions": 21,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_app_ts#1",
           "header": "@@ -1,10 +1,13 @@",
@@ -1074,7 +1074,7 @@
       "additions": 153,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_cleanup_storage_ts#1",
           "header": "@@ -0,0 +1,153 @@",
@@ -1092,7 +1092,7 @@
       "additions": 28,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_client_ip_ts#1",
           "header": "@@ -0,0 +1,28 @@",
@@ -1110,7 +1110,7 @@
       "additions": 16,
       "deletions": 3,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_config_ts#1",
           "header": "@@ -101,6 +101,19 @@ export function getServiceToken(): string {",
@@ -1136,7 +1136,7 @@
       "additions": 56,
       "deletions": 20,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_file_handlers_ts#1",
           "header": "@@ -13,11 +13,30 @@ import {",
@@ -1186,7 +1186,7 @@
       "additions": 22,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_file_retention_ts#1",
           "header": "@@ -0,0 +1,22 @@",
@@ -1204,7 +1204,7 @@
       "additions": 5,
       "deletions": 18,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_rate_limit_ts#1",
           "header": "@@ -27,6 +27,7 @@ import {",
@@ -1230,7 +1230,7 @@
       "additions": 5,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_request_schemas_ts#1",
           "header": "@@ -32,6 +32,11 @@ export const createShlBodySchema = z.object({",
@@ -1248,7 +1248,7 @@
       "additions": 78,
       "deletions": 11,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_service_auth_ts#1",
           "header": "@@ -1,29 +1,96 @@",
@@ -1266,7 +1266,7 @@
       "additions": 129,
       "deletions": 129,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_storage_ts#1",
           "header": "@@ -1,67 +1,80 @@",
@@ -1316,7 +1316,7 @@
       "additions": 27,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_tracked_file_upload_test_ts#1",
           "header": "@@ -0,0 +1,27 @@",
@@ -1334,7 +1334,7 @@
       "additions": 14,
       "deletions": 0,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_src_tracked_file_upload_ts#1",
           "header": "@@ -0,0 +1,14 @@",
@@ -1352,7 +1352,7 @@
       "additions": 12,
       "deletions": 1,
       "lang": "json",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_vercel_json#1",
           "header": "@@ -1,4 +1,15 @@",
@@ -1370,7 +1370,7 @@
       "additions": 9,
       "deletions": 4,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_vitest_config_ts#1",
           "header": "@@ -33,17 +33,22 @@ export default mergeConfig(",
@@ -1388,7 +1388,7 @@
       "additions": 5,
       "deletions": 4,
       "lang": "typescript",
-      "hunks": [
+      "chunks": [
         {
           "id": "apps_shl_server_vitest_integration_global_setup_ts#1",
           "header": "@@ -9,7 +9,7 @@ const appRoot = path.dirname(fileURLToPath(import.meta.url))",
@@ -1422,7 +1422,7 @@
       "additions": 14,
       "deletions": 7,
       "lang": "markdown",
-      "hunks": [
+      "chunks": [
         {
           "id": "docs_DEPLOYMENT_md#1",
           "header": "@@ -34,9 +34,11 @@ Both entry workflows call the reusable workflow with `secrets: inherit` and a",
@@ -1495,7 +1495,7 @@
       "files": [
         {
           "path": "apps/shl-server/prisma/schema.prisma",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_prisma_schema_prisma#1",
             "apps_shl_server_prisma_schema_prisma#2",
             "apps_shl_server_prisma_schema_prisma#3"
@@ -1519,14 +1519,14 @@
         },
         {
           "path": "apps/shl-server/prisma/migrations/20260707000000_shl_lifecycle_audit/migration.sql",
-          "hunks": ["apps_shl_server_prisma_migrations_20260707000000_shl_lifecycle_audit_migration_sql#1"],
+          "chunks": ["apps_shl_server_prisma_migrations_20260707000000_shl_lifecycle_audit_migration_sql#1"],
           "note": "Adds the columns, the two indexes, and the queue table, then backfills expiry once from the payload.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/prisma/migrations/20260914000000_sync_shl_expiry/migration.sql",
-          "hunks": ["apps_shl_server_prisma_migrations_20260914000000_sync_shl_expiry_migration_sql#1"],
+          "chunks": ["apps_shl_server_prisma_migrations_20260914000000_sync_shl_expiry_migration_sql#1"],
           "note": "A trigger derives `expiresAt` from the payload on every insert and on every payload update, and a corrective pass repairs rows the one-time backfill could not cover.",
           "annotations": [
             {
@@ -1540,7 +1540,7 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/migration.integration.test.ts",
-          "hunks": ["apps_shl_server_src___tests___migration_integration_test_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___migration_integration_test_ts#1"],
           "note": "Applies the real migration files in order against an ephemeral schema, with rows already in the table. Excluded from `pnpm test`.",
           "annotations": [],
           "isTest": true
@@ -1556,9 +1556,9 @@
       "diagram": {
         "mermaid": "stateDiagram-v2\n  [*] --> staged: upload recorded\n  staged --> published: publish transaction\n  staged --> reclaimed: never published, 24h\n  published --> superseded: an update swaps it out\n  superseded --> reclaimed: 2h retention\n  published --> reclaimed: link expired, 30d",
         "links": {
-          "staged": "#hunk:apps/shl-server/src/storage.ts#1",
+          "staged": "#chunk:apps/shl-server/src/storage.ts#1",
           "published": "#file:apps/shl-server/src/tracked-file-upload.ts",
-          "superseded": "#hunk:apps/shl-server/src/storage.ts#5",
+          "superseded": "#chunk:apps/shl-server/src/storage.ts#5",
           "reclaimed": "#file:apps/shl-server/src/cleanup-storage.ts"
         }
       },
@@ -1595,14 +1595,14 @@
       "files": [
         {
           "path": "apps/shl-server/src/file-retention.ts",
-          "hunks": ["apps_shl_server_src_file_retention_ts#1"],
+          "chunks": ["apps_shl_server_src_file_retention_ts#1"],
           "note": "The three windows, in one file so the relationship between them is visible at a glance.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/src/storage.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src_storage_ts#1",
             "apps_shl_server_src_storage_ts#2",
             "apps_shl_server_src_storage_ts#3",
@@ -1634,7 +1634,7 @@
         },
         {
           "path": "apps/shl-server/src/cleanup-storage.ts",
-          "hunks": ["apps_shl_server_src_cleanup_storage_ts#1"],
+          "chunks": ["apps_shl_server_src_cleanup_storage_ts#1"],
           "note": "The cleanup job's queries, kept out of [storage.ts](#file:apps/shl-server/src/storage.ts) so the request path and the batch job do not share a file. Both halves follow the same claim / release / complete shape.",
           "annotations": [
             {
@@ -1648,14 +1648,14 @@
         },
         {
           "path": "apps/shl-server/src/tracked-file-upload.ts",
-          "hunks": ["apps_shl_server_src_tracked_file_upload_ts#1"],
+          "chunks": ["apps_shl_server_src_tracked_file_upload_ts#1"],
           "note": "The one place that pairs the file handlers with upload tracking. The cleanup job builds handlers without it, since it only deletes.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/src/file-handlers.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src_file_handlers_ts#1",
             "apps_shl_server_src_file_handlers_ts#2",
             "apps_shl_server_src_file_handlers_ts#3",
@@ -1675,13 +1675,13 @@
         },
         {
           "path": "apps/shl-server/src/tracked-file-upload.test.ts",
-          "hunks": ["apps_shl_server_src_tracked_file_upload_test_ts#1"],
+          "chunks": ["apps_shl_server_src_tracked_file_upload_test_ts#1"],
           "annotations": [],
           "isTest": true
         },
         {
           "path": "apps/shl-server/src/__tests__/file-handlers.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___file_handlers_test_ts#1",
             "apps_shl_server_src___tests___file_handlers_test_ts#2",
             "apps_shl_server_src___tests___file_handlers_test_ts#3",
@@ -1697,7 +1697,7 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/db.integration.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___db_integration_test_ts#1",
             "apps_shl_server_src___tests___db_integration_test_ts#2",
             "apps_shl_server_src___tests___db_integration_test_ts#3"
@@ -1708,7 +1708,7 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/helpers/mock-db.ts",
-          "hunks": ["apps_shl_server_src___tests___helpers_mock_db_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___helpers_mock_db_ts#1"],
           "note": "An in-memory stand-in for the Prisma client, extracted so the endpoint suites stop each declaring their own.",
           "annotations": [],
           "collapsed": true,
@@ -1716,14 +1716,14 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/helpers/mock-supabase.ts",
-          "hunks": ["apps_shl_server_src___tests___helpers_mock_supabase_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___helpers_mock_supabase_ts#1"],
           "annotations": [],
           "collapsed": true,
           "isTest": true
         },
         {
           "path": "apps/shl-server/src/__tests__/helpers/test-env.ts",
-          "hunks": ["apps_shl_server_src___tests___helpers_test_env_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___helpers_test_env_ts#1"],
           "annotations": [],
           "collapsed": true,
           "isTest": true
@@ -1763,7 +1763,7 @@
       "files": [
         {
           "path": "apps/shl-server/src/service-auth.ts",
-          "hunks": ["apps_shl_server_src_service_auth_ts#1"],
+          "chunks": ["apps_shl_server_src_service_auth_ts#1"],
           "note": "`verifyBearerToken` is the shared comparison; the three exported gates differ only in which secret they check and what they return when it fails.",
           "annotations": [
             {
@@ -1777,35 +1777,35 @@
         },
         {
           "path": "apps/shl-server/src/client-ip.ts",
-          "hunks": ["apps_shl_server_src_client_ip_ts#1"],
+          "chunks": ["apps_shl_server_src_client_ip_ts#1"],
           "note": "One parser for the forwarded headers, so a rate-limit bucket and an audit row can never disagree about who the client is.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/src/config.ts",
-          "hunks": ["apps_shl_server_src_config_ts#1", "apps_shl_server_src_config_ts#2"],
+          "chunks": ["apps_shl_server_src_config_ts#1", "apps_shl_server_src_config_ts#2"],
           "note": "Adds `getCronSecret`, and renames `getAllowedCreationOrigins` to `getAllowedOrigins` now that update uses it too.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/src/rate-limit.ts",
-          "hunks": ["apps_shl_server_src_rate_limit_ts#1", "apps_shl_server_src_rate_limit_ts#2"],
+          "chunks": ["apps_shl_server_src_rate_limit_ts#1", "apps_shl_server_src_rate_limit_ts#2"],
           "note": "Loses its own copy of the header parsing and the trust-model comment, both of which now live in client-ip.ts.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/src/request-schemas.ts",
-          "hunks": ["apps_shl_server_src_request_schemas_ts#1"],
+          "chunks": ["apps_shl_server_src_request_schemas_ts#1"],
           "note": "The update body reuses the same bundle schema the create body validates.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/src/__tests__/config.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___config_test_ts#1",
             "apps_shl_server_src___tests___config_test_ts#2",
             "apps_shl_server_src___tests___config_test_ts#3",
@@ -1859,7 +1859,7 @@
       "files": [
         {
           "path": "apps/shl-server/src/api/update.ts",
-          "hunks": ["apps_shl_server_src_api_update_ts#1"],
+          "chunks": ["apps_shl_server_src_api_update_ts#1"],
           "note": "Upload first, publish second. Nothing the reader can see changes until the compare-and-swap succeeds.",
           "annotations": [
             {
@@ -1873,7 +1873,7 @@
         },
         {
           "path": "apps/shl-server/src/api/shl.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src_api_shl_ts#1",
             "apps_shl_server_src_api_shl_ts#2",
             "apps_shl_server_src_api_shl_ts#3",
@@ -1885,7 +1885,7 @@
         },
         {
           "path": "apps/shl-server/src/api/describe.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src_api_describe_ts#1",
             "apps_shl_server_src_api_describe_ts#2",
             "apps_shl_server_src_api_describe_ts#3",
@@ -1898,14 +1898,14 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/update.test.ts",
-          "hunks": ["apps_shl_server_src___tests___update_test_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___update_test_ts#1"],
           "note": "The failure cases are the interesting half: each one asserts what is left behind in storage and in the queue, not only the status code.",
           "annotations": [],
           "isTest": true
         },
         {
           "path": "apps/shl-server/src/__tests__/shl.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___shl_test_ts#1",
             "apps_shl_server_src___tests___shl_test_ts#2",
             "apps_shl_server_src___tests___shl_test_ts#3",
@@ -1922,7 +1922,7 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/describe.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___describe_test_ts#1",
             "apps_shl_server_src___tests___describe_test_ts#2",
             "apps_shl_server_src___tests___describe_test_ts#3",
@@ -1965,7 +1965,7 @@
       "files": [
         {
           "path": "apps/shl-server/src/api/manifest.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src_api_manifest_ts#1",
             "apps_shl_server_src_api_manifest_ts#2",
             "apps_shl_server_src_api_manifest_ts#3",
@@ -1991,7 +1991,7 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/manifest.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___manifest_test_ts#1",
             "apps_shl_server_src___tests___manifest_test_ts#2",
             "apps_shl_server_src___tests___manifest_test_ts#3",
@@ -2012,7 +2012,7 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/file-endpoint.test.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_src___tests___file_endpoint_test_ts#1",
             "apps_shl_server_src___tests___file_endpoint_test_ts#2",
             "apps_shl_server_src___tests___file_endpoint_test_ts#3"
@@ -2061,7 +2061,7 @@
       "files": [
         {
           "path": "apps/shl-server/src/api/cleanup.ts",
-          "hunks": ["apps_shl_server_src_api_cleanup_ts#1"],
+          "chunks": ["apps_shl_server_src_api_cleanup_ts#1"],
           "note": "Both kinds of work run through the same claim / work / release shape, so only the queries differ between an expired link and a queued object.",
           "annotations": [
             {
@@ -2081,7 +2081,7 @@
         },
         {
           "path": "apps/shl-server/src/app.ts",
-          "hunks": ["apps_shl_server_src_app_ts#1", "apps_shl_server_src_app_ts#2", "apps_shl_server_src_app_ts#3"],
+          "chunks": ["apps_shl_server_src_app_ts#1", "apps_shl_server_src_app_ts#2", "apps_shl_server_src_app_ts#3"],
           "note": "Three new routes plus `secureHeaders` on everything, and the cron route [vercel.json](#file:apps/shl-server/vercel.json) calls. The two deviations from Hono's defaults are explained above the middleware.",
           "annotations": [
             {
@@ -2095,14 +2095,14 @@
         },
         {
           "path": "apps/shl-server/src/__tests__/cleanup.test.ts",
-          "hunks": ["apps_shl_server_src___tests___cleanup_test_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___cleanup_test_ts#1"],
           "note": "Covers the concurrency cases by hand: a claim taken by another run, a claim taken over mid-flight, and a release that itself fails.",
           "annotations": [],
           "isTest": true
         },
         {
           "path": "apps/shl-server/src/__tests__/app.test.ts",
-          "hunks": ["apps_shl_server_src___tests___app_test_ts#1"],
+          "chunks": ["apps_shl_server_src___tests___app_test_ts#1"],
           "annotations": [],
           "isTest": true
         }
@@ -2131,14 +2131,14 @@
       "files": [
         {
           "path": ".env.example",
-          "hunks": ["_env_example#1", "_env_example#2", "_env_example#3"],
+          "chunks": ["_env_example#1", "_env_example#2", "_env_example#3"],
           "note": "Adds `CRON_SECRET` as an optional production var; leaving it unset keeps the cron route disabled.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": ".github/workflows/vercel-deploy-reusable.yml",
-          "hunks": ["_github_workflows_vercel_deploy_reusable_yml#1"],
+          "chunks": ["_github_workflows_vercel_deploy_reusable_yml#1"],
           "note": "A readiness check gates the shl-server preview only. The other app previews keep their old condition; the [cron entry](#file:apps/shl-server/vercel.json) is unaffected.",
           "annotations": [
             {
@@ -2152,14 +2152,14 @@
         },
         {
           "path": "apps/shl-server/vercel.json",
-          "hunks": ["apps_shl_server_vercel_json#1"],
+          "chunks": ["apps_shl_server_vercel_json#1"],
           "note": "Declares the daily 03:00 UTC cron that hits the GET cleanup route.",
           "annotations": [],
           "isTest": false
         },
         {
           "path": "apps/shl-server/README.md",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_README_md#1",
             "apps_shl_server_README_md#2",
             "apps_shl_server_README_md#3",
@@ -2178,13 +2178,13 @@
         },
         {
           "path": "docs/DEPLOYMENT.md",
-          "hunks": ["docs_DEPLOYMENT_md#1", "docs_DEPLOYMENT_md#2", "docs_DEPLOYMENT_md#3"],
+          "chunks": ["docs_DEPLOYMENT_md#1", "docs_DEPLOYMENT_md#2", "docs_DEPLOYMENT_md#3"],
           "annotations": [],
           "isTest": false
         },
         {
           "path": "AGENTS.md",
-          "hunks": ["AGENTS_md#1"],
+          "chunks": ["AGENTS_md#1"],
           "annotations": [],
           "isTest": false
         }
@@ -2201,7 +2201,7 @@
       "files": [
         {
           "path": "apps/shl-server/vitest.config.ts",
-          "hunks": ["apps_shl_server_vitest_config_ts#1"],
+          "chunks": ["apps_shl_server_vitest_config_ts#1"],
           "note": "Adds cleanup-storage.ts to the coverage exclusions, alongside the other modules the integration suite covers.",
           "annotations": [],
           "collapsed": true,
@@ -2209,7 +2209,7 @@
         },
         {
           "path": "apps/shl-server/vitest.integration.global-setup.ts",
-          "hunks": [
+          "chunks": [
             "apps_shl_server_vitest_integration_global_setup_ts#1",
             "apps_shl_server_vitest_integration_global_setup_ts#2",
             "apps_shl_server_vitest_integration_global_setup_ts#3"
@@ -2264,7 +2264,7 @@
       "title": "A database trigger is the authoritative writer for expiresAt",
       "path": "apps/shl-server/prisma/migrations/20260914000000_sync_shl_expiry/migration.sql",
       "line": 18,
-      "body": "`expiresAt` is a copy of `payload.exp` in an indexed column, so cleanup can find expired links without reading JSON. Two things write it: the application in [createSHLWithManifest](#hunk:apps/shl-server/src/storage.ts#1), and this `BEFORE INSERT OR UPDATE OF payload` trigger. The trigger assigns unconditionally, so it always wins.\n\nThat is what makes a rolling deployment safe — an older app version that knows nothing about the column still gets a correct value. The consequence to remember: an update that touches `payload` re-derives `expiresAt` and discards any value set by hand. To change a link's expiry, change `payload.exp`.",
+      "body": "`expiresAt` is a copy of `payload.exp` in an indexed column, so cleanup can find expired links without reading JSON. Two things write it: the application in [createSHLWithManifest](#chunk:apps/shl-server/src/storage.ts#1), and this `BEFORE INSERT OR UPDATE OF payload` trigger. The trigger assigns unconditionally, so it always wins.\n\nThat is what makes a rolling deployment safe — an older app version that knows nothing about the column still gets a correct value. The consequence to remember: an update that touches `payload` re-derives `expiresAt` and discards any value set by hand. To change a link's expiry, change `payload.exp`.",
       "fingerprint": "d7f9b5302fc599932feab09b9b0d161932417c42",
       "origin": "model",
       "layerId": "layer-1",
@@ -2300,7 +2300,7 @@
       "title": "An update uploads a new object and swaps it in, and each failure has its own answer",
       "path": "apps/shl-server/src/api/update.ts",
       "line": 71,
-      "body": "The replacement bundle is written to a new random storage path, and only then does [swapManifestFile](#hunk:apps/shl-server/src/storage.ts#5) point the manifest at it. Nothing a reader can fetch changes until that statement commits, so a failed upload costs only an orphan cleanup takes.\n\nThe three failure answers are deliberate. 404 means the link went inactive mid-request. 409 means a lost race, safe to retry. A manifest with no FHIR file — corrupt state, since creation always writes one — throws to a logged 500 rather than 404: a 404 would tell the intake app the link is gone and invite a replacement URI the patient never receives.",
+      "body": "The replacement bundle is written to a new random storage path, and only then does [swapManifestFile](#chunk:apps/shl-server/src/storage.ts#5) point the manifest at it. Nothing a reader can fetch changes until that statement commits, so a failed upload costs only an orphan cleanup takes.\n\nThe three failure answers are deliberate. 404 means the link went inactive mid-request. 409 means a lost race, safe to retry. A manifest with no FHIR file — corrupt state, since creation always writes one — throws to a logged 500 rather than 404: a 404 would tell the intake app the link is gone and invite a replacement URI the patient never receives.",
       "fingerprint": "271ba8631257806793df0dc4900cda0506a8e20a",
       "origin": "model",
       "layerId": "layer-4",
@@ -2312,7 +2312,7 @@
       "title": "The two cleanup halves are the same four-step shape written twice",
       "path": "apps/shl-server/src/cleanup-storage.ts",
       "line": 102,
-      "body": "Expired links and queued objects each get their own `retryable…Where`, `find…`, `claim…`, `release…` and `complete/mark…`. The two sets differ only in the model and the column names.\n\nKeeping them apart is the right call for two: a generic helper over two Prisma delegates with different column names buys indirection rather than clarity, and `withClaim` in [the job](#hunk:apps/shl-server/src/api/cleanup.ts#1) already shares the part with real logic in it. Worth remembering that a third kind of reclaimable object is where copying stops paying.",
+      "body": "Expired links and queued objects each get their own `retryable…Where`, `find…`, `claim…`, `release…` and `complete/mark…`. The two sets differ only in the model and the column names.\n\nKeeping them apart is the right call for two: a generic helper over two Prisma delegates with different column names buys indirection rather than clarity, and `withClaim` in [the job](#chunk:apps/shl-server/src/api/cleanup.ts#1) already shares the part with real logic in it. Worth remembering that a third kind of reclaimable object is where copying stops paying.",
       "fingerprint": "5f68b695c9a23029028f38e363be4eaaf8d042e0",
       "origin": "model",
       "layerId": "layer-2",
@@ -2360,7 +2360,7 @@
       "title": "An upload is recorded before it is written, so cleanup cannot delete what a manifest names",
       "path": "apps/shl-server/src/storage.ts",
       "line": 58,
-      "body": "[stageUploadedFile](#hunk:apps/shl-server/src/storage.ts#1) writes a `pending_file_deletions` row before the object reaches storage, and the publishing transaction deletes that row with `claimedAt: null` in the filter. If a cleanup run has already claimed it, the delete matches nothing, `consumeUploadRecord` throws, and the whole transaction rolls back.\n\nThat ordering is the guarantee: an object named by a manifest is never one a cleanup run is midway through deleting. The cost is a database write on the hot path of every create and update, and a queue row that outlives the request when publication fails.",
+      "body": "[stageUploadedFile](#chunk:apps/shl-server/src/storage.ts#1) writes a `pending_file_deletions` row before the object reaches storage, and the publishing transaction deletes that row with `claimedAt: null` in the filter. If a cleanup run has already claimed it, the delete matches nothing, `consumeUploadRecord` throws, and the whole transaction rolls back.\n\nThat ordering is the guarantee: an object named by a manifest is never one a cleanup run is midway through deleting. The cost is a database write on the hot path of every create and update, and a queue row that outlives the request when publication fails.",
       "fingerprint": "a2bcce93790d8ddbbfb6a041162b4e000848822f",
       "origin": "model",
       "layerId": "layer-2",

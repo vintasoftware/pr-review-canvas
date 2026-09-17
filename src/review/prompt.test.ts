@@ -5,7 +5,7 @@ import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { BASE_SHA, HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import {
   embedMarkdown,
-  hunkRange,
+  chunkRange,
   loadPromptSources,
   manifestMarkdown,
   patchLineCount,
@@ -33,7 +33,7 @@ function context(over: Partial<GenerationContext> = {}): GenerationContext {
     highRisk: [{ pattern: '**/*auth*', label: 'auth' }],
     caps: TEXT_CAPS,
     limits: { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12 },
-    generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
+    generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrChunks: 10 },
     tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
     smallPr: true,
     largePr: false,
@@ -127,15 +127,15 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('## Audit the change as you read it')
     expect(prompt).toContain('Values that must relate to each other')
     expect(prompt).toContain('"$schema"')
-    expect(prompt).toContain('Every hunk id must appear in exactly one layer')
+    expect(prompt).toContain('Every chunk id must appear in exactly one layer')
     expect(prompt).not.toContain('{{')
   })
 
   it('inlines the labeled diff under the threshold and states every number the validator uses', () => {
     const prompt = renderPrompt(context(), PATCHES, sources)
     expect(prompt).toContain(`The whole diff follows (${patchLineCount(PATCHES)} lines)`)
-    expect(prompt).toContain('#### `src/app.ts`\n\n````diff\n### hunk src_app_ts#1\n@@ -1,4 +1,5 @@')
-    expect(prompt).toContain('### hunk src_app_ts#2')
+    expect(prompt).toContain('#### `src/app.ts`\n\n````diff\n### chunk src_app_ts#1\n@@ -1,4 +1,5 @@')
+    expect(prompt).toContain('### chunk src_app_ts#2')
     expect(prompt).not.toContain('#### `assets/logo.png`')
     expect(prompt).toContain(
       '- `src/new-name.ts` (from `src/old-name.ts`) — renamed, +1 −1\n  - `src_new_name_ts#1` `@@ -1,2 +1,2 @@`'
@@ -175,7 +175,7 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('At most\n12 links per diagram')
     expect(prompt).toContain('Write the node id exactly as the source spells it, not its label')
     expect(prompt).toContain(
-      'A value may be any of the four forms: `#layer:`, `#file:`,\n`#hunk:`, or `#line:`'
+      'A value may be any of the four forms: `#layer:`, `#file:`,\n`#chunk:`, or `#line:`'
     )
     expect(prompt).toContain(
       'Link a node when a reviewer clicking it should land on the code that implements it'
@@ -189,7 +189,7 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('`[*]` is not a node')
     expect(prompt).toContain('never an attribute inside the\n  entity block')
     expect(prompt).toContain(
-      '"links": { "claimed": "#hunk:src/cleanup.ts#2", "deleted": "#file:src/retention.ts" }'
+      '"links": { "claimed": "#chunk:src/cleanup.ts#2", "deleted": "#file:src/retention.ts" }'
     )
     // The cap is the one the context carries, not a number written into the template.
     expect(
@@ -231,7 +231,7 @@ describe('renderPrompt', () => {
   it('points at the patch files instead of inlining above the threshold or for a large PR', () => {
     const over = renderPrompt(
       context({
-        generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 5, smallPrHunks: 10 },
+        generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 5, smallPrChunks: 10 },
       }),
       PATCHES,
       sources
@@ -292,21 +292,21 @@ describe('renderPrompt', () => {
     expect(long).toContain('> ' + body.replace(/\n/g, '\n> '))
   })
 
-  it('states the small-change guidance with the hunk count and limit, or that the rules apply in full', () => {
+  it('states the small-change guidance with the chunk count and limit, or that the rules apply in full', () => {
     const small = renderPrompt(context(), PATCHES, sources)
-    expect(small).toContain('**Small change set.** This pull request has 6 hunks, at most 10, so:')
+    expect(small).toContain('**Small change set.** This pull request has 6 chunks, at most 10, so:')
     expect(small).toContain('- Use one layer unless the concerns truly differ')
     expect(small).toContain('zero annotations is a fine answer')
     expect(small).toContain('Keep the summary self-contained')
     const big = renderPrompt(
       context({
         smallPr: false,
-        generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 4 },
+        generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrChunks: 4 },
       }),
       PATCHES,
       sources
     )
-    expect(big).toContain('This pull request has 6 hunks, above the 4-hunk small-change limit')
+    expect(big).toContain('This pull request has 6 chunks, above the 4-chunk small-change limit')
     expect(big).not.toContain('**Small change set.**')
     expect(renderPrompt(context(), PATCHES, sources)).toContain('At most one layer has `kind: "other"`')
   })
@@ -318,9 +318,9 @@ describe('renderPrompt', () => {
     )
   })
 
-  it('helpers: hunk ranges drop the context text, embedMarkdown strips front matter and demotes, counts skip empty patches', () => {
-    expect(hunkRange('@@ -1,4 +1,5 @@ const `x` = 1')).toBe('@@ -1,4 +1,5 @@')
-    expect(hunkRange('garbage')).toBe('garbage')
+  it('helpers: chunk ranges drop the context text, embedMarkdown strips front matter and demotes, counts skip empty patches', () => {
+    expect(chunkRange('@@ -1,4 +1,5 @@ const `x` = 1')).toBe('@@ -1,4 +1,5 @@')
+    expect(chunkRange('garbage')).toBe('garbage')
     expect(embedMarkdown('# A\n\n## B\n\n##### E\n')).toBe('### A\n\n#### B\n\n###### E')
     expect(manifestMarkdown([])).toBe('')
     expect(patchLineCount({ a: '', b: 'x\ny' })).toBe(2)
@@ -359,7 +359,7 @@ it('describes a large ref comparison with a rulebook supplied without a path', (
     PATCHES,
     sources
   )
-  expect(prompt).toContain('This change set has 6 hunks, above the 10-hunk small-change limit')
+  expect(prompt).toContain('This change set has 6 chunks, above the 10-chunk small-change limit')
   expect(prompt).toContain('The project rulebook (``)')
   expect(prompt).toContain('Keep changes focused.')
 })
