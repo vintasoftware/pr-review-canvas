@@ -13,8 +13,6 @@ const GhPullSchema = z.object({
   draft: z.boolean().optional(),
   merged: z.boolean().optional(),
   merge_commit_sha: z.string().nullable().optional(),
-  /** Null while GitHub is still computing whether the head merges cleanly. */
-  mergeable: z.boolean().nullable().optional(),
   updated_at: z.string(),
   additions: z.number().int(),
   deletions: z.number().int(),
@@ -39,7 +37,6 @@ export function mapPull(raw: unknown): PrMeta {
     headRef: p.head.ref,
     headSha: p.head.sha,
     mergeCommitSha: p.merged === true ? (p.merge_commit_sha ?? null) : null,
-    mergeable: p.mergeable ?? null,
     additions: p.additions,
     deletions: p.deletions,
     changedFiles: p.changed_files,

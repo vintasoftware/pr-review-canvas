@@ -36,11 +36,11 @@ export interface FakeGitOptions {
   /** `<a>..<b>` → how many commits b is ahead of a; unlisted pairs count 0. */
   counts?: Record<string, number>
   /**
-   * `<head> ^<base> ^<base>` → how many ordinary commits head reaches that no base does. An
-   * unlisted query answers the `counts` entry of its first base, so a history that names no
-   * merges is all ordinary commits.
+   * `<head> ^<base> ^<base>` → whether head reaches only automatic two-parent merges beyond the
+   * bases. An unlisted query is true when the `counts` entry of its first base is zero, so a
+   * history that names no merges is all ordinary commits.
    */
-  nonMergeCounts?: Record<string, number>
+  automaticMerges?: Record<string, boolean>
   /** Commits the fake origin serves when they are fetched by sha. */
   fetchable?: string[]
 }
@@ -83,13 +83,12 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
       calls.push(['rev-list', '--count', `${a}..${b}`])
       return options.counts?.[`${a}..${b}`] ?? 0
     },
-    countNonMergeCommitsNotIn: async (head, bases) => {
+    onlyAutomaticMergesBeyond: async (head, bases) => {
       const excluded = bases.map(b => `^${b}`)
-      calls.push(['rev-list', '--no-merges', '--count', head, ...excluded])
+      calls.push(['rev-list', '--parents', head, ...excluded])
       return (
-        options.nonMergeCounts?.[[head, ...excluded].join(' ')] ??
-        options.counts?.[`${bases[0]}..${head}`] ??
-        0
+        options.automaticMerges?.[[head, ...excluded].join(' ')] ??
+        (options.counts?.[`${bases[0]}..${head}`] ?? 0) === 0
       )
     },
     diff: async (base, head) => {

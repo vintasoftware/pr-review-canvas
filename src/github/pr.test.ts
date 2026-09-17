@@ -20,7 +20,6 @@ describe('mapPull', () => {
       headRef: 'feat/b',
       headSha: HEAD_SHA,
       mergeCommitSha: null,
-      mergeable: null,
       additions: 7,
       deletions: 5,
       changedFiles: 7,
@@ -46,13 +45,6 @@ describe('mapPull', () => {
     expect(meta.author).toBe('ghost')
     expect(meta.body).toBe('')
     expect(meta.draft).toBe(false)
-  })
-
-  it('reads whether the head merges cleanly, and leaves it open while GitHub is still computing', () => {
-    expect(mapPull({ ...GH_PULL, mergeable: true }).mergeable).toBe(true)
-    expect(mapPull({ ...GH_PULL, mergeable: false }).mergeable).toBe(false)
-    expect(mapPull({ ...GH_PULL, mergeable: null }).mergeable).toBeNull()
-    expect(mapPull(GH_PULL).mergeable).toBeNull()
   })
 
   it('rejects a payload that is not a pull request', () => {

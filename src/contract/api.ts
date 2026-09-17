@@ -70,8 +70,8 @@ export interface StaleInfo {
 }
 
 /**
- * A ready canvas whose head moved on by merge commits only, with no conflicts reported. The
- * change set the canvas explains is the same, so the page keeps it and says so.
+ * A ready canvas whose head moved on by merges of the base branch only. The change set the
+ * canvas explains is the same, so the page keeps it and says so.
  */
 export interface MergesSinceInfo {
   canvasHeadSha: string

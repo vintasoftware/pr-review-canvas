@@ -341,11 +341,10 @@ Merge commits are the exception. A head that only merged the base branch onto th
 commit (through **Update branch**, for example) carries the same change set, so the canvas stays
 current: the page shows the head's own diffs under a **Canvas still applies** note, review
 progress carries over, and sign-off, comments, and AI Chat keep working. This needs
-`canvas.ignoreMergeCommits` (the default) and a clean conflict report from GitHub or GitLab. A
-pending or negative conflict report, an ordinary commit on the branch, or a merge that brought in
-commits the base does not contain marks the canvas outdated as before. Edits made while
-resolving a merge by hand are not detected: regenerate the canvas after such a merge.
-`pr-review publish` applies the same rule when the head moves while a canvas is being generated.
+`canvas.ignoreMergeCommits` (the default) and git 2.38 or newer, which redoes each merge to check
+it. A merge that resolved conflicts by hand, a merge that brought in commits the base does not
+contain, or any ordinary commit marks the canvas outdated as before. `pr-review publish` applies
+the same rule when the head moves while a canvas is being generated.
 
 AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
 one on screen.

@@ -1,7 +1,7 @@
 // @vitest-environment node
-// A pull request whose head only merged other branches in since its canvas was generated: the
+// A pull request whose head only merged the base branch in since its canvas was generated: the
 // canvas stays current, the reviewer's marks move along, and the chat keeps working. The same
-// routes with the strict reading, when the project or the host's conflict report says so.
+// routes with the strict reading, when the project or the history says so.
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
 import { buildCanvasZip } from '../canvas/zip.js'
@@ -86,14 +86,13 @@ function gitWithMerge(extra: FakeGitOptions = {}) {
     blobs: SYNTHETIC_BLOBS,
     ancestors: { [`${OLD_SHA}..${HEAD_SHA}`]: true },
     counts: { [`${OLD_SHA}..${HEAD_SHA}`]: 3 },
-    nonMergeCounts: { [`${HEAD_SHA} ^${OLD_SHA} ^${BASE_SHA}`]: 0 },
+    automaticMerges: { [`${HEAD_SHA} ^${OLD_SHA} ^${BASE_SHA}`]: true },
     topLevel: '/repo',
     ...extra,
   })
 }
 
 interface Scenario {
-  mergeable?: boolean | null
   ignoreMergeCommits?: boolean
   git?: FakeGitOptions
   /** The pull request description, where a canvas zip may be attached. */
@@ -109,11 +108,7 @@ afterEach(() => t?.cleanup())
 /** A context holding the canvas of OLD_SHA, with the pull request now at HEAD_SHA. */
 async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
   runner = createFakeRunner()
-  const pull = {
-    ...GH_PULL,
-    mergeable: scenario.mergeable === undefined ? true : scenario.mergeable,
-    body: scenario.body ?? GH_PULL.body,
-  }
+  const pull = { ...GH_PULL, body: scenario.body ?? GH_PULL.body }
   const config: ProjectConfig = {
     ...DEFAULT_PROJECT_CONFIG,
     canvas: { ignoreMergeCommits: scenario.ignoreMergeCommits ?? true },
@@ -142,7 +137,6 @@ describe('a canvas whose head only gained merge commits', () => {
     expect(b.canvas?.headSha).toBe(OLD_SHA)
     expect(b.artifact?.pr.headSha).toBe(OLD_SHA)
     expect(b.pr.headSha).toBe(HEAD_SHA)
-    expect(b.pr.mergeable).toBe(true)
     expect(b.mergesSince).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: HEAD_SHA, commitsBehind: 3 })
     // The head's own diff, not the older commit's.
     expect(b.files.map(f => f.path)).toContain('src/app.ts')
@@ -150,8 +144,8 @@ describe('a canvas whose head only gained merge commits', () => {
     expect(b.skillCommand).toBe('/pr-review-canvas 42 --force')
   })
 
-  it('is outdated while the host is still checking for conflicts', async () => {
-    await withOldCanvas({ mergeable: null })
+  it('is outdated when the project config counts merge commits', async () => {
+    await withOldCanvas({ ignoreMergeCommits: false })
     const b = await bundle()
     expect(b.status).toBe('stale')
     expect(b.mergesSince).toBeUndefined()
@@ -163,18 +157,8 @@ describe('a canvas whose head only gained merge commits', () => {
     })
   })
 
-  it('is outdated when the host reports conflicts', async () => {
-    await withOldCanvas({ mergeable: false })
-    expect((await bundle()).status).toBe('stale')
-  })
-
-  it('is outdated when the project config counts merge commits', async () => {
-    await withOldCanvas({ ignoreMergeCommits: false })
-    expect((await bundle()).status).toBe('stale')
-  })
-
-  it('is outdated once an ordinary commit came in, on the branch or from a branch the base lacks', async () => {
-    await withOldCanvas({ git: { nonMergeCounts: { [`${HEAD_SHA} ^${OLD_SHA} ^${BASE_SHA}`]: 1 } } })
+  it('is outdated once the history holds more than automatic merges of the base', async () => {
+    await withOldCanvas({ git: { automaticMerges: { [`${HEAD_SHA} ^${OLD_SHA} ^${BASE_SHA}`]: false } } })
     const b = await bundle()
     expect(b.status).toBe('stale')
     expect(b.stale?.commitsBehind).toBe(3)
@@ -211,7 +195,7 @@ describe('a canvas whose head only gained merge commits', () => {
   })
 
   it('leaves the marks alone when the canvas is outdated after all', async () => {
-    await withOldCanvas({ mergeable: false })
+    await withOldCanvas({ ignoreMergeCommits: false })
     await t.ctx.state.update(42, state => ({
       ...state,
       reviewed: { 'layer:layer-1': true },
@@ -241,7 +225,7 @@ describe('a canvas whose head only gained merge commits', () => {
   })
 
   it('refuses the sign-off when the canvas is outdated', async () => {
-    await withOldCanvas({ mergeable: null })
+    await withOldCanvas({ ignoreMergeCommits: false })
     await bundle()
     const res = await createApp(t.ctx).request('/api/prs/42/review/body', { headers: LOCAL })
     expect(res.status).toBe(409)
@@ -280,7 +264,7 @@ describe('the chat after the head moved', () => {
   })
 
   it('still talks about an outdated canvas, with the diff of its own commit', async () => {
-    await withOldCanvas({ mergeable: null })
+    await withOldCanvas({ ignoreMergeCommits: false })
     await bundle()
     const res = await sendChat()
     expect(res.status).toBe(200)
@@ -295,7 +279,7 @@ describe('the chat after the head moved', () => {
   it('says so when the outdated canvas has no diff on this machine', async () => {
     // The older commit is not in the clone, so its diff cannot be rebuilt.
     await withOldCanvas({
-      mergeable: null,
+      ignoreMergeCommits: false,
       git: { refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA } },
     })
     await bundle()

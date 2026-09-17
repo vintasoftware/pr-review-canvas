@@ -254,11 +254,11 @@ describe('merges bar', () => {
     expect(bar?.getAttribute('role')).toBe('status')
     expect(bar?.textContent).toContain('Canvas still applies.')
     expect(bar?.textContent).toContain(
-      'generated for eeeeeee; the head aaaaaaa only merged the base branch in since (1 commit, no conflicts)'
+      'generated for eeeeeee; the head aaaaaaa only merged the base branch in since (1 commit)'
     )
     expect(bar?.querySelector('#stale-generate')?.textContent).toBe('regenerate anyway')
     expect(mergesBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD, commitsBehind: 4 })).toContain(
-      '(4 commits,'
+      '(4 commits)'
     )
   })
 })

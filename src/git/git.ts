@@ -16,10 +16,11 @@ export interface Git {
   /** `git rev-list --count a..b`: how many commits b is ahead of a. */
   countCommitsBetween(a: string, b: string): Promise<number>
   /**
-   * `git rev-list --no-merges --count head ^base...`: the ordinary commits head reaches that none
-   * of the bases does. Zero means head only merged the bases' history together.
+   * True when every commit head reaches beyond the bases is a two-parent merge whose tree is the
+   * one `git merge-tree` produces for its parents: no ordinary commit, and no edit made while
+   * merging. Needs git 2.38 (`merge-tree --write-tree`); an older git throws a GitError that says so.
    */
-  countNonMergeCommitsNotIn(head: string, bases: string[]): Promise<number>
+  onlyAutomaticMergesBeyond(head: string, bases: string[]): Promise<boolean>
   /** Full unified diff between two commits, rename detection on, 3 lines of context. */
   diff(base: string, head: string): Promise<string>
   fetch(remote: string, refspecs: string[]): Promise<void>
@@ -82,6 +83,21 @@ export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
 
 export type GitExec = typeof execGit
 
+/** The first git whose `merge-tree --write-tree` exists. */
+export const MERGE_TREE_MIN_VERSION = '2.38'
+
+/** True when `git version` output names a git at least as new as `min` (major.minor). */
+export function versionAtLeast(versionOutput: string, min: string): boolean {
+  const found = /(\d+)\.(\d+)/.exec(versionOutput)
+  const [minMajor, minMinor] = min.split('.').map(Number)
+  if (found === null || minMajor === undefined || minMinor === undefined) {
+    return false
+  }
+  const major = Number(found[1])
+  const minor = Number(found[2])
+  return major > minMajor || (major === minMajor && minor >= minMinor)
+}
+
 export function createGit(cwd: string, exec: GitExec = execGit): Git {
   async function run(args: string[]): Promise<string> {
     const r = await exec(cwd, args)
@@ -103,8 +119,38 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
       return r.code === 0
     },
     countCommitsBetween: async (a, b) => Number(await run(['rev-list', '--count', `${a}..${b}`])),
-    countNonMergeCommitsNotIn: async (head, bases) =>
-      Number(await run(['rev-list', '--no-merges', '--count', head, ...bases.map(b => `^${b}`)])),
+    onlyAutomaticMergesBeyond: async (head, bases) => {
+      const listed = await run(['rev-list', '--parents', head, ...bases.map(b => `^${b}`)])
+      const commits = listed === '' ? [] : listed.split('\n').map(line => line.split(' '))
+      if (commits.length === 0) {
+        return true
+      }
+      // One check at the boundary: the rest of the rule assumes `merge-tree --write-tree` exists.
+      const version = await run(['version'])
+      if (!versionAtLeast(version, MERGE_TREE_MIN_VERSION)) {
+        throw new GitError(
+          ['merge-tree', '--write-tree'],
+          `needs git ${MERGE_TREE_MIN_VERSION} or newer (this is ${version}); upgrade git or set canvas.ignoreMergeCommits: false`,
+          128
+        )
+      }
+      for (const [sha, first, second, ...rest] of commits) {
+        if (sha === undefined || first === undefined || second === undefined || rest.length > 0) {
+          return false
+        }
+        const args = ['merge-tree', '--write-tree', first, second]
+        const r = await exec(cwd, args)
+        // Exit 1 means conflicts: the tree written then holds conflict markers and cannot match.
+        if (r.code > 1) {
+          throw new GitError(args, r.stderr, r.code)
+        }
+        const automatic = r.stdout.toString('utf8').split('\n')[0]
+        if (automatic !== (await run(['rev-parse', `${sha}^{tree}`]))) {
+          return false
+        }
+      }
+      return true
+    },
     diff: (base, head) => run(['diff', '--no-color', '--no-ext-diff', '-M', '-U3', base, head]),
     fetch: async (remote, refspecs) => {
       await run(['fetch', '--no-tags', '--quiet', remote, ...refspecs])

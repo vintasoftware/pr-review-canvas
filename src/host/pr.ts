@@ -24,8 +24,6 @@ export interface PrMeta {
   headSha: string
   /** The commit that merged the PR into its base, once merged. */
   mergeCommitSha: string | null
-  /** Whether the head merges into the base without conflicts; null while the host is checking. */
-  mergeable: boolean | null
   additions: number
   deletions: number
   changedFiles: number
@@ -45,7 +43,6 @@ export function toPr(meta: PrMeta, repo: Repo, shas: { headSha: string; mergeBas
     headRef: meta.headRef,
     headSha: shas.headSha,
     mergeBaseSha: shas.mergeBaseSha,
-    mergeable: meta.mergeable,
     additions: meta.additions,
     deletions: meta.deletions,
     changedFiles: meta.changedFiles,

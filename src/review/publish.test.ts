@@ -189,30 +189,22 @@ describe('publish', () => {
     expect(err).toMatchObject({ code: 'NOT_FOUND', hint: 'run `pr-review prepare` first' })
   })
 
-  it('publishes for a head that only merged other branches in, while the host reports no conflicts', async () => {
+  it('publishes for a head that only merged the base branch onto the prepared commit', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     const merged = 'e'.repeat(40)
-    const pullAt = (mergeable: boolean | null) =>
-      createFakeGh({
-        routes: {
-          'repos/acme/widgets/pulls/42': ghJson({
-            ...GH_PULL,
-            mergeable,
-            head: { ...GH_PULL.head, sha: merged },
-          }),
-        },
-      })
     const history = {
       refs: { ...gitFor42().options.refs, 'pull/42/head': merged },
       mergeBases: { ...gitFor42().options.mergeBases, [`refs/pr/42/base..${merged}`]: BASE_SHA },
       ancestors: { [`${HEAD_SHA}..${merged}`]: true },
-      nonMergeCounts: { [`${merged} ^${HEAD_SHA} ^${BASE_SHA}`]: 0 },
+      automaticMerges: { [`${merged} ^${HEAD_SHA} ^${BASE_SHA}`]: true },
     }
     t.ctx.git = createFakeGit({ ...gitFor42().options, ...history })
-    t.ctx.gh = pullAt(null)
-    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
-    t.ctx.gh = pullAt(true)
+    t.ctx.gh = createFakeGh({
+      routes: {
+        'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha: merged } }),
+      },
+    })
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
       config: { ...t.ctx.projectConfig.config, canvas: { ignoreMergeCommits: false } },
@@ -225,7 +217,7 @@ describe('publish', () => {
     t.ctx.git = createFakeGit({
       ...gitFor42().options,
       ...history,
-      nonMergeCounts: { [`${merged} ^${HEAD_SHA} ^${BASE_SHA}`]: 1 },
+      automaticMerges: { [`${merged} ^${HEAD_SHA} ^${BASE_SHA}`]: false },
     })
     await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     t.ctx.git = createFakeGit({ ...gitFor42().options, ...history })

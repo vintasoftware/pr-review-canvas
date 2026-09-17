@@ -7,25 +7,25 @@ import { stateForHead } from './review-body.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
 
 /** What the rule reads of a pull request; a `PrMeta` with its fetched shas fits as well as a `Pr`. */
-type PrHead = Pick<Pr, 'headSha' | 'mergeBaseSha' | 'mergeable'>
+type PrHead = Pick<Pr, 'headSha' | 'mergeBaseSha'>
 
 /**
  * True when `sha` carries the same change set as the head: it is the head, or the head only
- * merged history that is already in the base onto it. That needs the project to ignore merge
- * commits and the host to report that the head merges cleanly; a pending or negative report
- * keeps the strict reading. Any ordinary commit since `sha`, on the branch or brought in by
- * merging a branch the base does not contain, marks the canvas outdated.
+ * merged history that is already in the base onto it, each merge as git would have made it. That
+ * needs the project to ignore merge commits. Any ordinary commit since `sha`, on the branch or
+ * brought in by merging a branch the base does not contain, and any edit made while resolving a
+ * merge by hand, marks the canvas outdated.
  */
 export async function standsForHead(ctx: AppContext, sha: string, pr: PrHead): Promise<boolean> {
   if (sha === pr.headSha) {
     return true
   }
-  if (!ctx.projectConfig.config.canvas.ignoreMergeCommits || pr.mergeable !== true) {
+  if (!ctx.projectConfig.config.canvas.ignoreMergeCommits) {
     return false
   }
   return (
     (await ctx.git.isAncestor(sha, pr.headSha)) &&
-    (await ctx.git.countNonMergeCommitsNotIn(pr.headSha, [sha, pr.mergeBaseSha])) === 0
+    ctx.git.onlyAutomaticMergesBeyond(pr.headSha, [sha, pr.mergeBaseSha])
   )
 }
 

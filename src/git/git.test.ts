@@ -7,7 +7,16 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
 import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
-import { createGit, execGit, GitError, type GitExec, redactStderr, STDERR_MESSAGE_MAX } from './git.js'
+import {
+  createGit,
+  execGit,
+  GitError,
+  type GitExec,
+  MERGE_TREE_MIN_VERSION,
+  redactStderr,
+  STDERR_MESSAGE_MAX,
+  versionAtLeast,
+} from './git.js'
 
 const run = promisify(execFile)
 
@@ -57,25 +66,60 @@ describe('createGit (real adapter)', () => {
     expect(await git.commitExists('f'.repeat(40))).toBe(false)
   })
 
-  it('counts the ordinary commits the head reaches beyond the given bases', async () => {
+  it('tells automatic merges of the bases from other commits and from hand-edited merges', async ctx => {
     const git = createGit(repo.dir)
+    if (!versionAtLeast(await g(repo.dir, 'version'), MERGE_TREE_MIN_VERSION)) {
+      ctx.skip()
+    }
     // A branch off `one`, merged onto `two` with a merge commit: `two`'s line gained only the merge.
-    // Both happen on side branches, so `main` still points at `two` for the other tests.
+    // Everything happens on side branches, so `main` still points at `two` for the other tests.
     await g(repo.dir, 'checkout', '-q', '-b', 'side', repo.sha1)
     await writeFile(path.join(repo.dir, 'src/side.ts'), 'export const side = true\n')
     await g(repo.dir, 'add', '.')
     await g(repo.dir, 'commit', '-q', '-m', 'side')
+    const sideTip = await g(repo.dir, 'rev-parse', 'side')
     await g(repo.dir, 'checkout', '-q', '-b', 'trunk', repo.sha2)
     await g(repo.dir, 'merge', '-q', '--no-ff', '--no-edit', 'side')
     const merged = await g(repo.dir, 'rev-parse', 'HEAD')
-    const sideTip = await g(repo.dir, 'rev-parse', 'side')
+    // The same merge, with an edit slipped into the merge commit.
+    await g(repo.dir, 'checkout', '-q', '-b', 'edited', repo.sha2)
+    await g(repo.dir, 'merge', '-q', '--no-ff', '--no-commit', 'side')
+    await writeFile(path.join(repo.dir, 'src/a.ts'), 'export const a = 3\n')
+    await g(repo.dir, 'add', '.')
+    await g(repo.dir, 'commit', '-q', '--no-edit')
+    const edited = await g(repo.dir, 'rev-parse', 'HEAD')
     await g(repo.dir, 'checkout', '-q', 'main')
     expect(await git.countCommitsBetween(repo.sha2, merged)).toBe(2)
-    // Merging a branch the bases already hold adds only the merge commit.
-    expect(await git.countNonMergeCommitsNotIn(merged, [repo.sha2, sideTip])).toBe(0)
-    // Merging a branch the bases do not hold brings its commit along.
-    expect(await git.countNonMergeCommitsNotIn(merged, [repo.sha2, repo.sha1])).toBe(1)
     expect(await git.isAncestor(repo.sha2, merged)).toBe(true)
+    // Nothing beyond the bases: trivially automatic.
+    expect(await git.onlyAutomaticMergesBeyond(repo.sha2, [repo.sha2, sideTip])).toBe(true)
+    // Merging a branch the bases already hold adds only the merge commit, as git made it.
+    expect(await git.onlyAutomaticMergesBeyond(merged, [repo.sha2, sideTip])).toBe(true)
+    // Merging a branch the bases do not hold brings its ordinary commit along.
+    expect(await git.onlyAutomaticMergesBeyond(merged, [repo.sha2, repo.sha1])).toBe(false)
+    // A merge commit whose tree is not what git would have produced.
+    expect(await git.onlyAutomaticMergesBeyond(edited, [repo.sha2, sideTip])).toBe(false)
+  })
+
+  it('refuses to judge merges on a git without merge-tree --write-tree, and says which git it needs', async () => {
+    const exec: GitExec = async (_cwd, args) => ({
+      stdout: Buffer.from(
+        args[0] === 'version'
+          ? 'git version 2.34.1\n'
+          : `${'a'.repeat(40)} ${'b'.repeat(40)} ${'c'.repeat(40)}\n`
+      ),
+      stderr: '',
+      code: 0,
+    })
+    const git = createGit('/tmp', exec)
+    await expect(git.onlyAutomaticMergesBeyond('a'.repeat(40), ['d'.repeat(40)])).rejects.toThrow(
+      /needs git 2\.38 or newer \(this is git version 2\.34\.1\); upgrade git or set canvas\.ignoreMergeCommits: false/
+    )
+    expect(versionAtLeast('git version 2.38.0', MERGE_TREE_MIN_VERSION)).toBe(true)
+    expect(versionAtLeast('git version 2.47.1.windows.1', MERGE_TREE_MIN_VERSION)).toBe(true)
+    expect(versionAtLeast('git version 3.0.0', MERGE_TREE_MIN_VERSION)).toBe(true)
+    expect(versionAtLeast('git version 2.37.9', MERGE_TREE_MIN_VERSION)).toBe(false)
+    expect(versionAtLeast('nonsense', MERGE_TREE_MIN_VERSION)).toBe(false)
   })
 
   it('throws GitError for an unknown ref', async () => {
