@@ -44,13 +44,18 @@ export interface Git {
 }
 
 /**
- * The index `snapshotWorktree` stages into, next to the repository's own inside the git
- * directory. It is kept between runs so git's stat cache spares a rehash of the whole tree.
+ * The index `snapshotWorktree` stages into, inside this worktree's own git directory rather than
+ * the one every worktree shares. It is kept between runs so git's stat cache spares a rehash of
+ * the whole tree, and `git worktree remove` takes it away with the worktree it belongs to.
  */
 export const SNAPSHOT_INDEX = 'pr-review-canvas.index'
 
-/** Where the snapshot commit is anchored, so `git gc` cannot collect the canvas out from under us. */
-export const SNAPSHOT_REF = 'refs/pr-review/worktree'
+/**
+ * Where the snapshot commit is anchored, so `git gc` cannot collect the canvas out from under us.
+ * `refs/worktree/` is git's own per-worktree namespace: two worktrees of one clone each keep their
+ * own snapshot instead of overwriting the single ref they would otherwise share.
+ */
+export const SNAPSHOT_REF = 'refs/worktree/pr-review-snapshot'
 
 /**
  * A fixed identity and time, so the same working tree always hashes to the same commit: preparing
@@ -183,7 +188,7 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
     snapshotWorktree: async () => {
       const indexEnv = {
         GIT_INDEX_FILE: path.join(
-          await run(['rev-parse', '--path-format=absolute', '--git-common-dir']),
+          await run(['rev-parse', '--path-format=absolute', '--git-dir']),
           SNAPSHOT_INDEX
         ),
       }

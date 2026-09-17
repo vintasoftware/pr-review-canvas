@@ -66,11 +66,15 @@ one never disturbs the other.
 - **Uncommitted work.** `--uncommitted` stages the working tree into an index of its own and
   writes a commit from it, so the diff covers files that are not committed yet. Nothing the user
   staged is touched, ignored files stay out, and the commit is anchored at
-  `refs/pr-review/worktree` so `git gc` cannot collect it. The same working tree always hashes to
-  the same commit.
+  `refs/worktree/pr-review-snapshot` so `git gc` cannot collect it. The same working tree always
+  hashes to the same commit.
 - **Staleness.** Committing after `--branch`, or editing a file after `--uncommitted`, moves the
   head, so `publish` answers `CANVAS_STALE` and the page offers to regenerate, exactly as a push
   does for a pull request.
+- **Worktrees.** The snapshot index and its anchor are per worktree, so two worktrees of one clone
+  never overwrite each other's snapshot. The review targets are not: `branch` and `uncommitted`
+  name one review per clone, so worktrees share their canvas, review progress and chat threads.
+  Review local work from one worktree at a time.
 - **No forge side.** A local canvas posts nothing: comments, sign-off, canvas import, and
   attachment discovery are refused for it, and the page hides them. A canvas of a working-tree
   snapshot is never offered as a pull request's canvas, or as the branch review's, because its

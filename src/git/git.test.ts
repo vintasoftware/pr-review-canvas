@@ -2,7 +2,7 @@
 // The real adapter against a throwaway repository: git is a process boundary, but the adapter
 // itself is what this file tests, so it needs the real binary once.
 import { execFile } from 'node:child_process'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
@@ -13,6 +13,7 @@ import {
   GitError,
   type GitExec,
   redactStderr,
+  SNAPSHOT_INDEX,
   SNAPSHOT_REF,
   STDERR_MESSAGE_MAX,
 } from './git.js'
@@ -221,6 +222,40 @@ describe('createGit (real adapter)', () => {
       // Nothing the user staged, or did not stage, has moved: the real index is untouched.
       expect(await g(dir, 'diff', '--cached', '--name-only')).toBe('')
       expect(await g(dir, 'ls-files', '--others', '--exclude-standard')).toBe('fresh.ts')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('gives every worktree of one clone its own snapshot and its own anchor', async () => {
+    const dir = await makeTempDir('pr-review-wt-')
+    const main = path.join(dir, 'main')
+    const side = path.join(dir, 'side')
+    try {
+      await mkdir(main, { recursive: true })
+      await g(main, 'init', '-q', '-b', 'main')
+      await g(main, 'config', 'user.email', 'test@example.com')
+      await g(main, 'config', 'user.name', 'Test')
+      await writeFile(path.join(main, 'a.ts'), 'export const a = 1\n')
+      await g(main, 'add', '.')
+      await g(main, 'commit', '-q', '-m', 'one')
+      await g(main, 'worktree', 'add', '-q', '-b', 'side', side)
+
+      await writeFile(path.join(main, 'a.ts'), 'export const a = 2\n')
+      await writeFile(path.join(side, 'a.ts'), 'export const a = 3\n')
+      const mainSha = await createGit(main).snapshotWorktree()
+      const sideSha = await createGit(side).snapshotWorktree()
+      expect(mainSha).toMatch(/^[0-9a-f]{40}$/)
+      expect(sideSha).not.toBe(mainSha)
+      // Each worktree keeps its own anchor, so the second snapshot cannot leave the first one
+      // unreachable for `git gc` to collect.
+      expect(await g(main, 'rev-parse', SNAPSHOT_REF)).toBe(mainSha)
+      expect(await g(side, 'rev-parse', SNAPSHOT_REF)).toBe(sideSha)
+      // The index each stages into is its own too, so neither waits on the other's lock.
+      const sideGitDir = await g(side, 'rev-parse', '--path-format=absolute', '--git-dir')
+      await access(path.join(sideGitDir, SNAPSHOT_INDEX))
+      const common = await g(side, 'rev-parse', '--path-format=absolute', '--git-common-dir')
+      expect(sideGitDir).not.toBe(common)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

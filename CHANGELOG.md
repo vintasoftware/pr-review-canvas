@@ -9,8 +9,9 @@
   its edits and untracked files on top. Both compare against the default branch, read from
   `origin/HEAD`, and `--base <ref>` overrides it.
 - `--uncommitted` stages the working tree into an index of this tool's own and writes a commit
-  anchored at `refs/pr-review/worktree`, so nothing the user staged is touched and the same tree
-  always hashes to the same commit. Changing the head afterwards makes the canvas stale, as a push
+  anchored at `refs/worktree/pr-review-snapshot`, so nothing the user staged is touched and the
+  same tree always hashes to the same commit. Both the index and the anchor are per worktree, so
+  worktrees of one clone keep their own snapshots. Changing the head afterwards makes the canvas stale, as a push
   does for a pull request.
 - The canvases are served at `/review/branch` and `/review/uncommitted`, and the home page links
   to whichever exist. Each keeps its own review progress and chat threads. Attention points and
