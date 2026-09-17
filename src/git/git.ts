@@ -16,10 +16,10 @@ export interface Git {
   /** `git rev-list --count a..b`: how many commits b is ahead of a. */
   countCommitsBetween(a: string, b: string): Promise<number>
   /**
-   * `git rev-list --first-parent --no-merges --count a..b`: the commits on b's own line since a
-   * that are not merges. Zero means b only merged other branches into a.
+   * `git rev-list --no-merges --count head ^base...`: the ordinary commits head reaches that none
+   * of the bases does. Zero means head only merged the bases' history together.
    */
-  countNonMergeCommitsBetween(a: string, b: string): Promise<number>
+  countNonMergeCommitsNotIn(head: string, bases: string[]): Promise<number>
   /** Full unified diff between two commits, rename detection on, 3 lines of context. */
   diff(base: string, head: string): Promise<string>
   fetch(remote: string, refspecs: string[]): Promise<void>
@@ -103,8 +103,8 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
       return r.code === 0
     },
     countCommitsBetween: async (a, b) => Number(await run(['rev-list', '--count', `${a}..${b}`])),
-    countNonMergeCommitsBetween: async (a, b) =>
-      Number(await run(['rev-list', '--first-parent', '--no-merges', '--count', `${a}..${b}`])),
+    countNonMergeCommitsNotIn: async (head, bases) =>
+      Number(await run(['rev-list', '--no-merges', '--count', head, ...bases.map(b => `^${b}`)])),
     diff: (base, head) => run(['diff', '--no-color', '--no-ext-diff', '-M', '-U3', base, head]),
     fetch: async (remote, refspecs) => {
       await run(['fetch', '--no-tags', '--quiet', remote, ...refspecs])

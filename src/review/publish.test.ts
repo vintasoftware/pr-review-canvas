@@ -204,8 +204,10 @@ describe('publish', () => {
         },
       })
     const history = {
+      refs: { ...gitFor42().options.refs, 'pull/42/head': merged },
+      mergeBases: { ...gitFor42().options.mergeBases, [`refs/pr/42/base..${merged}`]: BASE_SHA },
       ancestors: { [`${HEAD_SHA}..${merged}`]: true },
-      nonMergeCounts: { [`${HEAD_SHA}..${merged}`]: 0 },
+      nonMergeCounts: { [`${merged} ^${HEAD_SHA} ^${BASE_SHA}`]: 0 },
     }
     t.ctx.git = createFakeGit({ ...gitFor42().options, ...history })
     t.ctx.gh = pullAt(null)
@@ -223,7 +225,7 @@ describe('publish', () => {
     t.ctx.git = createFakeGit({
       ...gitFor42().options,
       ...history,
-      nonMergeCounts: { [`${HEAD_SHA}..${merged}`]: 1 },
+      nonMergeCounts: { [`${merged} ^${HEAD_SHA} ^${BASE_SHA}`]: 1 },
     })
     await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     t.ctx.git = createFakeGit({ ...gitFor42().options, ...history })
@@ -241,6 +243,11 @@ describe('publish', () => {
       routes: {
         'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha: moved } }),
       },
+    })
+    t.ctx.git = createFakeGit({
+      ...gitFor42().options,
+      refs: { ...gitFor42().options.refs, 'pull/42/head': moved },
+      mergeBases: { ...gitFor42().options.mergeBases, [`refs/pr/42/base..${moved}`]: BASE_SHA },
     })
     const err = await publish(t.ctx, canvasDir, OPTS).catch(e => e)
     expect(err).toBeInstanceOf(PublishError)

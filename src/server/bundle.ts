@@ -2,15 +2,12 @@ import type { CanvasInfo, PrBundle, SharedCanvasInfo, StaleInfo } from '../contr
 import type { CommentsPayload } from '../contract/comments.js'
 import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
-import type { PrState } from '../contract/state.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
-import { lookupCanvas, standsForHead } from '../review/canvas-lookup.js'
-import { stateForHead } from '../review/review-body.js'
+import { lookupCanvas, reviewStateFor } from '../review/canvas-lookup.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
-import type { Derived } from '../store/derived-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 
@@ -145,36 +142,6 @@ async function loadCanvas(
   return { artifact, canvas }
 }
 
-/**
- * The review marks as they apply to this head. Marks made on a commit the head only merged onto
- * are moved along with the canvas, so a merge commit does not reset the reviewer's progress.
- */
-async function stateForBundle(ctx: AppContext, number: number, pr: Pr): Promise<PrState> {
-  const stored = await ctx.state.read(number)
-  const marked = stored.reviewedHeadSha
-  if (marked !== undefined && marked !== pr.headSha && (await standsForHead(ctx, marked, pr))) {
-    return ctx.state.moveReviewedHead(number, pr.headSha)
-  }
-  // Marks made on another commit describe other code, so the page never shows them as reviewed.
-  return stateForHead(stored, pr.headSha)
-}
-
-/** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
-export async function readOrBuildDerived(
-  ctx: AppContext,
-  headSha: string,
-  mergeBaseSha: string | undefined
-): Promise<Derived | null> {
-  const stored = await ctx.derived.read(headSha)
-  if (stored !== null || mergeBaseSha === undefined) {
-    return stored
-  }
-  if (!(await ctx.derived.derivable(headSha, mergeBaseSha))) {
-    return null
-  }
-  return ctx.derived.ensure(headSha, mergeBaseSha)
-}
-
 export async function resolveBundle(
   ctx: AppContext,
   loader: PrLoader,
@@ -194,7 +161,7 @@ export async function resolveBundle(
 
   const chatEnabled = ctx.projectConfig.config.chat.enabled
   const [state, capabilities, settings, acpx] = await Promise.all([
-    stateForBundle(ctx, number, pr),
+    reviewStateFor(ctx, number, pr),
     ctx.capabilities.get(),
     chatEnabled ? ctx.chat.effectiveSettings() : Promise.resolve(null),
     chatEnabled ? ctx.preflight.get() : Promise.resolve({ installed: false, version: null }),
@@ -236,8 +203,9 @@ export async function resolveBundle(
   let found = await lookupCanvas(ctx, number, pr)
   let sharedCanvas: SharedCanvasInfo | null = null
   // A canvas for this very head beats anything attached to the PR, so discovery runs only
-  // when there is none, and its import can turn a stale or missing bundle into a ready one.
-  if (found.status !== 'ready') {
+  // when there is none: an import can turn a stale or missing bundle into a ready one, and can
+  // replace a canvas of an earlier commit with one generated for the head itself.
+  if (found.status !== 'ready' || found.mergesSince !== undefined) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)
@@ -269,18 +237,19 @@ export async function resolveBundle(
     const merges = found.mergesSince === undefined ? {} : { mergesSince: found.mergesSince }
     return { ...base, ...shared, ...loaded, ...merges, status: 'ready', skillCommand }
   }
-  const stale: StaleInfo = {
-    canvasHeadSha: found.headSha,
-    currentHeadSha: pr.headSha,
-    relation: found.relation,
-  }
-  if (found.commitsBehind !== undefined) {
-    stale.commitsBehind = found.commitsBehind
-  }
+  const stale: StaleInfo =
+    found.relation === 'ancestor'
+      ? {
+          canvasHeadSha: found.headSha,
+          currentHeadSha: pr.headSha,
+          relation: 'ancestor',
+          commitsBehind: found.commitsBehind,
+        }
+      : { canvasHeadSha: found.headSha, currentHeadSha: pr.headSha, relation: 'unrelated' }
   // The page shows the canvas of the older commit, so the files and the diffs are that commit's.
   // They are rebuilt when the clone has the commits, which is how a canvas imported before the
   // fetch becomes readable once the commits arrive.
-  const staleDerived = await readOrBuildDerived(ctx, found.headSha, loaded.canvas.manifest?.mergeBaseSha)
+  const staleDerived = await ctx.derived.readOrBuild(found.headSha, loaded.canvas.manifest?.mergeBaseSha)
   // A stale canvas describes an older commit, so its own files decide both the diffs and
   // whether the notice about large change sets belongs on the page.
   const staleFiles = staleDerived?.files ?? loaded.artifact.files

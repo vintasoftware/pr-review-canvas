@@ -110,7 +110,7 @@ When the saved canvas describes a different PR head, **Canvas is outdated** appe
 the top. You can still read the older canvas, with its commit and distance shown; posting
 from that view is disabled. Click **refresh** to check GitHub or GitLab for changes and a newer zip.
 
-Merge commits do not outdate a canvas: when the head only merged other branches in (for
+Merge commits do not outdate a canvas: when the head only merged the base branch in (for
 example, updating the branch from `main`) and the host reports no conflicts, the canvas
 still applies and the page says so. Set `canvas.ignoreMergeCommits: false` in the project
 config to treat every commit as a new head.

@@ -119,9 +119,15 @@ describe('a GitLab origin', () => {
     t.ctx.gh = createFakeGh({
       routes: { [MR_API]: ghJson({ ...MR, sha: moved, diff_refs: { ...MR.diff_refs, head_sha: moved } }) },
     })
+    t.ctx.git = createFakeGit({
+      ...gitForMr42().options,
+      refs: { ...gitForMr42().options.refs, 'merge-requests/42/head': moved },
+      mergeBases: { [`refs/pr/42/base..${moved}`]: BASE_SHA },
+    })
     await expect(publish(t.ctx, canvasDir, opts)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
     t.ctx.gh = glabFor42()
+    t.ctx.git = gitForMr42()
     await expect(publish(t.ctx, canvasDir, opts)).resolves.toMatchObject({
       status: 'published',
       headSha: HEAD_SHA,

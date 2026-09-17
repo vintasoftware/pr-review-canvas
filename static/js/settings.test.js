@@ -127,10 +127,10 @@ describe('settingsDialogHtml', () => {
       AGENTS
     )
     expect(html).toContain('chat enabled: no')
-    expect(html).toContain('canvas outdated by merge commits: no')
+    expect(html).toContain('ignore merge commits: yes')
     expect(
       settingsDialogHtml({ ...SETTINGS, project: { ...SETTINGS.project, ignoreMergeCommits: false } }, AGENTS)
-    ).toContain('canvas outdated by merge commits: yes')
+    ).toContain('ignore merge commits: no')
     expect(html).toContain('--agent codex')
     expect(html).not.toContain('--model')
   })

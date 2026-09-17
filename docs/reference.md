@@ -337,14 +337,15 @@ completion. If the head moves before submission, reload and review the current c
 A canvas describes one head commit. When the pull request moves to another commit, the page
 shows **Canvas is outdated**, offers the older canvas read-only, and disables posting from it.
 
-Merge commits are the exception. A head that only merged other branches onto the canvas's commit
-(the base branch through **Update branch**, for example) carries the same change set, so the
-canvas stays current: the page shows the head's own diffs under a **Canvas still applies** note,
-review progress carries over, and sign-off, comments, and AI Chat keep working. This needs
+Merge commits are the exception. A head that only merged the base branch onto the canvas's
+commit (through **Update branch**, for example) carries the same change set, so the canvas stays
+current: the page shows the head's own diffs under a **Canvas still applies** note, review
+progress carries over, and sign-off, comments, and AI Chat keep working. This needs
 `canvas.ignoreMergeCommits` (the default) and a clean conflict report from GitHub or GitLab. A
-merge that resolved conflicts by hand, a pending conflict check, or any ordinary commit marks the
-canvas outdated as before. `pr-review publish` applies the same rule when the head moves while a
-canvas is being generated.
+pending or negative conflict report, an ordinary commit on the branch, or a merge that brought in
+commits the base does not contain marks the canvas outdated as before. Edits made while
+resolving a merge by hand are not detected: regenerate the canvas after such a merge.
+`pr-review publish` applies the same rule when the head moves while a canvas is being generated.
 
 AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
 one on screen.

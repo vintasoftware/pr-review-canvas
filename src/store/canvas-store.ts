@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { CanvasRelation, MergesSinceInfo } from '../contract/api.js'
+import type { MergesSinceInfo } from '../contract/api.js'
 import {
   type CanvasIndex,
   CanvasIndexSchema,
@@ -10,27 +10,14 @@ import { type ReviewArtifact, ReviewArtifactSchema } from '../contract/review-ar
 import type { Git } from '../git/git.js'
 import { readJson, readText, writeJsonAtomic } from './atomic-json.js'
 
+/** A canvas for another commit: one the head was built on, with its distance, or one off a discarded branch. */
+export type StaleLookup =
+  | { status: 'stale'; headSha: string; relation: 'ancestor'; commitsBehind: number }
+  | { status: 'stale'; headSha: string; relation: 'unrelated' }
+
 export type CanvasLookup =
   /** `headSha` is the canvas's own commit: the head, or an earlier commit the head only merged onto. */
-  | { status: 'ready'; headSha: string; mergesSince?: MergesSinceInfo }
-  | { status: 'stale'; headSha: string; relation: CanvasRelation; commitsBehind?: number }
-  | { status: 'missing' }
-
-export interface FindForPrOptions {
-  /**
-   * Accept a canvas of an ancestor commit when every commit on the head's own line since then is
-   * a merge. The caller decides this from the project config and the host's conflict report.
-   */
-  followMerges?: boolean
-}
-
-/** True when b is a, or b only merged other branches onto a: the change set they carry is the same. */
-export async function onlyMergesSince(git: Git, a: string, b: string): Promise<boolean> {
-  if (a === b) {
-    return true
-  }
-  return (await git.isAncestor(a, b)) && (await git.countNonMergeCommitsBetween(a, b)) === 0
-}
+  { status: 'ready'; headSha: string; mergesSince?: MergesSinceInfo } | StaleLookup | { status: 'missing' }
 
 export interface CanvasStore {
   readonly root: string
@@ -44,10 +31,9 @@ export interface CanvasStore {
   write(headSha: string, artifact: ReviewArtifact, manifest: CanvasManifest, prNumber?: number): Promise<void>
   /**
    * The best canvas for this PR: the one written for its current head, else the newest one the
-   * head was built on top of, else one from a branch the head no longer contains. With
-   * `followMerges`, an ancestor the head only merged onto counts as ready.
+   * head was built on top of, else one from a branch the head no longer contains.
    */
-  findForPr(prNumber: number, currentHeadSha: string, opts?: FindForPrOptions): Promise<CanvasLookup>
+  findForPr(prNumber: number, currentHeadSha: string): Promise<CanvasLookup>
   /** Records the PR number on a canvas that was exported before the pull request existed. */
   attachPrNumber(headSha: string, prNumber: number): Promise<void>
 }
@@ -91,7 +77,7 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       index.canvases[headSha] = entry
       await writeJsonAtomic(indexFile, index)
     },
-    findForPr: async (prNumber, currentHeadSha, opts = {}) => {
+    findForPr: async (prNumber, currentHeadSha) => {
       const index = await readIndex()
       if (index.canvases[currentHeadSha] !== undefined) {
         return { status: 'ready', headSha: currentHeadSha }
@@ -101,54 +87,26 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
         ([sha, entry]) =>
           sha !== currentHeadSha && (entry.prNumber === undefined || entry.prNumber === prNumber)
       )
-      const ranked: Array<{
-        headSha: string
-        generatedAt: string
-        relation: CanvasRelation
-        commitsBehind?: number
-      }> = []
-      for (const [sha, entry] of candidates) {
-        if (await git.isAncestor(sha, currentHeadSha)) {
-          ranked.push({
-            headSha: sha,
-            generatedAt: entry.generatedAt,
-            relation: 'ancestor',
-            commitsBehind: await git.countCommitsBetween(sha, currentHeadSha),
-          })
-        } else {
-          ranked.push({ headSha: sha, generatedAt: entry.generatedAt, relation: 'unrelated' })
-        }
+      const ranked: Array<{ generatedAt: string; lookup: StaleLookup }> = []
+      for (const [headSha, entry] of candidates) {
+        const lookup: StaleLookup = (await git.isAncestor(headSha, currentHeadSha))
+          ? {
+              status: 'stale',
+              headSha,
+              relation: 'ancestor',
+              commitsBehind: await git.countCommitsBetween(headSha, currentHeadSha),
+            }
+          : { status: 'stale', headSha, relation: 'unrelated' }
+        ranked.push({ generatedAt: entry.generatedAt, lookup })
       }
       // Commits the head was built on come first; a force-pushed-away canvas is the last resort.
       ranked.sort((a, b) => {
-        if (a.relation !== b.relation) {
-          return a.relation === 'ancestor' ? -1 : 1
+        if (a.lookup.relation !== b.lookup.relation) {
+          return a.lookup.relation === 'ancestor' ? -1 : 1
         }
         return a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0
       })
-      const best = ranked[0]
-      if (best === undefined) {
-        return { status: 'missing' }
-      }
-      if (
-        opts.followMerges === true &&
-        best.commitsBehind !== undefined &&
-        (await git.countNonMergeCommitsBetween(best.headSha, currentHeadSha)) === 0
-      ) {
-        return {
-          status: 'ready',
-          headSha: best.headSha,
-          mergesSince: { canvasHeadSha: best.headSha, currentHeadSha, commitsBehind: best.commitsBehind },
-        }
-      }
-      return best.commitsBehind === undefined
-        ? { status: 'stale', headSha: best.headSha, relation: best.relation }
-        : {
-            status: 'stale',
-            headSha: best.headSha,
-            relation: best.relation,
-            commitsBehind: best.commitsBehind,
-          }
+      return ranked[0]?.lookup ?? { status: 'missing' }
     },
     attachPrNumber: async (headSha, prNumber) => {
       const index = await readIndex()

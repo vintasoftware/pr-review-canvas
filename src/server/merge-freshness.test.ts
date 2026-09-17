@@ -4,6 +4,7 @@
 // routes with the strict reading, when the project or the host's conflict report says so.
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
+import { buildCanvasZip } from '../canvas/zip.js'
 import type { ErrorEnvelope, PrBundle, ReviewBodyResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
@@ -33,6 +34,9 @@ const SAME_ORIGIN = { ...LOCAL, origin: 'http://localhost:3010', 'sec-fetch-site
 const JSON_POST = { ...SAME_ORIGIN, 'content-type': 'application/json' }
 /** The commit the canvas was generated for; HEAD_SHA merged the base onto it afterwards. */
 const OLD_SHA = 'e'.repeat(40)
+/** A canvas zip generated for HEAD_SHA itself, attached to the pull request. */
+const HEAD_ZIP_URL =
+  'https://github.com/user-attachments/files/12345/pr-42-20260910T120000Z-aaaaaaaa-acme-widgets-canvas.zip'
 
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T
@@ -82,7 +86,7 @@ function gitWithMerge(extra: FakeGitOptions = {}) {
     blobs: SYNTHETIC_BLOBS,
     ancestors: { [`${OLD_SHA}..${HEAD_SHA}`]: true },
     counts: { [`${OLD_SHA}..${HEAD_SHA}`]: 3 },
-    nonMergeCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 0 },
+    nonMergeCounts: { [`${HEAD_SHA} ^${OLD_SHA} ^${BASE_SHA}`]: 0 },
     topLevel: '/repo',
     ...extra,
   })
@@ -92,6 +96,10 @@ interface Scenario {
   mergeable?: boolean | null
   ignoreMergeCommits?: boolean
   git?: FakeGitOptions
+  /** The pull request description, where a canvas zip may be attached. */
+  body?: string
+  /** What downloading an attachment answers. */
+  fetch?: typeof fetch
 }
 
 let t: TestContext
@@ -101,7 +109,11 @@ afterEach(() => t?.cleanup())
 /** A context holding the canvas of OLD_SHA, with the pull request now at HEAD_SHA. */
 async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
   runner = createFakeRunner()
-  const pull = { ...GH_PULL, mergeable: scenario.mergeable === undefined ? true : scenario.mergeable }
+  const pull = {
+    ...GH_PULL,
+    mergeable: scenario.mergeable === undefined ? true : scenario.mergeable,
+    body: scenario.body ?? GH_PULL.body,
+  }
   const config: ProjectConfig = {
     ...DEFAULT_PROJECT_CONFIG,
     canvas: { ignoreMergeCommits: scenario.ignoreMergeCommits ?? true },
@@ -111,6 +123,7 @@ async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
     gh: ghFor42({ routes: { 'repos/acme/widgets/pulls/42': ghJson(pull) } }),
     runner,
     projectConfig: { config, warnings: [], source: '/repo/pr-review.config.yml' },
+    ...(scenario.fetch === undefined ? {} : { fetch: scenario.fetch }),
   })
   await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA), 42)
   return t
@@ -160,11 +173,24 @@ describe('a canvas whose head only gained merge commits', () => {
     expect((await bundle()).status).toBe('stale')
   })
 
-  it('is outdated once an ordinary commit sits among the merges', async () => {
-    await withOldCanvas({ git: { nonMergeCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 1 } } })
+  it('is outdated once an ordinary commit came in, on the branch or from a branch the base lacks', async () => {
+    await withOldCanvas({ git: { nonMergeCounts: { [`${HEAD_SHA} ^${OLD_SHA} ^${BASE_SHA}`]: 1 } } })
     const b = await bundle()
     expect(b.status).toBe('stale')
     expect(b.stale?.commitsBehind).toBe(3)
+  })
+
+  it('still takes a canvas attached to the pull request when it was generated for the head itself', async () => {
+    const bytes = buildCanvasZip(manifest(HEAD_SHA), artifactFor(HEAD_SHA))
+    await withOldCanvas({
+      body: `canvas: ${HEAD_ZIP_URL}`,
+      fetch: async () => new Response(bytes.slice().buffer as ArrayBuffer, { status: 200 }),
+    })
+    const b = await bundle()
+    expect(b.status).toBe('ready')
+    expect(b.mergesSince).toBeUndefined()
+    expect(b.canvas?.headSha).toBe(HEAD_SHA)
+    expect(b.sharedCanvas).toMatchObject({ url: HEAD_ZIP_URL, matchesHead: true, downloadable: true })
   })
 
   it('carries the reviewer marks over to the new head', async () => {
@@ -196,16 +222,22 @@ describe('a canvas whose head only gained merge commits', () => {
     expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
   })
 
-  it('lets the sign-off routes use the canvas for the current head', async () => {
+  it('lets the sign-off routes use the canvas for the current head, with the marks moved along', async () => {
     await withOldCanvas()
-    await bundle()
+    await t.ctx.state.update(42, state => ({
+      ...state,
+      reviewed: { 'layer:layer-1': true },
+      reviewedHeadSha: OLD_SHA,
+    }))
+    // No bundle was loaded first: the sign-off routes apply the rule themselves.
     const app = createApp(t.ctx)
     const body = await json<ReviewBodyResponse>(
       await app.request('/api/prs/42/review/body', { headers: LOCAL })
     )
     expect(body.headSha).toBe(HEAD_SHA)
-    expect(body.body).toContain(`Reviewed 0 of 1 layer on \`${HEAD_SHA.slice(0, 7)}\``)
-    expect(body.unreviewed).toEqual(['Run path'])
+    expect(body.body).toContain(`Reviewed 1 of 1 layer on \`${HEAD_SHA.slice(0, 7)}\``)
+    expect(body.unreviewed).toEqual([])
+    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(HEAD_SHA)
   })
 
   it('refuses the sign-off when the canvas is outdated', async () => {
@@ -222,20 +254,6 @@ describe('a canvas whose head only gained merge commits', () => {
     const res = await createApp(t.ctx).request('/api/prs/42/export', { headers: LOCAL })
     expect(res.status).toBe(200)
     expect(res.headers.get('content-disposition')).toContain(OLD_SHA.slice(0, 8))
-  })
-})
-
-describe('StateStore.moveReviewedHead', () => {
-  it('re-keys marks to the new head, and writes nothing when there is nothing to move', async () => {
-    await withOldCanvas()
-    const untouched = await t.ctx.state.moveReviewedHead(42, HEAD_SHA)
-    expect(untouched.reviewedHeadSha).toBeUndefined()
-    expect(untouched.rev).toBe((await t.ctx.state.read(42)).rev)
-    await t.ctx.state.setReviewed(42, 'layer:layer-1', true, OLD_SHA)
-    const moved = await t.ctx.state.moveReviewedHead(42, HEAD_SHA)
-    expect(moved.reviewed).toEqual({ 'layer:layer-1': true })
-    expect(moved.reviewedHeadSha).toBe(HEAD_SHA)
-    expect((await t.ctx.state.moveReviewedHead(42, HEAD_SHA)).rev).toBe(moved.rev)
   })
 })
 

@@ -1,33 +1,65 @@
-// Which stored canvas stands for a pull request head, with the project's word on merge commits.
+// Which stored canvas, and which review marks, stand for a pull request head once the project's
+// word on merge commits is applied. Every route and the CLI decide this here and nowhere else.
 import type { Pr } from '../contract/review-artifact.js'
-import type { ProjectConfig } from '../project-config.js'
+import type { PrState } from '../contract/state.js'
 import type { AppContext } from '../server/context.js'
-import { type CanvasLookup, onlyMergesSince } from '../store/canvas-store.js'
+import { stateForHead } from './review-body.js'
+import type { CanvasLookup } from '../store/canvas-store.js'
+
+/** What the rule reads of a pull request; a `PrMeta` with its fetched shas fits as well as a `Pr`. */
+type PrHead = Pick<Pr, 'headSha' | 'mergeBaseSha' | 'mergeable'>
 
 /**
- * Whether a canvas of an earlier commit may stand for this head: the project ignores merge
- * commits, and the host reports that the head merges cleanly. A pending or negative conflict
- * check keeps the strict reading, so a merge that resolved conflicts by hand marks the canvas
- * outdated.
+ * True when `sha` carries the same change set as the head: it is the head, or the head only
+ * merged history that is already in the base onto it. That needs the project to ignore merge
+ * commits and the host to report that the head merges cleanly; a pending or negative report
+ * keeps the strict reading. Any ordinary commit since `sha`, on the branch or brought in by
+ * merging a branch the base does not contain, marks the canvas outdated.
  */
-export function followsMerges(config: ProjectConfig, pr: Pr): boolean {
-  return config.canvas.ignoreMergeCommits && pr.mergeable === true
-}
-
-/** The canvas for this pull request, read with the project's merge-commit setting applied. */
-export function lookupCanvas(ctx: AppContext, number: number, pr: Pr): Promise<CanvasLookup> {
-  return ctx.canvases.findForPr(number, pr.headSha, {
-    followMerges: followsMerges(ctx.projectConfig.config, pr),
-  })
-}
-
-/**
- * True when `sha` describes the same change set as the head: it is the head, or the head only
- * merged other branches onto it and the project lets that pass.
- */
-export async function standsForHead(ctx: AppContext, sha: string, pr: Pr): Promise<boolean> {
+export async function standsForHead(ctx: AppContext, sha: string, pr: PrHead): Promise<boolean> {
   if (sha === pr.headSha) {
     return true
   }
-  return followsMerges(ctx.projectConfig.config, pr) && onlyMergesSince(ctx.git, sha, pr.headSha)
+  if (!ctx.projectConfig.config.canvas.ignoreMergeCommits || pr.mergeable !== true) {
+    return false
+  }
+  return (
+    (await ctx.git.isAncestor(sha, pr.headSha)) &&
+    (await ctx.git.countNonMergeCommitsNotIn(pr.headSha, [sha, pr.mergeBaseSha])) === 0
+  )
+}
+
+/** The canvas for this pull request: the head's own, or one of an earlier commit that stands for it. */
+export async function lookupCanvas(ctx: AppContext, number: number, pr: Pr): Promise<CanvasLookup> {
+  const found = await ctx.canvases.findForPr(number, pr.headSha)
+  if (
+    found.status !== 'stale' ||
+    found.relation !== 'ancestor' ||
+    !(await standsForHead(ctx, found.headSha, pr))
+  ) {
+    return found
+  }
+  return {
+    status: 'ready',
+    headSha: found.headSha,
+    mergesSince: {
+      canvasHeadSha: found.headSha,
+      currentHeadSha: pr.headSha,
+      commitsBehind: found.commitsBehind,
+    },
+  }
+}
+
+/**
+ * The review marks as they apply to this head. Marks made on a commit that stands for the head
+ * are re-keyed to it, so a merge commit does not reset the reviewer's progress; marks made on any
+ * other commit describe other code and are never shown as reviewed.
+ */
+export async function reviewStateFor(ctx: AppContext, number: number, pr: Pr): Promise<PrState> {
+  const stored = await ctx.state.read(number)
+  const marked = stored.reviewedHeadSha
+  if (marked !== undefined && marked !== pr.headSha && (await standsForHead(ctx, marked, pr))) {
+    return ctx.state.update(number, state => ({ ...state, reviewedHeadSha: pr.headSha }))
+  }
+  return stateForHead(stored, pr.headSha)
 }

@@ -4,8 +4,8 @@
 
 ### Review interface
 
-- A canvas stays current when the pull request head only gained merge commits, such as the
-  base branch merged in, and GitHub or GitLab reports no conflicts. The page shows the head's
+- A canvas stays current when the pull request head only merged the base branch in and GitHub
+  or GitLab reports no conflicts. The page shows the head's
   diffs under a **Canvas still applies** note, review progress carries over, and sign-off keeps
   working. The new `canvas.ignoreMergeCommits` project setting (default `true`) turns this off.
 - `pr-review publish` accepts a head that only merged other branches onto the prepared commit
