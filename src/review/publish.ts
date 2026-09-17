@@ -6,7 +6,6 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { type GenerationContext, GenerationContextSchema } from '../contract/generation-context.js'
 import type { Generator, ReviewArtifact } from '../contract/review-artifact.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
-import { fetchPrMeta } from '../github/pr.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { normalize } from './normalize.js'
@@ -87,7 +86,7 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
 /** The current head of the target; a push during generation makes the prepared context stale. */
 async function currentHead(ctx: AppContext, context: GenerationContext): Promise<string> {
   if (context.target.kind === 'pr') {
-    return (await fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)).headSha
+    return (await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)).headSha
   }
   return ctx.git.revParse(context.target.head)
 }

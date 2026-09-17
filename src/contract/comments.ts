@@ -96,3 +96,8 @@ export {
 export function emptyComments(headSha: string, fetchedAt: string): CommentsPayload {
   return { fetchedAt, headSha, reviewComments: [], issueComments: [] }
 }
+
+export interface FetchCommentsResult {
+  payload: CommentsPayload
+  warnings: string[]
+}

@@ -1,7 +1,7 @@
 # PR Review Canvas
 
-Review a GitHub pull request canvas: layers by topic, with grouped diffs, attention points, comments,
-and an optional AI chat. Everything runs locally at **http://localhost:3010**.
+Review a GitHub pull request or GitLab merge request canvas: layers by topic, with grouped diffs,
+attention points, comments, and an optional AI chat. Everything runs locally at **http://localhost:3010**.
 
 ## Quick start: author generates, reviewers review
 
@@ -18,8 +18,8 @@ Replace **123** with your PR number. The skill reads the PR, generates and valid
 then returns a local review URL and the exported zip's path. Open the URL to check the canvas.
 
 The skill ends with upload instructions. If you're happy with the produced canvas, edit the PR
-description in GitHub's UI, drag the zip into the editor, wait for the upload to finish, and save.
-Uploading the zip is a manual browser step due to restrictions of GitHub's API.
+or MR description in GitHub or GitLab, drag the zip into the editor, wait for the upload to finish,
+and save. Uploading the zip is a manual browser step.
 
 ### Review side
 
@@ -34,8 +34,11 @@ review. Stop the server with **Ctrl+C**. To use another port, run `pr-review ser
 
 ## Install
 
-You need Node.js 22+, npm, Git, and [GitHub CLI](https://cli.github.com).
-Sign in to GitHub with `gh auth login`.
+You need Node.js 22+, npm, Git, and the CLI for your host:
+
+- GitHub: [GitHub CLI](https://cli.github.com). Sign in with `gh auth login`.
+- GitLab: [GitLab CLI (glab)](https://gitlab.com/gitlab-org/cli). Sign in with `glab auth login`.
+  Self-hosted GitLab whose hostname does not contain `gitlab` needs `PR_REVIEW_HOST=gitlab`.
 
 Install the command globally once, for use in any project:
 
@@ -57,9 +60,9 @@ Re-run `pr-review install-skill` after upgrading the CLI to refresh them. It als
 project's `.gitignore`. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
-`doctor` checks Git, your GitHub remote, the GitHub CLI and its login, write access to the local
-canvas directory, whether installed skills match the current package, and **Destructive Command
-Guard (`dcg`)**. Install dcg using
+`doctor` checks Git, your GitHub or GitLab remote, the matching CLI (`gh` or `glab`) and its login,
+write access to the local canvas directory, whether installed skills match the current package, and
+**Destructive Command Guard (`dcg`)**. Install dcg using
 the [upstream installation instructions](https://github.com/Dicklesworthstone/destructive_command_guard#quick-install)
 and verify `dcg --version`. Doctor fails with exit code `1` and an installation hint when dcg
 is missing, fails to run, or fails the required chat policy probes. The probes evaluate command
@@ -161,7 +164,7 @@ pr-review export --pr 123
 ```
 
 The command prints the zip's absolute path. Both `export` and `publish` save locally; neither
-uploads an attachment to GitHub.
+uploads an attachment to GitHub or GitLab.
 
 The zip contains `manifest.json` and `review.json`: the PR description, file/hunk metadata,
 and generated review notes. Check these before sharing, since they can contain private
@@ -175,7 +178,7 @@ Reviewers click **refresh**.
 
 When the saved canvas describes a different PR head, **Canvas is outdated** appears at
 the top. You can still read the older canvas, with its commit and distance shown; posting
-from that view is disabled. Click **refresh** to check GitHub for changes and a newer zip.
+from that view is disabled. Click **refresh** to check GitHub or GitLab for changes and a newer zip.
 
 ## Configuration
 

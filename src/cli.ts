@@ -19,7 +19,7 @@ import {
 import { ConfigError, loadRuntimeConfig, parsePort, readEnv, resolveRepoRoot } from './config.js'
 import { type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { createGit } from './git/git.js'
-import { createGitHubClient } from './github/gh.js'
+import { createHostClient } from './host/client.js'
 import { loadProjectConfig } from './project-config.js'
 import { checkSkill } from './review/doctor.js'
 import { type AppContext, createAppContext, readPackageVersion } from './server/context.js'
@@ -53,7 +53,7 @@ const USAGE = `usage: pr-review <command> [flags]
   doctor [--all-checks] [--json] [--repo <dir>] [--data-dir <dir>]
 
 Every command prints one JSON line on success and { "error": { code, message, hint } } on failure.
-Exit codes: 0 ok, 1 error, 2 usage, 4 gh missing or not logged in, 5 invalid model output.
+Exit codes: 0 ok, 1 error, 2 usage, 4 gh/glab missing or not logged in, 5 invalid model output.
 `
 
 const io: CliIo = {
@@ -126,15 +126,15 @@ async function serve(argv: string[]): Promise<number> {
   return EXIT.ok
 }
 
-/** doctor builds no AppContext: it has to answer even when the repo or `gh` is the problem. */
+/** doctor builds no AppContext: it has to answer even when the repo or host CLI is the problem. */
 async function doctorCommand(argv: string[]): Promise<number> {
   const { repo, dataDir, rest } = splitCommonFlags(argv)
   const cwd = process.cwd()
-  const git = createGit(repo === undefined ? cwd : path.resolve(cwd, repo))
   return runDoctor(
     {
-      git,
-      gh: createGitHubClient(),
+      git: createGit(repo === undefined ? cwd : path.resolve(cwd, repo)),
+      env: process.env,
+      client: host => createHostClient(host.cli),
       version: readPackageVersion(),
       acpxVersion: () => createAgentRunner().acpxVersion(),
       dcgVersion: async () => dcgVersion(),

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PrBundle } from '../contract/api.js'
 import { emptyState } from '../contract/state.js'
-import { GitHubApiError } from '../github/gh.js'
+import { HostCliError } from '../host/client.js'
 import {
   createFakeGh,
   createFakeGit,
@@ -138,7 +138,7 @@ describe('createApp', () => {
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
       expect(html).toContain(
-        '{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test"}</script>'
+        '{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"}}</script>'
       )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
@@ -245,6 +245,7 @@ describe('createApp', () => {
           agentAuth: { ok: true },
         },
         repo: { owner: 'acme', name: 'widgets' },
+        host: { kind: 'github', label: 'GitHub', webBase: 'https://github.com' },
         dataDir: t.dataDir,
         chat: { enabled: true, acpx: true, agent: 'claude', model: null },
       })
@@ -437,7 +438,7 @@ describe('createApp', () => {
       t = await makeTestContext({
         git: gitFor42(),
         gh: createFakeGh({
-          routes: { 'repos/acme/widgets/pulls/7': ghError(new GitHubApiError('x', 'HTTP 401', 1)) },
+          routes: { 'repos/acme/widgets/pulls/7': ghError(new HostCliError('gh', 'x', 'HTTP 401', 1)) },
         }),
       })
       const app = createApp(t.ctx)

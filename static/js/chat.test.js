@@ -3,7 +3,7 @@
 // The live AI Chat pane: the context chip, streaming, the comment cards, threads, and the width.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyState } from '../../src/contract/state.js'
-import { UNKNOWN_CAPABILITIES } from '../../src/github/capabilities.js'
+import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { setChatEnabled } from './ask.js'

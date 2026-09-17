@@ -3,9 +3,11 @@ import { randomBytes } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { DCG_INSTALL_HINT, DCG_POLICY_HINT, DcgPolicyError, SANDBOX_INSTALL_HINT } from '../acpx/sandbox.js'
-import { parseGithubRemote } from '../config.js'
+import { ORIGIN_HINT } from '../config.js'
 import type { Git } from '../git/git.js'
-import type { GitHubClient } from '../github/gh.js'
+import { CLI_INFO, type HostClient } from '../host/client.js'
+import { GITHUB_HOST, type Host } from '../host/host.js'
+import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
 import { skillContent } from './skill-content.js'
@@ -31,7 +33,10 @@ export interface DoctorReport {
 
 export interface DoctorDeps {
   git: Git
-  gh: GitHubClient
+  /** Where `PR_REVIEW_HOST` is read from. */
+  env: NodeJS.ProcessEnv
+  /** The CLI client for the host origin names; without a usable origin, GitHub's is checked. */
+  client: (host: Host) => HostClient
   version: string
   acpxVersion: () => Promise<string | null>
   dcgVersion: () => Promise<string>
@@ -137,25 +142,30 @@ export async function runDoctorChecks(
     git = { ok: false, detail: message(err), hint: 'run from a clone or pass --repo <dir>' }
   }
 
+  let host = GITHUB_HOST
   let origin: DoctorCheck
   try {
     const url = await deps.git.remoteUrl('origin')
-    const repo = url === null ? null : parseGithubRemote(url)
-    origin =
-      repo === null
-        ? { ok: false, detail: url ?? 'no origin remote', hint: 'add a github.com origin' }
-        : { ok: true, detail: `${repo.owner}/${repo.name}` }
+    const parsed = url === null ? null : parseOriginRemote(url, deps.env)
+    if (parsed === null) {
+      origin = { ok: false, detail: url ?? 'no origin remote', hint: ORIGIN_HINT }
+    } else {
+      host = parsed.host
+      origin = { ok: true, detail: `${parsed.repo.owner}/${parsed.repo.name} (${host.label})` }
+    }
   } catch (err) {
-    origin = { ok: false, detail: message(err), hint: 'add a github.com origin' }
+    origin = { ok: false, detail: message(err), hint: ORIGIN_HINT }
   }
 
-  const status = await deps.gh.authStatus()
+  // The `gh` keys are the report's public names; for a GitLab origin they describe glab.
+  const status = await deps.client(host).authStatus()
+  const cli = CLI_INFO[host.cli.cli]
   const gh: DoctorCheck = status.installed
     ? { ok: true, detail: status.detail }
-    : { ok: false, detail: status.detail, hint: 'install it from https://cli.github.com' }
+    : { ok: false, detail: status.detail, hint: `install it from ${cli.installUrl}` }
   const ghAuth: DoctorCheck = status.authenticated
     ? { ok: true, detail: status.detail }
-    : { ok: false, detail: status.detail, hint: 'run `gh auth login`' }
+    : { ok: false, detail: status.detail, hint: `run \`${cli.loginCommand}\`` }
 
   let dataDir: DoctorCheck
   try {

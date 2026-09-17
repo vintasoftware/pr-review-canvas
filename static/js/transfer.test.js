@@ -3,7 +3,7 @@
 // The browser side of canvas transfer: the drop zone, the export command, and the two screens
 // that offer them.
 import { emptyState } from '../../src/contract/state.js'
-import { UNKNOWN_CAPABILITIES } from '../../src/github/capabilities.js'
+import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   ApiError,

@@ -6,6 +6,7 @@
 import { cssEscape } from './anchors.js'
 import { renderMarkdown } from './markdown.js'
 import { esc } from './dom.js'
+import { noPostingTitle, postToLabel } from './host.js'
 
 /**
  * @typedef {{
@@ -50,7 +51,7 @@ export function composerHtml(opts) {
     `<label class="sr" for="${esc(opts.id)}-t">${esc(opts.label)}</label>` +
     previewControlsHtml() +
     `<textarea id="${esc(opts.id)}-t" rows="3" placeholder="${esc(opts.label)}">${esc(opts.body ?? '')}</textarea>` +
-    '<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>post to github</button>' +
+    `<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>` +
     '<button class="cmd" type="button" data-act="composer-cancel">cancel</button></div></div>'
   )
 }
@@ -144,12 +145,9 @@ export function closeComposers(root) {
   return closed
 }
 
-/** What a command says when this GitHub login may not post. */
-export const NO_POSTING_TITLE = 'this GitHub login cannot post on this repository'
-
 /**
  * Disables everything that posts when the probe said no, and enables it otherwise. A token
- * whose rights cannot be read ('unknown') stays enabled: GitHub answers for itself.
+ * whose rights cannot be read ('unknown') stays enabled: the host answers for itself.
  *
  * A command can be disabled for a reason of its own (the approve command before every layer is
  * read, a command whose request is still running). Those keep their state: this only adds and
@@ -159,7 +157,7 @@ export const NO_POSTING_TITLE = 'this GitHub login cannot post on this repositor
  */
 export function applyCapabilityGating(root, capabilities) {
   const blocked = capabilities.canComment === false
-  const reason = capabilities.reason ?? NO_POSTING_TITLE
+  const reason = capabilities.reason ?? noPostingTitle()
   for (const el of Array.from(root.querySelectorAll('[data-needs-post]'))) {
     if (!(el instanceof HTMLButtonElement) || el.getAttribute('aria-busy') === 'true') {
       continue

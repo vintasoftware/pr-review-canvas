@@ -2,31 +2,14 @@
 import {
   ConfigError,
   loadRuntimeConfig,
+  ORIGIN_HINT,
   parseChatOverrides,
-  parseGithubRemote,
   parsePort,
-  resolveGithubRepo,
+  resolveOrigin,
   resolveRepoRoot,
 } from './config.js'
+import { GITHUB_HOST } from './host/host.js'
 import { createFakeGit } from './testing/fakes.js'
-
-describe('parseGithubRemote', () => {
-  it('reads ssh and https forms with or without .git', () => {
-    const expected = { owner: 'vintasoftware', name: 'building-blocks' }
-    expect(parseGithubRemote('git@github.com:vintasoftware/building-blocks.git')).toEqual(expected)
-    expect(parseGithubRemote('git@github.com:vintasoftware/building-blocks')).toEqual(expected)
-    expect(parseGithubRemote('ssh://git@github.com/vintasoftware/building-blocks.git')).toEqual(expected)
-    expect(parseGithubRemote('https://github.com/vintasoftware/building-blocks.git')).toEqual(expected)
-    expect(parseGithubRemote('https://github.com/vintasoftware/building-blocks/')).toEqual(expected)
-    expect(parseGithubRemote('https://user@github.com/vintasoftware/building-blocks\n')).toEqual(expected)
-  })
-
-  it('rejects non-GitHub urls', () => {
-    expect(parseGithubRemote('git@gitlab.com:a/b.git')).toBeNull()
-    expect(parseGithubRemote('https://github.com/only-owner')).toBeNull()
-    expect(parseGithubRemote('')).toBeNull()
-  })
-})
 
 describe('parsePort', () => {
   it('falls back, parses, and rejects garbage', () => {
@@ -39,20 +22,31 @@ describe('parsePort', () => {
   })
 })
 
-describe('resolveRepoRoot and resolveGithubRepo', () => {
+describe('resolveRepoRoot and resolveOrigin', () => {
   it('maps git failures to ConfigError with a hint', async () => {
     await expect(resolveRepoRoot(createFakeGit())).rejects.toMatchObject({
       code: 'NOT_A_REPO',
       hint: 'run from a clone or pass --repo <dir>',
     })
-    await expect(resolveGithubRepo(createFakeGit({ remotes: {} }))).rejects.toMatchObject({
+    await expect(resolveOrigin(createFakeGit({ remotes: {} }))).rejects.toMatchObject({
       code: 'NO_ORIGIN',
+      message: 'the repository has no "origin" remote',
+      hint: ORIGIN_HINT,
     })
     await expect(
-      resolveGithubRepo(createFakeGit({ remotes: { origin: 'git@gitlab.com:a/b.git' } }))
+      resolveOrigin(createFakeGit({ remotes: { origin: 'git@bitbucket.org:a/b.git' } }))
     ).rejects.toMatchObject({
       code: 'NO_ORIGIN',
-      message: 'origin is not a GitHub URL: git@gitlab.com:a/b.git',
+      message: 'origin is not a GitHub or GitLab URL: git@bitbucket.org:a/b.git',
+      hint: ORIGIN_HINT,
+    })
+    await expect(
+      resolveOrigin(createFakeGit({ remotes: { origin: 'git@bitbucket.org:a/b.git' } }), {
+        PR_REVIEW_HOST: 'gitlab',
+      })
+    ).resolves.toMatchObject({
+      host: { kind: 'gitlab', hostname: 'bitbucket.org' },
+      repo: { owner: 'a', name: 'b' },
     })
   })
 
@@ -80,8 +74,21 @@ describe('loadRuntimeConfig', () => {
       commonDir: '/work/repo/.git',
       dataDir: '/work/repo/.pr-review',
       repo: { owner: 'acme', name: 'widgets' },
+      host: GITHUB_HOST,
       fixtureCanvasPath: null,
       chatOverrides: {},
+    })
+  })
+
+  it('classifies a GitLab origin', async () => {
+    const gitlabGit = createFakeGit({
+      topLevel: '/work/repo',
+      commonDir: '/work/repo/.git',
+      remotes: { origin: 'git@gitlab.com:acme/widgets.git' },
+    })
+    expect(await loadRuntimeConfig({}, {}, gitlabGit, '/cwd')).toMatchObject({
+      repo: { owner: 'acme', name: 'widgets' },
+      host: { kind: 'gitlab', hostname: 'gitlab.com' },
     })
   })
 

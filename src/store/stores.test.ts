@@ -61,6 +61,7 @@ describe('data-dir', () => {
     )
     expect(resolveDataDir({ override: '', commonDir: '/work/repo/.git' })).toBe('/work/repo/.pr-review')
     expect(repoDir('/d', TEST_REPO)).toBe('/d/repos/acme__widgets')
+    expect(repoDir('/d', { owner: 'group/sub', name: 'app' })).toBe('/d/repos/group__sub__app')
   })
 
   it('creates the dir with a self-ignoring .gitignore once', async () => {

@@ -1,7 +1,7 @@
 ---
 name: pr-review-canvas
 model: sonnet
-description: Generate a review canvas for a GitHub pull request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` until the validator passes. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR.
+description: Generate a review canvas for a GitHub pull request or GitLab merge request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` until the validator passes. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR.
 ---
 
 # pr-review-canvas
@@ -54,7 +54,7 @@ Progress goes to stderr. The last stdout line is JSON:
   "canvas already exists for <headSha>; run with --force to regenerate".
 - A line of the form `{ "error": { "code", "message", "hint" } }` means prepare failed. Report the
   code, message, and hint verbatim and stop. `pr-review doctor` names which of git, origin,
-  `gh`, the data dir, the skill install, and `dcg` is missing.
+  `gh` or `glab`, the data dir, the skill install, and `dcg` is missing.
 
 ### 2. Read the task
 
@@ -133,11 +133,11 @@ command prints one JSON line with the absolute `path` of the zip.
 ### 7. Finish
 
 For a PR run, report the `reviewUrl` from publish, the absolute zip path from export, and a link
-to the GitHub PR from the prepared context. End with upload instructions:
+to the GitHub PR or GitLab MR from the prepared context. End with upload instructions:
 
 > The canvas is ready at <reviewUrl> (start the server with `pr-review serve` if it is not running).
 > ZIP: <path>
-> If you're happy with the produced canvas, open <PR URL>, edit the PR description, drag the ZIP
+> If you're happy with the produced canvas, open <PR or MR URL>, edit the description, drag the ZIP
 > into the editor, wait for the upload to finish, and save.
 
 For an update, tell the user to replace the old canvas attachment link with the new one.
@@ -146,6 +146,7 @@ Include these instructions in the final response without asking a question or wa
 Uploading and saving the description are manual browser steps. Do not create a release or claim
 the ZIP was uploaded. GitHub's `gh --attach` supports images and video, but not ZIP files
 ([supported types](https://github.com/cli/cli/blob/trunk/internal/attachments/userasset.go)).
+GitLab accepts file uploads in the merge request description the same way.
 
 For a `--base/--head` run, say the canvas is stored for `<headSha>`, that the zip has no PR number
 yet, and that `pr-review export --pr <n>` re-exports it once the pull request exists. Include the

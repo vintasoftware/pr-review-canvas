@@ -1,3 +1,10 @@
+// Tests and their child processes must not inherit the hook's repository pointers.
+import { REPO_ENV_VARS } from './src/git/environment.mjs'
+
+for (const name of REPO_ENV_VARS) {
+  delete process.env[name]
+}
+
 // Test-only shim for the happy-dom environment.
 //
 // DOMPurify 3.4.14 reads element names through a getter it copies from `Node.prototype` at import

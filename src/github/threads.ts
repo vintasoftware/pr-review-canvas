@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Repo } from '../contract/review-artifact.js'
-import type { GitHubClient } from './gh.js'
+import type { HostClient } from '../host/client.js'
 
 const ThreadsPageSchema = z.object({
   repository: z.object({
@@ -34,7 +34,7 @@ export const THREADS_QUERY = `query($owner: String!, $name: String!, $number: In
  * so this one GraphQL query is joined to the REST comments by id.
  */
 export async function fetchResolvedCommentIds(
-  gh: GitHubClient,
+  gh: HostClient,
   repo: Repo,
   number: number
 ): Promise<Set<number>> {
