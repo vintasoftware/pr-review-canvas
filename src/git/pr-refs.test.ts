@@ -35,7 +35,6 @@ describe('fetchPrRefs and toPr', () => {
       mergeBaseSha: BASE_SHA,
       additions: 7,
       deletions: 5,
-      mergeable: null,
       changedFiles: 7,
       repo: TEST_REPO,
     })

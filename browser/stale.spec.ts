@@ -19,7 +19,7 @@ test('notes a canvas that still applies after merge commits, without disabling p
   await expect(note).toBeVisible()
   await expect(note).toContainText('Canvas still applies.')
   await expect(note).toContainText('generated for ccccccc')
-  await expect(note).toContainText('2 commits, no conflicts')
+  await expect(note).toContainText('the 2 commits since left the diff unchanged')
   await expect(page.locator('section.layer').first()).toBeVisible()
   await expect(page.locator('#es-h')).toHaveCount(0)
 })

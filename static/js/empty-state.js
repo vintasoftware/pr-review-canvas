@@ -173,7 +173,7 @@ export function staleBarHtml(stale) {
 
 /**
  * The note above a canvas that was generated for an earlier commit of the same change set: the
- * head only merged other branches in since, with no conflicts, so the canvas still applies.
+ * commits since (merges from the base branch, as a rule) left the diff as it was.
  * @param {NonNullable<PrBundle['mergesSince']>} merges
  * @returns {string}
  */
@@ -183,7 +183,7 @@ export function mergesBarHtml(merges) {
   const n = merges.commitsBehind
   return (
     `<div class="stale-bar merges-bar" role="status"><strong>Canvas still applies.</strong> ` +
-    `${esc(`It was generated for ${canvas}; the head ${head} only merged in other branches since (${n} commit${n === 1 ? '' : 's'}, no conflicts). The diffs are the head's.`)} ` +
+    `${esc(`It was generated for ${canvas}; the ${n} commit${n === 1 ? '' : 's'} since left the diff unchanged, so it describes the head ${head} too.`)} ` +
     '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button></div>'
   )
 }

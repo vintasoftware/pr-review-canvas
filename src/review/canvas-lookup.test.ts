@@ -1,76 +1,77 @@
 // @vitest-environment node
-import type { Pr } from '../contract/review-artifact.js'
-import { DEFAULT_PROJECT_CONFIG, type ProjectConfig } from '../project-config.js'
-import { createFakeGit, makeTestContext, type TestContext } from '../testing/fakes.js'
-import { syntheticArtifact } from '../testing/synthetic.js'
-import { followsMerges, lookupCanvas, standsForHead } from './canvas-lookup.js'
+// The branches the routes do not reach on their own: a head or a marked commit whose diff the
+// clone cannot produce. The rest of this module is exercised end to end in server/merge-freshness.
+import type { CanvasManifest } from '../contract/canvas-manifest.js'
+import { createFakeGit, makeTestContext, TEST_REPO, type TestContext } from '../testing/fakes.js'
+import { BASE_SHA, SYNTHETIC_DIFF, syntheticArtifact } from '../testing/synthetic.js'
+import { lookupCanvas, reviewStateFor, sameChangeSet } from './canvas-lookup.js'
 
 const HEAD = 'a'.repeat(40)
 const OLD = 'e'.repeat(40)
-const STRICT: ProjectConfig = { ...DEFAULT_PROJECT_CONFIG, canvas: { ignoreMergeCommits: false } }
 
-function pr(mergeable: boolean | null | undefined): Pr {
-  const base = { ...syntheticArtifact().pr, headSha: HEAD }
-  delete base.mergeable
-  return mergeable === undefined ? base : { ...base, mergeable }
+const MANIFEST: CanvasManifest = {
+  formatVersion: 1,
+  tool: { name: 'pr-review', version: '0.1.0' },
+  repo: TEST_REPO,
+  prNumber: 42,
+  headSha: OLD,
+  mergeBaseSha: BASE_SHA,
+  baseRef: 'main',
+  headRef: 'feat/b',
+  generatedAt: '2026-09-10T11:00:00.000Z',
+  generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
 }
 
-describe('followsMerges', () => {
-  it('needs the setting on and a clean conflict report', () => {
-    expect(followsMerges(DEFAULT_PROJECT_CONFIG, pr(true))).toBe(true)
-    expect(followsMerges(DEFAULT_PROJECT_CONFIG, pr(false))).toBe(false)
-    expect(followsMerges(DEFAULT_PROJECT_CONFIG, pr(null))).toBe(false)
-    expect(followsMerges(DEFAULT_PROJECT_CONFIG, pr(undefined))).toBe(false)
-    expect(followsMerges(STRICT, pr(true))).toBe(false)
+let t: TestContext
+afterEach(() => t?.cleanup())
+
+/** OLD is in the clone and diffs to the synthetic change; HEAD is known to the index only. */
+async function context(): Promise<TestContext> {
+  t = await makeTestContext({
+    git: createFakeGit({
+      refs: { old: OLD },
+      mergeBases: { [`${BASE_SHA}..${OLD}`]: BASE_SHA },
+      diffs: { [`${BASE_SHA}..${OLD}`]: SYNTHETIC_DIFF },
+      ancestors: { [`${OLD}..${HEAD}`]: true },
+      counts: { [`${OLD}..${HEAD}`]: 1 },
+    }),
+  })
+  await t.ctx.canvases.write(OLD, syntheticArtifact(), MANIFEST, 42)
+  return t
+}
+
+const pr = { ...syntheticArtifact().pr, headSha: HEAD, mergeBaseSha: BASE_SHA }
+
+describe('sameChangeSet', () => {
+  it('compares files, hunks, and patches together', () => {
+    const files = syntheticArtifact().files
+    expect(sameChangeSet({ files, patches: { a: 'x' } }, { files, patches: { a: 'x' } })).toBe(true)
+    expect(sameChangeSet({ files, patches: { a: 'x' } }, { files, patches: { a: 'y' } })).toBe(false)
+    expect(sameChangeSet({ files, patches: {} }, { files: files.slice(1), patches: {} })).toBe(false)
   })
 })
 
-describe('standsForHead and lookupCanvas', () => {
-  let t: TestContext
-  afterEach(() => t?.cleanup())
-
-  async function context(config: ProjectConfig, nonMerges: number): Promise<TestContext> {
-    t = await makeTestContext({
-      git: createFakeGit({
-        ancestors: { [`${OLD}..${HEAD}`]: true },
-        counts: { [`${OLD}..${HEAD}`]: 2 },
-        nonMergeCounts: { [`${OLD}..${HEAD}`]: nonMerges },
-      }),
-      projectConfig: { config, warnings: [], source: null },
+describe('lookupCanvas', () => {
+  it('keeps the strict answer when the head cannot be diffed on this machine', async () => {
+    await context()
+    expect(await lookupCanvas(t.ctx, 42, pr)).toEqual({
+      status: 'stale',
+      headSha: OLD,
+      relation: 'ancestor',
+      commitsBehind: 1,
     })
-    return t
-  }
-
-  it('the head stands for itself whatever the setting says', async () => {
-    await context(STRICT, 1)
-    expect(await standsForHead(t.ctx, HEAD, pr(null))).toBe(true)
   })
+})
 
-  it('an older commit stands for the head only through merges, with the setting on', async () => {
-    await context(DEFAULT_PROJECT_CONFIG, 0)
-    expect(await standsForHead(t.ctx, OLD, pr(true))).toBe(true)
-    expect(await standsForHead(t.ctx, OLD, pr(null))).toBe(false)
-    expect(await standsForHead(t.ctx, 'f'.repeat(40), pr(true))).toBe(false)
-    await t.cleanup()
-    await context(DEFAULT_PROJECT_CONFIG, 1)
-    expect(await standsForHead(t.ctx, OLD, pr(true))).toBe(false)
-    await t.cleanup()
-    await context(STRICT, 0)
-    expect(await standsForHead(t.ctx, OLD, pr(true))).toBe(false)
-  })
-
-  it('passes the setting and the conflict report on to the store', async () => {
-    await context(DEFAULT_PROJECT_CONFIG, 0)
-    const calls: unknown[] = []
-    t.ctx.canvases.findForPr = async (number, headSha, opts) => {
-      calls.push([number, headSha, opts])
-      return { status: 'missing' }
-    }
-    await lookupCanvas(t.ctx, 42, pr(true))
-    await lookupCanvas(t.ctx, 42, pr(false))
-    expect(calls).toEqual([
-      [42, HEAD, { followMerges: true }],
-      [42, HEAD, { followMerges: false }],
-    ])
+describe('reviewStateFor', () => {
+  it('keeps the strict answer when the marked commit was never diffed on this machine', async () => {
+    await context()
+    // The head is diffable here; the marked commit is not.
+    await t.ctx.derived.ensure(OLD, BASE_SHA)
+    const marked = 'c'.repeat(40)
+    await t.ctx.state.setReviewed(42, 'layer:layer-1', true, marked)
+    const state = await reviewStateFor(t.ctx, 42, { ...pr, headSha: OLD })
+    expect(state.reviewed).toEqual({})
+    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(marked)
   })
 })

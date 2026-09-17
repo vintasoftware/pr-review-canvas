@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { createFakeGit, type FakeGitOptions, makeTempDir, TEST_REPO } from '../testing/fakes.js'
 import { syntheticArtifact } from '../testing/synthetic.js'
-import { type CanvasStore, createCanvasStore, onlyMergesSince } from './canvas-store.js'
+import { type CanvasStore, createCanvasStore } from './canvas-store.js'
 
 const HEAD = 'a'.repeat(40)
 const OLD = 'b'.repeat(40)
@@ -39,27 +39,6 @@ async function store(git: FakeGitOptions): Promise<CanvasStore> {
 async function put(s: CanvasStore, headSha: string, generatedAt: string, prNumber?: number): Promise<void> {
   await s.write(headSha, { ...syntheticArtifact(), generatedAt }, manifest(headSha, prNumber), prNumber)
 }
-
-describe('onlyMergesSince', () => {
-  it('is true for the same commit, and for an ancestor reached through merges alone', async () => {
-    const git = createFakeGit({
-      ancestors: { [`${OLD}..${HEAD}`]: true },
-      nonMergeCounts: { [`${OLD}..${HEAD}`]: 0, [`${OLDER}..${HEAD}`]: 0 },
-    })
-    expect(await onlyMergesSince(git, HEAD, HEAD)).toBe(true)
-    expect(await onlyMergesSince(git, OLD, HEAD)).toBe(true)
-    // Not an ancestor: the count is never asked for.
-    expect(await onlyMergesSince(git, OLDER, HEAD)).toBe(false)
-    expect(git.calls.filter(c => c[0] === 'rev-list')).toHaveLength(1)
-    expect(
-      await onlyMergesSince(
-        createFakeGit({ ancestors: { [`${OLD}..${HEAD}`]: true }, counts: { [`${OLD}..${HEAD}`]: 2 } }),
-        OLD,
-        HEAD
-      )
-    ).toBe(false)
-  })
-})
 
 describe('CanvasStore.findForPr', () => {
   it('takes the canvas of the head itself', async () => {
@@ -141,57 +120,6 @@ describe('CanvasStore.findForPr', () => {
     await put(s, OLD, '2026-09-10T10:00:00.000Z', 42)
     await put(s, FORCE_PUSHED, '2026-09-10T10:00:00.000Z', 42)
     expect(await s.findForPr(42, HEAD)).toEqual({ status: 'stale', headSha: OLD, relation: 'unrelated' })
-  })
-
-  describe('with followMerges', () => {
-    const merged = {
-      ancestors: { [`${OLD}..${HEAD}`]: true },
-      counts: { [`${OLD}..${HEAD}`]: 3 },
-      nonMergeCounts: { [`${OLD}..${HEAD}`]: 0 },
-    }
-
-    it('takes an ancestor the head only merged onto as ready, and says how far it moved', async () => {
-      const s = await store(merged)
-      await put(s, OLD, '2026-09-10T10:00:00.000Z', 42)
-      expect(await s.findForPr(42, HEAD, { followMerges: true })).toEqual({
-        status: 'ready',
-        headSha: OLD,
-        mergesSince: { canvasHeadSha: OLD, currentHeadSha: HEAD, commitsBehind: 3 },
-      })
-      // Without the option, the same history reads as outdated.
-      expect(await s.findForPr(42, HEAD)).toEqual({
-        status: 'stale',
-        headSha: OLD,
-        relation: 'ancestor',
-        commitsBehind: 3,
-      })
-    })
-
-    it('keeps the canvas of the head itself ahead of an older one', async () => {
-      const s = await store(merged)
-      await put(s, OLD, '2026-09-10T10:00:00.000Z', 42)
-      await put(s, HEAD, '2026-09-10T11:00:00.000Z', 42)
-      expect(await s.findForPr(42, HEAD, { followMerges: true })).toEqual({ status: 'ready', headSha: HEAD })
-    })
-
-    it('stays outdated when an ordinary commit is among the new ones', async () => {
-      const s = await store({ ...merged, nonMergeCounts: { [`${OLD}..${HEAD}`]: 1 } })
-      await put(s, OLD, '2026-09-10T10:00:00.000Z', 42)
-      expect(await s.findForPr(42, HEAD, { followMerges: true })).toMatchObject({
-        status: 'stale',
-        headSha: OLD,
-      })
-    })
-
-    it('never follows merges onto a commit the head does not contain', async () => {
-      const s = await store({ nonMergeCounts: { [`${FORCE_PUSHED}..${HEAD}`]: 0 } })
-      await put(s, FORCE_PUSHED, '2026-09-10T10:00:00.000Z', 42)
-      expect(await s.findForPr(42, HEAD, { followMerges: true })).toEqual({
-        status: 'stale',
-        headSha: FORCE_PUSHED,
-        relation: 'unrelated',
-      })
-    })
   })
 
   it('attaches a PR number to a canvas that had none, and leaves an unknown sha alone', async () => {

@@ -15,11 +15,6 @@ export interface Git {
   isAncestor(a: string, b: string): Promise<boolean>
   /** `git rev-list --count a..b`: how many commits b is ahead of a. */
   countCommitsBetween(a: string, b: string): Promise<number>
-  /**
-   * `git rev-list --first-parent --no-merges --count a..b`: the commits on b's own line since a
-   * that are not merges. Zero means b only merged other branches into a.
-   */
-  countNonMergeCommitsBetween(a: string, b: string): Promise<number>
   /** Full unified diff between two commits, rename detection on, 3 lines of context. */
   diff(base: string, head: string): Promise<string>
   fetch(remote: string, refspecs: string[]): Promise<void>
@@ -103,8 +98,6 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
       return r.code === 0
     },
     countCommitsBetween: async (a, b) => Number(await run(['rev-list', '--count', `${a}..${b}`])),
-    countNonMergeCommitsBetween: async (a, b) =>
-      Number(await run(['rev-list', '--first-parent', '--no-merges', '--count', `${a}..${b}`])),
     diff: (base, head) => run(['diff', '--no-color', '--no-ext-diff', '-M', '-U3', base, head]),
     fetch: async (remote, refspecs) => {
       await run(['fetch', '--no-tags', '--quiet', remote, ...refspecs])

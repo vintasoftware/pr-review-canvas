@@ -12,6 +12,7 @@ import { createApp } from '../server/app.js'
 import {
   createFakeGh,
   createFakeGit,
+  moveFakeHead,
   ghJson,
   ghPost,
   makeTestContext,
@@ -107,7 +108,8 @@ describe('a GitLab origin', () => {
   })
 
   it('prepares and publishes an MR canvas, and refuses a changed head', async () => {
-    t = await makeTestContext({ host: GL, gh: glabFor42(), git: gitForMr42() })
+    const git = gitForMr42()
+    t = await makeTestContext({ host: GL, gh: glabFor42(), git })
     const { canvasDir } = await prepare(
       t.ctx,
       { kind: 'pr', number: 42 },
@@ -119,6 +121,13 @@ describe('a GitLab origin', () => {
     t.ctx.gh = createFakeGh({
       routes: { [MR_API]: ghJson({ ...MR, sha: moved, diff_refs: { ...MR.diff_refs, head_sha: moved } }) },
     })
+    moveFakeHead(
+      git,
+      'merge-requests/42/head',
+      moved,
+      BASE_SHA,
+      SYNTHETIC_DIFF.replace('+  const y = 2', '+  const y = 3')
+    )
     await expect(publish(t.ctx, canvasDir, opts)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
     t.ctx.gh = glabFor42()

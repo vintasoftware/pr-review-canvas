@@ -35,24 +35,46 @@ export interface FakeGitOptions {
   ancestors?: Record<string, boolean>
   /** `<a>..<b>` → how many commits b is ahead of a; unlisted pairs count 0. */
   counts?: Record<string, number>
-  /**
-   * `<a>..<b>` → how many non-merge commits lie on b's first-parent line since a. Unlisted pairs
-   * answer their `counts` entry, so a pair that names no merges is all ordinary commits.
-   */
-  nonMergeCounts?: Record<string, number>
   /** Commits the fake origin serves when they are fetched by sha. */
   fetchable?: string[]
 }
 
+/** The options with the history tables always present, so a test can add to them afterwards. */
+type FakeGitHistory = FakeGitOptions & Required<Pick<FakeGitOptions, 'refs' | 'mergeBases' | 'diffs'>>
+
 export interface FakeGit extends Git {
   calls: string[][]
-  options: FakeGitOptions
+  /** The history the fake answers from, read on every call: a test may change it as it goes. */
+  options: FakeGitHistory
 }
 
-export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
+/**
+ * The origin's head moved to `sha`, which diffs to `diff` against `baseSha`: what a push during
+ * generation looks like to a clone that fetches the pull request again.
+ */
+export function moveFakeHead(
+  git: FakeGit,
+  remoteRef: string,
+  sha: string,
+  baseSha: string,
+  diff: string
+): void {
+  git.options.refs[remoteRef] = sha
+  git.options.mergeBases[`refs/pr/42/base..${sha}`] = baseSha
+  git.options.diffs[`${baseSha}..${sha}`] = diff
+}
+
+export function createFakeGit(init: FakeGitOptions = {}): FakeGit {
   const calls: string[][] = []
-  const refs = options.refs ?? {}
-  const shas = new Set(Object.values(refs))
+  const options: FakeGitHistory = {
+    ...init,
+    refs: init.refs ?? {},
+    mergeBases: init.mergeBases ?? {},
+    diffs: init.diffs ?? {},
+  }
+  /** Commits fetched by sha, on top of everything a ref names. */
+  const fetched = new Set<string>()
+  const known = (sha: string): boolean => fetched.has(sha) || Object.values(options.refs).includes(sha)
   const fail = (args: string[], msg: string): never => {
     throw new GitError(args, msg, 128)
   }
@@ -61,18 +83,16 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     options,
     revParse: async ref => {
       calls.push(['rev-parse', ref])
-      const sha = refs[ref] ?? (shas.has(ref) ? ref : undefined)
+      const sha = options.refs[ref] ?? (known(ref) ? ref : undefined)
       return sha ?? fail(['rev-parse', ref], 'fatal: Needed a single revision')
     },
     mergeBase: async (a, b) => {
       calls.push(['merge-base', a, b])
-      return (
-        options.mergeBases?.[`${a}..${b}`] ?? fail(['merge-base', a, b], 'fatal: Not a valid object name')
-      )
+      return options.mergeBases[`${a}..${b}`] ?? fail(['merge-base', a, b], 'fatal: Not a valid object name')
     },
     commitExists: async sha => {
       calls.push(['cat-file', '-e', sha])
-      return shas.has(sha) || Object.values(options.mergeBases ?? {}).includes(sha)
+      return known(sha) || Object.values(options.mergeBases).includes(sha)
     },
     isAncestor: async (a, b) => {
       calls.push(['merge-base', '--is-ancestor', a, b])
@@ -82,13 +102,9 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
       calls.push(['rev-list', '--count', `${a}..${b}`])
       return options.counts?.[`${a}..${b}`] ?? 0
     },
-    countNonMergeCommitsBetween: async (a, b) => {
-      calls.push(['rev-list', '--first-parent', '--no-merges', '--count', `${a}..${b}`])
-      return options.nonMergeCounts?.[`${a}..${b}`] ?? options.counts?.[`${a}..${b}`] ?? 0
-    },
     diff: async (base, head) => {
       calls.push(['diff', base, head])
-      return options.diffs?.[`${base}..${head}`] ?? fail(['diff', base, head], 'fatal: bad revision')
+      return options.diffs[`${base}..${head}`] ?? fail(['diff', base, head], 'fatal: bad revision')
     },
     fetch: async (remote, refspecs) => {
       calls.push(['fetch', remote, ...refspecs])
@@ -97,13 +113,13 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
         if (m === null) {
           // A bare sha: the fake origin serves it when it is on the fetchable list.
           if (options.fetchable?.includes(spec) === true) {
-            shas.add(spec)
+            fetched.add(spec)
           }
           continue
         }
-        const from = m[1] === undefined ? undefined : refs[m[1]]
+        const from = m[1] === undefined ? undefined : options.refs[m[1]]
         if (from !== undefined && m[2] !== undefined) {
-          refs[m[2]] = from
+          options.refs[m[2]] = from
         }
       }
     },
@@ -119,7 +135,7 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     },
     commitAuthor: async ref => {
       calls.push(['log', '-1', '--format=%an', ref])
-      const sha = refs[ref] ?? ref
+      const sha = options.refs[ref] ?? ref
       return options.authors?.[sha] ?? 'someone'
     },
     topLevel: async () => {

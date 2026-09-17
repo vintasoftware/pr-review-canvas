@@ -67,8 +67,8 @@ export const ProjectConfigSchema = z.object({
   chat: z.object({ enabled: z.boolean() }),
   canvas: z.object({
     /**
-     * A canvas still stands for a head that only merged other branches in since the canvas was
-     * generated, while the host reports no conflicts. False marks the canvas outdated on any commit.
+     * A canvas still stands for a head that moved on without changing the diff, which is what
+     * merging the base branch in does. False marks the canvas outdated on any commit.
      */
     ignoreMergeCommits: z.boolean(),
   }),
