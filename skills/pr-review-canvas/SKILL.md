@@ -1,7 +1,7 @@
 ---
 name: pr-review-canvas
 model: sonnet
-description: Generate a review canvas for a GitHub pull request or GitLab merge request (or two refs) with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` to validate and automatically share it as a compressed PR/MR comment. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR.
+description: Generate a review canvas for a GitHub pull request or GitLab merge request, for the work in this clone before a pull request exists, or for two refs, with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` to validate and automatically share it as a compressed PR/MR comment. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas branch`, `/pr-review-canvas uncommitted`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR, for their branch, or for what they have not committed.
 ---
 
 # pr-review-canvas
@@ -11,12 +11,12 @@ points, and hand it to the `pr-review` CLI. The CLI does the deterministic work 
 validation, storage); you do the reading and the writing of `model.json`. Nothing here checks out
 a branch or writes outside the canvas directory.
 
-Arguments: `<pr-number> [--force]` or `--base <ref> --head <ref> [--force]`. `--force` regenerates
-a canvas that already exists for the head commit: prepare removes the old `model.json` and any
-other leftovers from the canvas directory, keeping `derived/`, `publish.log` (the attempts history),
-and the published `review.json` + `manifest.json` (the page keeps showing the old canvas until your
-publish replaces it), so you start a fresh `model.json`. Run every `pr-review` command from the
-repository root.
+Arguments: `<pr-number> [--force]`, `branch [--base <ref>] [--force]`,
+`uncommitted [--base <ref>] [--force]`, or `--base <ref> --head <ref> [--force]`. `--force`
+regenerates a canvas that already exists for the head commit: prepare removes the old `model.json` and any other leftovers from the canvas
+directory, keeping `derived/`, `publish.log` (the attempts history), and the published
+`review.json` + `manifest.json` (the page keeps showing the old canvas until your publish replaces
+it), so you start a fresh `model.json`. Run every `pr-review` command from the repository root.
 
 ## Flow
 
@@ -33,9 +33,32 @@ Record the model that actually generated the canvas when publishing.
 
 ```bash
 pr-review prepare --pr <n> [--force]
-# or, before a PR exists:
+# or, before a pull request exists, one of the two reviews of this clone:
+pr-review prepare --branch [--base <ref>] [--force]
+pr-review prepare --uncommitted [--base <ref>] [--force]
+# or, for any two refs:
 pr-review prepare --base <ref> --head <ref> [--force]
 ```
+
+The skill word maps to the flag: `/pr-review-canvas branch` runs `prepare --branch`, and
+`/pr-review-canvas uncommitted` runs `prepare --uncommitted`.
+
+Both compare against the default branch, which prepare reads from `origin/HEAD` unless `--base`
+names another one. They differ in what the head holds:
+
+- `--branch` is the tip of the current branch. Whatever is in the working tree is left out.
+- `--uncommitted` is the working tree itself: prepare snapshots the edits and the untracked files
+  into a commit of its own, without touching anything the user has staged. With a clean tree it is
+  the branch tip, and the canvas is the same one `--branch` would build.
+
+They are separate reviews with separate pages, progress and chat threads, so preparing one leaves
+the other alone. Pick the one the user asked for; when they only say "review my work", ask which,
+unless the words already decide it ("before I commit" is `uncommitted`, "before I open the PR" with
+everything committed is `branch`).
+
+The JSON carries an extra `local` object with the review's name, the base that was resolved, the
+branch the head is on, and whether uncommitted work is in it. Tell the user all four: a review of
+the wrong base, or of a tree that has moved, is worth catching early.
 
 Progress goes to stderr. The last stdout line is JSON:
 
@@ -104,9 +127,15 @@ pr-review publish <canvasDir> --agent <your agent id> --model <model id if you k
   anywhere else.
 
 On success the last line is `{ "status": "published", "headSha", "reviewJsonPath", "attempts",
-"reviewUrl", "sharing" }` (`reviewUrl` is absent for a `--base/--head` run).
+"reviewUrl", "sharing" }` (`reviewUrl` is absent only for a `--base/--head` run; a local run
+points at `/review/branch` or `/review/uncommitted`).
 For PR/MR runs, publish automatically creates or updates your canvas comment using the host CLI login.
 Always inspect `sharing.status`: local validation success does not mean remote sharing succeeded.
+
+For a local run there is nothing to share: `sharing.status` is `"local"`. Report `reviewUrl` and
+tell the user to start `pr-review serve` to read the canvas. If publish prints `CANVAS_STALE`, the
+branch or the working tree changed while you worked; offer to prepare again rather than passing
+`--allow-stale`, because the canvas would then describe code the user has already changed.
 
 On failure the command prints one line per problem, then an error line, and exits 5:
 
@@ -134,7 +163,13 @@ For a PR/MR run, report the local `reviewUrl` (start it with `pr-review serve`) 
   attachment link. Include these instructions in your final response; the local canvas is ready,
   but reviewers still need the upload. Do not regenerate the model to repair a sharing failure.
 
-For a `--base/--head` run, `sharing.status` is `"local"`. Report the stored commit and export it:
+For a local run, `sharing.status` is `"local"` and there is nothing to share. Give the user
+`reviewUrl` (`http://localhost:<port>/review/branch` or `.../review/uncommitted`) and tell them to
+start `pr-review serve` if it is not running. Say which base was compared and whether uncommitted
+work was included, both from the `local` object prepare printed.
+
+For a `--base/--head` run, `sharing.status` is `"local"` too, but the canvas has no page of its
+own. Report the stored commit and export it:
 
 ```bash
 pr-review export --head <headSha>
@@ -142,7 +177,8 @@ pr-review export --head <headSha>
 
 Give the returned absolute ZIP path. Once a PR exists, `pr-review export --head <headSha> --pr <n>`
 stamps its number for manual upload, or rerun this skill for the PR number with `--force` to share
-automatically.
+automatically. A canvas of a working-tree snapshot cannot be carried to a pull request this way:
+its commit is on no branch, so generate a fresh one for the PR.
 
 ## Rules the validator enforces (and models tend to break)
 

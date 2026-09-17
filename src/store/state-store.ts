@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type { ReviewKey } from '../contract/review-key.js'
 import { emptyState, type PrState, PrStateSchema } from '../contract/state.js'
 import { readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
 import type { PrStore } from './pr-store.js'
@@ -9,23 +10,23 @@ export interface PostedEntry {
   pointFingerprint?: string
 }
 
-/** Per-PR local state: reviewed cards, dismissed points, hidden threads, posted comments. */
+/** Per-target local state: reviewed cards, dismissed points, hidden threads, posted comments. */
 export interface StateStore {
   /** Defaults when the file is missing or does not match the schema (an older tool version wrote it). */
-  read(number: number): Promise<PrState>
+  read(key: ReviewKey): Promise<PrState>
   /**
-   * Read, change, write. Calls for the same PR run one after another, so two requests that
+   * Read, change, write. Calls for the same target run one after another, so two requests that
    * arrive together both land instead of one overwriting the other.
    */
-  update(number: number, mutate: (state: PrState) => PrState): Promise<PrState>
+  update(key: ReviewKey, mutate: (state: PrState) => PrState): Promise<PrState>
   /**
    * Marks one layer or file. `headSha` is the commit the page was showing: when it differs from
    * the one the marks describe, the old marks are dropped, because they were about other code.
    */
-  setReviewed(number: number, id: string, reviewed: boolean, headSha?: string): Promise<PrState>
-  setDismissed(number: number, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
-  setThreadHidden(number: number, rootCommentId: number, hidden: boolean): Promise<PrState>
-  addPosted(number: number, entry: PostedEntry): Promise<PrState>
+  setReviewed(key: ReviewKey, id: string, reviewed: boolean, headSha?: string): Promise<PrState>
+  setDismissed(key: ReviewKey, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
+  setThreadHidden(key: ReviewKey, rootCommentId: number, hidden: boolean): Promise<PrState>
+  addPosted(key: ReviewKey, entry: PostedEntry): Promise<PrState>
 }
 
 /** `layer:<id>` or `layer:<id>/file:<key>`, with the ids and keys the artifact uses. */
@@ -42,25 +43,25 @@ function layerOf(id: string): string {
 }
 
 export function createStateStore(prs: PrStore, now: () => Date): StateStore {
-  const file = (number: number): string => path.join(prs.prDir(number), 'state.json')
-  const read = (number: number): Promise<PrState> =>
-    readJsonOrDefault(file(number), PrStateSchema, () => emptyState(now().toISOString()))
+  const file = (key: ReviewKey): string => path.join(prs.prDir(key), 'state.json')
+  const read = (key: ReviewKey): Promise<PrState> =>
+    readJsonOrDefault(file(key), PrStateSchema, () => emptyState(now().toISOString()))
 
-  /** One chain per PR number; each update waits for the one before it. */
-  const chains = new Map<number, Promise<unknown>>()
+  /** One chain per target; each update waits for the one before it. */
+  const chains = new Map<ReviewKey, Promise<unknown>>()
 
-  const update = (number: number, mutate: (state: PrState) => PrState): Promise<PrState> => {
+  const update = (key: ReviewKey, mutate: (state: PrState) => PrState): Promise<PrState> => {
     const run = async (): Promise<PrState> => {
-      const current = await read(number)
+      const current = await read(key)
       // Every write counts up, so the page can tell which of two answers was written later.
       const next = { ...mutate(current), rev: (current.rev ?? 0) + 1, updatedAt: now().toISOString() }
-      await writeJsonAtomic(file(number), next)
+      await writeJsonAtomic(file(key), next)
       return next
     }
-    const chained = (chains.get(number) ?? Promise.resolve()).then(run, run)
+    const chained = (chains.get(key) ?? Promise.resolve()).then(run, run)
     // The chain only orders the calls, so a failed update never blocks the next one.
     chains.set(
-      number,
+      key,
       chained.catch(() => undefined)
     )
     return chained
@@ -69,19 +70,19 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
   return {
     read,
     update,
-    setReviewed: (number, id, reviewed, headSha) =>
-      update(number, state => {
+    setReviewed: (key, id, reviewed, headSha) =>
+      update(key, state => {
         const sameHead =
           headSha === undefined || state.reviewedHeadSha === undefined || state.reviewedHeadSha === headSha
         const next = sameHead ? { ...state.reviewed } : {}
         if (reviewed) {
           next[id] = true
         } else {
-          for (const key of Object.keys(next)) {
+          for (const marked of Object.keys(next)) {
             // Reopening a layer reopens its files, and reopening a file reopens its layer:
             // both readings of "reviewed" have to agree.
-            if (key === id || key.startsWith(`${id}/`) || key === layerOf(id)) {
-              delete next[key]
+            if (marked === id || marked.startsWith(`${id}/`) || marked === layerOf(id)) {
+              delete next[marked]
             }
           }
         }
@@ -89,8 +90,8 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
           ? { ...state, reviewed: next }
           : { ...state, reviewed: next, reviewedHeadSha: headSha }
       }),
-    setDismissed: (number, fingerprint, dismissed, reason) =>
-      update(number, state => {
+    setDismissed: (key, fingerprint, dismissed, reason) =>
+      update(key, state => {
         const next = { ...state.dismissed }
         if (dismissed) {
           next[fingerprint] =
@@ -100,8 +101,8 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
         }
         return { ...state, dismissed: next }
       }),
-    setThreadHidden: (number, rootCommentId, hidden) =>
-      update(number, state => {
+    setThreadHidden: (key, rootCommentId, hidden) =>
+      update(key, state => {
         const next = { ...state.hiddenThreads }
         if (hidden) {
           next[String(rootCommentId)] = { at: now().toISOString() }
@@ -110,8 +111,8 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
         }
         return { ...state, hiddenThreads: next }
       }),
-    addPosted: (number, entry) =>
-      update(number, state => {
+    addPosted: (key, entry) =>
+      update(key, state => {
         if (state.posted.some(p => p.commentId === entry.commentId)) {
           return state
         }

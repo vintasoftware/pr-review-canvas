@@ -116,6 +116,16 @@ function skillCommandHtml(bundle) {
   )
 }
 
+/**
+ * What each screen with no canvas is called. A local review names the work it describes, because
+ * `branch` and `uncommitted` are two different reads of the same clone.
+ * @type {Record<string, string>}
+ */
+const LOCAL_HEADINGS = {
+  branch: 'No review canvas for this branch yet',
+  uncommitted: 'No review canvas for your uncommitted work yet',
+}
+
 /** @returns {string} */
 function dropZoneHtml() {
   return (
@@ -127,18 +137,20 @@ function dropZoneHtml() {
 }
 
 /**
- * The `missing` screen: the skill command with its copy command, the drop zone, the callout.
+ * The `missing` screen: the skill command with its copy command, the drop zone, the callout. A
+ * local review has no pull request to carry an attached canvas, so it shows neither of the last two.
  * @param {PrBundle} bundle
  * @returns {string}
  */
 export function renderEmptyState(bundle) {
+  const heading = LOCAL_HEADINGS[bundle.local ?? ''] ?? 'No review canvas for this PR yet'
+  const transfer = bundle.local ? '' : dropZoneHtml() + sharedCanvasCalloutHtml(bundle)
   return (
     '<section class="panel empty" id="empty-state" aria-labelledby="es-h">' +
-    '<div class="panel-h"><h2 id="es-h">No review canvas for this PR yet</h2></div>' +
+    `<div class="panel-h"><h2 id="es-h">${heading}</h2></div>` +
     '<div class="body center">' +
     skillCommandHtml(bundle) +
-    dropZoneHtml() +
-    sharedCanvasCalloutHtml(bundle) +
+    transfer +
     '</div></section>'
   )
 }
@@ -146,11 +158,15 @@ export function renderEmptyState(bundle) {
 /**
  * How far the canvas is from the head, in words.
  * @param {NonNullable<PrBundle['stale']>} stale
+ * @param {PrBundle['local']} [local] which local review this is, when it is one
  * @returns {string}
  */
-export function staleSummary(stale) {
+export function staleSummary(stale, local) {
   const canvas = stale.canvasHeadSha.slice(0, 7)
   const head = stale.currentHeadSha.slice(0, 7)
+  if (local !== undefined) {
+    return `The canvas is for ${canvas}; your work has moved on to ${head} since it was generated.`
+  }
   if (stale.relation === 'unrelated') {
     return `The canvas is for ${canvas}, which is not in this branch any more; the head is ${head}.`
   }
@@ -162,11 +178,12 @@ export function staleSummary(stale) {
  * The bar that stays on screen while a stale canvas is shown, so the reader is never misled about
  * which commit the diffs come from.
  * @param {NonNullable<PrBundle['stale']>} stale
+ * @param {PrBundle['local']} [local]
  * @returns {string}
  */
-export function staleBarHtml(stale) {
+export function staleBarHtml(stale, local) {
   return (
-    `<div class="stale-bar" role="status"><strong>Canvas is outdated.</strong> You are reading an older commit. ${esc(staleSummary(stale))} ` +
+    `<div class="stale-bar" role="status"><strong>Canvas is outdated.</strong> You are reading an older commit. ${esc(staleSummary(stale, local))} ` +
     '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button></div>'
   )
 }
@@ -178,16 +195,16 @@ export function staleBarHtml(stale) {
  */
 export function renderStaleState(bundle) {
   const stale = bundle.stale
+  const transfer = bundle.local ? '' : dropZoneHtml() + sharedCanvasCalloutHtml(bundle)
   return (
     '<section class="panel empty" id="empty-state" aria-labelledby="es-h">' +
     '<div class="panel-h"><h2 id="es-h">Canvas is outdated</h2></div>' +
     '<div class="body center">' +
-    `<p class="hint">${stale ? esc(staleSummary(stale)) : ''}</p>` +
+    `<p class="hint">${stale ? esc(staleSummary(stale, bundle.local)) : ''}</p>` +
     '<div class="cmdbox"><button class="cmd fill" type="button" id="view-stale">view stale canvas</button>' +
     '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button></div>' +
     skillCommandHtml(bundle) +
-    dropZoneHtml() +
-    sharedCanvasCalloutHtml(bundle) +
+    transfer +
     '</div></section>'
   )
 }

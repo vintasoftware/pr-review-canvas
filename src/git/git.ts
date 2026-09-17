@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import path from 'node:path'
 import { envWithoutRepo } from './environment.mjs'
 
 /**
@@ -27,7 +28,42 @@ export interface Git {
   topLevel(): Promise<string>
   commonDir(): Promise<string>
   remoteUrl(name: string): Promise<string | null>
+  /** The checked-out branch, or null on a detached HEAD. */
+  currentBranch(): Promise<string | null>
+  /** The first of `refs` that resolves, or null when none of them do. */
+  firstExistingRef(refs: readonly string[]): Promise<string | null>
+  /** What a symbolic ref points at, in its short form; null when it is not one. */
+  symbolicRef(name: string): Promise<string | null>
+  /** `git config user.name`, the person this clone commits as; null when it is unset. */
+  configuredUser(): Promise<string | null>
+  /**
+   * A commit that holds the working tree as it is right now, or null when it matches HEAD.
+   * Nothing the user staged is touched: the snapshot is built in an index of this tool's own.
+   */
+  snapshotWorktree(): Promise<string | null>
 }
+
+/**
+ * The index `snapshotWorktree` stages into, next to the repository's own inside the git
+ * directory. It is kept between runs so git's stat cache spares a rehash of the whole tree.
+ */
+export const SNAPSHOT_INDEX = 'pr-review-canvas.index'
+
+/** Where the snapshot commit is anchored, so `git gc` cannot collect the canvas out from under us. */
+export const SNAPSHOT_REF = 'refs/pr-review/worktree'
+
+/**
+ * A fixed identity and time, so the same working tree always hashes to the same commit: preparing
+ * twice without an edit lands on the canvas that already exists instead of making a second one.
+ */
+const SNAPSHOT_ENV = {
+  GIT_AUTHOR_NAME: 'pr-review',
+  GIT_AUTHOR_EMAIL: 'pr-review@localhost',
+  GIT_AUTHOR_DATE: '1970-01-01T00:00:00+0000',
+  GIT_COMMITTER_NAME: 'pr-review',
+  GIT_COMMITTER_EMAIL: 'pr-review@localhost',
+  GIT_COMMITTER_DATE: '1970-01-01T00:00:00+0000',
+} as const
 
 export const STDERR_MESSAGE_MAX = 300
 
@@ -60,13 +96,18 @@ interface ExecResult {
   code: number
 }
 
-/** Runs git with an argument array; never a shell. */
-export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
+/** Runs git with an argument array; never a shell. `extra` puts back the few repo variables a
+ * command needs, such as the snapshot index. */
+export function execGit(
+  cwd: string,
+  args: string[],
+  extra: Readonly<Record<string, string>> = {}
+): Promise<ExecResult> {
   return new Promise(resolve => {
     execFile(
       'git',
       args,
-      { cwd, env: envWithoutRepo(), encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
+      { cwd, env: { ...envWithoutRepo(), ...extra }, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
         resolve({ stdout, stderr: stderr.toString('utf8'), code })
@@ -78,8 +119,8 @@ export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
 export type GitExec = typeof execGit
 
 export function createGit(cwd: string, exec: GitExec = execGit): Git {
-  async function run(args: string[]): Promise<string> {
-    const r = await exec(cwd, args)
+  async function run(args: string[], env: Readonly<Record<string, string>> = {}): Promise<string> {
+    const r = await exec(cwd, args, env)
     if (r.code !== 0) {
       throw new GitError(args, r.stderr, r.code)
     }
@@ -102,12 +143,12 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
     fetch: async (remote, refspecs) => {
       await run(['fetch', '--no-tags', '--quiet', remote, ...refspecs])
     },
-    show: async (ref, path) => {
-      const r = await exec(cwd, ['show', `${ref}:${path}`])
+    show: async (ref, file) => {
+      const r = await exec(cwd, ['show', `${ref}:${file}`])
       return r.code === 0 ? r.stdout : null
     },
-    blobSize: async (ref, path) => {
-      const r = await exec(cwd, ['cat-file', '-s', `${ref}:${path}`])
+    blobSize: async (ref, file) => {
+      const r = await exec(cwd, ['cat-file', '-s', `${ref}:${file}`])
       return r.code === 0 ? Number(r.stdout.toString('utf8').trim()) : null
     },
     commitAuthor: ref => run(['log', '-1', '--format=%an', ref]),
@@ -116,6 +157,48 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
     remoteUrl: async name => {
       const r = await exec(cwd, ['remote', 'get-url', name])
       return r.code === 0 ? r.stdout.toString('utf8').trim() : null
+    },
+    currentBranch: async () => {
+      const r = await exec(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
+      return r.code === 0 ? r.stdout.toString('utf8').trim() : null
+    },
+    symbolicRef: async name => {
+      const r = await exec(cwd, ['symbolic-ref', '--quiet', '--short', name])
+      return r.code === 0 ? r.stdout.toString('utf8').trim() : null
+    },
+    configuredUser: async () => {
+      const r = await exec(cwd, ['config', '--get', 'user.name'])
+      const value = r.code === 0 ? r.stdout.toString('utf8').trim() : ''
+      return value === '' ? null : value
+    },
+    firstExistingRef: async refs => {
+      for (const ref of refs) {
+        const r = await exec(cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+        if (r.code === 0) {
+          return ref
+        }
+      }
+      return null
+    },
+    snapshotWorktree: async () => {
+      const indexEnv = {
+        GIT_INDEX_FILE: path.join(
+          await run(['rev-parse', '--path-format=absolute', '--git-common-dir']),
+          SNAPSHOT_INDEX
+        ),
+      }
+      // `:/` stages the whole repository whatever the cwd is; ignored files stay out of it.
+      await run(['add', '-A', '--', ':/'], indexEnv)
+      const tree = await run(['write-tree'], indexEnv)
+      if (tree === (await run(['rev-parse', 'HEAD^{tree}']))) {
+        return null
+      }
+      const sha = await run(
+        ['commit-tree', tree, '-p', 'HEAD', '-m', 'pr-review: working tree snapshot'],
+        SNAPSHOT_ENV
+      )
+      await run(['update-ref', SNAPSHOT_REF, sha])
+      return sha
     },
   }
 }

@@ -14,7 +14,8 @@ import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError, logRequestError } from '../errors.js'
 import { SSE_HEADERS, sseStream } from '../sse.js'
-import { parsePrNumber } from './api.js'
+import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
+import { parseTargetKey } from './api.js'
 
 async function readJsonBody<T>(
   request: Request,
@@ -59,12 +60,14 @@ function settingsResponse(ctx: AppContext, settings: SettingsResponse['settings'
   }
 }
 
-/** The canvas the chat talks about: the one written for the pull request's current head. */
-async function artifactForChat(ctx: AppContext, number: number, pr: Pr): Promise<ReviewArtifact> {
+/** The canvas the chat talks about: the one written for the target's current head. */
+async function artifactForChat(ctx: AppContext, key: ReviewKey, pr: Pr): Promise<ReviewArtifact> {
   if (ctx.fixtureArtifact !== null) {
     return { ...ctx.fixtureArtifact, pr }
   }
-  const found = await ctx.canvases.findForPr(number, pr.headSha)
+  const found = isLocalKey(key)
+    ? await ctx.canvases.findForLocal(key, pr.headSha)
+    : await ctx.canvases.findForPr(key, pr.headSha)
   const artifact = found.status === 'ready' ? await ctx.canvases.readArtifact(found.headSha) : null
   if (artifact === null) {
     throw new AppError(
@@ -122,38 +125,38 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     return c.json(await ctx.agents.probe(id, { refresh: c.req.query('refresh') === '1' }))
   })
 
-  api.get('/prs/:n/chat/threads', async c => c.json(await ctx.chat.threads(parsePrNumber(c.req.param('n')))))
+  api.get('/prs/:n/chat/threads', async c => c.json(await ctx.chat.threads(parseTargetKey(c.req.param('n')))))
 
   api.post('/prs/:n/chat/threads', async c => {
-    const number = parsePrNumber(c.req.param('n'))
-    const thread = await ctx.chat.createThread(number)
-    return c.json({ thread, ...(await ctx.chat.threads(number)) }, 201)
+    const key = parseTargetKey(c.req.param('n'))
+    const thread = await ctx.chat.createThread(key)
+    return c.json({ thread, ...(await ctx.chat.threads(key)) }, 201)
   })
 
   api.get('/prs/:n/chat/threads/:name/history', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const name = c.req.param('name')
-    if (!isThreadNameFor(name, number)) {
-      throw new AppError('NOT_FOUND', `no chat thread named ${name} on this pull request`, 404)
+    if (!isThreadNameFor(name, key)) {
+      throw new AppError('NOT_FOUND', `no chat thread named ${name} on this review`, 404)
     }
-    const body: ChatHistoryResponse = { name, turns: await ctx.transcripts.read(number, name) }
+    const body: ChatHistoryResponse = { name, turns: await ctx.transcripts.read(key, name) }
     return c.json(body)
   })
 
   api.post('/prs/:n/chat/cancel', async c => {
-    const number = parsePrNumber(c.req.param('n'))
-    return c.json({ cancelled: await ctx.chat.cancel(number) })
+    const key = parseTargetKey(c.req.param('n'))
+    return c.json({ cancelled: await ctx.chat.cancel(key) })
   })
 
   api.post('/prs/:n/chat', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const input = await readJsonBody(
       c.req.raw,
       ChatSendSchema,
       '{ "message": "…", "context": { "kind": "pr" } }'
     )
-    const pr = await loader.currentPr(number)
-    const artifact = await artifactForChat(ctx, number, pr)
+    const pr = await loader.currentTarget(key)
+    const artifact = await artifactForChat(ctx, key, pr)
     const derived = await ctx.derived.read(pr.headSha)
     if (derived === null) {
       throw new AppError(
@@ -165,7 +168,7 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     const events = ctx.chat.send(
       {
-        prNumber: number,
+        key,
         headSha: pr.headSha,
         artifact,
         files: derived.files,
@@ -190,7 +193,7 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
         replayFrom(first, iterator),
         undefined,
         () => {
-          void ctx.chat.cancel(number)
+          void ctx.chat.cancel(key)
         },
         err => logRequestError(ctx.log, c.req, err)
       ),

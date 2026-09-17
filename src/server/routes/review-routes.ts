@@ -7,12 +7,13 @@ import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
+import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
-import type { PrLoader } from '../bundle.js'
+import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
-import { parsePrNumber } from './api.js'
+import { parseTargetKey, requirePrNumber } from './api.js'
 
 const ReviewedBodySchema = z.object({
   reviewed: z.boolean(),
@@ -92,18 +93,18 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
   }
 
-  const stateBody = (number: number, state: StateResponse['state']): StateResponse => ({
-    prNumber: number,
+  const stateBody = (key: ReviewKey, state: StateResponse['state']): StateResponse => ({
+    prNumber: key,
     state,
   })
 
   api.get('/prs/:n/state', async c => {
-    const number = parsePrNumber(c.req.param('n'))
-    return c.json(stateBody(number, await ctx.state.read(number)))
+    const key = parseTargetKey(c.req.param('n'))
+    return c.json(stateBody(key, await ctx.state.read(key)))
   })
 
   api.put('/prs/:n/reviewed/:id{.+}', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const id = c.req.param('id')
     if (!isReviewedId(id)) {
       throw new AppError(
@@ -114,21 +115,25 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       )
     }
     const body = await readBody(c.req.raw, ReviewedBodySchema, '{ "reviewed": true }')
-    const pr = await loader.currentPr(number)
-    requireSameHead(body.headSha, pr.headSha)
-    return c.json(stateBody(number, await ctx.state.setReviewed(number, id, body.reviewed, pr.headSha)))
+    // A mark is made against the canvas on screen, which for a local review is the snapshot the
+    // page was drawn from, not whatever the working tree holds a keystroke later.
+    const headSha = body.headSha ?? (await loader.currentTarget(key)).headSha
+    if (!isLocalKey(key)) {
+      requireSameHead(body.headSha, (await loader.currentPr(key)).headSha)
+    }
+    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, headSha)))
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const fingerprint = c.req.param('fingerprint')
     const body = await readBody(c.req.raw, DismissedBodySchema, '{ "dismissed": true, "reason": "…" }')
-    const next = await ctx.state.setDismissed(number, fingerprint, body.dismissed, body.reason)
-    return c.json(stateBody(number, next))
+    const next = await ctx.state.setDismissed(key, fingerprint, body.dismissed, body.reason)
+    return c.json(stateBody(key, next))
   })
 
   api.put('/prs/:n/threads/:rootCommentId/hidden', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'hiding a comment thread')
     const rootId = z.coerce.number().int().positive().safeParse(c.req.param('rootCommentId'))
     if (!rootId.success) {
       throw new AppError('BAD_REQUEST', 'the thread id is the numeric id of its first comment', 400)
@@ -138,12 +143,15 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.get('/prs/:n/capabilities', async c => {
-    parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
+    if (isLocalKey(key)) {
+      return c.json(LOCAL_CAPABILITIES)
+    }
     return c.json(await ctx.capabilities.get({ refresh: c.req.query('refresh') === '1' }))
   })
 
   api.post('/prs/:n/comments', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'posting a comment')
     const input = await readBody(c.req.raw, PostCommentInputSchema, 'an inline, reply, or issue comment')
     await requirePosting()
     const pr = await loader.currentPr(number)
@@ -176,7 +184,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.get('/prs/:n/review/body', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'the sign-off summary')
     const pr = await loader.currentPr(number)
     const artifact = await artifactForHead(ctx, number, pr)
     const state = stateForHead(await ctx.state.read(number), pr.headSha)
@@ -190,7 +198,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.post('/prs/:n/review', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'submitting a review')
     const input = await readBody(c.req.raw, PostReviewInputSchema, '{ "event": "APPROVE" }')
     await requirePosting()
     const pr = await loader.currentPr(number)

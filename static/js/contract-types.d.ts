@@ -24,6 +24,7 @@ export type {
   ChatThreadsResponse,
   ChatTurn,
 } from '../../src/contract/chat.js'
+export type { ReviewKey } from '../../src/contract/review-key.js'
 export type {
   CommentsPayload,
   IssueComment,

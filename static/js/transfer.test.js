@@ -116,7 +116,7 @@ describe('drop zone', () => {
 
   it('uploads a dropped canvas, shows progress, and reports the result', async () => {
     const root = mount(renderEmptyState(bundle()))
-    /** @type {Array<[number, string]>} */
+    /** @type {Array<[import('./contract-types.js').ReviewKey, string]>} */
     const sent = []
     const zone = wireDropZone(root, {
       prNumber: 42,

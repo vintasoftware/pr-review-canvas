@@ -7,6 +7,7 @@ import path from 'node:path'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { type GenerationContext, GenerationContextSchema } from '../contract/generation-context.js'
 import type { Generator, ReviewArtifact } from '../contract/review-artifact.js'
+import { UNCOMMITTED_STATE, resolveLocalHead } from '../git/local-target.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
@@ -29,7 +30,7 @@ export interface PublishResult {
     | { status: 'shared'; url: string }
     | { status: 'failed'; warning: string; zipPath: string }
     | { status: 'local' }
-  /** Where the canvas shows once the server runs; absent for a change set without a PR. */
+  /** Where the canvas shows once the server runs; absent only for a `--base/--head` change set. */
   reviewUrl?: string
 }
 
@@ -89,10 +90,17 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
   return parseModelText(text, 'model.json')
 }
 
-/** The current head of the target; a push during generation makes the prepared context stale. */
+/**
+ * The current head of the target; a push during generation makes the prepared context stale. For a
+ * local target the working tree is snapshotted again, so an edit made while the agent worked is
+ * caught the same way a push is.
+ */
 async function currentHead(ctx: AppContext, context: GenerationContext): Promise<string> {
   if (context.target.kind === 'pr') {
     return (await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)).headSha
+  }
+  if (context.target.kind === 'local') {
+    return (await resolveLocalHead(ctx.git, context.target.source)).headSha
   }
   return ctx.git.revParse(context.target.head)
 }
@@ -212,13 +220,19 @@ export async function publish(
     testPatterns: context.tests.patterns,
   })
   const manifest = buildManifest(context, artifact, ctx.version)
-  await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber)
+  await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber, {
+    // A snapshot commit is on no branch, so it must never be offered as a pull request's canvas.
+    worktree: context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE,
+  })
   const published: PublishResult = {
     status: 'published',
     sharing: { status: 'local' },
     headSha: context.headSha,
     reviewJsonPath: path.join(ctx.canvases.canvasDir(context.headSha), 'review.json'),
     attempts,
+  }
+  if (context.target.kind === 'local') {
+    published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.source}`
   }
   if (context.target.kind === 'pr') {
     published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.number}`

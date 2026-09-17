@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Review before the pull request
+
+- Two reviews of the work in a clone, each a target of its own: `pr-review prepare --branch` for
+  the tip of the current branch, and `pr-review prepare --uncommitted` for the working tree with
+  its edits and untracked files on top. Both compare against the default branch, read from
+  `origin/HEAD`, and `--base <ref>` overrides it.
+- `--uncommitted` stages the working tree into an index of this tool's own and writes a commit
+  anchored at `refs/pr-review/worktree`, so nothing the user staged is touched and the same tree
+  always hashes to the same commit. Changing the head afterwards makes the canvas stale, as a push
+  does for a pull request.
+- The canvases are served at `/review/branch` and `/review/uncommitted`, and the home page links
+  to whichever exist. Each keeps its own review progress and chat threads. Attention points and
+  the AI chat work there; comments, sign-off, canvas import, and attachment discovery are refused,
+  because local work is on no forge.
+- `/pr-review-canvas branch` and `/pr-review-canvas uncommitted` run the whole flow from Claude
+  Code or Codex.
+
 ### Hosts
 
 - GitLab merge requests work through the [GitLab CLI (`glab`)](https://gitlab.com/gitlab-org/cli),

@@ -1,6 +1,7 @@
 import { html, raw } from 'hono/html'
 import type { HtmlEscapedString } from 'hono/utils/html'
 import type { ErrorEnvelope, HomeData } from '../contract/api.js'
+import { keyLabel, keyToString, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 
@@ -69,24 +70,35 @@ ${opts.app ? html`<script type="module" src="/static/js/app.js"></script>` : ''}
 }
 
 export function reviewPage(
-  page: { prNumber: number; owner: string; repo: string; version: string; host: Host },
+  page: { prNumber: ReviewKey; owner: string; repo: string; version: string; host: Host },
   nonce: string,
   appearance: Appearance
 ): Html {
   const bootstrap = { ...page, host: publicHost(page.host) }
+  const key = keyToString(bootstrap.prNumber)
+  const what =
+    typeof bootstrap.prNumber === 'number' ? `${page.host.nounShort} #${key}` : keyLabel(bootstrap.prNumber)
   return pageShell({
-    title: `${page.host.nounShort} #${bootstrap.prNumber} · ${bootstrap.owner}/${bootstrap.repo} · review canvas`,
+    title: `${what} · ${bootstrap.owner}/${bootstrap.repo} · review canvas`,
     bootstrap,
     nonce,
     appearance,
     app: true,
     body: html`<a class="skip" href="#main">Skip to content</a>
-<pr-app class="page" data-pr="${String(bootstrap.prNumber)}"><div class="loading">Loading PR #${String(bootstrap.prNumber)}…</div></pr-app>`,
+<pr-app class="page" data-pr="${key}"><div class="loading">Loading ${what}…</div></pr-app>`,
   })
 }
 
 export function homePage(
-  data: HomeData & { owner: string; repo: string; version: string; port: number; host: Host },
+  data: HomeData & {
+    owner: string
+    repo: string
+    version: string
+    port: number
+    host: Host
+    /** The local reviews prepared here, so the home page can link straight to them. */
+    localReviews: readonly LocalKey[]
+  },
   nonce: string,
   appearance: Appearance
 ): Html {
@@ -111,6 +123,15 @@ export function homePage(
 <label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
 <button class="cmd fill" type="submit">open</button>
 </form></section>
+<section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
+<div class="body">${
+      data.localReviews.length === 0
+        ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>`
+        : html`<ul class="plain">${data.localReviews.map(
+            key =>
+              html`<li><a href="/review/${key}">${keyLabel(key)}</a> <span class="muted">/review/${key}</span></li>`
+          )}</ul>`
+    }</div></section>
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${
   data.recentPrs.length === 0

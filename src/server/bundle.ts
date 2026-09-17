@@ -1,13 +1,23 @@
-import type { CanvasInfo, PrBundle, SharedCanvasInfo, StaleInfo } from '../contract/api.js'
+import type {
+  BundleStatus,
+  CanvasInfo,
+  Capabilities,
+  PrBundle,
+  SharedCanvasInfo,
+  StaleInfo,
+} from '../contract/api.js'
 import type { CommentsPayload } from '../contract/comments.js'
-import { isLargePr } from '../contract/generation-context.js'
+import { isLargePr, type LocalPrepareTarget } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
+import { isLocalKey, type LocalKey, type ReviewKey } from '../contract/review-key.js'
+import { describeLocalWork, resolveLocalBase } from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
 import { stateForHead } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
+import type { Derived } from '../store/derived-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 
@@ -59,6 +69,20 @@ export async function runDiscovery(
 export function createPrLoader(ctx: AppContext) {
   const refreshed = new Set<number>()
 
+  /** One local review's cached meta, which `prepare` wrote. */
+  async function localPr(key: LocalKey): Promise<Pr> {
+    const stored = await ctx.prs.readPr(key)
+    if (stored === null) {
+      throw new AppError(
+        'CANVAS_NOT_FOUND',
+        `no ${key} review has been prepared in this repository yet`,
+        404,
+        `run /pr-review-canvas ${key} to generate one`
+      )
+    }
+    return stored
+  }
+
   async function refreshPr(
     number: number
   ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
@@ -66,7 +90,7 @@ export function createPrLoader(ctx: AppContext) {
     const meta = await host.fetchPrMeta(ctx.gh, repo, number)
     const shas = await fetchPrRefs(ctx.git, host, meta)
     const pr = toPr(meta, repo, shas)
-    await ctx.prs.writePr(pr)
+    await ctx.prs.writePr(number, pr)
     const { payload, warnings } = await host.fetchComments(ctx.gh, repo, number, shas.headSha, ctx.now)
     await ctx.prs.writeComments(number, payload)
     refreshed.add(number)
@@ -96,17 +120,31 @@ export function createPrLoader(ctx: AppContext) {
     async currentPr(number: number): Promise<Pr> {
       return (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
     },
+    /** The head of either kind of target, so the routes both kinds serve need no branch. */
+    async currentTarget(key: ReviewKey): Promise<Pr> {
+      return isLocalKey(key) ? localPr(key) : ((await ctx.prs.readPr(key)) ?? (await refreshPr(key)).pr)
+    },
   }
 }
 export type PrLoader = ReturnType<typeof createPrLoader>
 
-/** Whether the change set on screen is large, counted from the files the page is showing. */
-function largePrOf(files: readonly FileEntry[]): boolean {
-  return isLargePr({
-    files: files.length,
+/** The diffstat of the files the page is showing. */
+function countDiff(files: readonly FileEntry[]): {
+  additions: number
+  deletions: number
+  changedFiles: number
+} {
+  return {
     additions: files.reduce((n, f) => n + f.additions, 0),
     deletions: files.reduce((n, f) => n + f.deletions, 0),
-  })
+    changedFiles: files.length,
+  }
+}
+
+/** Whether the change set on screen is large, counted from the files the page is showing. */
+function largePrOf(files: readonly FileEntry[]): boolean {
+  const counts = countDiff(files)
+  return isLargePr({ files: counts.changedFiles, ...counts })
 }
 
 /** Dev fixture: the committed artifact presented as the canvas of the live PR head. */
@@ -118,10 +156,15 @@ export function rekeyFixture(fixture: ReviewArtifact, pr: Pr): ReviewArtifact {
  * The stored canvas and the block that describes it. Null when review.json was written by an
  * older tool version: the page then offers to generate a new one.
  */
+export interface LoadedCanvas {
+  artifact: ReviewArtifact
+  canvas: CanvasInfo
+}
+
 async function loadCanvas(
   ctx: AppContext,
   found: Extract<CanvasLookup, { headSha: string }>
-): Promise<{ artifact: ReviewArtifact; canvas: CanvasInfo } | null> {
+): Promise<LoadedCanvas | null> {
   let artifact: ReviewArtifact | null
   try {
     artifact = await ctx.canvases.readArtifact(found.headSha)
@@ -143,11 +186,11 @@ async function loadCanvas(
 }
 
 /** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
-async function readOrBuildDerived(
+export async function readOrBuildDerived(
   ctx: AppContext,
   headSha: string,
   mergeBaseSha: string | undefined
-): Promise<{ files: FileEntry[] } | null> {
+): Promise<Derived | null> {
   const stored = await ctx.derived.read(headSha)
   if (stored !== null || mergeBaseSha === undefined) {
     return stored
@@ -158,62 +201,212 @@ async function readOrBuildDerived(
   return ctx.derived.ensure(headSha, mergeBaseSha)
 }
 
-export async function resolveBundle(
+/** The shape of an empty comment payload: a local review has no forge thread to read. */
+function noComments(headSha: string, now: () => Date): CommentsPayload {
+  return { fetchedAt: now().toISOString(), headSha, reviewComments: [], issueComments: [], reviews: [] }
+}
+
+/** Posting is a forge operation, and local work is on no forge. The page hides every post button. */
+export const LOCAL_CAPABILITIES: Capabilities = {
+  canComment: false,
+  tokenKind: 'none',
+  login: null,
+  reason: 'this work is not on a pull request yet, so there is nothing to comment on',
+  hint: 'open the pull request, then review it at /review/<number>',
+}
+
+/** Which diffs the page shows, and what to say when their commits are not in the clone. */
+interface ShownDiff {
+  files: FileEntry[]
+  derivable: boolean
+  warning: string | null
+}
+
+/**
+ * The diffs of the canvas on screen, which is the one `found` names rather than the target's
+ * current head: a stale canvas describes an older commit, and its own files are what the reader
+ * is looking at.
+ */
+async function shownDiff(
   ctx: AppContext,
-  loader: PrLoader,
-  number: number,
-  opts: BundleOptions
-): Promise<PrBundle> {
-  const { pr, comments, warnings } = await loader.load(number, opts)
-  const allWarnings = [...ctx.projectConfig.warnings, ...warnings]
-
-  const derivable = await ctx.derived.derivable(pr.headSha, pr.mergeBaseSha)
-  let files: FileEntry[] = []
-  if (derivable) {
-    files = (await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)).files
-  } else {
-    allWarnings.push('the PR head or merge base is not in the local clone; diffs are not available')
+  pr: Pr,
+  found: CanvasLookup,
+  loaded: LoadedCanvas | null
+): Promise<ShownDiff> {
+  const headSha = found.status === 'missing' ? pr.headSha : found.headSha
+  const mergeBaseSha = loaded?.canvas.manifest?.mergeBaseSha ?? pr.mergeBaseSha
+  const derived = await readOrBuildDerived(ctx, headSha, mergeBaseSha)
+  if (derived !== null) {
+    return { files: derived.files, derivable: true, warning: null }
   }
+  return {
+    files: loaded?.artifact.files ?? [],
+    derivable: false,
+    warning:
+      loaded === null
+        ? 'the head or merge base is not in the local clone; diffs are not available'
+        : 'the commits behind this canvas are not in the clone; diffs are not available',
+  }
+}
 
+/**
+ * The screen a canvas lookup produces: its status, the notice a stale one carries, and the command
+ * that regenerates it. Both targets go through this, so neither can drift from the other.
+ */
+function canvasScreen(
+  key: ReviewKey,
+  pr: Pr,
+  found: CanvasLookup,
+  loaded: LoadedCanvas | null
+): { status: BundleStatus; skillCommand: string; stale?: StaleInfo; warning?: string } {
+  if (found.status === 'missing') {
+    return { status: 'missing', skillCommand: buildSkillCommand(key, { force: false }) }
+  }
+  // A canvas exists for this target, so regenerating always needs --force.
+  const skillCommand = buildSkillCommand(key, { force: true })
+  if (loaded === null) {
+    return {
+      status: 'missing',
+      skillCommand,
+      warning: `the canvas for ${found.headSha.slice(0, 7)} does not match the current format; regenerate it`,
+    }
+  }
+  if (found.status === 'ready') {
+    return { status: 'ready', skillCommand }
+  }
+  const stale: StaleInfo = {
+    canvasHeadSha: found.headSha,
+    currentHeadSha: pr.headSha,
+    relation: found.relation,
+  }
+  if (found.commitsBehind !== undefined) {
+    stale.commitsBehind = found.commitsBehind
+  }
+  return { status: 'stale', skillCommand, stale }
+}
+
+/** Everything a bundle holds that does not depend on which canvas was found. */
+async function bundleBase(
+  ctx: AppContext,
+  key: ReviewKey,
+  input: {
+    pr: Pr
+    comments: CommentsPayload
+    /** A promise, so probing the forge runs alongside the chat and state reads. */
+    capabilities: Promise<Capabilities>
+    diff: ShownDiff
+    warnings: string[]
+  }
+): Promise<Omit<PrBundle, 'status' | 'skillCommand'>> {
   const chatEnabled = ctx.projectConfig.config.chat.enabled
   const [stored, capabilities, settings, acpx] = await Promise.all([
-    ctx.state.read(number),
-    ctx.capabilities.get(),
+    ctx.state.read(key),
+    input.capabilities,
     chatEnabled ? ctx.chat.effectiveSettings() : Promise.resolve(null),
     chatEnabled ? ctx.preflight.get() : Promise.resolve({ installed: false, version: null }),
   ])
   if (chatEnabled && !acpx.installed) {
-    allWarnings.push('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
+    input.warnings.push('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
   }
-  // Marks made on another commit describe other code, so the page never shows them as reviewed.
-  const state = stateForHead(stored, pr.headSha)
-  const base = {
-    pr,
-    files,
-    derivable,
-    comments,
-    state,
+  return {
+    pr: input.pr,
+    files: input.diff.files,
+    derivable: input.diff.derivable,
+    comments: input.comments,
+    // Marks made on another commit describe other code, so the page never shows them as reviewed.
+    state: stateForHead(stored, input.pr.headSha),
     capabilities,
     chat: {
       enabled: chatEnabled && acpx.installed,
       acpx: acpx.installed,
       ...(settings === null ? {} : { agent: settings.agent, model: settings.model }),
     },
-    largePr: largePrOf(files),
-    warnings: allWarnings,
+    largePr: largePrOf(input.diff.files),
+    warnings: input.warnings,
   }
+}
+
+/**
+ * The head the local review describes right now, resolved the way `prepare` would. Only asked for
+ * on an explicit refresh: snapshotting the working tree on every poll would hash the whole tree
+ * again and again.
+ */
+async function currentLocalPr(ctx: AppContext, key: LocalKey, stored: Pr | null): Promise<Pr> {
+  const target: LocalPrepareTarget = (await ctx.prs.readLocalTarget(key)) ?? {
+    kind: 'local',
+    base: await resolveLocalBase(ctx.git, stored?.baseRef),
+    source: key,
+  }
+  return describeLocalWork(ctx.git, {
+    base: target.base,
+    source: target.source,
+    repo: ctx.config.repo,
+    now: ctx.now,
+  })
+}
+
+/**
+ * The bundle for `/review/branch` and `/review/uncommitted`: the same screen over work that has no
+ * pull request. There is no forge side to it, so no comments, no capabilities, no attachment
+ * discovery and no import.
+ */
+export async function resolveLocalBundle(
+  ctx: AppContext,
+  key: LocalKey,
+  opts: BundleOptions
+): Promise<PrBundle> {
+  const stored = await ctx.prs.readPr(key)
+  const head = opts.refresh || stored === null ? await currentLocalPr(ctx, key, stored) : stored
+  const warnings = [...ctx.projectConfig.warnings]
+
+  const found = await ctx.canvases.findForLocal(key, head.headSha)
+  const loaded = found.status === 'missing' ? null : await loadCanvas(ctx, found)
+  const diff = await shownDiff(ctx, head, found, loaded)
+  if (diff.warning !== null && loaded !== null) {
+    warnings.push(diff.warning)
+  }
+  const screen = canvasScreen(key, head, found, loaded)
+  if (screen.warning !== undefined) {
+    warnings.push(screen.warning)
+  }
+  // Local work is on no forge, so the only diffstat there is is the one in the diff on screen.
+  const pr: Pr = { ...head, ...countDiff(diff.files) }
+  const base = await bundleBase(ctx, key, {
+    pr,
+    comments: noComments(pr.headSha, ctx.now),
+    capabilities: Promise.resolve(LOCAL_CAPABILITIES),
+    diff,
+    warnings,
+  })
+  const { warning: _screenWarning, ...screenFields } = screen
+  return { ...base, local: key, ...(loaded ?? {}), ...screenFields }
+}
+
+export async function resolveBundle(
+  ctx: AppContext,
+  loader: PrLoader,
+  number: number,
+  opts: BundleOptions
+): Promise<PrBundle> {
+  const { pr, comments, warnings: fetched } = await loader.load(number, opts)
+  const warnings = [...ctx.projectConfig.warnings, ...fetched]
+  const capabilities = ctx.capabilities.get()
 
   if (ctx.fixtureArtifact !== null) {
     const artifact = rekeyFixture(ctx.fixtureArtifact, pr)
+    const live = await shownDiff(ctx, pr, { status: 'missing' }, null)
+    if (live.warning !== null) {
+      warnings.push(live.warning)
+    }
+    warnings.push('showing the --fixture-canvas artifact (dev only)')
+    const diff = live.files.length > 0 ? live : { ...live, files: artifact.files }
+    const base = await bundleBase(ctx, number, { pr, comments, capabilities, diff, warnings })
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
-    allWarnings.push('showing the --fixture-canvas artifact (dev only)')
     return {
       ...base,
       status: 'ready',
       artifact,
       canvas,
-      files: files.length > 0 ? files : artifact.files,
-      largePr: largePrOf(files.length > 0 ? files : artifact.files),
       skillCommand: buildSkillCommand(number, { force: true }),
     }
   }
@@ -225,57 +418,23 @@ export async function resolveBundle(
   if (found.status !== 'ready' || opts.refresh) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
-    allWarnings.push(...discovery.warnings)
+    warnings.push(...discovery.warnings)
     if (discovery.imported) {
       found = await ctx.canvases.findForPr(number, pr.headSha)
     }
   }
-  const shared = sharedCanvas === null ? {} : { sharedCanvas }
 
-  if (found.status === 'missing') {
-    return {
-      ...base,
-      ...shared,
-      status: 'missing',
-      skillCommand: buildSkillCommand(number, { force: false }),
-    }
+  const loaded = found.status === 'missing' ? null : await loadCanvas(ctx, found)
+  const diff = await shownDiff(ctx, pr, found, loaded)
+  if (diff.warning !== null) {
+    warnings.push(diff.warning)
   }
-  const loaded = await loadCanvas(ctx, found)
-  if (loaded === null) {
-    allWarnings.push(
-      `the canvas for ${found.headSha.slice(0, 7)} does not match the current format; regenerate it`
-    )
-    return { ...base, ...shared, status: 'missing', skillCommand: buildSkillCommand(number, { force: true }) }
+  const screen = canvasScreen(number, pr, found, loaded)
+  if (screen.warning !== undefined) {
+    warnings.push(screen.warning)
   }
-  // A canvas exists for this PR, so regenerating always needs --force.
-  const skillCommand = buildSkillCommand(number, { force: true })
-  if (found.status === 'ready') {
-    return { ...base, ...shared, ...loaded, status: 'ready', skillCommand }
-  }
-  const stale: StaleInfo = {
-    canvasHeadSha: found.headSha,
-    currentHeadSha: pr.headSha,
-    relation: found.relation,
-  }
-  if (found.commitsBehind !== undefined) {
-    stale.commitsBehind = found.commitsBehind
-  }
-  // The page shows the canvas of the older commit, so the files and the diffs are that commit's.
-  // They are rebuilt when the clone has the commits, which is how a canvas imported before the
-  // fetch becomes readable once the commits arrive.
-  const staleDerived = await readOrBuildDerived(ctx, found.headSha, loaded.canvas.manifest?.mergeBaseSha)
-  // A stale canvas describes an older commit, so its own files decide both the diffs and
-  // whether the notice about large change sets belongs on the page.
-  const staleFiles = staleDerived?.files ?? loaded.artifact.files
-  return {
-    ...base,
-    ...shared,
-    ...loaded,
-    files: staleFiles,
-    largePr: largePrOf(staleFiles),
-    derivable: staleDerived !== null,
-    status: 'stale',
-    stale,
-    skillCommand,
-  }
+  const base = await bundleBase(ctx, number, { pr, comments, capabilities, diff, warnings })
+  const shared = sharedCanvas === null ? {} : { sharedCanvas }
+  const { warning: _screenWarning, ...screenFields } = screen
+  return { ...base, ...shared, ...(loaded ?? {}), ...screenFields }
 }

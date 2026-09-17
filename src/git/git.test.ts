@@ -7,7 +7,15 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
 import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
-import { createGit, execGit, GitError, type GitExec, redactStderr, STDERR_MESSAGE_MAX } from './git.js'
+import {
+  createGit,
+  execGit,
+  GitError,
+  type GitExec,
+  redactStderr,
+  SNAPSHOT_REF,
+  STDERR_MESSAGE_MAX,
+} from './git.js'
 
 const run = promisify(execFile)
 
@@ -168,6 +176,54 @@ describe('createGit (real adapter)', () => {
       stderr: 'boom\n',
       message: 'git rev-parse --show-toplevel failed (3): boom',
     })
+  })
+
+  it('reads the branch, the symbolic refs, the configured user, and the first ref that exists', async () => {
+    const git = createGit(repo.dir)
+    expect(await git.currentBranch()).toBe('main')
+    expect(await git.configuredUser()).toBe('Test')
+    expect(await git.firstExistingRef(['origin/nope', 'nope', 'main'])).toBe('main')
+    expect(await git.firstExistingRef(['origin/nope'])).toBeNull()
+    await g(repo.dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    expect(await git.symbolicRef('refs/remotes/origin/HEAD')).toBe('origin/main')
+    expect(await git.symbolicRef('refs/heads/main')).toBeNull()
+    await g(repo.dir, 'checkout', '-q', '--detach')
+    expect(await git.currentBranch()).toBeNull()
+    await g(repo.dir, 'checkout', '-q', 'main')
+  })
+
+  it('snapshots the working tree, untracked files included, without touching the real index', async () => {
+    const dir = await makeTempDir('pr-review-snap-')
+    try {
+      await g(dir, 'init', '-q', '-b', 'main')
+      await g(dir, 'config', 'user.email', 'test@example.com')
+      await g(dir, 'config', 'user.name', 'Test')
+      await writeFile(path.join(dir, 'kept.ts'), 'export const a = 1\n')
+      await writeFile(path.join(dir, '.gitignore'), 'ignored.ts\n')
+      await g(dir, 'add', '.')
+      await g(dir, 'commit', '-q', '-m', 'one')
+      const git = createGit(dir)
+      // A clean tree is the branch tip: there is nothing extra to describe.
+      expect(await git.snapshotWorktree()).toBeNull()
+
+      await writeFile(path.join(dir, 'kept.ts'), 'export const a = 2\n')
+      await writeFile(path.join(dir, 'fresh.ts'), 'export const fresh = true\n')
+      await writeFile(path.join(dir, 'ignored.ts'), 'secret\n')
+      const sha = await git.snapshotWorktree()
+      expect(sha).toMatch(/^[0-9a-f]{40}$/)
+      const listed = await g(dir, 'ls-tree', '-r', '--name-only', String(sha))
+      expect(listed.split('\n').sort()).toEqual(['.gitignore', 'fresh.ts', 'kept.ts'])
+      expect(await git.show(String(sha), 'kept.ts')).toEqual(Buffer.from('export const a = 2\n'))
+      // The same tree hashes to the same commit, so preparing twice lands on one canvas.
+      expect(await git.snapshotWorktree()).toBe(sha)
+      // The commit is anchored, so `git gc` cannot collect the canvas out from under the page.
+      expect(await g(dir, 'rev-parse', SNAPSHOT_REF)).toBe(sha)
+      // Nothing the user staged, or did not stage, has moved: the real index is untouched.
+      expect(await g(dir, 'diff', '--cached', '--name-only')).toBe('')
+      expect(await g(dir, 'ls-files', '--others', '--exclude-standard')).toBe('fresh.ts')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('keeps URL credentials and long stderr out of the GitError message', () => {

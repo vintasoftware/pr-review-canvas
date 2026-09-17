@@ -36,7 +36,7 @@ These commands support custom generation workflows. The bundled
 [generation skill](../skills/pr-review-canvas/SKILL.md) describes the complete sequence and model rules.
 
 ```text
-pr-review prepare (--pr <n> | --base <ref> --head <ref>) [--force]
+pr-review prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--base <ref>] [--force]
 pr-review validate <model.json|review.json> --canvas <dir> [--human] [--fix]
 pr-review publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
 ```
@@ -46,7 +46,37 @@ A status of `exists` means that head already has a canvas. With `--force`, prepa
 previous generation's working files while keeping the published canvas available until a new
 publish succeeds.
 
-For a comparison before a PR exists, use local refs:
+### Reviewing before the pull request exists
+
+There are two reviews of the work in a clone, and they are separate targets:
+
+```bash
+pr-review prepare --branch        # served at /review/branch
+pr-review prepare --uncommitted   # served at /review/uncommitted
+```
+
+`--branch` describes the tip of the current branch. `--uncommitted` describes the working tree as
+it stands, with the edits and the untracked files on top of that tip; with a clean tree the two
+build the same canvas. Each keeps its own canvas, review progress and chat threads, so preparing
+one never disturbs the other.
+
+- **Base.** Both compare against the repository's default branch, resolved from `origin/HEAD` and
+  falling back to `origin/main`, `origin/master`, `main`, then `master`. `--base <ref>` overrides
+  it. Preparation fails with a hint when none of them resolve.
+- **Uncommitted work.** `--uncommitted` stages the working tree into an index of its own and
+  writes a commit from it, so the diff covers files that are not committed yet. Nothing the user
+  staged is touched, ignored files stay out, and the commit is anchored at
+  `refs/pr-review/worktree` so `git gc` cannot collect it. The same working tree always hashes to
+  the same commit.
+- **Staleness.** Committing after `--branch`, or editing a file after `--uncommitted`, moves the
+  head, so `publish` answers `CANVAS_STALE` and the page offers to regenerate, exactly as a push
+  does for a pull request.
+- **No forge side.** A local canvas posts nothing: comments, sign-off, canvas import, and
+  attachment discovery are refused for it, and the page hides them. A canvas of a working-tree
+  snapshot is never offered as a pull request's canvas, or as the branch review's, because its
+  commit is on no branch.
+
+For a comparison between two commits that both exist, name them instead:
 
 ```bash
 pr-review prepare --base origin/main --head HEAD
@@ -57,7 +87,8 @@ pr-review prepare --base origin/main --head HEAD
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
 limit and overlong prose require rewriting.
 
-`publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl` for PR runs.
+`publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl`
+for PR and local runs.
 Its `--agent`, `--model`, and `--harness` describe who generated the canvas; they do not launch or
 select an agent. `--allow-stale` permits publishing for the prepared commit after the PR head has
 moved. Use it only when that older commit is the intended review target.
