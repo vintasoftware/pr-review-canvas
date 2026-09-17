@@ -16,13 +16,5 @@ dist-site/
 /.agents/skills/pr-review-canvas
 /.claude/skills/pr-review-canvas
 
-# Local Impeccable installation, shared with worktrees by post-checkout.
-/.agents/skills/impeccable
-/.claude/skills/impeccable
-/.claude/agents/impeccable-*.md
 /.claude/settings.local.json
-/.codex/hooks.json
-/.github/skills/impeccable
-/.github/agents/impeccable-*.agent.md
-/.github/hooks/impeccable.json
 .pr-review/settings.yml
