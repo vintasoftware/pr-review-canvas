@@ -91,8 +91,8 @@ describe('createGit (real adapter)', () => {
     await g(repo.dir, 'checkout', '-q', 'main')
     expect(await git.countCommitsBetween(repo.sha2, merged)).toBe(2)
     expect(await git.isAncestor(repo.sha2, merged)).toBe(true)
-    // Nothing beyond the bases: trivially automatic.
-    expect(await git.onlyAutomaticMergesBeyond(repo.sha2, [repo.sha2, sideTip])).toBe(true)
+    // Nothing beyond the bases: the head lies inside them, nothing was merged in.
+    expect(await git.onlyAutomaticMergesBeyond(repo.sha2, [repo.sha2, sideTip])).toBe(false)
     // Merging a branch the bases already hold adds only the merge commit, as git made it.
     expect(await git.onlyAutomaticMergesBeyond(merged, [repo.sha2, sideTip])).toBe(true)
     // Merging a branch the bases do not hold brings its ordinary commit along.
@@ -102,19 +102,29 @@ describe('createGit (real adapter)', () => {
   })
 
   it('refuses to judge merges on a git without merge-tree --write-tree, and says which git it needs', async () => {
-    const exec: GitExec = async (_cwd, args) => ({
-      stdout: Buffer.from(
-        args[0] === 'version'
-          ? 'git version 2.34.1\n'
-          : `${'a'.repeat(40)} ${'b'.repeat(40)} ${'c'.repeat(40)}\n`
-      ),
-      stderr: '',
-      code: 0,
-    })
-    const git = createGit('/tmp', exec)
-    await expect(git.onlyAutomaticMergesBeyond('a'.repeat(40), ['d'.repeat(40)])).rejects.toThrow(
+    const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(ch => ch.repeat(40))
+    const gitAt = (
+      version: string,
+      revList: string
+    ): { git: ReturnType<typeof createGit>; calls: string[][] } => {
+      const calls: string[][] = []
+      const exec: GitExec = async (_cwd, args) => {
+        calls.push(args)
+        return { stdout: Buffer.from(args[0] === 'version' ? version : revList), stderr: '', code: 0 }
+      }
+      return { git: createGit('/tmp', exec), calls }
+    }
+    const merge = gitAt('git version 2.34.1\n', `${a} ${b} ${c}\n`)
+    await expect(merge.git.onlyAutomaticMergesBeyond(a ?? '', [d ?? ''])).rejects.toThrow(
       /needs git 2\.38 or newer \(this is git version 2\.34\.1\); upgrade git or set canvas\.ignoreMergeCommits: false/
     )
+    // An ordinary commit is seen without merge-tree, so an old git is never asked its version.
+    const ordinary = gitAt('git version 2.34.1\n', `${a} ${b}\n`)
+    expect(await ordinary.git.onlyAutomaticMergesBeyond(a ?? '', [d ?? ''])).toBe(false)
+    expect(ordinary.calls.map(args => args[0])).toEqual(['rev-list'])
+    // Nothing beyond the bases is not a merge either.
+    const inside = gitAt('git version 2.34.1\n', '')
+    expect(await inside.git.onlyAutomaticMergesBeyond(a ?? '', [d ?? ''])).toBe(false)
     expect(versionAtLeast('git version 2.38.0', MERGE_TREE_MIN_VERSION)).toBe(true)
     expect(versionAtLeast('git version 2.47.1.windows.1', MERGE_TREE_MIN_VERSION)).toBe(true)
     expect(versionAtLeast('git version 3.0.0', MERGE_TREE_MIN_VERSION)).toBe(true)

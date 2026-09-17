@@ -16,9 +16,11 @@ export interface Git {
   /** `git rev-list --count a..b`: how many commits b is ahead of a. */
   countCommitsBetween(a: string, b: string): Promise<number>
   /**
-   * True when every commit head reaches beyond the bases is a two-parent merge whose tree is the
-   * one `git merge-tree` produces for its parents: no ordinary commit, and no edit made while
-   * merging. Needs git 2.38 (`merge-tree --write-tree`); an older git throws a GitError that says so.
+   * True when head reaches at least one commit beyond the bases and every such commit is a
+   * two-parent merge whose tree is the one `git merge-tree` produces for its parents: no ordinary
+   * commit, and no edit made while merging. Nothing beyond the bases means head lies inside them.
+   * Judging a merge needs git 2.38 (`merge-tree --write-tree`); an older git throws a GitError
+   * that says so, but only once a merge has to be judged.
    */
   onlyAutomaticMergesBeyond(head: string, bases: string[]): Promise<boolean>
   /** Full unified diff between two commits, rename detection on, 3 lines of context. */
@@ -121,11 +123,18 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
     countCommitsBetween: async (a, b) => Number(await run(['rev-list', '--count', `${a}..${b}`])),
     onlyAutomaticMergesBeyond: async (head, bases) => {
       const listed = await run(['rev-list', '--parents', head, ...bases.map(b => `^${b}`)])
-      const commits = listed === '' ? [] : listed.split('\n').map(line => line.split(' '))
-      if (commits.length === 0) {
-        return true
+      if (listed === '') {
+        return false
       }
-      // One check at the boundary: the rest of the rule assumes `merge-tree --write-tree` exists.
+      const merges: Array<[sha: string, first: string, second: string]> = []
+      for (const line of listed.split('\n')) {
+        const [sha, first, second, ...rest] = line.split(' ')
+        if (sha === undefined || first === undefined || second === undefined || rest.length > 0) {
+          return false
+        }
+        merges.push([sha, first, second])
+      }
+      // One check at the boundary, and only now: an ordinary commit needs no merge-tree to be seen.
       const version = await run(['version'])
       if (!versionAtLeast(version, MERGE_TREE_MIN_VERSION)) {
         throw new GitError(
@@ -134,10 +143,7 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
           128
         )
       }
-      for (const [sha, first, second, ...rest] of commits) {
-        if (sha === undefined || first === undefined || second === undefined || rest.length > 0) {
-          return false
-        }
+      for (const [sha, first, second] of merges) {
         const args = ['merge-tree', '--write-tree', first, second]
         const r = await exec(cwd, args)
         // Exit 1 means conflicts: the tree written then holds conflict markers and cannot match.
