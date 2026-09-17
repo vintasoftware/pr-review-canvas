@@ -7,19 +7,19 @@ attention points, comments, and an optional AI chat. Everything runs locally at 
 
 ### Author side
 
-Each PR author should generate a canvas and attach its zip to the **PR description** before
-requesting review. After the project setup below, run the installed skill in Claude Code or Codex:
+Each PR author generates a canvas before requesting review. The skill shares it automatically
+in a comment on the GitHub PR or GitLab MR. After the project setup below, run the installed skill in Claude Code or Codex:
 
 ```text
 /pr-review-canvas 123
 ```
 
-Replace **123** with your PR number. The skill reads the PR, generates and validates the canvas,
-then returns a local review URL and the exported zip's path. Open the URL to check the canvas.
+Replace **123** with your PR number. The skill reads the PR, generates and validates the canvas, then publishes a compressed canvas
+comment using your `gh` or `glab` login. It returns a local review URL and the comment link.
 
-The skill ends with upload instructions. If you're happy with the produced canvas, edit the PR
-or MR description in GitHub or GitLab, drag the zip into the editor, wait for the upload to finish,
-and save. Uploading the zip is a manual browser step.
+If automatic sharing fails (including a canvas too large for one comment), the skill warns you
+and gives you a ZIP path. Drag that ZIP into the PR or MR description, wait for the upload, and
+save. This manual upload is only a fallback.
 
 ### Review side
 
@@ -93,22 +93,21 @@ See the [CLI and configuration reference](docs/reference.md) for detailed option
 pr-review export --pr 123
 ```
 
-The command prints the zip's absolute path. Both `export` and `publish` save locally; neither
-uploads an attachment to GitHub or GitLab.
+The command prints the zip's absolute path. `export` saves locally; `publish` also shares PR/MR
+canvases automatically as compressed comments.
 
 The zip contains `manifest.json` and `review.json`: the PR description, file/hunk metadata,
-and generated review notes. Check these before sharing, since they can contain private
-information. Each reviewer gets source diffs from their own clone; chat history stays local.
+and generated review notes. Publishing shares this information with everyone who can read the PR/MR. Each reviewer gets source diffs from their own clone; chat history stays local.
 
 ### Update an outdated canvas
 
 After pushing new commits, run `/pr-review-canvas 123` again. To rewrite a canvas for the
-same commit, run `/pr-review-canvas 123 --force`. Replace the zip in the PR description.
+same commit, run `/pr-review-canvas 123 --force`. Publishing updates your canvas comment automatically.
 Reviewers click **refresh**.
 
 When the saved canvas describes a different PR head, **Canvas is outdated** appears at
 the top. You can still read the older canvas, with its commit and distance shown; posting
-from that view is disabled. Click **refresh** to check GitHub or GitLab for changes and a newer zip.
+from that view is disabled. Click **refresh** to check GitHub or GitLab for changes and a newer canvas.
 
 ## Configuration
 
