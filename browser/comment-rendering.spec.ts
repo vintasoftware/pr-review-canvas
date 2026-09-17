@@ -1,19 +1,20 @@
 import { expect, test } from './fixtures.js'
 
-test('loads PR screenshots and external bot images under the canvas CSP', async ({ page, reviewUrl }) => {
+test('links PR screenshots to GitHub and loads external bot images under the canvas CSP', async ({
+  page,
+  reviewUrl,
+}) => {
   const screenshot = 'https://github.com/user-attachments/assets/test-screenshot'
   const botAsset = 'https://assets.coderabbit.ai/test-review.png'
-  for (const url of [screenshot, botAsset]) {
-    await page.route(url, route =>
-      route.fulfill({
-        contentType: 'image/png',
-        body: Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCWQAAAAASUVORK5CYII=',
-          'base64'
-        ),
-      })
-    )
-  }
+  await page.route(botAsset, route =>
+    route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCWQAAAAASUVORK5CYII=',
+        'base64'
+      ),
+    })
+  )
   await page.route('**/api/prs/42', async route => {
     const response = await route.fetch()
     const bundle = await response.json()
@@ -30,11 +31,13 @@ test('loads PR screenshots and external bot images under the canvas CSP', async 
   })
   await page.goto(reviewUrl)
   await page.locator('.pr-desc > summary').click()
-  for (const alt of ['Self-QA screenshot', 'Bot evidence']) {
-    const img = page.getByRole('img', { name: alt, exact: true })
-    await img.scrollIntoViewIfNeeded()
-    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1)
-  }
+  const screenshotLink = page.getByRole('link', { name: 'View image on GitHub: Self-QA screenshot' })
+  await expect(screenshotLink).toHaveAttribute('href', screenshot)
+  await expect(screenshotLink).toHaveAttribute('target', '_blank')
+  await expect(page.getByRole('img', { name: 'Self-QA screenshot', exact: true })).toHaveCount(0)
+  const img = page.getByRole('img', { name: 'Bot evidence', exact: true })
+  await img.scrollIntoViewIfNeeded()
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1)
 })
 
 test('renders avatars, safe GitHub Markdown, and comments missing from current files', async ({

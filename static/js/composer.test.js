@@ -8,10 +8,10 @@ import {
   composerInput,
   composerRowHtml,
   focusComposer,
-  NO_POSTING_TITLE,
   setDisabledReason,
   toggleMarkdownPreview,
 } from './composer.js'
+import { noPostingTitle } from './host.js'
 
 /** @param {string} html */
 function mount(html) {
@@ -51,8 +51,7 @@ describe('composerHtml', () => {
     expect(box.hasAttribute('data-start-line')).toBe(false)
     expect(box.querySelector('label')?.getAttribute('for')).toBe('c1-t')
     expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
-      'markdown-write',
-      'markdown-preview',
+      'markdown-toggle',
       'composer-post',
       'composer-cancel',
     ])
@@ -205,7 +204,7 @@ describe('applyCapabilityGating', () => {
 
   it('falls back to a general reason and enables everything again', () => {
     applyCapabilityGating(document, { canComment: false, tokenKind: 'classic', login: null })
-    expect(document.querySelector('button[data-needs-post]')?.getAttribute('title')).toBe(NO_POSTING_TITLE)
+    expect(document.querySelector('button[data-needs-post]')?.getAttribute('title')).toBe(noPostingTitle())
     expect(
       applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     ).toBe(false)
@@ -273,25 +272,27 @@ describe('Markdown preview', () => {
   it('renders a draft safely, reports an empty preview, and returns focus to the unchanged draft', () => {
     const box = mount(composerHtml({ id: 'preview', label: 'Comment', kind: 'issue' }))
     const textarea = type(box, '**hello** <script>bad()</script>')
-    const button = box.querySelector('[data-act="markdown-preview"]')
+    const button = box.querySelector('[data-act="markdown-toggle"]')
     if (!(button instanceof HTMLElement)) throw new Error('missing preview button')
-    toggleMarkdownPreview(button, true)
+    expect(button.textContent).toBe('preview')
+    toggleMarkdownPreview(button)
     expect(textarea.hidden).toBe(true)
     expect(box.querySelector('.markdown-preview strong')?.textContent).toBe('hello')
     expect(box.querySelector('.markdown-preview script')).toBeNull()
-    expect(button.getAttribute('aria-pressed')).toBe('true')
-    toggleMarkdownPreview(button, false)
+    expect(button.textContent).toBe('write')
+    toggleMarkdownPreview(button)
     expect(textarea.hidden).toBe(false)
+    expect(button.textContent).toBe('preview')
     expect(document.activeElement).toBe(textarea)
     expect(textarea.value).toBe('**hello** <script>bad()</script>')
     textarea.value = '  '
-    toggleMarkdownPreview(button, true)
+    toggleMarkdownPreview(button)
     expect(box.querySelector('.markdown-preview')?.textContent).toBe('Nothing to preview.')
   })
 
   it('ignores a preview command after its editor has been removed', () => {
     const button = document.createElement('button')
-    expect(() => toggleMarkdownPreview(button, true)).not.toThrow()
+    expect(() => toggleMarkdownPreview(button)).not.toThrow()
   })
 
   it('keeps capability restrictions when a local disabled reason changes', () => {

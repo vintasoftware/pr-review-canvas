@@ -6,6 +6,7 @@
 import { cssEscape } from './anchors.js'
 import { renderMarkdown } from './markdown.js'
 import { esc } from './dom.js'
+import { noPostingTitle, postToLabel } from './host.js'
 
 /**
  * @typedef {{
@@ -50,7 +51,7 @@ export function composerHtml(opts) {
     `<label class="sr" for="${esc(opts.id)}-t">${esc(opts.label)}</label>` +
     previewControlsHtml() +
     `<textarea id="${esc(opts.id)}-t" rows="3" placeholder="${esc(opts.label)}">${esc(opts.body ?? '')}</textarea>` +
-    '<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>post to github</button>' +
+    `<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>` +
     '<button class="cmd" type="button" data-act="composer-cancel">cancel</button></div></div>'
   )
 }
@@ -144,12 +145,9 @@ export function closeComposers(root) {
   return closed
 }
 
-/** What a command says when this GitHub login may not post. */
-export const NO_POSTING_TITLE = 'this GitHub login cannot post on this repository'
-
 /**
  * Disables everything that posts when the probe said no, and enables it otherwise. A token
- * whose rights cannot be read ('unknown') stays enabled: GitHub answers for itself.
+ * whose rights cannot be read ('unknown') stays enabled: the host answers for itself.
  *
  * A command can be disabled for a reason of its own (the approve command before every layer is
  * read, a command whose request is still running). Those keep their state: this only adds and
@@ -159,7 +157,7 @@ export const NO_POSTING_TITLE = 'this GitHub login cannot post on this repositor
  */
 export function applyCapabilityGating(root, capabilities) {
   const blocked = capabilities.canComment === false
-  const reason = capabilities.reason ?? NO_POSTING_TITLE
+  const reason = capabilities.reason ?? noPostingTitle()
   for (const el of Array.from(root.querySelectorAll('[data-needs-post]'))) {
     if (!(el instanceof HTMLButtonElement) || el.getAttribute('aria-busy') === 'true') {
       continue
@@ -222,15 +220,19 @@ export function setDisabledReason(el, reason) {
   }
 }
 
+/** One command that swaps the box between writing and previewing; its label is the mode it goes to. */
 export function previewControlsHtml() {
-  return '<div class="preview-controls" role="group" aria-label="Markdown editor"><button class="cmd" type="button" data-act="markdown-write" aria-pressed="true">Write</button><button class="cmd" type="button" data-act="markdown-preview" aria-pressed="false">Preview</button></div><div class="markdown-preview prose" hidden></div>'
+  return '<div class="preview-controls"><button class="cmd" type="button" data-act="markdown-toggle">preview</button></div><div class="markdown-preview prose" hidden></div>'
 }
 
-/** @param {HTMLElement} button @param {boolean} preview */
-export function toggleMarkdownPreview(button, preview) {
-  const host = button.closest('.composer-box, .signoff-dialog')
-  const textarea = host?.querySelector('textarea')
-  const output = host?.querySelector('.markdown-preview')
+/**
+ * Puts one editor into write or preview mode.
+ * @param {Element} host the `.composer-box` or `.signoff-dialog` that holds the editor
+ * @param {boolean} preview
+ */
+export function setMarkdownPreview(host, preview) {
+  const textarea = host.querySelector('textarea')
+  const output = host.querySelector('.markdown-preview')
   if (!(textarea instanceof HTMLTextAreaElement) || !(output instanceof HTMLElement)) return
   if (preview)
     output.innerHTML = textarea.value.trim()
@@ -238,7 +240,15 @@ export function toggleMarkdownPreview(button, preview) {
       : '<p class="muted">Nothing to preview.</p>'
   textarea.hidden = preview
   output.hidden = !preview
-  host?.querySelector('[data-act="markdown-write"]')?.setAttribute('aria-pressed', String(!preview))
-  host?.querySelector('[data-act="markdown-preview"]')?.setAttribute('aria-pressed', String(preview))
+  const toggle = host.querySelector('[data-act="markdown-toggle"]')
+  if (toggle !== null) toggle.textContent = preview ? 'write' : 'preview'
   if (!preview) textarea.focus()
+}
+
+/** @param {HTMLElement} button */
+export function toggleMarkdownPreview(button) {
+  const host = button.closest('.composer-box, .signoff-dialog')
+  if (host === null) return
+  const output = host.querySelector('.markdown-preview')
+  setMarkdownPreview(host, output instanceof HTMLElement && output.hidden)
 }

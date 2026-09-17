@@ -2,6 +2,8 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type CliIo, runDoctor } from '../commands.js'
+import { ORIGIN_HINT } from '../config.js'
+import type { Host } from '../host/host.js'
 import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
 import { type DoctorDeps, runDoctorChecks } from './doctor.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
@@ -19,7 +21,8 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
       commonDir: '/repo/.git',
       remotes: { origin: 'git@github.com:acme/widgets.git' },
     }),
-    gh: createFakeGh(),
+    env: {},
+    client: () => createFakeGh(),
     version: '0.0.0-test',
     acpxVersion: async () => '0.13.2',
     readSkill: async file =>
@@ -66,7 +69,7 @@ describe('runDoctorChecks', () => {
       version: '0.0.0-test',
       checks: {
         git: { ok: true, detail: REPO },
-        origin: { ok: true, detail: 'acme/widgets' },
+        origin: { ok: true, detail: 'acme/widgets (GitHub)' },
         gh: { ok: true, detail: 'Logged in to github.com' },
         ghAuth: { ok: true, detail: 'Logged in to github.com' },
         dataDir: { ok: true, detail: dataDir },
@@ -109,7 +112,8 @@ describe('runDoctorChecks', () => {
     const report = await runDoctorChecks(
       deps({
         git: createFakeGit({ commonDir: '/repo/.git', remotes: {} }),
-        gh: createFakeGh({ auth: { installed: false, authenticated: false, detail: 'gh is not on PATH' } }),
+        client: () =>
+          createFakeGh({ auth: { installed: false, authenticated: false, detail: 'gh is not on PATH' } }),
         dataDirOverride: blocked,
         readSkill: async () => null,
       })
@@ -120,7 +124,7 @@ describe('runDoctorChecks', () => {
     expect(report.checks.origin).toEqual({
       ok: false,
       detail: 'no origin remote',
-      hint: 'add a github.com origin',
+      hint: ORIGIN_HINT,
     })
     expect(report.checks.gh).toEqual({
       ok: false,
@@ -138,7 +142,36 @@ describe('runDoctorChecks', () => {
     })
   })
 
-  it('reports a remote that is not GitHub and a missing skill', async () => {
+  it('checks glab, not gh, when origin is GitLab, including a self-hosted one named by the environment', async () => {
+    const asked: Host[] = []
+    const report = await runDoctorChecks(
+      deps({
+        git: createFakeGit({
+          topLevel: REPO,
+          commonDir: '/repo/.git',
+          remotes: { origin: 'git@git.company.com:group/sub/app.git' },
+        }),
+        env: { PR_REVIEW_HOST: 'gitlab' },
+        client: host => {
+          asked.push(host)
+          return createFakeGh({
+            auth: { installed: false, authenticated: false, detail: 'glab is not on PATH' },
+          })
+        },
+        dataDirOverride: await makeTempDir(),
+      })
+    )
+    expect(asked.map(h => [h.kind, h.hostname])).toEqual([['gitlab', 'git.company.com']])
+    expect(report.checks.origin).toEqual({ ok: true, detail: 'group/sub/app (GitLab)' })
+    expect(report.checks.gh).toEqual({
+      ok: false,
+      detail: 'glab is not on PATH',
+      hint: 'install it from https://gitlab.com/gitlab-org/cli',
+    })
+    expect(report.checks.ghAuth.hint).toBe('run `glab auth login`')
+  })
+
+  it('accepts a GitLab origin and still reports a missing skill', async () => {
     const dataDir = await makeTempDir()
     const report = await runDoctorChecks(
       deps({
@@ -152,9 +185,8 @@ describe('runDoctorChecks', () => {
       })
     )
     expect(report.checks.origin).toEqual({
-      ok: false,
-      detail: 'https://gitlab.com/acme/widgets.git',
-      hint: 'add a github.com origin',
+      ok: true,
+      detail: 'acme/widgets (GitLab)',
     })
     expect(report.checks.skill).toEqual({
       ok: false,
@@ -192,11 +224,7 @@ describe('runDoctorChecks', () => {
       },
     }
     const report = await runDoctorChecks(deps({ git: failing }))
-    expect(report.checks.origin).toEqual({
-      ok: false,
-      detail: 'fatal: no remotes',
-      hint: 'add a github.com origin',
-    })
+    expect(report.checks.origin).toEqual({ ok: false, detail: 'fatal: no remotes', hint: ORIGIN_HINT })
     expect(report.checks.dataDir).toEqual({
       ok: false,
       detail: 'fatal: not a git repository',

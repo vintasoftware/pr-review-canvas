@@ -4,23 +4,31 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { CommentsPayload } from '../contract/comments.js'
 import { emptyComments } from '../contract/comments.js'
 import type { Pr } from '../contract/review-artifact.js'
+import { findGithubAttachmentLinks, GITHUB_ATTACHMENTS } from '../github/attachments.js'
 import { AppError } from '../server/errors.js'
-import { createFakeGit, makeTestContext, TEST_REPO, type TestContext } from '../testing/fakes.js'
+import {
+  createFakeGh,
+  createFakeGit,
+  makeTestContext,
+  TEST_REPO,
+  type TestContext,
+} from '../testing/fakes.js'
 import { BASE_SHA, HEAD_SHA, SYNTHETIC_DIFF, syntheticArtifact } from '../testing/synthetic.js'
 import {
   collectCandidates,
   discoverSharedCanvas,
   discoveryFingerprint,
   downloadAttachment,
-  findAttachmentLinks,
   importFailureReason,
   rankCandidates,
 } from './attachments.js'
+import { gitlabHost } from './host.js'
 
 const FILE_URL =
   'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
 const ASSET_URL = 'https://github.com/user-attachments/assets/6e9d2b7c-1f2a-4c3d-9a8b-0f1e2d3c4b5a'
 const SIGNED_URL = 'https://objects.githubusercontent.com/canvas.zip?sig=abc'
+const NAME_FOR_HEAD = `pr-42-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
 
 function comments(over: Partial<CommentsPayload> = {}): CommentsPayload {
   return { ...emptyComments(HEAD_SHA, '2026-09-10T12:00:00.000Z'), ...over }
@@ -93,10 +101,10 @@ function zipResponse(bytes: Uint8Array, status = 200): Response {
   return new Response(bytes.slice().buffer as ArrayBuffer, { status })
 }
 
-describe('findAttachmentLinks', () => {
+describe('findGithubAttachmentLinks', () => {
   it('reads the files form and the markdown-labelled assets form once each', () => {
     const text = `see ${FILE_URL} and [pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip](${ASSET_URL})\nand ${FILE_URL}`
-    expect(findAttachmentLinks(text)).toEqual([
+    expect(findGithubAttachmentLinks(text)).toEqual([
       { url: FILE_URL, name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip' },
       { url: ASSET_URL, name: 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip' },
     ])
@@ -105,7 +113,7 @@ describe('findAttachmentLinks', () => {
   it('deduplicates repeated asset URLs even when their labels differ', () => {
     const name = 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
     const text = `[${name}](${ASSET_URL}) and [copy.zip](${ASSET_URL})`
-    expect(findAttachmentLinks(text)).toEqual([{ url: ASSET_URL, name }])
+    expect(findGithubAttachmentLinks(text)).toEqual([{ url: ASSET_URL, name }])
   })
 
   it('ignores links that are not zip attachments on github', () => {
@@ -114,7 +122,7 @@ describe('findAttachmentLinks', () => {
       'https://github.com/user-attachments/files/1/notes.pdf',
       '[canvas.zip](https://github.com/acme/widgets/files/1/canvas.zip)',
     ].join('\n')
-    expect(findAttachmentLinks(text)).toEqual([])
+    expect(findGithubAttachmentLinks(text)).toEqual([])
   })
 })
 
@@ -128,7 +136,8 @@ describe('candidate collection and ranking', () => {
     })
     const found = collectCandidates(
       { body: 'nothing here', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
-      TEST_REPO
+      TEST_REPO,
+      GITHUB_ATTACHMENTS
     )
     expect(found.map(c => [c.name, c.order])).toEqual([
       ['pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 0],
@@ -145,11 +154,30 @@ describe('candidate collection and ranking', () => {
           issueComments: [issue(1, `https://github.com/user-attachments/files/2/${name}`)],
         }),
       },
-      TEST_REPO
+      TEST_REPO,
+      GITHUB_ATTACHMENTS
     )
     const ranked = rankCandidates(candidates, { headSha: HEAD_SHA, prNumber: 42 })
     expect(ranked).toHaveLength(2)
     expect(ranked[0]?.parsed.shaPrefix).toBe('aaaaaaaa')
+  })
+
+  it('sorts a name of another pull request below every usable attachment', () => {
+    const url = (n: string) => `https://github.com/user-attachments/files/1/${n}`
+    // The wrong PR on the right commit: it would win on the sha alone, and import refuses it, so
+    // it may not take a place in the try budget from the older canvas of this pull request.
+    const wrongPr = `pr-99-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
+    const ours = 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip'
+    const payload = comments({ issueComments: [issue(1, url(wrongPr)), issue(2, url(ours))] })
+    const ranked = rankCandidates(
+      collectCandidates(
+        { body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
+        TEST_REPO,
+        GITHUB_ATTACHMENTS
+      ),
+      { headSha: HEAD_SHA, prNumber: 42 }
+    )
+    expect(ranked.map(c => c.name)).toEqual([ours, wrongPr])
   })
 
   it('puts the canvas for the head first, then this PR, then the newest link', () => {
@@ -164,7 +192,11 @@ describe('candidate collection and ranking', () => {
       ],
     })
     const ranked = rankCandidates(
-      collectCandidates({ body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload }, TEST_REPO),
+      collectCandidates(
+        { body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
+        TEST_REPO,
+        GITHUB_ATTACHMENTS
+      ),
       { headSha: HEAD_SHA, prNumber: 42 }
     )
     expect(ranked.map(c => c.name)).toEqual([
@@ -190,7 +222,10 @@ describe('ranking by edit time', () => {
       ],
     })
     const sources = { body: '', bodyUpdatedAt: '2026-09-01T00:00:00Z', comments: payload }
-    const ranked = rankCandidates(collectCandidates(sources, TEST_REPO), { headSha: HEAD_SHA, prNumber: 42 })
+    const ranked = rankCandidates(collectCandidates(sources, TEST_REPO, GITHUB_ATTACHMENTS), {
+      headSha: HEAD_SHA,
+      prNumber: 42,
+    })
     expect(ranked.map(c => c.name)).toEqual([edited, newer])
   })
 })
@@ -238,10 +273,26 @@ describe('downloadAttachment', () => {
     t = await makeTestContext({ fetch: fetches.impl })
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'auth-required' })
     await t.cleanup()
-    const { createFakeGh } = await import('../testing/fakes.js')
     t = await makeTestContext({ gh: createFakeGh({ token: null }), fetch: fetches.impl })
     expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'auth-required' })
   })
+
+  it.each(['gitlab.example.com', 'gitlab.example.com:8443', 'gitlab.example.com:443'])(
+    'asks %s with a Bearer token and refuses other hosts and ports',
+    async hostname => {
+      const bytes = canvasBytes()
+      const upload = new URL(`https://${hostname}/acme/widgets/uploads/abc/${NAME_FOR_HEAD}`).toString()
+      const fetches = fakeFetch([zipResponse(bytes)])
+      t = await makeTestContext({ fetch: fetches.impl, host: gitlabHost(hostname) })
+      expect(await downloadAttachment(t.ctx, upload)).toEqual({ ok: true, bytes })
+      expect(fetches.calls).toEqual([{ url: upload, auth: 'Bearer gh-test-token' }])
+      const otherPort = new URL(upload)
+      otherPort.port = '9443'
+      expect(await downloadAttachment(t.ctx, otherPort.toString())).toEqual({ ok: false, reason: 'network' })
+      expect(await downloadAttachment(t.ctx, FILE_URL)).toEqual({ ok: false, reason: 'network' })
+      expect(fetches.calls).toHaveLength(1)
+    }
+  )
 
   it('never sends the token to storage, even when the link points there', async () => {
     const bytes = canvasBytes()
@@ -420,6 +471,39 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.warnings[0]).toContain('other/repo')
   })
 
+  it('reports a zip attached to the wrong pull request without downloading it', async () => {
+    const wrongPr =
+      'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    const fetches = fakeFetch([])
+    t = await localClone(fetches.impl)
+    const outcome = await discoverSharedCanvas(t.ctx, pr({ body: wrongPr }), comments())
+    expect(fetches.calls).toEqual([])
+    expect(outcome.sharedCanvas).toEqual({
+      url: wrongPr,
+      name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
+      matchesHead: true,
+      downloadable: false,
+      reason: 'pr-mismatch',
+    })
+    expect(outcome.imported).toBeNull()
+    expect(outcome.warnings).toEqual([
+      'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip was exported for #99, not #42',
+    ])
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+  })
+
+  it('imports the canvas of this PR when a zip of another one is attached too', async () => {
+    const wrongPr =
+      'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    const fetches = fakeFetch([zipResponse(canvasBytes())])
+    t = await localClone(fetches.impl)
+    const payload = comments({ issueComments: [issue(1, wrongPr, { createdAt: '2026-09-10T11:00:00Z' })] })
+    const outcome = await discoverSharedCanvas(t.ctx, pr({ body: FILE_URL }), payload)
+    expect(fetches.calls.map(c => c.url)).toEqual([FILE_URL])
+    expect(outcome.sharedCanvas?.downloadable).toBe(true)
+    expect(outcome.imported?.status).toBe('ready')
+  })
+
   it('does nothing for a PR with no attachment and for a change set without a number', async () => {
     t = await makeTestContext()
     expect(await discoverSharedCanvas(t.ctx, pr({ body: 'no zip here' }), comments())).toEqual({
@@ -440,6 +524,7 @@ describe('importFailureReason', () => {
     expect(importFailureReason(new Error('boom'))).toBe('not-zip')
     expect(importFailureReason(new AppError('CANVAS_TOO_LARGE', 'big', 413))).toBe('too-large')
     expect(importFailureReason(new AppError('CANVAS_REPO_MISMATCH', 'elsewhere', 400))).toBe('name-mismatch')
+    expect(importFailureReason(new AppError('CANVAS_PR_MISMATCH', 'another PR', 400))).toBe('pr-mismatch')
     expect(importFailureReason(new AppError('CANVAS_INVALID', 'broken', 400))).toBe('not-zip')
   })
 })

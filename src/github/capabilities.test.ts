@@ -2,16 +2,10 @@
 // Whether this gh login may post here, decided from the token scopes and the repo permissions.
 import { createFakeGh, ghError, ghJson, TEST_REPO } from '../testing/fakes.js'
 import { GH_REPO_RESPONSE } from '../testing/synthetic.js'
-import {
-  CAPABILITY_TTL_MS,
-  createCapabilityProbe,
-  decideCapabilities,
-  probeCapabilities,
-  SCOPE_HINT,
-} from './capabilities.js'
-import { type GhResponse, GitHubApiError, type GitHubClient } from './gh.js'
+import { decideCapabilities, probeCapabilities, SCOPE_HINT } from './capabilities.js'
+import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
 
-function response(headers: Record<string, string>, body: unknown): GhResponse {
+function response(headers: Record<string, string>, body: unknown): CliResponse {
   return { status: 200, headers, body }
 }
 
@@ -106,7 +100,7 @@ describe('probeCapabilities', () => {
 
   it('still probes the repository when the user call fails', async () => {
     const gh = createFakeGh({
-      routes: { user: ghError(new GitHubApiError('user', 'HTTP 401', 1)) },
+      routes: { user: ghError(new HostCliError('gh', 'user', 'HTTP 401', 1)) },
       rawRoutes: { 'repos/acme/widgets': GH_REPO_RESPONSE },
     })
     expect(await probeCapabilities(gh, TEST_REPO)).toEqual({
@@ -119,7 +113,7 @@ describe('probeCapabilities', () => {
   it('reports the failure the fake was told to raise', async () => {
     const gh = createFakeGh({
       routes: { user: ghJson({ login: 'octocat' }) },
-      rawRoutes: { 'repos/acme/widgets': new GitHubApiError('repos', 'HTTP 500', 1) },
+      rawRoutes: { 'repos/acme/widgets': new HostCliError('gh', 'repos', 'HTTP 500', 1) },
     })
     expect((await probeCapabilities(gh, TEST_REPO)).reason).toContain('HTTP 500')
   })
@@ -127,7 +121,7 @@ describe('probeCapabilities', () => {
   it('reports a failure that is not an Error by its text', async () => {
     const gh = createFakeGh({ routes: { user: ghJson({ login: 'octocat' }) } })
     // `gh` runs as a child process, which can reject with something that is not an Error.
-    const raw: GitHubClient = {
+    const raw: HostClient = {
       ...gh,
       apiWithHeaders: () => Promise.reject('gh exited with signal SIGKILL'),
     }
@@ -149,24 +143,5 @@ describe('probeCapabilities', () => {
       reason: 'gh api repos/acme/widgets failed (1): gh: Not Found (HTTP 404)',
       hint: 'run `gh auth status` and log in again',
     })
-  })
-})
-
-describe('createCapabilityProbe', () => {
-  it('probes once, reuses the answer, and probes again after the cache expires or on refresh', async () => {
-    const gh = createFakeGh({
-      routes: { user: ghJson({ login: 'octocat' }) },
-      rawRoutes: { 'repos/acme/widgets': GH_REPO_RESPONSE },
-    })
-    let at = new Date('2026-09-10T12:00:00.000Z')
-    const probe = createCapabilityProbe(gh, TEST_REPO, () => at)
-    await probe.get()
-    await probe.get()
-    expect(gh.calls.filter(c => c.kind === 'raw')).toHaveLength(1)
-    await probe.get({ refresh: true })
-    expect(gh.calls.filter(c => c.kind === 'raw')).toHaveLength(2)
-    at = new Date(at.getTime() + CAPABILITY_TTL_MS + 1)
-    await probe.get()
-    expect(gh.calls.filter(c => c.kind === 'raw')).toHaveLength(3)
   })
 })

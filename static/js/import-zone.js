@@ -56,7 +56,7 @@ export function wireDropZone(root, opts) {
     }
   }
   const send = async (/** @type {File} */ file) => {
-    const problem = validateCanvasFilename(file.name)
+    const problem = validateCanvasFilename(file.name, opts.prNumber)
     if (problem !== null) {
       apply({ type: 'fail', message: problem })
       return

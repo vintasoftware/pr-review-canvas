@@ -3,8 +3,19 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ConfigError } from '../config.js'
 import type { ErrorCode, ErrorEnvelope } from '../contract/api.js'
 import { GitError } from '../git/git.js'
-import { GitHubApiError } from '../github/gh.js'
-import { PrNotFoundError } from '../github/pr.js'
+import { PrNotFoundError } from '../host/pr.js'
+import { CLI_INFO, type HostCli, HostCliError } from '../host/client.js'
+
+/** The codes each host CLI's failures map to. The front end and the docs name them one by one. */
+const CLI_ERROR_CODES: Record<HostCli, { missing: ErrorCode; unauthenticated: ErrorCode; api: ErrorCode }> = {
+  gh: { missing: 'GH_MISSING', unauthenticated: 'GH_UNAUTHENTICATED', api: 'GITHUB_API_ERROR' },
+  glab: { missing: 'GLAB_MISSING', unauthenticated: 'GLAB_UNAUTHENTICATED', api: 'GITLAB_API_ERROR' },
+}
+
+/** The codes that mean the host CLI itself, not the request, is the problem. */
+export const CLI_SETUP_CODES: ReadonlySet<ErrorCode> = new Set(
+  Object.values(CLI_ERROR_CODES).flatMap(c => [c.missing, c.unauthenticated])
+)
 
 export class AppError extends Error {
   readonly code: ErrorCode
@@ -53,19 +64,26 @@ export function toAppError(err: unknown): AppError {
       'check the number and that origin is the right repository'
     )
   }
-  if (err instanceof GitHubApiError) {
+  if (err instanceof HostCliError) {
+    const codes = CLI_ERROR_CODES[err.cli]
+    const info = CLI_INFO[err.cli]
     if (err.missingBinary) {
       return new AppError(
-        'GH_MISSING',
-        'the GitHub CLI (gh) is not installed',
+        codes.missing,
+        `the ${info.label} is not installed`,
         500,
-        'install it from https://cli.github.com'
+        `install it from ${info.installUrl}`
       )
     }
     if (err.unauthenticated) {
-      return new AppError('GH_UNAUTHENTICATED', 'gh is not logged in', 401, 'run `gh auth login`')
+      return new AppError(
+        codes.unauthenticated,
+        `${err.cli} is not logged in`,
+        401,
+        `run \`${info.loginCommand}\``
+      )
     }
-    return new AppError('GITHUB_API_ERROR', err.message, 502)
+    return new AppError(codes.api, err.message, 502)
   }
   if (err instanceof GitError) {
     return new AppError('GIT_ERROR', err.message, 500)

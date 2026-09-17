@@ -25,5 +25,6 @@ export async function ensureDataDir(dataDir: string): Promise<void> {
 }
 
 export function repoDir(dataDir: string, repo: Repo): string {
-  return path.join(dataDir, 'repos', `${repo.owner}__${repo.name}`)
+  const owner = repo.owner.replaceAll('/', '__')
+  return path.join(dataDir, 'repos', `${owner}__${repo.name}`)
 }

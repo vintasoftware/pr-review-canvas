@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { envWithoutRepo } from './environment.mjs'
 
 /**
  * The git operations the tool needs. Routes, stores, and the CLI receive an implementation
@@ -65,7 +66,7 @@ export function execGit(cwd: string, args: string[]): Promise<ExecResult> {
     execFile(
       'git',
       args,
-      { cwd, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
+      { cwd, env: envWithoutRepo(), encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
         resolve({ stdout, stderr: stderr.toString('utf8'), code })

@@ -1,7 +1,7 @@
 {
   "name": "@vintasoftware/pr-review-canvas",
-  "version": "0.3.0",
-  "description": "Localhost PR review canvas: layered diffs, attention points, and GitHub comments for one PR",
+  "version": "0.4.0",
+  "description": "Localhost PR review canvas: layered diffs, attention points, and GitHub or GitLab comments for one PR",
   "type": "module",
   "bin": {
     "pr-review": "./bin/pr-review.mjs"
@@ -10,7 +10,7 @@
     "dev": "tsx watch --clear-screen=false --ignore '**/.pr-review/**' src/cli.ts serve",
     "start": "tsx src/cli.ts serve",
     "test": "vitest run",
-    "hooks:install": "git config core.hooksPath .githooks",
+    "hooks:install": "git config core.hooksPath \"$(git rev-parse --show-toplevel)/.githooks\"",
     "test:watch": "vitest",
     "test:browser": "playwright test",
     "coverage": "vitest run --coverage",
@@ -23,7 +23,11 @@
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck",
-    "precommit": "pnpm check && pnpm test"
+    "precommit": "pnpm check && pnpm test",
+    "site:dev": "vite --config site/vite.config.js",
+    "site:build": "vite build --config site/vite.config.js",
+    "site:preview": "vite preview --config site/vite.config.js",
+    "site:test": "playwright test --config site/playwright.config.js"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",

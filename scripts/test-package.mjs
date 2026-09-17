@@ -6,12 +6,16 @@ import os from 'node:os'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { envWithoutRepo } from '../src/git/environment.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const temp = await mkdtemp(path.join(os.tmpdir(), 'pr-review-package-'))
+const env = envWithoutRepo()
+
 const run = (command, args, cwd = temp) => {
   const result = spawnSync(command, args, {
     cwd,
+    env,
     encoding: 'utf8',
     timeout: 120_000,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -52,10 +56,10 @@ try {
     path.join(temp, pack.filename),
   ])
   const cli = path.join(temp, 'node_modules', '.bin', 'pr-review')
-  const help = spawnSync(cli, ['--help'], { cwd: temp, encoding: 'utf8', timeout: 15_000 })
+  const help = spawnSync(cli, ['--help'], { cwd: temp, env, encoding: 'utf8', timeout: 15_000 })
   assert.equal(help.status, 0)
   assert.match(help.stderr, /install-skill/)
-  const invalid = spawnSync(cli, ['unknown-command'], { cwd: temp, encoding: 'utf8', timeout: 15_000 })
+  const invalid = spawnSync(cli, ['unknown-command'], { cwd: temp, env, encoding: 'utf8', timeout: 15_000 })
   assert.equal(invalid.status, 2, invalid.stderr)
   run('git', ['init', '--quiet'])
   run('git', ['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'])
@@ -73,7 +77,11 @@ try {
   await once(probe, 'listening')
   const port = probe.address().port
   await new Promise((resolve, reject) => probe.close(error => (error ? reject(error) : resolve())))
-  server = spawn(cli, ['serve', '--port', String(port)], { cwd: temp, stdio: ['ignore', 'pipe', 'pipe'] })
+  server = spawn(cli, ['serve', '--port', String(port)], {
+    cwd: temp,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   stopped = once(server, 'exit')
   let logs = ''
   server.stdout.on('data', chunk => {

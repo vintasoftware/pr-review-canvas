@@ -16,10 +16,14 @@ export const ERROR_CODES = [
   'GH_MISSING',
   'GH_UNAUTHENTICATED',
   'GITHUB_API_ERROR',
+  'GLAB_MISSING',
+  'GLAB_UNAUTHENTICATED',
+  'GITLAB_API_ERROR',
   'PR_NOT_FOUND',
   'CANVAS_NOT_FOUND',
   'CANVAS_INVALID',
   'CANVAS_REPO_MISMATCH',
+  'CANVAS_PR_MISMATCH',
   'CANVAS_TOO_LARGE',
   'CANVAS_STALE',
   'MODEL_INVALID',
@@ -87,6 +91,15 @@ export interface SharedCanvasFetchResponse {
 
 /** A canvas zip found on the pull request. Shaped by the schema the discovery cache stores. */
 export type SharedCanvasInfo = z.infer<typeof SharedCanvasInfoSchema>
+
+/** The forge the server talks to, as the page and the health endpoint learn it. */
+export interface PublicHost {
+  kind: 'github' | 'gitlab'
+  /** `GitHub` or `GitLab`, for the words on the page. */
+  label: string
+  /** `https://github.com` or the GitLab instance, for links to profiles. */
+  webBase: string
+}
 
 export interface PrBundle {
   status: BundleStatus
@@ -172,6 +185,7 @@ export interface HealthResponse {
     agentAuth?: HealthCheck
   }
   repo: { owner: string; name: string } | null
+  host: PublicHost
   dataDir: string
   chat: ChatStatus
 }

@@ -1,5 +1,10 @@
 // @vitest-environment node
-import { buildHunkIndex, labelPatch, splitHunks } from './patch-lines.js'
+import { buildHunkIndex, checkInlineTarget, labelPatch, splitHunks } from './patch-lines.js'
+
+import { toFileEntry } from './diff-collector.js'
+import { SYNTHETIC_FILES } from '../testing/synthetic.js'
+
+const FILES = SYNTHETIC_FILES.map(toFileEntry)
 
 const PATCH = ['@@ -1,4 +1,5 @@', ' a', '+b', ' c', '@@ -10 +11,2 @@ ctx', ' x', '+y'].join('\n')
 
@@ -58,5 +63,33 @@ describe('labelPatch', () => {
       ].join('\n')
     )
     expect(labelPatch('k', '')).toBe('')
+  })
+})
+
+describe('checkInlineTarget', () => {
+  it('accepts a line inside a hunk on the new side', () => {
+    expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 4, side: 'new' })).toBeNull()
+  })
+
+  it('accepts a range inside one hunk and refuses one that leaves it', () => {
+    expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 4, side: 'new', startLine: 2 })).toBeNull()
+    expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 12, side: 'new', startLine: 4 })).toBe(
+      'src/app.ts:4-12 (new) spans more than one hunk'
+    )
+  })
+
+  it('refuses a range whose first line comes after its last', () => {
+    expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 3, side: 'new', startLine: 4 })).toBe(
+      'the first line of the range must come before 3'
+    )
+  })
+
+  it('refuses a file that is not in the diff and a line outside every hunk', () => {
+    expect(checkInlineTarget(FILES, { path: 'src/nope.ts', line: 1, side: 'new' })).toBe(
+      'src/nope.ts is not in the diff'
+    )
+    expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 400, side: 'new' })).toBe(
+      'src/app.ts:400 (new) is not in the diff'
+    )
   })
 })

@@ -2,7 +2,7 @@
 // handle, the GitHub payloads that describe it, and an artifact that layers it.
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { parseUnifiedDiff, toFileEntry } from '../git/diff-collector.js'
-import type { GhResponse } from '../github/gh.js'
+import type { CliResponse } from '../host/client.js'
 import {
   createFakeGh,
   createFakeGit,
@@ -192,7 +192,7 @@ export const GH_ISSUE_COMMENTS = [
 /** The login behind the fake token, and what `gh api -i repos/acme/widgets` reports about it. */
 export const GH_USER = { login: 'octocat' }
 
-export const GH_REPO_RESPONSE: GhResponse = {
+export const GH_REPO_RESPONSE: CliResponse = {
   status: 200,
   headers: { 'x-oauth-scopes': 'gist, read:org, repo', 'content-type': 'application/json' },
   body: {

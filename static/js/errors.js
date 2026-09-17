@@ -36,8 +36,8 @@ export const ERROR_CARDS = {
     action: 'Start pr-review from a clone, or pass --repo <dir>.',
   },
   NO_ORIGIN: {
-    title: 'No GitHub origin',
-    action: 'Add an origin remote that points at github.com, then restart the server.',
+    title: 'No GitHub or GitLab origin',
+    action: 'Add an origin remote that points at github.com or GitLab, then restart the server.',
   },
   GIT_ERROR: {
     title: 'A git command failed',
@@ -53,6 +53,18 @@ export const ERROR_CARDS = {
   },
   GITHUB_API_ERROR: {
     title: 'GitHub refused the request',
+    action: 'Retry in a moment. A rate limit or an outage both read like this.',
+  },
+  GLAB_MISSING: {
+    title: 'GitLab CLI is not installed',
+    action: 'Install glab from https://gitlab.com/gitlab-org/cli and log in, then retry.',
+  },
+  GLAB_UNAUTHENTICATED: {
+    title: 'GitLab CLI is not logged in',
+    action: 'Run glab auth login in a terminal, then retry.',
+  },
+  GITLAB_API_ERROR: {
+    title: 'GitLab refused the request',
     action: 'Retry in a moment. A rate limit or an outage both read like this.',
   },
   PR_NOT_FOUND: {
@@ -71,6 +83,10 @@ export const ERROR_CARDS = {
     title: 'That canvas belongs to another repository',
     action: 'Import a canvas exported from this repository.',
   },
+  CANVAS_PR_MISMATCH: {
+    title: 'That canvas belongs to another pull request',
+    action: 'Import the canvas exported for this PR, or generate one for it with the skill.',
+  },
   CANVAS_TOO_LARGE: {
     title: 'That canvas is too large',
     action: 'A canvas zip holds two JSON files and stays under 20 MB. Export it again.',
@@ -88,11 +104,11 @@ export const ERROR_CARDS = {
     action: 'Remove it, or run pr-review install-skill --force.',
   },
   COMMENT_FORBIDDEN: {
-    title: 'This GitHub login cannot post here',
-    action: 'Run gh auth refresh -h github.com -s repo, then retry.',
+    title: 'This login cannot post here',
+    action: 'Check the account’s repository access and token permissions, then retry.',
   },
   COMMENT_LINE_NOT_IN_DIFF: {
-    title: 'GitHub takes comments only on lines the diff shows',
+    title: 'Comments must sit on lines the diff shows',
     action: 'Pick a line inside a hunk of this pull request.',
   },
   SIGNOFF_INCOMPLETE: {

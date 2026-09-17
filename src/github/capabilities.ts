@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Capabilities } from '../contract/api.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { GhResponse, GitHubClient } from './gh.js'
+import type { CliResponse, HostClient } from '../host/client.js'
 
 const UserSchema = z.object({ login: z.string() })
 const RepoBodySchema = z.object({
@@ -9,24 +9,14 @@ const RepoBodySchema = z.object({
   permissions: z.object({ pull: z.boolean().optional(), push: z.boolean().optional() }).optional(),
 })
 
-/** What a page assumes before the probe answers: posting is tried and GitHub decides. */
-export const UNKNOWN_CAPABILITIES: Capabilities = {
-  canComment: 'unknown',
-  tokenKind: 'unprobed',
-  login: null,
-}
-
 export const SCOPE_HINT = 'gh auth refresh -h github.com -s repo'
-
-/** How long a probe answer is reused. A new token needs `?refresh=1` or ten minutes. */
-export const CAPABILITY_TTL_MS = 10 * 60 * 1000
 
 /**
  * Whether this login may post on this repository, from the token's scopes and the repository
  * permissions. A token without a scopes header is a fine-grained or app token, whose rights this
  * check cannot read: posting stays enabled and GitHub's own answer decides.
  */
-export function decideCapabilities(login: string | null, response: GhResponse): Capabilities {
+export function decideCapabilities(login: string | null, response: CliResponse): Capabilities {
   const parsed = RepoBodySchema.safeParse(response.body)
   const body = parsed.success ? parsed.data : {}
   const canPull = body.permissions?.pull === true
@@ -67,7 +57,7 @@ export function decideCapabilities(login: string | null, response: GhResponse): 
 }
 
 /** The probe itself: who the token belongs to, and what it may do here. */
-export async function probeCapabilities(gh: GitHubClient, repo: Repo): Promise<Capabilities> {
+export async function probeCapabilities(gh: HostClient, repo: Repo): Promise<Capabilities> {
   let login: string | null = null
   try {
     login = UserSchema.parse(await gh.api('user')).login
@@ -84,33 +74,5 @@ export async function probeCapabilities(gh: GitHubClient, repo: Repo): Promise<C
       reason: err instanceof Error ? err.message : String(err),
       hint: 'run `gh auth status` and log in again',
     }
-  }
-}
-
-export interface CapabilityProbe {
-  get(opts?: { refresh?: boolean }): Promise<Capabilities>
-}
-
-/**
- * The probe with its cache. One per server process; `refresh` skips the cache after the user
- * changed their token.
- */
-export function createCapabilityProbe(
-  gh: GitHubClient,
-  repo: Repo,
-  now: () => Date,
-  ttlMs = CAPABILITY_TTL_MS
-): CapabilityProbe {
-  let cached: { at: number; value: Capabilities } | null = null
-  return {
-    get: async (opts = {}) => {
-      const at = now().getTime()
-      if (!opts.refresh && cached !== null && at - cached.at < ttlMs) {
-        return cached.value
-      }
-      const value = await probeCapabilities(gh, repo)
-      cached = { at, value }
-      return value
-    },
   }
 }

@@ -8,7 +8,7 @@ export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost
 
 /**
  * Model text on one line of a list. Markdown characters are escaped so a title cannot open a
- * heading, a link, or a code span in the review GitHub publishes.
+ * heading, a link, or a code span in the published review.
  */
 export function inlineText(text: string): string {
   return text
