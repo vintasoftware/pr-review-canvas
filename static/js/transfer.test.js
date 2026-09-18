@@ -324,7 +324,7 @@ describe('stale screen', () => {
     const shared = {
       url: 'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: false,
       reason: /** @type {const} */ ('pr-mismatch'),
     }
@@ -343,7 +343,7 @@ describe('stale screen', () => {
     const shared = {
       url: 'https://github.com/user-attachments/files/1/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: false,
       reason: /** @type {const} */ ('auth-required'),
     }

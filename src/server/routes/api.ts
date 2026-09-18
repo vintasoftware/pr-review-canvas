@@ -258,7 +258,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     const result = await importCanvas(ctx, {
       bytes: new Uint8Array(await file.arrayBuffer()),
       prNumber: number,
-      currentHeadSha: (await loader.currentPr(number)).headSha,
+      currentHead: await loader.currentPr(number),
       force: force === '1',
     })
     return c.json(result)

@@ -5,7 +5,7 @@ import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
-import { reviewedCommit, stateForHead } from '../review/review-body.js'
+import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -191,7 +191,7 @@ export async function resolveBundle(
     allWarnings.push('showing the --fixture-canvas artifact (dev only)')
     return {
       ...bare,
-      state: stateForHead(stored, pr.headSha),
+      state: stateForCanvas(stored, pr.headSha),
       status: 'ready',
       artifact,
       canvas,
@@ -217,7 +217,7 @@ export async function resolveBundle(
   }
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
   // Marks made on another commit describe other code, so the page never shows them as reviewed.
-  const base = { ...bare, state: stateForHead(stored, reviewedCommit(found, pr)) }
+  const base = { ...bare, state: stateForCanvas(stored, reviewedCommit(found, pr)) }
 
   if (found.status === 'missing') {
     return {

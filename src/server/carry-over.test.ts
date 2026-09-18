@@ -241,7 +241,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     // A mark made on the carried-over page is recorded against the canvas's commit, not the head.
     const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: OLD_SHA })
     expect(res.status).toBe(200)
-    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
+    expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(OLD_SHA)
     expect((await bundle()).state.reviewed).toEqual({ 'layer:layer-1': true })
     // The head moves again with the identical diff: the canvas and its marks still apply.
     headMovedTo('c'.repeat(40))
@@ -264,7 +264,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     // The outdated view shows the older canvas and its diff, so a mark made there is the older canvas's.
     const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: OLD_SHA })
     expect(res.status).toBe(200)
-    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
+    expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(OLD_SHA)
     const outdated = await bundle()
     expect(outdated.status).toBe('stale')
     expect(outdated.state.reviewed).toEqual({ 'layer:layer-1': true })
@@ -283,7 +283,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect(res.status).toBe(200)
     // No ancestry walk, no rev-list, no diff: the canvas the page names is looked up in the index.
     expect(git.calls.slice(before)).toEqual([])
-    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
+    expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(OLD_SHA)
   })
 
   it('refuses a mark that names a commit which is not a canvas of this pull request', async () => {
@@ -371,6 +371,9 @@ describe('the chat after the head moved', () => {
     // The agent reads the head's diffs, from the head's derived directory.
     expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(HEAD_SHA))
     expect(runner.runs[0]?.prompt).not.toContain(t.ctx.derived.derivedDir(OLD_SHA))
+    // The seed header names that same commit: the diffs and the words about them agree.
+    expect(runner.runs[0]?.prompt).toContain(`head \`${HEAD_SHA.slice(0, 7)}\``)
+    expect(runner.runs[0]?.prompt).not.toContain(`head \`${OLD_SHA.slice(0, 7)}\``)
   })
 
   it('still talks about an outdated canvas, with the diff of its own commit', async () => {
@@ -381,6 +384,8 @@ describe('the chat after the head moved', () => {
     await res.text()
     expect(runner.runs).toHaveLength(1)
     expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(OLD_SHA))
+    // The canvas is read with its own commit's diff, so the header names that commit.
+    expect(runner.runs[0]?.prompt).toContain(`head \`${OLD_SHA.slice(0, 7)}\``)
     // The diffs of the older commit were built from the clone on the way.
     expect(await t.ctx.derived.read(OLD_SHA)).not.toBeNull()
   })

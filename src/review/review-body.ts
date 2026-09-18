@@ -19,11 +19,11 @@ export function inlineText(text: string): string {
 }
 
 /**
- * The state as it applies to one commit. Marks made on another commit, and marks whose commit
+ * The state as it applies to one canvas. Marks made on another canvas, and marks whose canvas
  * is unknown, describe other code, so they count for nothing here.
  */
-export function stateForHead(state: PrState, headSha: string): PrState {
-  return state.reviewedHeadSha === headSha ? state : { ...state, reviewed: {} }
+export function stateForCanvas(state: PrState, canvasSha: string): PrState {
+  return state.reviewedCanvasSha === canvasSha ? state : { ...state, reviewed: {} }
 }
 
 /**

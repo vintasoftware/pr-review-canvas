@@ -114,6 +114,16 @@ describe('standsForHead and lookupCanvas', () => {
     expect(await standsForHead(t.ctx, { ...PR, mergeBaseSha: advanced }, CANVAS)).toBe(false)
   })
 
+  it('does not carry a canvas over on two empty change sets, which match by having nothing to compare', async () => {
+    await context({
+      refs: { head: HEAD_SHA, old: OLD, base: BASE_SHA },
+      diffs: { [`${BASE_SHA}..${OLD}`]: '', [`${BASE_SHA}..${HEAD_SHA}`]: '' },
+    })
+    expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(false)
+    // The head still stands for itself: the rule only ever compares two different commits.
+    expect(await standsForHead(t.ctx, PR, { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).toBe(true)
+  })
+
   it('reads a canvas that stands for the head as ready, and names both commits', async () => {
     await context(history(SYNTHETIC_DIFF))
     await t.ctx.canvases.write(OLD, syntheticArtifact(), manifestOf(OLD), 42)

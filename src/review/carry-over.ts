@@ -18,7 +18,8 @@ export interface DiffedCommit {
  * hunk ids, folds, and attention points all assume the diff on screen is the one the canvas was
  * generated from, and identity is what guarantees that; a base merge that only moves a hunk down
  * already breaks it. How the head reached that diff does not matter. A diff missing on this
- * machine keeps the strict reading. Off when the project marks the canvas outdated on any commit.
+ * machine, and a change set that is empty on both sides, keep the strict reading. Off when the
+ * project marks the canvas outdated on any commit.
  */
 export async function standsForHead(
   ctx: AppContext,
@@ -35,7 +36,13 @@ export async function standsForHead(
     ctx.derived.readOrBuild(commit.headSha, commit.mergeBaseSha),
     ctx.derived.readOrBuild(pr.headSha, pr.mergeBaseSha),
   ])
-  return older !== null && head !== null && samePatches(older, head)
+  if (older === null || head === null) {
+    return false
+  }
+  // Two empty diffs are equal by having nothing to compare, which is no evidence that the canvas
+  // explains the head. An empty change set has nothing to review either way, so the strict
+  // reading costs the reviewer nothing here.
+  return Object.keys(head.patches).length > 0 && samePatches(older, head)
 }
 
 /**

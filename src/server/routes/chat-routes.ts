@@ -90,6 +90,8 @@ async function subjectForChat(ctx: AppContext, number: number, pr: Pr): Promise<
     )
   }
   if (found.status === 'stale') {
+    // The diff is the canvas's own commit's, so the stored artifact, which names that commit,
+    // is already the one that describes it.
     const manifest = await ctx.canvases.readManifest(found.headSha)
     return withDiff(
       artifact,
@@ -97,10 +99,16 @@ async function subjectForChat(ctx: AppContext, number: number, pr: Pr): Promise<
       await ctx.derived.readOrBuild(found.headSha, manifest?.mergeBaseSha)
     )
   }
-  return withDiff(artifact, pr.headSha, await ctx.derived.read(pr.headSha))
+  // A carried-over canvas was generated for an earlier commit but is read with the head's diff,
+  // so the live pull request is stamped on it: the seed's header names the commit whose diff the
+  // agent is given, with that commit's file and line counts.
+  return withDiff({ ...artifact, pr }, pr.headSha, await ctx.derived.read(pr.headSha))
 }
 
-/** The subject with its diff, or the 404 that says the diff is not on this machine. */
+/**
+ * The subject with its diff, or the 404 that says the diff is not on this machine. The artifact
+ * passed in names `headSha` as its own commit, so the seed header and the diff agree.
+ */
 function withDiff(artifact: ReviewArtifact, headSha: string, derived: Derived | null): ChatSubject {
   if (derived === null) {
     throw new AppError(

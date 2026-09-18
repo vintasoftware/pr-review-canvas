@@ -376,8 +376,10 @@ the diff identical as long as the base did not touch the changed files. The rule
 the head reached that diff, only that it did; a diff that differs anywhere, even a hunk moved down
 by a base change, marks the canvas outdated as before, because the canvas's layers, hunk ids, and
 attention points describe the diff it was generated from. It needs `canvas.keepForIdenticalDiff`
-(the default) and both commits in the local clone. `pr-review publish` applies the same rule when
-the head moves while a canvas is being generated.
+(the default) and both commits in the local clone: the canvas's own commit has to be there for its
+diff to be rebuilt, and without that diff there is nothing to compare, so the canvas reads outdated.
+Two empty change sets are not compared either. `pr-review publish` and `pr-review import` apply the
+same rule, so the CLI never calls a canvas stale that the page shows as current.
 
 AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
 one on screen.

@@ -6,13 +6,22 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { AppError } from '../server/errors.js'
 import { createFakeGit, makeTempDir, makeTestContext, TEST_REPO, type TestContext } from '../testing/fakes.js'
-import { BASE_SHA, HEAD_SHA, SYNTHETIC_DIFF, syntheticArtifact } from '../testing/synthetic.js'
+import {
+  BASE_SHA,
+  HEAD_SHA,
+  SYNTHETIC_DIFF,
+  SYNTHETIC_DIFF_MOVED_BY_BASE,
+  syntheticArtifact,
+} from '../testing/synthetic.js'
 import { defaultExportDir, exportCanvas, resolveOutPath } from './export.js'
 import { importCanvas } from './import.js'
 import { buildCanvasZipName, parseCanvasZipName, repoSlug } from './name.js'
 import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, CanvasZipError, readCanvasZip } from './zip.js'
 
 const OTHER_SHA = 'c'.repeat(40)
+const CARRIED_SHA = 'e'.repeat(40)
+/** The pull request sitting at the commit the canvas was generated for. */
+const AT_HEAD = { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA }
 
 function manifest(over: Partial<CanvasManifest> = {}): CanvasManifest {
   return {
@@ -286,9 +295,15 @@ describe('importCanvas', () => {
   function contextWithCommits(): Promise<TestContext> {
     return makeTestContext({
       git: createFakeGit({
-        refs: { head: HEAD_SHA, base: BASE_SHA, other: OTHER_SHA },
+        refs: { head: HEAD_SHA, base: BASE_SHA, other: OTHER_SHA, carried: CARRIED_SHA },
         mergeBases: { [`${BASE_SHA}..${HEAD_SHA}`]: BASE_SHA },
-        diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF },
+        diffs: {
+          [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF,
+          // The later head changed the same files differently, so it is not carried over.
+          [`${BASE_SHA}..${OTHER_SHA}`]: SYNTHETIC_DIFF_MOVED_BY_BASE,
+          // This one merged the base branch in without touching them, so its diff is identical.
+          [`${BASE_SHA}..${CARRIED_SHA}`]: SYNTHETIC_DIFF,
+        },
         ancestors: { [`${HEAD_SHA}..${OTHER_SHA}`]: true },
         counts: { [`${HEAD_SHA}..${OTHER_SHA}`]: 3 },
       }),
@@ -300,7 +315,7 @@ describe('importCanvas', () => {
     const result = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
       prNumber: 42,
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
     })
     expect(result).toEqual({
       status: 'ready',
@@ -316,12 +331,29 @@ describe('importCanvas', () => {
     expect((await t.ctx.derived.read(HEAD_SHA))?.files.length).toBeGreaterThan(0)
   })
 
+  it('stores a canvas of an earlier commit as current when the head has the identical diff', async () => {
+    t = await contextWithCommits()
+    const result = await importCanvas(t.ctx, {
+      bytes: buildCanvasZip(manifest(), artifact()),
+      prNumber: 42,
+      currentHead: { headSha: CARRIED_SHA, mergeBaseSha: BASE_SHA },
+    })
+    // The same answer the page gives: the CLI never calls this canvas stale.
+    expect(result).toEqual({
+      status: 'ready',
+      headSha: HEAD_SHA,
+      currentHeadSha: CARRIED_SHA,
+      derivable: true,
+      warnings: [],
+    })
+  })
+
   it('reports a canvas for an ancestor of the head as stale with the distance', async () => {
     t = await contextWithCommits()
     const result = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
       prNumber: 42,
-      currentHeadSha: OTHER_SHA,
+      currentHead: { headSha: OTHER_SHA, mergeBaseSha: BASE_SHA },
     })
     expect(result).toEqual({
       status: 'stale',
@@ -338,7 +370,7 @@ describe('importCanvas', () => {
     t = await contextWithCommits()
     const result = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
-      currentHeadSha: 'd'.repeat(40),
+      currentHead: { headSha: 'd'.repeat(40), mergeBaseSha: BASE_SHA },
     })
     expect(result.status).toBe('stale')
     expect(result.relation).toBe('unrelated')
@@ -348,8 +380,8 @@ describe('importCanvas', () => {
   it('keeps the stored canvas when the zip is not newer, and takes it when it is', async () => {
     t = await contextWithCommits()
     const first = buildCanvasZip(beforeThePr(), artifact({ summary: 'first', pr: prWithoutNumber() }))
-    await importCanvas(t.ctx, { bytes: first, currentHeadSha: HEAD_SHA })
-    const same = await importCanvas(t.ctx, { bytes: first, prNumber: 9, currentHeadSha: HEAD_SHA })
+    await importCanvas(t.ctx, { bytes: first, currentHead: AT_HEAD })
+    const same = await importCanvas(t.ctx, { bytes: first, prNumber: 9, currentHead: AT_HEAD })
     expect(same.status).toBe('exists')
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.summary).toBe('first')
     // The PR number is still recorded, which is how a pre-PR export joins its pull request.
@@ -358,7 +390,7 @@ describe('importCanvas', () => {
       manifest({ generatedAt: '2026-09-11T09:00:00.000Z' }),
       artifact({ summary: 'second', generatedAt: '2026-09-11T09:00:00.000Z' })
     )
-    const replaced = await importCanvas(t.ctx, { bytes: newer, currentHeadSha: HEAD_SHA })
+    const replaced = await importCanvas(t.ctx, { bytes: newer, currentHead: AT_HEAD })
     expect(replaced.status).toBe('ready')
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.summary).toBe('second')
   })
@@ -366,8 +398,8 @@ describe('importCanvas', () => {
   it('reports exists for a second import that names no pull request', async () => {
     t = await contextWithCommits()
     const zip = buildCanvasZip(manifest(), artifact())
-    await importCanvas(t.ctx, { bytes: zip, currentHeadSha: HEAD_SHA })
-    const again = await importCanvas(t.ctx, { bytes: zip, currentHeadSha: HEAD_SHA })
+    await importCanvas(t.ctx, { bytes: zip, currentHead: AT_HEAD })
+    const again = await importCanvas(t.ctx, { bytes: zip, currentHead: AT_HEAD })
     expect(again.status).toBe('exists')
     expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(42)
   })
@@ -375,12 +407,12 @@ describe('importCanvas', () => {
   it('refuses a canvas from another repository unless force is passed', async () => {
     t = await contextWithCommits()
     const foreign = buildCanvasZip(manifest({ repo: { owner: 'other', name: 'repo' } }), artifact())
-    const err = await catchApp(() => importCanvas(t.ctx, { bytes: foreign, currentHeadSha: HEAD_SHA }))
+    const err = await catchApp(() => importCanvas(t.ctx, { bytes: foreign, currentHead: AT_HEAD }))
     expect(err.code).toBe('CANVAS_REPO_MISMATCH')
     expect(err.status).toBe(400)
     const forced = await importCanvas(t.ctx, {
       bytes: foreign,
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
       force: true,
     })
     expect(forced.status).toBe('ready')
@@ -390,16 +422,14 @@ describe('importCanvas', () => {
   it('refuses a canvas exported for another pull request, and force does not open it', async () => {
     t = await contextWithCommits()
     const zip = buildCanvasZip(manifest(), artifact())
-    const err = await catchApp(() =>
-      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHeadSha: HEAD_SHA })
-    )
+    const err = await catchApp(() => importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHead: AT_HEAD }))
     expect([err.code, err.status]).toEqual(['CANVAS_PR_MISMATCH', 400])
     expect(err.message).toBe('this canvas was exported for #42, and it is being imported for #7')
     expect(err.hint).toBe('import it without --pr to store it under #42, or generate a canvas for #7')
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
     // Forcing would only write an index entry that contradicts the zip, so there is no way past.
     const forced = await catchApp(() =>
-      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHeadSha: HEAD_SHA, force: true })
+      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHead: AT_HEAD, force: true })
     )
     expect(forced.code).toBe('CANVAS_PR_MISMATCH')
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
@@ -409,7 +439,7 @@ describe('importCanvas', () => {
     t = await contextWithCommits()
     const imported = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
     })
     expect(imported.status).toBe('ready')
     expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(42)
@@ -418,16 +448,14 @@ describe('importCanvas', () => {
   it('reads the pull request from review.json when the manifest names none', async () => {
     t = await contextWithCommits()
     const zip = buildCanvasZip(beforeThePr(), artifact())
-    const err = await catchApp(() =>
-      importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHeadSha: HEAD_SHA })
-    )
+    const err = await catchApp(() => importCanvas(t.ctx, { bytes: zip, prNumber: 7, currentHead: AT_HEAD }))
     expect(err.code).toBe('CANVAS_PR_MISMATCH')
   })
 
   it('takes a canvas exported before the pull request existed, and one imported without a PR', async () => {
     t = await contextWithCommits()
     const prePr = buildCanvasZip(beforeThePr(), artifact({ pr: prWithoutNumber() }))
-    const joined = await importCanvas(t.ctx, { bytes: prePr, prNumber: 7, currentHeadSha: HEAD_SHA })
+    const joined = await importCanvas(t.ctx, { bytes: prePr, prNumber: 7, currentHead: AT_HEAD })
     expect([joined.status, joined.warnings]).toEqual(['ready', []])
     expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(7)
     // `pr-review import <zip>` without --pr has no pull request to disagree with.
@@ -436,7 +464,7 @@ describe('importCanvas', () => {
         manifest({ generatedAt: '2026-09-11T09:00:00.000Z' }),
         artifact({ generatedAt: '2026-09-11T09:00:00.000Z' })
       ),
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
     })
     expect(anyPr.status).toBe('ready')
   })
@@ -444,7 +472,7 @@ describe('importCanvas', () => {
   it('reports the zip errors as the HTTP envelope', async () => {
     t = await makeTestContext()
     const invalid = await catchApp(() =>
-      importCanvas(t.ctx, { bytes: strToU8('nope'), currentHeadSha: HEAD_SHA })
+      importCanvas(t.ctx, { bytes: strToU8('nope'), currentHead: AT_HEAD })
     )
     expect([invalid.code, invalid.status]).toEqual(['CANVAS_INVALID', 400])
     const big = new Uint8Array(CANVAS_ZIP_MAX_BYTES + 1)
@@ -461,7 +489,7 @@ describe('importCanvas', () => {
     t = await makeTestContext({ git })
     const result = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
     })
     expect(result.derivable).toBe(true)
     expect(git.calls.some(c => c[0] === 'fetch' && c.includes(HEAD_SHA))).toBe(true)
@@ -474,7 +502,7 @@ describe('importCanvas', () => {
     })
     const result = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
     })
     expect(result.derivable).toBe(false)
     expect(result.warnings[0]).toContain('could not be rebuilt')
@@ -486,7 +514,7 @@ describe('importCanvas', () => {
     const result = await importCanvas(t.ctx, {
       bytes: buildCanvasZip(manifest(), artifact()),
       prNumber: 42,
-      currentHeadSha: HEAD_SHA,
+      currentHead: AT_HEAD,
     })
     expect(result.derivable).toBe(false)
     expect(result.warnings).toEqual(['aaaaaaa is not in this clone, so the diffs are not available'])

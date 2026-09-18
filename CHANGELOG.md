@@ -12,6 +12,8 @@
   the canvas's commit.
 - `pr-review publish` accepts a head whose diff is identical to the prepared commit's, instead of
   failing with `CANVAS_STALE`.
+- `pr-review import` and the canvas zips discovered on a pull request read the same rule, so the
+  CLI no longer reports a canvas as stale that the page shows as current.
 
 ### AI chat
 

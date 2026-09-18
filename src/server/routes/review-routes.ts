@@ -8,7 +8,7 @@ import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { lookupCanvas } from '../../review/carry-over.js'
-import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
+import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -89,7 +89,7 @@ async function canvasForSignOff(
 ): Promise<{ artifact: ReviewArtifact; state: PrState }> {
   const stored = await ctx.state.read(number)
   if (ctx.fixtureArtifact !== null) {
-    return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForHead(stored, pr.headSha) }
+    return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForCanvas(stored, pr.headSha) }
   }
   const found = await lookupCanvas(ctx, number, pr)
   if (found.status !== 'ready') {
@@ -104,7 +104,7 @@ async function canvasForSignOff(
   if (artifact === null) {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
-  return { artifact, state: stateForHead(stored, found.headSha) }
+  return { artifact, state: stateForCanvas(stored, found.headSha) }
 }
 
 export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
