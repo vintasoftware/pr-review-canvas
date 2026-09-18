@@ -122,6 +122,8 @@ export interface PrBundle {
   stale?: StaleInfo
   /** Set on a ready bundle whose canvas was generated for another commit with an identical diff. */
   carriedOver?: CarriedOverInfo
+  /** The basis canvas some of the reviewed marks on this page were made on; absent when none were. */
+  marksCarriedFrom?: string
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   comments: CommentsPayload

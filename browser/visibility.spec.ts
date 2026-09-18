@@ -64,7 +64,7 @@ test('dismisses a point everywhere, keeps it dismissed after reload, and restore
 
 test('collapses and reopens file and layer bodies', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
-  const layer = page.locator('section.layer[data-layer="layer-1"]')
+  const layer = page.locator('section.layer[data-layer="run-path"]')
   const file = layer.locator('article.file[data-path="src/app.ts"]')
   const fileBody = file.locator(':scope > .file-body')
   const fileToggle = file.locator(':scope > .file-h > .chev')

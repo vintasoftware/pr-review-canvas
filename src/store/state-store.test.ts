@@ -38,12 +38,12 @@ describe('state store', () => {
   it('drops the marks of another commit the first time the head moves', async () => {
     const head = 'a'.repeat(40)
     const next = 'b'.repeat(40)
-    const first = await t.ctx.state.setReviewed(42, 'layer:layer-1', true, head)
+    const first = await t.ctx.state.setReviewed(42, 'layer:layer-1', true, { canvasSha: head })
     expect(first).toMatchObject({ reviewed: { 'layer:layer-1': true }, reviewedCanvasSha: head })
-    const moved = await t.ctx.state.setReviewed(42, 'layer:layer-2', true, next)
+    const moved = await t.ctx.state.setReviewed(42, 'layer:layer-2', true, { canvasSha: next })
     expect(moved).toMatchObject({ reviewed: { 'layer:layer-2': true }, reviewedCanvasSha: next })
     // A state written before this field existed keeps its marks and adopts the head.
-    const same = await t.ctx.state.setReviewed(42, 'layer:layer-3', true, next)
+    const same = await t.ctx.state.setReviewed(42, 'layer:layer-3', true, { canvasSha: next })
     expect(same.reviewed).toEqual({ 'layer:layer-2': true, 'layer:layer-3': true })
   })
 
@@ -89,26 +89,28 @@ describe('state store', () => {
     expect((await t.ctx.state.setDismissed(42, 'fp-1', true)).rev).toBe(1)
   })
 
-  it('reads the marks of a state file that names the commit under its old key', async () => {
+  it('drops the marks of a state file written before marks were keyed by layer key', async () => {
     const { mkdir, readFile, writeFile } = await import('node:fs/promises')
     await mkdir(t.ctx.prs.prDir(42), { recursive: true })
     const canvas = 'e'.repeat(40)
-    // Written by a version that called the field reviewedHeadSha, holding the same commit.
+    // Version 1 keyed a mark by the layer's position, which cannot be translated into a key.
     const old = {
       ...emptyState('2026-09-01T00:00:00.000Z'),
+      version: 1,
       reviewed: { 'layer:layer-1': true },
       reviewedHeadSha: canvas,
+      dismissed: { 'fp-1': { at: '2026-09-01T00:00:00.000Z' } },
     }
     await writeFile(`${t.ctx.prs.prDir(42)}/state.json`, JSON.stringify(old), 'utf8')
     const read = await t.ctx.state.read(42)
-    expect(read.reviewedCanvasSha).toBe(canvas)
-    expect(read.reviewed).toEqual({ 'layer:layer-1': true })
-    // The marks belong to that canvas still, so a mark made on it joins them rather than
-    // replacing them, and the next write stores the commit under the new name.
-    const after = await t.ctx.state.setReviewed(42, 'layer:layer-2', true, canvas)
-    expect(after.reviewed).toEqual({ 'layer:layer-1': true, 'layer:layer-2': true })
+    expect(read.reviewed).toEqual({})
+    expect(read.reviewedCanvasSha).toBeUndefined()
+    // Everything that is not a mark survives the upgrade.
+    expect(read.dismissed).toEqual({ 'fp-1': { at: '2026-09-01T00:00:00.000Z' } })
+    const after = await t.ctx.state.setReviewed(42, 'layer:run-path', true, { canvasSha: canvas })
+    expect(after.reviewed).toEqual({ 'layer:run-path': true })
     const written = JSON.parse(await readFile(`${t.ctx.prs.prDir(42)}/state.json`, 'utf8'))
-    expect(written.reviewedCanvasSha).toBe(canvas)
+    expect(written.version).toBe(2)
     expect(written).not.toHaveProperty('reviewedHeadSha')
   })
 

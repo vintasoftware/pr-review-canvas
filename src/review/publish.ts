@@ -226,6 +226,7 @@ export async function publish(
     generatedAt: now,
     generator,
     testPatterns: context.tests.patterns,
+    basisCanvasSha: context.basis?.canvasSha,
   })
   const manifest = buildManifest(context, artifact, ctx.version)
   await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber)

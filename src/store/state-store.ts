@@ -21,12 +21,20 @@ export interface StateStore {
   /**
    * Marks one layer or file. `canvasSha` is the commit of the canvas the page was showing: when it
    * differs from the one the marks describe, the old marks are dropped, because they were about
-   * other code.
+   * other code, and `carried` takes their place — the marks the caller worked out may follow that
+   * canvas from the one it was generated from.
    */
-  setReviewed(number: number, id: string, reviewed: boolean, canvasSha?: string): Promise<PrState>
+  setReviewed(number: number, id: string, reviewed: boolean, opts?: SetReviewedOptions): Promise<PrState>
   setDismissed(number: number, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
   setThreadHidden(number: number, rootCommentId: number, hidden: boolean): Promise<PrState>
   addPosted(number: number, entry: PostedEntry): Promise<PrState>
+}
+
+export interface SetReviewedOptions {
+  /** The commit of the canvas the page was showing. */
+  canvasSha?: string | undefined
+  /** Marks that follow `canvasSha` from the canvas it was generated from; used on the first write. */
+  carried?: Readonly<Record<string, true>> | undefined
 }
 
 /** `layer:<id>` or `layer:<id>/file:<key>`, with the ids and keys the artifact uses. */
@@ -70,13 +78,14 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
   return {
     read,
     update,
-    setReviewed: (number, id, reviewed, canvasSha) =>
+    setReviewed: (number, id, reviewed, opts) =>
       update(number, state => {
+        const canvasSha = opts?.canvasSha
         const sameCanvas =
           canvasSha === undefined ||
           state.reviewedCanvasSha === undefined ||
           state.reviewedCanvasSha === canvasSha
-        const next = sameCanvas ? { ...state.reviewed } : {}
+        const next = sameCanvas ? { ...state.reviewed } : { ...opts?.carried }
         if (reviewed) {
           next[id] = true
         } else {

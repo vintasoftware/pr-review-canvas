@@ -15,19 +15,19 @@ describe('progress', () => {
     const none = emptyState('x')
     expect(layerProgress(layer, none)).toBe('none')
     expect(filesReviewed(layer, none)).toBe(0)
-    const partial = { ...none, reviewed: { 'layer:layer-1/file:src_app_ts': /** @type {const} */ (true) } }
+    const partial = { ...none, reviewed: { 'layer:run-path/file:src_app_ts': /** @type {const} */ (true) } }
     expect(layerProgress(layer, partial)).toBe('partial')
     expect(filesReviewed(layer, partial)).toBe(1)
     const allFiles = {
       ...none,
       reviewed: {
-        'layer:layer-1/file:src_app_ts': /** @type {const} */ (true),
-        'layer:layer-1/file:src_new_name_ts': /** @type {const} */ (true),
-        'layer:layer-1/file:src_app_test_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_new_name_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_app_test_ts': /** @type {const} */ (true),
       },
     }
     expect(layerProgress(layer, allFiles)).toBe('done')
-    const whole = { ...none, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const whole = { ...none, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     expect(layerProgress(layer, whole)).toBe('done')
   })
 
@@ -37,8 +37,8 @@ describe('progress', () => {
     const done = {
       ...none,
       reviewed: {
-        'layer:layer-1': /** @type {const} */ (true),
-        'layer:layer-2': /** @type {const} */ (true),
+        'layer:run-path': /** @type {const} */ (true),
+        'layer:other': /** @type {const} */ (true),
       },
     }
     expect(progressSummary(artifact, done)).toEqual({ done: 1, total: 1, percent: 100 })

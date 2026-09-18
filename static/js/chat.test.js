@@ -188,7 +188,7 @@ describe('the context chip', () => {
 
   it('names a layer by its title', () => {
     const { root, chat } = mount()
-    chat.setContext({ kind: 'layer', layerId: 'layer-1' })
+    chat.setContext({ kind: 'layer', layerId: 'run-path' })
     expect(el(root, '#chat-ctx').textContent).toBe('layer · Run path')
   })
 
@@ -629,10 +629,10 @@ describe('wireChat', () => {
         sent.push(input)
       },
     })
-    chat.askQuestion({ kind: 'layer', layerId: 'layer-1' }, 'Is this covered by tests?')
+    chat.askQuestion({ kind: 'layer', layerId: 'run-path' }, 'Is this covered by tests?')
     await flush()
     expect(sent).toEqual([
-      { message: 'Is this covered by tests?', context: { kind: 'layer', layerId: 'layer-1' } },
+      { message: 'Is this covered by tests?', context: { kind: 'layer', layerId: 'run-path' } },
     ])
   })
 })
@@ -1069,9 +1069,9 @@ describe('what the review round found', () => {
     expect(chip.getAttribute('data-ask-path')).toBe('src/app.ts')
     expect(chip.getAttribute('data-ask-side')).toBe('old')
     expect(chip.getAttribute('data-ask-start')).toBe('2')
-    chat.setContext({ kind: 'layer', layerId: 'layer-1' })
+    chat.setContext({ kind: 'layer', layerId: 'run-path' })
     expect(chip.getAttribute('data-ask-path')).toBeNull()
-    expect(chip.getAttribute('data-ask-layer')).toBe('layer-1')
+    expect(chip.getAttribute('data-ask-layer')).toBe('run-path')
   })
 })
 

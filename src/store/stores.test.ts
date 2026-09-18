@@ -251,9 +251,12 @@ describe('pr-store and state-store', () => {
     await mkdir(path.dirname(file), { recursive: true })
     await writeFile(file, '{ not json')
     expect(await state.read(42)).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
-    await writeFile(file, JSON.stringify({ version: 1, reviewed: { 'layer:layer-1': true }, updatedAt: 'x' }))
+    await writeFile(
+      file,
+      JSON.stringify({ version: 1, reviewed: { 'layer:run-path': true }, updatedAt: 'x' })
+    )
     expect(await state.read(42)).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
-    const good = { ...emptyState('2026-09-01T00:00:00.000Z'), reviewed: { 'layer:layer-1': true as const } }
+    const good = { ...emptyState('2026-09-01T00:00:00.000Z'), reviewed: { 'layer:run-path': true as const } }
     await writeJsonAtomic(file, good)
     expect(await state.read(42)).toEqual(good)
     await rm(file)

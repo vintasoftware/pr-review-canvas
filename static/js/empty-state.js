@@ -192,6 +192,22 @@ export function carriedOverBarHtml(carried) {
 }
 
 /**
+ * The note above a canvas that was generated from an earlier one, when some of the reviewer's
+ * progress followed it. Without it, the already-ticked layers look like a bug.
+ * @param {string} basisCanvasSha
+ * @returns {string}
+ */
+export function marksCarriedBarHtml(basisCanvasSha) {
+  return (
+    '<div class="stale-bar carried-over-bar" role="status"><strong>Review progress carried over.</strong> ' +
+    esc(
+      `This canvas was generated from ${basisCanvasSha.slice(0, 7)}; the layers and files it leaves untouched keep the marks you made there.`
+    ) +
+    '</div>'
+  )
+}
+
+/**
  * The `stale` screen: the same card as the empty state, plus the two ways forward.
  * @param {PrBundle} bundle
  * @returns {string}

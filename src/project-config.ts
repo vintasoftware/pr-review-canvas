@@ -41,6 +41,8 @@ export const PromptOverridesSchema = z
     'generation-format.md': z.string().min(1).optional(),
     'generation-strict.md': z.string().min(1).optional(),
     'generation-surfacing.md': z.string().min(1).optional(),
+    'generation-strict-incremental.md': z.string().min(1).optional(),
+    'generation-surfacing-incremental.md': z.string().min(1).optional(),
     'quality-standards.md': z.string().min(1).optional(),
     'layering-guidance.md': z.string().min(1).optional(),
     'chat-seed.md': z.string().min(1).optional(),
@@ -71,6 +73,12 @@ export const ProjectConfigSchema = z.object({
      * from, as after merging the base branch in. False marks the canvas outdated on any commit.
      */
     keepForIdenticalDiff: z.boolean(),
+    /**
+     * Regenerating a canvas for a new head starts from the newest canvas of a commit the head was
+     * built on, carrying what the head's diff leaves untouched. False generates every canvas from
+     * a blank page, as `--force` always does.
+     */
+    incremental: z.boolean(),
   }),
 })
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
@@ -93,7 +101,9 @@ const PartialProjectConfigSchema = z.object({
     .optional(),
   tests: z.object({ patterns: z.array(z.string().min(1)).optional() }).optional(),
   chat: z.object({ enabled: z.boolean().optional() }).optional(),
-  canvas: z.object({ keepForIdenticalDiff: z.boolean().optional() }).optional(),
+  canvas: z
+    .object({ keepForIdenticalDiff: z.boolean().optional(), incremental: z.boolean().optional() })
+    .optional(),
 })
 
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
@@ -103,7 +113,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
-  canvas: { keepForIdenticalDiff: true },
+  canvas: { keepForIdenticalDiff: true, incremental: true },
 }
 
 export interface LoadedProjectConfig {
@@ -147,6 +157,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     canvas: {
       keepForIdenticalDiff:
         user.canvas?.keepForIdenticalDiff ?? DEFAULT_PROJECT_CONFIG.canvas.keepForIdenticalDiff,
+      incremental: user.canvas?.incremental ?? DEFAULT_PROJECT_CONFIG.canvas.incremental,
     },
   }
   if (user.rulebook !== undefined) {

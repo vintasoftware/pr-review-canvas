@@ -14,11 +14,11 @@ describe('buildNavOrder', () => {
   it('lists the overview, each layer with its files, and Other last, mirroring the rendered ids', () => {
     expect(buildNavOrder(artifact)).toEqual([
       { kind: 'overview', id: 'overview' },
-      { kind: 'layer', id: 'layer-run-path', layerId: 'layer-1', key: 'run-path', other: false },
+      { kind: 'layer', id: 'layer-run-path', layerId: 'run-path', key: 'run-path', other: false },
       {
         kind: 'file',
         id: 'file-src_app_ts',
-        layerId: 'layer-1',
+        layerId: 'run-path',
         key: 'src_app_ts',
         path: 'src/app.ts',
         isTest: false,
@@ -27,7 +27,7 @@ describe('buildNavOrder', () => {
       {
         kind: 'file',
         id: 'file-src_new_name_ts',
-        layerId: 'layer-1',
+        layerId: 'run-path',
         key: 'src_new_name_ts',
         path: 'src/new-name.ts',
         isTest: false,
@@ -36,17 +36,17 @@ describe('buildNavOrder', () => {
       {
         kind: 'file',
         id: 'file-src_app_test_ts',
-        layerId: 'layer-1',
+        layerId: 'run-path',
         key: 'src_app_test_ts',
         path: 'src/app.test.ts',
         isTest: true,
         other: false,
       },
-      { kind: 'layer', id: 'layer-other', layerId: 'layer-2', key: 'other', other: true },
+      { kind: 'layer', id: 'layer-other', layerId: 'other', key: 'other', other: true },
       {
         kind: 'file',
         id: 'file-src_app_ts-other',
-        layerId: 'layer-2',
+        layerId: 'other',
         key: 'src_app_ts',
         path: 'src/app.ts',
         isTest: false,
@@ -55,7 +55,7 @@ describe('buildNavOrder', () => {
       {
         kind: 'file',
         id: 'file-src_new_ts',
-        layerId: 'layer-2',
+        layerId: 'other',
         key: 'src_new_ts',
         path: 'src/new.ts',
         isTest: false,
@@ -64,7 +64,7 @@ describe('buildNavOrder', () => {
       {
         kind: 'file',
         id: 'file-src_gone_ts',
-        layerId: 'layer-2',
+        layerId: 'other',
         key: 'src_gone_ts',
         path: 'src/gone.ts',
         isTest: false,

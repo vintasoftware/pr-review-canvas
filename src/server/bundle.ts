@@ -5,6 +5,7 @@ import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
+import { marksForCanvas } from '../review/carry-marks.js'
 import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
@@ -236,9 +237,16 @@ export async function resolveBundle(
   }
   // A canvas exists for this PR, so regenerating always needs --force.
   const skillCommand = buildSkillCommand(number, { force: true })
+  // Marks made on the canvas this one was generated from follow it where the diff is untouched.
+  const marks = await marksForCanvas(ctx, loaded.artifact, found.headSha, stored)
+  const withMarks = {
+    ...base,
+    state: marks.state,
+    ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
+  }
   if (found.status === 'ready') {
     const carried = found.carriedOver === undefined ? {} : { carriedOver: found.carriedOver }
-    return { ...base, ...shared, ...loaded, ...carried, status: 'ready', skillCommand }
+    return { ...withMarks, ...shared, ...loaded, ...carried, status: 'ready', skillCommand }
   }
   const stale: StaleInfo = {
     canvasHeadSha: found.headSha,
@@ -256,7 +264,7 @@ export async function resolveBundle(
   // whether the notice about large change sets belongs on the page.
   const staleFiles = staleDerived?.files ?? loaded.artifact.files
   return {
-    ...base,
+    ...withMarks,
     ...shared,
     ...loaded,
     files: staleFiles,

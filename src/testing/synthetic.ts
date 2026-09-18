@@ -244,7 +244,7 @@ export function syntheticArtifact(): ReviewArtifact {
     risk: [{ label: 'schema', source: 'config' }],
     layers: [
       {
-        id: 'layer-1',
+        id: 'run-path',
         key: 'run-path',
         title: 'Run path',
         rationale: 'The change to `run()` and its test. See [line 4](#line:src/app.ts:4).',
@@ -270,7 +270,7 @@ export function syntheticArtifact(): ReviewArtifact {
         ],
       },
       {
-        id: 'layer-2',
+        id: 'other',
         key: 'other',
         title: 'Other changes',
         rationale: 'Second hunk, new file, deletion.',
@@ -295,7 +295,7 @@ export function syntheticArtifact(): ReviewArtifact {
         line: 4,
         side: 'new',
         body: 'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.',
-        layerId: 'layer-1',
+        layerId: 'run-path',
         origin: 'model',
       },
       {
@@ -307,7 +307,7 @@ export function syntheticArtifact(): ReviewArtifact {
         path: 'src/app.ts',
         line: 13,
         body: 'The layer marks "other() returns x" as missing.',
-        layerId: 'layer-2',
+        layerId: 'other',
         origin: 'tests',
       },
       {
@@ -320,7 +320,7 @@ export function syntheticArtifact(): ReviewArtifact {
         line: 1,
         side: 'old',
         body: 'Nothing imports it any more.',
-        layerId: 'layer-2',
+        layerId: 'other',
         origin: 'model',
       },
     ],

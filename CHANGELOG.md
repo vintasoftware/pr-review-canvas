@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Breaking
+
+- Reviewed marks are keyed by the layer's own key instead of its position in the canvas, so a
+  regenerated canvas that reorders or renames its layers keeps a reviewer's progress pointing at
+  the same concern. Marks in state files written by earlier versions cannot be translated and are
+  dropped on first read: a review in progress starts its ticks again. Dismissed attention points,
+  posted comments, hidden threads, and chat threads are untouched.
+
+### Canvas generation
+
+- Regenerating a canvas for a new head updates the newest canvas of a commit the head was built
+  on, instead of writing one from a blank page. `pr-review prepare` compares that basis canvas's
+  diff with the head's file by file and hands the generator two computed lists: what to carry word
+  for word (whole layers whose files are all byte-identical, and the notes, folds, annotations and
+  attention points of untouched files elsewhere) and what to decide again. A carried attention
+  point keeps its kind, path and title, so it keeps its fingerprint and any dismissal with it. The
+  summary and the risk tags are always written again. A canvas of a line of work the head no longer
+  contains is never a basis.
+- Two prompt templates carry the wording of an incremental run, `generation-strict-incremental.md`
+  and `generation-surfacing-incremental.md`, selected by `prepare` when it finds a basis canvas and
+  overridable through the `prompts` map like the others.
+- `--force` generates from a blank page as before, and the new `canvas.incremental` project setting
+  (default `true`) turns the behavior off.
+- A canvas records the basis it was generated from, and nothing more. Which of a reviewer's marks
+  may follow it is decided on the reviewer's own machine, from the two canvases and their own
+  clone: a file's mark follows when that file is in both canvases under the same layer key and its
+  patch is byte-identical, and a layer's mark follows only when the layer holds exactly the same
+  files and the head touched none of them. When any mark follows, the page says which canvas it
+  came from.
+
 ### Review interface
 
 - A canvas is carried over to a later pull request head whose diff is identical to the one it

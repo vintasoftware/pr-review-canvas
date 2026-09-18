@@ -63,7 +63,7 @@ describe('normalize', () => {
         body: 'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.',
         fingerprint: fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' }),
         origin: 'model',
-        layerId: 'layer-1',
+        layerId: 'run-path',
       },
       {
         id: 'p-2',
@@ -76,7 +76,7 @@ describe('normalize', () => {
         body: 'The layer "Run path" lists this behavior without a test. y is unused',
         fingerprint: fingerprint({ kind: 'tests', path: 'src/app.ts', title: 'other() returns x' }),
         origin: 'tests',
-        layerId: 'layer-1',
+        layerId: 'run-path',
       },
       {
         id: 'p-3',
@@ -89,7 +89,7 @@ describe('normalize', () => {
         body: 'Nothing imports it any more.',
         fingerprint: fingerprint({ kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' }),
         origin: 'model',
-        layerId: 'layer-2',
+        layerId: 'other',
       },
     ]
     expect(artifact).toEqual({
@@ -162,7 +162,7 @@ describe('normalize', () => {
     other.tests = [{ behavior: 'removal is safe', status: 'missing' }]
     const artifact = normalize(output, input())
     const testPoint = artifact.points.find(p => p.title === 'removal is safe')
-    expect(testPoint).toMatchObject({ path: 'src/gone.ts', line: 1, side: 'old', layerId: 'layer-2' })
+    expect(testPoint).toMatchObject({ path: 'src/gone.ts', line: 1, side: 'old', layerId: 'other' })
     const orphan = artifactToModelOutput(syntheticArtifact())
     orphan.layers[0]?.tests.push({ behavior: 'z', status: 'missing' })
     const gone = normalize(orphan, { ...input(), files: FILES.filter(f => f.path !== 'src/app.ts') })
@@ -189,7 +189,7 @@ describe('normalize', () => {
 
   it('finds the layer owning a line, or undefined outside the diff', () => {
     const layers = syntheticArtifact().layers
-    expect(layerIdForLine(layers, FILES, 'src/app.ts', 'new', 12)).toBe('layer-2')
+    expect(layerIdForLine(layers, FILES, 'src/app.ts', 'new', 12)).toBe('other')
     expect(layerIdForLine(layers, FILES, 'src/app.ts', 'new', 99)).toBeUndefined()
     expect(layerIdForLine(layers, FILES, 'nope.ts', 'new', 1)).toBeUndefined()
   })
@@ -234,7 +234,7 @@ describe('normalize', () => {
     expect(again.points.map(p => [p.kind, p.path, p.line, p.layerId])).toEqual(
       original.points
         .map(p => [p.kind, p.path, p.line, p.layerId])
-        .map(x => (x[0] === 'tests' ? ['tests', 'src/app.ts', 1, 'layer-1'] : x))
+        .map(x => (x[0] === 'tests' ? ['tests', 'src/app.ts', 1, 'run-path'] : x))
     )
   })
 })

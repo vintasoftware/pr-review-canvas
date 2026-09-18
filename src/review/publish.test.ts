@@ -267,6 +267,25 @@ describe('publish', () => {
     expect(err).toMatchObject({ code: 'NOT_FOUND', hint: 'run `pr-review prepare` first' })
   })
 
+  it('records the basis canvas of an incremental run on the canvas it stores', async () => {
+    const canvasDir = await prepared()
+    const basis = 'e'.repeat(40)
+    // prepare found no basis here; write one into the context the way an incremental run would.
+    const contextPath = path.join(canvasDir, 'context.json')
+    const context = JSON.parse(await readFile(contextPath, 'utf8')) as Record<string, unknown>
+    context['basis'] = {
+      canvasSha: basis,
+      reviewJsonPath: path.join(canvasDir, 'review.json'),
+      files: { unchanged: [], changed: [], added: [], removed: [] },
+      layers: [],
+      points: [],
+    }
+    await writeFile(contextPath, JSON.stringify(context))
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    await publish(t.ctx, canvasDir, OPTS)
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.basisCanvasSha).toBe(basis)
+  })
+
   it('publishes for a head that moved on with the identical diff', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
@@ -275,12 +294,12 @@ describe('publish', () => {
     headMovedTo(merged, SYNTHETIC_DIFF)
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
-      config: { ...t.ctx.projectConfig.config, canvas: { keepForIdenticalDiff: false } },
+      config: { ...t.ctx.projectConfig.config, canvas: { keepForIdenticalDiff: false, incremental: true } },
     }
     await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
-      config: { ...t.ctx.projectConfig.config, canvas: { keepForIdenticalDiff: true } },
+      config: { ...t.ctx.projectConfig.config, canvas: { keepForIdenticalDiff: true, incremental: true } },
     }
     // A base merge that moved the hunks down is another diff.
     headMovedTo(moved, SYNTHETIC_DIFF_MOVED_BY_BASE)

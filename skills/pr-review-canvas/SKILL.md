@@ -11,6 +11,11 @@ points, and hand it to the `pr-review` CLI. The CLI does the deterministic work 
 validation, storage); you do the reading and the writing of `model.json`. Nothing here checks out
 a branch or writes outside the canvas directory.
 
+When the pull request already has a canvas for a commit this head was built on, prepare renders a
+different prompt: it names that canvas, lists which files the new commits left untouched, and tells
+you what to carry from it word for word and what to decide again. Follow that prompt as written;
+the two lists are computed, not suggestions.
+
 Arguments: `<pr-number> [--force]` or `--base <ref> --head <ref> [--force]`. `--force` regenerates
 a canvas that already exists for the head commit: prepare removes the old `model.json` and any
 other leftovers from the canvas directory, keeping `derived/`, `publish.log` (the attempts history),
@@ -59,7 +64,9 @@ Progress goes to stderr. The last stdout line is JSON:
 ### 2. Read the task
 
 Read `promptPath` in full: it holds the pull request, the manifest with every hunk id, the diffs
-(inline or by file path), the layering and length rules, the rulebook, and the JSON schema. Read
+(inline or by file path), the layering and length rules, the rulebook, and the JSON schema. On an
+incremental run it also names the basis canvas and its `review.json`: read that file for the exact
+wording of everything it tells you to carry. Read
 `contextPath` when you need the paths of the head files, the base files, or the patches. Read any
 untouched file with `git show <headSha>:<path>` from the repository root, using the SHA returned
 by prepare. The working tree may be on another branch. Do not check anything out.
@@ -172,7 +179,9 @@ automatically.
 
 ## Updating a shared canvas
 
-After new commits, run this skill again for the PR number. Add `--force` to regenerate a canvas
-for the same commit. Publish updates your canvas comment; follow the sharing-result instructions
+After new commits, run this skill again for the PR number. The run updates the canvas of the
+nearest earlier commit instead of writing one from nothing, and the reviewer's progress on the
+untouched files follows it. Add `--force` to regenerate a canvas for the same commit, or to start
+over from a blank page. Publish updates your canvas comment; follow the sharing-result instructions
 above if it fails. Reviewers click **refresh** to load it. A canvas for a different
 PR head shows **Canvas is outdated**; an older canvas remains readable with posting disabled.

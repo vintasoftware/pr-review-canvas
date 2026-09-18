@@ -183,7 +183,7 @@ for (const want of COMBINATIONS) {
 for (const skin of ['terminal', 'github'] as const) {
   test(`keeps collapse and dismissal working in the ${skin} skin`, async ({ page, reviewUrl }) => {
     await page.goto(`${reviewUrl}?skin=${skin}`)
-    const layer = page.locator('section.layer[data-layer="layer-1"]')
+    const layer = page.locator('section.layer[data-layer="run-path"]')
     const file = layer.locator('article.file[data-path="src/app.ts"]')
     const fileBody = file.locator(':scope > .file-body')
     const fileToggle = file.locator(':scope > .file-h > .chev')
