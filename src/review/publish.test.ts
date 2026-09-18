@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readCanvasComment } from '../canvas/comment.js'
+import { readCanvasZip } from '../canvas/zip.js'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ReviewArtifactSchema, TEXT_CAPS } from '../contract/review-artifact.js'
@@ -40,6 +42,7 @@ describe('publish', () => {
     const result = await publish(t.ctx, canvasDir, OPTS)
     expect(result).toEqual({
       status: 'published',
+      sharing: expect.objectContaining({ status: 'failed', zipPath: expect.stringMatching(/\.zip$/) }),
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
@@ -93,6 +96,44 @@ describe('publish', () => {
     expect(attemptsSincePrepare('x invalid attempts=1 errors=1 A\nx invalid attempts=2 errors=1 B\n')).toBe(2)
     // Only the second field marks a prepare; the word elsewhere in a line does not.
     expect(attemptsSincePrepare('x prepared a\nx published attempts=1 prepared \n')).toBe(1)
+  })
+
+  it('shares the validated ZIP and preserves a usable fallback when sharing fails', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    const bodies: string[] = []
+    t.ctx.config.host = {
+      ...t.ctx.config.host,
+      shareCanvas: async (_client, _repo, _number, body) => {
+        bodies.push(body)
+        return 'https://github.com/acme/widgets/pull/42#issuecomment-1'
+      },
+    }
+    const result = await publish(t.ctx, canvasDir, OPTS)
+    expect(result.sharing).toEqual({
+      status: 'shared',
+      url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',
+    })
+    expect(readCanvasZip(readCanvasComment(bodies[0]!)!.bytes).manifest.headSha).toBe(HEAD_SHA)
+
+    for (const failure of [new Error('permission denied'), 'network unavailable']) {
+      t.ctx.config.host.shareCanvas = async () => {
+        throw failure
+      }
+      const failed = await publish(t.ctx, canvasDir, OPTS)
+      expect(failed.sharing.status).toBe('failed')
+      if (failed.sharing.status !== 'failed') throw new Error('expected fallback')
+      expect(failed.sharing.warning).toContain('Upload the ZIP')
+      expect(readCanvasZip(await readFile(failed.sharing.zipPath)).manifest.headSha).toBe(HEAD_SHA)
+      expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(true)
+    }
+    t.ctx.config.host = { ...t.ctx.config.host, canvasCommentLimit: 10, shareCanvas: vi.fn() }
+    const oversized = await publish(t.ctx, canvasDir, OPTS)
+    expect(oversized.sharing).toMatchObject({
+      status: 'failed',
+      warning: expect.stringContaining('host limit is 10'),
+    })
+    expect(t.ctx.config.host.shareCanvas).not.toHaveBeenCalled()
   })
 
   it('refuses an invalid model with the report, logs the attempt, and writes no review.json', async () => {
@@ -215,6 +256,7 @@ describe('publish', () => {
     t.ctx.git.revParse = async () => HEAD_SHA
     const ok = await publish(t.ctx, refsDir, OPTS)
     expect(ok.status).toBe('published')
+    expect(ok.sharing).toEqual({ status: 'local' })
     // A pre-PR canvas is indexed without a PR number and its manifest carries none.
     expect(await t.ctx.canvases.readIndex()).toEqual({
       canvases: { [HEAD_SHA]: { generatedAt: '2026-09-10T12:00:00.000Z', source: 'local' } },

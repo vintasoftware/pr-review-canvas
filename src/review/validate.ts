@@ -217,7 +217,7 @@ function checkHunks(output: ModelOutput, index: Index, report: Report): Map<stri
       for (const id of file.hunks) {
         const hit = index.byHunkId.get(id)
         if (hit === undefined) {
-          const hint = entry === undefined ? '' : ` (${file.path} has ${entry.hunks.length} hunks)`
+          const hint = entry === undefined ? '' : ` (${file.path} has ${entry.hunks.length} chunks)`
           report.add('HUNK_UNKNOWN', where, `${layerLabel(layer)}: ${id} does not exist${hint}`)
           continue
         }
@@ -269,7 +269,7 @@ function checkLayers(output: ModelOutput, report: Report): void {
       keys.set(layer.key, i)
     }
     if (layer.files.length === 0) {
-      report.add('LAYER_EMPTY', where, `${layerLabel(layer)} has no hunks`)
+      report.add('LAYER_EMPTY', where, `${layerLabel(layer)} has no chunks`)
     }
   })
   // Other is optional: at most one, and last when present.
@@ -366,7 +366,7 @@ function checkRisk(output: ModelOutput, highRisk: readonly HighRiskRule[], repor
     report.add(
       'RISK_IN_OTHER',
       where,
-      `other: carries the risk tag "${tag.label}"; move the hunks to a real layer`
+      `other: carries the risk tag "${tag.label}"; move the chunks to a real layer`
     )
   }
   for (const file of other.files) {
@@ -403,7 +403,7 @@ function checkAnnotations(output: ModelOutput, index: Index, report: Report): vo
           report.add(
             'ANNOTATION_OUTSIDE_HUNK',
             where,
-            `${label} is not inside one hunk of the diff (${hunkLineRanges(entry?.hunks ?? [], a.side)})`
+            `${label} is not inside one chunk of the diff (${hunkLineRanges(entry?.hunks ?? [], a.side)})`
           )
         } else if (!file.hunks.includes(start.id)) {
           report.add(

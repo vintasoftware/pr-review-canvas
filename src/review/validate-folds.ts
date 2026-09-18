@@ -83,13 +83,13 @@ function validateFileFolds(
 
   for (const [index, fold] of folds.entries()) {
     if (assignedHunk(fold, file, hunks) === null) {
-      fail(`fold ${index + 1} must be an ordered range inside one hunk assigned to this file in this layer`)
+      fail(`fold ${index + 1} must be an ordered range inside one chunk assigned to this file in this layer`)
       continue
     }
 
     const earlierFolds = folds.slice(0, index)
     if (earlierFolds.some(earlier => rangesOverlap(fold, earlier, hunks))) {
-      fail(`fold ${index + 1} overlaps an earlier fold or uses another coordinate side in the same hunk`)
+      fail(`fold ${index + 1} overlaps an earlier fold or uses another coordinate side in the same chunk`)
     }
 
     if (protectedCode.some(range => rangesOverlap(fold, range, hunks))) {

@@ -107,21 +107,21 @@ describe('resolveLink', () => {
     ).toEqual({
       ok: false,
       message:
-        'packages/x.ts:400-410 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
+        'packages/x.ts:400-410 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
     })
     expect(
       resolveLink({ kind: 'line', path: 'packages/x.ts', start: 4, end: 12, side: 'new' }, targets)
     ).toEqual({
       ok: false,
       message:
-        'packages/x.ts:4-12 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
+        'packages/x.ts:4-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14, 32-33, 54)',
     })
     expect(
       resolveLink({ kind: 'line', path: 'packages/x.ts', start: 54, end: 54, side: 'old' }, targets)
     ).toEqual({
       ok: false,
       message:
-        'packages/x.ts:54 (old) is not inside one hunk of the diff (old-side lines 1-4, 10-12, 30, 50-51)',
+        'packages/x.ts:54 (old) is not inside one chunk of the diff (old-side lines 1-4, 10-12, 30, 50-51)',
     })
   })
 
@@ -136,11 +136,11 @@ describe('resolveLink', () => {
     })
     expect(resolveLink({ kind: 'hunk', path: 'packages/x.ts', n: 9 }, targets)).toEqual({
       ok: false,
-      message: 'packages/x.ts#9 does not exist (file has 4 hunks)',
+      message: 'packages/x.ts#9 does not exist (file has 4 chunks)',
     })
     expect(resolveLink({ kind: 'hunk', path: 'packages/x.ts', n: 0 }, targets)).toEqual({
       ok: false,
-      message: 'packages/x.ts#0 does not exist (file has 4 hunks)',
+      message: 'packages/x.ts#0 does not exist (file has 4 chunks)',
     })
   })
 })
@@ -158,7 +158,7 @@ describe('linkTargetId and linkLabel', () => {
   it('labels links for text that had none', () => {
     expect(linkLabel({ kind: 'layer', layerKey: 'auth' })).toBe('auth')
     expect(linkLabel({ kind: 'file', path: 'a/b.ts' })).toBe('a/b.ts')
-    expect(linkLabel({ kind: 'hunk', path: 'a/b.ts', n: 2 })).toBe('a/b.ts hunk 2')
+    expect(linkLabel({ kind: 'hunk', path: 'a/b.ts', n: 2 })).toBe('a/b.ts chunk 2')
     expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 5, side: 'new' })).toBe('a/b.ts:5')
     expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' })).toBe(
       'a/b.ts:5-9 (old)'

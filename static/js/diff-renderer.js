@@ -855,7 +855,7 @@ export function renderDiff(file, patch, opts = {}) {
     highlightHunk(h, file.lang)
     tables.push(
       `<table class="diff" id="${esc(hunkAnchorId(file.key, n))}" data-hunk="${esc(id)}" data-key="${esc(file.key)}">` +
-        `<caption class="sr">Hunk ${n} of ${esc(file.path)}</caption>${THEAD}<tbody>${buildRows(h, file.key)}</tbody></table>`
+        `<caption class="sr">Chunk ${n} of ${esc(file.path)}</caption>${THEAD}<tbody>${buildRows(h, file.key)}</tbody></table>`
     )
   })
   if (tables.length === 0) {
