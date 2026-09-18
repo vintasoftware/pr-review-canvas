@@ -35,12 +35,6 @@ export interface FakeGitOptions {
   ancestors?: Record<string, boolean>
   /** `<a>..<b>` → how many commits b is ahead of a; unlisted pairs count 0. */
   counts?: Record<string, number>
-  /**
-   * `<a>..<b>` → how many commits b gained since a that are neither merges nor part of the base
-   * it is asked against. Unlisted pairs answer their `counts` entry, so a history that names no
-   * merges of the base is all the branch's own commits.
-   */
-  ownCounts?: Record<string, number>
   /** Commits the fake origin serves when they are fetched by sha. */
   fetchable?: string[]
 }
@@ -73,7 +67,12 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     },
     commitExists: async sha => {
       calls.push(['cat-file', '-e', sha])
-      return shas.has(sha) || Object.values(options.mergeBases ?? {}).includes(sha)
+      // Refs may be repointed after creation, as a test moves a pull request's head.
+      return (
+        shas.has(sha) ||
+        Object.values(refs).includes(sha) ||
+        Object.values(options.mergeBases ?? {}).includes(sha)
+      )
     },
     isAncestor: async (a, b) => {
       calls.push(['merge-base', '--is-ancestor', a, b])
@@ -82,10 +81,6 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     countCommitsBetween: async (a, b) => {
       calls.push(['rev-list', '--count', `${a}..${b}`])
       return options.counts?.[`${a}..${b}`] ?? 0
-    },
-    countOwnCommitsSince: async (a, b, base) => {
-      calls.push(['rev-list', '--count', '--no-merges', `${a}..${b}`, '--not', base])
-      return options.ownCounts?.[`${a}..${b}`] ?? options.counts?.[`${a}..${b}`] ?? 0
     },
     diff: async (base, head) => {
       calls.push(['diff', base, head])

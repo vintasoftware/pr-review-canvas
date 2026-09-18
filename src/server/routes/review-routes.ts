@@ -6,7 +6,7 @@ import { PostCommentInputSchema, type PostCommentResult } from '../../contract/c
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
-import { lookupCanvas, reviewStateFor } from '../../review/merge-freshness.js'
+import { lookupCanvas, reviewStateFor } from '../../review/carry-over.js'
 import { buildReviewBody, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
@@ -58,7 +58,7 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
 
 /**
  * The canvas the reviewer is signing off on: the one written for the pull request's head, or
- * for a commit the head only merged onto.
+ * for another commit with an identical diff.
  */
 async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise<ReviewArtifact> {
   if (ctx.fixtureArtifact !== null) {

@@ -20,7 +20,7 @@ import {
   renderEmptyState,
   renderStaleState,
   sharedCanvasCalloutHtml,
-  mergesBarHtml,
+  carriedOverBarHtml,
   staleBarHtml,
   staleSummary,
   validateCanvasFilename,
@@ -247,19 +247,14 @@ describe('drop zone', () => {
   })
 })
 
-describe('merges bar', () => {
-  it('says the canvas still applies and which commits it spans', () => {
-    document.body.innerHTML = mergesBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD, commitsBehind: 1 })
-    const bar = document.querySelector('.stale-bar.merges-bar')
+describe('carried-over bar', () => {
+  it('says the canvas still applies and which commits it joins', () => {
+    document.body.innerHTML = carriedOverBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD })
+    const bar = document.querySelector('.stale-bar.carried-over-bar')
     expect(bar?.getAttribute('role')).toBe('status')
     expect(bar?.textContent).toContain('Canvas still applies.')
-    expect(bar?.textContent).toContain(
-      'generated for eeeeeee; the head aaaaaaa only merged the base branch in since (1 commit, no conflicts reported)'
-    )
+    expect(bar?.textContent).toContain('generated for eeeeeee; the head aaaaaaa has the identical diff.')
     expect(bar?.querySelector('#stale-generate')?.textContent).toBe('regenerate anyway')
-    expect(mergesBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD, commitsBehind: 4 })).toContain(
-      '(4 commits,'
-    )
   })
 })
 

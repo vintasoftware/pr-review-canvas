@@ -1,0 +1,92 @@
+// A canvas carried over to a later head: the head's diff is identical to the diff the canvas was
+// generated from, so the canvas and the review marks stand for it. The one place that reads the rule.
+import type { Pr } from '../contract/review-artifact.js'
+import type { PrState } from '../contract/state.js'
+import type { AppContext } from '../server/context.js'
+import type { CanvasLookup } from '../store/canvas-store.js'
+import type { Derived } from '../store/derived-store.js'
+import { stateForHead } from './review-body.js'
+
+/** A commit with the merge base its diff runs from; `Pr`, a prepared context, and a canvas manifest all provide it. */
+export interface DiffedCommit {
+  headSha: string
+  mergeBaseSha: string
+}
+
+/**
+ * True when `commit` stands for the head: it is the head, or the head's diff against its merge
+ * base is identical to `commit`'s diff against its own, file by file and byte for byte. Layers,
+ * hunk ids, folds, and attention points all assume the diff on screen is the one the canvas was
+ * generated from, and identity is what guarantees that; a base merge that only moves a hunk down
+ * already breaks it. How the head reached that diff does not matter. A diff missing on this
+ * machine keeps the strict reading. Off when the project marks the canvas outdated on any commit.
+ */
+export async function standsForHead(
+  ctx: AppContext,
+  pr: DiffedCommit,
+  commit: DiffedCommit
+): Promise<boolean> {
+  if (commit.headSha === pr.headSha) {
+    return true
+  }
+  if (!ctx.projectConfig.config.canvas.keepForIdenticalDiff) {
+    return false
+  }
+  const [older, head] = await Promise.all([
+    ctx.derived.readOrBuild(commit.headSha, commit.mergeBaseSha),
+    ctx.derived.readOrBuild(pr.headSha, pr.mergeBaseSha),
+  ])
+  return older !== null && head !== null && sameDiff(older, head)
+}
+
+/** Whether two diffs are the same: the same files in the same order, each with the same patch. */
+export function sameDiff(a: Derived, b: Derived): boolean {
+  return canonical(a) === canonical(b)
+}
+
+/** JSON with object keys sorted, so a diff read back through its schema equals a freshly built one. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v !== null && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)))
+      : v
+  )
+}
+
+/**
+ * The canvas for this pull request: the store's answer, with a canvas of another commit read as
+ * ready when that commit stands for the head. A canvas has a manifest naming its merge base;
+ * one whose manifest is gone cannot be compared.
+ */
+export async function lookupCanvas(ctx: AppContext, number: number, pr: Pr): Promise<CanvasLookup> {
+  const found = await ctx.canvases.findForPr(number, pr.headSha)
+  if (found.status !== 'stale') {
+    return found
+  }
+  const manifest = await ctx.canvases.readManifest(found.headSha)
+  if (manifest !== null && (await standsForHead(ctx, pr, manifest))) {
+    return {
+      status: 'ready',
+      headSha: found.headSha,
+      carriedOver: { canvasHeadSha: found.headSha, currentHeadSha: pr.headSha },
+    }
+  }
+  return found
+}
+
+/**
+ * The review marks as they apply to this head. Marks made on a commit that stands for the head
+ * are re-keyed to it, so a carried-over canvas keeps the reviewer's progress; marks made on any
+ * other commit describe other code, so they never show as reviewed.
+ */
+export async function reviewStateFor(ctx: AppContext, number: number, pr: Pr): Promise<PrState> {
+  const stored = await ctx.state.read(number)
+  const marked = stored.reviewedHeadSha
+  if (marked !== undefined && marked !== pr.headSha) {
+    const manifest = await ctx.canvases.readManifest(marked)
+    if (manifest !== null && (await standsForHead(ctx, pr, manifest))) {
+      return ctx.state.moveReviewedHead(number, pr.headSha)
+    }
+  }
+  return stateForHead(stored, pr.headSha)
+}

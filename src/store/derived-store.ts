@@ -24,6 +24,8 @@ export interface DerivedStore {
   /** Reads `derived/` when it matches the commits, otherwise rebuilds it from local git. */
   ensure(headSha: string, mergeBaseSha: string): Promise<Derived>
   read(headSha: string): Promise<Derived | null>
+  /** The stored diffs, else freshly built when the merge base is known and both commits are local. */
+  readOrBuild(headSha: string, mergeBaseSha: string | undefined): Promise<Derived | null>
   /** Lines `from..to` (1-based, inclusive) of a materialized file, or null when not materialized. */
   readLines(
     headSha: string,
@@ -47,36 +49,47 @@ export function createDerivedStore(canvases: CanvasStore, git: Git, now: () => D
     return { files, patches }
   }
 
+  const derivable = async (headSha: string, mergeBaseSha: string): Promise<boolean> =>
+    (await git.commitExists(headSha)) && (await git.commitExists(mergeBaseSha))
+
+  const ensure = async (headSha: string, mergeBaseSha: string): Promise<Derived> => {
+    const dir = derivedDir(headSha)
+    const meta = await readJson(path.join(dir, 'meta.json'), DerivedMetaSchema)
+    if (meta !== null && meta.mergeBaseSha === mergeBaseSha) {
+      const cached = await read(headSha)
+      if (cached !== null) {
+        return cached
+      }
+    }
+    const collected = await collectDiffs(git, mergeBaseSha, headSha)
+    const files = collected.map(toFileEntry)
+    const patches = toPatchMap(collected)
+    await writeJsonAtomic(path.join(dir, 'files.json'), files)
+    await writeJsonAtomic(path.join(dir, 'patches.json'), patches)
+    for (const f of collected) {
+      await writeTextAtomic(path.join(dir, 'patches', `${f.key}.diff`), `${labelPatch(f.key, f.patch)}\n`)
+    }
+    await materialize(git, { headSha, mergeBaseSha, files: collected, outDir: dir })
+    await writeJsonAtomic(path.join(dir, 'meta.json'), {
+      headSha,
+      mergeBaseSha,
+      builtAt: now().toISOString(),
+    })
+    return { files, patches }
+  }
+
   return {
     derivedDir,
-    derivable: async (headSha, mergeBaseSha) =>
-      (await git.commitExists(headSha)) && (await git.commitExists(mergeBaseSha)),
-    ensure: async (headSha, mergeBaseSha) => {
-      const dir = derivedDir(headSha)
-      const meta = await readJson(path.join(dir, 'meta.json'), DerivedMetaSchema)
-      if (meta !== null && meta.mergeBaseSha === mergeBaseSha) {
-        const cached = await read(headSha)
-        if (cached !== null) {
-          return cached
-        }
-      }
-      const collected = await collectDiffs(git, mergeBaseSha, headSha)
-      const files = collected.map(toFileEntry)
-      const patches = toPatchMap(collected)
-      await writeJsonAtomic(path.join(dir, 'files.json'), files)
-      await writeJsonAtomic(path.join(dir, 'patches.json'), patches)
-      for (const f of collected) {
-        await writeTextAtomic(path.join(dir, 'patches', `${f.key}.diff`), `${labelPatch(f.key, f.patch)}\n`)
-      }
-      await materialize(git, { headSha, mergeBaseSha, files: collected, outDir: dir })
-      await writeJsonAtomic(path.join(dir, 'meta.json'), {
-        headSha,
-        mergeBaseSha,
-        builtAt: now().toISOString(),
-      })
-      return { files, patches }
-    },
+    derivable,
+    ensure,
     read,
+    readOrBuild: async (headSha, mergeBaseSha) => {
+      const stored = await read(headSha)
+      if (stored !== null || mergeBaseSha === undefined || !(await derivable(headSha, mergeBaseSha))) {
+        return stored
+      }
+      return ensure(headSha, mergeBaseSha)
+    },
     readLines: async (headSha, side, filePath, from, to) => {
       const root = path.join(derivedDir(headSha), side)
       const full = path.resolve(root, filePath)

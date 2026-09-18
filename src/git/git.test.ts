@@ -57,38 +57,6 @@ describe('createGit (real adapter)', () => {
     expect(await git.commitExists('f'.repeat(40))).toBe(false)
   })
 
-  it('counts the commits a head gained that neither a merge nor the base accounts for', async () => {
-    const git = createGit(repo.dir)
-    // A feature branch off `one`, while `main` moved on to `two`. Everything happens on side
-    // branches, so `main` still points at `two` for the other tests.
-    await g(repo.dir, 'checkout', '-q', '-b', 'feat', repo.sha1)
-    await writeFile(path.join(repo.dir, 'src/feat.ts'), 'export const feat = true\n')
-    await g(repo.dir, 'add', '.')
-    await g(repo.dir, 'commit', '-q', '-m', 'feat')
-    const canvasSha = await g(repo.dir, 'rev-parse', 'HEAD')
-    // Merging the base in brings `two` and a merge commit: nothing of the branch's own.
-    await g(repo.dir, 'merge', '-q', '--no-ff', '--no-edit', 'main')
-    const mergedBase = await g(repo.dir, 'rev-parse', 'HEAD')
-    expect(await git.countCommitsBetween(canvasSha, mergedBase)).toBe(2)
-    expect(await git.countOwnCommitsSince(canvasSha, mergedBase, repo.sha2)).toBe(0)
-    // Merging any other branch brings code the base does not have, merge commit or not.
-    await g(repo.dir, 'checkout', '-q', '-b', 'side', canvasSha)
-    await writeFile(path.join(repo.dir, 'src/side.ts'), 'export const side = true\n')
-    await g(repo.dir, 'add', '.')
-    await g(repo.dir, 'commit', '-q', '-m', 'side')
-    await g(repo.dir, 'checkout', '-q', 'feat')
-    await g(repo.dir, 'merge', '-q', '--no-ff', '--no-edit', 'side')
-    const mergedSide = await g(repo.dir, 'rev-parse', 'HEAD')
-    expect(await git.countOwnCommitsSince(canvasSha, mergedSide, repo.sha2)).toBe(1)
-    // An ordinary commit on the branch counts too.
-    await writeFile(path.join(repo.dir, 'src/feat.ts'), 'export const feat = false\n')
-    await g(repo.dir, 'commit', '-q', '-am', 'more')
-    const more = await g(repo.dir, 'rev-parse', 'HEAD')
-    await g(repo.dir, 'checkout', '-q', 'main')
-    expect(await git.countOwnCommitsSince(canvasSha, more, repo.sha2)).toBe(2)
-    expect(await git.isAncestor(canvasSha, more)).toBe(true)
-  })
-
   it('throws GitError for an unknown ref', async () => {
     const git = createGit(repo.dir)
     await expect(git.revParse('refs/pr/999/head')).rejects.toBeInstanceOf(GitError)

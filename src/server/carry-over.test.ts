@@ -1,7 +1,7 @@
 // @vitest-environment node
-// A pull request whose head only merged the base branch in since its canvas was generated: the
-// canvas stays current, the reviewer's marks move along, and the chat keeps working. The same
-// routes with the strict reading, when the project or the host's conflict report says so.
+// A pull request whose head moved on since its canvas was generated but has the identical diff:
+// the canvas is carried over, the reviewer's marks move along, and the chat keeps working. The
+// same routes with the strict reading, when the project says so or the head's diff differs.
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
 import type { ErrorEnvelope, PrBundle, ReviewBodyResponse } from '../contract/api.js'
@@ -12,18 +12,17 @@ import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import {
   createFakeGit,
   type FakeGitOptions,
-  ghJson,
   makeTestContext,
   TEST_REPO,
   type TestContext,
 } from '../testing/fakes.js'
 import {
   BASE_SHA,
-  GH_PULL,
   ghFor42,
   HEAD_SHA,
   SYNTHETIC_BLOBS,
   SYNTHETIC_DIFF,
+  SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
 import { createApp } from './app.js'
@@ -58,40 +57,25 @@ function artifactFor(headSha: string): ReviewArtifact {
   return { ...base, pr: { ...base.pr, headSha }, generatedAt: '2026-09-10T11:00:00.000Z' }
 }
 
-const OLD_DIFF = [
-  'diff --git a/src/old-only.ts b/src/old-only.ts',
-  'index 1111111..2222222 100644',
-  '--- a/src/old-only.ts',
-  '+++ b/src/old-only.ts',
-  '@@ -1,2 +1,2 @@',
-  '-export const version = 1',
-  '+export const version = 2',
-  ' export const keep = true',
-  '',
-].join('\n')
-
 /**
- * PR #42 at HEAD_SHA, three commits after OLD_SHA: one merge commit on the branch's own line, and
- * the two base commits it brought in. `extra` overrides the history, e.g. to add a commit of the
- * branch's own.
+ * PR #42 at HEAD_SHA, three commits after OLD_SHA, with the identical diff. `extra` overrides the
+ * history, e.g. to give the head another diff.
  */
 function gitWithMerge(extra: FakeGitOptions = {}) {
   return createFakeGit({
     refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
     mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA, [`${BASE_SHA}..${OLD_SHA}`]: BASE_SHA },
-    diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF, [`${BASE_SHA}..${OLD_SHA}`]: OLD_DIFF },
+    diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF, [`${BASE_SHA}..${OLD_SHA}`]: SYNTHETIC_DIFF },
     blobs: SYNTHETIC_BLOBS,
     ancestors: { [`${OLD_SHA}..${HEAD_SHA}`]: true },
     counts: { [`${OLD_SHA}..${HEAD_SHA}`]: 3 },
-    ownCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 0 },
     topLevel: '/repo',
     ...extra,
   })
 }
 
 interface Scenario {
-  mergeable?: boolean | null
-  ignoreMergeCommits?: boolean
+  keepForIdenticalDiff?: boolean
   git?: FakeGitOptions
 }
 
@@ -102,14 +86,13 @@ afterEach(() => t?.cleanup())
 /** A context holding the canvas of OLD_SHA, with the pull request now at HEAD_SHA. */
 async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
   runner = createFakeRunner()
-  const pull = { ...GH_PULL, mergeable: scenario.mergeable === undefined ? true : scenario.mergeable }
   const config: ProjectConfig = {
     ...DEFAULT_PROJECT_CONFIG,
-    canvas: { ignoreMergeCommits: scenario.ignoreMergeCommits ?? true },
+    canvas: { keepForIdenticalDiff: scenario.keepForIdenticalDiff ?? true },
   }
   t = await makeTestContext({
     git: gitWithMerge(scenario.git),
-    gh: ghFor42({ routes: { 'repos/acme/widgets/pulls/42': ghJson(pull) } }),
+    gh: ghFor42(),
     runner,
     projectConfig: { config, warnings: [], source: '/repo/pr-review.config.yml' },
   })
@@ -121,8 +104,8 @@ async function bundle(): Promise<PrBundle> {
   return json<PrBundle>(await createApp(t.ctx).request('/api/prs/42', { headers: LOCAL }))
 }
 
-describe('a canvas whose head only gained merge commits', () => {
-  it('stays ready, says so, and shows the diffs of the head', async () => {
+describe('a canvas whose head moved on with the identical diff', () => {
+  it('stays ready and says so', async () => {
     await withOldCanvas()
     const b = await bundle()
     expect(b.status).toBe('ready')
@@ -130,19 +113,22 @@ describe('a canvas whose head only gained merge commits', () => {
     expect(b.canvas?.headSha).toBe(OLD_SHA)
     expect(b.artifact?.pr.headSha).toBe(OLD_SHA)
     expect(b.pr.headSha).toBe(HEAD_SHA)
-    expect(b.pr.mergeable).toBe(true)
-    expect(b.mergesSince).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: HEAD_SHA, commitsBehind: 3 })
-    // The head's own diff, not the older commit's.
-    expect(b.files.map(f => f.path)).toContain('src/app.ts')
-    expect(b.files.map(f => f.path)).not.toContain('src/old-only.ts')
+    expect(b.carriedOver).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: HEAD_SHA })
     expect(b.skillCommand).toBe('/pr-review-canvas 42 --force')
   })
 
-  it('is outdated while the host is still checking for conflicts', async () => {
-    await withOldCanvas({ mergeable: null })
+  it('is outdated when the diff differs, even by hunks the base merge moved down', async () => {
+    await withOldCanvas({
+      git: {
+        diffs: {
+          [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF_MOVED_BY_BASE,
+          [`${BASE_SHA}..${OLD_SHA}`]: SYNTHETIC_DIFF,
+        },
+      },
+    })
     const b = await bundle()
     expect(b.status).toBe('stale')
-    expect(b.mergesSince).toBeUndefined()
+    expect(b.carriedOver).toBeUndefined()
     expect(b.stale).toEqual({
       canvasHeadSha: OLD_SHA,
       currentHeadSha: HEAD_SHA,
@@ -151,21 +137,9 @@ describe('a canvas whose head only gained merge commits', () => {
     })
   })
 
-  it('is outdated when the host reports conflicts', async () => {
-    await withOldCanvas({ mergeable: false })
+  it('is outdated when the project config marks every commit as a new head', async () => {
+    await withOldCanvas({ keepForIdenticalDiff: false })
     expect((await bundle()).status).toBe('stale')
-  })
-
-  it('is outdated when the project config counts merge commits', async () => {
-    await withOldCanvas({ ignoreMergeCommits: false })
-    expect((await bundle()).status).toBe('stale')
-  })
-
-  it('is outdated once the head gained a commit the base does not have, its own or from another branch', async () => {
-    await withOldCanvas({ git: { ownCounts: { [`${OLD_SHA}..${HEAD_SHA}`]: 1 } } })
-    const b = await bundle()
-    expect(b.status).toBe('stale')
-    expect(b.stale?.commitsBehind).toBe(3)
   })
 
   it('carries the reviewer marks over to the new head', async () => {
@@ -186,7 +160,7 @@ describe('a canvas whose head only gained merge commits', () => {
   })
 
   it('leaves the marks alone when the canvas is outdated after all', async () => {
-    await withOldCanvas({ mergeable: false })
+    await withOldCanvas({ keepForIdenticalDiff: false })
     await t.ctx.state.update(42, state => ({
       ...state,
       reviewed: { 'layer:layer-1': true },
@@ -211,7 +185,7 @@ describe('a canvas whose head only gained merge commits', () => {
   })
 
   it('refuses the sign-off when the canvas is outdated', async () => {
-    await withOldCanvas({ mergeable: null })
+    await withOldCanvas({ keepForIdenticalDiff: false })
     await bundle()
     const res = await createApp(t.ctx).request('/api/prs/42/review/body', { headers: LOCAL })
     expect(res.status).toBe(409)
@@ -264,7 +238,7 @@ describe('the chat after the head moved', () => {
   })
 
   it('still talks about an outdated canvas, with the diff of its own commit', async () => {
-    await withOldCanvas({ mergeable: null })
+    await withOldCanvas({ keepForIdenticalDiff: false })
     await bundle()
     const res = await sendChat()
     expect(res.status).toBe(200)
@@ -272,14 +246,13 @@ describe('the chat after the head moved', () => {
     expect(runner.runs).toHaveLength(1)
     expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(OLD_SHA))
     // The diffs of the older commit were built from the clone on the way.
-    const derived = await t.ctx.derived.read(OLD_SHA)
-    expect(derived?.files.map(f => f.path)).toEqual(['src/old-only.ts'])
+    expect(await t.ctx.derived.read(OLD_SHA)).not.toBeNull()
   })
 
   it('says so when the outdated canvas has no diff on this machine', async () => {
     // The older commit is not in the clone, so its diff cannot be rebuilt.
     await withOldCanvas({
-      mergeable: null,
+      keepForIdenticalDiff: false,
       git: { refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA } },
     })
     await bundle()

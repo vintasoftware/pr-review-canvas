@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { MergesSinceInfo } from '../contract/api.js'
+import type { CarriedOverInfo } from '../contract/api.js'
 import {
   type CanvasIndex,
   CanvasIndexSchema,
@@ -19,8 +19,8 @@ export interface AncestorCanvas {
 }
 
 export type CanvasLookup =
-  /** `headSha` is the canvas's own commit: the head, or an earlier commit the head only merged the base onto. */
-  { status: 'ready'; headSha: string; mergesSince?: MergesSinceInfo } | StaleCanvas | { status: 'missing' }
+  /** `headSha` is the canvas's own commit: the head, or another commit with an identical diff. */
+  { status: 'ready'; headSha: string; carriedOver?: CarriedOverInfo } | StaleCanvas | { status: 'missing' }
 
 /** A canvas of another commit: one the head was built on, or one from a line the head no longer contains. */
 export type StaleCanvas = AncestorCanvas | { status: 'stale'; headSha: string; relation: 'unrelated' }

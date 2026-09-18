@@ -4,13 +4,13 @@
 
 ### Review interface
 
-- A canvas stays current when the pull request head only merged the base branch in since the
-  canvas was generated and GitHub or GitLab reports the head as mergeable. The page shows the
-  head's diffs under a **Canvas still applies** note, review progress carries over, and sign-off
-  keeps working. The new `canvas.ignoreMergeCommits` project setting (default `true`) turns this
-  off.
-- `pr-review publish` accepts a head that only merged the base onto the prepared commit under
-  the same rule, instead of failing with `CANVAS_STALE`.
+- A canvas is carried over to a later pull request head whose diff is identical to the one it
+  was generated from, as after merging the base branch in without touching the changed files.
+  The page shows it under a **Canvas still applies** note, review progress carries over, and
+  sign-off keeps working. The new `canvas.keepForIdenticalDiff` project setting (default `true`)
+  turns this off.
+- `pr-review publish` accepts a head whose diff is identical to the prepared commit's, instead of
+  failing with `CANVAS_STALE`.
 
 ### AI chat
 

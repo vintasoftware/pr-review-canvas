@@ -107,8 +107,8 @@ export interface SettingsResponse {
     maxRepairRounds: number
     inlineDiffMaxLines: number
     smallPrHunks: number
-    /** Whether a canvas still stands after the head only merged the base branch in. */
-    ignoreMergeCommits: boolean
+    /** Whether a canvas still stands for a later head with an identical diff. */
+    keepForIdenticalDiff: boolean
     layers: number
     highRisk: number
   }

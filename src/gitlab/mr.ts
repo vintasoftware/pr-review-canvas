@@ -14,9 +14,6 @@ const GlMergeRequestSchema = z.object({
   draft: z.boolean().optional(),
   updated_at: z.string(),
   merge_commit_sha: z.string().nullable().optional(),
-  has_conflicts: z.boolean().optional(),
-  /** `checking` and `unchecked` mean GitLab has not decided yet, whatever `has_conflicts` says. */
-  detailed_merge_status: z.string().optional(),
   target_branch: z.string(),
   source_branch: z.string(),
   sha: z.string(),
@@ -60,19 +57,6 @@ const STATES: Record<z.infer<typeof GlMergeRequestSchema>['state'], string> = {
   merged: 'merged',
 }
 
-const MERGE_STATUS_PENDING = new Set(['checking', 'unchecked'])
-
-/** GitLab's conflict flag as a mergeable answer: unknown while the check is pending or absent. */
-export function mergeableOf(m: {
-  has_conflicts?: boolean | undefined
-  detailed_merge_status?: string | undefined
-}): boolean | null {
-  if (m.has_conflicts === undefined || MERGE_STATUS_PENDING.has(m.detailed_merge_status ?? '')) {
-    return null
-  }
-  return !m.has_conflicts
-}
-
 export function mapMergeRequest(raw: unknown, stats: { additions: number; deletions: number }): PrMeta {
   const m = GlMergeRequestSchema.parse(raw)
   return {
@@ -88,7 +72,6 @@ export function mapMergeRequest(raw: unknown, stats: { additions: number; deleti
     headRef: m.source_branch,
     headSha: m.diff_refs?.head_sha ?? m.sha,
     mergeCommitSha: m.state === 'merged' ? (m.merge_commit_sha ?? null) : null,
-    mergeable: mergeableOf(m),
     additions: stats.additions,
     deletions: stats.deletions,
     changedFiles: Number.parseInt(m.changes_count ?? '0', 10) || 0,

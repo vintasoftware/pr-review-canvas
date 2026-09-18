@@ -172,19 +172,17 @@ export function staleBarHtml(stale) {
 }
 
 /**
- * The note above a canvas that was generated for an earlier commit of the same change set: the
- * head only merged the base branch in since, and the host reports it mergeable, so the canvas
- * still applies.
- * @param {NonNullable<PrBundle['mergesSince']>} merges
+ * The note above a canvas that was generated for another commit of the pull request whose diff is
+ * identical to the head's, so the canvas still applies.
+ * @param {NonNullable<PrBundle['carriedOver']>} carried
  * @returns {string}
  */
-export function mergesBarHtml(merges) {
-  const canvas = merges.canvasHeadSha.slice(0, 7)
-  const head = merges.currentHeadSha.slice(0, 7)
-  const n = merges.commitsBehind
+export function carriedOverBarHtml(carried) {
+  const canvas = carried.canvasHeadSha.slice(0, 7)
+  const head = carried.currentHeadSha.slice(0, 7)
   return (
-    `<div class="stale-bar merges-bar" role="status"><strong>Canvas still applies.</strong> ` +
-    `${esc(`It was generated for ${canvas}; the head ${head} only merged the base branch in since (${n} commit${n === 1 ? '' : 's'}, no conflicts reported). The diffs are the head's.`)} ` +
+    `<div class="stale-bar carried-over-bar" role="status"><strong>Canvas still applies.</strong> ` +
+    `${esc(`It was generated for ${canvas}; the head ${head} has the identical diff.`)} ` +
     '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button></div>'
   )
 }

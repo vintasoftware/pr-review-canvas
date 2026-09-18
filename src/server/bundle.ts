@@ -4,11 +4,10 @@ import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
-import { lookupCanvas, reviewStateFor } from '../review/merge-freshness.js'
+import { lookupCanvas, reviewStateFor } from '../review/carry-over.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
-import type { Derived } from '../store/derived-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 
@@ -143,22 +142,6 @@ async function loadCanvas(
   return { artifact, canvas }
 }
 
-/** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
-export async function readOrBuildDerived(
-  ctx: AppContext,
-  headSha: string,
-  mergeBaseSha: string | undefined
-): Promise<Derived | null> {
-  const stored = await ctx.derived.read(headSha)
-  if (stored !== null || mergeBaseSha === undefined) {
-    return stored
-  }
-  if (!(await ctx.derived.derivable(headSha, mergeBaseSha))) {
-    return null
-  }
-  return ctx.derived.ensure(headSha, mergeBaseSha)
-}
-
 export async function resolveBundle(
   ctx: AppContext,
   loader: PrLoader,
@@ -249,9 +232,8 @@ export async function resolveBundle(
   // A canvas exists for this PR, so regenerating always needs --force.
   const skillCommand = buildSkillCommand(number, { force: true })
   if (found.status === 'ready') {
-    // The head's own diffs are on the page, with the canvas that explains the same change set.
-    const merges = found.mergesSince === undefined ? {} : { mergesSince: found.mergesSince }
-    return { ...base, ...shared, ...loaded, ...merges, status: 'ready', skillCommand }
+    const carried = found.carriedOver === undefined ? {} : { carriedOver: found.carriedOver }
+    return { ...base, ...shared, ...loaded, ...carried, status: 'ready', skillCommand }
   }
   const stale: StaleInfo = {
     canvasHeadSha: found.headSha,
@@ -264,7 +246,7 @@ export async function resolveBundle(
   // The page shows the canvas of the older commit, so the files and the diffs are that commit's.
   // They are rebuilt when the clone has the commits, which is how a canvas imported before the
   // fetch becomes readable once the commits arrive.
-  const staleDerived = await readOrBuildDerived(ctx, found.headSha, loaded.canvas.manifest?.mergeBaseSha)
+  const staleDerived = await ctx.derived.readOrBuild(found.headSha, loaded.canvas.manifest?.mergeBaseSha)
   // A stale canvas describes an older commit, so its own files decide both the diffs and
   // whether the notice about large change sets belongs on the page.
   const staleFiles = staleDerived?.files ?? loaded.artifact.files

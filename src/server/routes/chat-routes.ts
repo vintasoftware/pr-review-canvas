@@ -10,9 +10,9 @@ import { ChatSendSchema } from '../../contract/chat.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { SettingsResponse } from '../../contract/settings.js'
 import { isChatAgent, SettingsInputSchema } from '../../contract/settings.js'
-import { lookupCanvas } from '../../review/merge-freshness.js'
+import { lookupCanvas } from '../../review/carry-over.js'
 import type { Derived } from '../../store/derived-store.js'
-import { type PrLoader, readOrBuildDerived } from '../bundle.js'
+import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError, logRequestError } from '../errors.js'
 import { SSE_HEADERS, sseStream } from '../sse.js'
@@ -55,7 +55,7 @@ function settingsResponse(ctx: AppContext, settings: SettingsResponse['settings'
       maxRepairRounds: project.generation.maxRepairRounds,
       inlineDiffMaxLines: project.generation.inlineDiffMaxLines,
       smallPrHunks: project.generation.smallPrHunks,
-      ignoreMergeCommits: project.canvas.ignoreMergeCommits,
+      keepForIdenticalDiff: project.canvas.keepForIdenticalDiff,
       layers: project.layers.length,
       highRisk: project.highRisk.length,
     },
@@ -94,7 +94,7 @@ async function subjectForChat(ctx: AppContext, number: number, pr: Pr): Promise<
     return withDiff(
       artifact,
       found.headSha,
-      await readOrBuildDerived(ctx, found.headSha, manifest?.mergeBaseSha)
+      await ctx.derived.readOrBuild(found.headSha, manifest?.mergeBaseSha)
     )
   }
   return withDiff(artifact, pr.headSha, await ctx.derived.read(pr.headSha))

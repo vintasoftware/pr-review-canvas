@@ -28,6 +28,10 @@ _Avoid_: Test coverage, approval
 The review interface and saved review state on the reviewer's machine. GitHub operations and AI requests still communicate with their respective services.
 _Avoid_: Offline AI, code never leaves the machine
 
+**Carried-over canvas**:
+A canvas generated for an earlier commit of the pull request, shown as current because the head's diff is identical to the one the canvas was generated from.
+_Avoid_: Merge-tolerant canvas, approximately matching canvas
+
 **Illustrative sample**:
 An attributed walkthrough of selected changes from a public pull request, with editorial layer groupings and scripted chat examples. It demonstrates concepts without claiming to be a complete generated canvas.
 _Avoid_: Live review, live AI chat

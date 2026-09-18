@@ -70,14 +70,12 @@ export interface StaleInfo {
 }
 
 /**
- * A ready canvas whose head only merged the base branch in since, with the host reporting it
- * mergeable. The change set the canvas explains is the same, so the page keeps it and says so.
+ * A ready canvas generated for an earlier commit of the pull request whose diff is identical to
+ * the head's, so the page keeps it and says so.
  */
-export interface MergesSinceInfo {
+export interface CarriedOverInfo {
   canvasHeadSha: string
   currentHeadSha: string
-  /** Every commit the head gained, the merged-in ones included. */
-  commitsBehind: number
 }
 
 /** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */
@@ -120,8 +118,8 @@ export interface PrBundle {
   artifact?: ReviewArtifact
   canvas?: CanvasInfo
   stale?: StaleInfo
-  /** Set on a ready bundle whose canvas was generated for an earlier commit the head only merged the base onto. */
-  mergesSince?: MergesSinceInfo
+  /** Set on a ready bundle whose canvas was generated for another commit with an identical diff. */
+  carriedOver?: CarriedOverInfo
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   comments: CommentsPayload

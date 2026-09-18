@@ -49,7 +49,7 @@ chat:
   enabled: true # false removes the chat pane and its routes
 
 canvas:
-  # A canvas stays current when the head only merged the base branch in since it was generated
-  # and GitHub or GitLab reports the head as mergeable. Set false to mark the canvas outdated on
-  # every new commit.
-  ignoreMergeCommits: true
+  # A canvas stays current for a later head whose diff is identical to the one it was generated
+  # from, as after merging the base branch in. Set false to mark the canvas outdated on every new
+  # commit.
+  keepForIdenticalDiff: true
