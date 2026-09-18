@@ -13,6 +13,7 @@
     "static/js/__fixtures__/**",
     "static/vendor/**",
     ".agents/**",
+    ".claude/skills/**",
     ".codex/**",
     "prompts/**"
   ],

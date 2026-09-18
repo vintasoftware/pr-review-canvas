@@ -12,13 +12,8 @@ import type {
 import { isLocalKey, parseReviewKey, type ReviewKey } from '../../contract/review-key.js'
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { publicHost } from '../../host/host.js'
-import {
-  createPrLoader,
-  readOrBuildDerived,
-  resolveBundle,
-  resolveLocalBundle,
-  runDiscovery,
-} from '../bundle.js'
+import { lookupCanvas } from '../../review/carry-over.js'
+import { createPrLoader, resolveBundle, resolveLocalBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
@@ -107,7 +102,7 @@ async function currentCanvasSha(
   const pr = await loader.currentTarget(key)
   const found = isLocalKey(key)
     ? await ctx.canvases.findForLocal(key, pr.headSha)
-    : await ctx.canvases.findForPr(key, pr.headSha)
+    : await lookupCanvas(ctx, key, pr)
   if (found.status === 'missing') {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for ${String(key)}`, 404, 'generate one first')
   }
@@ -212,8 +207,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     const headSha = parseHeadShaQuery(c.req.query('headSha')) ?? pr.headSha
     // Only the target's own head has a merge base to build from; any other sha the page names is
     // an older canvas, whose diffs were written when that canvas was drawn.
-    const derived = await readOrBuildDerived(
-      ctx,
+    const derived = await ctx.derived.readOrBuild(
       headSha,
       headSha === pr.headSha ? pr.mergeBaseSha : undefined
     )
@@ -298,7 +292,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     const result = await importCanvas(ctx, {
       bytes: new Uint8Array(await file.arrayBuffer()),
       prNumber: number,
-      currentHeadSha: (await loader.currentPr(number)).headSha,
+      currentHead: await loader.currentPr(number),
       force: force === '1',
     })
     return c.json(result)
@@ -309,7 +303,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     // Looking again means looking at the pull request as it is now, not at the cached copy.
     const { pr, comments } = await loader.load(number, { refresh: true })
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: true })
-    const found = await ctx.canvases.findForPr(number, pr.headSha)
+    const found = await lookupCanvas(ctx, number, pr)
     const body: SharedCanvasFetchResponse = {
       imported: discovery.imported,
       status: found.status,

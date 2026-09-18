@@ -2,6 +2,7 @@ import type {
   BundleStatus,
   CanvasInfo,
   Capabilities,
+  CarriedOverInfo,
   PrBundle,
   SharedCanvasInfo,
   StaleInfo,
@@ -13,11 +14,11 @@ import { isLocalKey, type LocalKey, type ReviewKey } from '../contract/review-ke
 import { describeLocalWork, resolveLocalBase } from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
-import { stateForHead } from '../review/review-body.js'
+import { lookupCanvas } from '../review/carry-over.js'
+import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
-import type { Derived } from '../store/derived-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 
@@ -185,22 +186,6 @@ async function loadCanvas(
   return { artifact, canvas }
 }
 
-/** The diffs of one canvas: the stored ones, or freshly built when both commits are local. */
-export async function readOrBuildDerived(
-  ctx: AppContext,
-  headSha: string,
-  mergeBaseSha: string | undefined
-): Promise<Derived | null> {
-  const stored = await ctx.derived.read(headSha)
-  if (stored !== null || mergeBaseSha === undefined) {
-    return stored
-  }
-  if (!(await ctx.derived.derivable(headSha, mergeBaseSha))) {
-    return null
-  }
-  return ctx.derived.ensure(headSha, mergeBaseSha)
-}
-
 /** The shape of an empty comment payload: a local review has no forge thread to read. */
 function noComments(headSha: string, now: () => Date): CommentsPayload {
   return { fetchedAt: now().toISOString(), headSha, reviewComments: [], issueComments: [], reviews: [] }
@@ -233,9 +218,8 @@ async function shownDiff(
   found: CanvasLookup,
   loaded: LoadedCanvas | null
 ): Promise<ShownDiff> {
-  const headSha = found.status === 'missing' ? pr.headSha : found.headSha
   const mergeBaseSha = loaded?.canvas.manifest?.mergeBaseSha ?? pr.mergeBaseSha
-  const derived = await readOrBuildDerived(ctx, headSha, mergeBaseSha)
+  const derived = await ctx.derived.readOrBuild(reviewedCommit(found, pr), mergeBaseSha)
   if (derived !== null) {
     return { files: derived.files, derivable: true, warning: null }
   }
@@ -258,7 +242,13 @@ function canvasScreen(
   pr: Pr,
   found: CanvasLookup,
   loaded: LoadedCanvas | null
-): { status: BundleStatus; skillCommand: string; stale?: StaleInfo; warning?: string } {
+): {
+  status: BundleStatus
+  skillCommand: string
+  stale?: StaleInfo
+  carriedOver?: CarriedOverInfo
+  warning?: string
+} {
   if (found.status === 'missing') {
     return { status: 'missing', skillCommand: buildSkillCommand(key, { force: false }) }
   }
@@ -272,14 +262,16 @@ function canvasScreen(
     }
   }
   if (found.status === 'ready') {
-    return { status: 'ready', skillCommand }
+    return found.carriedOver === undefined
+      ? { status: 'ready', skillCommand }
+      : { status: 'ready', skillCommand, carriedOver: found.carriedOver }
   }
   const stale: StaleInfo = {
     canvasHeadSha: found.headSha,
     currentHeadSha: pr.headSha,
     relation: found.relation,
   }
-  if (found.commitsBehind !== undefined) {
+  if (found.relation === 'ancestor') {
     stale.commitsBehind = found.commitsBehind
   }
   return { status: 'stale', skillCommand, stale }
@@ -295,6 +287,8 @@ async function bundleBase(
     /** A promise, so probing the forge runs alongside the chat and state reads. */
     capabilities: Promise<Capabilities>
     diff: ShownDiff
+    /** The commit of the canvas on screen: the marks the page shows are the ones made on it. */
+    canvasSha: string
     warnings: string[]
   }
 ): Promise<Omit<PrBundle, 'status' | 'skillCommand'>> {
@@ -313,8 +307,8 @@ async function bundleBase(
     files: input.diff.files,
     derivable: input.diff.derivable,
     comments: input.comments,
-    // Marks made on another commit describe other code, so the page never shows them as reviewed.
-    state: stateForHead(stored, input.pr.headSha),
+    // Marks made on another canvas describe other code, so the page never shows them as reviewed.
+    state: stateForCanvas(stored, input.canvasSha),
     capabilities,
     chat: {
       enabled: chatEnabled && acpx.installed,
@@ -376,6 +370,7 @@ export async function resolveLocalBundle(
     comments: noComments(pr.headSha, ctx.now),
     capabilities: Promise.resolve(LOCAL_CAPABILITIES),
     diff,
+    canvasSha: reviewedCommit(found, pr),
     warnings,
   })
   const { warning: _screenWarning, ...screenFields } = screen
@@ -400,7 +395,14 @@ export async function resolveBundle(
     }
     warnings.push('showing the --fixture-canvas artifact (dev only)')
     const diff = live.files.length > 0 ? live : { ...live, files: artifact.files }
-    const base = await bundleBase(ctx, number, { pr, comments, capabilities, diff, warnings })
+    const base = await bundleBase(ctx, number, {
+      pr,
+      comments,
+      capabilities,
+      diff,
+      canvasSha: pr.headSha,
+      warnings,
+    })
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
     return {
       ...base,
@@ -411,16 +413,18 @@ export async function resolveBundle(
     }
   }
 
-  let found = await ctx.canvases.findForPr(number, pr.headSha)
+  let found = await lookupCanvas(ctx, number, pr)
   let sharedCanvas: SharedCanvasInfo | null = null
-  // Refresh also checks for a newer generation at the same head. Ordinary loads keep the
-  // cached canvas; discovery fills a missing or stale one.
-  if (found.status !== 'ready' || opts.refresh) {
+  // A canvas for this very head beats anything attached to the PR, so an ordinary load runs
+  // discovery only when there is none, a carried-over canvas included, and its import can turn a
+  // stale, missing, or carried-over bundle into one with the head's own canvas. Refresh runs it
+  // whatever was found, to pick up a newer generation at the same head.
+  if (found.status !== 'ready' || found.carriedOver !== undefined || opts.refresh) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
     warnings.push(...discovery.warnings)
     if (discovery.imported) {
-      found = await ctx.canvases.findForPr(number, pr.headSha)
+      found = await lookupCanvas(ctx, number, pr)
     }
   }
 
@@ -433,7 +437,14 @@ export async function resolveBundle(
   if (screen.warning !== undefined) {
     warnings.push(screen.warning)
   }
-  const base = await bundleBase(ctx, number, { pr, comments, capabilities, diff, warnings })
+  const base = await bundleBase(ctx, number, {
+    pr,
+    comments,
+    capabilities,
+    diff,
+    canvasSha: reviewedCommit(found, pr),
+    warnings,
+  })
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
   const { warning: _screenWarning, ...screenFields } = screen
   return { ...base, ...shared, ...(loaded ?? {}), ...screenFields }

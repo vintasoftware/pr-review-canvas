@@ -20,6 +20,24 @@
 - `/pr-review-canvas branch` and `/pr-review-canvas uncommitted` run the whole flow from Claude
   Code or Codex.
 
+### Review interface
+
+- A canvas is carried over to a later pull request head whose diff is identical to the one it
+  was generated from, as after merging the base branch in without touching the changed files.
+  The page shows it under a **Canvas still applies** note, review progress carries over, and
+  sign-off keeps working. The new `canvas.keepForIdenticalDiff` project setting (default `true`)
+  turns this off. The note says how many commits later the head is, when the head was built on
+  the canvas's commit.
+- `pr-review publish` accepts a head whose diff is identical to the prepared commit's, instead of
+  failing with `CANVAS_STALE`.
+- `pr-review import` and the canvas zips discovered on a pull request read the same rule, so the
+  CLI no longer reports a canvas as stale that the page shows as current.
+
+### AI chat
+
+- The chat works on an outdated canvas again: it answers about the canvas on screen, with the
+  diff of that canvas's commit, instead of refusing with `CANVAS_NOT_FOUND` after every new commit.
+
 ### Hosts
 
 - GitLab merge requests work through the [GitLab CLI (`glab`)](https://gitlab.com/gitlab-org/cli),

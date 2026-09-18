@@ -9,8 +9,10 @@ import { type GenerationContext, GenerationContextSchema } from '../contract/gen
 import type { Generator, ReviewArtifact } from '../contract/review-artifact.js'
 import { UNCOMMITTED_STATE, resolveLocalHead } from '../git/local-target.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
+import { fetchPrRefs } from '../git/pr-refs.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
+import { standsForHead } from './carry-over.js'
 import { normalize } from './normalize.js'
 import { coveredTestPaths, type ValidationInput, validateModelOutput } from './validate.js'
 
@@ -91,18 +93,30 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
 }
 
 /**
- * The current head of the target; a push during generation makes the prepared context stale. For a
- * local target the working tree is snapshotted again, so an edit made while the agent worked is
- * caught the same way a push is.
+ * The current head of the target; a push during generation makes the prepared context stale. For
+ * a pull request whose head moved, the head and base are fetched again, and a head whose diff is
+ * identical to the prepared commit's still counts as that commit. For a local target the working
+ * tree is snapshotted again, so an edit made while the agent worked is caught the same way a push
+ * is.
  */
-async function currentHead(ctx: AppContext, context: GenerationContext): Promise<string> {
+async function currentHead(
+  ctx: AppContext,
+  context: GenerationContext
+): Promise<{ headSha: string; moved: boolean }> {
   if (context.target.kind === 'pr') {
-    return (await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, context.target.number)).headSha
+    const { host, repo } = ctx.config
+    const meta = await host.fetchPrMeta(ctx.gh, repo, context.target.number)
+    if (meta.headSha === context.headSha || !ctx.projectConfig.config.canvas.keepForIdenticalDiff) {
+      return { headSha: meta.headSha, moved: meta.headSha !== context.headSha }
+    }
+    const head = await fetchPrRefs(ctx.git, host, meta)
+    return { headSha: head.headSha, moved: !(await standsForHead(ctx, head, context)) }
   }
-  if (context.target.kind === 'local') {
-    return (await resolveLocalHead(ctx.git, context.target.source)).headSha
-  }
-  return ctx.git.revParse(context.target.head)
+  const headSha =
+    context.target.kind === 'local'
+      ? (await resolveLocalHead(ctx.git, context.target.source)).headSha
+      : await ctx.git.revParse(context.target.head)
+  return { headSha, moved: headSha !== context.headSha }
 }
 
 /** Publish runs since prepare last wrote a context (its `prepared` line), this one included. */
@@ -188,10 +202,10 @@ export async function publish(
   const context = await readContext(canvasDir)
   if (!opts.allowStale) {
     const head = await currentHead(ctx, context)
-    if (head !== context.headSha) {
+    if (head.moved) {
       throw new PublishError(
         'CANVAS_STALE',
-        `the target moved to ${head.slice(0, 7)} while this canvas was prepared for ${context.headSha.slice(0, 7)}`,
+        `the target moved to ${head.headSha.slice(0, 7)} while this canvas was prepared for ${context.headSha.slice(0, 7)}`,
         'run `pr-review prepare` again, or pass --allow-stale to publish for the old commit'
       )
     }

@@ -70,6 +70,17 @@ export interface StaleInfo {
   commitsBehind?: number
 }
 
+/**
+ * A ready canvas generated for an earlier commit of the pull request whose diff is identical to
+ * the head's, so the page keeps it and says so.
+ */
+export interface CarriedOverInfo {
+  canvasHeadSha: string
+  currentHeadSha: string
+  /** How many commits the head is ahead of the canvas's commit; absent when the head does not contain it. */
+  commitsBehind?: number
+}
+
 /** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */
 export interface ImportResult {
   status: 'ready' | 'stale' | 'exists'
@@ -110,6 +121,8 @@ export interface PrBundle {
   artifact?: ReviewArtifact
   canvas?: CanvasInfo
   stale?: StaleInfo
+  /** Set on a ready bundle whose canvas was generated for another commit with an identical diff. */
+  carriedOver?: CarriedOverInfo
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */

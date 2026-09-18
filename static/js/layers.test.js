@@ -182,7 +182,7 @@ describe('layer sections', () => {
     expect(cards[2]?.querySelector('.pill.test-tag')?.textContent).toBe('test')
     expect(cards[0]?.querySelector('.note .prose')?.textContent?.trim()).toBe('Read the return first.')
     expect(cards[0]?.querySelector('.diff-host')?.getAttribute('data-hunks')).toBe('src_app_ts#1')
-    expect(cards[0]?.querySelector('.more-hunks')?.textContent).toBe('1 more hunk in Other changes')
+    expect(cards[0]?.querySelector('.more-hunks')?.textContent).toBe('1 more chunk in Other changes')
     expect(cards[1]?.querySelector('.path .old')?.textContent).toBe('src/old-name.ts → ')
     expect(cards[1]?.querySelector('.status')?.textContent).toBe('renamed')
     expect(section?.querySelector('.layer-end .cmd')?.textContent).toBe('mark layer as reviewed')
@@ -196,7 +196,7 @@ describe('layer sections', () => {
     expect(fileCount(1)).toBe('1 file')
     expect(other?.querySelector('article.file#file-src_app_ts-other')).not.toBeNull()
     expect(other?.querySelector('article.file#file-src_app_ts-other .more-hunks')?.textContent).toBe(
-      '1 more hunk in layer 1 · Run path'
+      '1 more chunk in layer 1 · Run path'
     )
   })
 

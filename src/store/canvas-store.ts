@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { CanvasRelation } from '../contract/api.js'
+import type { CarriedOverInfo } from '../contract/api.js'
 import {
   type CanvasIndex,
   CanvasIndexSchema,
@@ -11,10 +11,20 @@ import type { LocalKey } from '../contract/review-key.js'
 import type { Git } from '../git/git.js'
 import { readJson, readText, writeJsonAtomic } from './atomic-json.js'
 
+/** A canvas of a commit the head was built on, and how many commits the head gained since. */
+export interface AncestorCanvas {
+  status: 'stale'
+  headSha: string
+  relation: 'ancestor'
+  commitsBehind: number
+}
+
 export type CanvasLookup =
-  | { status: 'ready'; headSha: string }
-  | { status: 'stale'; headSha: string; relation: CanvasRelation; commitsBehind?: number }
-  | { status: 'missing' }
+  /** `headSha` is the canvas's own commit: the head, or another commit with an identical diff. */
+  { status: 'ready'; headSha: string; carriedOver?: CarriedOverInfo } | StaleCanvas | { status: 'missing' }
+
+/** A canvas of another commit: one the head was built on, or one from a line the head no longer contains. */
+export type StaleCanvas = AncestorCanvas | { status: 'stale'; headSha: string; relation: 'unrelated' }
 
 export interface CanvasStore {
   readonly root: string
@@ -75,42 +85,25 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
     const candidates = Object.entries(index.canvases).filter(
       ([sha, entry]) => sha !== currentHeadSha && accept(entry)
     )
-    const ranked: Array<{
-      headSha: string
-      generatedAt: string
-      relation: CanvasRelation
-      commitsBehind?: number
-    }> = []
+    const ranked: Array<{ generatedAt: string; found: StaleCanvas }> = []
     for (const [sha, entry] of candidates) {
-      if (await git.isAncestor(sha, currentHeadSha)) {
-        ranked.push({
-          headSha: sha,
-          generatedAt: entry.generatedAt,
-          relation: 'ancestor',
-          commitsBehind: await git.countCommitsBetween(sha, currentHeadSha),
-        })
-      } else {
-        ranked.push({ headSha: sha, generatedAt: entry.generatedAt, relation: 'unrelated' })
-      }
+      const found: StaleCanvas = (await git.isAncestor(sha, currentHeadSha))
+        ? {
+            status: 'stale',
+            headSha: sha,
+            relation: 'ancestor',
+            commitsBehind: await git.countCommitsBetween(sha, currentHeadSha),
+          }
+        : { status: 'stale', headSha: sha, relation: 'unrelated' }
+      ranked.push({ generatedAt: entry.generatedAt, found })
     }
     ranked.sort((a, b) => {
-      if (a.relation !== b.relation) {
-        return a.relation === 'ancestor' ? -1 : 1
+      if (a.found.relation !== b.found.relation) {
+        return a.found.relation === 'ancestor' ? -1 : 1
       }
       return a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0
     })
-    const best = ranked[0]
-    if (best === undefined) {
-      return { status: 'missing' }
-    }
-    return best.commitsBehind === undefined
-      ? { status: 'stale', headSha: best.headSha, relation: best.relation }
-      : {
-          status: 'stale',
-          headSha: best.headSha,
-          relation: best.relation,
-          commitsBehind: best.commitsBehind,
-        }
+    return ranked[0]?.found ?? { status: 'missing' }
   }
 
   return {

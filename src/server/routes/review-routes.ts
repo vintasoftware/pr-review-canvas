@@ -4,10 +4,12 @@ import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
+import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
-import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
-import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
+import { lookupCanvas } from '../../review/carry-over.js'
+import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
+import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
@@ -19,6 +21,14 @@ const ReviewedBodySchema = z.object({
   reviewed: z.boolean(),
   /** The commit the page was showing; a mark made on another commit is refused. */
   headSha: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
+  /**
+   * The commit of the canvas on the page, which the marks are keyed to. The head when absent. Any
+   * other value must be a canvas indexed for this pull request.
+   */
+  canvasSha: z
     .string()
     .regex(/^[0-9a-f]{40}$/)
     .optional(),
@@ -56,12 +66,37 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
   return parsed.data
 }
 
-/** The canvas the reviewer is signing off on: the one written for the pull request's head. */
-async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise<ReviewArtifact> {
-  if (ctx.fixtureArtifact !== null) {
-    return { ...ctx.fixtureArtifact, pr }
+/** Refuses a commit that is not an indexed canvas of this target. */
+async function requireCanvasOf(ctx: AppContext, key: ReviewKey, canvasSha: string): Promise<void> {
+  const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
+  // A canvas of no pull request belongs to either kind of target; one of a pull request belongs
+  // only to that pull request, never to a local review.
+  const belongs =
+    entry !== undefined && (entry.prNumber === undefined || (!isLocalKey(key) && entry.prNumber === key))
+  if (!belongs) {
+    throw new AppError(
+      'CANVAS_NOT_FOUND',
+      `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,
+      404,
+      'reload the page'
+    )
   }
-  const found = await ctx.canvases.findForPr(number, pr.headSha)
+}
+
+/**
+ * The canvas the reviewer is signing off on, with the marks made on it: the canvas written for the
+ * pull request's head, or for another commit with an identical diff.
+ */
+async function canvasForSignOff(
+  ctx: AppContext,
+  number: number,
+  pr: Pr
+): Promise<{ artifact: ReviewArtifact; state: PrState }> {
+  const stored = await ctx.state.read(number)
+  if (ctx.fixtureArtifact !== null) {
+    return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForCanvas(stored, pr.headSha) }
+  }
+  const found = await lookupCanvas(ctx, number, pr)
   if (found.status !== 'ready') {
     throw new AppError(
       'SIGNOFF_INCOMPLETE',
@@ -74,7 +109,7 @@ async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise
   if (artifact === null) {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
-  return artifact
+  return { artifact, state: stateForCanvas(stored, found.headSha) }
 }
 
 export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
@@ -117,11 +152,17 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const body = await readBody(c.req.raw, ReviewedBodySchema, '{ "reviewed": true }')
     // A mark is made against the canvas on screen, which for a local review is the snapshot the
     // page was drawn from, not whatever the working tree holds a keystroke later.
-    const headSha = body.headSha ?? (await loader.currentTarget(key)).headSha
+    const pr = await loader.currentTarget(key)
     if (!isLocalKey(key)) {
-      requireSameHead(body.headSha, (await loader.currentPr(key)).headSha)
+      requireSameHead(body.headSha, pr.headSha)
     }
-    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, headSha)))
+    // The page sends back the canvas commit the bundle keyed its marks to, so a toggle costs no
+    // git work; the index, not git, says the commit is a canvas of this target.
+    const canvasSha = body.canvasSha ?? pr.headSha
+    if (canvasSha !== pr.headSha) {
+      await requireCanvasOf(ctx, key, canvasSha)
+    }
+    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, canvasSha)))
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {
@@ -186,8 +227,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   api.get('/prs/:n/review/body', async c => {
     const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'the sign-off summary')
     const pr = await loader.currentPr(number)
-    const artifact = await artifactForHead(ctx, number, pr)
-    const state = stateForHead(await ctx.state.read(number), pr.headSha)
+    const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body: ReviewBodyResponse = {
       headSha: pr.headSha,
@@ -203,8 +243,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting()
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
-    const artifact = await artifactForHead(ctx, number, pr)
-    const state = stateForHead(await ctx.state.read(number), pr.headSha)
+    const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     if (input.event === 'APPROVE') {
       const missing = unreviewedLayers(artifact, state)
       if (missing.length > 0) {

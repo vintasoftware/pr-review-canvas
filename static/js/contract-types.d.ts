@@ -1,6 +1,7 @@
 // Type-only bridge so the browser modules (JSDoc) see the same contract as the server.
 
 export type {
+  CarriedOverInfo,
   CanvasRelation,
   Capabilities,
   ChatStatus,

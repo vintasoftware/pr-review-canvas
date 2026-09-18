@@ -30,6 +30,7 @@ const SETTINGS = {
     maxRepairRounds: 3,
     inlineDiffMaxLines: 1500,
     smallPrHunks: 10,
+    keepForIdenticalDiff: true,
     layers: 8,
     highRisk: 2,
   },
@@ -126,6 +127,13 @@ describe('settingsDialogHtml', () => {
       AGENTS
     )
     expect(html).toContain('chat enabled: no')
+    expect(html).toContain('canvas kept for an identical diff: yes')
+    expect(
+      settingsDialogHtml(
+        { ...SETTINGS, project: { ...SETTINGS.project, keepForIdenticalDiff: false } },
+        AGENTS
+      )
+    ).toContain('canvas kept for an identical diff: no')
     expect(html).toContain('--agent codex')
     expect(html).not.toContain('--model')
   })

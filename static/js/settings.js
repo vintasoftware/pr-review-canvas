@@ -65,12 +65,13 @@ export function settingsDialogHtml(data, agents) {
     `<p class="muted small mono">${esc(data.file)}</p>` +
     '<div class="panel-ro"><h3>Project config (read-only)</h3>' +
     `<ul class="plain"><li>chat enabled: ${project.chatEnabled ? 'yes' : 'no'}</li>` +
+    `<li>canvas kept for an identical diff: ${project.keepForIdenticalDiff ? 'yes' : 'no'}</li>` +
     `<li>rulebook: ${esc(project.rulebook ?? 'none')}</li>` +
     `<li>configured layer suggestions: ${project.layers}</li>` +
     `<li>high-risk patterns: ${project.highRisk}</li>` +
     `<li>max repair rounds: ${project.maxRepairRounds}</li>` +
     `<li>inline diff max lines: ${project.inlineDiffMaxLines}</li>` +
-    `<li>small change set: ${project.smallPrHunks} hunks</li></ul>` +
+    `<li>small change set: ${project.smallPrHunks} chunks</li></ul>` +
     `<p class="muted small mono">${esc(project.file ?? 'built-in defaults (no pr-review.config.yml)')}</p></div>` +
     '<p class="probe-result" role="status"></p>' +
     '<div class="dialog-actions">' +

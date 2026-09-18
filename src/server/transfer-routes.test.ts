@@ -395,7 +395,7 @@ describe('transfer routes', () => {
       expect(bundle.sharedCanvas).toEqual({
         url: FILE_URL,
         name: 'pr-42-20260910T110000Z-eeeeeeee-acme-widgets-canvas.zip',
-        matchesHead: false,
+        namesHead: false,
         downloadable: true,
       })
     })

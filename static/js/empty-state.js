@@ -189,6 +189,26 @@ export function staleBarHtml(stale, local) {
 }
 
 /**
+ * The note above a canvas that was generated for another commit of the pull request whose diff is
+ * identical to the head's, so the canvas still applies.
+ * @param {NonNullable<PrBundle['carriedOver']>} carried
+ * @returns {string}
+ */
+export function carriedOverBarHtml(carried) {
+  const canvas = carried.canvasHeadSha.slice(0, 7)
+  const head = carried.currentHeadSha.slice(0, 7)
+  // How far the head moved, when the bundle knows: a head that reached the same diff by a rebase
+  // is no number of commits away from the canvas's commit, so the note says nothing about it.
+  const behind = carried.commitsBehind
+  const distance = behind === undefined ? '' : `, ${behind} commit${behind === 1 ? '' : 's'} later,`
+  return (
+    `<div class="stale-bar carried-over-bar" role="status"><strong>Canvas still applies.</strong> ` +
+    `${esc(`It was generated for ${canvas}; the head ${head}${distance} has the identical diff.`)} ` +
+    '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button></div>'
+  )
+}
+
+/**
  * The `stale` screen: the same card as the empty state, plus the two ways forward.
  * @param {PrBundle} bundle
  * @returns {string}

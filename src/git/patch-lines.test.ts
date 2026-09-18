@@ -74,7 +74,7 @@ describe('checkInlineTarget', () => {
   it('accepts a range inside one hunk and refuses one that leaves it', () => {
     expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 4, side: 'new', startLine: 2 })).toBeNull()
     expect(checkInlineTarget(FILES, { path: 'src/app.ts', line: 12, side: 'new', startLine: 4 })).toBe(
-      'src/app.ts:4-12 (new) spans more than one hunk'
+      'src/app.ts:4-12 (new) spans more than one chunk'
     )
   })
 

@@ -237,8 +237,7 @@ describe('the local reviews', () => {
     t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
     await publishLocal(t, 'uncommitted')
     // Gone from the clone means neither the stored diffs nor the commits to rebuild them.
-    t.ctx.derived.read = async () => null
-    t.ctx.derived.derivable = async () => false
+    t.ctx.derived.readOrBuild = async () => null
     const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: false })
     expect(bundle.status).toBe('ready')
     expect(bundle.derivable).toBe(false)
