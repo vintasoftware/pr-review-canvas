@@ -11,6 +11,7 @@ import type {
 } from '../../contract/api.js'
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { publicHost } from '../../host/host.js'
+import { lookupCanvas } from '../../review/carry-over.js'
 import { createPrLoader, resolveBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
@@ -78,7 +79,7 @@ async function currentCanvasSha(
   number: number
 ): Promise<string> {
   const pr = await loader.currentPr(number)
-  const found = await ctx.canvases.findForPr(number, pr.headSha)
+  const found = await lookupCanvas(ctx, number, pr)
   if (found.status === 'missing') {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
@@ -257,7 +258,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     const result = await importCanvas(ctx, {
       bytes: new Uint8Array(await file.arrayBuffer()),
       prNumber: number,
-      currentHeadSha: (await loader.currentPr(number)).headSha,
+      currentHead: await loader.currentPr(number),
       force: force === '1',
     })
     return c.json(result)
@@ -268,7 +269,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     // Looking again means looking at the pull request as it is now, not at the cached copy.
     const { pr, comments } = await loader.load(number, { refresh: true })
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: true })
-    const found = await ctx.canvases.findForPr(number, pr.headSha)
+    const found = await lookupCanvas(ctx, number, pr)
     const body: SharedCanvasFetchResponse = {
       imported: discovery.imported,
       status: found.status,

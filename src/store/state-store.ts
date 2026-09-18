@@ -19,10 +19,11 @@ export interface StateStore {
    */
   update(number: number, mutate: (state: PrState) => PrState): Promise<PrState>
   /**
-   * Marks one layer or file. `headSha` is the commit the page was showing: when it differs from
-   * the one the marks describe, the old marks are dropped, because they were about other code.
+   * Marks one layer or file. `canvasSha` is the commit of the canvas the page was showing: when it
+   * differs from the one the marks describe, the old marks are dropped, because they were about
+   * other code.
    */
-  setReviewed(number: number, id: string, reviewed: boolean, headSha?: string): Promise<PrState>
+  setReviewed(number: number, id: string, reviewed: boolean, canvasSha?: string): Promise<PrState>
   setDismissed(number: number, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
   setThreadHidden(number: number, rootCommentId: number, hidden: boolean): Promise<PrState>
   addPosted(number: number, entry: PostedEntry): Promise<PrState>
@@ -69,11 +70,13 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
   return {
     read,
     update,
-    setReviewed: (number, id, reviewed, headSha) =>
+    setReviewed: (number, id, reviewed, canvasSha) =>
       update(number, state => {
-        const sameHead =
-          headSha === undefined || state.reviewedHeadSha === undefined || state.reviewedHeadSha === headSha
-        const next = sameHead ? { ...state.reviewed } : {}
+        const sameCanvas =
+          canvasSha === undefined ||
+          state.reviewedCanvasSha === undefined ||
+          state.reviewedCanvasSha === canvasSha
+        const next = sameCanvas ? { ...state.reviewed } : {}
         if (reviewed) {
           next[id] = true
         } else {
@@ -85,9 +88,9 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
             }
           }
         }
-        return headSha === undefined
+        return canvasSha === undefined
           ? { ...state, reviewed: next }
-          : { ...state, reviewed: next, reviewedHeadSha: headSha }
+          : { ...state, reviewed: next, reviewedCanvasSha: canvasSha }
       }),
     setDismissed: (number, fingerprint, dismissed, reason) =>
       update(number, state => {

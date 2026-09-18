@@ -198,6 +198,7 @@ within one path segment.
 | `generation.caps`               | See below                                           | Overrides individual text limits                                                                                                                                                                                           |
 | `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
 | `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
+| `canvas.keepForIdenticalDiff`   | `true`                                              | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                          |
 | `prompts`                       | Bundled templates                                   | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
@@ -360,6 +361,28 @@ The sign-off dialog previews an editable review body summarizing reviewed layers
 attention points, and comments posted from the canvas. Approval requires every layer except
 **Other changes** to be reviewed for the current head. Requesting changes does not require that
 completion. If the head moves before submission, reload and review the current commit.
+
+### Outdated canvases
+
+A canvas describes one head commit. When the pull request moves to another commit, the page
+shows **Canvas is outdated**, offers the older canvas read-only, and disables posting from it.
+
+An identical diff is the exception. When the head's diff against its merge base is the same as
+the canvas commit's diff against its own, file by file and byte for byte, the canvas is carried
+over: the page shows it under a **Canvas still applies** note, review progress carries over, and
+sign-off, comments, and AI Chat keep working. The note says how many commits later the head is,
+when the head was built on the canvas's commit. Merging the base branch in (**Update branch**) keeps
+the diff identical as long as the base did not touch the changed files. The rule does not care how
+the head reached that diff, only that it did; a diff that differs anywhere, even a hunk moved down
+by a base change, marks the canvas outdated as before, because the canvas's layers, hunk ids, and
+attention points describe the diff it was generated from. It needs `canvas.keepForIdenticalDiff`
+(the default) and both commits in the local clone: the canvas's own commit has to be there for its
+diff to be rebuilt, and without that diff there is nothing to compare, so the canvas reads outdated.
+Two empty change sets are not compared either. `pr-review publish` and `pr-review import` apply the
+same rule, so the CLI never calls a canvas stale that the page shows as current.
+
+AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
+one on screen.
 
 ## AI Chat
 

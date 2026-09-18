@@ -4,8 +4,24 @@ import { readCanvasZip } from '../canvas/zip.js'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ReviewArtifactSchema, TEXT_CAPS } from '../contract/review-artifact.js'
-import { createFakeGh, ghJson, makeTestContext, type TestContext } from '../testing/fakes.js'
-import { BASE_SHA, GH_PULL, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
+import {
+  createFakeGh,
+  type FakeGit,
+  ghJson,
+  makeTestContext,
+  moveFakeHead,
+  type TestContext,
+} from '../testing/fakes.js'
+import {
+  BASE_SHA,
+  GH_PULL,
+  ghFor42,
+  gitFor42,
+  HEAD_SHA,
+  SYNTHETIC_DIFF,
+  SYNTHETIC_DIFF_MOVED_BY_BASE,
+  syntheticArtifact,
+} from '../testing/synthetic.js'
 import { artifactToModelOutput, normalize } from './normalize.js'
 import { prepare } from './prepare.js'
 import {
@@ -18,14 +34,35 @@ import {
 } from './publish.js'
 
 let t: TestContext
+let clone: FakeGit
 afterEach(() => t?.cleanup())
 
 const OPTS: PublishOptions = { agent: 'claude', model: 'opus', harness: 'claude-code', allowStale: false }
 
 async function prepared(target: Parameters<typeof prepare>[1] = { kind: 'pr', number: 42 }) {
-  t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+  clone = gitFor42()
+  t = await makeTestContext({ git: clone, gh: ghFor42() })
   const result = await prepare(t.ctx, target, { force: false, log: () => undefined })
   return result.canvasDir
+}
+
+/** The pull request's head moved to `sha` in the clone and on GitHub, with `diff` against the same merge base. */
+function headMovedTo(sha: string, diff: string): void {
+  moveFakeHead(clone, {
+    headRef: 'pull/42/head',
+    baseRef: 'refs/pr/42/base',
+    headSha: sha,
+    mergeBaseSha: BASE_SHA,
+    diff,
+  })
+  t.ctx.gh = pullAt(sha)
+}
+
+/** GitHub with PR #42's head at `sha`. */
+function pullAt(sha: string) {
+  return createFakeGh({
+    routes: { 'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha } }) },
+  })
 }
 
 async function writeModel(canvasDir: string, value: unknown): Promise<void> {
@@ -230,15 +267,37 @@ describe('publish', () => {
     expect(err).toMatchObject({ code: 'NOT_FOUND', hint: 'run `pr-review prepare` first' })
   })
 
+  it('publishes for a head that moved on with the identical diff', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    const merged = 'e'.repeat(40)
+    const moved = 'd'.repeat(40)
+    headMovedTo(merged, SYNTHETIC_DIFF)
+    t.ctx.projectConfig = {
+      ...t.ctx.projectConfig,
+      config: { ...t.ctx.projectConfig.config, canvas: { keepForIdenticalDiff: false } },
+    }
+    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
+    t.ctx.projectConfig = {
+      ...t.ctx.projectConfig,
+      config: { ...t.ctx.projectConfig.config, canvas: { keepForIdenticalDiff: true } },
+    }
+    // A base merge that moved the hunks down is another diff.
+    headMovedTo(moved, SYNTHETIC_DIFF_MOVED_BY_BASE)
+    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({ code: 'CANVAS_STALE' })
+    headMovedTo(merged, SYNTHETIC_DIFF)
+    const result = await publish(t.ctx, canvasDir, OPTS)
+    expect(result.status).toBe('published')
+    // The canvas is stored under the commit it was prepared for, which the merged head stands for.
+    expect(result.headSha).toBe(HEAD_SHA)
+  })
+
   it('refuses a canvas whose PR head moved unless --allow-stale, and checks refs targets against the ref', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     const moved = 'e'.repeat(40)
-    t.ctx.gh = createFakeGh({
-      routes: {
-        'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha: moved } }),
-      },
-    })
+    // Force-pushed, with another diff: the fetched head does not stand for the prepared commit.
+    headMovedTo(moved, SYNTHETIC_DIFF_MOVED_BY_BASE)
     const err = await publish(t.ctx, canvasDir, OPTS).catch(e => e)
     expect(err).toBeInstanceOf(PublishError)
     expect(err).toMatchObject({

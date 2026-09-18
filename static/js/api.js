@@ -101,11 +101,15 @@ export function fetchState(prNumber, opts = {}) {
  * @param {number} prNumber
  * @param {string} id `layer:<id>` or `layer:<id>/file:<key>`
  * @param {boolean} reviewed
- * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
+ * @param {{ headSha?: string, canvasSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').StateResponse>}
  */
 export function putReviewed(prNumber, id, reviewed, opts = {}) {
-  const body = opts.headSha === undefined ? { reviewed } : { reviewed, headSha: opts.headSha }
+  const body = {
+    reviewed,
+    ...(opts.headSha === undefined ? {} : { headSha: opts.headSha }),
+    ...(opts.canvasSha === undefined ? {} : { canvasSha: opts.canvasSha }),
+  }
   return fetchJson(`/api/prs/${prNumber}/reviewed/${id}`, {
     method: 'PUT',
     body,

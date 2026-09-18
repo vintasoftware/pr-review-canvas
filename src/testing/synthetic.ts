@@ -358,3 +358,15 @@ export function ghFor42(extra: FakeGhOptions = {}): FakeGh {
     graphql: extra.graphql ?? [GH_THREADS_PAGE, GH_THREADS_PAGE, GH_THREADS_PAGE],
   })
 }
+
+/**
+ * SYNTHETIC_DIFF as the same branch shows it after a base merge added three lines above every
+ * change: the changed lines are the same, but the hunks moved, so it is not the identical diff.
+ */
+export const SYNTHETIC_DIFF_MOVED_BY_BASE = SYNTHETIC_DIFF.replace(
+  /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@/gm,
+  (_m, oldStart: string, oldLines: string, newStart: string, newLines: string) => {
+    const shift = (n: string) => (n === '0' ? n : String(Number(n) + 3))
+    return `@@ -${shift(oldStart)},${oldLines} +${shift(newStart)},${newLines} @@`
+  }
+)

@@ -449,7 +449,7 @@ export async function runImport(ctx: AppContext, argv: string[], io: CliIo): Pro
     const prNumber = parsePrNumber(values.pr)
     const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, prNumber)
     options.prNumber = prNumber
-    options.currentHeadSha = (await fetchPrRefs(ctx.git, ctx.config.host, meta)).headSha
+    options.currentHead = await fetchPrRefs(ctx.git, ctx.config.host, meta)
   }
   printJson(io, await importCanvas(ctx, options))
   return EXIT.ok

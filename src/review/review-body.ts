@@ -1,8 +1,9 @@
 // The same reviewed rules the page uses, so the body and the header never disagree.
 import { layerProgress } from '../../static/js/progress.js'
 import type { CommentsPayload } from '../contract/comments.js'
-import type { Layer, ReviewArtifact } from '../contract/review-artifact.js'
+import type { Layer, Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import type { PrState } from '../contract/state.js'
+import type { CanvasLookup } from '../store/canvas-store.js'
 
 export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost).'
 
@@ -18,11 +19,22 @@ export function inlineText(text: string): string {
 }
 
 /**
- * The state as it applies to one commit. Marks made on another commit, and marks whose commit
+ * The state as it applies to one canvas. Marks made on another canvas, and marks whose canvas
  * is unknown, describe other code, so they count for nothing here.
  */
-export function stateForHead(state: PrState, headSha: string): PrState {
-  return state.reviewedHeadSha === headSha ? state : { ...state, reviewed: {} }
+export function stateForCanvas(state: PrState, canvasSha: string): PrState {
+  return state.reviewedCanvasSha === canvasSha ? state : { ...state, reviewed: {} }
+}
+
+/**
+ * The commit the marks on this page describe: the commit of the canvas on the page, whether it is
+ * current, carried over, or read as outdated, since its diff is what the reviewer looked at. The
+ * head only when there is no canvas. Keyed this way, a carried-over canvas keeps its marks however
+ * often the head moves, and marks made on an outdated canvas never credit a later one. The page
+ * sends this commit back with every mark it makes, as `bundle.canvas.headSha`.
+ */
+export function reviewedCommit(found: CanvasLookup, pr: Pr): string {
+  return found.status === 'missing' ? pr.headSha : found.headSha
 }
 
 /** The layers a human still has to look at. Empty means approve is allowed. */

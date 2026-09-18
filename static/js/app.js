@@ -19,7 +19,7 @@ import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
 import { esc, qs } from './dom.js'
 import { exportCanvasZip } from './download.js'
-import { renderEmptyState, renderStaleState, staleBarHtml } from './empty-state.js'
+import { carriedOverBarHtml, renderEmptyState, renderStaleState, staleBarHtml } from './empty-state.js'
 import { errorCardHtml } from './errors.js'
 import { renderHeader } from './header.js'
 import { wireDropZone } from './import-zone.js'
@@ -226,7 +226,12 @@ export class PrAppElement extends HTMLElement {
         now,
       })
       defineLayerElements()
-      const staleBar = bundle.status === 'stale' && bundle.stale ? staleBarHtml(bundle.stale) : ''
+      const staleBar =
+        bundle.status === 'stale' && bundle.stale
+          ? staleBarHtml(bundle.stale)
+          : bundle.carriedOver
+            ? carriedOverBarHtml(bundle.carriedOver)
+            : ''
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
@@ -251,6 +256,8 @@ export class PrAppElement extends HTMLElement {
         state: bundle.state,
         capabilities,
         headSha: bundle.pr.headSha,
+        // The marks are keyed to the canvas on the page, so every mark names it.
+        ...(bundle.canvas === undefined ? {} : { canvasSha: bundle.canvas.headSha }),
       })
       const interactions = wireReview(this, session, {
         chat: () => this.chat,

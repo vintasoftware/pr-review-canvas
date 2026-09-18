@@ -608,7 +608,7 @@ describe('POST /api/prs/:n/review', () => {
     const app = createApp(t.ctx)
     await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
     // The same marks, recorded against a commit this pull request has left behind.
-    await t.ctx.state.update(42, state => ({ ...state, reviewedHeadSha: 'c'.repeat(40) }))
+    await t.ctx.state.update(42, state => ({ ...state, reviewedCanvasSha: 'c'.repeat(40) }))
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
     expect(res.status).toBe(409)
     expect(await json(res)).toEqual({
@@ -643,7 +643,7 @@ describe('POST /api/prs/:n/review', () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
     await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
-    await t.ctx.state.update(42, state => ({ ...state, reviewedHeadSha: 'c'.repeat(40) }))
+    await t.ctx.state.update(42, state => ({ ...state, reviewedCanvasSha: 'c'.repeat(40) }))
     const bundle = await json<{ state: { reviewed: Record<string, true> } }>(
       await app.request('/api/prs/42', { headers: LOCAL })
     )
@@ -658,7 +658,7 @@ describe('POST /api/prs/:n/review', () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
     await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
-    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(HEAD_SHA)
+    expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(HEAD_SHA)
   })
 
   it('refuses an event it does not know', async () => {

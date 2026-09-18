@@ -109,6 +109,11 @@ When the saved canvas describes a different PR head, **Canvas is outdated** appe
 the top. You can still read the older canvas, with its commit and distance shown; posting
 from that view is disabled. Click **refresh** to check GitHub or GitLab for changes and a newer canvas.
 
+A head whose diff is identical to the canvas's does not outdate it: after **Update branch**
+merged `main` in without touching the changed files, for example, the canvas still applies
+and the page says so. Set `canvas.keepForIdenticalDiff: false` in the project config to treat
+every commit as a new head.
+
 ## Configuration
 
 ### User-local preferences

@@ -392,7 +392,7 @@ describe('empty state', () => {
     const shared = {
       url: 'https://github.com/x.zip',
       name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: true,
     }
     expect(sharedCanvasCalloutHtml(bundle({ sharedCanvas: shared }))).toContain('importing&hellip;')

@@ -3,7 +3,8 @@ import { z } from 'zod'
 export const SharedCanvasInfoSchema = z.object({
   url: z.string(),
   name: z.string(),
-  matchesHead: z.boolean(),
+  /** The attachment's file name carries the head's sha; it says nothing about whether it is current. */
+  namesHead: z.boolean(),
   downloadable: z.boolean(),
   reason: z
     .enum(['auth-required', 'not-zip', 'too-large', 'network', 'name-mismatch', 'pr-mismatch'])

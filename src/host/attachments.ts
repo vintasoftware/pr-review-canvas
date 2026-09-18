@@ -104,7 +104,7 @@ export const MAX_CANDIDATES_TRIED = 3
 /**
  * A fingerprint of everything discovery reads, so an unchanged pull request is not scanned again.
  * It covers the text of every comment, because an edit can swap one zip link for another, and the
- * head sha, because the ranking and `matchesHead` are answers about that commit.
+ * head sha, because the ranking and `namesHead` are answers about that commit.
  */
 export function discoveryFingerprint(body: string, comments: CommentsPayload, headSha: string): string {
   const hash = createHash('sha1')
@@ -258,7 +258,7 @@ async function tryCandidate(
   const shared = {
     url: candidate.url,
     name: candidate.name,
-    matchesHead: candidate.parsed.shaPrefix === pr.headSha.slice(0, 8),
+    namesHead: candidate.parsed.shaPrefix === pr.headSha.slice(0, 8),
   }
   // A name that carries another pull request's number is a zip attached to the wrong PR. Import
   // would refuse it anyway, so it is reported without spending a download on it.
@@ -281,11 +281,7 @@ async function tryCandidate(
     }
   }
   try {
-    const imported = await importCanvas(ctx, {
-      bytes: download.bytes,
-      prNumber,
-      currentHeadSha: pr.headSha,
-    })
+    const imported = await importCanvas(ctx, { bytes: download.bytes, prNumber, currentHead: pr })
     return { sharedCanvas: { ...shared, downloadable: true }, imported, warnings: imported.warnings }
   } catch (err) {
     return {
