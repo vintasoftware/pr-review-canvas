@@ -180,9 +180,13 @@ export function staleBarHtml(stale) {
 export function carriedOverBarHtml(carried) {
   const canvas = carried.canvasHeadSha.slice(0, 7)
   const head = carried.currentHeadSha.slice(0, 7)
+  // How far the head moved, when the bundle knows: a head that reached the same diff by a rebase
+  // is no number of commits away from the canvas's commit, so the note says nothing about it.
+  const behind = carried.commitsBehind
+  const distance = behind === undefined ? '' : `, ${behind} commit${behind === 1 ? '' : 's'} later,`
   return (
     `<div class="stale-bar carried-over-bar" role="status"><strong>Canvas still applies.</strong> ` +
-    `${esc(`It was generated for ${canvas}; the head ${head} has the identical diff.`)} ` +
+    `${esc(`It was generated for ${canvas}; the head ${head}${distance} has the identical diff.`)} ` +
     '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button></div>'
   )
 }

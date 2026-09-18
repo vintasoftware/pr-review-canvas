@@ -76,6 +76,8 @@ export interface StaleInfo {
 export interface CarriedOverInfo {
   canvasHeadSha: string
   currentHeadSha: string
+  /** How many commits the head is ahead of the canvas's commit; absent when the head does not contain it. */
+  commitsBehind?: number
 }
 
 /** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */

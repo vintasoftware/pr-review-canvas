@@ -8,7 +8,8 @@
   was generated from, as after merging the base branch in without touching the changed files.
   The page shows it under a **Canvas still applies** note, review progress carries over, and
   sign-off keeps working. The new `canvas.keepForIdenticalDiff` project setting (default `true`)
-  turns this off.
+  turns this off. The note says how many commits later the head is, when the head was built on
+  the canvas's commit.
 - `pr-review publish` accepts a head whose diff is identical to the prepared commit's, instead of
   failing with `CANVAS_STALE`.
 

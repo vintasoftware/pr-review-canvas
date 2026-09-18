@@ -1,6 +1,6 @@
 // A canvas carried over to a later head: the head's diff is identical to the diff the canvas was
 // generated from, so the canvas stands for it. The one place that reads the rule.
-import { isDeepStrictEqual } from 'node:util'
+import type { CarriedOverInfo } from '../contract/api.js'
 import type { Pr } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -35,12 +35,17 @@ export async function standsForHead(
     ctx.derived.readOrBuild(commit.headSha, commit.mergeBaseSha),
     ctx.derived.readOrBuild(pr.headSha, pr.mergeBaseSha),
   ])
-  return older !== null && head !== null && sameDiff(older, head)
+  return older !== null && head !== null && samePatches(older, head)
 }
 
-/** Whether two diffs are the same: the same files in the same order, each with the same patch. */
-export function sameDiff(a: Derived, b: Derived): boolean {
-  return isDeepStrictEqual(a, b)
+/**
+ * Whether two diffs change the same code: the same patch keys, each with the same patch body.
+ * The patches are the diff; the files array beside them only counts and flags what the patches
+ * already say, so comparing the patches is comparing the whole change.
+ */
+export function samePatches(a: Derived, b: Derived): boolean {
+  const keys = Object.keys(a.patches)
+  return keys.length === Object.keys(b.patches).length && keys.every(k => a.patches[k] === b.patches[k])
 }
 
 /**
@@ -55,11 +60,13 @@ export async function lookupCanvas(ctx: AppContext, number: number, pr: Pr): Pro
   }
   const manifest = await ctx.canvases.readManifest(found.headSha)
   if (manifest !== null && (await standsForHead(ctx, pr, manifest))) {
-    return {
-      status: 'ready',
-      headSha: found.headSha,
-      carriedOver: { canvasHeadSha: found.headSha, currentHeadSha: pr.headSha },
+    const carriedOver: CarriedOverInfo = { canvasHeadSha: found.headSha, currentHeadSha: pr.headSha }
+    // How far the head moved, when the head was built on the canvas's commit. A head that
+    // reached the identical diff another way, by a rebase, is no distance from it at all.
+    if (found.relation === 'ancestor') {
+      carriedOver.commitsBehind = found.commitsBehind
     }
+    return { status: 'ready', headSha: found.headSha, carriedOver }
   }
   return found
 }

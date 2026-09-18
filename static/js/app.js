@@ -256,6 +256,8 @@ export class PrAppElement extends HTMLElement {
         state: bundle.state,
         capabilities,
         headSha: bundle.pr.headSha,
+        // The marks are keyed to the canvas on the page, so every mark names it.
+        ...(bundle.canvas === undefined ? {} : { canvasSha: bundle.canvas.headSha }),
       })
       const interactions = wireReview(this, session, {
         chat: () => this.chat,

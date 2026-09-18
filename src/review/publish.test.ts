@@ -2,7 +2,14 @@
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ReviewArtifactSchema, TEXT_CAPS } from '../contract/review-artifact.js'
-import { createFakeGh, type FakeGit, ghJson, makeTestContext, type TestContext } from '../testing/fakes.js'
+import {
+  createFakeGh,
+  type FakeGit,
+  ghJson,
+  makeTestContext,
+  moveFakeHead,
+  type TestContext,
+} from '../testing/fakes.js'
 import {
   BASE_SHA,
   GH_PULL,
@@ -39,9 +46,13 @@ async function prepared(target: Parameters<typeof prepare>[1] = { kind: 'pr', nu
 
 /** The pull request's head moved to `sha` in the clone and on GitHub, with `diff` against the same merge base. */
 function headMovedTo(sha: string, diff: string): void {
-  Object.assign(clone.options.refs ?? {}, { 'pull/42/head': sha })
-  Object.assign(clone.options.mergeBases ?? {}, { [`refs/pr/42/base..${sha}`]: BASE_SHA })
-  Object.assign(clone.options.diffs ?? {}, { [`${BASE_SHA}..${sha}`]: diff })
+  moveFakeHead(clone, {
+    headRef: 'pull/42/head',
+    baseRef: 'refs/pr/42/base',
+    headSha: sha,
+    mergeBaseSha: BASE_SHA,
+    diff,
+  })
   t.ctx.gh = pullAt(sha)
 }
 

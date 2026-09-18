@@ -16,6 +16,7 @@ import {
   type FakeGitOptions,
   ghJson,
   makeTestContext,
+  moveFakeHead,
   TEST_REPO,
   type TestContext,
 } from '../testing/fakes.js'
@@ -117,13 +118,47 @@ async function bundle(refresh = false): Promise<PrBundle> {
   )
 }
 
-/** The pull request moved on to `sha`, again with the identical diff. */
-function headMovedTo(sha: string): void {
-  Object.assign(git.options.refs ?? {}, { 'pull/42/head': sha })
-  Object.assign(git.options.mergeBases ?? {}, { [`refs/pr/42/base..${sha}`]: BASE_SHA })
-  Object.assign(git.options.diffs ?? {}, { [`${BASE_SHA}..${sha}`]: SYNTHETIC_DIFF })
+/** The pull request moved on to `sha`, `behind` commits past OLD_SHA, again with the identical diff. */
+function headMovedTo(sha: string, behind = 5): void {
+  moveFakeHead(git, {
+    headRef: 'pull/42/head',
+    baseRef: 'refs/pr/42/base',
+    headSha: sha,
+    mergeBaseSha: BASE_SHA,
+    diff: SYNTHETIC_DIFF,
+    ahead: { [OLD_SHA]: behind },
+  })
+  prNowAt(sha)
+}
+
+/**
+ * The base branch advanced under the same head: the head's diff is now taken against the new
+ * merge base, which is where a base merge shows up as moved hunks.
+ */
+function baseAdvancedTo(sha: string, diff: string): void {
+  moveFakeHead(git, {
+    headRef: 'pull/42/head',
+    baseRef: 'refs/pr/42/base',
+    headSha: HEAD_SHA,
+    mergeBaseSha: sha,
+    diff,
+    ahead: { [OLD_SHA]: 3 },
+  })
+}
+
+/** GitHub now reports `sha` as the head of the pull request. */
+function prNowAt(sha: string): void {
   t.ctx.gh = ghFor42({
     routes: { 'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha } }) },
+  })
+}
+
+/** A mark on the one layer of the synthetic canvas, with whatever body the test wants to send. */
+async function markLayer1(body: Record<string, unknown>): Promise<Response> {
+  return createApp(t.ctx).request('/api/prs/42/reviewed/layer:layer-1', {
+    method: 'PUT',
+    headers: JSON_POST,
+    body: JSON.stringify(body),
   })
 }
 
@@ -136,7 +171,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect(b.canvas?.headSha).toBe(OLD_SHA)
     expect(b.artifact?.pr.headSha).toBe(OLD_SHA)
     expect(b.pr.headSha).toBe(HEAD_SHA)
-    expect(b.carriedOver).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: HEAD_SHA })
+    expect(b.carriedOver).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: HEAD_SHA, commitsBehind: 3 })
     expect(b.skillCommand).toBe('/pr-review-canvas 42 --force')
   })
 
@@ -204,11 +239,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
   it('keeps the reviewer marks, which belong to the canvas, however often the head moves', async () => {
     await withOldCanvas()
     // A mark made on the carried-over page is recorded against the canvas's commit, not the head.
-    const res = await createApp(t.ctx).request('/api/prs/42/reviewed/layer:layer-1', {
-      method: 'PUT',
-      headers: JSON_POST,
-      body: JSON.stringify({ reviewed: true, headSha: HEAD_SHA }),
-    })
+    const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: OLD_SHA })
     expect(res.status).toBe(200)
     expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
     expect((await bundle()).state.reviewed).toEqual({ 'layer:layer-1': true })
@@ -216,7 +247,11 @@ describe('a canvas whose head moved on with the identical diff', () => {
     headMovedTo('c'.repeat(40))
     const b = await bundle(true)
     expect(b.status).toBe('ready')
-    expect(b.carriedOver).toEqual({ canvasHeadSha: OLD_SHA, currentHeadSha: 'c'.repeat(40) })
+    expect(b.carriedOver).toEqual({
+      canvasHeadSha: OLD_SHA,
+      currentHeadSha: 'c'.repeat(40),
+      commitsBehind: 5,
+    })
     expect(b.state.reviewed).toEqual({ 'layer:layer-1': true })
     const body = await json<ReviewBodyResponse>(
       await createApp(t.ctx).request('/api/prs/42/review/body', { headers: LOCAL })
@@ -227,11 +262,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
   it('shows the marks made on an outdated canvas with it, and never credits them to a later canvas', async () => {
     await withOldCanvas({ keepForIdenticalDiff: false })
     // The outdated view shows the older canvas and its diff, so a mark made there is the older canvas's.
-    const res = await createApp(t.ctx).request('/api/prs/42/reviewed/layer:layer-1', {
-      method: 'PUT',
-      headers: JSON_POST,
-      body: JSON.stringify({ reviewed: true, headSha: HEAD_SHA }),
-    })
+    const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: OLD_SHA })
     expect(res.status).toBe(200)
     expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
     const outdated = await bundle()
@@ -242,6 +273,53 @@ describe('a canvas whose head moved on with the identical diff', () => {
     const current = await bundle()
     expect(current.status).toBe('ready')
     expect(current.state.reviewed).toEqual({})
+  })
+
+  it('marks a layer without running git: the page names the canvas its marks belong to', async () => {
+    await withOldCanvas()
+    await bundle()
+    const before = git.calls.length
+    const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: OLD_SHA })
+    expect(res.status).toBe(200)
+    // No ancestry walk, no rev-list, no diff: the canvas the page names is looked up in the index.
+    expect(git.calls.slice(before)).toEqual([])
+    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
+  })
+
+  it('refuses a mark that names a commit which is not a canvas of this pull request', async () => {
+    await withOldCanvas()
+    await bundle()
+    const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: '7'.repeat(40) })
+    expect(res.status).toBe(404)
+    expect((await json<ErrorEnvelope>(res)).error.code).toBe('CANVAS_NOT_FOUND')
+    expect((await t.ctx.state.read(42)).reviewed).toEqual({})
+  })
+
+  it('refuses a mark that names a canvas of another pull request', async () => {
+    await withOldCanvas()
+    const otherPr = '8'.repeat(40)
+    await t.ctx.canvases.write(otherPr, artifactFor(otherPr), { ...manifest(otherPr), prNumber: 43 }, 43)
+    const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: otherPr })
+    expect(res.status).toBe(404)
+    expect((await t.ctx.state.read(42)).reviewed).toEqual({})
+  })
+
+  it('reads the canvas as outdated when the base advanced under the same head', async () => {
+    await withOldCanvas()
+    expect((await bundle()).carriedOver).toBeDefined()
+    // The head did not move; its diff is now taken against the base branch's new tip, where the
+    // merged commits pushed every hunk down. The canvas explains the diff that is gone.
+    baseAdvancedTo('9'.repeat(40), SYNTHETIC_DIFF_MOVED_BY_BASE)
+    const b = await bundle(true)
+    expect(b.status).toBe('stale')
+    expect(b.carriedOver).toBeUndefined()
+    expect(b.pr.headSha).toBe(HEAD_SHA)
+    expect(b.stale).toEqual({
+      canvasHeadSha: OLD_SHA,
+      currentHeadSha: HEAD_SHA,
+      relation: 'ancestor',
+      commitsBehind: 3,
+    })
   })
 
   it('lets the sign-off routes use the canvas and the carried-over marks without a page load first', async () => {

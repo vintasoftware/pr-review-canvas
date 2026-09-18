@@ -256,6 +256,23 @@ describe('carried-over bar', () => {
     expect(bar?.textContent).toContain('generated for eeeeeee; the head aaaaaaa has the identical diff.')
     expect(bar?.querySelector('#stale-generate')?.textContent).toBe('regenerate anyway')
   })
+
+  it('says how far the head moved when it was built on the canvas commit', () => {
+    document.body.innerHTML = carriedOverBarHtml({
+      canvasHeadSha: OLD,
+      currentHeadSha: HEAD,
+      commitsBehind: 3,
+    })
+    expect(document.querySelector('.carried-over-bar')?.textContent).toContain(
+      'generated for eeeeeee; the head aaaaaaa, 3 commits later, has the identical diff.'
+    )
+    document.body.innerHTML = carriedOverBarHtml({
+      canvasHeadSha: OLD,
+      currentHeadSha: HEAD,
+      commitsBehind: 1,
+    })
+    expect(document.querySelector('.carried-over-bar')?.textContent).toContain('1 commit later')
+  })
 })
 
 describe('stale screen', () => {

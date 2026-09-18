@@ -8,7 +8,7 @@ import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { lookupCanvas } from '../../review/carry-over.js'
-import { buildReviewBody, reviewedCommit, stateForHead, unreviewedLayers } from '../../review/review-body.js'
+import { buildReviewBody, stateForHead, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -20,6 +20,14 @@ const ReviewedBodySchema = z.object({
   reviewed: z.boolean(),
   /** The commit the page was showing; a mark made on another commit is refused. */
   headSha: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
+  /**
+   * The commit of the canvas on the page, which the marks are keyed to. The head when absent. Any
+   * other value must be a canvas indexed for this pull request.
+   */
+  canvasSha: z
     .string()
     .regex(/^[0-9a-f]{40}$/)
     .optional(),
@@ -55,6 +63,19 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
     throw new AppError('BAD_REQUEST', `send a JSON body: ${expected}`, 400, parsed.error.issues[0]?.message)
   }
   return parsed.data
+}
+
+/** Refuses a commit that is not an indexed canvas of this pull request. */
+async function requireCanvasOf(ctx: AppContext, number: number, canvasSha: string): Promise<void> {
+  const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
+  if (entry === undefined || (entry.prNumber !== undefined && entry.prNumber !== number)) {
+    throw new AppError(
+      'CANVAS_NOT_FOUND',
+      `${canvasSha.slice(0, 7)} is not a canvas of pull request ${number}`,
+      404,
+      'reload the page'
+    )
+  }
 }
 
 /**
@@ -126,10 +147,13 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const body = await readBody(c.req.raw, ReviewedBodySchema, '{ "reviewed": true }')
     const pr = await loader.currentPr(number)
     requireSameHead(body.headSha, pr.headSha)
-    const found = await lookupCanvas(ctx, number, pr)
-    return c.json(
-      stateBody(number, await ctx.state.setReviewed(number, id, body.reviewed, reviewedCommit(found, pr)))
-    )
+    // The page sends back the canvas commit the bundle keyed its marks to, so a toggle costs no
+    // git work; the index, not git, says the commit is a canvas of this pull request.
+    const canvasSha = body.canvasSha ?? pr.headSha
+    if (canvasSha !== pr.headSha) {
+      await requireCanvasOf(ctx, number, canvasSha)
+    }
+    return c.json(stateBody(number, await ctx.state.setReviewed(number, id, body.reviewed, canvasSha)))
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {

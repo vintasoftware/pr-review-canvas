@@ -18,7 +18,7 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { lookupCanvas, sameDiff, standsForHead } from './carry-over.js'
+import { lookupCanvas, samePatches, standsForHead } from './carry-over.js'
 
 /** The commit the canvas describes; the pull request moved on to HEAD_SHA afterwards. */
 const OLD = 'e'.repeat(40)
@@ -44,14 +44,24 @@ function history(headDiff: string): FakeGitOptions {
   }
 }
 
-describe('sameDiff', () => {
+describe('samePatches', () => {
   it('is identity: the same changed lines in moved hunks are another diff', () => {
     const canvas = derivedOf(SYNTHETIC_DIFF)
-    expect(sameDiff(canvas, derivedOf(SYNTHETIC_DIFF))).toBe(true)
-    expect(sameDiff(canvas, derivedOf(SYNTHETIC_DIFF_MOVED_BY_BASE))).toBe(false)
-    expect(sameDiff(canvas, derivedOf(SYNTHETIC_DIFF.replace('+  const y = 2', '+  const y = 3')))).toBe(
+    expect(samePatches(canvas, derivedOf(SYNTHETIC_DIFF))).toBe(true)
+    expect(samePatches(canvas, derivedOf(SYNTHETIC_DIFF_MOVED_BY_BASE))).toBe(false)
+    expect(samePatches(canvas, derivedOf(SYNTHETIC_DIFF.replace('+  const y = 2', '+  const y = 3')))).toBe(
       false
     )
+  })
+
+  it('reads the patches, so a file the diff no longer touches is another diff', () => {
+    const canvas = derivedOf(SYNTHETIC_DIFF)
+    const fewer: Derived = { files: canvas.files, patches: { ...canvas.patches } }
+    const dropped = Object.keys(fewer.patches)[0]
+    expect(dropped).toBeDefined()
+    delete fewer.patches[dropped as string]
+    expect(samePatches(canvas, fewer)).toBe(false)
+    expect(samePatches(fewer, canvas)).toBe(false)
   })
 })
 
@@ -110,7 +120,7 @@ describe('standsForHead and lookupCanvas', () => {
     expect(await lookupCanvas(t.ctx, 42, PR)).toEqual({
       status: 'ready',
       headSha: OLD,
-      carriedOver: { canvasHeadSha: OLD, currentHeadSha: HEAD_SHA },
+      carriedOver: { canvasHeadSha: OLD, currentHeadSha: HEAD_SHA, commitsBehind: 3 },
     })
     await t.cleanup()
     await context(history(SYNTHETIC_DIFF_MOVED_BY_BASE))

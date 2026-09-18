@@ -340,7 +340,8 @@ shows **Canvas is outdated**, offers the older canvas read-only, and disables po
 An identical diff is the exception. When the head's diff against its merge base is the same as
 the canvas commit's diff against its own, file by file and byte for byte, the canvas is carried
 over: the page shows it under a **Canvas still applies** note, review progress carries over, and
-sign-off, comments, and AI Chat keep working. Merging the base branch in (**Update branch**) keeps
+sign-off, comments, and AI Chat keep working. The note says how many commits later the head is,
+when the head was built on the canvas's commit. Merging the base branch in (**Update branch**) keeps
 the diff identical as long as the base did not touch the changed files. The rule does not care how
 the head reached that diff, only that it did; a diff that differs anywhere, even a hunk moved down
 by a base change, marks the canvas outdated as before, because the canvas's layers, hunk ids, and
