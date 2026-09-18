@@ -1,21 +1,21 @@
 ---
 name: thermo-nuclear-review-loop-v2
-description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer approves it, with a growth budget so fixes shrink the code, an interview gate so hypothetical scenarios are decided by the human, and poka-yoke remedies over defensive runtime code. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without bloating.
+description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer explicitly approves it under a strict code-quality standard. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without growing defensive code.
 ---
 
 # Thermo-Nuclear Review Loop v2
 
-You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, verify its findings, fix the justified ones, and repeat until it approves. There is no separate fixer agent.
+You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, independently verify its findings, fix the justified ones, and repeat until it explicitly approves. There is no separate fixer agent.
 
-Two forces shape every cycle. The **budget** keeps the scope from growing while findings are addressed. The **gate** sends decisions about scenarios, requirements, and behavior to the human instead of letting either agent assume them.
+Remedies are your call. Scope is the human's. When a finding needs the human to decide whether a scenario matters at all, the **gate** sends that question to them instead of letting either agent assume the answer.
 
 ## Establish the scope
 
 1. Read the repository instructions (`AGENTS.md`, `CLAUDE.md`, rules, README).
-2. Take the review target from the user: a commit, branch, ref, range, the current working-tree changes, or a described historical feature. Without a target, ask one question and wait.
+2. Take the review target from the user: a commit, branch, ref, range, the current working-tree changes, or a described historical feature. Without a target, ask one question and wait. Ask for the original request, ticket, or prompt that produced the change when one exists; it is the **stated requirement**, and the reviewer receives it verbatim.
 3. Resolve the baseline: a commit's parent, a branch's merge base, the explicit range, the repository baseline for current changes, or the commits that introduced a historical feature. Trace a historical feature into the current tree and edit the current tree.
 4. Inspect status before editing. Preserve unrelated user changes and generated artifacts. If the tree already holds unrelated uncommitted changes, the loop runs uncommitted (see Commit).
-5. Record the **budget baseline**: `git diff --stat <baseline>` for the scope, as net lines and files touched. Every later report compares against it.
+5. Record `git diff --shortstat <baseline>` for the scope. The final report compares against it.
 
 If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
@@ -27,44 +27,50 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
 **Brief**: before spawning, check for a project-root `REVIEW.md`. If it exists, the reviewer reads only that file as its standard. Otherwise the reviewer reads the Review Standard section of this skill: point at this file's path, or paste the section when the reviewer is a different agent that cannot see this skill.
 
-**Access**: the reviewer may read and run commands (tests, `git blame`, greps) but makes no edits. Record `git rev-parse HEAD` and `git status --porcelain` before each pass and compare after. Any change made by the reviewer stops the loop: report it and ask the user what to do with those changes.
+**Access**: the reviewer may read and run commands (tests, `git blame`, greps, scratch repos outside the tree) but makes no edits. Record `git rev-parse HEAD` and `git status --porcelain` before each pass and compare after. Any change made by the reviewer stops the loop: report it and ask the user what to do with those changes.
 
 Prompt template:
 
-> Read `<REVIEW.md or Review Standard path/paste>` and apply it to `<resolved scope>` in the current working tree, compared against `<baseline>`. Verify every claim against code, history, tests, and repository instructions; behavior claims need a file:line citation, not an inference from naming. Do not edit. Return prioritized findings with evidence, remedy, label (`deletes/simplifies` or `adds`), and confidence, or explicit approval.
+> Read `<REVIEW.md or Review Standard path/paste>` and apply it to `<resolved scope>` in the current working tree, compared against `<baseline>`. The stated requirement is: `<original request verbatim, or "none recorded">`. Be ambitious about structural simplification and code-judo opportunities. Verify every claim against code, history, tests, and repository instructions; behavior claims need a file:line citation, not an inference from naming. Do not edit. Return concrete blockers with evidence and remedies, or explicitly approve if the implementation meets the standard.
 
-Wait for the verdict; the loop cannot proceed without it.
+Wait for the verdict; the loop cannot proceed without it. If the verdict does not arrive as a message, check your inbox and ask the reviewer to resend before doing anything else.
 
-## Triage every finding
+## Verify before fixing
 
-Reviewer output is a list of leads, not orders. For each finding, verify it yourself against code and tests, then place it in exactly one bucket:
+Reviewer output is a list of leads, not orders. For each finding:
 
-- **Fix**: verified, behavior-preserving or a clear bug, and either labeled `deletes/simplifies` or an `adds` whose addition the project's own patterns already call for.
-- **Gate**: verified in principle but depends on a decision that is the human's:
-    1. handling for a scenario no current caller, type, or data can reach;
-    2. a defensive check on data already typed or validated upstream;
-    3. a fix that changes externally observable behavior, including security hardening;
-    4. a product or requirements ambiguity;
-    5. a destructive or irreversible operation in scope (deletes, migrations, production-touching scripts).
-- **Reject**: unsupported, pre-existing and outside scope, or fails the evidence bar (see Review Standard). Keep the concrete counter-evidence for the next reviewer prompt and the final report.
+1. Reproduce or prove the claimed behavior or design problem from code and tests. A scratch repository outside the tree is fine for git behavior.
+2. Check repository invariants, intended behavior, historical rationale, and current callers.
+3. Decide: correct, partially correct, or unsupported. Unsupported findings, pre-existing issues outside the scope, and findings that fail the evidence bar in the Review Standard are rejected; keep the concrete counter-evidence for the next reviewer prompt and the final report.
 
-**Assumptions belong to the project or the human, never to you or the reviewer.** Before adding machinery for a rare case, look for the project's existing pattern in README, `AGENTS.md`, `CLAUDE.md`, rules, and neighboring code. The existing pattern is the default answer. No pattern means gate, not assume. Typical assumptions (examples; non-functional requirements and rare functional edge cases produce more): backward compatibility with in-flight data or old clients, zero-downtime or online migration, concurrent writers, retries and idempotency, partial-failure recovery, multi-tenant isolation, scale beyond current volume, offline or network-loss handling, locale and timezone, permission tiers beyond those in the code.
+**Choosing a remedy is your job.** When a verified defect or structural problem has several remedies, choose the one that makes the bad state unreachable for every consumer of the data (a type, an exact comparison, a key derived by construction) and then the simplest. Ask what downstream code assumes about the data and pick the rule that guarantees exactly that. Do not ask the human to pick a mechanism.
+
+**Keep the code's promises.** When docs, names, or UI copy promise more than the code does, the default fix is to make the code keep the promise. Weaken the text instead only when the human has settled that the scenario is out of scope (gate trigger 3).
+
+**Assumptions belong to the project or the human.** Before adding machinery for a rare case, look for the project's existing pattern in README, `AGENTS.md`, `CLAUDE.md`, rules, and neighboring code. The existing pattern is the default answer. No pattern means gate, not assume. Typical assumptions (examples; non-functional requirements and rare functional edge cases produce more): backward compatibility with in-flight data or old clients, zero-downtime or online migration, concurrent writers, retries and idempotency, partial-failure recovery, multi-tenant isolation, scale beyond current volume, offline or network-loss handling, locale and timezone, permission tiers beyond those in the code.
 
 ## Run the gate
 
-Fix every Fix-bucket finding first. Then, once per iteration, put all Gate items to the user in one batch: each with the finding, the evidence, what handling it would cost, and your recommendation. The default recommendation for triggers 1 and 2 is "reject the finding". Use the host's structured question tool when it has one; otherwise end the turn with the questions in plain text. Wait for the answers.
+A finding goes to the human, not to the fix, when it depends on a decision that is theirs:
 
-Record each answer as a **settled decision**: what was asked, what was decided, and the date. Settled decisions go into every later reviewer prompt. The reviewer may re-raise one only with new evidence; you decide whether the evidence changes the answer, and a re-raise without new evidence is dropped, not fixed.
+1. handling for a scenario no current caller, type, or data can reach;
+2. a defensive check on data already typed or validated upstream;
+3. a product or requirements ambiguity: the docs, tests, and code disagree about what is wanted, and none of them is clearly the bug; or the stated requirement names a mechanism that does not achieve its own goal, so keeping the code correct means departing from the requirement's words;
+4. a destructive or irreversible operation in scope (deletes, migrations, production-touching scripts).
+
+Fix every other justified finding first. Then, once per iteration, put the gate items to the user in one batch: each with the finding, the evidence, the reviewer's recommendation in its own words, and yours. The default recommendation for triggers 1 and 2 is "reject the finding". Use the host's structured question tool when it has one; otherwise end the turn with the questions in plain text. Wait for the answers.
+
+Record each answer as a **settled decision**: what was asked, what was decided, and the date. Settled decisions go into every later reviewer prompt. The reviewer may re-raise one only with new evidence; you decide whether the evidence changes the answer.
 
 Gate interviews do not count as iterations.
 
-## Implement
+## Implement and verify
 
-Address the Fix bucket and the gate-approved items as one coherent change per iteration. Prefer changes that delete concepts, branches, duplicated state, and boundary leaks.
+Address all verified findings as one coherent design change per iteration. Prefer changes that delete concepts, branches, duplicated state, and boundary leaks. Preserve externally intended behavior unless the finding proves that behavior is incorrect; when a fix changes documented behavior, change the documentation, config names, and UI copy in the same commit so they say exactly what the code checks.
 
-**Poka-yoke over defense.** When a finding needs a guarantee, choose the highest rung available:
+**Poka-yoke over defense.** When a fix needs a guarantee, choose the highest rung available:
 
-1. make the illegal state unrepresentable in types (exhaustive unions, enums over strings, non-optional fields);
+1. make the illegal state unrepresentable in types (exhaustive unions, enums over strings, non-optional fields, keys derived by construction);
 2. a static check (type strictness, a lint rule, a schema);
 3. a scripted check (a test, a CI script, a git hook);
 4. one assertion at the trust boundary where untrusted data enters (user input, network, files, environment);
@@ -72,29 +78,23 @@ Address the Fix bucket and the gate-approved items as one coherent change per it
 
 Adding a lint rule, tightening typing, or adding a script counts as a fix and needs no gate. Internal callers are trusted: code past the boundary works on typed data without re-validating it.
 
-**Cohesion over extraction.** Judge every split by the cognitive load it removes, not by line count. A new file or module is justified when a reader would otherwise hold unrelated concerns at once. Splitting code that changes together is a regression: it raises accidental load and file count without reducing essential load. A file passing 1000 lines is a smell to weigh against cohesion, not an automatic blocker. State the justification for each new file in the iteration report.
+**Cohesion over extraction.** Judge every split by the cognitive load it removes, not by line count. A new file or module is justified when a reader would otherwise hold unrelated concerns at once. Splitting code that changes together is a regression. A file passing 1000 lines is a smell to weigh against cohesion, not an automatic blocker. Name the reason for each new file in the iteration report.
 
-**Tests.** Add a test only when a fix changes behavior or a verified bug was found. Strengthen an existing test before adding a file. Delete tests a simplification made redundant. Tests for hypothetical scenarios are gate items, not fixes.
+**Tests.** Add a test only when a fix changes behavior or a verified bug was found. Strengthen an existing test before adding a file. Delete tests a simplification made redundant. Tests for hypothetical scenarios are gate items, not fixes. A test must run the rule on the same inputs the real system feeds it, entering through the real routes or commands rather than seeding state directly; a fake that carries the rule's answer in a separate table tests wiring, not the rule. A rule that migrates, re-keys, or carries persisted state forward is tested through two consecutive transitions, since the first move is where every such rule works and the second is where it breaks.
 
 **Verify.** Run the repository's build and test commands, plus focused checks the affected code warrants (sanitizers, concurrency checks, format and lint). Separate environment-only failures from regressions; report both.
 
 **Commit.** One commit per iteration on the current branch, message naming the iteration and the findings it addresses, so each cycle stays reviewable. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
 
-**Iteration report** (to the user, every iteration):
-
-- findings fixed, gated, rejected (with counter-evidence);
-- lines added, lines removed, files added, against the budget baseline;
-- if net lines grew, which findings caused it;
-- justification for each new file;
-- verification results.
+**Iteration report** (to the user, every iteration): findings fixed, gated, rejected with counter-evidence; the reason for each new file; verification results.
 
 ## Re-review
 
-Send the same reviewer the iteration commit hash (or the diff when uncommitted), the settled decisions, and the rejected findings with counter-evidence. Require it to inspect the diff rather than trust your summary, and to reapply the full standard with the pass-two rules from the Review Standard: blockers only, and each new blocker explains why the previous pass missed it.
+Send the same reviewer the iteration commit hash (or the diff when uncommitted), the settled decisions, and the rejected findings with counter-evidence. Summarize what you did, but require it to inspect the actual diff rather than trust the summary, and to reapply the full standard with the pass-two rules from the Review Standard.
 
 Count each pass that returns blockers as one unsuccessful iteration. After four, pause before the fifth and tell the user:
 
-- what changed across the four cycles and the budget totals so far;
+- what changed across the four cycles;
 - which blockers remain, and which of them you verified, disputed, or consider diminishing returns;
 - your own view of whether more work is worth it;
 - the risks that remain.
@@ -107,7 +107,7 @@ The loop ends successfully only when the reviewer explicitly approves. Passing t
 
 - structural improvements made;
 - findings rejected and why, and settled decisions taken;
-- budget: start versus end net lines and files, and which additions came through the gate;
+- size: the scope's `--shortstat` at the start and at the end, and the reason for any new file;
 - verification performed and environment-only failures;
 - the final reviewer verdict;
 - iteration commits created (or why the tree stayed uncommitted), and that nothing was pushed.
@@ -118,7 +118,7 @@ The reviewer's brief when the project has no `REVIEW.md`. Self-contained: a revi
 
 ### Stance
 
-Review the scope in the current working tree against its baseline. Verify every claim against code, history, tests, and repository instructions. You make no edits. Be ambitious about **code judo**: restructurings that keep behavior while deleting whole branches, helpers, modes, or layers. Prefer the version that feels inevitable in hindsight. Be direct and demanding; state major problems as major problems.
+Perform a deep code quality audit of the scope in the current working tree against its baseline. Rethink how to structure the change to meaningfully improve code quality without changing intended behavior. Work to improve abstractions and modularity, reduce spaghetti, and improve succinctness and legibility. Be ambitious: assume there is often a **code judo** move, a reframing that uses the existing architecture so that whole branches, helpers, modes, or layers disappear. Prefer the solution that makes the code feel inevitable in hindsight. If you see a path to delete complexity rather than rearrange it, push hard for that path. Verify every claim against code, history, tests, and repository instructions. You make no edits. Be direct and demanding; state major problems as major problems.
 
 ### Evidence bar
 
@@ -126,33 +126,36 @@ No evidence, no finding. Every finding answers four questions: Can I cite the ex
 
 These are not findings: pre-existing issues outside the scope, issues a linter or type checker already catches, nits a senior engineer would skip, generic input validation without a proven impact, paths no current caller or data can reach, denial-of-service or rate-limiting concerns without a threat model, and handling for scenarios the project's own patterns do not handle elsewhere. If a scenario is genuinely undecided, report it as a **question for the human** with your recommendation, separate from blockers.
 
-### Labels
-
-Every finding carries a label: `deletes/simplifies` when the remedy removes code, concepts, or branches; `adds` when it introduces any. Prefer remedies from the poka-yoke ladder: types first, then static checks, then scripted checks, then a single trust-boundary assertion, with runtime defensive code last.
-
 ### What to review, in priority order
 
 1. **Correctness and security.** Logic errors, broken edge cases that current inputs can reach, injection, missing or weakened authorization, unscoped queries in multi-tenant code, secrets or PII in logs and error messages, unsafe deserialization, race conditions with a concrete interleaving. Treat any logic alteration as high risk until shown otherwise, refactors included. Count callers to size the blast radius; flag unchanged callers that depend on changed behavior; `git blame` removed checks before accepting their removal.
-2. **Destructive or irreversible operations.** Hard deletes where the project uses soft deletes, migrations without a rollback step, scripts that touch production without a dry run, non-atomic multi-step updates that can leave state half-applied.
-3. **Drift from project conventions and duplicated judgment.** Bespoke helpers where a canonical one exists, re-implemented framework primitives, a decision (parse, validate, classify) answered in two places, domain-language drift from the project's own terms, logic in the wrong layer or package, hand-edited generated artifacts.
-4. **Structural regressions and missed simplifications.** Ad-hoc conditionals bolted onto unrelated flows, one-off booleans and nullable modes, feature logic leaking into shared paths, thin wrappers and pass-through helpers, magic generic mechanisms hiding simple data shapes, refactors that move complexity without deleting it. Also the reverse: splits that separate code which changes together, trading cohesion for file count and raising the reader's load.
-5. **Brittle or flaky tests.** Timing sleeps, order dependence, real network or clock, assertions rewritten to match new behavior instead of the requirement, tests deleted or skipped, coverage or lint thresholds lowered, tests that restate the implementation or pass vacuously.
-6. **Boundary and type contracts.** Unnecessary optionality, `any`, `unknown`, casts, silent fallbacks that degrade to a simpler behavior without logging, validation duplicated past the trust boundary, ad-hoc object shapes where a typed model would remove branches.
-7. **Legibility.** Only after the above, and only when a senior engineer would stop on it.
+2. **Consumer invariants.** For every rule, comparison, or key the change introduces, name what downstream code assumes about the data (positions, identity, ordering, presence) and check that the rule guarantees exactly that. A rule that is weaker than its consumers' assumption is a blocker, not a question for the human, even when every listed case passes; state the consumer, the assumption, and the input that violates it. When the change widens what a status, flag, or enum value means (a "ready" that now also covers an older commit), list every reader of that value with file:line in the verdict and say for each whether it still holds; a reader written for the old meaning is a blocker, and a reader you did not list is a gap in your review.
+3. **Destructive or irreversible operations.** Hard deletes where the project uses soft deletes, migrations without a rollback step, scripts that touch production without a dry run, non-atomic multi-step updates that can leave state half-applied, persisted fields whose meaning changes without a migration or a note. For any rule that migrates, re-keys, or carries persisted state forward, walk two consecutive transitions and state what the second one reads; a rule verified on one move only is unverified.
+4. **Drift from project conventions and duplicated judgment.** Bespoke helpers where a canonical one exists, re-implemented framework primitives, a decision (parse, validate, classify) answered in two places, domain-language drift from the project's own terms (`CONTEXT.md` or its equivalent), logic in the wrong layer or package, hand-edited generated artifacts.
+5. **Structural regressions and missed simplifications.** Ad-hoc conditionals bolted onto unrelated flows, one-off booleans and nullable modes, feature logic leaking into shared paths, thin wrappers and pass-through helpers, magic generic mechanisms hiding simple data shapes, contract fields repeating data already exposed, refactors that move complexity without deleting it. Also the reverse: splits that separate code which changes together, trading cohesion for file count.
+6. **Hot-path cost.** List every path that reaches the changed code with file:line: page load, poll, each write and per-item action (a click, a toggle, a row), each command. For each, say what subprocess, network or full-recomputation work it does per call now and what it did before. A path you did not list is a gap in your review. Work added where the previous code used cached or in-memory data is a finding; name the path and the multiplier.
+7. **Text that outruns the code.** Docs, config names, changelog lines, comments, and UI copy must claim exactly what the code checks. A setting named for merges guarding a rule that ignores merges, or a page note asserting something the rule never verifies, is a finding. The remedy to propose is the code keeping the promise; propose weakening the text only when the promise is out of scope, and say so.
+8. **Brittle or flaky tests.** Timing sleeps, order dependence, real network or clock, assertions rewritten to match new behavior instead of the requirement, tests deleted or skipped, coverage or lint thresholds lowered, tests that restate the implementation or pass vacuously. A fake must derive the rule's answer from the same inputs the real system uses; a fake with a second table that the test sets to the desired answer, or a fixture describing a state the real system cannot produce, is a finding. A test of persisted state that seeds the state directly instead of entering through the real route or command hides the bugs that live in the writer.
+9. **Boundary and type contracts.** Unnecessary optionality, `any`, `unknown`, casts, silent fallbacks that degrade to a simpler behavior without logging, validation duplicated past the trust boundary, ad-hoc object shapes where a typed model would remove branches.
+10. **Legibility.** Only after the above, and only when a senior engineer would stop on it.
 
 Also check **requirement fidelity**: the code does what was asked, not something adjacent, and dependency changes are intentional.
 
+### Preferred remedies
+
+Delete a layer of indirection rather than polishing it. Reframe the state model so conditionals disappear instead of getting centralized. Change the ownership boundary so the feature becomes a natural extension of an existing abstraction. Make the bad state unrepresentable (an exact comparison, a key derived by construction, a typed model) rather than detected. Reuse the canonical helper. Move logic to the layer that owns the concept. Do not be satisfied with "maybe rename this" when the real issue is structural, nor with a cleaner version of the same messy idea when a much simpler idea is visible.
+
 ### Output
 
-Prioritized findings, each with file:line evidence, failure mode or cost, remedy, label, confidence. Then questions for the human. Then, if nothing blocks, explicit approval in one sentence. Fewer high-conviction findings beat a long list.
+Prioritized findings, each with file:line evidence, failure mode or cost, remedy, confidence. Then questions for the human. Then, if nothing blocks, explicit approval in one sentence. Fewer high-conviction findings beat a long list.
 
 ### Pass two and later
 
-Report blockers only. Every new blocker states why the previous pass did not raise it: a regression from the fix, or a concrete miss. Findings equivalent to ones already approved or settled by the human are dropped unless you bring new evidence, which you name. Approve when the bar is met; the loop has no other exit.
+Report blockers only. Every new blocker states why the previous pass did not raise it: a regression from the fix, or a concrete miss. Findings equivalent to ones already approved or settled by the human are dropped unless you bring new evidence, which you name. When a fix changed a rule, re-read the fakes and fixtures that feed its tests and the text that describes it: fakes must derive answers from real inputs, fixtures must describe states the real system produces, and docs, names, and UI copy must match the new rule. Approve when the bar is met; the loop has no other exit.
 
 ### Approval bar
 
-Approve when the scope has: no verified correctness or security defect, no unguarded destructive path, no duplicated judgment or drift the project's patterns forbid, no structural regression or plausible code-judo move left on the table, no brittle test, no boundary churn obscuring the contract, and no growth the human did not approve. Behavior that merely works is not enough; behavior that works with less code than before is the goal.
+Approve when the scope has: no verified correctness or security defect, no rule weaker than its consumers assume, no unguarded destructive path, no duplicated judgment or drift the project's patterns forbid, no structural regression or plausible code-judo move left on the table, no hot-path regression, no text claiming more than the code checks, no brittle test or answer-carrying fake, and no boundary churn obscuring the contract. Behavior that merely works is not enough.
 
 ## Host notes
 
