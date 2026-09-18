@@ -1,9 +1,10 @@
 // A chat thread is one acpx session plus the transcript of what was said in it. Both are named
-// after the pull request, so two repositories never share a session and a name can never point
+// after the review target, so two repositories never share a session and a name can never point
 // outside the chat directory.
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type ChatTurn, ChatTurnSchema } from '../contract/chat.js'
+import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { Repo } from '../contract/review-artifact.js'
 import type { ChatThread } from '../contract/state.js'
 import { isNotFound } from '../store/atomic-json.js'
@@ -17,19 +18,19 @@ export function slug(value: string): string {
     .slice(0, 40)
 }
 
-export function threadName(repo: Repo, prNumber: number, agent: string, index: number): string {
-  return `pr-review-${slug(repo.owner)}-${slug(repo.name)}-${prNumber}-${slug(agent)}-t${index}`
+export function threadName(repo: Repo, key: ReviewKey, agent: string, index: number): string {
+  return `pr-review-${slug(repo.owner)}-${slug(repo.name)}-${keyToString(key)}-${slug(agent)}-t${index}`
 }
 
-const NAME_RE = /^pr-review-[a-z0-9-]+-(\d+)-[a-z0-9-]+-t(\d+)$/
+const NAME_RE = /^pr-review-[a-z0-9-]+-(\d+|branch|uncommitted)-[a-z0-9-]+-t(\d+)$/
 
-/** True when the name is one this tool could have made for this pull request. */
-export function isThreadNameFor(name: string, prNumber: number): boolean {
+/** True when the name is one this tool could have made for this target. */
+export function isThreadNameFor(name: string, key: ReviewKey): boolean {
   const m = NAME_RE.exec(name)
-  return m !== null && m[1] === String(prNumber)
+  return m !== null && m[1] === keyToString(key)
 }
 
-/** The next `t<k>`: one past the highest index already used on this pull request. */
+/** The next `t<k>`: one past the highest index already used on this target. */
 export function nextThreadIndex(threads: readonly ChatThread[]): number {
   let highest = 0
   for (const thread of threads) {
@@ -55,22 +56,22 @@ export function threadTitle(firstMessage: string): string {
 }
 
 export interface TranscriptStore {
-  dir(prNumber: number): string
-  file(prNumber: number, name: string): string
-  eventsFile(prNumber: number, name: string): string
-  read(prNumber: number, name: string): Promise<ChatTurn[]>
-  append(prNumber: number, name: string, turn: ChatTurn): Promise<void>
+  dir(key: ReviewKey): string
+  file(key: ReviewKey, name: string): string
+  eventsFile(key: ReviewKey, name: string): string
+  read(key: ReviewKey, name: string): Promise<ChatTurn[]>
+  append(key: ReviewKey, name: string, turn: ChatTurn): Promise<void>
   /** Appends one already-scrubbed acpx line to the raw event log. */
-  appendEvent(prNumber: number, name: string, line: string): Promise<void>
+  appendEvent(key: ReviewKey, name: string, line: string): Promise<void>
 }
 
-export function createTranscriptStore(prDir: (prNumber: number) => string): TranscriptStore {
-  const dir = (prNumber: number): string => path.join(prDir(prNumber), 'chat')
-  const named = (prNumber: number, name: string, suffix: string): string => {
-    if (!isThreadNameFor(name, prNumber)) {
-      throw new Error(`not a chat thread of pull request ${prNumber}: ${name}`)
+export function createTranscriptStore(prDir: (key: ReviewKey) => string): TranscriptStore {
+  const dir = (key: ReviewKey): string => path.join(prDir(key), 'chat')
+  const named = (key: ReviewKey, name: string, suffix: string): string => {
+    if (!isThreadNameFor(name, key)) {
+      throw new Error(`not a chat thread of ${keyToString(key)}: ${name}`)
     }
-    return path.join(dir(prNumber), `${name}${suffix}`)
+    return path.join(dir(key), `${name}${suffix}`)
   }
   const appendLine = async (file: string, line: string): Promise<void> => {
     await mkdir(path.dirname(file), { recursive: true })
@@ -78,12 +79,12 @@ export function createTranscriptStore(prDir: (prNumber: number) => string): Tran
   }
   return {
     dir,
-    file: (prNumber, name) => named(prNumber, name, '.jsonl'),
-    eventsFile: (prNumber, name) => named(prNumber, name, '.events.ndjson'),
-    async read(prNumber, name) {
+    file: (key, name) => named(key, name, '.jsonl'),
+    eventsFile: (key, name) => named(key, name, '.events.ndjson'),
+    async read(key, name) {
       let text: string
       try {
-        text = await readFile(named(prNumber, name, '.jsonl'), 'utf8')
+        text = await readFile(named(key, name, '.jsonl'), 'utf8')
       } catch (err) {
         if (isNotFound(err)) {
           return []
@@ -108,7 +109,7 @@ export function createTranscriptStore(prDir: (prNumber: number) => string): Tran
       }
       return turns
     },
-    append: (prNumber, name, turn) => appendLine(named(prNumber, name, '.jsonl'), JSON.stringify(turn)),
-    appendEvent: (prNumber, name, line) => appendLine(named(prNumber, name, '.events.ndjson'), line),
+    append: (key, name, turn) => appendLine(named(key, name, '.jsonl'), JSON.stringify(turn)),
+    appendEvent: (key, name, line) => appendLine(named(key, name, '.events.ndjson'), line),
   }
 }

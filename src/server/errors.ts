@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ConfigError } from '../config.js'
 import type { ErrorCode, ErrorEnvelope } from '../contract/api.js'
 import { GitError } from '../git/git.js'
+import { LocalTargetError } from '../git/local-target.js'
 import { PrNotFoundError } from '../host/pr.js'
 import { CLI_INFO, type HostCli, HostCliError } from '../host/client.js'
 
@@ -84,6 +85,9 @@ export function toAppError(err: unknown): AppError {
       )
     }
     return new AppError(codes.api, err.message, 502)
+  }
+  if (err instanceof LocalTargetError) {
+    return new AppError('BAD_REQUEST', err.message, 400, err.hint)
   }
   if (err instanceof GitError) {
     return new AppError('GIT_ERROR', err.message, 500)

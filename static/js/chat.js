@@ -114,7 +114,7 @@ export const QUICK_QUESTIONS = [
 /**
  * @typedef {{
  *   root: HTMLElement,
- *   prNumber: number,
+ *   prNumber: import('./contract-types.js').ReviewKey,
  *   session: ReviewSession,
  *   storage?: Storage | null,
  *   api?: Partial<ChatApi>,

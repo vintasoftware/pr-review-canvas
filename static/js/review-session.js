@@ -24,7 +24,7 @@ import { sanitizeKey } from './keys.js'
 
 /**
  * @typedef {{
- *   prNumber: number,
+ *   prNumber: import('./contract-types.js').ReviewKey,
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
  *   state: PrState,

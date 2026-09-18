@@ -35,7 +35,8 @@ import { applySkin, nextSkin, readSkin, skinLabel } from './skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
-/** @typedef {{ prNumber: number, owner: string, repo: string, version: string, host: import('./contract-types.js').PublicHost }} Bootstrap */
+/** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
+/** @typedef {{ prNumber: ReviewKey, owner: string, repo: string, version: string, host: import('./contract-types.js').PublicHost }} Bootstrap */
 
 /** @returns {Bootstrap | null} */
 function readBootstrap() {
@@ -84,7 +85,7 @@ function toEnvelopeError(err) {
 /**
  * The patches for the bundle. The first visit builds derived/ while the bundle resolves, so the
  * parallel fetch can land before the patches exist; one more try after the bundle is enough.
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {Promise<Record<string, string> | null>} started
  * @param {string} [headSha] the canvas commit, when it is not the PR head
  */
@@ -228,7 +229,7 @@ export class PrAppElement extends HTMLElement {
       defineLayerElements()
       const staleBar =
         bundle.status === 'stale' && bundle.stale
-          ? staleBarHtml(bundle.stale)
+          ? staleBarHtml(bundle.stale, bundle.local)
           : bundle.carriedOver
             ? carriedOverBarHtml(bundle.carriedOver)
             : ''
@@ -380,11 +381,15 @@ export class PrAppElement extends HTMLElement {
       this.viewStale = true
       void this.render(bundle)
     })
-    wireDropZone(this, {
-      prNumber: boot.prNumber,
-      importImpl: importCanvas,
-      onImported: () => void this.reload(),
-    })
+    // Importing a canvas a teammate attached is a pull request thing; local work has no thread
+    // to attach one to, and the local screens draw no drop zone.
+    if (typeof boot.prNumber === 'number') {
+      wireDropZone(this, {
+        prNumber: boot.prNumber,
+        importImpl: importCanvas,
+        onImported: () => void this.reload(),
+      })
+    }
   }
 
   /**

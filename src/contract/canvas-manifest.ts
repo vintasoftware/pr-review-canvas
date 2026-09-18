@@ -23,6 +23,8 @@ export const CanvasIndexSchema = z.object({
       generatedAt: z.string(),
       source: z.enum(['local', 'import']),
       importedAt: z.string().optional(),
+      /** A snapshot of uncommitted work: it sits on no branch, so no pull request can claim it. */
+      worktree: z.boolean().optional(),
     })
   ),
 })
