@@ -1,8 +1,9 @@
 // The same reviewed rules the page uses, so the body and the header never disagree.
 import { layerProgress } from '../../static/js/progress.js'
 import type { CommentsPayload } from '../contract/comments.js'
-import type { Layer, ReviewArtifact } from '../contract/review-artifact.js'
+import type { Layer, Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import type { PrState } from '../contract/state.js'
+import type { CanvasLookup } from '../store/canvas-store.js'
 
 export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost).'
 
@@ -23,6 +24,15 @@ export function inlineText(text: string): string {
  */
 export function stateForHead(state: PrState, headSha: string): PrState {
   return state.reviewedHeadSha === headSha ? state : { ...state, reviewed: {} }
+}
+
+/**
+ * The commit the marks on this page describe: the current canvas's own commit, which is the head
+ * unless the canvas was carried over, else the head. Keyed this way, a carried-over canvas keeps
+ * its marks however often the head moves.
+ */
+export function reviewedCommit(found: CanvasLookup, pr: Pr): string {
+  return found.status === 'ready' ? found.headSha : pr.headSha
 }
 
 /** The layers a human still has to look at. Empty means approve is allowed. */

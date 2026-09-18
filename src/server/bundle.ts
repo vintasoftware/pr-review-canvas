@@ -4,7 +4,8 @@ import { isLargePr } from '../contract/generation-context.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
-import { lookupCanvas, reviewStateFor } from '../review/carry-over.js'
+import { lookupCanvas } from '../review/carry-over.js'
+import { reviewedCommit, stateForHead } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -160,8 +161,8 @@ export async function resolveBundle(
   }
 
   const chatEnabled = ctx.projectConfig.config.chat.enabled
-  const [state, capabilities, settings, acpx] = await Promise.all([
-    reviewStateFor(ctx, number, pr),
+  const [stored, capabilities, settings, acpx] = await Promise.all([
+    ctx.state.read(number),
     ctx.capabilities.get(),
     chatEnabled ? ctx.chat.effectiveSettings() : Promise.resolve(null),
     chatEnabled ? ctx.preflight.get() : Promise.resolve({ installed: false, version: null }),
@@ -169,12 +170,11 @@ export async function resolveBundle(
   if (chatEnabled && !acpx.installed) {
     allWarnings.push('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
   }
-  const base = {
+  const bare = {
     pr,
     files,
     derivable,
     comments,
-    state,
     capabilities,
     chat: {
       enabled: chatEnabled && acpx.installed,
@@ -190,7 +190,8 @@ export async function resolveBundle(
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
     allWarnings.push('showing the --fixture-canvas artifact (dev only)')
     return {
-      ...base,
+      ...bare,
+      state: stateForHead(stored, pr.headSha),
       status: 'ready',
       artifact,
       canvas,
@@ -213,6 +214,8 @@ export async function resolveBundle(
     }
   }
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
+  // Marks made on another commit describe other code, so the page never shows them as reviewed.
+  const base = { ...bare, state: stateForHead(stored, reviewedCommit(found, pr)) }
 
   if (found.status === 'missing') {
     return {

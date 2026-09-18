@@ -4,10 +4,11 @@ import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
+import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
-import { lookupCanvas, reviewStateFor } from '../../review/carry-over.js'
-import { buildReviewBody, unreviewedLayers } from '../../review/review-body.js'
+import { lookupCanvas } from '../../review/carry-over.js'
+import { buildReviewBody, reviewedCommit, stateForHead, unreviewedLayers } from '../../review/review-body.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
@@ -57,12 +58,17 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
 }
 
 /**
- * The canvas the reviewer is signing off on: the one written for the pull request's head, or
- * for another commit with an identical diff.
+ * The canvas the reviewer is signing off on, with the marks made on it: the canvas written for the
+ * pull request's head, or for another commit with an identical diff.
  */
-async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise<ReviewArtifact> {
+async function canvasForSignOff(
+  ctx: AppContext,
+  number: number,
+  pr: Pr
+): Promise<{ artifact: ReviewArtifact; state: PrState }> {
+  const stored = await ctx.state.read(number)
   if (ctx.fixtureArtifact !== null) {
-    return { ...ctx.fixtureArtifact, pr }
+    return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForHead(stored, pr.headSha) }
   }
   const found = await lookupCanvas(ctx, number, pr)
   if (found.status !== 'ready') {
@@ -77,7 +83,7 @@ async function artifactForHead(ctx: AppContext, number: number, pr: Pr): Promise
   if (artifact === null) {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
-  return artifact
+  return { artifact, state: stateForHead(stored, found.headSha) }
 }
 
 export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
@@ -120,7 +126,10 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const body = await readBody(c.req.raw, ReviewedBodySchema, '{ "reviewed": true }')
     const pr = await loader.currentPr(number)
     requireSameHead(body.headSha, pr.headSha)
-    return c.json(stateBody(number, await ctx.state.setReviewed(number, id, body.reviewed, pr.headSha)))
+    const found = await lookupCanvas(ctx, number, pr)
+    return c.json(
+      stateBody(number, await ctx.state.setReviewed(number, id, body.reviewed, reviewedCommit(found, pr)))
+    )
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {
@@ -182,8 +191,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   api.get('/prs/:n/review/body', async c => {
     const number = parsePrNumber(c.req.param('n'))
     const pr = await loader.currentPr(number)
-    const artifact = await artifactForHead(ctx, number, pr)
-    const state = await reviewStateFor(ctx, number, pr)
+    const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body: ReviewBodyResponse = {
       headSha: pr.headSha,
@@ -199,8 +207,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting()
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
-    const artifact = await artifactForHead(ctx, number, pr)
-    const state = await reviewStateFor(ctx, number, pr)
+    const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     if (input.event === 'APPROVE') {
       const missing = unreviewedLayers(artifact, state)
       if (missing.length > 0) {

@@ -18,7 +18,7 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { lookupCanvas, reviewStateFor, sameDiff, standsForHead } from './carry-over.js'
+import { lookupCanvas, sameDiff, standsForHead } from './carry-over.js'
 
 /** The commit the canvas describes; the pull request moved on to HEAD_SHA afterwards. */
 const OLD = 'e'.repeat(40)
@@ -55,7 +55,7 @@ describe('sameDiff', () => {
   })
 })
 
-describe('standsForHead, lookupCanvas, and reviewStateFor', () => {
+describe('standsForHead and lookupCanvas', () => {
   let t: TestContext
   let git: FakeGit
   afterEach(() => t?.cleanup())
@@ -124,23 +124,6 @@ describe('standsForHead, lookupCanvas, and reviewStateFor', () => {
       headSha: FORCE_PUSHED,
       carriedOver: { canvasHeadSha: FORCE_PUSHED, currentHeadSha: HEAD_SHA },
     })
-  })
-
-  it('moves the marks to a head that stands for the marked commit, and blanks them otherwise', async () => {
-    await context(history(SYNTHETIC_DIFF))
-    await t.ctx.canvases.write(OLD, syntheticArtifact(), manifestOf(OLD), 42)
-    await t.ctx.state.setReviewed(42, 'layer:layer-1', true, OLD)
-    const moved = await reviewStateFor(t.ctx, 42, PR)
-    expect(moved.reviewed).toEqual({ 'layer:layer-1': true })
-    expect(moved.reviewedHeadSha).toBe(HEAD_SHA)
-    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(HEAD_SHA)
-    await t.cleanup()
-    await context(history(SYNTHETIC_DIFF_MOVED_BY_BASE))
-    await t.ctx.canvases.write(OLD, syntheticArtifact(), manifestOf(OLD), 42)
-    await t.ctx.state.setReviewed(42, 'layer:layer-1', true, OLD)
-    const blanked = await reviewStateFor(t.ctx, 42, PR)
-    expect(blanked.reviewed).toEqual({})
-    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD)
   })
 })
 

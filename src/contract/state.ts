@@ -20,8 +20,9 @@ export const PrStateSchema = z.object({
   rev: z.number().int().nonnegative().optional(),
   reviewed: z.record(z.string(), z.literal(true)),
   /**
-   * The commit the reviewed marks describe. A canvas for another commit describes other code,
-   * so the marks start again when the head moves. Absent in state files of older tool versions.
+   * The commit of the canvas the reviewed marks were made on: the head, or the commit a carried-over
+   * canvas was generated for. A canvas for another commit describes other code, so the marks start
+   * again with it. Absent in state files of older tool versions.
    */
   reviewedHeadSha: z.string().optional(),
   hiddenThreads: z.record(z.string(), z.object({ at: z.string() })),
