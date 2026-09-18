@@ -1,3 +1,5 @@
+import { shareGithubCanvas } from '../github/canvas-comment.js'
+import { shareGitlabCanvas } from '../gitlab/canvas-comment.js'
 import type { Capabilities, PublicHost, ReviewSummary } from '../contract/api.js'
 import type { FetchCommentsResult, PostCommentInput, PostCommentResult } from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
@@ -74,6 +76,8 @@ export interface Host {
     input: { event: ReviewEvent; body: string }
   ): Promise<ReviewSummary>
   probeCapabilities(client: HostClient, repo: Repo): Promise<Capabilities>
+  canvasCommentLimit: number
+  shareCanvas(client: HostClient, repo: Repo, number: number, body: string): Promise<string>
   attachments: HostAttachments
 }
 
@@ -92,6 +96,8 @@ export const GITHUB_HOST: Host = {
   postComment,
   postReview,
   probeCapabilities,
+  canvasCommentLimit: 65_536,
+  shareCanvas: shareGithubCanvas,
   attachments: GITHUB_ATTACHMENTS,
 }
 
@@ -118,6 +124,8 @@ export function gitlabHost(hostname: string): Host {
     postReview: (client, repo, number, headSha, input) =>
       postGitlabReview(client, repo, number, headSha, input, webBase),
     probeCapabilities: probeGitlabCapabilities,
+    canvasCommentLimit: 1_000_000,
+    shareCanvas: (client, repo, number, body) => shareGitlabCanvas(client, repo, number, body, webBase),
     attachments: gitlabAttachments(hostname, webBase),
   }
 }

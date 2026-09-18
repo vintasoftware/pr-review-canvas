@@ -101,7 +101,7 @@ export function resolveLink(link, targets) {
   if (link.kind === 'hunk' && (link.n < 1 || link.n > file.hunks.length)) {
     return {
       ok: false,
-      message: `${link.path}#${link.n} does not exist (file has ${file.hunks.length} hunks)`,
+      message: `${link.path}#${link.n} does not exist (file has ${file.hunks.length} chunks)`,
     }
   }
   if (link.kind === 'line') {
@@ -111,7 +111,7 @@ export function resolveLink(link, targets) {
       const range = link.end === link.start ? `${link.start}` : `${link.start}-${link.end}`
       return {
         ok: false,
-        message: `${link.path}:${range} (${link.side}) is not inside one hunk of the diff (${hunkLineRanges(file.hunks, link.side)})`,
+        message: `${link.path}:${range} (${link.side}) is not inside one chunk of the diff (${hunkLineRanges(file.hunks, link.side)})`,
       }
     }
   }
@@ -149,7 +149,7 @@ export function linkLabel(link) {
     case 'file':
       return link.path
     case 'hunk':
-      return `${link.path} hunk ${link.n}`
+      return `${link.path} chunk ${link.n}`
     case 'line':
       return `${link.path}:${link.start}${link.end !== link.start ? `-${link.end}` : ''}${link.side === 'old' ? ' (old)' : ''}`
   }

@@ -78,6 +78,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
     ).toBe(EXIT.ok)
     expect(lastJson(publishIo)).toEqual({
       status: 'published',
+      sharing: expect.objectContaining({ status: 'failed', zipPath: expect.stringMatching(/\.zip$/) }),
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,

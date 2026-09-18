@@ -93,12 +93,12 @@ code,
 pre {
   margin: 0;
   overflow-x: auto;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.9;
 }
 p code,
 dd code {
-  font-size: 0.87em;
+  font-size: max(14px, 0.87em);
   overflow-wrap: anywhere;
 }
 .wrap {
@@ -129,7 +129,7 @@ dd code {
   display: flex;
   gap: 30px;
   align-items: center;
-  font-size: 13px;
+  font-size: 14px;
 }
 .site-header nav a {
   text-decoration: none;
@@ -149,7 +149,7 @@ dd code {
   padding-block: 65px 64px;
 }
 .eyebrow {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 1.6px;
   margin-bottom: 24px;
@@ -208,7 +208,7 @@ dd code {
   border-color: var(--accent);
 }
 .text-link {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   text-decoration: none;
   border-bottom: 1px solid currentColor;
@@ -231,14 +231,14 @@ dd code {
   font-weight: 450;
 }
 .mono {
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.7px;
 }
 .muted {
   color: var(--muted);
 }
 .pill {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.3px;
   background: #eeefe8;
   border-radius: 3px;
@@ -253,7 +253,7 @@ dd code {
   padding-block: 28px 36px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .proof-strip span::before {
   content: '+';
@@ -307,6 +307,7 @@ dd code {
 }
 .map-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -316,7 +317,7 @@ dd code {
 .map-heading .pill {
   background: var(--lime);
 }
-.intent-map ol {
+.intent-map ul {
   list-style: none;
   padding: 0;
   margin-block: 6px 20px;
@@ -333,39 +334,28 @@ dd code {
   place-items: center;
   width: 29px;
   height: 29px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--paper);
   border: 1px solid #d0d4c6;
-  font-size: 11px;
+  font-size: 14px;
   z-index: 1;
 }
-.intent-map li:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: 14px;
-  top: 47px;
-  bottom: -33px;
-  border-left: 1px solid #ced2c5;
-}
+
 .intent-map li strong,
 .intent-map li code {
   display: block;
 }
 .intent-map li strong {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 550;
 }
 .intent-map code {
-  font-size: 10px;
-  color: var(--muted);
-}
-.map-note {
-  margin-left: auto;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--muted);
 }
 .intent-map > p {
-  font-size: 11px;
+  font-size: 14px;
   text-align: center;
   border-top: 1px solid #d4d7c9;
   padding-top: 18px;
@@ -430,7 +420,7 @@ dd code {
 }
 .local-boundary p {
   color: #c5cbbf;
-  font-size: 12px;
+  font-size: 14px;
 }
 .local-boundary strong {
   color: #f7f7f2;
@@ -455,7 +445,7 @@ dd code {
   width: 34px;
   height: 34px;
   font-family: Georgia, serif;
-  font-size: 13px;
+  font-size: 14px;
 }
 .setup-step > p {
   color: var(--muted);
@@ -473,7 +463,7 @@ dd code {
   padding-top: 14px;
 }
 .command-block code {
-  font-size: 12px;
+  font-size: 14px;
 }
 .copy-button {
   position: absolute;
@@ -482,7 +472,7 @@ dd code {
   border: 0;
   color: var(--muted);
   background: transparent;
-  font-size: 10px;
+  font-size: 14px;
   padding: 3px 8px;
   border-radius: 3px;
 }
@@ -503,10 +493,10 @@ dd code {
 }
 .workflow-note > strong {
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 14px;
 }
 .workflow-note p {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
 }
 .config-list {
@@ -541,7 +531,7 @@ dd code {
 .config-example > p {
   border-top: 1px solid var(--line);
   padding: 16px 24px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .faq-section {
@@ -578,7 +568,7 @@ dd code {
 .faq-list details p {
   margin-top: 14px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 .closing {
   background: #e8ecdf;
@@ -602,20 +592,27 @@ dd code {
   padding-block: 54px;
 }
 .footer-vinta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   font-size: 20px;
   letter-spacing: -1px;
   font-weight: 750;
   text-decoration: none;
 }
+.footer-vinta img {
+  display: block;
+  object-fit: contain;
+}
 .site-footer p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin-top: 10px;
 }
 .footer-links {
   display: flex;
   gap: 26px;
-  font-size: 12px;
+  font-size: 14px;
   align-items: start;
   padding-top: 8px;
 }
@@ -625,7 +622,7 @@ dd code {
 .notice {
   padding: 16px;
   background: #eaece1;
-  font-size: 13px;
+  font-size: 14px;
 }
 .sr-only,
 .skip-link:not(:focus) {
@@ -668,9 +665,6 @@ dd code {
   .local-facts {
     gap: 30px;
   }
-  .map-note {
-    display: none;
-  }
   .closing {
     margin-inline: 28px;
   }
@@ -702,7 +696,7 @@ dd code {
   }
   .nav-cta {
     padding: 7px 10px;
-    font-size: 11px;
+    font-size: 14px;
   }
   .hero {
     grid-template-columns: 1fr;
@@ -749,7 +743,7 @@ dd code {
   }
   .proof-strip {
     justify-content: flex-start;
-    font-size: 10px;
+    font-size: 14px;
     gap: 13px 20px;
     padding-block: 25px;
   }
@@ -796,7 +790,7 @@ dd code {
     padding-block: 44px;
   }
   .closing .eyebrow {
-    font-size: 9px;
+    font-size: 14px;
   }
   .site-footer {
     flex-direction: column;
@@ -823,4 +817,9 @@ dd code {
 .local-top > *,
 .faq-section > * {
   min-width: 0;
+}
+
+.intent-map > .map-summary {
+  text-align: left;
+  border-top: 0;
 }

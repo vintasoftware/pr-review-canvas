@@ -77,7 +77,7 @@ export function pathSet(files) {
 }
 
 /**
- * Layer title per hunk id, so a file card can say "2 more hunks in layer 4".
+ * Layer title per hunk id, so a file card can say "2 more chunks in layer 4".
  * @param {ReviewArtifact} artifact
  * @returns {Map<string, { layer: Layer, index: number }>}
  */
@@ -281,7 +281,7 @@ export function renderFileCard(lf, entry, layer, ctx) {
 }
 
 /**
- * "2 more hunks in layer 4 · title" when a file's other hunks live in other layers.
+ * "2 more chunks in layer 4 · title" when a file's other hunks live in other layers.
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
@@ -310,7 +310,7 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
   }
   const parts = [...others.values()].map(
     o =>
-      `${o.n} more ${o.n === 1 ? 'hunk' : 'hunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? esc(o.layer.title) : `layer ${o.index + 1} · ${esc(o.layer.title)}`}</a>`
+      `${o.n} more ${o.n === 1 ? 'chunk' : 'chunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? esc(o.layer.title) : `layer ${o.index + 1} · ${esc(o.layer.title)}`}</a>`
   )
   return `<div class="more-hunks">${parts.join(' · ')}</div>`
 }

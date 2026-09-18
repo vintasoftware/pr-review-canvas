@@ -220,9 +220,9 @@ export async function resolveBundle(
 
   let found = await ctx.canvases.findForPr(number, pr.headSha)
   let sharedCanvas: SharedCanvasInfo | null = null
-  // A canvas for this very head beats anything attached to the PR, so discovery runs only
-  // when there is none, and its import can turn a stale or missing bundle into a ready one.
-  if (found.status !== 'ready') {
+  // Refresh also checks for a newer generation at the same head. Ordinary loads keep the
+  // cached canvas; discovery fills a missing or stale one.
+  if (found.status !== 'ready' || opts.refresh) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)

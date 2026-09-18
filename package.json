@@ -25,6 +25,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck",
     "precommit": "pnpm check && pnpm test",
     "site:dev": "vite --config site/vite.config.js",
+    "site:image": "node scripts/render-social-preview.mjs",
     "site:build": "vite build --config site/vite.config.js",
     "site:preview": "vite preview --config site/vite.config.js",
     "site:test": "playwright test --config site/playwright.config.js"
