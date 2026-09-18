@@ -39,6 +39,9 @@ hunk in that file's patch.
 
 ## Layering rules
 
+In reader-facing prose, call diff sections **chunks**. Keep the schema field `hunks` and
+`#hunk:` link targets exactly as specified.
+
 Project-configured layers (optional guidance):
 
 {{CONFIGURED_LAYERS}}

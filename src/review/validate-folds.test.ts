@@ -49,7 +49,7 @@ describe('validateFolds', () => {
       {
         code: 'FOLD_INVALID',
         where,
-        message: `${where}: fold 1 must be an ordered range inside one hunk assigned to this file in this layer`,
+        message: `${where}: fold 1 must be an ordered range inside one chunk assigned to this file in this layer`,
       },
     ])
   })
@@ -62,7 +62,7 @@ describe('validateFolds', () => {
       {
         code: 'FOLD_INVALID',
         where,
-        message: `${where}: fold 2 overlaps an earlier fold or uses another coordinate side in the same hunk`,
+        message: `${where}: fold 2 overlaps an earlier fold or uses another coordinate side in the same chunk`,
       },
     ])
   })

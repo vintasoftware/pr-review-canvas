@@ -74,7 +74,7 @@ describe('validateModelOutput', () => {
         code: 'FOLD_INVALID',
         where: 'layer:run-path/file:src/app.test.ts',
         message:
-          'layer:run-path/file:src/app.test.ts: fold 1 must be an ordered range inside one hunk assigned to this file in this layer',
+          'layer:run-path/file:src/app.test.ts: fold 1 must be an ordered range inside one chunk assigned to this file in this layer',
       },
     ])
   })
@@ -362,7 +362,7 @@ describe('validateModelOutput', () => {
       {
         code: 'HUNK_UNKNOWN',
         where: 'layer:run-path',
-        message: 'layer run-path: src_app_ts#9 does not exist (src/app.ts has 2 hunks)',
+        message: 'layer run-path: src_app_ts#9 does not exist (src/app.ts has 2 chunks)',
       },
     ])
     const wrongFile = clean()
@@ -399,7 +399,7 @@ describe('validateModelOutput', () => {
       files: [],
     })
     expect(errorsOf(output)).toEqual([
-      { code: 'LAYER_EMPTY', where: 'layer:empty', message: 'layer empty has no hunks' },
+      { code: 'LAYER_EMPTY', where: 'layer:empty', message: 'layer empty has no chunks' },
     ])
   })
 
@@ -510,7 +510,7 @@ describe('validateModelOutput', () => {
       {
         code: 'RISK_IN_OTHER',
         where: 'layer:other',
-        message: 'other: carries the risk tag "schema"; move the hunks to a real layer',
+        message: 'other: carries the risk tag "schema"; move the chunks to a real layer',
       },
     ])
     expect(errorsOf(clean(), { highRisk: [{ pattern: 'src/gone*', label: 'legacy' }] })).toEqual([
@@ -535,8 +535,8 @@ describe('validateModelOutput', () => {
       { side: 'new', startLine: 12, endLine: 12, text: 'other layer hunk' },
     ]
     expect(errorsOf(output).map(formatValidationError)).toEqual([
-      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:40-41 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14)',
-      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-12 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14)',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:40-41 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
+      'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
       'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:4-3 (new): endLine is before startLine',
       'ANNOTATION_OUTSIDE_HUNK layer run-path src/app.ts:12 (new) is in src_app_ts#2, which this layer does not list',
     ])
@@ -643,11 +643,11 @@ describe('validateModelOutput', () => {
     expect(errorsOf(output).map(formatValidationError)).toEqual([
       'LINK_UNRESOLVED summary: #layer:nope layer nope does not exist',
       'LINK_UNRESOLVED layer run-path rationale: #file:src/nope.ts src/nope.ts is not in the diff',
-      'LINK_UNRESOLVED layer run-path decisions: #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 hunks)',
+      'LINK_UNRESOLVED layer run-path decisions: #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 chunks)',
       'LINK_UNRESOLVED layer run-path checkByHand: #line:src/nope.ts:4 src/nope.ts is not in the diff',
-      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:400-410 src/app.ts:400-410 (new) is not inside one hunk of the diff (new-side lines 1-5, 11-14)',
-      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:8:old src/app.ts:8 (old) is not inside one hunk of the diff (old-side lines 1-4, 10-12)',
-      'LINK_UNRESOLVED layer run-path test "run() adds b()": #hunk:src/app.ts#3 src/app.ts#3 does not exist (file has 2 hunks)',
+      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:400-410 src/app.ts:400-410 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)',
+      'LINK_UNRESOLVED layer run-path checkByHand: #line:src/app.ts:8:old src/app.ts:8 (old) is not inside one chunk of the diff (old-side lines 1-4, 10-12)',
+      'LINK_UNRESOLVED layer run-path test "run() adds b()": #hunk:src/app.ts#3 src/app.ts#3 does not exist (file has 2 chunks)',
       'LINK_UNRESOLVED layer run-path src/app.ts note: #layer:zzz layer zzz does not exist',
       'LINK_UNRESOLVED layer run-path src/app.ts annotation 1: #hunk:nope is not one of the four link forms',
       'LINK_UNRESOLVED point 1 "Sum instead of product": #file:src/zzz.ts src/zzz.ts is not in the diff',
@@ -694,7 +694,7 @@ describe('validateModelOutput', () => {
       links: { store: '#hunk:src/app.ts#9', serve: '#layer:nope' },
     }
     expect(errorsOf(output).map(formatValidationError)).toEqual([
-      'LINK_UNRESOLVED layer run-path diagram node "store": #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 hunks)',
+      'LINK_UNRESOLVED layer run-path diagram node "store": #hunk:src/app.ts#9 src/app.ts#9 does not exist (file has 2 chunks)',
       'LINK_UNRESOLVED layer run-path diagram node "serve": #layer:nope layer nope does not exist',
     ])
     // A value that is not a canvas link at all fails the schema, so nothing else runs.

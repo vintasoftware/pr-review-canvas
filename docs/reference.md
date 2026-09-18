@@ -57,7 +57,7 @@ pr-review prepare --base origin/main --head HEAD
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
 limit and overlong prose require rewriting.
 
-`publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, and a `reviewUrl` for PR runs.
+`publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl` for PR runs.
 Its `--agent`, `--model`, and `--harness` describe who generated the canvas; they do not launch or
 select an agent. `--allow-stale` permits publishing for the prepared commit after the PR head has
 moved. Use it only when that older commit is the intended review target.
@@ -65,6 +65,35 @@ moved. Use it only when that older commit is the intended review target.
 For more than 400 changed files or 50,000 added/deleted lines, preparation leaves diffs out of the
 prompt and directs the generator to read patch files individually. Smaller diffs are inlined up
 to `generation.inlineDiffMaxLines`.
+
+### Automatic sharing and ZIP fallback
+
+For PR/MR targets, `publish` saves the validated canvas locally, then posts its compressed ZIP
+as base64 inside a hidden HTML comment on GitHub or GitLab. The visible comment identifies the
+commit and explains how to open the canvas. Publishing again updates the existing canvas comment
+owned by the current CLI account; another author's comment is left alone. The payload contains
+the same `manifest.json` and `review.json` as an export, including the PR/MR description and review
+notes. Hidden markup is not private: anyone who can read the comment can retrieve the payload.
+No generated files enter Git history and no storage service or CI workflow is required.
+
+Check the `sharing` result even when the process exits successfully:
+
+- `{ "status": "shared", "url": "..." }`: the host accepted the comment.
+- `{ "status": "failed", "warning": "...", "zipPath": "..." }`: the canvas is saved locally,
+  but automatic sharing failed. The CLI also prints a warning to stderr and exports a fallback ZIP.
+  Upload that ZIP into the PR/MR description in the browser and save; replace an older attachment
+  link if present. A host failure can have an uncertain outcome, so check the comment before retrying.
+- `{ "status": "local" }`: a refs-only target has no PR/MR to publish to.
+
+The entire comment must fit the host limit: 65,536 characters on GitHub and 1,000,000 on GitLab.
+Base64 uses roughly four characters per three compressed bytes, leaving slightly under 48 KiB
+for a GitHub ZIP after the envelope and visible text. Oversize canvases are never split or truncated.
+Permission, login, network, and host-policy errors use the same ZIP fallback. A sharing failure
+keeps exit code 0 because local publication succeeded; validation errors still exit 5.
+The generation skill must report the warning and manual-upload instructions on sharing failure.
+
+`export` remains a local-only command for backups and manual sharing. For refs-only canvases,
+export with `--head <sha> --pr <n>` once the PR exists, or regenerate for the PR to share automatically.
 
 ### Export and import options
 
@@ -307,10 +336,11 @@ it automatically.
 
 ### Finding shared canvases
 
-Discovery checks the PR description and comments for canvas ZIP links. It prefers a filename
+Discovery reads compressed canvas comments and checks the PR description and comments for legacy
+canvas ZIP links. Both use the same ZIP validation and import path. It prefers a filename
 matching the current head, then the PR number, then the most recently edited source text.
-If a download fails, it tries other matching attachments. Keep the exported filename so the
-canvas can be recognized.
+If a candidate fails, it tries other matching canvases. Keep the exported filename so the
+canvas can be recognized. **Refresh** also checks for regenerated canvases at the same head commit.
 
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the
@@ -369,7 +399,8 @@ incomplete answer can be retried; increase `chatTimeoutSec` if replies need more
 The server binds to `127.0.0.1` and rejects browser writes from other origins. It is intended for
 local use with your GitHub or GitLab login.
 
-Host requests fetch PR or MR data and attachments and submit the comments or reviews you choose to
+Publishing sends the canvas as a PR/MR comment. Host requests also fetch PR or MR data and
+attachments and submit the comments or reviews you choose to
 post. Rendered Markdown can load images from HTTPS hosts. Generation and chat send review
 context to the selected coding agent and its configured provider.
 

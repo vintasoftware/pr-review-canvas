@@ -1,13 +1,17 @@
 // @vitest-environment node
 // The three transfer routes and the two bundle paths they feed: a stale canvas and a canvas
 // discovered on the pull request.
+import { buildCanvasComment } from '../canvas/comment.js'
 import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, readCanvasZip } from '../canvas/zip.js'
 import type { ImportResult, PrBundle, SharedCanvasFetchResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import {
   createFakeGit,
+  createFakeGh,
+  ghJson,
   type FakeGitOptions,
+  type FakeGhOptions,
   makeTestContext,
   TEST_REPO,
   type TestContext,
@@ -113,7 +117,6 @@ describe('transfer routes', () => {
   })
 
   async function contextFor(body = 'no attachment here', fetchImpl?: typeof fetch): Promise<TestContext> {
-    const { createFakeGh } = await import('../testing/fakes.js')
     const opts: Parameters<typeof makeTestContext>[0] = {
       git: gitWithHistory(),
       gh: createFakeGh(ghWithBody(body)),
@@ -329,7 +332,6 @@ describe('transfer routes', () => {
     })
 
     it('keeps an imported stale canvas readable when its commits are absent from the clone', async () => {
-      const { createFakeGh } = await import('../testing/fakes.js')
       t = await makeTestContext({
         git: gitWithHistory({
           refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
@@ -427,6 +429,42 @@ describe('transfer routes', () => {
       expect(body.imported).toBe(true)
       expect(body.status).toBe('ready')
       expect(body.sharedCanvas?.downloadable).toBe(true)
+    })
+
+    it('refresh imports a newer compressed canvas for the same head', async () => {
+      const previous = artifactFor(HEAD_SHA)
+      const updated = { ...previous, generatedAt: '2026-09-11T12:00:00.000Z', summary: 'Updated explanation' }
+      const body = buildCanvasComment(
+        {
+          name: `pr-42-20260911T120000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`,
+          headSha: HEAD_SHA,
+          prNumber: 42,
+          bytes: buildCanvasZip({ ...manifest(HEAD_SHA), generatedAt: updated.generatedAt }, updated),
+        },
+        65_536
+      )
+      t = await contextFor()
+      const options: FakeGhOptions = ghWithBody('')
+      options.routes = {
+        ...options.routes,
+        'repos/acme/widgets/issues/42/comments': ghJson([
+          {
+            id: 1,
+            user: { login: 'author' },
+            body,
+            created_at: updated.generatedAt,
+            html_url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',
+          },
+        ]),
+      }
+      t.ctx.gh = createFakeGh(options)
+      await t.ctx.canvases.write(HEAD_SHA, previous, manifest(HEAD_SHA))
+      const app = createApp(t.ctx)
+      const before = await json<PrBundle>(await app.request('/api/prs/42', { headers: LOCAL }))
+      expect(before.artifact?.summary).toBe(previous.summary)
+      const after = await json<PrBundle>(await app.request('/api/prs/42?refresh=1', { headers: LOCAL }))
+      expect(after.status).toBe('ready')
+      expect(after.artifact?.summary).toBe('Updated explanation')
     })
 
     it('does not scan when a canvas for the head is already stored', async () => {

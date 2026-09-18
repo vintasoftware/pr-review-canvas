@@ -308,6 +308,8 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
     harness: parseHarness(values.harness),
     allowStale: values['allow-stale'] === true,
   })
+  if (result.sharing.status === 'failed')
+    io.stderr(`${result.sharing.warning} ZIP: ${result.sharing.zipPath}`)
   printJson(io, result)
   return EXIT.ok
 }

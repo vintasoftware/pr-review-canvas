@@ -11,6 +11,9 @@ At most six sentences. No headings unless the reader asks for more. Markdown is 
 short lists, `path:line` references. Do not restate the question. Do not summarize the whole PR
 when the reader asked about one file.
 
+Call diff sections **chunks** in answers and proposed comments. Keep code identifiers and
+`#hunk:` link targets unchanged.
+
 ## Answer protocol
 
 For any "is this fine / covered / needed / safe?" question, the verdict comes first, in one of

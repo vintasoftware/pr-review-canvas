@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { buildCanvasComment } from '../canvas/comment.js'
 import { buildCanvasZip } from '../canvas/zip.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { CommentsPayload } from '../contract/comments.js'
@@ -526,5 +527,62 @@ describe('importFailureReason', () => {
     expect(importFailureReason(new AppError('CANVAS_REPO_MISMATCH', 'elsewhere', 400))).toBe('name-mismatch')
     expect(importFailureReason(new AppError('CANVAS_PR_MISMATCH', 'another PR', 400))).toBe('pr-mismatch')
     expect(importFailureReason(new AppError('CANVAS_INVALID', 'broken', 400))).toBe('not-zip')
+  })
+})
+
+describe('embedded canvas discovery', () => {
+  it.each([undefined, gitlabHost('gitlab.example.com')])(
+    'imports a compressed comment without downloading an attachment',
+    async host => {
+      const t = await makeTestContext({
+        git: createFakeGit({
+          refs: { [HEAD_SHA]: HEAD_SHA, [BASE_SHA]: BASE_SHA },
+          diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF },
+        }),
+        ...(host === undefined ? {} : { host }),
+      })
+      try {
+        const body = buildCanvasComment(
+          { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+          65_536
+        )
+        const outcome = await discoverSharedCanvas(t.ctx, pr(), comments({ issueComments: [issue(7, body)] }))
+        expect(outcome.imported?.status).toBe('ready')
+        expect(outcome.sharedCanvas).toMatchObject({ url: 'u7', downloadable: true })
+        expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.summary).toEqual(syntheticArtifact().summary)
+      } finally {
+        await t.cleanup()
+      }
+    }
+  )
+
+  it('ignores foreign names and falls through corrupt ZIPs to a valid comment', async () => {
+    const t = await makeTestContext()
+    try {
+      const body = buildCanvasComment(
+        { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+        65_536
+      )
+      const corrupt = buildCanvasComment(
+        { name: NAME_FOR_HEAD, bytes: Uint8Array.from([1, 2, 3]), headSha: HEAD_SHA, prNumber: 42 },
+        65_536
+      )
+      const outcome = await discoverSharedCanvas(
+        t.ctx,
+        pr(),
+        comments({
+          issueComments: [
+            issue(1, body),
+            issue(2, corrupt),
+            issue(3, body.replace('acme-widgets', 'other-repo')),
+          ],
+        })
+      )
+      expect(outcome.imported).not.toBeNull()
+      expect(outcome.sharedCanvas?.url).toBe('u1')
+      expect(outcome.warnings.length).toBeGreaterThan(0)
+    } finally {
+      await t.cleanup()
+    }
   })
 })

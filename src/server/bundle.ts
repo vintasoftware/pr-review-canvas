@@ -203,10 +203,11 @@ export async function resolveBundle(
 
   let found = await lookupCanvas(ctx, number, pr)
   let sharedCanvas: SharedCanvasInfo | null = null
-  // A canvas for this very head beats anything attached to the PR, so discovery runs only
-  // when there is none, a carried-over canvas included, and its import can turn a stale,
-  // missing, or carried-over bundle into one with the head's own canvas.
-  if (found.status !== 'ready' || found.carriedOver !== undefined) {
+  // A canvas for this very head beats anything attached to the PR, so an ordinary load runs
+  // discovery only when there is none, a carried-over canvas included, and its import can turn a
+  // stale, missing, or carried-over bundle into one with the head's own canvas. Refresh runs it
+  // whatever was found, to pick up a newer generation at the same head.
+  if (found.status !== 'ready' || found.carriedOver !== undefined || opts.refresh) {
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: opts.refresh })
     sharedCanvas = discovery.sharedCanvas
     allWarnings.push(...discovery.warnings)

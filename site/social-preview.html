@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>PR Review Canvas social preview</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./social-preview.css" />
+  </head>
+  <body>
+    <div class="promo-top">
+      <div class="promo-brand">
+        <img src="./brand.svg" width="30" height="30" alt="" />
+        <span>PR Review <strong>Canvas</strong></span>
+      </div>
+      <span class="promo-pill">GUIDED CODE REVIEW</span>
+    </div>
+    <h1 class="promo-heading">Understand large PRs, <em>one layer at a time.</em></h1>
+    <p class="promo-subtitle">Related changes across files. One guided review.</p>
+    <div id="preview-demo"></div>
+    <footer class="promo-footer">
+      <span><strong>Free</strong> · Open source · Runs locally</span>
+      <span class="promo-credit"
+        >Built by <img src="./vinta-software.svg" width="108" height="24" alt="Vinta Software"
+      /></span>
+    </footer>
+    <div class="promo-rule"></div>
+    <script type="module">
+      const response = await fetch('./')
+      if (!response.ok) throw new Error(`Could not load the site demo: ${response.status}`)
+      const site = new DOMParser().parseFromString(await response.text(), 'text/html')
+      document.getElementById('preview-demo').append(site.querySelector('.canvas-demo'))
+      await import('./main.js')
+      document.querySelector('[data-layer="timers"]').click()
+    </script>
+  </body>
+</html>
