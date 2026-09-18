@@ -26,9 +26,9 @@ export interface BundleOptions {
   refresh: boolean
   /**
    * The background poller asked, rather than a reader opening or refreshing the page. A local
-   * review answers a poll from the head the page was opened with: snapshotting the working tree
-   * every few seconds would stat the whole tree again and again, and every edit in between would
-   * leave another commit and another `derived/` tree behind it.
+   * review answers a poll from the head it last resolved: snapshotting the working tree every few
+   * seconds would stat the whole tree again and again, and every edit in between would leave
+   * another commit and another `derived/` tree behind it.
    */
   poll?: boolean
 }
@@ -76,6 +76,13 @@ export async function runDiscovery(
  */
 export function createPrLoader(ctx: AppContext) {
   const refreshed = new Set<number>()
+  /**
+   * The head each local review was last resolved at in this process, with the head `prepare` had
+   * on file at the time. A poll answers from it, so it can never report a status the page's own
+   * load contradicts; a later `prepare` files another head, and that is the one answer a waiting
+   * page is polling for, so it resolves again.
+   */
+  const localHeads = new Map<LocalKey, { head: Pr; preparedSha: string | null }>()
 
   /** One local review's cached meta, which `prepare` wrote. */
   async function localPr(key: LocalKey): Promise<Pr> {
@@ -127,6 +134,23 @@ export function createPrLoader(ctx: AppContext) {
     },
     async currentPr(number: number): Promise<Pr> {
       return (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
+    },
+    /**
+     * The head a local review describes. Every request but a poll reads the work again, so opening
+     * or refreshing the page catches an edit made since the canvas was generated. A poll reads it
+     * again only when this process has not resolved a head yet, or when `prepare` has filed one
+     * since: the rest of the time it answers about the head the page is showing, at no cost.
+     */
+    async localHead(key: LocalKey, opts: BundleOptions): Promise<Pr> {
+      const stored = await ctx.prs.readPr(key)
+      const preparedSha = stored?.headSha ?? null
+      const seen = localHeads.get(key)
+      if (opts.poll === true && seen !== undefined && seen.preparedSha === preparedSha) {
+        return seen.head
+      }
+      const head = await currentLocalPr(ctx, key, stored)
+      localHeads.set(key, { head, preparedSha })
+      return head
     },
     /** The head of either kind of target, so the routes both kinds serve need no branch. */
     async currentTarget(key: ReviewKey): Promise<Pr> {
@@ -351,13 +375,11 @@ async function currentLocalPr(ctx: AppContext, key: LocalKey, stored: Pr | null)
  */
 export async function resolveLocalBundle(
   ctx: AppContext,
+  loader: PrLoader,
   key: LocalKey,
   opts: BundleOptions
 ): Promise<PrBundle> {
-  const stored = await ctx.prs.readPr(key)
-  // Opening or refreshing the page reads the work again, so edits made since the canvas was
-  // generated show the outdated bar instead of an older tree passed off as the current one.
-  const head = opts.poll === true && stored !== null ? stored : await currentLocalPr(ctx, key, stored)
+  const head = await loader.localHead(key, opts)
   const warnings = [...ctx.projectConfig.warnings]
 
   const found = await ctx.canvases.findForLocal(key, head.headSha)

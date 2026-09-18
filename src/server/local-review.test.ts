@@ -12,7 +12,7 @@ import { createFakeRunner } from '../testing/fake-runner.js'
 import { makeTestContext, type TestContext } from '../testing/fakes.js'
 import { BASE_SHA, ghFor42, gitForLocal, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { createApp } from './app.js'
-import { resolveLocalBundle } from './bundle.js'
+import { createPrLoader, resolveLocalBundle } from './bundle.js'
 
 const LOCAL = { host: 'localhost:3010' }
 const POST = { ...LOCAL, origin: 'http://localhost:3010', 'content-type': 'application/json' }
@@ -208,7 +208,7 @@ describe('the local reviews', () => {
 
   it('offers the skill command when the review has not been prepared yet', async () => {
     t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
-    const bundle = await resolveLocalBundle(t.ctx, 'branch', { refresh: false })
+    const bundle = await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'branch', { refresh: false })
     expect(bundle.status).toBe('missing')
     expect(bundle.skillCommand).toBe('/pr-review-canvas branch')
     // With nothing on file the head is resolved from the clone, and `branch` never snapshots.
@@ -221,7 +221,7 @@ describe('the local reviews', () => {
     // The screen with no canvas is polled every few seconds, so it must cost no snapshot, no
     // commit, and no derived tree of its own, whatever the working tree holds.
     for (const refresh of [false, true, false]) {
-      const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh })
+      const bundle = await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'uncommitted', { refresh })
       expect(bundle.status).toBe('missing')
       expect(bundle.pr.headSha).toBe(BASE_SHA)
     }
@@ -229,32 +229,36 @@ describe('the local reviews', () => {
 
     // Once it is prepared, the head is the snapshot again, and a moved tree reads as outdated.
     await publishLocal(t, 'uncommitted')
-    expect((await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: true })).pr.headSha).toBe(HEAD_SHA)
+    expect(
+      (await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'uncommitted', { refresh: true })).pr.headSha
+    ).toBe(HEAD_SHA)
   })
 
   it('resolves the head the review was prepared for, not the other review kind', async () => {
     t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
     await prepare(t.ctx, target('branch'), quiet)
-    const bundle = await resolveLocalBundle(t.ctx, 'branch', { refresh: true })
+    const bundle = await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'branch', { refresh: true })
     expect(bundle.pr.headSha).toBe(BASE_SHA)
   })
 
-  it('reports the canvas as outdated once the working tree has moved on', async () => {
+  it('reports the canvas as outdated once the working tree has moved on, polls included', async () => {
     const git = gitForLocal()
     t = await makeTestContext({ git, gh: ghFor42() })
     await publishLocal(t, 'uncommitted')
     // A later edit hashes to another commit, so the canvas on screen is for the older one.
     git.options.snapshot = BASE_SHA
-    for (const opts of [{ refresh: true }, { refresh: false }]) {
-      const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', opts)
+    // One loader per server, so a page load and the polls behind it read one head and cannot
+    // contradict each other about the same working tree.
+    const loader = createPrLoader(t.ctx)
+    for (const opts of [{ refresh: true }, { refresh: false }, { refresh: false, poll: true }]) {
+      const bundle = await resolveLocalBundle(t.ctx, loader, 'uncommitted', opts)
       expect(bundle.status).toBe('stale')
       expect(bundle.stale).toMatchObject({ canvasHeadSha: HEAD_SHA, currentHeadSha: BASE_SHA })
     }
-    // The poller is the one caller that does not: it answers from the head the page was opened
-    // with, so an open tab costs no snapshot of the working tree.
-    const polled = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: false, poll: true })
-    expect(polled.status).toBe('ready')
-    expect(polled.pr.headSha).toBe(HEAD_SHA)
+    // A poll costs no snapshot of its own: it answers about the head the load resolved.
+    const snapshots = git.calls.filter(c => c[0] === 'write-tree').length
+    await resolveLocalBundle(t.ctx, loader, 'uncommitted', { refresh: false, poll: true })
+    expect(git.calls.filter(c => c[0] === 'write-tree').length).toBe(snapshots)
   })
 
   it('shows the canvas from its own files when the commits have left the clone', async () => {
@@ -262,7 +266,7 @@ describe('the local reviews', () => {
     await publishLocal(t, 'uncommitted')
     // Gone from the clone means neither the stored diffs nor the commits to rebuild them.
     t.ctx.derived.readOrBuild = async () => null
-    const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: false })
+    const bundle = await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'uncommitted', { refresh: false })
     expect(bundle.status).toBe('ready')
     expect(bundle.derivable).toBe(false)
     expect(bundle.files).toEqual(syntheticArtifact().files)
@@ -275,7 +279,9 @@ describe('the local reviews', () => {
     t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
     await publishLocal(t, 'uncommitted')
     t.ctx.preflight.get = async () => ({ installed: false, version: null })
-    const withoutAcpx = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: false })
+    const withoutAcpx = await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'uncommitted', {
+      refresh: false,
+    })
     expect(withoutAcpx.chat).toMatchObject({ enabled: false, acpx: false })
     expect(withoutAcpx.warnings).toContain(
       'acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on'
@@ -285,7 +291,7 @@ describe('the local reviews', () => {
       ...t.ctx.projectConfig,
       config: { ...t.ctx.projectConfig.config, chat: { enabled: false } },
     }
-    const chatOff = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: false })
+    const chatOff = await resolveLocalBundle(t.ctx, createPrLoader(t.ctx), 'uncommitted', { refresh: false })
     expect(chatOff.chat).toEqual({ enabled: false, acpx: false })
   })
 
@@ -303,6 +309,18 @@ describe('the local reviews', () => {
     expect((await t.ctx.state.read('uncommitted')).reviewed).toEqual({ 'layer:l1': true })
     expect((await t.ctx.state.read('branch')).reviewed).toEqual({})
     expect((await t.ctx.state.read(42)).reviewed).toEqual({})
+  })
+
+  it('shows the canvas a poll was waiting for as soon as it is generated', async () => {
+    t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
+    const loader = createPrLoader(t.ctx)
+    const poll = { refresh: false, poll: true }
+    // The screen with no canvas polls until one exists; the answer must arrive without a reload.
+    expect((await resolveLocalBundle(t.ctx, loader, 'uncommitted', poll)).status).toBe('missing')
+    await publishLocal(t, 'uncommitted')
+    const bundle = await resolveLocalBundle(t.ctx, loader, 'uncommitted', poll)
+    expect(bundle.status).toBe('ready')
+    expect(bundle.pr.headSha).toBe(HEAD_SHA)
   })
 
   it('refuses a mark keyed to a canvas the review will never show', async () => {

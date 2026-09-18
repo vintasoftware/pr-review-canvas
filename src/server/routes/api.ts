@@ -196,7 +196,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     const key = parseTargetKey(c.req.param('n'))
     const opts = { refresh: c.req.query('refresh') === '1', poll: c.req.query('poll') === '1' }
     const bundle = isLocalKey(key)
-      ? await resolveLocalBundle(ctx, key, opts)
+      ? await resolveLocalBundle(ctx, loader, key, opts)
       : await resolveBundle(ctx, loader, key, opts)
     return c.json(bundle)
   })

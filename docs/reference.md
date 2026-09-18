@@ -71,8 +71,9 @@ one never disturbs the other.
   snapshot cannot leave it collectable. The same working tree always hashes to the same commit.
 - **Staleness.** Committing after `--branch`, or editing a file after `--uncommitted`, moves the
   head, so `publish` answers `CANVAS_STALE`, exactly as a push does for a pull request. The page
-  reads the head again when it is opened and when `refresh` is pressed, and offers to regenerate;
-  it does not re-read the working tree on its background polls.
+  reads the head again when it is opened and when `refresh` is pressed, and offers to regenerate.
+  Its background polls answer about that same head, so they never contradict what the page shows;
+  they read the work again only once a new canvas has been prepared.
 - **Worktrees.** The snapshot index and its anchor are per worktree, so two worktrees of one clone
   never overwrite each other's snapshot. The review targets are not: `branch` and `uncommitted`
   name one review per clone, so worktrees share their canvas, review progress and chat threads.
