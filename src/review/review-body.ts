@@ -27,12 +27,13 @@ export function stateForHead(state: PrState, headSha: string): PrState {
 }
 
 /**
- * The commit the marks on this page describe: the current canvas's own commit, which is the head
- * unless the canvas was carried over, else the head. Keyed this way, a carried-over canvas keeps
- * its marks however often the head moves.
+ * The commit the marks on this page describe: the commit of the canvas on the page, whether it is
+ * current, carried over, or read as outdated, since its diff is what the reviewer looked at. The
+ * head only when there is no canvas. Keyed this way, a carried-over canvas keeps its marks however
+ * often the head moves, and marks made on an outdated canvas never credit a later one.
  */
 export function reviewedCommit(found: CanvasLookup, pr: Pr): string {
-  return found.status === 'ready' ? found.headSha : pr.headSha
+  return found.status === 'missing' ? pr.headSha : found.headSha
 }
 
 /** The layers a human still has to look at. Empty means approve is allowed. */

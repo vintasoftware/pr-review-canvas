@@ -182,15 +182,24 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect(body.unreviewed).toEqual([])
   })
 
-  it('leaves the marks alone when the canvas is outdated after all', async () => {
+  it('shows the marks made on an outdated canvas with it, and never credits them to a later canvas', async () => {
     await withOldCanvas({ keepForIdenticalDiff: false })
-    await t.ctx.state.update(42, state => ({
-      ...state,
-      reviewed: { 'layer:layer-1': true },
-      reviewedHeadSha: OLD_SHA,
-    }))
-    const b = await bundle()
-    expect(b.state.reviewed).toEqual({})
+    // The outdated view shows the older canvas and its diff, so a mark made there is the older canvas's.
+    const res = await createApp(t.ctx).request('/api/prs/42/reviewed/layer:layer-1', {
+      method: 'PUT',
+      headers: JSON_POST,
+      body: JSON.stringify({ reviewed: true, headSha: HEAD_SHA }),
+    })
+    expect(res.status).toBe(200)
+    expect((await t.ctx.state.read(42)).reviewedHeadSha).toBe(OLD_SHA)
+    const outdated = await bundle()
+    expect(outdated.status).toBe('stale')
+    expect(outdated.state.reviewed).toEqual({ 'layer:layer-1': true })
+    // A canvas generated for the head afterwards starts unreviewed.
+    await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), manifest(HEAD_SHA), 42)
+    const current = await bundle()
+    expect(current.status).toBe('ready')
+    expect(current.state.reviewed).toEqual({})
   })
 
   it('lets the sign-off routes use the canvas and the carried-over marks without a page load first', async () => {
