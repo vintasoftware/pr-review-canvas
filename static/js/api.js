@@ -70,12 +70,15 @@ export async function fetchJson(url, opts = {}) {
 }
 
 /**
+ * The bundle for one target. `refresh` asks the server to read the forge, or the working tree,
+ * again; `poll` says this is the background poller, which is answered from the head the page was
+ * opened with rather than by snapshotting the working tree every few seconds.
  * @param {ReviewKey} prNumber
- * @param {{ refresh?: boolean, fetchImpl?: typeof fetch | undefined }} [opts]
+ * @param {{ refresh?: boolean, poll?: boolean, fetchImpl?: typeof fetch | undefined }} [opts]
  * @returns {Promise<PrBundle>}
  */
 export function fetchBundle(prNumber, opts = {}) {
-  const q = opts.refresh ? '?refresh=1' : ''
+  const q = opts.refresh ? '?refresh=1' : opts.poll ? '?poll=1' : ''
   return fetchJson(`/api/prs/${prNumber}${q}`, { fetchImpl: opts.fetchImpl })
 }
 
@@ -235,7 +238,7 @@ export function pollBundle(prNumber, opts = {}) {
     /** @type {PrBundle} */
     let bundle
     try {
-      bundle = await fetchBundle(prNumber, { fetchImpl: opts.fetchImpl })
+      bundle = await fetchBundle(prNumber, { poll: true, fetchImpl: opts.fetchImpl })
     } catch (err) {
       if (!stopped) {
         opts.onError?.(err)

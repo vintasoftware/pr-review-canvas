@@ -42,6 +42,19 @@ export function largePrNoticeHtml(bundle) {
   )
 }
 
+/**
+ * The author, linked to their page on the forge. A local review's author is the name this clone
+ * commits as, which is no forge login, so it stays plain text.
+ * @param {string} author
+ * @param {boolean} local
+ * @returns {string}
+ */
+function authorHtml(author, local) {
+  return local
+    ? esc(author)
+    : `<a href="${esc(authorProfileUrl(author))}" target="_blank" rel="noopener noreferrer">${esc(author)}</a>`
+}
+
 /** @param {PrBundle['pr']} pr */
 export function statePill(pr) {
   const state = pr.state === 'open' && pr.draft ? 'draft' : pr.state
@@ -88,7 +101,7 @@ export function renderHeader(bundle, opts) {
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
     `<div class="title"><h1>${number}${esc(pr.title)}</h1>${forgeLink}</div>` +
-    `<p class="meta"><span>by <a href="${esc(authorProfileUrl(pr.author))}" target="_blank" rel="noopener noreferrer">${esc(pr.author)}</a></span>` +
+    `<p class="meta"><span>by ${authorHtml(pr.author, local)}</span>` +
     `<span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>${statePill(pr)}` +
     `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
     `${largePrNoticeHtml(bundle)}${risk}${progress}</div></header>`

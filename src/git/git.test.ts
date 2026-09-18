@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
 import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
 import {
+  CANVAS_ANCHOR_PREFIX,
   createGit,
   execGit,
   GitError,
@@ -222,6 +223,40 @@ describe('createGit (real adapter)', () => {
       // Nothing the user staged, or did not stage, has moved: the real index is untouched.
       expect(await g(dir, 'diff', '--cached', '--name-only')).toBe('')
       expect(await g(dir, 'ls-files', '--others', '--exclude-standard')).toBe('fresh.ts')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps an anchored snapshot reachable across the next two edits and a gc', async () => {
+    const dir = await makeTempDir('pr-review-anchor-')
+    try {
+      await g(dir, 'init', '-q', '-b', 'main')
+      await g(dir, 'config', 'user.email', 'test@example.com')
+      await g(dir, 'config', 'user.name', 'Test')
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 1\n')
+      await g(dir, 'add', '.')
+      await g(dir, 'commit', '-q', '-m', 'one')
+      const git = createGit(dir)
+
+      // The snapshot a canvas was published for, anchored the way `publish` anchors it.
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 2\n')
+      const published = String(await git.snapshotWorktree())
+      await git.anchorCommit(published)
+      // Two more edits: the moving ref points at the newest tree, not at the published one.
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 3\n')
+      const unanchored = String(await git.snapshotWorktree())
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 4\n')
+      const newest = String(await git.snapshotWorktree())
+      expect(await g(dir, 'rev-parse', SNAPSHOT_REF)).toBe(newest)
+
+      await g(dir, 'gc', '--prune=now', '--quiet')
+      // The published canvas still has its commit, so the page can still show its diffs.
+      expect(await g(dir, 'rev-parse', `${CANVAS_ANCHOR_PREFIX}/${published}`)).toBe(published)
+      expect(await git.show(published, 'a.ts')).toEqual(Buffer.from('export const a = 2\n'))
+      // The snapshot no canvas was published for is what the moving ref left behind, and gc took
+      // it: that is the collection the anchor is there to prevent.
+      expect(await git.commitExists(unanchored)).toBe(false)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

@@ -24,6 +24,13 @@ import { AppError } from './errors.js'
 
 export interface BundleOptions {
   refresh: boolean
+  /**
+   * The background poller asked, rather than a reader opening or refreshing the page. A local
+   * review answers a poll from the head the page was opened with: snapshotting the working tree
+   * every few seconds would stat the whole tree again and again, and every edit in between would
+   * leave another commit and another `derived/` tree behind it.
+   */
+  poll?: boolean
 }
 
 export interface DiscoveryRun {
@@ -321,19 +328,17 @@ async function bundleBase(
 }
 
 /**
- * The head the local review describes right now, resolved the way `prepare` would. Only asked for
- * on an explicit refresh: snapshotting the working tree on every poll would hash the whole tree
- * again and again.
+ * The head the local review describes right now, resolved the way `prepare` would.
+ *
+ * `source` is what decides whether the working tree is snapshotted, so an unprepared review asks
+ * for the branch tip: there is no canvas for a snapshot to be stale against yet, and that screen
+ * is the one the page polls until one exists.
  */
 async function currentLocalPr(ctx: AppContext, key: LocalKey, stored: Pr | null): Promise<Pr> {
-  const target: LocalPrepareTarget = (await ctx.prs.readLocalTarget(key)) ?? {
-    kind: 'local',
-    base: await resolveLocalBase(ctx.git, stored?.baseRef),
-    source: key,
-  }
+  const target: LocalPrepareTarget | null = await ctx.prs.readLocalTarget(key)
   return describeLocalWork(ctx.git, {
-    base: target.base,
-    source: target.source,
+    base: target?.base ?? (await resolveLocalBase(ctx.git, stored?.baseRef)),
+    source: stored === null ? 'branch' : (target?.source ?? key),
     repo: ctx.config.repo,
     now: ctx.now,
   })
@@ -350,7 +355,9 @@ export async function resolveLocalBundle(
   opts: BundleOptions
 ): Promise<PrBundle> {
   const stored = await ctx.prs.readPr(key)
-  const head = opts.refresh || stored === null ? await currentLocalPr(ctx, key, stored) : stored
+  // Opening or refreshing the page reads the work again, so edits made since the canvas was
+  // generated show the outdated bar instead of an older tree passed off as the current one.
+  const head = opts.poll === true && stored !== null ? stored : await currentLocalPr(ctx, key, stored)
   const warnings = [...ctx.projectConfig.warnings]
 
   const found = await ctx.canvases.findForLocal(key, head.headSha)

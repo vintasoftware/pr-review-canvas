@@ -10,6 +10,7 @@ import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { lookupCanvas } from '../../review/carry-over.js'
 import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
+import { canvasBelongsTo } from '../../store/canvas-store.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
@@ -69,11 +70,8 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
 /** Refuses a commit that is not an indexed canvas of this target. */
 async function requireCanvasOf(ctx: AppContext, key: ReviewKey, canvasSha: string): Promise<void> {
   const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
-  // A canvas of no pull request belongs to either kind of target; one of a pull request belongs
-  // only to that pull request, never to a local review.
-  const belongs =
-    entry !== undefined && (entry.prNumber === undefined || (!isLocalKey(key) && entry.prNumber === key))
-  if (!belongs) {
+  // The same rule the lookups use, so a mark can only be keyed to a canvas this target shows.
+  if (entry === undefined || !canvasBelongsTo(entry, key)) {
     throw new AppError(
       'CANVAS_NOT_FOUND',
       `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,

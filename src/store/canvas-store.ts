@@ -7,7 +7,7 @@ import {
   CanvasManifestSchema,
 } from '../contract/canvas-manifest.js'
 import { type ReviewArtifact, ReviewArtifactSchema } from '../contract/review-artifact.js'
-import type { LocalKey } from '../contract/review-key.js'
+import { isLocalKey, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import type { Git } from '../git/git.js'
 import { readJson, readText, writeJsonAtomic } from './atomic-json.js'
 
@@ -25,6 +25,25 @@ export type CanvasLookup =
 
 /** A canvas of another commit: one the head was built on, or one from a line the head no longer contains. */
 export type StaleCanvas = AncestorCanvas | { status: 'stale'; headSha: string; relation: 'unrelated' }
+
+/** One canvas as `index.json` lists it. */
+export type CanvasEntry = CanvasIndex['canvases'][string]
+
+/**
+ * Whether a canvas is one of this target's. A canvas belongs to a pull request when it was
+ * generated for it or before it existed; to a local review when it belongs to no pull request. A
+ * snapshot of uncommitted work sits on no branch, so only the `uncommitted` review claims it.
+ *
+ * Every consumer asks through here: the lookups that pick the canvas to show, and the routes that
+ * accept a canvas a mark was made on. Two answers to this question is how marks end up keyed to a
+ * canvas their review will never show.
+ */
+export function canvasBelongsTo(entry: CanvasEntry, key: ReviewKey): boolean {
+  if (isLocalKey(key)) {
+    return entry.prNumber === undefined && (key === 'uncommitted' || entry.worktree !== true)
+  }
+  return entry.worktree !== true && (entry.prNumber === undefined || entry.prNumber === key)
+}
 
 export interface CanvasStore {
   readonly root: string
@@ -76,7 +95,7 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
    */
   const rank = async (
     currentHeadSha: string,
-    accept: (entry: CanvasIndex['canvases'][string]) => boolean
+    accept: (entry: CanvasEntry) => boolean
   ): Promise<CanvasLookup> => {
     const index = await readIndex()
     if (index.canvases[currentHeadSha] !== undefined) {
@@ -118,7 +137,7 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       await writeJsonAtomic(path.join(dir, 'review.json'), artifact)
       await writeJsonAtomic(path.join(dir, 'manifest.json'), manifest)
       const index = await readIndex()
-      const entry: CanvasIndex['canvases'][string] = {
+      const entry: CanvasEntry = {
         generatedAt: artifact.generatedAt,
         source: artifact.source,
       }
@@ -135,18 +154,8 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       index.canvases[headSha] = entry
       await writeJsonAtomic(indexFile, index)
     },
-    findForPr: (prNumber, currentHeadSha) =>
-      // A canvas belongs to this PR when it was exported for it, or before the PR existed. A
-      // snapshot of uncommitted work never does: its commit is on no branch at all.
-      rank(
-        currentHeadSha,
-        entry => entry.worktree !== true && (entry.prNumber === undefined || entry.prNumber === prNumber)
-      ),
-    findForLocal: (key, currentHeadSha) =>
-      rank(
-        currentHeadSha,
-        entry => entry.prNumber === undefined && (key === 'uncommitted' || entry.worktree !== true)
-      ),
+    findForPr: (prNumber, currentHeadSha) => rank(currentHeadSha, entry => canvasBelongsTo(entry, prNumber)),
+    findForLocal: (key, currentHeadSha) => rank(currentHeadSha, entry => canvasBelongsTo(entry, key)),
     attachPrNumber: async (headSha, prNumber) => {
       const index = await readIndex()
       const entry = index.canvases[headSha]

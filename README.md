@@ -35,8 +35,8 @@ Start `pr-review serve` and open **http://localhost:3010/review/branch** or
 
 Nothing is posted anywhere: local work has no pull request, so the comment and sign-off commands
 stay off. Add `--base <ref>` to compare against another branch. Committing after `branch`, or
-editing a file after `uncommitted`, marks that canvas outdated, and the page offers to generate
-it again.
+editing a file after `uncommitted`, moves the head: the next time you open the page or press
+refresh, the canvas is marked outdated and the page offers to generate it again.
 
 ### Review side
 

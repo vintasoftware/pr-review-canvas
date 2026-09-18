@@ -158,12 +158,17 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
       return wanted.find(ref => refs[ref] !== undefined) ?? null
     },
     snapshotWorktree: async () => {
-      calls.push(['stash', 'create'])
+      // The commands the real adapter runs, so a test that asserts on `calls` reads the truth.
+      calls.push(['add', '-A'], ['write-tree'])
       const sha = options.snapshot ?? null
       if (sha !== null) {
         shas.add(sha)
+        calls.push(['commit-tree', sha])
       }
       return sha
+    },
+    anchorCommit: async sha => {
+      calls.push(['update-ref', sha])
     },
   }
 }

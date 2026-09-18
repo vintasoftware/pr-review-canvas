@@ -88,7 +88,7 @@ describe('the local reviews', () => {
       headRef: 'feat/b',
       uncommitted: false,
     })
-    expect(git.calls.some(c => c[0] === 'stash')).toBe(false)
+    expect(git.calls.some(c => c[0] === 'write-tree')).toBe(false)
     expect(await t.ctx.prs.readPr('branch')).toMatchObject({ title: 'feat/b', state: 'branch' })
     expect(await t.ctx.prs.readPr('uncommitted')).toBeNull()
   })
@@ -215,6 +215,23 @@ describe('the local reviews', () => {
     expect(bundle.pr).toMatchObject({ baseRef: 'origin/main', headSha: BASE_SHA, state: 'branch' })
   })
 
+  it('snapshots nothing until the uncommitted review has been prepared', async () => {
+    const git = gitForLocal()
+    t = await makeTestContext({ git, gh: ghFor42() })
+    // The screen with no canvas is polled every few seconds, so it must cost no snapshot, no
+    // commit, and no derived tree of its own, whatever the working tree holds.
+    for (const refresh of [false, true, false]) {
+      const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh })
+      expect(bundle.status).toBe('missing')
+      expect(bundle.pr.headSha).toBe(BASE_SHA)
+    }
+    expect(git.calls.some(c => c[0] === 'write-tree')).toBe(false)
+
+    // Once it is prepared, the head is the snapshot again, and a moved tree reads as outdated.
+    await publishLocal(t, 'uncommitted')
+    expect((await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: true })).pr.headSha).toBe(HEAD_SHA)
+  })
+
   it('resolves the head the review was prepared for, not the other review kind', async () => {
     t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
     await prepare(t.ctx, target('branch'), quiet)
@@ -228,9 +245,16 @@ describe('the local reviews', () => {
     await publishLocal(t, 'uncommitted')
     // A later edit hashes to another commit, so the canvas on screen is for the older one.
     git.options.snapshot = BASE_SHA
-    const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: true })
-    expect(bundle.status).toBe('stale')
-    expect(bundle.stale).toMatchObject({ canvasHeadSha: HEAD_SHA, currentHeadSha: BASE_SHA })
+    for (const opts of [{ refresh: true }, { refresh: false }]) {
+      const bundle = await resolveLocalBundle(t.ctx, 'uncommitted', opts)
+      expect(bundle.status).toBe('stale')
+      expect(bundle.stale).toMatchObject({ canvasHeadSha: HEAD_SHA, currentHeadSha: BASE_SHA })
+    }
+    // The poller is the one caller that does not: it answers from the head the page was opened
+    // with, so an open tab costs no snapshot of the working tree.
+    const polled = await resolveLocalBundle(t.ctx, 'uncommitted', { refresh: false, poll: true })
+    expect(polled.status).toBe('ready')
+    expect(polled.pr.headSha).toBe(HEAD_SHA)
   })
 
   it('shows the canvas from its own files when the commits have left the clone', async () => {
@@ -279,6 +303,24 @@ describe('the local reviews', () => {
     expect((await t.ctx.state.read('uncommitted')).reviewed).toEqual({ 'layer:l1': true })
     expect((await t.ctx.state.read('branch')).reviewed).toEqual({})
     expect((await t.ctx.state.read(42)).reviewed).toEqual({})
+  })
+
+  it('refuses a mark keyed to a canvas the review will never show', async () => {
+    t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
+    await publishLocal(t, 'uncommitted')
+    await prepare(t.ctx, target('branch'), quiet)
+    // The snapshot's canvas is the uncommitted review's alone: marking against it from the branch
+    // review would key that review's marks to a commit its own lookup never returns.
+    const put = await createApp(t.ctx).request('/api/prs/branch/reviewed/layer:l1', {
+      method: 'PUT',
+      headers: POST,
+      body: JSON.stringify({ reviewed: true, canvasSha: HEAD_SHA }),
+    })
+    expect(put.status).toBe(404)
+    expect(await json<{ error: { code: string } }>(put)).toMatchObject({
+      error: { code: 'CANVAS_NOT_FOUND' },
+    })
+    expect((await t.ctx.state.read('branch')).reviewed).toEqual({})
   })
 
   it('answers the routes that need a prepared review, and says which one is missing', async () => {

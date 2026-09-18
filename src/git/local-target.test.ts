@@ -59,7 +59,7 @@ describe('resolveLocalHead', () => {
       branch: 'feat/b',
       uncommitted: false,
     })
-    expect(git.calls.some(c => c[0] === 'stash')).toBe(false)
+    expect(git.calls.some(c => c[0] === 'write-tree')).toBe(false)
   })
 
   it('reports a detached HEAD as no branch at all', async () => {

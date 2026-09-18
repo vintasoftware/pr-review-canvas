@@ -78,11 +78,13 @@ describe('fetchJson', () => {
     const f = fakeFetch(200, {})
     await fetchBundle(42, { fetchImpl: f.impl })
     await fetchBundle(42, { refresh: true, fetchImpl: f.impl })
+    await fetchBundle(42, { poll: true, fetchImpl: f.impl })
     await fetchPatches(42, { fetchImpl: f.impl })
     await fetchPatches(42, { headSha: 'abc', fetchImpl: f.impl })
     expect(f.calls.map(c => c.url)).toEqual([
       '/api/prs/42',
       '/api/prs/42?refresh=1',
+      '/api/prs/42?poll=1',
       '/api/prs/42/patches',
       '/api/prs/42/patches?headSha=abc',
     ])
@@ -121,9 +123,11 @@ describe('pollBundle', () => {
     await vi.advanceTimersByTimeAsync(4999)
     expect(f.urls).toEqual([])
     await vi.advanceTimersByTimeAsync(1)
-    expect(f.urls).toEqual(['/api/prs/7'])
+    // Every poll says so, so a local review is answered from the head the page was opened with
+    // instead of snapshotting the working tree again.
+    expect(f.urls).toEqual(['/api/prs/7?poll=1'])
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(f.urls).toEqual(['/api/prs/7', '/api/prs/7', '/api/prs/7'])
+    expect(f.urls).toEqual(['/api/prs/7?poll=1', '/api/prs/7?poll=1', '/api/prs/7?poll=1'])
     expect(seen).toEqual(['missing', 'missing', 'ready'])
     await vi.advanceTimersByTimeAsync(20_000)
     expect(f.urls.length).toBe(3)

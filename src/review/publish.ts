@@ -234,10 +234,14 @@ export async function publish(
     testPatterns: context.tests.patterns,
   })
   const manifest = buildManifest(context, artifact, ctx.version)
-  await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber, {
-    // A snapshot commit is on no branch, so it must never be offered as a pull request's canvas.
-    worktree: context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE,
-  })
+  // A snapshot commit is on no branch, so it must never be offered as a pull request's canvas.
+  const worktree = context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE
+  await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber, { worktree })
+  if (worktree) {
+    // The snapshot ref moves with the working tree. This canvas stays, and the page reads its
+    // diffs from its own commit, so it gets an anchor that the next edit cannot take away.
+    await ctx.git.anchorCommit(context.headSha)
+  }
   const published: PublishResult = {
     status: 'published',
     sharing: { status: 'local' },

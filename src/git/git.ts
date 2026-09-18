@@ -41,6 +41,8 @@ export interface Git {
    * Nothing the user staged is touched: the snapshot is built in an index of this tool's own.
    */
   snapshotWorktree(): Promise<string | null>
+  /** Keeps `sha` reachable for good, whatever the working tree does next. */
+  anchorCommit(sha: string): Promise<void>
 }
 
 /**
@@ -51,11 +53,17 @@ export interface Git {
 export const SNAPSHOT_INDEX = 'pr-review-canvas.index'
 
 /**
- * Where the snapshot commit is anchored, so `git gc` cannot collect the canvas out from under us.
- * `refs/worktree/` is git's own per-worktree namespace: two worktrees of one clone each keep their
- * own snapshot instead of overwriting the single ref they would otherwise share.
+ * Where the newest snapshot commit is anchored, so `git gc` cannot collect it between `prepare`
+ * and `publish`. `refs/worktree/` is git's own per-worktree namespace: two worktrees of one clone
+ * each keep their own snapshot instead of overwriting the single ref they would otherwise share.
+ *
+ * It moves with the working tree, so it protects one commit only. A canvas outlives the tree it
+ * was drawn from, and `anchorCommit` gives each published one an anchor of its own.
  */
 export const SNAPSHOT_REF = 'refs/worktree/pr-review-snapshot'
+
+/** One ref per published snapshot canvas, under the same per-worktree namespace. */
+export const CANVAS_ANCHOR_PREFIX = 'refs/worktree/pr-review-canvas'
 
 /**
  * A fixed identity and time, so the same working tree always hashes to the same commit: preparing
@@ -204,6 +212,9 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
       )
       await run(['update-ref', SNAPSHOT_REF, sha])
       return sha
+    },
+    anchorCommit: async sha => {
+      await run(['update-ref', `${CANVAS_ANCHOR_PREFIX}/${sha}`, sha])
     },
   }
 }

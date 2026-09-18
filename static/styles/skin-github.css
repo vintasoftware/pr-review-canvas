@@ -153,7 +153,9 @@
 [data-skin='github'] .pill.open,
 [data-skin='github'] .pill.merged,
 [data-skin='github'] .pill.closed,
-[data-skin='github'] .pill.draft {
+[data-skin='github'] .pill.draft,
+[data-skin='github'] .pill.branch,
+[data-skin='github'] .pill.uncommitted {
   border-color: transparent;
   color: #ffffff;
 }
@@ -168,6 +170,10 @@
 }
 [data-skin='github'] .pill.draft {
   background: light-dark(#6e7781, #636e7b);
+}
+[data-skin='github'] .pill.branch,
+[data-skin='github'] .pill.uncommitted {
+  background: light-dark(#0969da, #1f6feb);
 }
 [data-skin='github'] .pill.risk,
 [data-skin='github'] .pill.kind,

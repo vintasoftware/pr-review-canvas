@@ -7,7 +7,10 @@ import { z } from 'zod'
  */
 export const LOCAL_KEYS = ['branch', 'uncommitted'] as const
 
-/** The current branch against the base it will be opened against, uncommitted edits left out. */
+/**
+ * Which local review: `branch` is the current branch against the base it will be opened against,
+ * uncommitted edits left out; `uncommitted` is that branch with the working tree on top.
+ */
 export type LocalKey = (typeof LOCAL_KEYS)[number]
 
 /**
