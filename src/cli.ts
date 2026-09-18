@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { createAgentRunner } from './acpx/acpx.js'
+import { checkChatGuards, checkSandbox, dcgVersion } from './acpx/sandbox.js'
 import {
   type CliIo,
   EXIT,
@@ -49,7 +50,7 @@ const USAGE = `usage: pr-review <command> [flags]
   export (--pr <n> | --head <ref|sha>) [--out <file|dir>] [--repo <dir>] [--data-dir <dir>]
                    (both flags: the named commit is exported and the number stamps the zip)
   import <zip> [--pr <n>] [--force] [--repo <dir>] [--data-dir <dir>]
-  doctor [--all-checks] [--repo <dir>] [--data-dir <dir>]
+  doctor [--all-checks] [--json] [--repo <dir>] [--data-dir <dir>]
 
 Every command prints one JSON line on success and { "error": { code, message, hint } } on failure.
 Exit codes: 0 ok, 1 error, 2 usage, 4 gh/glab missing or not logged in, 5 invalid model output.
@@ -136,6 +137,9 @@ async function doctorCommand(argv: string[]): Promise<number> {
       client: host => createHostClient(host.cli),
       version: readPackageVersion(),
       acpxVersion: () => createAgentRunner().acpxVersion(),
+      dcgVersion: async () => dcgVersion(),
+      checkSandbox: async () => checkSandbox(),
+      checkChatGuards: async repoRoot => checkChatGuards(repoRoot),
       dataDirOverride: dataDir ?? readEnv(process.env, 'PR_REVIEW_DATA_DIR'),
     },
     rest,

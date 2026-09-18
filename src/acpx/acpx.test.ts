@@ -1,7 +1,8 @@
 // @vitest-environment node
 // The spawn path against a real child process: src/testing/fake-acpx.mjs stands in for acpx and
 // plays the scenarios the spike showed, the exit-0-without-an-answer one included.
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,10 +15,19 @@ import {
   buildExecArgs,
   buildPromptArgs,
   commonAcpxArgs,
-  createAgentRunner,
+  createAgentRunner as createProductionAgentRunner,
   readExecStream,
 } from './acpx.js'
 import type { AgentEvent } from './events.js'
+import { SandboxError } from './sandbox.js'
+
+// Process protocol tests inject unsandboxed transports; sandbox.test.ts exercises containment.
+const createAgentRunner: typeof createProductionAgentRunner = options =>
+  createProductionAgentRunner({
+    spawnImpl: spawn,
+    execFileImpl: (file, args, opts) => promisify(execFile)(file, args, { ...opts, encoding: 'utf8' }),
+    ...options,
+  })
 
 const FAKE = path.join(PACKAGE_ROOT, 'src', 'testing', 'fake-acpx.mjs')
 
@@ -299,13 +309,13 @@ describe('createAgentRunner().exec', () => {
     expect(result).toMatchObject({ ok: false, code: 'AGENT_AUTH_REQUIRED' })
   })
 
-  it('maps the exit code when acpx says nothing', async () => {
+  it('maps the exit code and preserves stderr when acpx emits no JSON', async () => {
     env.FAKE_ACPX_MODE = 'usage'
     expect(await runner().exec({ agent: 'claude', prompt: 'x', cwd: PACKAGE_ROOT, timeoutSec: 30 })).toEqual({
       ok: false,
       text: '',
       code: 'AGENT_USAGE',
-      message: 'acpx rejected the command line',
+      message: "error: unknown option '--nope'",
     })
   })
 
@@ -436,10 +446,34 @@ describe('the runner in the odd cases', () => {
     })
     const run = agentRunner.run(RUN)
     expect(await collect(run.events)).toEqual([
-      { type: 'error', code: 'AGENT_MISSING', message: 'acpx could not be started' },
+      { type: 'error', code: 'AGENT_MISSING', message: 'no processes left' },
     ])
     // There is nothing to cancel, and asking does not throw.
     await expect(run.cancel()).resolves.toBeUndefined()
+  })
+
+  it('names the sandbox when preparing the launch is what throws', async () => {
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      spawnImpl: () => {
+        throw new SandboxError('bubblewrap is not installed')
+      },
+    })
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      { type: 'error', code: 'AGENT_PERMISSION_DENIED', message: 'bubblewrap is not installed' },
+    ])
+  })
+
+  it('describes a spawn that throws something other than an Error', async () => {
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      spawnImpl: () => {
+        throw 'nope'
+      },
+    })
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      { type: 'error', code: 'AGENT_MISSING', message: 'acpx could not be started' },
+    ])
   })
 
   it('reports a child that fails for a reason other than a missing binary', async () => {
@@ -467,6 +501,17 @@ describe('the runner in the odd cases', () => {
         code: 'AGENT_PERMISSION_DENIED',
         message: 'the agent was denied a permission it needed',
       },
+    ])
+  })
+
+  it('treats a child killed by a signal as a failed exit', async () => {
+    const agentRunner = createAgentRunner({
+      bin: process.execPath,
+      spawnImpl: (_file, _args, options) =>
+        spawn(process.execPath, ['-e', 'process.kill(process.pid, "SIGTERM")'], options),
+    })
+    expect(await collect(agentRunner.run(RUN).events)).toEqual([
+      { type: 'error', code: 'AGENT_FAILED', message: 'acpx exited with code 1' },
     ])
   })
 

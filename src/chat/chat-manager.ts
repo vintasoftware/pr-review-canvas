@@ -2,6 +2,7 @@
 // and keep the transcript. The lock is what makes `CHAT_BUSY` a real answer rather than two
 // agents writing into one thread.
 import type { AgentRunner } from '../acpx/acpx.js'
+import { agentPathAsync } from '../acpx/sandbox-client.js'
 import type { ChatContext, ChatEvent, ChatThreadsResponse, ChatTurn } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
@@ -210,7 +211,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       readLines: target.readLines,
     })
     const seed = seeded
-      ? `${renderSeed(await deps.loadSeedTemplate(), target.artifact, seedPaths(deps, target))}\n\n`
+      ? `${renderSeed(await deps.loadSeedTemplate(), target.artifact, await seedPaths(deps, target))}\n\n`
       : ''
     const prompt = `${seed}${contextBlock}\n\n## Question\n\n${input.message}\n`
 
@@ -382,13 +383,14 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 }
 
-function seedPaths(deps: ChatManagerDeps, target: ChatTarget): SeedPaths {
-  return {
-    headDir: `${target.derivedDir}/head`,
-    baseDir: `${target.derivedDir}/base`,
-    patchDir: `${target.derivedDir}/patches`,
-    repoRoot: deps.repoRoot,
-  }
+async function seedPaths(deps: ChatManagerDeps, target: ChatTarget): Promise<SeedPaths> {
+  const [headDir, baseDir, patchDir, repoRoot] = await Promise.all([
+    agentPathAsync(`${target.derivedDir}/head`),
+    agentPathAsync(`${target.derivedDir}/base`),
+    agentPathAsync(`${target.derivedDir}/patches`),
+    agentPathAsync(deps.repoRoot),
+  ])
+  return { headDir, baseDir, patchDir, repoRoot }
 }
 
 function hintFor(code: string): { hint?: string } {

@@ -13,6 +13,38 @@
 - New error codes: `GLAB_MISSING`, `GLAB_UNAUTHENTICATED`, `GITLAB_API_ERROR`. Exit code `4` covers
   both CLIs.
 
+### AI chat
+
+- Chat runs the agent inside read-only filesystem containment: bubblewrap on Ubuntu and Ubuntu
+  WSL2, Seatbelt on macOS, and Ubuntu WSL2 for Windows 11 hosts. The repository, Git metadata, and
+  snapshots are read-only; scratch files and agent sessions live in a separate runtime directory.
+- Destructive Command Guard (`dcg`) is mandatory for chat. Native Bash `PreToolUse` hooks in Codex
+  and Claude Code evaluate commands through an app-owned policy that also covers cloud, database,
+  Kubernetes, Terraform, GitHub Actions, and Cloudflare Workers rules. Denied commands return the
+  rule and explanation to the model and the chat UI.
+- Chat pins its ACP adapters, protects the Codex hook configuration against writes and renaming,
+  and verifies native hook activation before a session starts.
+- Sandboxes are prepared and attested asynchronously once per checkout, and complete runtimes are
+  published atomically so failed or concurrent starts retry safely.
+
+### Diagnostics and development
+
+- `doctor` prints readable PASS/FAIL checks with installation and repair instructions by default;
+  `--json` keeps the structured report. Default checks require `dcg`; `--all-checks` also probes
+  the sandbox, `acpx`, and native hook activation.
+- Added disposable containment fixtures, offline native-tool tests through both acpx adapters, and
+  macOS and Windows (Ubuntu WSL2) CI jobs.
+
+### Upgrade from 0.3.0
+
+1. Install `dcg` following the
+   [upstream instructions](https://github.com/Dicklesworthstone/destructive_command_guard#quick-install)
+   and verify `dcg --version`. `pr-review doctor` fails without it.
+2. For chat, install `acpx@0.13.2` and bubblewrap (Ubuntu and WSL2), then run
+   `pr-review doctor --all-checks`. Windows 11 users install Node, `dcg`, `acpx`, and their agent
+   inside Ubuntu WSL2. See the README's AI Chat setup.
+3. Existing configuration and saved canvases remain compatible; no migration is required.
+
 ## 0.3.0
 
 Changes since 0.2.0.

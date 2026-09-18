@@ -11,7 +11,7 @@ import type { GenerationContext, PrepareTarget } from './contract/generation-con
 import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
 import { fetchPrRefs } from './git/pr-refs.js'
-import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
+import { type DoctorDeps, formatDoctorReport, runDoctorChecks } from './review/doctor.js'
 import {
   CLAUDE_SKILLS_DIR,
   CODEX_SKILLS_DIR,
@@ -314,14 +314,16 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
   return EXIT.ok
 }
 
-/**
- * `doctor`: every check the tool needs, as one JSON line. Exit 1 when one fails, so a script can
- * read the code instead of the JSON.
- */
+/** Explain prerequisites by default; keep the structured report available to scripts. */
 export async function runDoctor(deps: DoctorDeps, argv: string[], io: CliIo): Promise<number> {
-  const { values } = parseArgs({ args: argv, options: { 'all-checks': { type: 'boolean' } }, strict: true })
+  const { values } = parseArgs({
+    args: argv,
+    options: { 'all-checks': { type: 'boolean' }, json: { type: 'boolean' } },
+    strict: true,
+  })
   const report = await runDoctorChecks(deps, { allChecks: values['all-checks'] === true })
-  printJson(io, report)
+  if (values['json']) printJson(io, report)
+  else io.stdout(formatDoctorReport(report))
   return report.ok ? EXIT.ok : EXIT.error
 }
 

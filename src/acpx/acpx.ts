@@ -5,6 +5,7 @@
  */
 import { type ChildProcess, execFile, type SpawnOptions, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
 import {
   type AgentErrorCode,
   type AgentEvent,
@@ -14,6 +15,9 @@ import {
   scrubForLog,
 } from './events.js'
 import { createNdjsonSplitter, NdjsonError } from './ndjson.js'
+import { hostCommand, SandboxError, type SandboxOptions } from './sandbox.js'
+
+import { agentPathAsync, createSandboxClient } from './sandbox-client.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -134,6 +138,7 @@ export type ExecFileImpl = (
 ) => Promise<{ stdout: string; stderr: string }>
 
 export interface CreateAgentRunnerOptions {
+  sandbox?: SandboxOptions
   bin?: string
   spawnImpl?: SpawnImpl
   execFileImpl?: ExecFileImpl
@@ -191,10 +196,23 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
   const bin = opts.bin ?? ACPX_BIN
   const slackMs = opts.deadlineSlackMs ?? DEADLINE_SLACK_MS
   const cancelGraceMs = opts.cancelGraceMs ?? CANCEL_TIMEOUT_SEC * 1000
-  const spawnImpl = opts.spawnImpl ?? spawn
+  const sandbox = createSandboxClient(opts.sandbox)
+  const chatCommand = async (file: string, args: string[], cwd: string) => {
+    // Tests may supply a fixture binary. Production always uses the guarded acpx entry point.
+    if (opts.bin) return sandbox(file, args, cwd)
+    const launcher = await agentPathAsync(fileURLToPath(new URL('./chat-acpx.mjs', import.meta.url)))
+    return sandbox('node', [launcher, ...args], cwd)
+  }
   const run: ExecFileImpl =
     opts.execFileImpl ??
-    ((file, args, options) => execFileAsync(file, args, { ...options, encoding: 'utf8', shell: false }))
+    (async (file, args, options) => {
+      // Version and login probes do not start an agent session.
+      const command =
+        file === bin && args[0] !== '--version'
+          ? await chatCommand(file, args, options.cwd ?? process.cwd())
+          : hostCommand(file, args)
+      return execFileAsync(command.file, command.args, { ...options, encoding: 'utf8', shell: false })
+    })
 
   const execQuiet = async (
     file: string,
@@ -224,20 +242,29 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
 
   return {
     run(options) {
-      return startRun(
-        bin,
-        spawnImpl,
-        options,
-        // The cancel call gets its own timeout, and SIGKILL when it elapses: a cancel that hangs
-        // must neither hold the kill back nor stay behind as a process of its own.
-        agentArgs =>
-          execQuiet(bin, agentArgs, {
-            cwd: options.cwd,
-            timeoutSec: CANCEL_TIMEOUT_SEC,
-            killSignal: 'SIGKILL',
-          }),
-        slackMs,
-        cancelGraceMs
+      const start = (spawnImpl: SpawnImpl) =>
+        startRun(
+          bin,
+          spawnImpl,
+          options,
+          // The cancel call gets its own timeout, and SIGKILL when it elapses: a cancel that hangs
+          // must neither hold the kill back nor stay behind as a process of its own.
+          agentArgs =>
+            execQuiet(bin, agentArgs, {
+              cwd: options.cwd,
+              timeoutSec: CANCEL_TIMEOUT_SEC,
+              killSignal: 'SIGKILL',
+            }),
+          slackMs,
+          cancelGraceMs
+        )
+      if (opts.spawnImpl) return start(opts.spawnImpl)
+      return prepareRun(
+        async () => {
+          const command = await chatCommand(bin, buildPromptArgs(options), options.cwd)
+          return () => start((_file, _args, spawnOptions) => spawn(command.file, command.args, spawnOptions))
+        },
+        options.timeoutSec * 1000 + slackMs
       )
     },
 
@@ -262,13 +289,18 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         return { ok: false, text: '', code: error.code, message: error.message }
       }
       if (!result.ok) {
+        if (result.error instanceof SandboxError) {
+          return { ok: false, text: '', code: 'AGENT_PERMISSION_DENIED', message: result.error.message }
+        }
         const code = exitCodeOf(result.error)
         return {
           ok: false,
           text: '',
           // A failed call never exits 0, so the table always names a code here.
           code: exitCodeToAgentCode(code) ?? 'AGENT_FAILED',
-          message: missingBinary(result.error) ? `${bin} is not installed` : exitCodeMessage(code),
+          message: missingBinary(result.error)
+            ? `${bin} is not installed`
+            : result.stderr.trim() || exitCodeMessage(code),
         }
       }
       if (!ended) {
@@ -364,6 +396,55 @@ export function readExecStream(stdout: string): {
   return { text: text.trim(), error: null, ended }
 }
 
+/** Cancellation and the deadline also cover asynchronous sandbox preparation. */
+function prepareRun(prepare: () => Promise<() => AgentRun>, timeoutMs: number): AgentRun {
+  const queue = createEventQueue()
+  let stopped = false
+  let run: AgentRun | undefined
+  let cancellation: Promise<void> | undefined
+  const deadline = setTimeout(() => {
+    stopped = true
+    queue.push({ type: 'error', code: 'AGENT_TIMEOUT', message: 'Chat sandbox preparation timed out' })
+    queue.end()
+  }, timeoutMs)
+  deadline.unref?.()
+  void (async () => {
+    try {
+      const start = await prepare()
+      clearTimeout(deadline)
+      if (stopped) return
+      run = start()
+      for await (const event of run.events) queue.push(event)
+    } catch (error) {
+      if (!stopped)
+        queue.push({
+          type: 'error',
+          code: error instanceof SandboxError ? 'AGENT_PERMISSION_DENIED' : 'AGENT_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+        })
+    } finally {
+      clearTimeout(deadline)
+      queue.end()
+    }
+  })()
+  return {
+    events: queue.iterate(),
+    cancel() {
+      if (!cancellation) {
+        stopped = true
+        clearTimeout(deadline)
+        if (run) cancellation = run.cancel()
+        else {
+          queue.push({ type: 'done', stopReason: 'cancelled' })
+          queue.end()
+          cancellation = Promise.resolve()
+        }
+      }
+      return cancellation
+    },
+  }
+}
+
 /** Spawns one prompt turn and turns its output into events. */
 function startRun(
   bin: string,
@@ -386,8 +467,12 @@ function startRun(
   let child: ChildProcess
   try {
     child = spawnImpl(bin, buildPromptArgs(options), { cwd: options.cwd, stdio: ['pipe', 'pipe', 'pipe'] })
-  } catch {
-    queue.push({ type: 'error', code: 'AGENT_MISSING', message: `${bin} could not be started` })
+  } catch (error) {
+    queue.push({
+      type: 'error',
+      code: error instanceof SandboxError ? 'AGENT_PERMISSION_DENIED' : 'AGENT_MISSING',
+      message: error instanceof Error ? error.message : `${bin} could not be started`,
+    })
     queue.end()
     return { events: queue.iterate(), cancel: async () => undefined }
   }

@@ -1,8 +1,8 @@
-// `pr-review doctor`: one pass over everything the tool needs before it can serve a review, as
-// one JSON line. It reports instead of throwing, so a broken setup still answers.
+// Report each prerequisite separately so a broken setup still explains what needs fixing.
 import { randomBytes } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { DCG_INSTALL_HINT, DCG_POLICY_HINT, DcgPolicyError, SANDBOX_INSTALL_HINT } from '../acpx/sandbox.js'
 import { ORIGIN_HINT } from '../config.js'
 import type { Git } from '../git/git.js'
 import { CLI_INFO, type HostClient } from '../host/client.js'
@@ -12,7 +12,7 @@ import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
 import { skillContent } from './skill-content.js'
 
-export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill'] as const
+export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill', 'dcg'] as const
 export type DoctorCheckName = (typeof DOCTOR_CHECKS)[number]
 
 export interface DoctorCheck {
@@ -24,7 +24,11 @@ export interface DoctorCheck {
 export interface DoctorReport {
   ok: boolean
   version: string
-  checks: Record<DoctorCheckName, DoctorCheck> & { acpx?: DoctorCheck }
+  checks: Record<DoctorCheckName, DoctorCheck> & {
+    acpx?: DoctorCheck
+    sandbox?: DoctorCheck
+    chatGuards?: DoctorCheck
+  }
 }
 
 export interface DoctorDeps {
@@ -35,6 +39,9 @@ export interface DoctorDeps {
   client: (host: Host) => HostClient
   version: string
   acpxVersion: () => Promise<string | null>
+  dcgVersion: () => Promise<string>
+  checkSandbox: () => Promise<void>
+  checkChatGuards: (cwd: string) => Promise<string>
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
   dataDirOverride?: string | undefined
   readSkill?: (file: string) => Promise<string | null>
@@ -169,9 +176,111 @@ export async function runDoctorChecks(
   }
 
   const skill = await checkSkill(repoRoot, deps.readSkill)
-  const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill }
+  let dcg: DoctorCheck
+  try {
+    const version = (await deps.dcgVersion()).trim()
+    dcg = version
+      ? { ok: true, detail: version }
+      : { ok: false, detail: 'dcg did not report a version', hint: DCG_INSTALL_HINT }
+  } catch (err) {
+    dcg = {
+      ok: false,
+      detail: message(err),
+      hint: err instanceof DcgPolicyError ? DCG_POLICY_HINT : DCG_INSTALL_HINT,
+    }
+  }
+  const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill, dcg }
   if (options.allChecks) {
     checks.acpx = await checkAcpx(deps)
+    try {
+      await deps.checkSandbox()
+      checks.sandbox = { ok: true, detail: 'filesystem containment is available' }
+    } catch (err) {
+      checks.sandbox = { ok: false, detail: message(err), hint: SANDBOX_INSTALL_HINT }
+    }
+    try {
+      if (!repoRoot || !checks.sandbox.ok || !dcg.ok)
+        throw new Error('Fix the repository, sandbox, and dcg checks before checking chat hooks.')
+      checks.chatGuards = { ok: true, detail: await deps.checkChatGuards(repoRoot) }
+    } catch (err) {
+      checks.chatGuards = {
+        ok: false,
+        detail: message(err),
+        hint: 'see README AI Chat setup; chat requires active dcg hooks',
+      }
+    }
   }
   return { ok: Object.values(checks).every(check => check.ok), version: deps.version, checks }
+}
+
+const CHECK_LABELS: Record<keyof DoctorReport['checks'], string> = {
+  git: 'Git repository',
+  origin: 'GitHub origin',
+  gh: 'GitHub CLI',
+  ghAuth: 'GitHub login',
+  dataDir: 'Canvas storage',
+  skill: 'Review skill',
+  dcg: 'dcg and required chat policy',
+  acpx: 'acpx',
+  sandbox: 'Filesystem sandbox',
+  chatGuards: 'Native chat hooks',
+}
+
+/** Plain text works in terminals, pasted bug reports, and agent prompts. */
+export function formatDoctorReport(
+  report: DoctorReport,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const windows = platform === 'win32'
+  const mac = platform === 'darwin'
+  const installs: Partial<Record<keyof DoctorReport['checks'], string>> = {
+    git: windows
+      ? 'Install Git for Windows from https://git-scm.com/downloads/win.'
+      : mac
+        ? 'Install Git with `xcode-select --install`.'
+        : 'Install Git with `sudo apt-get update` then `sudo apt-get install git`.',
+    gh: windows
+      ? 'Install GitHub CLI with `winget install --id GitHub.cli`.'
+      : mac
+        ? 'Install GitHub CLI with `brew install gh`, or use https://cli.github.com.'
+        : 'Install GitHub CLI using https://github.com/cli/cli/blob/trunk/docs/install_linux.md.',
+    acpx: 'Install acpx with `npm install -g acpx@0.13.2`, then check `acpx --version`.',
+    sandbox: windows
+      ? 'Install Ubuntu WSL2 from PowerShell with `wsl --install -d Ubuntu`. Inside Ubuntu, run `sudo apt-get update` then `sudo apt-get install bubblewrap`.'
+      : mac
+        ? 'Check that `/usr/bin/sandbox-exec` is available and permitted by your macOS security policy.'
+        : 'Run `sudo apt-get update` then `sudo apt-get install bubblewrap`. If installed, check whether your OS permits unprivileged user namespaces.',
+    chatGuards:
+      'Install at least one supported agent: `npm install -g @openai/codex@0.154.0` or `npm install -g @anthropic-ai/claude-code@2.1.272`. Sign in with `codex login` or `claude auth login`. If already installed, follow the reported hook/configuration repair instructions.',
+  }
+  const lines = [`pr-review doctor ${report.version}`, '']
+  const failures: string[] = []
+  for (const [key, check] of Object.entries(report.checks)) {
+    const name = key as keyof DoctorReport['checks']
+    lines.push(`${check.ok ? 'PASS' : 'FAIL'} ${CHECK_LABELS[name]}: ${check.detail}`)
+    if (!check.ok) {
+      const steps = [installs[name], check.hint].filter((step): step is string => Boolean(step))
+      failures.push(
+        `${failures.length + 1}. ${CHECK_LABELS[name]}\n${steps.map(step => `   ${step}`).join('\n')}`
+      )
+    }
+  }
+  if (failures.length) lines.push('', 'Next steps', ...failures)
+  if (windows)
+    lines.push(
+      '',
+      'Windows 11: the review app uses Windows Git/GitHub CLI. Chat uses Ubuntu WSL2: install Node 22.18+ or 24+, dcg, acpx, and your agent there. Check `wsl --exec node --version` and `wsl --exec dcg --version`. A Windows-only installation does not satisfy chat checks.'
+    )
+  lines.push(
+    '',
+    report.ok
+      ? 'All requested checks passed.'
+      : `${failures.length} check(s) failed. Fix the items above and rerun the same doctor command.`
+  )
+  if (!report.checks.acpx)
+    lines.push(
+      'Run `pr-review doctor --all-checks` to also check chat dependencies, containment, and native hooks.'
+    )
+  lines.push('Use `--json` for the structured report.')
+  return lines.join('\n')
 }
