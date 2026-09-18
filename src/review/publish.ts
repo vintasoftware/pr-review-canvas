@@ -87,8 +87,8 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
 
 /**
  * The current head of the target; a push during generation makes the prepared context stale. For
- * a pull request, the head and base are fetched again, and a head whose diff is identical to the
- * prepared commit's still counts as that commit.
+ * a pull request whose head moved, the head and base are fetched again, and a head whose diff is
+ * identical to the prepared commit's still counts as that commit.
  */
 async function currentHead(
   ctx: AppContext,
@@ -97,6 +97,9 @@ async function currentHead(
   if (context.target.kind === 'pr') {
     const { host, repo } = ctx.config
     const meta = await host.fetchPrMeta(ctx.gh, repo, context.target.number)
+    if (meta.headSha === context.headSha || !ctx.projectConfig.config.canvas.keepForIdenticalDiff) {
+      return { headSha: meta.headSha, moved: meta.headSha !== context.headSha }
+    }
     const head = await fetchPrRefs(ctx.git, host, meta)
     return { headSha: head.headSha, moved: !(await standsForHead(ctx, head, context)) }
   }

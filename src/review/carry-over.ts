@@ -1,5 +1,6 @@
 // A canvas carried over to a later head: the head's diff is identical to the diff the canvas was
 // generated from, so the canvas stands for it. The one place that reads the rule.
+import { isDeepStrictEqual } from 'node:util'
 import type { Pr } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -39,16 +40,7 @@ export async function standsForHead(
 
 /** Whether two diffs are the same: the same files in the same order, each with the same patch. */
 export function sameDiff(a: Derived, b: Derived): boolean {
-  return canonical(a) === canonical(b)
-}
-
-/** JSON with object keys sorted, so a diff read back through its schema equals a freshly built one. */
-function canonical(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) =>
-    v !== null && typeof v === 'object' && !Array.isArray(v)
-      ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)))
-      : v
-  )
+  return isDeepStrictEqual(a, b)
 }
 
 /**

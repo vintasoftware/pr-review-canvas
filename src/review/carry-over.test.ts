@@ -93,6 +93,17 @@ describe('standsForHead and lookupCanvas', () => {
     expect(await standsForHead(t.ctx, PR, { headSha: FORCE_PUSHED, mergeBaseSha: BASE_SHA })).toBe(false)
   })
 
+  it('builds the head diff against its current merge base, so a base that advanced is seen', async () => {
+    await context(history(SYNTHETIC_DIFF))
+    // The clone still holds the head diff built against BASE_SHA, identical to the canvas's.
+    expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(true)
+    // The base advanced under the same head: against the new merge base the hunks moved.
+    const advanced = '9'.repeat(40)
+    Object.assign(git.options.refs ?? {}, { base: advanced })
+    Object.assign(git.options.diffs ?? {}, { [`${advanced}..${HEAD_SHA}`]: SYNTHETIC_DIFF_MOVED_BY_BASE })
+    expect(await standsForHead(t.ctx, { ...PR, mergeBaseSha: advanced }, CANVAS)).toBe(false)
+  })
+
   it('reads a canvas that stands for the head as ready, and names both commits', async () => {
     await context(history(SYNTHETIC_DIFF))
     await t.ctx.canvases.write(OLD, syntheticArtifact(), manifestOf(OLD), 42)

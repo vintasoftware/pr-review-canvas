@@ -7,6 +7,7 @@ import path from 'node:path'
 import type { ErrorEnvelope, PrBundle, ReviewBodyResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
+import { buildCanvasZip } from '../canvas/zip.js'
 import { DEFAULT_PROJECT_CONFIG, type ProjectConfig } from '../project-config.js'
 import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import {
@@ -80,6 +81,9 @@ function gitWithMerge(extra: FakeGitOptions = {}) {
 interface Scenario {
   keepForIdenticalDiff?: boolean
   git?: FakeGitOptions
+  /** The pull request body, where a shared canvas zip may be linked. */
+  body?: string
+  fetch?: typeof fetch
 }
 
 let t: TestContext
@@ -95,11 +99,13 @@ async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
     canvas: { keepForIdenticalDiff: scenario.keepForIdenticalDiff ?? true },
   }
   git = gitWithMerge(scenario.git)
+  const pull = scenario.body === undefined ? GH_PULL : { ...GH_PULL, body: scenario.body }
   t = await makeTestContext({
     git,
-    gh: ghFor42(),
+    gh: ghFor42({ routes: { 'repos/acme/widgets/pulls/42': ghJson(pull) } }),
     runner,
     projectConfig: { config, warnings: [], source: '/repo/pr-review.config.yml' },
+    ...(scenario.fetch === undefined ? {} : { fetch: scenario.fetch }),
   })
   await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA), 42)
   return t
@@ -152,6 +158,42 @@ describe('a canvas whose head moved on with the identical diff', () => {
       relation: 'ancestor',
       commitsBehind: 3,
     })
+  })
+
+  it('is outdated when merging another branch brought a sibling file into the diff', async () => {
+    const withSibling = [
+      SYNTHETIC_DIFF,
+      'diff --git a/src/sibling.ts b/src/sibling.ts',
+      'new file mode 100644',
+      'index 0000000..cccdddd',
+      '--- /dev/null',
+      '+++ b/src/sibling.ts',
+      '@@ -0,0 +1 @@',
+      '+export const sibling = true',
+    ].join('\n')
+    await withOldCanvas({
+      git: {
+        diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: withSibling, [`${BASE_SHA}..${OLD_SHA}`]: SYNTHETIC_DIFF },
+      },
+    })
+    const b = await bundle()
+    expect(b.status).toBe('stale')
+    expect(b.carriedOver).toBeUndefined()
+  })
+
+  it('imports a zip regenerated for the head itself over a carried-over canvas', async () => {
+    const url =
+      'https://github.com/user-attachments/files/12345/pr-42-20260910T120000Z-aaaaaaaa-acme-widgets-canvas.zip'
+    const zip = buildCanvasZip(manifest(HEAD_SHA), artifactFor(HEAD_SHA))
+    await withOldCanvas({
+      body: `canvas: ${url}`,
+      fetch: async () => new Response(zip.slice().buffer as ArrayBuffer, { status: 200 }),
+    })
+    const b = await bundle()
+    expect(b.status).toBe('ready')
+    expect(b.canvas?.headSha).toBe(HEAD_SHA)
+    expect(b.canvas?.source).toBe('import')
+    expect(b.carriedOver).toBeUndefined()
   })
 
   it('is outdated when the project config marks every commit as a new head', async () => {
