@@ -1534,7 +1534,7 @@ describe('the pending review', () => {
     expect(root.querySelector('.toast')?.textContent).toBe('comment added to your review')
   })
 
-  it('offers to add to the review once one is open', async () => {
+  it('offers only the review once one is open', async () => {
     const { root } = setup()
     write(root, 'one')
     click(root, 'tr.composer [data-act="composer-queue"]')
@@ -1543,6 +1543,9 @@ describe('the pending review', () => {
     expect(root.querySelector('tr.composer [data-act="composer-queue"]')?.textContent).toBe(
       'add review comment'
     )
+    // Posting one comment on its own is not offered while a review is waiting, so a comment
+    // cannot jump the queue and publish ahead of the rest.
+    expect(root.querySelector('tr.composer [data-act="composer-post"]')).toBeNull()
   })
 
   it('keeps the whole range of a comment on several lines', async () => {

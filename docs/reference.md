@@ -402,9 +402,14 @@ chunk of the diff.
 
 ### Pending reviews
 
-A comment on a diff line offers two commands. **post to github** sends it on its own, at once.
-**start a review** puts it in a pending review instead, which is kept on your machine and posted
-to nobody until you submit it; once a review is open, the command reads **add review comment**.
+A comment on a diff line offers two commands while no review is open. **post to github** sends it
+on its own, at once. **start a review** puts it in a pending review instead, which is kept on your
+machine and posted to nobody until you submit it.
+
+Once a review is open, the box offers only **add review comment**. Posting a single comment would
+publish it while the rest of the review is still held back, so that way is closed for as long as
+anything is waiting, and the drafts go out together. Replies and pull-request comments are not part
+of a forge review's comment list, so they still post at once either way.
 
 While a review has comments waiting, a bar sits under the progress line saying how many, and each
 draft is drawn on the diff with a **pending** badge and commands to edit or delete it. Drafts are

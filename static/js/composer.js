@@ -44,9 +44,12 @@ function dataAttributes(opts) {
 }
 
 /**
- * The commands under the box. A comment on a diff line can go two ways, the way it can on the
- * forge's own page: into the review being written, or straight out on its own. Which one leads
- * depends on whether a review is already open, so the usual next step is the first command.
+ * The commands under the box, which are the ones the forge's own page offers.
+ *
+ * With no review open, a comment on a diff line can go either way: into a review it starts, or
+ * straight out on its own. Once a review is open it can only join it. Posting one comment on its
+ * own would publish it while the rest of the review is still held back, so that way is closed for
+ * as long as something is waiting, and the drafts are submitted together.
  *
  * A draft being edited has neither: it is already in the review, so it is only saved.
  * @param {ComposerOptions} opts
@@ -56,13 +59,17 @@ function commandsHtml(opts) {
   if (opts.pendingId !== undefined) {
     return `<button class="cmd fill" type="button" data-act="pending-save">save</button>${cancel}`
   }
+  const post = (lead = false) =>
+    `<button class="cmd${lead ? ' fill' : ''}" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>`
   if (opts.kind !== 'inline') {
-    return `<button class="cmd fill" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>${cancel}`
+    return `${post(true)}${cancel}`
   }
-  const queueLabel = opts.pendingActive === true ? 'add review comment' : 'start a review'
+  if (opts.pendingActive === true) {
+    return `<button class="cmd fill" type="button" data-act="composer-queue">add review comment</button>${cancel}`
+  }
   return (
-    `<button class="cmd fill" type="button" data-act="composer-queue">${queueLabel}</button>` +
-    `<button class="cmd" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>` +
+    `<button class="cmd fill" type="button" data-act="composer-queue">start a review</button>` +
+    post() +
     cancel
   )
 }

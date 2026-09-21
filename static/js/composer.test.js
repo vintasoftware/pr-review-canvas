@@ -50,8 +50,8 @@ describe('composerHtml', () => {
     expect(box.getAttribute('data-line')).toBe('4')
     expect(box.hasAttribute('data-start-line')).toBe(false)
     expect(box.querySelector('label')?.getAttribute('for')).toBe('c1-t')
-    // A comment on a diff line can go into the review being written or out on its own, so both
-    // commands are there, with starting a review first because no review is open yet.
+    // With no review open, a comment on a diff line can go either way, so both commands are
+    // there, with starting a review first.
     expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
       'markdown-toggle',
       'composer-queue',
@@ -59,6 +59,41 @@ describe('composerHtml', () => {
       'composer-cancel',
     ])
     expect(box.querySelector('[data-act="composer-queue"]')?.textContent).toBe('start a review')
+  })
+
+  it('drops the single-comment command once a review is open', () => {
+    const box = mount(
+      composerHtml({
+        id: 'c1',
+        label: 'Comment on src/app.ts:4',
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 4,
+        side: 'new',
+        pendingActive: true,
+      })
+    )
+    // Posting one comment on its own would publish it while the review is still held back, so
+    // the only way left is into the review.
+    expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
+      'markdown-toggle',
+      'composer-queue',
+      'composer-cancel',
+    ])
+    expect(box.querySelector('[data-act="composer-queue"]')?.textContent).toBe('add review comment')
+  })
+
+  it('keeps one command on a reply and a pull-request comment, which no review holds', () => {
+    for (const kind of /** @type {const} */ (['reply', 'issue'])) {
+      const box = mount(
+        composerHtml({ id: `c-${kind}`, label: 'Reply', kind, inReplyToId: 7, pendingActive: true })
+      )
+      expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
+        'markdown-toggle',
+        'composer-post',
+        'composer-cancel',
+      ])
+    }
   })
 
   it('escapes the draft and the label it is given', () => {

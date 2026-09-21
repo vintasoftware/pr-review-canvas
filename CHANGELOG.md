@@ -5,9 +5,10 @@
 ### Pending reviews
 
 - A comment on a diff line can go into a pending review instead of out on its own: **start a
-  review** holds it locally, and **add review comment** adds to a review already open. The drafts
-  are part of the review state, so they survive a reload, and nothing reaches the forge until the
-  review is submitted.
+  review** holds it locally. Once a review is open, **add review comment** is the only way out of
+  the box, because a single comment would publish ahead of the review still being written. The
+  drafts are part of the review state, so they survive a reload, and nothing reaches the forge
+  until the review is submitted.
 - A bar under the progress line says how many comments are waiting and offers to finish or discard
   the review; each draft is drawn on its line with a **pending** badge and commands to edit or
   delete it.

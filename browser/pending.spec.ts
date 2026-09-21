@@ -39,9 +39,11 @@ for (const skin of ['terminal', 'github'] as const) {
     expect(edge).not.toBe('rgba(0, 0, 0, 0)')
     await page.screenshot({ path: test.info().outputPath(`pending-review-${skin}.png`) })
 
-    // A second comment joins the review already open.
+    // A second comment joins the review already open, and that is now the only way out of the
+    // box: a single comment would publish ahead of the review still being written.
     await file.locator('#L-src_app_ts-new-5 .plus').click()
     await expect(editor.locator('[data-act="composer-queue"]')).toHaveText('add review comment')
+    await expect(editor.locator('[data-act="composer-post"]')).toHaveCount(0)
     await editor.locator('textarea').fill('and a test for it')
     await editor.locator('[data-act="composer-queue"]').click()
     await expect(bar).toContainText('2 pending comments')
