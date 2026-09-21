@@ -13,6 +13,16 @@ For setup and the basic review workflow, see the [README](../README.md).
 
 ## CLI options
 
+### Check the installation
+
+```text
+pr-review doctor [--all-checks] [--json]
+```
+
+Doctor checks Git, the GitHub remote and login, storage, the review skill, and dcg's required
+chat policy. `--all-checks` adds acpx, filesystem containment, and native chat hooks. The default
+output explains failed checks and installation or repair steps; `--json` prints the structured report.
+
 ### Repository and runtime options
 
 | Option                           | Applies to                 | Default and behavior                                                                                             |
@@ -199,6 +209,7 @@ directories.
 ### Output and exit codes
 
 One-shot commands normally print a JSON result on stdout. Preparation progress goes to stderr.
+`doctor` prints readable checks and repair instructions (`--json` selects JSON).
 `validate --human` prints text, and a failed `publish` prints validation diagnostics before its
 JSON error. `serve` stays running and writes its startup message to stderr.
 
@@ -429,6 +440,30 @@ one on screen.
 Choosing another target replaces it; **clear** returns to the whole PR. The `a` key asks about
 the focused target, and `/` focuses the message box.
 
+**Filesystem containment.** Every agent session command (ensure, prompt, exec, and cancel) runs
+inside an OS sandbox. Ubuntu and Ubuntu WSL2 use bubblewrap with read-only host mounts; macOS
+uses Seatbelt through `/usr/bin/sandbox-exec`. Windows 11 launches the same Linux backend through
+Ubuntu WSL2. Agent processes can write only to their separate scratch/session runtime, plus
+sandbox-local OS facilities such as `/dev/null`. The repository, linked-worktree Git metadata,
+and snapshots remain read-only even for native agent tools. Missing dcg or an unavailable
+sandbox prevents launch. Normal doctor checks require dcg; `--all-checks` also probes the
+sandbox, acpx, and native hook activation for installed agents. See
+[platform setup and runtime storage](../README.md#platform-setup).
+
+**Mandatory dcg guard.** App-owned launchers configure native Bash `PreToolUse` hooks for both
+agents. Codex's isolated configuration stores trust for the exact guard hash and is protected
+against writes and renaming. Claude receives explicit launch settings and verifies that hooks
+run before starting its session. Chat uses pinned ACP adapters and cannot opt out of this guard.
+Normal doctor checks evaluate known safe and dangerous commands without executing them;
+`--all-checks` also verifies hook activation inside containment.
+
+The policy includes cloud, Kubernetes, Terraform, database, GitHub Actions, and Cloudflare
+Workers rules in addition to Git/filesystem rules. Denials return a rule and explanation;
+evaluation errors and timeouts deny the command. Claude's failed tool status and Codex's guard
+notice show the short dcg reason. The existing ACP permission flags remain in place. Network access is enabled for
+inference, and dcg does not inspect every SDK, MCP, HTTP, or interactive-input operation.
+Native hook coverage and failures remain agent-dependent; filesystem containment is independent.
+
 Chat can propose an inline comment. A valid proposal appears with controls to post, edit,
 or copy it. A proposal outside the current diff remains text with an explanation.
 
@@ -451,31 +486,39 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 ## Troubleshooting
 
-| Symptom or code                         | Next step                                                                                                                                             |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NOT_A_REPO`                            | Run inside a Git clone or pass `--repo <dir>`                                                                                                         |
-| `NO_ORIGIN`                             | Check that `origin` points to github.com or GitLab; for self-hosted GitLab set `PR_REVIEW_HOST=gitlab`                                                |
-| `GH_MISSING` / `GH_UNAUTHENTICATED`     | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server              |
-| `GITHUB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                                      |
-| `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server |
-| `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                      |
-| `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                      |
-| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                  |
-| `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                            |
-| `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                          |
-| `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own              |
-| `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                           |
-| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                               |
-| `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                               |
-| `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                             |
-| `CHAT_BUSY`                             | Wait for the running reply or press **stop**                                                                                                          |
-| `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                  |
-| `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                               |
-| `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                        |
-| `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                          |
-| `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                               |
-| `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                  |
-| `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                              |
+| Symptom or code                         | Next step                                                                                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_A_REPO`                            | Run inside a Git clone or pass `--repo <dir>`                                                                                                                       |
+| `NO_ORIGIN`                             | Check that `origin` points to github.com or GitLab; for self-hosted GitLab set `PR_REVIEW_HOST=gitlab`                                                              |
+| `GH_MISSING` / `GH_UNAUTHENTICATED`     | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server                            |
+| `GITHUB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                                                    |
+| `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server               |
+| `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                                    |
+| `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                                    |
+| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                                |
+| `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                                          |
+| `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                                        |
+| `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                            |
+| `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                                         |
+| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                             |
+| `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                             |
+| `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                           |
+| `CHAT_BUSY`                             | Wait for the running reply or press **stop**                                                                                                                        |
+| `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                                |
+| `AGENT_MISSING` or missing chat pane    | Check the [chat setup](../README.md#ai-chat-setup), `chat.enabled`, and that the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks` |
+| `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                                      |
+| `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                                        |
+| `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                                             |
+| `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                                |
+| `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                            |
+
+`pr-review doctor` explains most of the first rows, including whether the data dir
+is writable and the skill is installed. `GET /api/health` reports the four checks a running server
+can answer for itself: git, origin, `gh`, and `gh` auth.
+
+Use `--json` for the previous machine-readable report. The default output includes installation
+commands or links and repair steps. Chat supplies the remote-service dcg rules automatically;
+doctor distinguishes missing dcg from a failed bundled policy and explains how to fix either.
 
 ### Validation diagnostics
 

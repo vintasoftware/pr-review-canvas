@@ -58,6 +58,22 @@ function contentText(value: unknown): string {
   return readString(value, 'text') ?? ''
 }
 
+/** Show the guard's short denial without exposing the rest of a tool's output. */
+function guardTitle(update: Record<string, unknown>): string | undefined {
+  if (readString(update, 'status') !== 'failed') return undefined
+  const content = read(update, 'content')
+  if (!Array.isArray(content)) return undefined
+  for (const block of content) {
+    if (!isRecord(block)) continue
+    const text = contentText(read(block, 'content'))
+    const reason = text.match(
+      /Blocked by dcg \([a-z0-9_.:-]+\): [^\r\n]+|Chat command guard could not verify this command[^\r\n]*/
+    )?.[0]
+    if (reason) return reason.slice(0, 350)
+  }
+  return undefined
+}
+
 /**
  * The event one acpx line means, or null for a line the chat ignores (the handshake, the command
  * list, session titles).
@@ -98,7 +114,7 @@ function mapUpdate(update: Record<string, unknown>): AgentEvent | null {
       return {
         type: 'tool',
         id: readString(update, 'toolCallId') ?? '',
-        title: readString(update, 'title') ?? readString(update, 'kind') ?? 'tool',
+        title: guardTitle(update) ?? readString(update, 'title') ?? readString(update, 'kind') ?? 'tool',
         status: readString(update, 'status') ?? 'pending',
       }
     case 'usage_update':

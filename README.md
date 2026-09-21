@@ -78,27 +78,97 @@ project's `.gitignore`. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
 `doctor` checks Git, your GitHub or GitLab remote, the matching CLI (`gh` or `glab`) and its login,
-write access to the local canvas directory, and whether installed skills match the current package.
-It prints a JSON report with a result for each check and suggested fixes for failures.
-`doctor --all-checks` also checks that `acpx` runs and reports its version. Exit code `0` means all
-checks passed.
+write access to the local canvas directory, whether installed skills match the current package, and
+**Destructive Command Guard (`dcg`)**. Install dcg using
+the [upstream installation instructions](https://github.com/Dicklesworthstone/destructive_command_guard#quick-install)
+and verify `dcg --version`. Doctor fails with exit code `1` and an installation hint when dcg
+is missing, fails to run, or fails the required chat policy probes. The probes evaluate command
+strings without executing them. Doctor prints readable PASS/FAIL results and installation or
+repair instructions for each failure. Exit code `0` means all requested checks passed.
+Use `pr-review doctor --json` for the structured report, or
+`pr-review doctor --all-checks --json` to include chat checks.
+
+Chat enables remote-service rules through its bundled dcg policy, even if your personal dcg
+configuration leaves them disabled. You do not install these rules separately. If the installed
+dcg cannot evaluate them, doctor fails and explains how to upgrade dcg or restore the app's policy.
 
 `serve` automatically runs the skill check and warns on stderr if a skill is missing, outdated,
 or modified. The warning includes the reinstall command and does not block startup.
 
-### Optional: AI Chat install
+### AI Chat setup
 
-To ask questions about a PR inside the canvas, install `acpx` globally:
+AI Chat supports macOS, Ubuntu (including WSL2), and Windows 11 using an Ubuntu WSL2 backend.
+Install `acpx` globally in the environment that runs the agent:
 
 ```bash
-npm install -g acpx
+npm install -g acpx@0.13.2
 acpx --version
 pr-review doctor --all-checks
 ```
 
-Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
+Install and sign in to either Claude Code or Codex in that environment. Start (or restart)
 the review server, then choose your agent in **settings**. The chat uses that agent's account.
+`doctor --all-checks` also checks acpx, exercises the OS sandbox, and verifies native hook
+activation for each installed agent. A failed check
+returns exit code `1` with an installation hint. Agent login is checked when you use chat.
 You can review canvases without installing `acpx`.
+
+The tested versions are **dcg 0.6.5, Codex 0.154.0, and Claude Code 2.1.272**. Chat pins its
+ACP adapters to `codex-acp` 1.11.0 and `claude-agent-acp` 0.60.0. Install at least one native
+agent; a version that cannot activate the required hook cannot start chat.
+
+#### Platform setup
+
+- **Ubuntu / Ubuntu WSL2:** install bubblewrap with `sudo apt-get install bubblewrap`.
+  Unprivileged user namespaces must be available; doctor reports when the OS blocks them.
+- **macOS:** chat uses the system `/usr/bin/sandbox-exec` facility. Doctor verifies that it
+  can start a sandbox. No bubblewrap installation is needed.
+- **Windows 11:** install Ubuntu WSL2 with `wsl --install -d Ubuntu`. Inside Ubuntu, install
+  Linux Node **22.18+ or 24+**, bubblewrap, dcg, acpx, and your agent, then sign in there.
+  The Windows server runs chat and its agent/login checks through `wsl.exe`; a Windows-only
+  agent or dcg installation does not satisfy those checks. Use the default Ubuntu distribution,
+  or set `PR_REVIEW_WSL_DISTRO` to its exact name (for example `Ubuntu-24.04`).
+  Verify from PowerShell that `wsl --exec node --version`, `wsl --exec acpx --version`, and
+  `wsl --exec dcg --version` work. Tools must be on WSL's non-interactive PATH. Repository and
+  snapshot paths are translated with `wslpath`, including paths containing spaces.
+
+#### What chat can write
+
+The repository, Git metadata, PR snapshots, and other host files are read-only to the agent
+process and its children. A separate runtime directory holds scratch files, caches, and agent
+sessions: `~/.local/state/pr-review-canvas/chat/<checkout-hash>/` in the agent's environment
+(inside WSL on Windows). Linux exposes it at `/run/pr-review-runtime-<uid>`; macOS uses its real path.
+Chat copies initial login files into this isolated environment. Codex uses an app-owned,
+read-only configuration that trusts only the exact dcg hook. Claude receives app-owned launch
+settings; its native CLI does not load personal or project settings. Configure the chat model
+through the review app. Custom settings and hooks from your normal agent sessions are not a
+substitute for the required chat guard.
+Login refreshes stay there; if credentials become stale, stop the server, remove that checkout's
+runtime directory, sign in again, and restart.
+
+After a Codex upgrade or a guard configuration change, doctor may ask you to reset that
+checkout's runtime so it can install the new exact hook trust. This removes its isolated agent
+sessions and caches. Stop the server before resetting it.
+
+#### Required command guard
+
+**dcg is mandatory for chat.** Chat checks its policy before launch and installs a native
+`PreToolUse` hook for Bash commands in both agents. The hook checks commands before execution
+and returns the matching rule and explanation when it denies one. Claude's failed tool status
+and Codex's guard notice show the short denial; the agent receives the full explanation. Missing dcg, evaluator errors,
+invalid results, and evaluation timeouts block commands. There is no chat setting to opt out.
+
+The bundled policy enables Git/filesystem rules plus AWS, Google Cloud, Azure, Kubernetes,
+Terraform, database, GitHub Actions, and Cloudflare Workers rules. For example, it blocks
+recognized bucket deletion, namespace deletion, and infrastructure destruction commands.
+Personal dcg settings and allowlists do not control this policy.
+
+The filesystem sandbox remains required and has no unsandboxed fallback. WSL chat cannot
+launch Windows executables through WSL interop. Network access remains enabled for inference.
+dcg is a command-pattern guard, not a network firewall: it does not authorize arbitrary SDK,
+MCP, or HTTP requests, and cannot guarantee prevention of every remote side effect. Hook
+coverage and hook-process failures also depend on the native agent. The OS sandbox protects
+local files independently of hooks.
 
 ## Advanced usage
 

@@ -316,6 +316,7 @@ const SPAWN_ALLOWED = 'src/acpx/acpx.ts'
  */
 const ALLOWED_IMPORTS: Readonly<Record<string, readonly string[]>> = {
   'src/acpx/acpx.ts': ['execFile', 'spawn'],
+  'src/acpx/sandbox.ts': ['execFileSync'],
 }
 const DEFAULT_ALLOWED_IMPORTS = ['execFile']
 
