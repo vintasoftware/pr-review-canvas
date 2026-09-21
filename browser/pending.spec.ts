@@ -114,3 +114,23 @@ test('comments on a range of lines picked with a shift-click', async ({ page, re
   await expect(file.locator('.pending-cmt')).toHaveCount(1)
   await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
 })
+
+test('adds an attention point to the review and gives it back on delete', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  const point = page.locator('.findings li.finding[data-fingerprint="fp-1"]').first()
+  await point.scrollIntoViewIfNeeded()
+  // A point offers both ways to send it, and keeps both while a review is open.
+  await expect(point.locator('[data-act="point-post"]')).toHaveCount(1)
+  await point.locator('[data-act="point-queue"]').click()
+
+  await expect(point.locator('.pill.pending')).toHaveText('in your review')
+  await expect(point.locator('[data-act="point-queue"]')).toHaveCount(0)
+  await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
+  // The point's own text is what waits, drawn on the line it is anchored to.
+  await expect(page.locator('tr.pending-row .pending-cmt')).toContainText('Sum instead of product')
+
+  await page.locator('tr.pending-row [data-act="pending-delete"]').click()
+  await expect(point.locator('.pill.pending')).toHaveCount(0)
+  await expect(point.locator('[data-act="point-post"]')).toHaveCount(1)
+  await expect(point.locator('[data-act="point-queue"]')).toHaveCount(1)
+})

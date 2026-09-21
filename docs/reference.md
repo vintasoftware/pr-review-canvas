@@ -411,6 +411,12 @@ publish it while the rest of the review is still held back, so that way is close
 anything is waiting, and the drafts go out together. Replies and pull-request comments are not part
 of a forge review's comment list, so they still post at once either way.
 
+An attention point carries **add to review** next to **post to github**, and keeps both even while
+a review is open: its text is written in advance, so sending one on its own is a use of its own
+rather than a comment jumping the queue. A point waiting in the review says **in your review** and
+is edited or dropped as the draft on its line. Once the review lands, the point shows the comment
+it became, the same as posting it directly.
+
 While a review has comments waiting, a bar sits under the progress line saying how many, and each
 draft is drawn on the diff with a **pending** badge and commands to edit or delete it. Drafts are
 part of the local review state, so they survive a reload. **discard** throws the whole pending

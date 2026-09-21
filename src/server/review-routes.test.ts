@@ -15,7 +15,15 @@ import {
   TEST_REPO,
   type TestContext,
 } from '../testing/fakes.js'
-import { BASE_SHA, GH_PULL, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
+import {
+  BASE_SHA,
+  GH_PULL,
+  GH_REVIEW_COMMENTS,
+  ghFor42,
+  gitFor42,
+  HEAD_SHA,
+  syntheticArtifact,
+} from '../testing/synthetic.js'
 import { createApp } from './app.js'
 import { postedFromPending } from './routes/review-routes.js'
 
@@ -791,6 +799,30 @@ describe('the pending review', () => {
     })
     // The review holds them now, so the local pending review is empty again.
     expect((await t.ctx.state.read(42)).pending).toEqual([])
+  })
+
+  it('marks the point posted once the review its draft went out with has landed', async () => {
+    // After the review lands, the forge lists the comment it created alongside the older ones.
+    const gh = ghFor42({
+      postRoutes: POST_ROUTES,
+      routes: { 'repos/acme/widgets/pulls/42/comments': ghJson([...GH_REVIEW_COMMENTS, POSTED_INLINE]) },
+    })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    // A draft that came from an attention point carries the point's fingerprint.
+    await app.request(
+      ...post('/api/prs/42/pending', { ...DRAFT, body: POSTED_INLINE.body, pointFingerprint: 'fp-1' })
+    )
+    expect((await t.ctx.state.read(42)).pending[0]?.pointFingerprint).toBe('fp-1')
+
+    await app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    // The review call names none of the comments it made, so the draft is found in the list the
+    // forge returns and the point is recorded as posted, the way posting it directly would.
+    const state = await t.ctx.state.read(42)
+    expect(state.pending).toEqual([])
+    expect(state.posted).toEqual([
+      { commentId: 5001, pointFingerprint: 'fp-1', at: '2026-09-10T12:00:00.000Z' },
+    ])
   })
 
   it('leaves the drafts waiting when the page submits a review without them', async () => {

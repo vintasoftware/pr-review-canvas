@@ -663,6 +663,30 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /**
+   * Puts an attention point's text in the pending review instead of posting it. The point is
+   * tagged with its fingerprint, so once the review lands the point shows the comment it became.
+   * @param {HTMLElement} button
+   * @param {Point} point
+   */
+  const queuePoint = (button, point) => {
+    void runCommand(
+      button,
+      async () => {
+        await session.addPending({
+          path: point.path,
+          line: point.line,
+          side: point.side ?? 'new',
+          body: pointToMarkdown(point),
+          pointFingerprint: point.fingerprint,
+        })
+        redrawCards()
+        toast(root, 'attention point added to your review')
+      },
+      { pendingLabel: 'adding…' }
+    )
+  }
+
+  /**
    * @param {HTMLElement} button
    * @param {string} id
    */
@@ -703,6 +727,12 @@ export function wireReview(root, session, opts = {}) {
       const point = pointById(el.getAttribute('data-point') ?? '')
       if (point !== undefined) {
         postPoint(el, point)
+      }
+    },
+    'point-queue': el => {
+      const point = pointById(el.getAttribute('data-point') ?? '')
+      if (point !== undefined) {
+        queuePoint(el, point)
       }
     },
     'comment-line': el => {

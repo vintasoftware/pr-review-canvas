@@ -39,6 +39,17 @@ export function pendingForPath(state, path) {
   return pendingComments(state).filter(p => p.path === path)
 }
 
+/**
+ * The draft an attention point was added to the review as, when it was. A point is queued at most
+ * once: its fingerprint is what ties the two together.
+ * @param {PrState | null | undefined} state
+ * @param {string} fingerprint
+ * @returns {PendingComment | undefined}
+ */
+export function pendingForPoint(state, fingerprint) {
+  return pendingComments(state).find(p => p.pointFingerprint === fingerprint)
+}
+
 /** @param {number} count */
 export function pendingLabel(count) {
   return count === 1 ? '1 pending comment' : `${count} pending comments`

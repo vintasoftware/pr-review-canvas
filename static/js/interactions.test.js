@@ -168,6 +168,7 @@ function setup(opts = {}) {
             side: input.side,
             ...(input.startLine === undefined ? {} : { startLine: input.startLine }),
             body: input.body,
+            ...(input.pointFingerprint === undefined ? {} : { pointFingerprint: input.pointFingerprint }),
             headSha: HEAD,
             createdAt: NOW.toISOString(),
             updatedAt: NOW.toISOString(),
@@ -1689,6 +1690,50 @@ describe('the pending review', () => {
     await flush()
     expect(calls).toEqual([])
     expect(root.querySelector('.cmd-err')?.textContent).toBe('write something first')
+  })
+
+  it('adds an attention point to the review instead of posting it', async () => {
+    const { root, calls, session } = setup()
+    const card = root.querySelector('.findings li.finding[data-fingerprint="fp-1"]')
+    click(root, '.findings li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]')
+    await flush()
+
+    expect(calls).toHaveLength(1)
+    const [name, input] = calls[0] ?? []
+    expect(name).toBe('pending-add')
+    expect(input).toMatchObject({ path: 'src/app.ts', line: 4, side: 'new', pointFingerprint: 'fp-1' })
+    // The point's own text is what waits, so the review reads the same as posting it would.
+    expect(String(/** @type {{ body: string }} */ (input).body)).toContain('Sum instead of product')
+    expect(session.pending).toHaveLength(1)
+    expect(root.querySelector('.toast')?.textContent).toBe('attention point added to your review')
+
+    // The point says it is waiting, everywhere it is drawn, and offers neither way out again.
+    expect(card?.querySelector('.pill.pending')?.textContent).toBe('in your review')
+    expect(root.querySelectorAll('[data-fingerprint="fp-1"] .pill.pending.queued').length).toBe(2)
+    expect(root.querySelector('[data-act="point-queue"][data-point="p-1"]')).toBeNull()
+    expect(root.querySelector('[data-act="point-post"][data-point="p-1"]')).toBeNull()
+  })
+
+  it('gives a point its commands back when its draft is deleted', async () => {
+    const { root } = setup()
+    click(root, '.findings li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]')
+    await flush()
+    click(root, 'tr.pending-row [data-act="pending-delete"]')
+    await flush()
+    const card = root.querySelector('.findings li.finding[data-fingerprint="fp-1"]')
+    expect(card?.querySelector('.pill.pending')).toBeNull()
+    expect(card?.querySelector('[data-act="point-post"]')).not.toBeNull()
+    expect(card?.querySelector('[data-act="point-queue"]')).not.toBeNull()
+  })
+
+  it('still posts a point on its own while a review is open', async () => {
+    const { root, calls } = setup()
+    click(root, '.findings li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]')
+    await flush()
+    // A point's text is written in advance, so posting one is its own use, not a queue jump.
+    click(root, 'tr.ifind[data-fingerprint="fp-3"] [data-act="point-post"]')
+    await flush()
+    expect(calls.map(c => c[0])).toEqual(['pending-add', 'comment'])
   })
 
   it('draws the drafts of a state the page opened with', () => {
