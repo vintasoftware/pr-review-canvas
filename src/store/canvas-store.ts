@@ -80,6 +80,9 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       if (artifact.importedAt !== undefined) {
         entry.importedAt = artifact.importedAt
       }
+      if (artifact.basisCanvasSha !== undefined) {
+        entry.basisCanvasSha = artifact.basisCanvasSha
+      }
       index.canvases[headSha] = entry
       await writeJsonAtomic(indexFile, index)
     },

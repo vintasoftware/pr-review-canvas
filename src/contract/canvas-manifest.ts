@@ -23,6 +23,11 @@ export const CanvasIndexSchema = z.object({
       generatedAt: z.string(),
       source: z.enum(['local', 'import']),
       importedAt: z.string().optional(),
+      /**
+       * The canvas this one was generated from. Kept here as well as on the artifact so the line
+       * of descent can be walked from the index alone, without opening every canvas on the way.
+       */
+      basisCanvasSha: z.string().optional(),
     })
   ),
 })

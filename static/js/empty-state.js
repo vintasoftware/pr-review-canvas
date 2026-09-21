@@ -192,16 +192,17 @@ export function carriedOverBarHtml(carried) {
 }
 
 /**
- * The note above a canvas that was generated from an earlier one, when some of the reviewer's
- * progress followed it. Without it, the already-ticked layers look like a bug.
- * @param {string} basisCanvasSha
+ * The note above a canvas that some of the reviewer's progress followed onto. Without it, the
+ * already-ticked layers look like a bug. The sha is the canvas the marks were made on, which may
+ * be several generations back when the reviewer marked nothing on the canvases in between.
+ * @param {string} markedCanvasSha
  * @returns {string}
  */
-export function marksCarriedBarHtml(basisCanvasSha) {
+export function marksCarriedBarHtml(markedCanvasSha) {
   return (
     '<div class="stale-bar carried-over-bar" role="status"><strong>Review progress carried over.</strong> ' +
     esc(
-      `This canvas was generated from ${basisCanvasSha.slice(0, 7)}; the layers and files it leaves untouched keep the marks you made there.`
+      `You marked these on the canvas of ${markedCanvasSha.slice(0, 7)}; the layers and files this one leaves untouched keep those marks.`
     ) +
     '</div>'
   )

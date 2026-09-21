@@ -10,7 +10,6 @@
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./contract-types.js').ReviewSummary} ReviewSummary */
 import { postComment, postReview, putDismissed, putReviewed, putThreadHidden } from './api.js'
-import { sanitizeKey } from './keys.js'
 
 /**
  * @typedef {{
@@ -41,13 +40,7 @@ function withDefaults(overrides) {
   return { putReviewed, putDismissed, putThreadHidden, postComment, postReview, ...overrides }
 }
 
-/**
- * @param {string} layerId
- * @param {string} [path]
- */
-export function reviewedId(layerId, path) {
-  return path === undefined ? `layer:${layerId}` : `layer:${layerId}/file:${sanitizeKey(path)}`
-}
+export { reviewedId } from './keys.js'
 
 /** @param {SessionOptions} options */
 export function createReviewSession(options) {

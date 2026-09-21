@@ -221,16 +221,18 @@ affects canvas generation; chat answers the reviewer's selected question.
 
 The `prompts` map in `pr-review.config.yml` accepts these keys:
 
-| Key                                   | Purpose                                     |
-| ------------------------------------- | ------------------------------------------- |
-| `generation-format.md`                | Schema and output rules                     |
-| `generation-strict.md`                | Instructions for strict mode                |
-| `generation-surfacing.md`             | Instructions for surfacing mode             |
-| `generation-strict-incremental.md`    | Strict mode, updating an existing canvas    |
-| `generation-surfacing-incremental.md` | Surfacing mode, updating an existing canvas |
-| `quality-standards.md`                | Bundled code standards                      |
-| `layering-guidance.md`                | Guidance for grouping related changes       |
-| `chat-seed.md`                        | Opening AI Chat instructions                |
+| Key                                   | Purpose                                                     |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `generation-format.md`                | Schema and output rules                                     |
+| `generation-strict.md`                | Instructions for strict mode                                |
+| `generation-surfacing.md`             | Instructions for surfacing mode                             |
+| `generation-strict-incremental.md`    | Strict mode, updating an existing canvas                    |
+| `generation-surfacing-incremental.md` | Surfacing mode, updating an existing canvas                 |
+| `judging-strict.md`                   | Strict mode's judging rules, shared by both of its tasks    |
+| `judging-surfacing.md`                | Surfacing mode's judging rules, shared by both of its tasks |
+| `quality-standards.md`                | Bundled code standards                                      |
+| `layering-guidance.md`                | Guidance for grouping related changes                       |
+| `chat-seed.md`                        | Opening AI Chat instructions                                |
 
 Each configured file replaces a whole template. Paths resolve from the project root,
 including when running from a subdirectory or using `--repo`. Absolute paths work for
@@ -404,12 +406,15 @@ starts from a blank page, and `canvas.incremental: false` turns the behavior off
 The canvas records the basis it came from, and nothing else: which of your review marks may follow
 it is worked out on your own machine, from the two canvases and your own clone.
 
-Your review progress follows an incremental canvas for the parts you have already seen. A file's
-mark follows when that file is in both canvases under the same layer key and its patch is
-byte-identical; a layer's mark follows only when the layer holds exactly the same files and the
-head touched none of them, since that mark claims the whole layer was read. When any mark follows,
-the page says which canvas it came from. A machine that does not have the basis canvas, or cannot
-rebuild either diff, carries nothing and starts the marks empty.
+Your review progress follows an incremental canvas for the parts you have already seen. Each canvas
+records the one it was generated from, and your marks follow that line of descent however long it
+is: marking nothing on an intermediate canvas does not strand them, because the canvas you marked
+and the canvas on screen are compared directly. A file's mark follows when that file is in both of
+those canvases under the same layer key and its patch is byte-identical; a layer's mark follows only
+when the layer holds exactly the same files and none of them changed, since that mark claims the
+whole layer was read. A file that changed and changed back counts as untouched, because it is. When
+any mark follows, the page names the canvas you made it on. A machine that does not have that
+canvas, or cannot rebuild either diff, carries nothing and starts the marks empty.
 
 ## AI Chat
 

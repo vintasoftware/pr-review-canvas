@@ -10,7 +10,8 @@ import {
   SYNTHETIC_DIFF,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { carriedMarks, markId, marksForCanvas } from './carry-marks.js'
+import { carriedMarks, marksForCanvas } from './carry-marks.js'
+import { reviewedId } from '../contract/keys.js'
 import { fileDelta } from './incremental.js'
 import { parseUnifiedDiff, toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import type { Derived } from '../store/derived-store.js'
@@ -57,10 +58,10 @@ function history(headDiff: string): FakeGitOptions {
   }
 }
 
-const APP = markId('run-path', 'src/app.ts')
-const APP_TEST = markId('run-path', 'src/app.test.ts')
-const RUN_PATH = markId('run-path')
-const OTHER = markId('other')
+const APP = reviewedId('run-path', 'src/app.ts')
+const APP_TEST = reviewedId('run-path', 'src/app.test.ts')
+const RUN_PATH = reviewedId('run-path')
+const OTHER = reviewedId('other')
 
 describe('carriedMarks', () => {
   const basis = syntheticArtifact()
@@ -110,10 +111,11 @@ describe('marksForCanvas', () => {
   let t: TestContext
   afterEach(() => t?.cleanup())
 
-  async function withCanvases(headDiff: string, basisCanvasSha: string | undefined = OLD): Promise<void> {
+  async function withCanvases(headDiff: string, basisCanvasSha: string | null = OLD): Promise<void> {
     t = await makeTestContext({ git: createFakeGit(history(headDiff)) })
     await t.ctx.canvases.write(OLD, canvasOf(OLD), manifestOf(OLD), 42)
-    await t.ctx.canvases.write(HEAD_SHA, canvasOf(HEAD_SHA, basisCanvasSha), manifestOf(HEAD_SHA), 42)
+    const head = basisCanvasSha === null ? canvasOf(HEAD_SHA) : canvasOf(HEAD_SHA, basisCanvasSha)
+    await t.ctx.canvases.write(HEAD_SHA, head, manifestOf(HEAD_SHA), 42)
   }
 
   const stateOn = (canvasSha: string, reviewed: Record<string, true>): PrState => ({
@@ -143,7 +145,7 @@ describe('marksForCanvas', () => {
   })
 
   it('drops the marks when the canvas names no basis, or another one', async () => {
-    await withCanvases(TOUCHED_APP, undefined)
+    await withCanvases(TOUCHED_APP, null)
     const state = stateOn(OLD, { [APP_TEST]: true })
     const none = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA), HEAD_SHA, state)
     expect(none).toEqual({ state: { ...state, reviewed: {} } })

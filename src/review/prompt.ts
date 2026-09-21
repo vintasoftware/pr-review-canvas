@@ -14,28 +14,45 @@ export interface PromptSources {
   generation: Record<GenerationMode, string>
   /** The same two modes, worded as an update of a basis canvas. Used when `ctx.basis` is set. */
   incremental: Record<GenerationMode, string>
+  /**
+   * The judging rules of each mode: the half of the task that does not change between writing a
+   * canvas and updating one. Both task files of a mode end with it, so its wording has one home.
+   */
+  judging: Record<GenerationMode, string>
   format: string
   layeringGuidance: string
   qualityStandards: string
 }
 
 export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<PromptSources> {
-  const [format, layeringGuidance, qualityStandards, strict, surfacing, strictInc, surfacingInc] =
-    await Promise.all([
-      loadPromptFile('generation-format.md', dir, project),
-      loadPromptFile('layering-guidance.md', dir, project),
-      loadPromptFile('quality-standards.md', dir, project),
-      loadPromptFile('generation-strict.md', dir, project),
-      loadPromptFile('generation-surfacing.md', dir, project),
-      loadPromptFile('generation-strict-incremental.md', dir, project),
-      loadPromptFile('generation-surfacing-incremental.md', dir, project),
-    ])
+  const [
+    format,
+    layeringGuidance,
+    qualityStandards,
+    strict,
+    surfacing,
+    strictInc,
+    surfacingInc,
+    judgingStrict,
+    judgingSurfacing,
+  ] = await Promise.all([
+    loadPromptFile('generation-format.md', dir, project),
+    loadPromptFile('layering-guidance.md', dir, project),
+    loadPromptFile('quality-standards.md', dir, project),
+    loadPromptFile('generation-strict.md', dir, project),
+    loadPromptFile('generation-surfacing.md', dir, project),
+    loadPromptFile('generation-strict-incremental.md', dir, project),
+    loadPromptFile('generation-surfacing-incremental.md', dir, project),
+    loadPromptFile('judging-strict.md', dir, project),
+    loadPromptFile('judging-surfacing.md', dir, project),
+  ])
   return {
     format,
     layeringGuidance,
     qualityStandards,
     generation: { strict, surfacing },
     incremental: { strict: strictInc, surfacing: surfacingInc },
+    judging: { strict: judgingStrict, surfacing: judgingSurfacing },
   }
 }
 
@@ -312,8 +329,12 @@ export function renderPrompt(
     RE_JUDGED: reJudgedMarkdown(ctx.basis),
   }
   // A prepared basis picks the incremental wording: one prompt states one job, with no conditions.
+  // Both wordings end with the mode's judging rules, which are assembled first so the tokens inside
+  // them are filled by the one pass below.
   const task = ctx.basis === undefined ? sources.generation : sources.incremental
-  const template = task[ctx.generation.mode].replace('{{FORMAT}}', () => sources.format)
+  const template = task[ctx.generation.mode]
+    .replace('{{JUDGING}}', () => sources.judging[ctx.generation.mode])
+    .replace('{{FORMAT}}', () => sources.format)
   return template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {
     const value = tokens[name]
     if (value === undefined) {

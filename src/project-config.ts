@@ -43,6 +43,8 @@ export const PromptOverridesSchema = z
     'generation-surfacing.md': z.string().min(1).optional(),
     'generation-strict-incremental.md': z.string().min(1).optional(),
     'generation-surfacing-incremental.md': z.string().min(1).optional(),
+    'judging-strict.md': z.string().min(1).optional(),
+    'judging-surfacing.md': z.string().min(1).optional(),
     'quality-standards.md': z.string().min(1).optional(),
     'layering-guidance.md': z.string().min(1).optional(),
     'chat-seed.md': z.string().min(1).optional(),

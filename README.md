@@ -117,7 +117,7 @@ every commit as a new head.
 Regenerating for a new head is incremental: the run starts from the newest canvas of a commit the
 head was built on, and keeps the layers, folds, notes and attention points whose files the new
 commits leave untouched, word for word. Your review progress on those files follows the new canvas,
-and the page says which canvas it came from. `--force` starts from a blank page instead, and
+however many regenerations back you made it, and the page names the canvas you marked. `--force` starts from a blank page instead, and
 `canvas.incremental: false` turns it off for the project.
 
 ## Configuration

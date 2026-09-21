@@ -55,6 +55,32 @@ describe('fileDelta', () => {
     expect(delta.removed).toEqual(['src/gone.ts'])
     expect(delta.added).toEqual(['src/later.ts'])
   })
+
+  it('matches the two sides by path, so two paths that sanitize alike are not confused', () => {
+    // `a-b.ts` and `a_b.ts` share a sanitized key; uniqueKey separates them by their order in
+    // whichever diff holds both, so the plain key names a different file on each side.
+    const patch = 'whatever this file changed'
+    const entry = derivedOf(SYNTHETIC_DIFF).files[0]
+    if (entry === undefined) {
+      throw new Error('no file')
+    }
+    const basis: Derived = {
+      files: [{ ...entry, path: 'src/a-b.ts', key: 'src_a_b_ts' }],
+      patches: { src_a_b_ts: patch },
+    }
+    const head: Derived = {
+      files: [
+        { ...entry, path: 'src/a_b.ts', key: 'src_a_b_ts' },
+        { ...entry, path: 'src/a-b.ts', key: 'src_a_b_ts_2' },
+      ],
+      patches: { src_a_b_ts: patch, src_a_b_ts_2: patch },
+    }
+    const delta = fileDelta(basis, head)
+    // The file the basis canvas describes is the one that kept its patch, whatever its key is now.
+    expect(delta.unchanged).toEqual(['src/a-b.ts'])
+    expect(delta.added).toEqual(['src/a_b.ts'])
+    expect(delta.removed).toEqual([])
+  })
 })
 
 describe('splitBasis', () => {

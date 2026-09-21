@@ -18,23 +18,29 @@ import type { Derived } from '../store/derived-store.js'
  * its whole patch is byte-identical: line numbers, context, and all. Anything less would let a
  * fold or an annotation of the basis land on a line it was never written for. Renames arrive as a
  * removal and an addition, since a file's key follows its path.
+ *
+ * The two sides are matched by path, and each side's patch is read through its own key. A key is
+ * the sanitized path, and two paths can sanitize to the same key (`a-b.ts` and `a_b.ts`), which
+ * `uniqueKey` then separates by the order the files appear in that one diff. The same key can
+ * therefore name different files in two diffs; the path cannot.
  */
 export function fileDelta(basis: Derived, head: Derived): FileDelta {
-  const pathOf = (d: Derived): Map<string, string> => new Map(d.files.map(f => [f.key, f.path]))
-  const basisPaths = pathOf(basis)
-  const headPaths = pathOf(head)
+  const keysByPath = (d: Derived): Map<string, string> => new Map(d.files.map(f => [f.path, f.key]))
+  const basisKeys = keysByPath(basis)
+  const headKeys = keysByPath(head)
   const delta: FileDelta = { unchanged: [], changed: [], added: [], removed: [] }
-  for (const [key, path] of headPaths) {
-    if (!basisPaths.has(key)) {
+  for (const [path, headKey] of headKeys) {
+    const basisKey = basisKeys.get(path)
+    if (basisKey === undefined) {
       delta.added.push(path)
-    } else if (basis.patches[key] === head.patches[key]) {
+    } else if (basis.patches[basisKey] === head.patches[headKey]) {
       delta.unchanged.push(path)
     } else {
       delta.changed.push(path)
     }
   }
-  for (const [key, path] of basisPaths) {
-    if (!headPaths.has(key)) {
+  for (const path of basisKeys.keys()) {
+    if (!headKeys.has(path)) {
       delta.removed.push(path)
     }
   }

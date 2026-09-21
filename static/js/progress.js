@@ -3,7 +3,7 @@
 /** @typedef {import('./contract-types.js').Layer} Layer */
 /** @typedef {import('./contract-types.js').PrState} PrState */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
-import { sanitizeKey } from './keys.js'
+import { reviewedId } from './keys.js'
 
 /**
  * @param {Layer} layer
@@ -11,13 +11,13 @@ import { sanitizeKey } from './keys.js'
  * @returns {'done' | 'partial' | 'none'}
  */
 export function layerProgress(layer, state) {
-  if (state.reviewed[`layer:${layer.id}`] === true) {
+  if (state.reviewed[reviewedId(layer.key)] === true) {
     return 'done'
   }
   const files = layer.files.length
   let reviewedFiles = 0
   for (const f of layer.files) {
-    if (state.reviewed[`layer:${layer.id}/file:${sanitizeKey(f.path)}`] === true) {
+    if (state.reviewed[reviewedId(layer.key, f.path)] === true) {
       reviewedFiles++
     }
   }
@@ -45,6 +45,5 @@ export function progressSummary(artifact, state) {
  * @param {PrState} state
  */
 export function filesReviewed(layer, state) {
-  return layer.files.filter(f => state.reviewed[`layer:${layer.id}/file:${sanitizeKey(f.path)}`] === true)
-    .length
+  return layer.files.filter(f => state.reviewed[reviewedId(layer.key, f.path)] === true).length
 }
