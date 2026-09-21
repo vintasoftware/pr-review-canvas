@@ -211,17 +211,33 @@ describe('prepare, publish, validate through the CLI layer', () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const io = fakeIo()
     await expect(runPrepare(t.ctx, [], io)).rejects.toThrow(
-      'prepare needs --pr <n> or --base <ref> --head <ref>'
+      'prepare needs a target: pass one of --pr <n>, --branch, --uncommitted, or --base <ref> --head <ref>'
     )
     await expect(runPrepare(t.ctx, ['--pr', 'x'], io)).rejects.toThrow(
       '--pr must be a positive integer, got "x"'
     )
-    await expect(runPrepare(t.ctx, ['--pr', '1', '--head', 'h'], io)).rejects.toThrow(/not both/)
+    await expect(runPrepare(t.ctx, ['--pr', '1', '--head', 'h'], io)).rejects.toThrow(/pass one of --pr/)
     await expect(runPrepare(t.ctx, ['--base', 'main'], io)).rejects.toThrow(/prepare needs/)
     await expect(runPrepare(t.ctx, ['--nope'], io)).rejects.toMatchObject({
       code: 'ERR_PARSE_ARGS_UNKNOWN_OPTION',
     })
     expect(parsePrepareTarget({ base: 'a', head: 'b' })).toEqual({ kind: 'refs', base: 'a', head: 'b' })
+    expect(parsePrepareTarget({ branch: true })).toEqual({
+      kind: 'local',
+      source: 'branch',
+      base: undefined,
+    })
+    // The base the user named is carried through; `prepare` resolves an absent one from the clone.
+    expect(parsePrepareTarget({ uncommitted: true, base: 'main' })).toEqual({
+      kind: 'local',
+      source: 'uncommitted',
+      base: 'main',
+    })
+    expect(() => parsePrepareTarget({ pr: '1', branch: true })).toThrow(/pass one of --pr/)
+    expect(() => parsePrepareTarget({ uncommitted: true, head: 'HEAD' })).toThrow(/takes no --head/)
+    expect(() => parsePrepareTarget({ branch: true, uncommitted: true })).toThrow(
+      /two reviews; ask for one of them/
+    )
     await expect(runValidate(t.ctx, [], io)).rejects.toThrow(/validate takes one file/)
     await expect(runValidate(t.ctx, ['a', 'b', '--canvas', 'c'], io)).rejects.toThrow(
       /validate takes one file/

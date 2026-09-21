@@ -6,7 +6,7 @@ import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'
-import { renderEmptyState, sharedCanvasCalloutHtml } from './empty-state.js'
+import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
 import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
 
@@ -302,6 +302,37 @@ describe('header', () => {
       percent: 0,
     })
   })
+  it('keeps export and regenerate live on a stale canvas', () => {
+    document.body.innerHTML = renderHeader(bundle({ status: 'stale' }), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+    })
+    expect(document.querySelector('#export-zip')?.hasAttribute('disabled')).toBe(false)
+    expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('drops the forge link and speaks of local work when the canvas has no pull request', () => {
+    const artifact = syntheticArtifact()
+    document.body.innerHTML = renderHeader(
+      bundle({
+        local: 'uncommitted',
+        pr: { ...artifact.pr, number: null, url: '', state: 'uncommitted' },
+      }),
+      { host: 'localhost:3010', theme: 'auto', skin: 'terminal', now: NOW }
+    )
+    const hdr = document.querySelector('header.hdr')
+    expect(hdr?.querySelector('h1')?.textContent).toBe('feat: add b')
+    expect(hdr?.querySelector('.title a.cmd')).toBeNull()
+    expect(hdr?.querySelector('#refresh')?.getAttribute('title')).toBe(
+      'Snapshot the working tree again and redraw'
+    )
+    expect(hdr?.querySelector('#regenerate')?.getAttribute('title')).toBe(
+      'Generate a new canvas for this local work'
+    )
+    expect(hdr?.querySelector('.pill')?.textContent).toBe('uncommitted')
+  })
 })
 
 describe('overview', () => {
@@ -392,7 +423,7 @@ describe('empty state', () => {
     const shared = {
       url: 'https://github.com/x.zip',
       name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: true,
     }
     expect(sharedCanvasCalloutHtml(bundle({ sharedCanvas: shared }))).toContain('importing&hellip;')
@@ -406,6 +437,71 @@ describe('empty state', () => {
       '(unknown)'
     )
     expect(sharedCanvasCalloutHtml(bundle())).toBe('')
+  })
+  it('keeps the stale screen readable when the bundle names no older commit', () => {
+    const stale = renderStaleState(bundle({ status: 'stale' }))
+    expect(stale).toContain('Canvas is outdated')
+    expect(stale).toContain('<p class="hint"></p>')
+  })
+
+  it('offers the drop zone on the stale screen of a pull request', () => {
+    const stale = renderStaleState(
+      bundle({
+        status: 'stale',
+        stale: {
+          canvasHeadSha: 'a'.repeat(40),
+          currentHeadSha: 'b'.repeat(40),
+          relation: 'ancestor',
+          commitsBehind: 3,
+        },
+      })
+    )
+    expect(stale).toContain('3 commits behind the head bbbbbbb')
+    expect(stale).toContain('id="view-stale"')
+    expect(stale).toContain('Drop a canvas zip here')
+  })
+
+  it('names the branch review on its own empty screen', () => {
+    expect(
+      renderEmptyState(
+        bundle({
+          status: 'missing',
+          artifact: undefined,
+          local: 'branch',
+          skillCommand: '/pr-review-canvas branch',
+        })
+      )
+    ).toContain('No review canvas for this branch yet')
+  })
+
+  it('leaves the canvas transfer out of a local review and says whose work it is', () => {
+    const local = renderEmptyState(
+      bundle({
+        status: 'missing',
+        artifact: undefined,
+        local: 'uncommitted',
+        skillCommand: '/pr-review-canvas uncommitted',
+      })
+    )
+    expect(local).toContain('No review canvas for your uncommitted work yet')
+    expect(local).toContain('/pr-review-canvas uncommitted')
+    expect(local).not.toContain('drop')
+
+    const stale = renderStaleState(
+      bundle({
+        status: 'stale',
+        local: 'uncommitted',
+        stale: { canvasHeadSha: 'a'.repeat(40), currentHeadSha: 'b'.repeat(40), relation: 'unrelated' },
+      })
+    )
+    expect(stale).toContain('your work has moved on to bbbbbbb')
+    expect(stale).not.toContain('drop')
+    expect(
+      staleBarHtml(
+        { canvasHeadSha: 'a'.repeat(40), currentHeadSha: 'b'.repeat(40), relation: 'unrelated' },
+        'uncommitted'
+      )
+    ).toContain('your work has moved on')
   })
 })
 

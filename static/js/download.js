@@ -26,7 +26,7 @@ export function saveBlob(blob, filename, deps = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {import('./contract-types.js').ReviewKey} prNumber
  * @param {{ headSha?: string, fetchImpl?: typeof fetch } & SaveDeps} [opts]
  * @returns {Promise<string>} the file name the browser saved
  */

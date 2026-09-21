@@ -400,7 +400,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.sharedCanvas).toEqual({
       url: FILE_URL,
       name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: true,
     })
     expect(outcome.imported?.status).toBe('ready')
@@ -413,7 +413,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.sharedCanvas).toEqual({
       url: FILE_URL,
       name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: false,
       reason: 'auth-required',
     })
@@ -435,7 +435,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.sharedCanvas).toEqual({
       url: other,
       name: 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip',
-      matchesHead: false,
+      namesHead: false,
       downloadable: true,
     })
   })
@@ -454,7 +454,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.sharedCanvas).toEqual({
       url: url(4),
       name: 'pr-42-20260910T110000Z-bbbbbbbb-acme-widgets-canvas.zip',
-      matchesHead: false,
+      namesHead: false,
       downloadable: false,
       reason: 'auth-required',
     })
@@ -482,7 +482,7 @@ describe('discoverSharedCanvas', () => {
     expect(outcome.sharedCanvas).toEqual({
       url: wrongPr,
       name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: false,
       reason: 'pr-mismatch',
     })

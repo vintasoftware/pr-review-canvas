@@ -3,6 +3,7 @@ import type { CanvasManifest } from './canvas-manifest.js'
 import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js'
 import type { SharedCanvasInfoSchema } from './discovery.js'
 import type { FileEntry, Pr, ReviewArtifact } from './review-artifact.js'
+import type { LocalKey, ReviewKey } from './review-key.js'
 import type { PrState } from './state.js'
 
 export const ERROR_CODES = [
@@ -69,6 +70,17 @@ export interface StaleInfo {
   commitsBehind?: number
 }
 
+/**
+ * A ready canvas generated for an earlier commit of the pull request whose diff is identical to
+ * the head's, so the page keeps it and says so.
+ */
+export interface CarriedOverInfo {
+  canvasHeadSha: string
+  currentHeadSha: string
+  /** How many commits the head is ahead of the canvas's commit; absent when the head does not contain it. */
+  commitsBehind?: number
+}
+
 /** The answer of `POST /import`, of `pr-review import`, and of an imported shared canvas. */
 export interface ImportResult {
   status: 'ready' | 'stale' | 'exists'
@@ -109,8 +121,12 @@ export interface PrBundle {
   artifact?: ReviewArtifact
   canvas?: CanvasInfo
   stale?: StaleInfo
+  /** Set on a ready bundle whose canvas was generated for another commit with an identical diff. */
+  carriedOver?: CarriedOverInfo
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
+  /** Set on a local review: work that has no pull request, so the forge side of the page is off. */
+  local?: LocalKey
   comments: CommentsPayload
   state: PrState
   capabilities: Capabilities
@@ -124,7 +140,8 @@ export interface PrBundle {
 
 /** Every answer of a state route, so the page can replace its copy of the state in one step. */
 export interface StateResponse {
-  prNumber: number
+  /** The target the state belongs to: a pull request number, or `local`. */
+  prNumber: ReviewKey
   state: PrState
 }
 

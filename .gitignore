@@ -11,4 +11,10 @@ playwright-report/
 *.tsbuildinfo
 dist-site/
 
+# This repository's own skill, installed into it by `pr-review install-skill` so the slash
+# command works here. The tracked copy is skills/pr-review-canvas.
+/.agents/skills/pr-review-canvas
+/.claude/skills/pr-review-canvas
+
 /.claude/settings.local.json
+.pr-review/settings.yml

@@ -1,6 +1,7 @@
 // Type-only bridge so the browser modules (JSDoc) see the same contract as the server.
 
 export type {
+  CarriedOverInfo,
   CanvasRelation,
   Capabilities,
   ChatStatus,
@@ -24,6 +25,7 @@ export type {
   ChatThreadsResponse,
   ChatTurn,
 } from '../../src/contract/chat.js'
+export type { ReviewKey } from '../../src/contract/review-key.js'
 export type {
   CommentsPayload,
   IssueComment,

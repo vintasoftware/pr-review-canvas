@@ -20,6 +20,7 @@ import {
   renderEmptyState,
   renderStaleState,
   sharedCanvasCalloutHtml,
+  carriedOverBarHtml,
   staleBarHtml,
   staleSummary,
   validateCanvasFilename,
@@ -116,7 +117,7 @@ describe('drop zone', () => {
 
   it('uploads a dropped canvas, shows progress, and reports the result', async () => {
     const root = mount(renderEmptyState(bundle()))
-    /** @type {Array<[number, string]>} */
+    /** @type {Array<[import('./contract-types.js').ReviewKey, string]>} */
     const sent = []
     const zone = wireDropZone(root, {
       prNumber: 42,
@@ -246,6 +247,34 @@ describe('drop zone', () => {
   })
 })
 
+describe('carried-over bar', () => {
+  it('says the canvas still applies and which commits it joins', () => {
+    document.body.innerHTML = carriedOverBarHtml({ canvasHeadSha: OLD, currentHeadSha: HEAD })
+    const bar = document.querySelector('.stale-bar.carried-over-bar')
+    expect(bar?.getAttribute('role')).toBe('status')
+    expect(bar?.textContent).toContain('Canvas still applies.')
+    expect(bar?.textContent).toContain('generated for eeeeeee; the head aaaaaaa has the identical diff.')
+    expect(bar?.querySelector('#stale-generate')?.textContent).toBe('regenerate anyway')
+  })
+
+  it('says how far the head moved when it was built on the canvas commit', () => {
+    document.body.innerHTML = carriedOverBarHtml({
+      canvasHeadSha: OLD,
+      currentHeadSha: HEAD,
+      commitsBehind: 3,
+    })
+    expect(document.querySelector('.carried-over-bar')?.textContent).toContain(
+      'generated for eeeeeee; the head aaaaaaa, 3 commits later, has the identical diff.'
+    )
+    document.body.innerHTML = carriedOverBarHtml({
+      canvasHeadSha: OLD,
+      currentHeadSha: HEAD,
+      commitsBehind: 1,
+    })
+    expect(document.querySelector('.carried-over-bar')?.textContent).toContain('1 commit later')
+  })
+})
+
 describe('stale screen', () => {
   it('says how far behind the canvas is, in both relations', () => {
     expect(
@@ -295,7 +324,7 @@ describe('stale screen', () => {
     const shared = {
       url: 'https://github.com/user-attachments/files/9/pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       name: 'pr-99-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: false,
       reason: /** @type {const} */ ('pr-mismatch'),
     }
@@ -314,7 +343,7 @@ describe('stale screen', () => {
     const shared = {
       url: 'https://github.com/user-attachments/files/1/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
       name: 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip',
-      matchesHead: true,
+      namesHead: true,
       downloadable: false,
       reason: /** @type {const} */ ('auth-required'),
     }

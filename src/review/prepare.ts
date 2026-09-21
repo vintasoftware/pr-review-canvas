@@ -2,9 +2,17 @@
 // the canvas directory. The agent reads those two files; publish reads context.json back.
 import { appendFile, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { type GenerationContext, isLargePr, type PrepareTarget } from '../contract/generation-context.js'
+import {
+  type GenerationContext,
+  isLargePr,
+  type PrepareTarget,
+  type PrepareTargetInput,
+} from '../contract/generation-context.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
+import type { LocalKey } from '../contract/review-key.js'
+import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
+
 import { toPr } from '../host/pr.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
@@ -12,7 +20,7 @@ import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js
 
 export interface PrepareOptions {
   force: boolean
-  /** Progress lines: `fetch-pr`, `fetch-refs`, `collect-diffs`, `prompt`. */
+  /** Progress lines: `fetch-pr`, `fetch-refs`, `snapshot`, `collect-diffs`, `prompt`. */
   log: (phase: string) => void
   promptSources?: PromptSources
 }
@@ -24,6 +32,8 @@ export interface PrepareResult {
   promptPath: string
   contextPath: string
   status: 'prepared' | 'exists'
+  /** Local targets only: which review it is, the base resolved for it, and what its head holds. */
+  local?: { review: LocalKey; base: string; headRef: string; uncommitted: boolean }
 }
 
 /** The PR meta, live from GitHub, with the head and base refs fetched into the local clone. */
@@ -33,7 +43,29 @@ async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['l
   log('fetch-refs')
   const shas = await fetchPrRefs(ctx.git, ctx.config.host, meta)
   const pr = toPr(meta, ctx.config.repo, shas)
-  await ctx.prs.writePr(pr)
+  await ctx.prs.writePr(number, pr)
+  return pr
+}
+
+/**
+ * The work in this clone that has no pull request yet: the current branch, or a snapshot commit
+ * of the working tree when it carries edits. The meta is cached under `prs/<branch|uncommitted>/`,
+ * which is what the matching page reads.
+ */
+async function resolveLocal(
+  ctx: AppContext,
+  target: Extract<PrepareTarget, { kind: 'local' }>,
+  log: PrepareOptions['log']
+): Promise<Pr> {
+  log('snapshot')
+  const pr = await describeLocalWork(ctx.git, {
+    base: target.base,
+    source: target.source,
+    repo: ctx.config.repo,
+    now: ctx.now,
+  })
+  await ctx.prs.writePr(target.source, pr)
+  await ctx.prs.writeLocalTarget(target.source, target)
   return pr
 }
 
@@ -99,24 +131,43 @@ async function clearCanvasDir(canvasDir: string): Promise<void> {
   }
 }
 
+/** The target with its base resolved, which is the form `context.json` records. */
+async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promise<PrepareTarget> {
+  if (input.kind !== 'local') {
+    return input
+  }
+  return { kind: 'local', source: input.source, base: await resolveLocalBase(ctx.git, input.base) }
+}
+
 export async function prepare(
   ctx: AppContext,
-  target: PrepareTarget,
+  input: PrepareTargetInput,
   opts: PrepareOptions
 ): Promise<PrepareResult> {
+  const target = await resolveTarget(ctx, input)
   const pr =
     target.kind === 'pr'
       ? await resolvePr(ctx, target.number, opts.log)
-      : await resolveRefs(ctx, target.base, target.head, opts.log)
+      : target.kind === 'local'
+        ? await resolveLocal(ctx, target, opts.log)
+        : await resolveRefs(ctx, target.base, target.head, opts.log)
   const canvasDir = ctx.canvases.canvasDir(pr.headSha)
   const promptPath = path.join(canvasDir, 'prompt.md')
   const contextPath = path.join(canvasDir, 'context.json')
-  const result = {
+  const result: Omit<PrepareResult, 'status'> = {
     canvasDir,
     headSha: pr.headSha,
     mergeBaseSha: pr.mergeBaseSha,
     promptPath,
     contextPath,
+  }
+  if (target.kind === 'local') {
+    result.local = {
+      review: target.source,
+      base: target.base,
+      headRef: pr.headRef,
+      uncommitted: pr.state === UNCOMMITTED_STATE,
+    }
   }
   if (!opts.force && (await ctx.canvases.exists(pr.headSha))) {
     return { ...result, status: 'exists' }
@@ -126,6 +177,8 @@ export async function prepare(
   const derived = await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)
   const additions = derived.files.reduce((n, f) => n + f.additions, 0)
   const deletions = derived.files.reduce((n, f) => n + f.deletions, 0)
+  // A pull request's counts are the forge's; anything else is counted from the diff itself. The
+  // page derives its own from the files it shows, so this is only what the canvas records.
   const fullPr: Pr =
     target.kind === 'pr' ? pr : { ...pr, additions, deletions, changedFiles: derived.files.length }
   const derivedDir = ctx.derived.derivedDir(pr.headSha)

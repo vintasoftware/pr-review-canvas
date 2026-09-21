@@ -358,3 +358,44 @@ export function ghFor42(extra: FakeGhOptions = {}): FakeGh {
     graphql: extra.graphql ?? [GH_THREADS_PAGE, GH_THREADS_PAGE, GH_THREADS_PAGE],
   })
 }
+
+/**
+ * A clone with work that has no pull request: `feat/b` is checked out on BASE_SHA, `origin/HEAD`
+ * points at `origin/main`, and the working tree snapshots to HEAD_SHA unless the caller says the
+ * tree is clean.
+ */
+export function gitForLocal(opts: { snapshot?: string | null; head?: string } = {}): FakeGit {
+  const head = opts.head ?? BASE_SHA
+  return createFakeGit({
+    refs: {
+      HEAD: head,
+      'origin/HEAD': BASE_SHA,
+      'origin/main': BASE_SHA,
+      'refs/heads/main': BASE_SHA,
+    },
+    symbolicRefs: { 'refs/remotes/origin/HEAD': 'origin/main' },
+    mergeBases: {
+      [`origin/main..${HEAD_SHA}`]: BASE_SHA,
+      [`origin/main..${BASE_SHA}`]: BASE_SHA,
+    },
+    diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF, [`${BASE_SHA}..${BASE_SHA}`]: '' },
+    blobs: SYNTHETIC_BLOBS,
+    authors: { [HEAD_SHA]: 'octocat', [BASE_SHA]: 'octocat' },
+    branch: 'feat/b',
+    user: 'dev',
+    snapshot: opts.snapshot === undefined ? HEAD_SHA : opts.snapshot,
+    topLevel: '/repo',
+  })
+}
+
+/**
+ * SYNTHETIC_DIFF as the same branch shows it after a base merge added three lines above every
+ * change: the changed lines are the same, but the hunks moved, so it is not the identical diff.
+ */
+export const SYNTHETIC_DIFF_MOVED_BY_BASE = SYNTHETIC_DIFF.replace(
+  /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@/gm,
+  (_m, oldStart: string, oldLines: string, newStart: string, newLines: string) => {
+    const shift = (n: string) => (n === '0' ? n : String(Number(n) + 3))
+    return `@@ -${shift(oldStart)},${oldLines} +${shift(newStart)},${newLines} @@`
+  }
+)

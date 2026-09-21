@@ -36,7 +36,7 @@ These commands support custom generation workflows. The bundled
 [generation skill](../skills/pr-review-canvas/SKILL.md) describes the complete sequence and model rules.
 
 ```text
-pr-review prepare (--pr <n> | --base <ref> --head <ref>) [--force]
+pr-review prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--base <ref>] [--force]
 pr-review validate <model.json|review.json> --canvas <dir> [--human] [--fix]
 pr-review publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
 ```
@@ -46,7 +46,45 @@ A status of `exists` means that head already has a canvas. With `--force`, prepa
 previous generation's working files while keeping the published canvas available until a new
 publish succeeds.
 
-For a comparison before a PR exists, use local refs:
+### Reviewing before the pull request exists
+
+There are two reviews of the work in a clone, and they are separate targets:
+
+```bash
+pr-review prepare --branch        # served at /review/branch
+pr-review prepare --uncommitted   # served at /review/uncommitted
+```
+
+`--branch` describes the tip of the current branch. `--uncommitted` describes the working tree as
+it stands, with the edits and the untracked files on top of that tip; with a clean tree the two
+build the same canvas. Each keeps its own canvas, review progress and chat threads, so preparing
+one never disturbs the other.
+
+- **Base.** Both compare against the repository's default branch, resolved from `origin/HEAD` and
+  falling back to `origin/main`, `origin/master`, `main`, then `master`. `--base <ref>` overrides
+  it. Preparation fails with a hint when none of them resolve.
+- **Uncommitted work.** `--uncommitted` stages the working tree into an index of its own and
+  writes a commit from it, so the diff covers files that are not committed yet. Nothing the user
+  staged is touched, ignored files stay out, and the commit is anchored at
+  `refs/worktree/pr-review-snapshot` so `git gc` cannot collect it before `publish`. Publishing
+  gives that canvas an anchor of its own under `refs/worktree/pr-review-canvas/`, so a later
+  snapshot cannot leave it collectable. The same working tree always hashes to the same commit.
+- **Staleness.** Committing after `--branch`, or editing a file after `--uncommitted`, moves the
+  head, so `publish` answers `CANVAS_STALE`, exactly as a push does for a pull request. The page
+  reads the head again when it is opened and when `refresh` is pressed, and offers to regenerate.
+  Its background polls answer about that same head, so they never contradict what the page shows;
+  they read the work again only once a new canvas has been prepared.
+- **Worktrees.** The snapshot index and its anchor are per worktree, so two worktrees of one clone
+  never overwrite each other's snapshot. The review targets are not: `branch` and `uncommitted`
+  name one review per clone, so worktrees share their canvas, review progress and chat threads.
+  Review local work from one worktree at a time.
+- **No forge side.** A local canvas posts nothing: comments, sign-off, canvas import, and
+  attachment discovery are refused for it. The page draws no import drop zone and no shared-canvas
+  callout, and the comment and sign-off commands stay disabled with the reason. A canvas of a working-tree
+  snapshot is never offered as a pull request's canvas, or as the branch review's, because its
+  commit is on no branch.
+
+For a comparison between two commits that both exist, name them instead:
 
 ```bash
 pr-review prepare --base origin/main --head HEAD
@@ -57,7 +95,8 @@ pr-review prepare --base origin/main --head HEAD
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
 limit and overlong prose require rewriting.
 
-`publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl` for PR runs.
+`publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl`
+for PR and local runs.
 Its `--agent`, `--model`, and `--harness` describe who generated the canvas; they do not launch or
 select an agent. `--allow-stale` permits publishing for the prepared commit after the PR head has
 moved. Use it only when that older commit is the intended review target.
@@ -198,6 +237,7 @@ within one path segment.
 | `generation.caps`               | See below                                           | Overrides individual text limits                                                                                                                                                                                           |
 | `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
 | `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
+| `canvas.keepForIdenticalDiff`   | `true`                                              | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                          |
 | `prompts`                       | Bundled templates                                   | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
@@ -360,6 +400,28 @@ The sign-off dialog previews an editable review body summarizing reviewed layers
 attention points, and comments posted from the canvas. Approval requires every layer except
 **Other changes** to be reviewed for the current head. Requesting changes does not require that
 completion. If the head moves before submission, reload and review the current commit.
+
+### Outdated canvases
+
+A canvas describes one head commit. When the pull request moves to another commit, the page
+shows **Canvas is outdated**, offers the older canvas read-only, and disables posting from it.
+
+An identical diff is the exception. When the head's diff against its merge base is the same as
+the canvas commit's diff against its own, file by file and byte for byte, the canvas is carried
+over: the page shows it under a **Canvas still applies** note, review progress carries over, and
+sign-off, comments, and AI Chat keep working. The note says how many commits later the head is,
+when the head was built on the canvas's commit. Merging the base branch in (**Update branch**) keeps
+the diff identical as long as the base did not touch the changed files. The rule does not care how
+the head reached that diff, only that it did; a diff that differs anywhere, even a hunk moved down
+by a base change, marks the canvas outdated as before, because the canvas's layers, hunk ids, and
+attention points describe the diff it was generated from. It needs `canvas.keepForIdenticalDiff`
+(the default) and both commits in the local clone: the canvas's own commit has to be there for its
+diff to be rebuilt, and without that diff there is nothing to compare, so the canvas reads outdated.
+Two empty change sets are not compared either. `pr-review publish` and `pr-review import` apply the
+same rule, so the CLI never calls a canvas stale that the page shows as current.
+
+AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
+one on screen.
 
 ## AI Chat
 

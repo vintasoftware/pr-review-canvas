@@ -21,6 +21,23 @@ If automatic sharing fails (including a canvas too large for one comment), the s
 and gives you a ZIP path. Drag that ZIP into the PR or MR description, wait for the upload, and
 save. This manual upload is only a fallback.
 
+### Before you open the pull request
+
+To read your own change the way a reviewer will, generate a canvas for the work in your clone:
+
+```text
+/pr-review-canvas branch          # the current branch against the default branch
+/pr-review-canvas uncommitted     # the same, with your working-tree edits and new files on top
+```
+
+Start `pr-review serve` and open **http://localhost:3010/review/branch** or
+**/review/uncommitted**. The two are separate reviews, so generating one leaves the other alone.
+
+Nothing is posted anywhere: local work has no pull request, so the comment and sign-off commands
+stay off. Add `--base <ref>` to compare against another branch. Committing after `branch`, or
+editing a file after `uncommitted`, moves the head: the next time you open the page or press
+refresh, the canvas is marked outdated and the page offers to generate it again.
+
 ### Review side
 
 Start the canvas server from the project you want to review:
@@ -29,8 +46,8 @@ Start the canvas server from the project you want to review:
 pr-review serve
 ```
 
-Open **http://localhost:3010**, enter a PR number, and leave the terminal running while you
-review. Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
+Open **http://localhost:3010**, enter a PR number (or follow a link to a local review), and
+leave the terminal running while you review. Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
 
 ## Install
 
@@ -108,6 +125,11 @@ Reviewers click **refresh**.
 When the saved canvas describes a different PR head, **Canvas is outdated** appears at
 the top. You can still read the older canvas, with its commit and distance shown; posting
 from that view is disabled. Click **refresh** to check GitHub or GitLab for changes and a newer canvas.
+
+A head whose diff is identical to the canvas's does not outdate it: after **Update branch**
+merged `main` in without touching the changed files, for example, the canvas still applies
+and the page says so. Set `canvas.keepForIdenticalDiff: false` in the project config to treat
+every commit as a new head.
 
 ## Configuration
 

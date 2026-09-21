@@ -1,5 +1,6 @@
 // @ts-check
 /** @typedef {import('./contract-types.js').ErrorEnvelope} ErrorEnvelope */
+/** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').PatchesResponse} PatchesResponse */
 
@@ -69,17 +70,20 @@ export async function fetchJson(url, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
- * @param {{ refresh?: boolean, fetchImpl?: typeof fetch | undefined }} [opts]
+ * The bundle for one target. `refresh` asks the server to read the forge, or the working tree,
+ * again; `poll` says this is the background poller, which is answered from the head the page was
+ * opened with rather than by snapshotting the working tree every few seconds.
+ * @param {ReviewKey} prNumber
+ * @param {{ refresh?: boolean, poll?: boolean, fetchImpl?: typeof fetch | undefined }} [opts]
  * @returns {Promise<PrBundle>}
  */
 export function fetchBundle(prNumber, opts = {}) {
-  const q = opts.refresh ? '?refresh=1' : ''
+  const q = opts.refresh ? '?refresh=1' : opts.poll ? '?poll=1' : ''
   return fetchJson(`/api/prs/${prNumber}${q}`, { fetchImpl: opts.fetchImpl })
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<PatchesResponse>}
  */
@@ -89,7 +93,7 @@ export function fetchPatches(prNumber, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').StateResponse>}
  */
@@ -98,14 +102,18 @@ export function fetchState(prNumber, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {string} id `layer:<id>` or `layer:<id>/file:<key>`
  * @param {boolean} reviewed
- * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
+ * @param {{ headSha?: string, canvasSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').StateResponse>}
  */
 export function putReviewed(prNumber, id, reviewed, opts = {}) {
-  const body = opts.headSha === undefined ? { reviewed } : { reviewed, headSha: opts.headSha }
+  const body = {
+    reviewed,
+    ...(opts.headSha === undefined ? {} : { headSha: opts.headSha }),
+    ...(opts.canvasSha === undefined ? {} : { canvasSha: opts.canvasSha }),
+  }
   return fetchJson(`/api/prs/${prNumber}/reviewed/${id}`, {
     method: 'PUT',
     body,
@@ -114,7 +122,7 @@ export function putReviewed(prNumber, id, reviewed, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {string} fingerprint
  * @param {boolean} dismissed
  * @param {{ reason?: string, fetchImpl?: typeof fetch }} [opts]
@@ -130,7 +138,7 @@ export function putDismissed(prNumber, fingerprint, dismissed, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {number} rootCommentId
  * @param {boolean} hidden
  * @param {{ fetchImpl?: typeof fetch }} [opts]
@@ -145,7 +153,7 @@ export function putThreadHidden(prNumber, rootCommentId, hidden, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ refresh?: boolean, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').Capabilities>}
  */
@@ -155,7 +163,7 @@ export function fetchCapabilities(prNumber, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {import('./contract-types.js').PostCommentInput} input
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').PostCommentResponse>}
@@ -169,7 +177,7 @@ export function postComment(prNumber, input, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').ReviewBodyResponse>}
  */
@@ -178,7 +186,7 @@ export function fetchReviewBody(prNumber, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ event: 'APPROVE' | 'REQUEST_CHANGES', body?: string, headSha?: string }} input
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').PostReviewResponse>}
@@ -210,7 +218,7 @@ export const POLL_SLOW_INTERVAL_MS = 15_000
  * After five minutes of waiting the gap grows to 15 s, because a generation that has not finished
  * by then takes minutes more. A failed poll is reported and polling goes on; the page never
  * blocks on it.
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {PollOptions} [opts]
  * @returns {{ stop: () => void }}
  */
@@ -230,7 +238,7 @@ export function pollBundle(prNumber, opts = {}) {
     /** @type {PrBundle} */
     let bundle
     try {
-      bundle = await fetchBundle(prNumber, { fetchImpl: opts.fetchImpl })
+      bundle = await fetchBundle(prNumber, { poll: true, fetchImpl: opts.fetchImpl })
     } catch (err) {
       if (!stopped) {
         opts.onError?.(err)
@@ -306,7 +314,7 @@ export function uploadForm(url, form, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {File} file
  * @param {{ force?: boolean, onProgress?: (fraction: number) => void, xhrImpl?: () => XMLHttpRequest }} [opts]
  * @returns {Promise<import('./contract-types.js').ImportResult>}
@@ -321,7 +329,7 @@ export function importCanvas(prNumber, file, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').SharedCanvasFetchResponse>}
  */
@@ -331,7 +339,7 @@ export function fetchSharedCanvas(prNumber, opts = {}) {
 
 /**
  * The zip as a blob plus the name the server chose, ready to hand to the browser.
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ blob: Blob, filename: string }>}
  */
@@ -378,7 +386,7 @@ export function saveAppearance(input, opts = {}) {
 /* ---- AI Chat and its settings ---- */
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').ChatThreadsResponse>}
  */
@@ -387,7 +395,7 @@ export function fetchThreads(prNumber, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').ChatThreadsResponse>}
  */
@@ -400,7 +408,7 @@ export function createThread(prNumber, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {string} name
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').ChatHistoryResponse>}
@@ -412,7 +420,7 @@ export function fetchThreadHistory(prNumber, name, opts = {}) {
 }
 
 /**
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ cancelled: boolean }>}
  */
@@ -501,7 +509,7 @@ export function readSseFrames(buffer, chunk) {
 /**
  * Sends one chat message and calls `onEvent` for every frame until the turn ends. Rejects with
  * an ApiError when the server refuses the message (a busy chat, a context it cannot resolve).
- * @param {number} prNumber
+ * @param {ReviewKey} prNumber
  * @param {{ message: string, context: import('./chat-context.js').ChatContext, thread?: string }} input
  * @param {{
  *   onEvent: (event: { event: string, data: unknown }) => void,

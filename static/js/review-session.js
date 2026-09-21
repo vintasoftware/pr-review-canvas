@@ -24,12 +24,13 @@ import { sanitizeKey } from './keys.js'
 
 /**
  * @typedef {{
- *   prNumber: number,
+ *   prNumber: import('./contract-types.js').ReviewKey,
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
  *   state: PrState,
  *   capabilities: Capabilities,
  *   headSha: string,
+ *   canvasSha?: string,
  *   api?: Partial<SessionApi>,
  *   onState?: (state: PrState) => void,
  * }} SessionOptions
@@ -193,7 +194,11 @@ export function createReviewSession(options) {
       return change(
         current => withEntry(current, 'reviewed', id, reviewed ? true : undefined),
         current => withEntry(current, 'reviewed', id, before),
-        () => api.putReviewed(options.prNumber, id, reviewed, { headSha: options.headSha })
+        () =>
+          api.putReviewed(options.prNumber, id, reviewed, {
+            headSha: options.headSha,
+            ...(options.canvasSha === undefined ? {} : { canvasSha: options.canvasSha }),
+          })
       )
     },
     /**

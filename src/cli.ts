@@ -41,7 +41,12 @@ const USAGE = `usage: pr-review <command> [flags]
 
   serve [--port 3010] [--repo <dir>] [--data-dir <dir>] [--fixture-canvas <review.json>]
         [--agent claude|codex] [--model <id>]   (chat only; wins over .pr-review/settings.yml)
-  prepare (--pr <n> | --base <ref> --head <ref>) [--force] [--repo <dir>] [--data-dir <dir>]
+  prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
+          [--base <ref>] [--repo <dir>] [--data-dir <dir>]
+                   (--branch reviews the current branch against the default branch, and
+                    --uncommitted reviews it with the working tree's edits and new files on top.
+                    Both are for work with no PR yet, take --base <ref> to compare against
+                    another branch, and show at /review/branch and /review/uncommitted.)
   validate <model.json|review.json> --canvas <dir> [--human] [--fix] [--repo <dir>] [--data-dir <dir>]
                    (--fix trims over-cap titles in place and reports each one)
   publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]

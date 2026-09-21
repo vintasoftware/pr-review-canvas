@@ -47,3 +47,9 @@ tests:
 
 chat:
   enabled: true # false removes the chat pane and its routes
+
+canvas:
+  # A canvas stays current for a later head whose diff is identical to the one it was generated
+  # from, as after merging the base branch in. Set false to mark the canvas outdated on every new
+  # commit.
+  keepForIdenticalDiff: true

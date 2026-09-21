@@ -37,6 +37,14 @@ export interface FakeGitOptions {
   counts?: Record<string, number>
   /** Commits the fake origin serves when they are fetched by sha. */
   fetchable?: string[]
+  /** The checked-out branch; null stands for a detached HEAD. */
+  branch?: string | null
+  /** The commit `snapshotWorktree` answers with; null means the working tree matches HEAD. */
+  snapshot?: string | null
+  /** `<ref>` → what it points at, short form; unlisted refs are not symbolic. */
+  symbolicRefs?: Record<string, string>
+  /** `git config user.name`. */
+  user?: string | null
 }
 
 export interface FakeGit extends Git {
@@ -46,7 +54,10 @@ export interface FakeGit extends Git {
 
 export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
   const calls: string[][] = []
-  const refs = options.refs ?? {}
+  // The ref table lives on the options, so a test that repoints a ref -- a push mid-test -- is
+  // seen here. `moveFakeHead` is the way to do that.
+  options.refs ??= {}
+  const refs = options.refs
   const shas = new Set(Object.values(refs))
   const fail = (args: string[], msg: string): never => {
     throw new GitError(args, msg, 128)
@@ -67,7 +78,12 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     },
     commitExists: async sha => {
       calls.push(['cat-file', '-e', sha])
-      return shas.has(sha) || Object.values(options.mergeBases ?? {}).includes(sha)
+      // Refs may be repointed after creation, as a test moves a pull request's head.
+      return (
+        shas.has(sha) ||
+        Object.values(refs).includes(sha) ||
+        Object.values(options.mergeBases ?? {}).includes(sha)
+      )
     },
     isAncestor: async (a, b) => {
       calls.push(['merge-base', '--is-ancestor', a, b])
@@ -125,6 +141,73 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
       calls.push(['remote', 'get-url', name])
       return options.remotes?.[name] ?? null
     },
+    symbolicRef: async name => {
+      calls.push(['symbolic-ref', name])
+      return options.symbolicRefs?.[name] ?? null
+    },
+    configuredUser: async () => {
+      calls.push(['config', 'user.name'])
+      return options.user ?? null
+    },
+    currentBranch: async () => {
+      calls.push(['symbolic-ref', 'HEAD'])
+      return options.branch === undefined ? 'feature' : options.branch
+    },
+    firstExistingRef: async wanted => {
+      calls.push(['rev-parse', ...wanted])
+      return wanted.find(ref => refs[ref] !== undefined) ?? null
+    },
+    snapshotWorktree: async () => {
+      // The commands the real adapter runs, so a test that asserts on `calls` reads the truth.
+      calls.push(['add', '-A'], ['write-tree'])
+      const sha = options.snapshot ?? null
+      if (sha !== null) {
+        shas.add(sha)
+        calls.push(['commit-tree', sha])
+      }
+      return sha
+    },
+    anchorCommit: async sha => {
+      calls.push(['update-ref', sha])
+    },
+  }
+}
+
+/** A push that moved a fake pull request's head, as `moveFakeHead` applies it. */
+export interface FakeHeadMove {
+  /** The ref the head is read from, e.g. `pull/42/head`. */
+  headRef: string
+  /** The ref the merge base is computed against, e.g. `refs/pr/42/base`. */
+  baseRef: string
+  /** The commit the head now points at. */
+  headSha: string
+  /** The merge base of the new head; the same one as before unless the base branch moved too. */
+  mergeBaseSha: string
+  /** The new head's diff against that merge base. */
+  diff: string
+  /** Commits the new head is ahead of, by sha: it contains each of them, that many commits back. */
+  ahead?: Record<string, number>
+}
+
+/**
+ * Repoints a fake pull request's head and updates every table that has to move with it: the ref,
+ * the merge base, the diff, and the ancestry and commit counts of the commits left behind. A
+ * mid-test push is one call, instead of four `Object.assign`s that can disagree.
+ */
+export function moveFakeHead(git: FakeGit, move: FakeHeadMove): void {
+  // The tables are edited in place: the fake reads the ones it was built with.
+  const o = git.options
+  const refs = (o.refs ??= {})
+  const mergeBases = (o.mergeBases ??= {})
+  const diffs = (o.diffs ??= {})
+  const ancestors = (o.ancestors ??= {})
+  const counts = (o.counts ??= {})
+  refs[move.headRef] = move.headSha
+  mergeBases[`${move.baseRef}..${move.headSha}`] = move.mergeBaseSha
+  diffs[`${move.mergeBaseSha}..${move.headSha}`] = move.diff
+  for (const [sha, commitsBehind] of Object.entries(move.ahead ?? {})) {
+    ancestors[`${sha}..${move.headSha}`] = true
+    counts[`${sha}..${move.headSha}`] = commitsBehind
   }
 }
 

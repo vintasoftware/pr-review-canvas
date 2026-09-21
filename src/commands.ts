@@ -7,7 +7,8 @@ import { exportCanvas } from './canvas/export.js'
 import { importCanvas } from './canvas/import.js'
 import { CANVAS_ZIP_MAX_BYTES } from './canvas/zip.js'
 import type { ErrorCode } from './contract/api.js'
-import type { GenerationContext, PrepareTarget } from './contract/generation-context.js'
+import type { GenerationContext, PrepareTargetInput } from './contract/generation-context.js'
+import type { LocalKey } from './contract/review-key.js'
 import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
 import { fetchPrRefs } from './git/pr-refs.js'
@@ -145,17 +146,39 @@ function parsePrNumber(raw: string): number {
   return n
 }
 
-export function parsePrepareTarget(values: { pr?: string; base?: string; head?: string }): PrepareTarget {
+export interface PrepareFlags {
+  pr?: string | undefined
+  base?: string | undefined
+  head?: string | undefined
+  branch?: boolean | undefined
+  uncommitted?: boolean | undefined
+}
+
+const LOCAL_FLAGS = 'pass one of --pr <n>, --branch, --uncommitted, or --base <ref> --head <ref>'
+
+/** The target the flags name. `prepare` resolves a local review's base against the clone. */
+export function parsePrepareTarget(values: PrepareFlags): PrepareTargetInput {
+  const local: LocalKey | undefined =
+    values.branch === true ? 'branch' : values.uncommitted === true ? 'uncommitted' : undefined
+  if (values.branch === true && values.uncommitted === true) {
+    throw new UsageError('--branch and --uncommitted are two reviews; ask for one of them')
+  }
   if (values.pr !== undefined) {
-    if (values.base !== undefined || values.head !== undefined) {
-      throw new UsageError('pass either --pr <n> or --base <ref> --head <ref>, not both')
+    if (values.base !== undefined || values.head !== undefined || local !== undefined) {
+      throw new UsageError(LOCAL_FLAGS)
     }
     return { kind: 'pr', number: parsePrNumber(values.pr) }
+  }
+  if (local !== undefined) {
+    if (values.head !== undefined) {
+      throw new UsageError(`--${local} reviews this clone, so it takes no --head`)
+    }
+    return { kind: 'local', source: local, base: values.base }
   }
   if (values.base !== undefined && values.head !== undefined) {
     return { kind: 'refs', base: values.base, head: values.head }
   }
-  throw new UsageError('prepare needs --pr <n> or --base <ref> --head <ref>')
+  throw new UsageError(`prepare needs a target: ${LOCAL_FLAGS}`)
 }
 
 export async function runPrepare(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
@@ -165,12 +188,16 @@ export async function runPrepare(ctx: AppContext, argv: string[], io: CliIo): Pr
       pr: { type: 'string' },
       base: { type: 'string' },
       head: { type: 'string' },
+      branch: { type: 'boolean' },
+      uncommitted: { type: 'boolean' },
       force: { type: 'boolean' },
     },
     strict: true,
   })
-  const target = parsePrepareTarget(values)
-  const result = await prepare(ctx, target, { force: values.force === true, log: phase => io.stderr(phase) })
+  const result = await prepare(ctx, parsePrepareTarget(values), {
+    force: values.force === true,
+    log: phase => io.stderr(phase),
+  })
   printJson(io, result)
   return EXIT.ok
 }
@@ -449,7 +476,7 @@ export async function runImport(ctx: AppContext, argv: string[], io: CliIo): Pro
     const prNumber = parsePrNumber(values.pr)
     const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, prNumber)
     options.prNumber = prNumber
-    options.currentHeadSha = (await fetchPrRefs(ctx.git, ctx.config.host, meta)).headSha
+    options.currentHead = await fetchPrRefs(ctx.git, ctx.config.host, meta)
   }
   printJson(io, await importCanvas(ctx, options))
   return EXIT.ok

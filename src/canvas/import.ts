@@ -1,6 +1,7 @@
 // One import path for the three ways a canvas arrives: the drop zone, `pr-review import`, and a
 // zip discovered on the pull request. Everything is checked here, so no caller can skip a step.
 import type { CanvasRelation, ImportResult } from '../contract/api.js'
+import { type DiffedCommit, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
@@ -9,8 +10,11 @@ export interface ImportOptions {
   bytes: Uint8Array
   /** The pull request the canvas is imported for; recorded on the canvas. */
   prNumber?: number | undefined
-  /** The head the page is looking at. Absent means the canvas is taken as the current one. */
-  currentHeadSha?: string | undefined
+  /**
+   * The head the page is looking at, with the merge base its diff runs from. Absent means the
+   * canvas is taken as the current one.
+   */
+  currentHead?: DiffedCommit | undefined
   /** Accepts a canvas exported from another repository. */
   force?: boolean | undefined
 }
@@ -112,7 +116,7 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   }
 
   const headSha = manifest.headSha
-  const currentHeadSha = opts.currentHeadSha ?? headSha
+  const currentHeadSha = opts.currentHead?.headSha ?? headSha
   const index = await ctx.canvases.readIndex()
   const stored = index.canvases[headSha]
   const keepStored = stored !== undefined && stored.generatedAt >= artifact.generatedAt
@@ -130,7 +134,13 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   if (keepStored) {
     return { status: 'exists', headSha, currentHeadSha, derivable, warnings }
   }
-  if (headSha === currentHeadSha) {
+  // The same rule the page reads: a canvas of another commit is current when the head's diff is
+  // identical to the one it was generated from, so the CLI never calls stale what the page shows
+  // as carried over.
+  if (
+    opts.currentHead === undefined ||
+    (await standsForHead(ctx, opts.currentHead, { headSha, mergeBaseSha }))
+  ) {
     return { status: 'ready', headSha, currentHeadSha, derivable, warnings }
   }
   const related = await relateToHead(ctx, headSha, currentHeadSha)
