@@ -6,24 +6,25 @@ OIDC trusted publishing, as in `vintasoftware/fhirpath-ts`. No npm token secret 
 
 ## Release a version
 
-1. Open a PR with the version change in `package.json` and release notes and upgrade
-   instructions in `CHANGELOG.md`. Use `npm version minor --no-git-tag-version`
-   (or `patch` / `major`) and `corepack pnpm install --lockfile-only`.
-2. Merge the PR after CI passes. From a clean checkout, pull `main` and push the tag:
+Open a PR with the version change in `package.json` and release notes and upgrade
+instructions in `CHANGELOG.md`. Use `npm version minor --no-git-tag-version`
+(or `patch` / `major`) and `corepack pnpm install --lockfile-only`.
 
-    ```bash
-    git switch main
-    git pull --ff-only
-    release_version=$(node -p "require('./package.json').version")
-    git tag -a "v${release_version}" -m "Release ${release_version}"
-    git push origin "v${release_version}"
-    ```
+Merge the PR after CI passes. From a clean checkout, pull `main` and push the tag:
 
-3. Watch **Actions → Release**. After it succeeds, check npm:
+```bash
+git switch main
+git pull --ff-only
+release_version=$(node -p "require('./package.json').version")
+git tag -a "v${release_version}" -m "Release ${release_version}"
+git push origin "v${release_version}"
+```
 
-    ```bash
-    npm view "@vintasoftware/pr-review-canvas@${release_version}" version dist.integrity
-    ```
+Watch **Actions → Release**. After it succeeds, check npm:
+
+```bash
+npm view "@vintasoftware/pr-review-canvas@${release_version}" version dist.integrity
+```
 
 The tag must match `package.json`. Stable versions use npm's `latest` channel;
 prereleases use `next` and create a GitHub prerelease. The workflow generates GitHub
