@@ -65,8 +65,8 @@ The release calls the same CI workflow used by pull requests, at the tagged comm
 Both Node versions run lint, formatting, strict types, coverage, browser tests, and
 the package installation smoke test. Publishing waits for both jobs to pass.
 
-The publish job uses npm 11.11.0, packs the source package, prints its contents with
-`npm publish --dry-run`, and publishes that same tarball with provenance. It skips
+The publish job uses npm 11.11.0, packs the source package, prints its contents from
+`npm pack --json`, and publishes that same tarball with provenance. It skips
 lifecycle scripts because CI has already run the full suite and the package needs
 no compilation. Local `npm publish` still runs `prepublishOnly` as before.
 

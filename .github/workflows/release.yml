@@ -55,13 +55,11 @@ jobs:
 
       # CI already ran the full suite on this commit. This package ships source and needs no build.
       - name: Pack and inspect the release
-        env:
-          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
         run: |
           npm pack --pack-destination "$RUNNER_TEMP" --json > "$RUNNER_TEMP/pack.json"
+          cat "$RUNNER_TEMP/pack.json"
           archive=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/pack.json", "utf8"))[0].filename')
           echo "RELEASE_ARCHIVE=$RUNNER_TEMP/$archive" >> "$GITHUB_ENV"
-          npm publish "$RUNNER_TEMP/$archive" --dry-run --ignore-scripts --access public --tag "$DIST_TAG"
 
       - name: Publish to npm with provenance
         if: github.event_name == 'push'
