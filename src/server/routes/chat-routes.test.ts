@@ -215,7 +215,7 @@ describe('the settings routes', () => {
     const body = await json<SettingsResponse>(res)
     expect(body.settings).toEqual({
       version: 1,
-      skin: 'terminal',
+      skin: 'github',
       theme: 'auto',
       agent: 'claude',
       model: null,
@@ -246,7 +246,7 @@ describe('the settings routes', () => {
     })
     expect((await json<SettingsResponse>(res)).settings).toEqual({
       version: 1,
-      skin: 'terminal',
+      skin: 'github',
       theme: 'auto',
       agent: 'codex',
       model: 'gpt-5.2',
@@ -328,7 +328,7 @@ describe('with chat turned off in the project config', () => {
   it('still serves the look of the page, which is not an agent surface', async () => {
     const app = createApp(t.ctx)
     expect(await json(await app.request('/api/appearance', { headers: LOCAL }))).toEqual({
-      skin: 'terminal',
+      skin: 'github',
       theme: 'auto',
     })
     const saved = await app.request('/api/appearance', {

@@ -31,7 +31,7 @@ import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
 import { openSettingsDialog } from './settings.js'
-import { applySkin, nextSkin, readSkin, skinLabel } from './skin.js'
+import { applySkin, DEFAULT_SKIN, nextSkin, readSkin, skinLabel } from './skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
@@ -109,7 +109,7 @@ export class PrAppElement extends HTMLElement {
   /** @type {import('./theme.js').Theme} */
   theme = 'auto'
   /** @type {import('./skin.js').Skin} */
-  skin = 'terminal'
+  skin = DEFAULT_SKIN
   /** @type {{ stop: () => void } | null} */
   diagrams = null
   /** @type {{ stop: () => void } | null} */
