@@ -50,11 +50,15 @@ describe('composerHtml', () => {
     expect(box.getAttribute('data-line')).toBe('4')
     expect(box.hasAttribute('data-start-line')).toBe(false)
     expect(box.querySelector('label')?.getAttribute('for')).toBe('c1-t')
+    // A comment on a diff line can go into the review being written or out on its own, so both
+    // commands are there, with starting a review first because no review is open yet.
     expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
       'markdown-toggle',
+      'composer-queue',
       'composer-post',
       'composer-cancel',
     ])
+    expect(box.querySelector('[data-act="composer-queue"]')?.textContent).toBe('start a review')
   })
 
   it('escapes the draft and the label it is given', () => {

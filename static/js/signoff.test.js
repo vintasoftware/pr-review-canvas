@@ -76,7 +76,12 @@ describe('the sign-off dialog', () => {
 
   it('shows the generated body and the commit it lands on', () => {
     const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
-    fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'Reviewed 1 of 1 layer.', unreviewed: [] })
+    fillSignoffDialog(dialog, {
+      headSha: 'a'.repeat(40),
+      body: 'Reviewed 1 of 1 layer.',
+      unreviewed: [],
+      pending: 0,
+    })
     expect(signoffBody(dialog)).toBe('Reviewed 1 of 1 layer.')
     expect(dialog.querySelector('textarea')?.hasAttribute('aria-busy')).toBe(false)
     expect(dialog.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(false)
@@ -120,7 +125,9 @@ describe('a dialog the page stripped of its parts', () => {
       throw new Error('no dialog')
     }
     expect(signoffBody(dialog)).toBe('')
-    expect(fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'x', unreviewed: [] })).toBe(dialog)
+    expect(
+      fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'x', unreviewed: [], pending: 0 })
+    ).toBe(dialog)
     expect(
       showSignoffResult(dialog, { id: 1, state: 'APPROVED', url: 'https://x.test', submittedAt: null })
     ).toBeNull()

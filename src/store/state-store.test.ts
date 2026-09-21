@@ -140,6 +140,87 @@ describe('state store', () => {
     expect(await t.ctx.state.read(42)).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
   })
 
+  it('keeps the pending review in the order the comments were written', async () => {
+    const first = await t.ctx.state.addPending(
+      42,
+      { path: 'src/app.ts', line: 4, side: 'new', body: 'one' },
+      'a'.repeat(40)
+    )
+    const both = await t.ctx.state.addPending(
+      42,
+      { path: 'src/other.ts', line: 9, side: 'old', startLine: 7, body: 'two' },
+      'a'.repeat(40)
+    )
+    expect(first.pending.map(p => p.body)).toEqual(['one'])
+    expect(both.pending.map(p => p.body)).toEqual(['one', 'two'])
+    expect(both.pending[1]).toMatchObject({
+      path: 'src/other.ts',
+      line: 9,
+      side: 'old',
+      startLine: 7,
+      headSha: 'a'.repeat(40),
+    })
+    // Every draft is told apart from the others, which is all its id has to do.
+    expect(new Set(both.pending.map(p => p.id)).size).toBe(2)
+  })
+
+  it('edits one body, leaves the other drafts alone, and stamps the change', async () => {
+    const added = await t.ctx.state.addPending(
+      42,
+      { path: 'src/app.ts', line: 4, side: 'new', body: 'one' },
+      'a'.repeat(40)
+    )
+    await t.ctx.state.addPending(
+      42,
+      { path: 'src/app.ts', line: 5, side: 'new', body: 'two' },
+      'a'.repeat(40)
+    )
+    const id = added.pending[0]?.id ?? ''
+    const edited = await t.ctx.state.editPending(42, id, 'one, revised')
+    expect(edited.pending.map(p => p.body)).toEqual(['one, revised', 'two'])
+    expect(edited.pending[0]?.createdAt).toBe(added.pending[0]?.createdAt)
+    expect(edited.pending[0]?.updatedAt).toBe('2026-09-10T12:00:00.000Z')
+  })
+
+  it('leaves the state alone when the draft to edit is gone', async () => {
+    const before = await t.ctx.state.addPending(
+      42,
+      { path: 'src/app.ts', line: 4, side: 'new', body: 'one' },
+      'a'.repeat(40)
+    )
+    const after = await t.ctx.state.editPending(42, 'nope', 'x')
+    expect(after.pending).toEqual(before.pending)
+  })
+
+  it('removes one draft and discards them all', async () => {
+    const added = await t.ctx.state.addPending(
+      42,
+      { path: 'src/app.ts', line: 4, side: 'new', body: 'one' },
+      'a'.repeat(40)
+    )
+    await t.ctx.state.addPending(
+      42,
+      { path: 'src/app.ts', line: 5, side: 'new', body: 'two' },
+      'a'.repeat(40)
+    )
+    const dropped = await t.ctx.state.removePending(42, added.pending[0]?.id ?? '')
+    expect(dropped.pending.map(p => p.body)).toEqual(['two'])
+    expect((await t.ctx.state.clearPending(42)).pending).toEqual([])
+  })
+
+  it('reads a state file written before pending reviews existed', async () => {
+    const { writeFile } = await import('node:fs/promises')
+    // One write first, so the directory the older file goes into exists.
+    await t.ctx.state.setReviewed(42, 'layer:layer-1', true)
+    const older = { ...emptyState('2026-09-10T12:00:00.000Z'), reviewed: { 'layer:layer-1': true } }
+    const { pending: _pending, ...withoutPending } = older
+    await writeFile(`${t.ctx.prs.prDir(42)}/state.json`, JSON.stringify(withoutPending), 'utf8')
+    const read = await t.ctx.state.read(42)
+    // The marks survive the upgrade; the drafts simply start empty.
+    expect(read.reviewed).toEqual({ 'layer:layer-1': true })
+    expect(read.pending).toEqual([])
+  })
+
   it('accepts only layer and layer-file reviewed ids', () => {
     expect(['layer:layer-1', 'layer:layer-1/file:src_app_ts'].map(isReviewedId)).toEqual([true, true])
     expect(['layer-1', 'layer:', 'layer:a/file:', 'layer:a/file:b/c', '../../etc'].map(isReviewedId)).toEqual(

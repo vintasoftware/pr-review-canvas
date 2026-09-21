@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Pending reviews
+
+- A comment on a diff line can go into a pending review instead of out on its own: **start a
+  review** holds it locally, and **add review comment** adds to a review already open. The drafts
+  are part of the review state, so they survive a reload, and nothing reaches the forge until the
+  review is submitted.
+- A bar under the progress line says how many comments are waiting and offers to finish or discard
+  the review; each draft is drawn on its line with a **pending** badge and commands to edit or
+  delete it.
+- Submitting a review sends the drafts with it: on GitHub as the comments of the one call that
+  creates the review, so they land as a single review; on GitLab as one inline discussion each,
+  posted before the verdict. A review the forge refuses leaves the drafts waiting.
+
+### Sign-off
+
+- A third verdict, **comment**, posts a review with no approval or rejection, next to the existing
+  **approve** and **request changes**, each of which already carries an editable review body.
+  Only approval still asks that every layer was read.
+
 ## 0.4.0
 
 Changes since 0.3.0.

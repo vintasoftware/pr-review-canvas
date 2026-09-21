@@ -20,6 +20,8 @@ import { noPostingTitle, postToLabel } from './host.js'
  *   inReplyToId?: number,
  *   pointFingerprint?: string,
  *   body?: string,
+ *   pendingActive?: boolean,
+ *   pendingId?: string,
  * }} ComposerOptions
  */
 
@@ -33,6 +35,7 @@ function dataAttributes(opts) {
     ['data-start-line', opts.startLine],
     ['data-in-reply-to', opts.inReplyToId],
     ['data-fingerprint', opts.pointFingerprint],
+    ['data-pending-id', opts.pendingId],
   ]
   return pairs
     .filter(([, value]) => value !== undefined)
@@ -41,7 +44,31 @@ function dataAttributes(opts) {
 }
 
 /**
- * The box itself. The textarea carries the draft; the two commands act on the nearest
+ * The commands under the box. A comment on a diff line can go two ways, the way it can on the
+ * forge's own page: into the review being written, or straight out on its own. Which one leads
+ * depends on whether a review is already open, so the usual next step is the first command.
+ *
+ * A draft being edited has neither: it is already in the review, so it is only saved.
+ * @param {ComposerOptions} opts
+ */
+function commandsHtml(opts) {
+  const cancel = '<button class="cmd" type="button" data-act="composer-cancel">cancel</button>'
+  if (opts.pendingId !== undefined) {
+    return `<button class="cmd fill" type="button" data-act="pending-save">save</button>${cancel}`
+  }
+  if (opts.kind !== 'inline') {
+    return `<button class="cmd fill" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>${cancel}`
+  }
+  const queueLabel = opts.pendingActive === true ? 'add review comment' : 'start a review'
+  return (
+    `<button class="cmd fill" type="button" data-act="composer-queue">${queueLabel}</button>` +
+    `<button class="cmd" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>` +
+    cancel
+  )
+}
+
+/**
+ * The box itself. The textarea carries the draft; the commands act on the nearest
  * `.composer-box` ancestor.
  * @param {ComposerOptions} opts
  */
@@ -51,8 +78,7 @@ export function composerHtml(opts) {
     `<label class="sr" for="${esc(opts.id)}-t">${esc(opts.label)}</label>` +
     previewControlsHtml() +
     `<textarea id="${esc(opts.id)}-t" rows="3" placeholder="${esc(opts.label)}">${esc(opts.body ?? '')}</textarea>` +
-    `<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>` +
-    '<button class="cmd" type="button" data-act="composer-cancel">cancel</button></div></div>'
+    `<div class="composer-actions">${commandsHtml(opts)}</div></div>`
   )
 }
 
@@ -79,6 +105,24 @@ export function pendingCommentHtml() {
 export function composerBody(box) {
   const textarea = box.querySelector('textarea')
   return textarea instanceof HTMLTextAreaElement ? textarea.value.trim() : ''
+}
+
+/**
+ * What this composer would add to the pending review, or null when it is empty or is not a
+ * comment on a diff line. Only inline comments can wait: a reply and a PR-level comment have
+ * no place in a forge review's comment list.
+ * @param {Element} box
+ * @returns {Omit<import('./contract-types.js').AddPendingInput, 'headSha'> | null}
+ */
+export function composerPendingInput(box) {
+  const input = composerInput(box)
+  return input === null || input.kind !== 'inline' ? null : stripKind(input)
+}
+
+/** @param {Extract<PostCommentInput, { kind: 'inline' }>} input */
+function stripKind(input) {
+  const { kind: _kind, ...rest } = input
+  return rest
 }
 
 /**

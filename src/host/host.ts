@@ -7,6 +7,7 @@ import { GITHUB_ATTACHMENTS } from '../github/attachments.js'
 import { probeCapabilities } from '../github/capabilities.js'
 import { fetchComments } from '../github/comments.js'
 import { postComment } from '../github/post-comment.js'
+import type { PendingComment } from '../contract/pending.js'
 import type { ReviewEvent } from '../contract/reviews.js'
 import { postReview } from '../github/post-review.js'
 import { fetchPrMeta } from '../github/pr.js'
@@ -68,12 +69,18 @@ export interface Host {
     input: PostCommentInput,
     diff: Derived
   ): Promise<PostCommentResult>
+  /**
+   * Submits the review, with the comments the reviewer had waiting. GitHub takes them in the one
+   * call that creates the review; GitLab posts them itself before the verdict, which is why the
+   * diff is passed here too.
+   */
   postReview(
     client: HostClient,
     repo: Repo,
     number: number,
     headSha: string,
-    input: { event: ReviewEvent; body: string }
+    input: { event: ReviewEvent; body: string; comments?: ReadonlyArray<PendingComment> },
+    diff: Derived
   ): Promise<ReviewSummary>
   probeCapabilities(client: HostClient, repo: Repo): Promise<Capabilities>
   canvasCommentLimit: number
@@ -121,8 +128,8 @@ export function gitlabHost(hostname: string): Host {
       fetchGitlabComments(client, repo, number, headSha, now, webBase),
     postComment: (client, repo, number, headSha, input, diff) =>
       postGitlabComment(client, repo, number, headSha, input, { webBase, ...diff }),
-    postReview: (client, repo, number, headSha, input) =>
-      postGitlabReview(client, repo, number, headSha, input, webBase),
+    postReview: (client, repo, number, headSha, input, diff) =>
+      postGitlabReview(client, repo, number, headSha, input, webBase, diff),
     probeCapabilities: probeGitlabCapabilities,
     canvasCommentLimit: 1_000_000,
     shareCanvas: (client, repo, number, body) => shareGitlabCanvas(client, repo, number, body, webBase),

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PendingCommentSchema } from './pending.js'
 
 export const ChatThreadSchema = z.object({
   name: z.string(),
@@ -48,6 +49,12 @@ export const PrStateSchema = z.preprocess(
       z.object({ commentId: z.number().int(), pointFingerprint: z.string().optional(), at: z.string() })
     ),
     dismissed: z.record(z.string(), z.object({ at: z.string(), reason: z.string().optional() })),
+    /**
+     * The comments of the review being written, in the order they were added. They live here and
+     * nowhere else until the review is submitted, so a reload does not lose a draft. A state file
+     * of an older tool version has none, which reads as an empty list.
+     */
+    pending: z.array(PendingCommentSchema).default([]),
     chat: z.object({ threads: z.array(ChatThreadSchema), activeThread: z.string().optional() }),
     updatedAt: z.string(),
   })
@@ -62,6 +69,7 @@ export function emptyState(updatedAt: string): PrState {
     hiddenThreads: {},
     posted: [],
     dismissed: {},
+    pending: [],
     chat: { threads: [] },
     updatedAt,
   }

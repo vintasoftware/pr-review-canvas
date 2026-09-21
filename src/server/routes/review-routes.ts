@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
+import { AddPendingInputSchema, EditPendingInputSchema, type PendingComment } from '../../contract/pending.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
@@ -110,6 +111,65 @@ async function canvasForSignOff(
   return { artifact, state: stateForCanvas(stored, found.headSha) }
 }
 
+/**
+ * The diff of this head as it is stored locally, which every inline target is checked against.
+ * Without it the line a comment names cannot be checked, so the comment is refused rather than
+ * sent to a coordinate nobody verified.
+ */
+async function requireDerived(ctx: AppContext, headSha: string): Promise<Derived> {
+  const derived = await ctx.derived.read(headSha)
+  if (derived === null) {
+    throw new AppError(
+      'NOT_FOUND',
+      'the diff of this head is not available locally, so the line cannot be checked',
+      404,
+      'fetch the PR head and reload'
+    )
+  }
+  return derived
+}
+
+/** Refuses a line the diff on screen does not show. */
+function requireInlineTarget(diff: Derived, target: Parameters<typeof checkInlineTarget>[1]): void {
+  const problem = checkInlineTarget(diff.files, target)
+  if (problem !== null) {
+    throw new AppError('COMMENT_LINE_NOT_IN_DIFF', problem, 422, 'comment on a line the diff shows')
+  }
+}
+
+/**
+ * The `posted` entries for drafts that came from attention points, found in the comment list the
+ * forge returns after the review landed. A review is created in one call that does not name the
+ * comments it made, so each draft is matched by where it sits and what it says — the same path,
+ * side, line and body it was submitted with. A draft that matches nothing is skipped: the point
+ * simply keeps its post command.
+ */
+export function postedFromPending(
+  pending: ReadonlyArray<PendingComment>,
+  comments: ReadonlyArray<{ id: number; path: string; line: number | null; side: string; body: string }>
+): Array<{ commentId: number; pointFingerprint: string }> {
+  const entries: Array<{ commentId: number; pointFingerprint: string }> = []
+  const used = new Set<number>()
+  for (const draft of pending) {
+    if (draft.pointFingerprint === undefined) {
+      continue
+    }
+    const match = comments.find(
+      c =>
+        !used.has(c.id) &&
+        c.path === draft.path &&
+        c.line === draft.line &&
+        c.side === draft.side &&
+        c.body === draft.body
+    )
+    if (match !== undefined) {
+      used.add(match.id)
+      entries.push({ commentId: match.id, pointFingerprint: draft.pointFingerprint })
+    }
+  }
+  return entries
+}
+
 export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
 
@@ -197,20 +257,8 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     requireSameHead(input.headSha, pr.headSha)
     let diff: Derived = { files: [], patches: {} }
     if (input.kind === 'inline') {
-      const derived = await ctx.derived.read(pr.headSha)
-      if (derived === null) {
-        throw new AppError(
-          'NOT_FOUND',
-          'the diff of this head is not available locally, so the line cannot be checked',
-          404,
-          'fetch the PR head and reload'
-        )
-      }
-      const problem = checkInlineTarget(derived.files, input)
-      if (problem !== null) {
-        throw new AppError('COMMENT_LINE_NOT_IN_DIFF', problem, 422, 'comment on a line the diff shows')
-      }
-      diff = derived
+      diff = await requireDerived(ctx, pr.headSha)
+      requireInlineTarget(diff, input)
     }
     const posted = await ctx.config.host.postComment(ctx.gh, ctx.config.repo, number, pr.headSha, input, diff)
     await appendComment(ctx, number, posted)
@@ -222,6 +270,42 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     return c.json({ ...posted, state }, 201)
   })
 
+  // The pending review: comments the reviewer wrote and has not submitted. They are kept here,
+  // never on the forge, until a review carries them out in one go.
+  api.post('/prs/:n/pending', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'a pending review comment')
+    const input = await readBody(c.req.raw, AddPendingInputSchema, 'a comment on a line of the diff')
+    const pr = await loader.currentPr(number)
+    requireSameHead(input.headSha, pr.headSha)
+    // A draft is checked against the diff when it is written, so a line that cannot take a comment
+    // is refused while the reviewer is still looking at it, not when the review is submitted.
+    requireInlineTarget(await requireDerived(ctx, pr.headSha), input)
+    const state = await ctx.state.addPending(number, input, pr.headSha)
+    return c.json(stateBody(number, state), 201)
+  })
+
+  api.patch('/prs/:n/pending/:id', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'a pending review comment')
+    const id = c.req.param('id')
+    const { body } = await readBody(c.req.raw, EditPendingInputSchema, '{ "body": "…" }')
+    const current = await ctx.state.read(number)
+    if (!current.pending.some(p => p.id === id)) {
+      throw new AppError('NOT_FOUND', `no pending comment ${id}`, 404, 'reload the page')
+    }
+    return c.json(stateBody(number, await ctx.state.editPending(number, id, body)))
+  })
+
+  api.delete('/prs/:n/pending/:id', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'a pending review comment')
+    return c.json(stateBody(number, await ctx.state.removePending(number, c.req.param('id'))))
+  })
+
+  /** Discards the whole pending review. Nothing was on the forge, so nothing is withdrawn. */
+  api.delete('/prs/:n/pending', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'a pending review')
+    return c.json(stateBody(number, await ctx.state.clearPending(number)))
+  })
+
   api.get('/prs/:n/review/body', async c => {
     const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'the sign-off summary')
     const pr = await loader.currentPr(number)
@@ -231,6 +315,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       headSha: pr.headSha,
       body: buildReviewBody({ artifact, state, comments, headSha: pr.headSha }),
       unreviewed: unreviewedLayers(artifact, state).map(l => l.title),
+      pending: state.pending.length,
     }
     return c.json(body)
   })
@@ -255,11 +340,30 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body = input.body ?? buildReviewBody({ artifact, state, comments, headSha: pr.headSha })
-    const review = await ctx.config.host.postReview(ctx.gh, ctx.config.repo, number, pr.headSha, {
-      event: input.event,
-      body,
-    })
-    return c.json({ review }, 201)
+    // The drafts read here are the ones that go out. A draft written after this read stays in the
+    // pending review instead of being dropped by the clear below.
+    const pending = input.includePending ? (await ctx.state.read(number)).pending : []
+    // GitLab posts the drafts itself, one discussion at a time, and needs the diff to place them.
+    const diff = pending.length === 0 ? { files: [], patches: {} } : await requireDerived(ctx, pr.headSha)
+    const review = await ctx.config.host.postReview(
+      ctx.gh,
+      ctx.config.repo,
+      number,
+      pr.headSha,
+      { event: input.event, body, comments: pending },
+      diff
+    )
+    let next = state
+    if (pending.length > 0) {
+      // The review landed, so the drafts are no longer pending whatever happens next. The comment
+      // list is fetched again because the review call does not name the comments it created.
+      next = await ctx.state.clearPending(number)
+      const fresh = await loader.refreshComments(number).catch(() => null)
+      for (const entry of postedFromPending(pending, fresh?.comments.reviewComments ?? [])) {
+        next = await ctx.state.addPosted(number, entry)
+      }
+    }
+    return c.json({ review, submitted: pending.length, state: next }, 201)
   })
 
   return api

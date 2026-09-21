@@ -17,6 +17,7 @@ import {
 } from '../testing/fakes.js'
 import { BASE_SHA, GH_PULL, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { createApp } from './app.js'
+import { postedFromPending } from './routes/review-routes.js'
 
 const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' }
@@ -536,14 +537,15 @@ describe('POST /api/prs/:n/review', () => {
     await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
     expect(res.status).toBe(201)
-    expect(await json<PostReviewResponse>(res)).toEqual({
-      review: {
-        id: 7001,
-        state: 'APPROVED',
-        url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7001',
-        submittedAt: '2026-09-10T12:00:00Z',
-      },
+    const answer = await json<PostReviewResponse>(res)
+    expect(answer.review).toEqual({
+      id: 7001,
+      state: 'APPROVED',
+      url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7001',
+      submittedAt: '2026-09-10T12:00:00Z',
     })
+    // Nothing was waiting, so the review carried no comments with it.
+    expect(answer.submitted).toBe(0)
     const sent = gh.calls.find(c => c.kind === 'post')
     expect(sent?.path).toBe('repos/acme/widgets/pulls/42/reviews')
     expect(sent?.body).toEqual({
@@ -664,7 +666,215 @@ describe('POST /api/prs/:n/review', () => {
   it('refuses an event it does not know', async () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
-    const res = await app.request(...post('/api/prs/42/review', { event: 'COMMENT' }))
+    const res = await app.request(...post('/api/prs/42/review', { event: 'MERGE' }))
     expect(res.status).toBe(400)
+  })
+
+  it('posts a review with no verdict without asking that every layer was read', async () => {
+    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    await app.request('/api/prs/42', { headers: LOCAL })
+    // No layer is marked reviewed: only approving asks for that.
+    const res = await app.request(...post('/api/prs/42/review', { event: 'COMMENT' }))
+    expect(res.status).toBe(201)
+    expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'COMMENT' })
+  })
+})
+
+describe('the pending review', () => {
+  let t: TestContext
+  afterEach(async () => {
+    await t?.cleanup()
+  })
+
+  function patch(path: string, body: unknown): [string, RequestInit] {
+    return [path, { method: 'PATCH', headers: SAME_ORIGIN, body: JSON.stringify(body) }]
+  }
+
+  function del(path: string): [string, RequestInit] {
+    return [path, { method: 'DELETE', headers: SAME_ORIGIN }]
+  }
+
+  const DRAFT = { path: 'src/app.ts', line: 4, side: 'new', body: 'needs a guard' }
+
+  it('keeps a comment locally and posts nothing while it waits', async () => {
+    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    const res = await app.request(...post('/api/prs/42/pending', DRAFT))
+    expect(res.status).toBe(201)
+    const { state } = await json<StateResponse>(res)
+    expect(state.pending).toHaveLength(1)
+    expect(state.pending[0]).toMatchObject({
+      path: 'src/app.ts',
+      line: 4,
+      side: 'new',
+      body: 'needs a guard',
+    })
+    expect(state.pending[0]?.headSha).toBe(HEAD_SHA)
+    // Nothing at all went to the forge: that is the whole point of a pending review.
+    expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
+    expect((await t.ctx.state.read(42)).pending).toHaveLength(1)
+  })
+
+  it('keeps the range of a comment on several lines', async () => {
+    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    const app = createApp(t.ctx)
+    const res = await app.request(...post('/api/prs/42/pending', { ...DRAFT, startLine: 2 }))
+    expect((await json<StateResponse>(res)).state.pending[0]?.startLine).toBe(2)
+  })
+
+  it('refuses a draft on a line the diff does not show', async () => {
+    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    const app = createApp(t.ctx)
+    const res = await app.request(...post('/api/prs/42/pending', { ...DRAFT, line: 9999 }))
+    expect(res.status).toBe(422)
+    expect((await json<{ error: { code: string } }>(res)).error.code).toBe('COMMENT_LINE_NOT_IN_DIFF')
+    expect((await t.ctx.state.read(42)).pending).toEqual([])
+  })
+
+  it('refuses a draft written against a head the pull request has moved past', async () => {
+    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    const app = createApp(t.ctx)
+    const res = await app.request(...post('/api/prs/42/pending', { ...DRAFT, headSha: 'c'.repeat(40) }))
+    expect(res.status).toBe(409)
+  })
+
+  it('edits and deletes one draft, and discards the whole review', async () => {
+    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    const app = createApp(t.ctx)
+    const first = await json<StateResponse>(await app.request(...post('/api/prs/42/pending', DRAFT)))
+    await app.request(...post('/api/prs/42/pending', { ...DRAFT, line: 5, body: 'and a test' }))
+    const id = first.state.pending[0]?.id ?? ''
+
+    const edited = await json<StateResponse>(
+      await app.request(...patch(`/api/prs/42/pending/${id}`, { body: 'needs two guards' }))
+    )
+    expect(edited.state.pending.find(p => p.id === id)?.body).toBe('needs two guards')
+
+    const dropped = await json<StateResponse>(await app.request(...del(`/api/prs/42/pending/${id}`)))
+    expect(dropped.state.pending.map(p => p.body)).toEqual(['and a test'])
+
+    const cleared = await json<StateResponse>(await app.request(...del('/api/prs/42/pending')))
+    expect(cleared.state.pending).toEqual([])
+  })
+
+  it('refuses an edit to a draft that is not there', async () => {
+    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    const app = createApp(t.ctx)
+    const res = await app.request(...patch('/api/prs/42/pending/nope', { body: 'x' }))
+    expect(res.status).toBe(404)
+  })
+
+  it('submits the drafts as the comments of one review and clears them', async () => {
+    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    await app.request(...post('/api/prs/42/pending', DRAFT))
+    await app.request(...post('/api/prs/42/pending', { ...DRAFT, line: 5, startLine: 4, body: 'and this' }))
+
+    const res = await app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    expect(res.status).toBe(201)
+    expect((await json<PostReviewResponse>(res)).submitted).toBe(2)
+
+    const sent = gh.calls.find(c => c.kind === 'post' && c.path.endsWith('/reviews'))
+    expect(sent?.body).toMatchObject({
+      event: 'COMMENT',
+      body: 'a look',
+      commit_id: HEAD_SHA,
+      comments: [
+        { path: 'src/app.ts', line: 4, side: 'RIGHT', body: 'needs a guard' },
+        // The range goes out only because it covers more than the anchor line.
+        { path: 'src/app.ts', line: 5, side: 'RIGHT', start_line: 4, start_side: 'RIGHT', body: 'and this' },
+      ],
+    })
+    // The review holds them now, so the local pending review is empty again.
+    expect((await t.ctx.state.read(42)).pending).toEqual([])
+  })
+
+  it('leaves the drafts waiting when the page submits a review without them', async () => {
+    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    await app.request(...post('/api/prs/42/pending', DRAFT))
+    const res = await app.request(
+      ...post('/api/prs/42/review', { event: 'COMMENT', body: 'later', includePending: false })
+    )
+    expect((await json<PostReviewResponse>(res)).submitted).toBe(0)
+    expect(gh.calls.find(c => c.kind === 'post' && c.path.endsWith('/reviews'))?.body).not.toHaveProperty(
+      'comments'
+    )
+    expect((await t.ctx.state.read(42)).pending).toHaveLength(1)
+  })
+
+  it('keeps the drafts when the forge refuses the review', async () => {
+    const gh = ghFor42({
+      postRoutes: {
+        ...POST_ROUTES,
+        'repos/acme/widgets/pulls/42/reviews': ghPostError(
+          new HostCliError('gh', 'repos/acme/widgets/pulls/42/reviews', 'HTTP 422', 1)
+        ),
+      },
+    })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    await app.request(...post('/api/prs/42/pending', DRAFT))
+    const res = await app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    // Nothing landed, so the reviewer still has what they wrote.
+    expect((await t.ctx.state.read(42)).pending).toHaveLength(1)
+  })
+})
+
+describe('postedFromPending', () => {
+  const draft = (over: Partial<Parameters<typeof postedFromPending>[0][number]> = {}) => ({
+    id: 'p1',
+    path: 'src/app.ts',
+    line: 4,
+    side: 'new' as const,
+    body: 'needs a guard',
+    headSha: HEAD_SHA,
+    createdAt: '2026-09-10T12:00:00.000Z',
+    updatedAt: '2026-09-10T12:00:00.000Z',
+    ...over,
+  })
+  const comment = (over: Record<string, unknown> = {}) => ({
+    id: 5001,
+    path: 'src/app.ts',
+    line: 4,
+    side: 'new',
+    body: 'needs a guard',
+    ...over,
+  })
+
+  it('only follows a draft that came from an attention point', () => {
+    expect(postedFromPending([draft()], [comment()])).toEqual([])
+    expect(postedFromPending([draft({ pointFingerprint: 'fp-1' })], [comment()])).toEqual([
+      { commentId: 5001, pointFingerprint: 'fp-1' },
+    ])
+  })
+
+  it('matches on where the comment sits and what it says', () => {
+    const drafts = [draft({ pointFingerprint: 'fp-1' })]
+    expect(postedFromPending(drafts, [comment({ line: 9 })])).toEqual([])
+    expect(postedFromPending(drafts, [comment({ side: 'old' })])).toEqual([])
+    expect(postedFromPending(drafts, [comment({ body: 'something else' })])).toEqual([])
+    expect(postedFromPending(drafts, [comment({ path: 'src/other.ts' })])).toEqual([])
+    // A draft that matches nothing is skipped rather than guessed at.
+    expect(postedFromPending(drafts, [])).toEqual([])
+  })
+
+  it('never gives one comment to two drafts that read the same', () => {
+    const drafts = [
+      draft({ id: 'p1', pointFingerprint: 'fp-1' }),
+      draft({ id: 'p2', pointFingerprint: 'fp-2' }),
+    ]
+    expect(postedFromPending(drafts, [comment(), comment({ id: 5002 })])).toEqual([
+      { commentId: 5001, pointFingerprint: 'fp-1' },
+      { commentId: 5002, pointFingerprint: 'fp-2' },
+    ])
+    // With only one comment to go round, the second draft goes unmatched.
+    expect(postedFromPending(drafts, [comment()])).toEqual([{ commentId: 5001, pointFingerprint: 'fp-1' }])
   })
 })

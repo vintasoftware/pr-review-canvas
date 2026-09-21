@@ -21,6 +21,7 @@ import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
+import { pendingForPath } from './pending.js'
 import { pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
 import { anchorKey, buildThreads } from './threads.js'
@@ -457,27 +458,80 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   }
   const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
   host.innerHTML = renderDiff({ key: entry.key, path: entry.path, lang: entry.lang }, patch, { hunkIds })
-  const layer = ctx.artifact.layers.find(l => l.id === layerId)
-  const lf = layer?.files.find(f => f.path === entry.path)
-  const annotations = lf?.annotations ?? []
-  const points = ctx.artifact.points.filter(
-    p => p.path === entry.path && hunkIds.has(hunkIdForPoint(p, entry))
-  )
-  const threads = threadsForHunks(ctx.comments, entry, hunkIds)
-  const { placed, missed } = applyDecorations(card, key, {
-    annotations,
-    points,
-    threads,
+  const lf = layerFileOf(ctx, layerId, entry.path)
+  const { placed, missed } = decorateCard(card, ctx, { key, layerId, entry, hunkIds })
+  applyCodeFolds(card, key, lf?.folds ?? [])
+  wireFoldReveal(card)
+  cardRenderedHook?.(card)
+  return { rendered: true, deferred: false, placed, missed }
+}
+
+/**
+ * @param {RenderContext} ctx
+ * @param {string} layerId
+ * @param {string} path
+ */
+function layerFileOf(ctx, layerId, path) {
+  return ctx.artifact.layers.find(l => l.id === layerId)?.files.find(f => f.path === path)
+}
+
+/**
+ * Puts every decoration on one drawn card: the annotations of its layer, the attention points and
+ * comment threads of the hunks it shows, and the pending comments anchored in it. The call is
+ * idempotent, so it is also how a card is brought up to date after the state changed.
+ * @param {HTMLElement} card
+ * @param {RenderContext} ctx
+ * @param {{ key: string, layerId: string, entry: FileEntry, hunkIds: ReadonlySet<string> }} at
+ */
+function decorateCard(card, ctx, at) {
+  return applyDecorations(card, at.key, {
+    annotations: layerFileOf(ctx, at.layerId, at.entry.path)?.annotations ?? [],
+    points: ctx.artifact.points.filter(
+      p => p.path === at.entry.path && at.hunkIds.has(hunkIdForPoint(p, at.entry))
+    ),
+    threads: threadsForHunks(ctx.comments, at.entry, at.hunkIds),
+    pending: pendingForPath(ctx.state, at.entry.path),
     paths: pathSet(ctx.files),
     now: ctx.now,
     state: ctx.state,
     posted: postedUrls(ctx.state, ctx.comments),
     hiddenThreads: new Set(Object.keys(ctx.state.hiddenThreads).map(Number)),
   })
-  applyCodeFolds(card, key, lf?.folds ?? [])
-  wireFoldReveal(card)
-  cardRenderedHook?.(card)
-  return { rendered: true, deferred: false, placed, missed }
+}
+
+/**
+ * Draws the decorations of every card whose diff is already on the page again, from the current
+ * context. A card that has not been drawn yet is left alone: it reads the context when it draws.
+ *
+ * This is how a pending comment appears and disappears without redrawing any diff, so open folds
+ * and the reader's scroll position survive it.
+ * @param {ParentNode} root
+ * @param {RenderContext} ctx
+ * @returns {number} how many cards were redrawn
+ */
+export function refreshCardDecorations(root, ctx) {
+  let redrawn = 0
+  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+    const key = card.getAttribute('data-key')
+    const layerId = card.getAttribute('data-layer')
+    const host = card.querySelector('.diff-host')
+    if (!(card instanceof HTMLElement) || key === null || layerId === null) {
+      continue
+    }
+    // Nothing is drawn for a card still holding its patch back, so there is nothing to decorate.
+    if (!(host instanceof HTMLElement) || host.querySelector('table.diff') === null) {
+      continue
+    }
+    const entry = ctx.files.find(f => f.key === key)
+    if (entry === undefined) {
+      continue
+    }
+    const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
+    decorateCard(card, ctx, { key, layerId, entry, hunkIds })
+    cardRenderedHook?.(card)
+    redrawn++
+  }
+  return redrawn
 }
 
 /**

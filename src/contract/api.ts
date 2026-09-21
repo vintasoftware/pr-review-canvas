@@ -162,12 +162,18 @@ export interface ReviewSummary {
 export interface ReviewBodyResponse {
   headSha: string
   body: string
+  /** How many pending comments would go out with the review. */
+  pending: number
   /** The titles of the layers that still need a look; approve is refused while this is not empty. */
   unreviewed: string[]
 }
 
 export interface PostReviewResponse {
   review: ReviewSummary
+  /** How many pending comments went out with the review. */
+  submitted: number
+  /** The state after the pending review was cleared, so the page drops its drafts in one step. */
+  state: PrState
 }
 
 export interface PatchesResponse {

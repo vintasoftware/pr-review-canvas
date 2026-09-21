@@ -86,6 +86,7 @@ function setup(opts = {}) {
   const calls = []
   // What the server holds, which the page does not get to write directly.
   let stored = state
+  let pendingSeq = 0
   /** @type {import('./review-session.js').SessionApi} */
   const api = {
     putReviewed: async (_pr, id, reviewed) => {
@@ -137,6 +138,11 @@ function setup(opts = {}) {
     },
     postReview: async (_pr, input) => {
       calls.push(['review', input])
+      // The route sends back the state with the drafts cleared, and says how many went out.
+      const submitted = input.includePending === false ? 0 : stored.pending.length
+      if (submitted > 0) {
+        stored = { ...stored, pending: [] }
+      }
       return {
         review: {
           id: 7001,
@@ -144,7 +150,46 @@ function setup(opts = {}) {
           url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7001',
           submittedAt: null,
         },
+        submitted,
+        state: stored,
       }
+    },
+    addPending: async (_pr, input) => {
+      calls.push(['pending-add', input])
+      pendingSeq += 1
+      stored = {
+        ...stored,
+        pending: [
+          ...stored.pending,
+          {
+            id: `p${pendingSeq}`,
+            path: input.path,
+            line: input.line,
+            side: input.side,
+            ...(input.startLine === undefined ? {} : { startLine: input.startLine }),
+            body: input.body,
+            headSha: HEAD,
+            createdAt: NOW.toISOString(),
+            updatedAt: NOW.toISOString(),
+          },
+        ],
+      }
+      return { prNumber: 42, state: stored }
+    },
+    editPending: async (_pr, id, body) => {
+      calls.push(['pending-edit', { id, body }])
+      stored = { ...stored, pending: stored.pending.map(p => (p.id === id ? { ...p, body } : p)) }
+      return { prNumber: 42, state: stored }
+    },
+    deletePending: async (_pr, id) => {
+      calls.push(['pending-delete', { id }])
+      stored = { ...stored, pending: stored.pending.filter(p => p.id !== id) }
+      return { prNumber: 42, state: stored }
+    },
+    discardPending: async () => {
+      calls.push(['pending-discard', {}])
+      stored = { ...stored, pending: [] }
+      return { prNumber: 42, state: stored }
     },
     ...opts.api,
   }
@@ -927,7 +972,12 @@ describe('capability gating and sign-off', () => {
   })
 
   it('shows the generated body and posts the review', async () => {
-    const preview = { headSha: artifact.pr.headSha, body: 'Reviewed 1 of 1 layer.', unreviewed: [] }
+    const preview = {
+      headSha: artifact.pr.headSha,
+      body: 'Reviewed 1 of 1 layer.',
+      unreviewed: [],
+      pending: 0,
+    }
     const { root, calls } = setup({
       state: { ...BASE, reviewed: { 'layer:layer-1': true } },
       fetchReviewBody: async () => preview,
@@ -949,7 +999,12 @@ describe('capability gating and sign-off', () => {
 
   it('sends no body when the reader emptied the box, and says that changes were asked for', async () => {
     const { root, calls } = setup({
-      fetchReviewBody: async () => ({ headSha: artifact.pr.headSha, body: 'body', unreviewed: ['Run path'] }),
+      fetchReviewBody: async () => ({
+        headSha: artifact.pr.headSha,
+        body: 'body',
+        unreviewed: ['Run path'],
+        pending: 0,
+      }),
     })
     click(root, '#request-changes')
     await flush()
@@ -961,7 +1016,7 @@ describe('capability gating and sign-off', () => {
     click(root, '[data-act="signoff-post"]')
     await flush()
     expect(calls).toEqual([['review', { event: 'REQUEST_CHANGES', headSha: HEAD }]])
-    expect(root.querySelector('.toast')?.textContent).toBe('changes requested on github')
+    expect(root.querySelector('.toast')?.textContent).toBe('changes requested')
   })
 
   it('says inside the dialog when the body could not be read', async () => {
@@ -979,7 +1034,12 @@ describe('capability gating and sign-off', () => {
   it('asks for changes at any time and shows what the server said when it fails', async () => {
     const { root } = setup({
       api: { postReview: () => Promise.reject(new Error('502 github is down')) },
-      fetchReviewBody: async () => ({ headSha: artifact.pr.headSha, body: 'body', unreviewed: ['Run path'] }),
+      fetchReviewBody: async () => ({
+        headSha: artifact.pr.headSha,
+        body: 'body',
+        unreviewed: ['Run path'],
+        pending: 0,
+      }),
     })
     click(root, '#request-changes')
     await flush()
@@ -1070,7 +1130,11 @@ describe('a page that lost the elements a command expects', () => {
         },
         postReview: async () => {
           calls.push(['review', {}])
-          return { review: { id: 1, state: 'APPROVED', url: 'https://github.com/x', submittedAt: null } }
+          return {
+            review: { id: 1, state: 'APPROVED', url: 'https://github.com/x', submittedAt: null },
+            submitted: 0,
+            state: BASE,
+          }
         },
       },
     })
@@ -1429,5 +1493,220 @@ describe('moved code', () => {
     const landed = root.querySelector('#L-moved_ts-new-18')
     expect(landed?.classList.contains('is-target')).toBe(true)
     expect([...root.querySelectorAll('tr.move-to')].every(r => r.classList.contains('shown'))).toBe(true)
+  })
+})
+
+describe('the pending review', () => {
+  /**
+   * Opens the composer on `src/app.ts:4` and writes `body` in it.
+   * @param {HTMLElement} root
+   * @param {string} body
+   */
+  function write(root, body) {
+    click(root, '#L-src_app_ts-new-4 .plus')
+    const area = root.querySelector('tr.composer textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    area.value = body
+    return area
+  }
+
+  it('starts a review instead of posting, and says so on the page', async () => {
+    const { root, calls, session } = setup()
+    write(root, 'needs a guard')
+    // Nothing is open yet, so the first command offers to start one.
+    expect(root.querySelector('tr.composer [data-act="composer-queue"]')?.textContent).toBe('start a review')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+
+    expect(calls).toEqual([
+      ['pending-add', { path: 'src/app.ts', line: 4, side: 'new', body: 'needs a guard', headSha: HEAD }],
+    ])
+    expect(session.pending).toHaveLength(1)
+    // The draft is on the diff, marked as not posted.
+    const draft = root.querySelector('tr.pending-row .pending-cmt')
+    expect(draft?.querySelector('.prose')?.textContent).toContain('needs a guard')
+    expect(draft?.querySelector('.pill.pending')?.textContent).toBe('pending')
+    // And the bar says a review is open, which is what a reader far down the page sees.
+    expect(root.querySelector('.pending-bar')?.textContent).toContain('1 pending comment')
+    expect(root.querySelector('tr.composer')).toBeNull()
+    expect(root.querySelector('.toast')?.textContent).toBe('comment added to your review')
+  })
+
+  it('offers to add to the review once one is open', async () => {
+    const { root } = setup()
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '#L-src_app_ts-new-5 .plus')
+    expect(root.querySelector('tr.composer [data-act="composer-queue"]')?.textContent).toBe(
+      'add review comment'
+    )
+  })
+
+  it('keeps the whole range of a comment on several lines', async () => {
+    const { root, calls } = setup()
+    root
+      .querySelector('#L-src_app_ts-new-2 td.ln:nth-child(2)')
+      ?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    root
+      .querySelector('#L-src_app_ts-new-4 td.ln:nth-child(2)')
+      ?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, shiftKey: true }))
+    expect(root.querySelectorAll('tr.is-selected').length).toBe(3)
+    click(root, 'tr.sel-bar [data-act="comment-selection"]')
+    const area = root.querySelector('tr.composer textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    area.value = 'this whole block'
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    // The draft keeps both ends of the selection, which is what makes it a multi-line comment.
+    expect(calls).toEqual([
+      [
+        'pending-add',
+        {
+          path: 'src/app.ts',
+          line: 4,
+          side: 'new',
+          startLine: 2,
+          body: 'this whole block',
+          headSha: HEAD,
+        },
+      ],
+    ])
+  })
+
+  it('edits a draft in place', async () => {
+    const { root, calls, session } = setup()
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    calls.length = 0
+
+    click(root, '[data-act="pending-edit"]')
+    const area = root.querySelector('.pending-cmt textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    expect(area.value).toBe('one')
+    // A draft is already in the review, so saving is the only command it needs.
+    expect(
+      [...root.querySelectorAll('.pending-cmt .composer-actions button')].map(b => b.getAttribute('data-act'))
+    ).toEqual(['pending-save', 'composer-cancel'])
+    area.value = 'one, revised'
+    click(root, '[data-act="pending-save"]')
+    await flush()
+    expect(calls).toEqual([['pending-edit', { id: 'p1', body: 'one, revised' }]])
+    expect(session.pending[0]?.body).toBe('one, revised')
+    expect(root.querySelector('.pending-cmt .prose')?.textContent).toContain('one, revised')
+  })
+
+  it('deletes one draft and takes the bar away with the last of them', async () => {
+    const { root, calls, session } = setup()
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '[data-act="pending-delete"]')
+    await flush()
+    expect(calls.at(-1)).toEqual(['pending-delete', { id: 'p1' }])
+    expect(session.pending).toEqual([])
+    expect(root.querySelector('tr.pending-row')).toBeNull()
+    expect(root.querySelector('.pending-bar')).toBeNull()
+    expect(root.querySelector('.toast')?.textContent).toBe('draft deleted')
+  })
+
+  it('discards the whole review from the bar', async () => {
+    const { root, session } = setup()
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '.pending-bar [data-act="pending-discard"]')
+    await flush()
+    expect(session.pending).toEqual([])
+    expect(root.querySelector('.pending-bar')).toBeNull()
+    expect(root.querySelector('.toast')?.textContent).toBe('1 pending comment discarded')
+  })
+
+  it('submits the drafts with the review and clears them from the page', async () => {
+    const { root, calls, session } = setup({
+      fetchReviewBody: async () => ({
+        headSha: artifact.pr.headSha,
+        body: 'a look',
+        unreviewed: [],
+        pending: 1,
+      }),
+    })
+    write(root, 'needs a guard')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    const dialog = root.querySelector('#signoff-dialog')
+    // Finishing a review opens on the verdict that claims nothing, the way a thread-level
+    // review does, and says what will go out with it.
+    expect(dialog?.getAttribute('data-event')).toBe('COMMENT')
+    expect(dialog?.querySelector('.signoff-pending')?.textContent).toContain(
+      '1 pending comment will be posted'
+    )
+    expect(dialog?.querySelector('[data-act="signoff-post"]')?.textContent).toBe(
+      'post review · 1 pending comment'
+    )
+
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(calls.at(-1)).toEqual(['review', { event: 'COMMENT', body: 'a look', headSha: HEAD }])
+    expect(session.pending).toEqual([])
+    expect(root.querySelector('tr.pending-row')).toBeNull()
+    expect(root.querySelector('.pending-bar')).toBeNull()
+    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment')
+  })
+
+  it('keeps the draft on the page when the server refuses to take it', async () => {
+    const { root, session } = setup({
+      api: { addPending: () => Promise.reject(new Error('422 line not in diff')) },
+    })
+    write(root, 'needs a guard')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    expect(session.pending).toEqual([])
+    // The box stays with what was typed in it, so nothing the reviewer wrote is lost.
+    const kept = root.querySelector('tr.composer textarea')
+    expect(kept instanceof HTMLTextAreaElement && kept.value).toBe('needs a guard')
+    expect(root.querySelector('.cmd-err')?.textContent).toBe('422 line not in diff')
+  })
+
+  it('refuses to add an empty draft', async () => {
+    const { root, calls } = setup()
+    click(root, '#L-src_app_ts-new-4 .plus')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    expect(calls).toEqual([])
+    expect(root.querySelector('.cmd-err')?.textContent).toBe('write something first')
+  })
+
+  it('draws the drafts of a state the page opened with', () => {
+    const { root } = setup({
+      state: {
+        ...BASE,
+        pending: [
+          {
+            id: 'p9',
+            path: 'src/app.ts',
+            line: 4,
+            side: 'new',
+            body: 'written before the reload',
+            headSha: HEAD,
+            createdAt: NOW.toISOString(),
+            updatedAt: NOW.toISOString(),
+          },
+        ],
+      },
+    })
+    expect(root.querySelector('tr.pending-row .prose')?.textContent).toContain('written before the reload')
+    expect(root.querySelector('.pending-bar')?.textContent).toContain('1 pending comment')
   })
 })

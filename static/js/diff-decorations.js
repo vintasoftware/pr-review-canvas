@@ -9,6 +9,7 @@ import { findRow, nearestRow } from './anchors.js'
 import { viewCommentHtml } from './comment-link.js'
 import { esc, fragment, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
+import { pendingRowHtml } from './pending.js'
 import { pointRowHtml } from './points.js'
 
 const DECORATION = 'data-decoration'
@@ -147,6 +148,42 @@ export function insertThreadRow(card, key, t, opts) {
 }
 
 /**
+ * The drafts of one file, drawn under the lines they comment on. A draft whose line is not on the
+ * page (a fold, or a file drawn short) goes under the nearest row, like every other decoration.
+ * @param {HTMLElement} card
+ * @param {string} key
+ * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} drafts
+ * @param {Date} now
+ * @returns {{ placed: number, missed: number }}
+ */
+export function insertPendingRows(card, key, drafts, now) {
+  let placed = 0
+  let missed = 0
+  // One row per line, so two drafts on the same line sit together in the order they were written.
+  const byLine = new Map()
+  for (const p of drafts) {
+    const at = `${p.side}:${p.line}`
+    byLine.set(at, [...(byLine.get(at) ?? []), p])
+  }
+  for (const group of [...byLine.values()].reverse()) {
+    const first = group[0]
+    const near = nearestRow(card, key, first.side, first.line)
+    if (near === null) {
+      missed += group.length
+      continue
+    }
+    const row = firstRow(pendingRowHtml(group, now))
+    row.setAttribute(DECORATION, 'pending')
+    if (near.approx) {
+      row.classList.add('is-approx')
+    }
+    near.row.insertAdjacentElement('afterend', row)
+    placed += group.length
+  }
+  return { placed, missed }
+}
+
+/**
  * @param {string} html
  * @returns {HTMLTableRowElement}
  */
@@ -166,7 +203,7 @@ function firstRow(html) {
  * right after the anchor row, so they are added in reverse).
  * @param {HTMLElement} card
  * @param {string} key
- * @param {{ annotations: ReadonlyArray<Annotation>, points: ReadonlyArray<Point>, threads: ReadonlyArray<Thread>, paths: ReadonlySet<string>, now: Date, state?: import('./contract-types.js').PrState, posted?: ReadonlyMap<string, string>, hiddenThreads?: ReadonlySet<number> }} data
+ * @param {{ annotations: ReadonlyArray<Annotation>, points: ReadonlyArray<Point>, threads: ReadonlyArray<Thread>, pending?: ReadonlyArray<import('./contract-types.js').PendingComment>, paths: ReadonlySet<string>, now: Date, state?: import('./contract-types.js').PrState, posted?: ReadonlyMap<string, string>, hiddenThreads?: ReadonlySet<number> }} data
  * @returns {{ placed: number, missed: number }}
  */
 export function applyDecorations(card, key, data) {
@@ -185,6 +222,11 @@ export function applyDecorations(card, key, data) {
       missed++
     }
   }
+  // Drafts are added before the threads, so under one line they end up after them: the comment
+  // that is already on the forge reads first, the one still being written reads last.
+  const drafts = insertPendingRows(card, key, data.pending ?? [], data.now)
+  placed += drafts.placed
+  missed += drafts.missed
   for (const t of [...data.threads].reverse()) {
     count(
       insertThreadRow(card, key, t, { now: data.now, hidden: data.hiddenThreads?.has(t.root.id) ?? false })

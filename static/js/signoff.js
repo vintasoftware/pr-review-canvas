@@ -7,6 +7,7 @@
 import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
+import { pendingLabel } from './pending.js'
 import { layerProgress } from './progress.js'
 
 export const SIGNOFF_DIALOG_ID = 'signoff-dialog'
@@ -33,22 +34,46 @@ export function approveBlockedReason(artifact, state) {
 }
 
 /**
- * @param {'APPROVE' | 'REQUEST_CHANGES'} event
+ * @param {import('./contract-types.js').ReviewEvent} event
  */
 export function signoffTitle(event) {
-  return event === 'APPROVE' ? `Approve on ${hostLabel()}` : `Request changes on ${hostLabel()}`
+  switch (event) {
+    case 'APPROVE':
+      return `Approve on ${hostLabel()}`
+    case 'REQUEST_CHANGES':
+      return `Request changes on ${hostLabel()}`
+    case 'COMMENT':
+      return `Comment on ${hostLabel()}`
+  }
 }
 
 /**
- * @param {{ event: 'APPROVE' | 'REQUEST_CHANGES' }} opts
+ * What the dialog says this event does, under its heading.
+ * @param {import('./contract-types.js').ReviewEvent} event
+ */
+export function signoffHint(event) {
+  const where = `on ${hostLabel()} as you`
+  switch (event) {
+    case 'APPROVE':
+      return `This posts an approving review ${where}. Edit the body first if you want to.`
+    case 'REQUEST_CHANGES':
+      return `This posts a review requesting changes ${where}. Edit the body first if you want to.`
+    case 'COMMENT':
+      return `This posts a review with no verdict ${where}: nothing is approved or rejected. Edit the body first if you want to.`
+  }
+}
+
+/**
+ * @param {{ event: import('./contract-types.js').ReviewEvent }} opts
  * @returns {string}
  */
 export function signoffDialogHtml(opts) {
   return (
     `<dialog id="${SIGNOFF_DIALOG_ID}" class="signoff-dialog" aria-labelledby="signoff-h">` +
     `<h2 id="signoff-h">${esc(signoffTitle(opts.event))}</h2>` +
-    `<p class="hint">This posts a review on ${esc(hostLabel())} as you. Edit the body first if you want to.</p>` +
+    `<p class="hint">${esc(signoffHint(opts.event))}</p>` +
     '<p class="signoff-target muted mono"></p>' +
+    '<p class="signoff-pending"></p>' +
     '<label class="sr" for="signoff-body">Review body</label>' +
     previewControlsHtml() +
     '<textarea id="signoff-body" rows="12" aria-busy="true"></textarea>' +
@@ -64,7 +89,7 @@ export function signoffDialogHtml(opts) {
  * Creates the dialog on first use, points it at this event, and opens it. The body arrives
  * afterwards through `fillSignoffDialog`.
  * @param {HTMLElement} root
- * @param {{ event: 'APPROVE' | 'REQUEST_CHANGES' }} opts
+ * @param {{ event: import('./contract-types.js').ReviewEvent }} opts
  * @returns {HTMLDialogElement}
  */
 export function openSignoffDialog(root, opts) {
@@ -83,6 +108,14 @@ export function openSignoffDialog(root, opts) {
   const heading = dialog.querySelector('#signoff-h')
   if (heading !== null) {
     heading.textContent = signoffTitle(opts.event)
+  }
+  const hint = dialog.querySelector('.hint')
+  if (hint !== null) {
+    hint.textContent = signoffHint(opts.event)
+  }
+  const pending = dialog.querySelector('.signoff-pending')
+  if (pending !== null) {
+    pending.textContent = ''
   }
   const result = dialog.querySelector('.signoff-result')
   if (result !== null) {
@@ -119,6 +152,17 @@ export function fillSignoffDialog(dialog, preview) {
   const target = dialog.querySelector('.signoff-target')
   if (target !== null) {
     target.textContent = `on commit ${preview.headSha.slice(0, 7)}`
+  }
+  // The drafts go out with the review, so the dialog says so before anything is posted.
+  const pending = dialog.querySelector('.signoff-pending')
+  if (pending !== null) {
+    pending.textContent =
+      preview.pending > 0 ? `${pendingLabel(preview.pending)} will be posted with this review.` : ''
+    pending.classList.toggle('has-pending', preview.pending > 0)
+  }
+  const post = dialog.querySelector('[data-act="signoff-post"]')
+  if (post !== null) {
+    post.textContent = preview.pending > 0 ? `post review · ${pendingLabel(preview.pending)}` : 'post review'
   }
   return dialog
 }

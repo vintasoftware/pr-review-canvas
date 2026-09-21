@@ -30,6 +30,8 @@ const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' }
 const GL = gitlabHost('gitlab.example.com')
 const MR_API = 'projects/acme%2Fwidgets/merge_requests/42'
+/** A review with no pending comments needs no diff to place them with. */
+const NO_DIFF = { files: [], patches: {} }
 
 const MR = {
   iid: 42,
@@ -224,7 +226,7 @@ describe('a GitLab origin', () => {
   it('approves with the head sha and posts request-changes as a note', async () => {
     const gh = glabFor42()
     expect(
-      await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: 'ship it' })
+      await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: 'ship it' }, NO_DIFF)
     ).toMatchObject({
       id: 99,
       state: 'APPROVED',
@@ -235,12 +237,54 @@ describe('a GitLab origin', () => {
       [`${MR_API}/approve`, { sha: HEAD_SHA }],
     ])
     expect(
-      await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'REQUEST_CHANGES', body: 'not yet' })
+      await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'REQUEST_CHANGES', body: 'not yet' }, NO_DIFF)
     ).toEqual({
       id: 6001,
       state: 'CHANGES_REQUESTED',
       url: `${MR.web_url}#note_6001`,
       submittedAt: '2026-09-10T12:00:00Z',
     })
+  })
+
+  it('posts a review with no verdict as a note and approves nothing', async () => {
+    const gh = glabFor42()
+    expect(
+      await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'COMMENT', body: 'a look' }, NO_DIFF)
+    ).toMatchObject({ id: 6001, state: 'COMMENTED' })
+    expect(gh.calls.filter(c => c.kind === 'post').map(c => c.path)).toEqual([`${MR_API}/notes`])
+  })
+
+  it('posts the pending comments as discussions before the verdict', async () => {
+    const gh = glabFor42()
+    t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
+    const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    await GL.postReview(
+      gh,
+      TEST_REPO,
+      42,
+      HEAD_SHA,
+      {
+        event: 'APPROVE',
+        body: 'ship it',
+        comments: [
+          {
+            id: 'p1',
+            path: 'src/app.ts',
+            line: 4,
+            side: 'new',
+            body: 'needs a guard',
+            headSha: HEAD_SHA,
+            createdAt: '2026-09-10T12:00:00.000Z',
+            updatedAt: '2026-09-10T12:00:00.000Z',
+          },
+        ],
+      },
+      derived
+    )
+    // GitLab has no batch call, so the draft is its own discussion, and it goes out first.
+    const posts = gh.calls.filter(c => c.kind === 'post').map(c => c.path)
+    expect(posts).toEqual([`${MR_API}/discussions`, `${MR_API}/notes`, `${MR_API}/approve`])
+    const discussion = gh.calls.find(c => c.kind === 'post' && c.path.endsWith('/discussions'))
+    expect(discussion?.body).toMatchObject({ body: 'needs a guard' })
   })
 })
