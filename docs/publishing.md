@@ -3,6 +3,8 @@
 The package is `@vintasoftware/pr-review-canvas`; its installed command is `pr-review`.
 Publishing is manual. CI validates changes and has no npm credentials.
 
+For the 0.4.0 release, follow the [post-merge commands](release-0.4.0.md).
+
 ## Prepare a release
 
 Create a release branch, then bump the version without creating a tag:
