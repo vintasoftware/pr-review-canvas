@@ -4,6 +4,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { emptyComments } from '../contract/comments.js'
+import { LOCAL_KEYS } from '../contract/review-key.js'
 import { emptyState } from '../contract/state.js'
 import { createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
 import {
@@ -223,8 +224,8 @@ describe('pr-store and state-store', () => {
     expect(await prs.readComments(42)).toBeNull()
     expect(await prs.listRecent(5)).toEqual([])
     const pr = syntheticArtifact().pr
-    await prs.writePr(pr)
-    await prs.writePr({ ...pr, number: 7, title: 'older' })
+    await prs.writePr(42, pr)
+    await prs.writePr(7, { ...pr, number: 7, title: 'older' })
     await prs.writeComments(42, emptyComments(HEAD_SHA, '2026-09-10T12:00:00.000Z'))
     expect(await prs.readPr(42)).toEqual(pr)
     expect(await prs.readComments(42)).toEqual(emptyComments(HEAD_SHA, '2026-09-10T12:00:00.000Z'))
@@ -237,10 +238,25 @@ describe('pr-store and state-store', () => {
     expect((await prs.listRecent(1)).length).toBe(1)
   })
 
-  it('refuses invalid PR numbers and pre-PR change sets', async () => {
+  it('refuses invalid PR numbers and meta filed under the wrong one', async () => {
     const prs = createPrStore(dir)
     expect(() => prs.prDir(0)).toThrow(/not a pull request number/)
-    await expect(prs.writePr({ ...syntheticArtifact().pr, number: null })).rejects.toThrow(/pre-PR/)
+    await expect(prs.writePr(7, syntheticArtifact().pr)).rejects.toThrow(/cannot hold the meta of/)
+  })
+
+  it('files each local review under its own directory, out of the recent list', async () => {
+    const prs = createPrStore(dir)
+    const pr = { ...syntheticArtifact().pr, number: null, title: 'Uncommitted work on feature' }
+    for (const key of LOCAL_KEYS) {
+      await prs.writePr(key, { ...pr, title: key })
+      await prs.writeLocalTarget(key, { kind: 'local', base: 'origin/main', source: key })
+      expect(prs.prDir(key)).toBe(path.join(dir, 'prs', key))
+      expect(await prs.readPr(key)).toMatchObject({ title: key })
+      expect(await prs.readLocalTarget(key)).toEqual({ kind: 'local', base: 'origin/main', source: key })
+    }
+    // The two reviews never read each other's files.
+    expect(await prs.readPr('branch')).not.toEqual(await prs.readPr('uncommitted'))
+    expect(await prs.listRecent(5)).toEqual([])
   })
 
   it('reads state.json or falls back to defaults for missing, invalid JSON, and old shapes', async () => {

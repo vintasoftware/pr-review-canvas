@@ -7,6 +7,7 @@ import path from 'node:path'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { type GenerationContext, GenerationContextSchema } from '../contract/generation-context.js'
 import type { Generator, ReviewArtifact } from '../contract/review-artifact.js'
+import { UNCOMMITTED_STATE, resolveLocalHead } from '../git/local-target.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import type { AppContext } from '../server/context.js'
@@ -31,7 +32,7 @@ export interface PublishResult {
     | { status: 'shared'; url: string }
     | { status: 'failed'; warning: string; zipPath: string }
     | { status: 'local' }
-  /** Where the canvas shows once the server runs; absent for a change set without a PR. */
+  /** Where the canvas shows once the server runs; absent only for a `--base/--head` change set. */
   reviewUrl?: string
 }
 
@@ -94,7 +95,9 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
 /**
  * The current head of the target; a push during generation makes the prepared context stale. For
  * a pull request whose head moved, the head and base are fetched again, and a head whose diff is
- * identical to the prepared commit's still counts as that commit.
+ * identical to the prepared commit's still counts as that commit. For a local target the working
+ * tree is snapshotted again, so an edit made while the agent worked is caught the same way a push
+ * is.
  */
 async function currentHead(
   ctx: AppContext,
@@ -109,7 +112,10 @@ async function currentHead(
     const head = await fetchPrRefs(ctx.git, host, meta)
     return { headSha: head.headSha, moved: !(await standsForHead(ctx, head, context)) }
   }
-  const headSha = await ctx.git.revParse(context.target.head)
+  const headSha =
+    context.target.kind === 'local'
+      ? (await resolveLocalHead(ctx.git, context.target.source)).headSha
+      : await ctx.git.revParse(context.target.head)
   return { headSha, moved: headSha !== context.headSha }
 }
 
@@ -228,13 +234,23 @@ export async function publish(
     testPatterns: context.tests.patterns,
   })
   const manifest = buildManifest(context, artifact, ctx.version)
-  await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber)
+  // A snapshot commit is on no branch, so it must never be offered as a pull request's canvas.
+  const worktree = context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE
+  await ctx.canvases.write(context.headSha, artifact, manifest, manifest.prNumber, { worktree })
+  if (worktree) {
+    // The snapshot ref moves with the working tree. This canvas stays, and the page reads its
+    // diffs from its own commit, so it gets an anchor that the next edit cannot take away.
+    await ctx.git.anchorCommit(context.headSha)
+  }
   const published: PublishResult = {
     status: 'published',
     sharing: { status: 'local' },
     headSha: context.headSha,
     reviewJsonPath: path.join(ctx.canvases.canvasDir(context.headSha), 'review.json'),
     attempts,
+  }
+  if (context.target.kind === 'local') {
+    published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.source}`
   }
   if (context.target.kind === 'pr') {
     published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.number}`

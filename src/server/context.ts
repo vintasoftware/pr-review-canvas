@@ -137,7 +137,7 @@ export function createChatSet(
 ): ChatSet {
   const settings = createSettingsStore(config.dataDir)
   const preflight = createPreflightProbe(runner, now)
-  const transcripts = createTranscriptStore(number => stores.prs.prDir(number))
+  const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
     settings,
     preflight,

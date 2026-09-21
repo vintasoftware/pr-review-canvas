@@ -429,7 +429,7 @@ describe('createApp', () => {
       expect(bundle.derivable).toBe(false)
       expect(bundle.files).toEqual(syntheticArtifact().files)
       expect(bundle.warnings).toEqual([
-        'the PR head or merge base is not in the local clone; diffs are not available',
+        'the head or merge base is not in the local clone; diffs are not available',
         'showing the --fixture-canvas artifact (dev only)',
       ])
     })
@@ -455,7 +455,11 @@ describe('createApp', () => {
       const bad = await app.request('/api/prs/x', { headers: LOCAL })
       expect(bad.status).toBe(400)
       expect(await json(bad)).toEqual({
-        error: { code: 'BAD_REQUEST', message: 'not a pull request number: x' },
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'not a review target: x',
+          hint: 'use a PR number, `branch`, or `uncommitted`',
+        },
       })
     })
 
@@ -493,7 +497,7 @@ describe('createApp', () => {
       t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     })
 
-    it('serves patches as JSON after the bundle built them, and 404 before', async () => {
+    it('serves patches for the head it is asked for, and 404s for one it cannot build', async () => {
       const app = createApp(t.ctx)
       const before = await app.request(`/api/prs/42/patches?headSha=${'e'.repeat(40)}`, { headers: LOCAL })
       expect(before.status).toBe(404)
@@ -509,10 +513,7 @@ describe('createApp', () => {
       expect(await json(badSha)).toEqual({
         error: { code: 'BAD_REQUEST', message: 'headSha must be a 40-character lowercase hex sha' },
       })
-      // The bundle builds derived/; patches are read from it.
-      const notBuilt = await app.request('/api/prs/42/patches', { headers: LOCAL })
-      expect(notBuilt.status).toBe(404)
-      await app.request('/api/prs/42', { headers: LOCAL })
+      // The route builds the target's own head itself, so it does not need the bundle first.
       const res = await app.request('/api/prs/42/patches', { headers: LOCAL })
       expect(res.status).toBe(200)
       const body = await json<{ headSha: string; patches: Record<string, string> }>(res)

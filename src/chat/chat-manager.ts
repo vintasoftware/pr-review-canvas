@@ -5,6 +5,7 @@ import type { AgentRunner } from '../acpx/acpx.js'
 import type { ChatContext, ChatEvent, ChatThreadsResponse, ChatTurn } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
+import type { ReviewKey } from '../contract/review-key.js'
 import type { ChatThread } from '../contract/state.js'
 import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
@@ -38,9 +39,9 @@ export interface ChatManagerDeps {
   now: () => Date
 }
 
-/** Everything about the pull request one turn needs, resolved by the route. */
+/** Everything about the review target one turn needs, resolved by the route. */
 export interface ChatTarget {
-  prNumber: number
+  key: ReviewKey
   headSha: string
   artifact: ReviewArtifact
   files: FileEntry[]
@@ -58,13 +59,13 @@ export interface ChatSendInput {
 
 export interface ChatManager {
   effectiveSettings(): Promise<Settings>
-  threads(prNumber: number): Promise<ChatThreadsResponse>
-  createThread(prNumber: number): Promise<ChatThread>
-  selectThread(prNumber: number, name: string): Promise<ChatThread | null>
+  threads(key: ReviewKey): Promise<ChatThreadsResponse>
+  createThread(key: ReviewKey): Promise<ChatThread>
+  selectThread(key: ReviewKey, name: string): Promise<ChatThread | null>
   send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent>
   /** True when a turn was running and has been asked to stop. */
-  cancel(prNumber: number): Promise<boolean>
-  busy(prNumber: number): boolean
+  cancel(key: ReviewKey): Promise<boolean>
+  busy(key: ReviewKey): boolean
 }
 
 /** The slot a turn holds while it runs. The handle is filled in once the agent has started. */
@@ -75,7 +76,7 @@ interface RunningTurn {
 }
 
 export function createChatManager(deps: ChatManagerDeps): ChatManager {
-  const running = new Map<number, RunningTurn>()
+  const running = new Map<ReviewKey, RunningTurn>()
 
   const effectiveSettings = async (): Promise<Settings> => {
     const saved = await deps.settings.read()
@@ -86,12 +87,12 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     }
   }
 
-  const newThread = async (prNumber: number, agent: string): Promise<ChatThread> => {
+  const newThread = async (key: ReviewKey, agent: string): Promise<ChatThread> => {
     const at = deps.now().toISOString()
     let created: ChatThread | null = null
-    await deps.state.update(prNumber, state => {
+    await deps.state.update(key, state => {
       const thread: ChatThread = {
-        name: threadName(deps.repo, prNumber, agent, nextThreadIndex(state.chat.threads)),
+        name: threadName(deps.repo, key, agent, nextThreadIndex(state.chat.threads)),
         agent,
         rev: 0,
         title: NEW_THREAD_TITLE,
@@ -108,8 +109,8 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   /** The thread a message goes to: the one asked for, the active one, or a fresh one. */
-  const resolveThread = async (prNumber: number, agent: string, wanted?: string): Promise<ChatThread> => {
-    const state = await deps.state.read(prNumber)
+  const resolveThread = async (key: ReviewKey, agent: string, wanted?: string): Promise<ChatThread> => {
+    const state = await deps.state.read(key)
     const byName = wanted === undefined ? undefined : state.chat.threads.find(t => t.name === wanted)
     const active =
       byName ??
@@ -118,10 +119,10 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         : state.chat.threads.find(t => t.name === state.chat.activeThread))
     // Changing the agent starts a new thread: the old session belongs to the old agent.
     if (active === undefined || active.agent !== agent) {
-      return newThread(prNumber, agent)
+      return newThread(key, agent)
     }
     if (state.chat.activeThread !== active.name) {
-      await deps.state.update(prNumber, current => ({
+      await deps.state.update(key, current => ({
         ...current,
         chat: { ...current.chat, activeThread: active.name },
       }))
@@ -134,18 +135,18 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
    * try creates the session again and sends the seed again.
    */
   const saveTurn = async (
-    prNumber: number,
+    key: ReviewKey,
     thread: ChatThread,
     userText: string,
     assistant: ChatTurn,
     seededHeadSha: string,
     reached: boolean
   ): Promise<void> => {
-    await deps.transcripts.append(prNumber, thread.name, assistant)
+    await deps.transcripts.append(key, thread.name, assistant)
     if (!reached) {
       return
     }
-    await deps.state.update(prNumber, state => ({
+    await deps.state.update(key, state => ({
       ...state,
       chat: {
         ...state.chat,
@@ -169,8 +170,8 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
    * it, so the next turn creates the session again and sends the seed with it. The revision keeps
    * counting the turns the thread has taken, which is what its title is keyed on.
    */
-  const forgetSession = async (prNumber: number, name: string): Promise<void> => {
-    await deps.state.update(prNumber, state => ({
+  const forgetSession = async (key: ReviewKey, name: string): Promise<void> => {
+    await deps.state.update(key, state => ({
       ...state,
       chat: {
         ...state.chat,
@@ -180,17 +181,17 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
-    if (running.has(target.prNumber)) {
+    if (running.has(target.key)) {
       throw new ChatBusyError()
     }
     // The slot is taken before the first await, so a second request that arrives while this one
     // is still reading the settings sees a busy chat rather than starting a second agent.
     const slot: RunningTurn = { run: null, stopped: false }
-    running.set(target.prNumber, slot)
+    running.set(target.key, slot)
     try {
       yield* runTurn(target, input, slot)
     } finally {
-      running.delete(target.prNumber)
+      running.delete(target.key)
     }
   }
 
@@ -200,7 +201,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     slot: RunningTurn
   ): AsyncIterable<ChatEvent> {
     const settings = await effectiveSettings()
-    const thread = await resolveThread(target.prNumber, settings.agent, input.thread)
+    const thread = await resolveThread(target.key, settings.agent, input.thread)
     const seeded = thread.seededHeadSha !== target.headSha
     const at = deps.now().toISOString()
     const contextBlock = await renderChatContext(input.context, {
@@ -224,7 +225,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       })
     }
 
-    await deps.transcripts.append(target.prNumber, thread.name, {
+    await deps.transcripts.append(target.key, thread.name, {
       role: 'user',
       text: input.message,
       at,
@@ -235,7 +236,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     // transcript is written before the events, so a reader who leaves now still finds it there.
     if (slot.stopped) {
       await saveTurn(
-        target.prNumber,
+        target.key,
         thread,
         input.message,
         { role: 'assistant', text: '', at: deps.now().toISOString(), incomplete: 'cancelled' },
@@ -258,7 +259,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       maxTurns: settings.maxTurns ?? undefined,
       // The runner scrubs the line before it gets here; this only writes it down.
       onRawLine: line => {
-        void deps.transcripts.appendEvent(target.prNumber, thread.name, line).catch(() => undefined)
+        void deps.transcripts.appendEvent(target.key, thread.name, line).catch(() => undefined)
       },
     })
     slot.run = run
@@ -316,7 +317,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         await run.cancel().catch(() => undefined)
       }
       await saveTurn(
-        target.prNumber,
+        target.key,
         thread,
         input.message,
         {
@@ -330,15 +331,15 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         answer !== '' || incomplete === undefined || incomplete === 'cancelled'
       )
       if (incomplete === 'AGENT_NO_SESSION') {
-        await forgetSession(target.prNumber, thread.name)
+        await forgetSession(target.key, thread.name)
       }
     }
   }
 
   return {
     effectiveSettings,
-    async threads(prNumber) {
-      const [state, settings] = await Promise.all([deps.state.read(prNumber), effectiveSettings()])
+    async threads(key) {
+      const [state, settings] = await Promise.all([deps.state.read(key), effectiveSettings()])
       return {
         threads: state.chat.threads.map(t => ({
           name: t.name,
@@ -350,25 +351,25 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         agent: settings.agent,
       }
     },
-    async createThread(prNumber) {
+    async createThread(key) {
       const settings = await effectiveSettings()
-      return newThread(prNumber, settings.agent)
+      return newThread(key, settings.agent)
     },
-    async selectThread(prNumber, name) {
-      const state = await deps.state.read(prNumber)
+    async selectThread(key, name) {
+      const state = await deps.state.read(key)
       const thread = state.chat.threads.find(t => t.name === name)
       if (thread === undefined) {
         return null
       }
-      await deps.state.update(prNumber, current => ({
+      await deps.state.update(key, current => ({
         ...current,
         chat: { ...current.chat, activeThread: name },
       }))
       return thread
     },
     send,
-    async cancel(prNumber) {
-      const slot = running.get(prNumber)
+    async cancel(key) {
+      const slot = running.get(key)
       if (slot === undefined) {
         return false
       }
@@ -378,7 +379,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       await slot.run?.cancel()
       return true
     },
-    busy: prNumber => running.has(prNumber),
+    busy: key => running.has(key),
   }
 }
 

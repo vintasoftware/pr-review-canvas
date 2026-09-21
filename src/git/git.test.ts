@@ -2,12 +2,22 @@
 // The real adapter against a throwaway repository: git is a process boundary, but the adapter
 // itself is what this file tests, so it needs the real binary once.
 import { execFile } from 'node:child_process'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
 import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
-import { createGit, execGit, GitError, type GitExec, redactStderr, STDERR_MESSAGE_MAX } from './git.js'
+import {
+  CANVAS_ANCHOR_PREFIX,
+  createGit,
+  execGit,
+  GitError,
+  type GitExec,
+  redactStderr,
+  SNAPSHOT_INDEX,
+  SNAPSHOT_REF,
+  STDERR_MESSAGE_MAX,
+} from './git.js'
 
 const run = promisify(execFile)
 
@@ -168,6 +178,122 @@ describe('createGit (real adapter)', () => {
       stderr: 'boom\n',
       message: 'git rev-parse --show-toplevel failed (3): boom',
     })
+  })
+
+  it('reads the branch, the symbolic refs, the configured user, and the first ref that exists', async () => {
+    const git = createGit(repo.dir)
+    expect(await git.currentBranch()).toBe('main')
+    expect(await git.configuredUser()).toBe('Test')
+    expect(await git.firstExistingRef(['origin/nope', 'nope', 'main'])).toBe('main')
+    expect(await git.firstExistingRef(['origin/nope'])).toBeNull()
+    await g(repo.dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    expect(await git.symbolicRef('refs/remotes/origin/HEAD')).toBe('origin/main')
+    expect(await git.symbolicRef('refs/heads/main')).toBeNull()
+    await g(repo.dir, 'checkout', '-q', '--detach')
+    expect(await git.currentBranch()).toBeNull()
+    await g(repo.dir, 'checkout', '-q', 'main')
+  })
+
+  it('snapshots the working tree, untracked files included, without touching the real index', async () => {
+    const dir = await makeTempDir('pr-review-snap-')
+    try {
+      await g(dir, 'init', '-q', '-b', 'main')
+      await g(dir, 'config', 'user.email', 'test@example.com')
+      await g(dir, 'config', 'user.name', 'Test')
+      await writeFile(path.join(dir, 'kept.ts'), 'export const a = 1\n')
+      await writeFile(path.join(dir, '.gitignore'), 'ignored.ts\n')
+      await g(dir, 'add', '.')
+      await g(dir, 'commit', '-q', '-m', 'one')
+      const git = createGit(dir)
+      // A clean tree is the branch tip: there is nothing extra to describe.
+      expect(await git.snapshotWorktree()).toBeNull()
+
+      await writeFile(path.join(dir, 'kept.ts'), 'export const a = 2\n')
+      await writeFile(path.join(dir, 'fresh.ts'), 'export const fresh = true\n')
+      await writeFile(path.join(dir, 'ignored.ts'), 'secret\n')
+      const sha = await git.snapshotWorktree()
+      expect(sha).toMatch(/^[0-9a-f]{40}$/)
+      const listed = await g(dir, 'ls-tree', '-r', '--name-only', String(sha))
+      expect(listed.split('\n').sort()).toEqual(['.gitignore', 'fresh.ts', 'kept.ts'])
+      expect(await git.show(String(sha), 'kept.ts')).toEqual(Buffer.from('export const a = 2\n'))
+      // The same tree hashes to the same commit, so preparing twice lands on one canvas.
+      expect(await git.snapshotWorktree()).toBe(sha)
+      // The commit is anchored, so `git gc` cannot collect the canvas out from under the page.
+      expect(await g(dir, 'rev-parse', SNAPSHOT_REF)).toBe(sha)
+      // Nothing the user staged, or did not stage, has moved: the real index is untouched.
+      expect(await g(dir, 'diff', '--cached', '--name-only')).toBe('')
+      expect(await g(dir, 'ls-files', '--others', '--exclude-standard')).toBe('fresh.ts')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps an anchored snapshot reachable across the next two edits and a gc', async () => {
+    const dir = await makeTempDir('pr-review-anchor-')
+    try {
+      await g(dir, 'init', '-q', '-b', 'main')
+      await g(dir, 'config', 'user.email', 'test@example.com')
+      await g(dir, 'config', 'user.name', 'Test')
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 1\n')
+      await g(dir, 'add', '.')
+      await g(dir, 'commit', '-q', '-m', 'one')
+      const git = createGit(dir)
+
+      // The snapshot a canvas was published for, anchored the way `publish` anchors it.
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 2\n')
+      const published = String(await git.snapshotWorktree())
+      await git.anchorCommit(published)
+      // Two more edits: the moving ref points at the newest tree, not at the published one.
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 3\n')
+      const unanchored = String(await git.snapshotWorktree())
+      await writeFile(path.join(dir, 'a.ts'), 'export const a = 4\n')
+      const newest = String(await git.snapshotWorktree())
+      expect(await g(dir, 'rev-parse', SNAPSHOT_REF)).toBe(newest)
+
+      await g(dir, 'gc', '--prune=now', '--quiet')
+      // The published canvas still has its commit, so the page can still show its diffs.
+      expect(await g(dir, 'rev-parse', `${CANVAS_ANCHOR_PREFIX}/${published}`)).toBe(published)
+      expect(await git.show(published, 'a.ts')).toEqual(Buffer.from('export const a = 2\n'))
+      // The snapshot no canvas was published for is what the moving ref left behind, and gc took
+      // it: that is the collection the anchor is there to prevent.
+      expect(await git.commitExists(unanchored)).toBe(false)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('gives every worktree of one clone its own snapshot and its own anchor', async () => {
+    const dir = await makeTempDir('pr-review-wt-')
+    const main = path.join(dir, 'main')
+    const side = path.join(dir, 'side')
+    try {
+      await mkdir(main, { recursive: true })
+      await g(main, 'init', '-q', '-b', 'main')
+      await g(main, 'config', 'user.email', 'test@example.com')
+      await g(main, 'config', 'user.name', 'Test')
+      await writeFile(path.join(main, 'a.ts'), 'export const a = 1\n')
+      await g(main, 'add', '.')
+      await g(main, 'commit', '-q', '-m', 'one')
+      await g(main, 'worktree', 'add', '-q', '-b', 'side', side)
+
+      await writeFile(path.join(main, 'a.ts'), 'export const a = 2\n')
+      await writeFile(path.join(side, 'a.ts'), 'export const a = 3\n')
+      const mainSha = await createGit(main).snapshotWorktree()
+      const sideSha = await createGit(side).snapshotWorktree()
+      expect(mainSha).toMatch(/^[0-9a-f]{40}$/)
+      expect(sideSha).not.toBe(mainSha)
+      // Each worktree keeps its own anchor, so the second snapshot cannot leave the first one
+      // unreachable for `git gc` to collect.
+      expect(await g(main, 'rev-parse', SNAPSHOT_REF)).toBe(mainSha)
+      expect(await g(side, 'rev-parse', SNAPSHOT_REF)).toBe(sideSha)
+      // The index each stages into is its own too, so neither waits on the other's lock.
+      const sideGitDir = await g(side, 'rev-parse', '--path-format=absolute', '--git-dir')
+      await access(path.join(sideGitDir, SNAPSHOT_INDEX))
+      const common = await g(side, 'rev-parse', '--path-format=absolute', '--git-common-dir')
+      expect(sideGitDir).not.toBe(common)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('keeps URL credentials and long stderr out of the GitError message', () => {
