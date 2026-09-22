@@ -241,7 +241,13 @@ describe('layer sections', () => {
     }
     expect(layerDiagramHtml(layer)).toBe('')
     const drawn = { ...layer, diagram: { mermaid: 'stateDiagram-v2\n  [*] --> active', links: {} } }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set(), comments: [] }
+    const cctx = {
+      hunkIndex: hunkLayerIndex(artifact),
+      paths,
+      firstCardFor: new Set(),
+      comments: [],
+      headSha: artifact.pr.headSha,
+    }
     document.body.innerHTML = renderLayerSection(drawn, 0, artifact, files, state, cctx)
     const body = document.querySelector('section.layer > .layer-body > .body')
     expect([...(body?.children ?? [])].map(el => el.className)).toEqual([
@@ -265,7 +271,13 @@ describe('layer sections', () => {
       rationale: 'The swap.\n\n```mermaid\nflowchart LR\n  A --> B\n```',
       decisions: 'We kept it.\n\n```mermaid\nflowchart LR\n  C --> D\n```',
     }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set(), comments: [] }
+    const cctx = {
+      hunkIndex: hunkLayerIndex(artifact),
+      paths,
+      firstCardFor: new Set(),
+      comments: [],
+      headSha: artifact.pr.headSha,
+    }
     document.body.innerHTML = renderLayerSection(fenced, 0, artifact, files, state, cctx)
     expect([...document.querySelectorAll('.diagram')].map(el => el.getAttribute('data-mermaid'))).toEqual([
       'flowchart LR\n  A --> B',
@@ -280,7 +292,13 @@ describe('layer sections', () => {
     if (!layer) {
       throw new Error('no layer')
     }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set(), comments: [] }
+    const cctx = {
+      hunkIndex: hunkLayerIndex(artifact),
+      paths,
+      firstCardFor: new Set(),
+      comments: [],
+      headSha: artifact.pr.headSha,
+    }
     const html = renderFileCard(
       { path: 'ghost.ts', hunks: ['ghost_ts#1'], isTest: false, annotations: [] },
       undefined,
@@ -370,14 +388,18 @@ describe('layer sections', () => {
     if (layer === undefined) {
       throw new Error('missing layer')
     }
-    const counts = layerHiddenLines(layer, { artifact, files, comments: [] }, 'light')
+    const counts = layerHiddenLines(
+      layer,
+      { artifact, files, comments: [], state, headSha: artifact.pr.headSha },
+      'light'
+    )
 
     expect(counts.total).toBeGreaterThan(0)
     expect(hiddenLabel({ total: 10, hidden: 0 })).toBe('')
     expect(hiddenLabel({ total: 10, hidden: 4 })).toBe('4 of 10 lines hidden')
-    expect(canvasHiddenLines({ artifact, files, comments: [] }, 'light').total).toBeGreaterThanOrEqual(
-      counts.total
-    )
+    expect(
+      canvasHiddenLines({ artifact, files, comments: [], state, headSha: artifact.pr.headSha }, 'light').total
+    ).toBeGreaterThanOrEqual(counts.total)
   })
 })
 

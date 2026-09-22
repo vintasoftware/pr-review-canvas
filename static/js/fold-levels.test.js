@@ -139,11 +139,11 @@ describe('hiddenLines', () => {
 
   it('counts nothing hidden where the discussion keeps the code open, as the card draws it', () => {
     const collapsed = file({ collapsed: 'light', folds })
-    expect(hiddenLines(collapsed, HUNKS, 'light', { keepsOpen: true, threaded: false })).toEqual({
+    expect(hiddenLines(collapsed, HUNKS, 'light', { keepsOpen: true, discussed: false })).toEqual({
       total: 16,
       hidden: 4,
     })
-    expect(hiddenLines(collapsed, HUNKS, 'light', { keepsOpen: true, threaded: true })).toEqual({
+    expect(hiddenLines(collapsed, HUNKS, 'light', { keepsOpen: true, discussed: true })).toEqual({
       total: 16,
       hidden: 0,
     })

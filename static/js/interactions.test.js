@@ -19,6 +19,7 @@ import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interac
 import {
   cardOf,
   hydrateAll,
+  getRenderContext,
   hydrateFileCard,
   renderLayers,
   renderRail,
@@ -634,17 +635,17 @@ describe('comment composers', () => {
     expect(root.querySelector('.toast')?.textContent).toBe('comment posted to github')
   })
 
-  it.each([
-    ['posted alone', 'composer-post'],
-    ['submitted in a review', 'composer-queue'],
-  ])('opens the code of a new thread %s at a raised level, and counts it open', async (_how, act) => {
-    const test = 'src/app.test.ts'
+  /**
+   * The review screen with one moderate fold over the body of the test in src/app.test.ts, and no
+   * comments yet, at light.
+   */
+  function foldedPage() {
     const folded = {
       ...artifact,
       layers: artifact.layers.map(layer => ({
         ...layer,
         files: layer.files.map(f =>
-          f.path === test
+          f.path === 'src/app.test.ts'
             ? {
                 ...f,
                 folds: [
@@ -661,17 +662,36 @@ describe('comment composers', () => {
         ),
       })),
     }
-    const { root, session } = setup({ artifact: folded, comments: [] })
-    const select = root.querySelector('#fold-level')
+    const page = setup({ artifact: folded, comments: [] })
+    const select = page.root.querySelector('#fold-level')
     if (!(select instanceof HTMLSelectElement)) {
       throw new Error('no level control')
     }
-    const counter = root.querySelector('.fold-count')
-    const line = () => root.querySelector('#L-src_app_test_ts-new-3')
-    const pick = (/** @type {string} */ level) => {
-      select.value = level
-      select.dispatchEvent(new Event('change', { bubbles: true }))
+    return {
+      ...page,
+      counter: page.root.querySelector('.fold-count'),
+      line: () => page.root.querySelector('#L-src_app_test_ts-new-3'),
+      pick: (/** @type {string} */ level) => {
+        select.value = level
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+      },
+      /** @param {string} body */
+      write: body => {
+        click(page.root, '#L-src_app_test_ts-new-3 .plus')
+        const area = page.root.querySelector('tr.composer textarea')
+        if (!(area instanceof HTMLTextAreaElement)) {
+          throw new Error('no textarea')
+        }
+        area.value = body
+      },
     }
+  }
+
+  it.each([
+    ['posted alone', 'composer-post'],
+    ['submitted in a review', 'composer-queue'],
+  ])('opens the code of a new thread %s at a raised level, and counts it open', async (_how, act) => {
+    const { root, session, counter, line, pick, write } = foldedPage()
 
     // Without a thread the fold hides the test body at moderate, and the counter says so.
     pick('moderate')
@@ -679,13 +699,9 @@ describe('comment composers', () => {
     expect(counter?.textContent).toContain('lines hidden')
     pick('light')
 
-    click(root, '#L-src_app_test_ts-new-3 .plus')
-    const area = root.querySelector('tr.composer textarea')
-    if (!(area instanceof HTMLTextAreaElement)) {
-      throw new Error('no textarea')
-    }
-    area.value = 'why this value?'
-    // The level rises while the comment is still a draft, so only the post can reopen the code.
+    write('why this value?')
+    // The level rises while the comment is still in the composer, so only the post can reopen
+    // the code.
     pick('moderate')
     expect(line()?.hasAttribute('hidden')).toBe(true)
     click(root, `tr.composer [data-act="${act}"]`)
@@ -697,6 +713,27 @@ describe('comment composers', () => {
     expect(line()?.hasAttribute('hidden')).toBe(false)
     expect(root.querySelector('#file-src_app_test_ts .code-fold:not([hidden])')).toBeNull()
     expect(counter?.textContent).toBe('')
+  })
+
+  it('keeps a pending draft and its code open at a raised level, and after the card redraws', async () => {
+    const { root, counter, line, pick, write } = foldedPage()
+    write('needs a guard')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    const draft = () => root.querySelector('#file-src_app_test_ts tr.pending-row')
+
+    pick('moderate')
+    expect([line()?.hasAttribute('hidden'), draft()?.hasAttribute('hidden')]).toEqual([false, false])
+    expect(counter?.textContent).toBe('')
+
+    const card = root.querySelector('#file-src_app_test_ts')
+    const ctx = getRenderContext()
+    if (!(card instanceof HTMLElement) || ctx === null) {
+      throw new Error('no card')
+    }
+    hydrateFileCard(card, ctx, { force: true })
+    expect([line()?.hasAttribute('hidden'), draft()?.hasAttribute('hidden')]).toEqual([false, false])
+    expect(card.querySelector('.code-fold:not([hidden])')).toBeNull()
   })
 
   it('refuses to post an empty box and keeps it open', async () => {

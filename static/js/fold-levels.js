@@ -146,13 +146,14 @@ export function fileRows(file, hunks) {
 
 /**
  * What the review's discussion keeps open in one file card: `keepsOpen` when a comment or an
- * attention point stops the card collapsing, `threaded` when a thread drawn in its chunks stops
- * every fold. The page decides both once per card, and the card and its counter read the answer.
- * @typedef {{ keepsOpen: boolean, threaded: boolean }} Discussion
+ * attention point stops the card collapsing, `discussed` when a thread or a pending draft in its
+ * chunks stops every fold. The page decides both once per card, and the card and its counter read
+ * the answer.
+ * @typedef {{ keepsOpen: boolean, discussed: boolean }} Discussion
  */
 
 /** A file nobody has discussed yet, as the validator sees every file of a fresh generation. */
-export const UNDISCUSSED = /** @type {Discussion} */ ({ keepsOpen: false, threaded: false })
+export const UNDISCUSSED = /** @type {Discussion} */ ({ keepsOpen: false, discussed: false })
 
 /**
  * How many diff lines a file shows, and how many of them `level` hides. Measured from the model,
@@ -168,7 +169,7 @@ export function hiddenLines(file, hunks, level, discussion) {
   if (collapsesAt(file, level) && !discussion.keepsOpen) {
     return { total, hidden: total }
   }
-  if (discussion.threaded) {
+  if (discussion.discussed) {
     return { total, hidden: 0 }
   }
   return { total, hidden: coveredRows(foldsForLevel(file.folds ?? [], level)) }

@@ -232,7 +232,16 @@ export function wireReview(root, session, opts = {}) {
   const renderNow = () => getRenderContext()?.now ?? new Date()
   /** @param {import('./contract-types.js').FoldLevel} level */
   const hiddenAt = level =>
-    canvasHiddenLines(getRenderContext() ?? { artifact: session.artifact, files: [], comments: [] }, level)
+    canvasHiddenLines(
+      getRenderContext() ?? {
+        artifact: session.artifact,
+        files: [],
+        comments: [],
+        state: session.state,
+        headSha: session.headSha,
+      },
+      level
+    )
 
   /**
    * Whether a card counts as reviewed, read the same way the page was first drawn: a layer is
@@ -268,8 +277,9 @@ export function wireReview(root, session, opts = {}) {
       const next = { ...ctx, comments: [...ctx.comments, ...added] }
       setRenderContext(next)
       refreshCardDecorations(root, next, changedPaths, added)
-      if (added.length > 0) {
-        // A thread a submitted review adds keeps its card's code open, as a posted one does.
+      if (changedPaths.size > 0) {
+        // A thread a submitted review adds, or a draft saved or deleted, changes what keeps a
+        // card's code open, as a posted comment does.
         refreshFolds(root)
         refreshFoldLevel(root, getFoldLevel(), hiddenAt(getFoldLevel()))
       }

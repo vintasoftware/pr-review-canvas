@@ -274,18 +274,17 @@ export function cardKeepsOpen(lf, layerId, artifact, commentPaths) {
 }
 
 /**
- * @typedef {{
- *   artifact: ReviewArtifact,
- *   files: ReadonlyArray<FileEntry>,
- *   comments: ReadonlyArray<ReviewComment>,
- * }} CountContext
+ * What the counters and the discussion rule read of the page: the canvas, its diff, the comments,
+ * and the pending drafts in the state, which belong to `headSha`.
+ * @typedef {Pick<RenderContext, 'artifact' | 'files' | 'comments' | 'state' | 'headSha'>} CountContext
  * @typedef {import('./reading-level.js').HiddenCounts} HiddenCounts
  */
 
 /**
  * What the discussion keeps open in one card: a comment or an attention point stops it
- * collapsing, and a thread in its chunks stops every fold. The card's folds and its counter both
- * read this one answer, from the comments on the page now, so they cannot disagree.
+ * collapsing, and a thread or a pending draft in its chunks stops every fold. The card's folds and
+ * its counter both read this one answer, from the comments and drafts on the page now, so they
+ * cannot disagree.
  * @param {LayerFile} lf
  * @param {string} layerId
  * @param {CountContext} ctx
@@ -294,9 +293,13 @@ export function cardKeepsOpen(lf, layerId, artifact, commentPaths) {
  */
 function cardDiscussion(lf, layerId, ctx, commentPaths) {
   const entry = ctx.files.find(f => f.path === lf.path)
+  const hunkIds = new Set(lf.hunks)
   return {
     keepsOpen: cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths),
-    threaded: entry !== undefined && threadsForHunks(ctx.comments, entry, new Set(lf.hunks)).length > 0,
+    discussed:
+      entry !== undefined &&
+      (threadsForHunks(ctx.comments, entry, hunkIds).length > 0 ||
+        draftsForCard(ctx, entry, hunkIds).length > 0),
   }
 }
 
@@ -453,7 +456,7 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
  * @param {ReviewArtifact} artifact
  * @param {ReadonlyArray<FileEntry>} files
  * @param {PrState} state
- * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, comments: ReadonlyArray<ReviewComment> }} ctx
+ * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, comments: ReadonlyArray<ReviewComment>, headSha: string }} ctx
  * @returns {string}
  */
 export function renderLayerSection(layer, index, artifact, files, state, ctx) {
@@ -496,7 +499,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
     testMapHtml(layer, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
-    `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, { artifact, files, comments: ctx.comments }, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
+    `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, { artifact, files, comments: ctx.comments, state, headSha: ctx.headSha }, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
     `<div class="layer-end"><button class="cmd" type="button" data-act="mark-layer" data-reviewed-id="${esc(layerReviewedId)}">mark layer as reviewed</button></div>` +
     '</div></section></pr-layer>'
   )
@@ -508,8 +511,9 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
  * @param {ReadonlyArray<FileEntry>} files
  * @param {PrState} state
  * @param {ReadonlyArray<ReviewComment>} [comments] so a point that was posted says so
+ * @param {string} [headSha] the commit the page's drafts belong to, as in the render context
  */
-export function renderLayers(artifact, files, state, comments = []) {
+export function renderLayers(artifact, files, state, comments = [], headSha = artifact.pr.headSha) {
   const ctx = {
     hunkIndex: hunkLayerIndex(artifact),
     paths: pathSet(files),
@@ -517,6 +521,7 @@ export function renderLayers(artifact, files, state, comments = []) {
     state,
     posted: postedUrls(state, comments),
     comments,
+    headSha,
   }
   return artifact.layers.map((layer, i) => renderLayerSection(layer, i, artifact, files, state, ctx)).join('')
 }
@@ -590,8 +595,8 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   host.innerHTML = renderDiff({ key: entry.key, path: entry.path, lang: entry.lang }, patch, { hunkIds })
   const lf = layerFileOf(ctx, layerId, entry.path)
   const { placed, missed } = decorateCard(card, ctx, { key, layerId, entry, hunkIds })
-  const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).threaded
-  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, threaded)
+  const discussed = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).discussed
+  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, discussed)
   wireFoldReveal(card)
   cardRenderedHook?.(card)
   return { rendered: true, deferred: false, placed, missed }
@@ -633,7 +638,7 @@ function decorateCard(card, ctx, at) {
 /**
  * Drafts only belong to the diff and hunk they were written on. Earlier-commit drafts are
  * available in the pending bar, and the server checks diff equality before submitting them.
- * @param {RenderContext} ctx
+ * @param {CountContext} ctx
  * @param {FileEntry} entry
  * @param {ReadonlySet<string>} hunkIds
  */
@@ -859,8 +864,8 @@ export function refreshFolds(root) {
         : undefined
     if (card instanceof HTMLElement) {
       const layerId = card.getAttribute('data-layer') ?? ''
-      const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPaths).threaded
-      setCodeFoldLevel(card, foldLevel, threaded)
+      const discussed = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPaths).discussed
+      setCodeFoldLevel(card, foldLevel, discussed)
     }
   }
 }

@@ -91,7 +91,16 @@ export function renderHeader(bundle, opts) {
   const reading = ready
     ? foldLevelControlHtml(
         level,
-        canvasHiddenLines({ artifact, files: bundle.files, comments: bundle.comments.reviewComments }, level)
+        canvasHiddenLines(
+          {
+            artifact,
+            files: bundle.files,
+            comments: bundle.comments.reviewComments,
+            state: bundle.state,
+            headSha: pr.headSha,
+          },
+          level
+        )
       )
     : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''

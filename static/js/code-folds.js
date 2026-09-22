@@ -178,18 +178,19 @@ function paintFold(wired) {
 /**
  * Points a drawn card's folds at a level: the outermost folds that hide at it become active and
  * start folded, and the rest give their rows back. A fold that stays active keeps whatever the
- * reader did with it. A card with a thread keeps all of its code open, so none is active. Inactive
+ * reader did with it. A card with a thread or a pending draft keeps all of its code open, so none
+ * is active. Inactive
  * folds paint first, so a row shared with an active outer or inner fold ends up as the active
  * one says.
  * @param {HTMLElement} card
  * @param {FoldLevel} level
- * @param {boolean} threaded whether a thread sits in the card's chunks
+ * @param {boolean} discussed whether a thread or a pending draft sits in the card's chunks
  */
-export function setCodeFoldLevel(card, level, threaded) {
+export function setCodeFoldLevel(card, level, discussed) {
   const diff = drawnDiff(card)
   const wired = diff === null ? [] : (wiredFolds.get(diff) ?? [])
   const active = new Set(
-    threaded
+    discussed
       ? []
       : foldsForLevel(
           wired.map(w => w.fold),
@@ -219,9 +220,9 @@ export function setCodeFoldLevel(card, level, threaded) {
  * @param {string} key
  * @param {readonly CodeFold[]} folds
  * @param {FoldLevel} level the reader's level
- * @param {boolean} threaded whether a thread sits in the card's chunks
+ * @param {boolean} discussed whether a thread or a pending draft sits in the card's chunks
  */
-export function applyCodeFolds(card, key, folds, level, threaded) {
+export function applyCodeFolds(card, key, folds, level, discussed) {
   const diff = drawnDiff(card)
   if (diff === null || wiredFolds.has(diff)) {
     return
@@ -273,7 +274,7 @@ export function applyCodeFolds(card, key, folds, level, threaded) {
   }
 
   wiredFolds.set(diff, wired)
-  setCodeFoldLevel(card, level, threaded)
+  setCodeFoldLevel(card, level, discussed)
 }
 
 /**

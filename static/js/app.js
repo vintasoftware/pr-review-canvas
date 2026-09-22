@@ -235,11 +235,12 @@ export class PrAppElement extends HTMLElement {
         staleSha
       )
       // The context is set before any <pr-file> connects, so each card renders once, when visible.
+      const headSha = staleSha ?? bundle.pr.headSha
       setRenderContext({
         artifact,
         files,
         patches,
-        headSha: staleSha ?? bundle.pr.headSha,
+        headSha,
         comments: bundle.comments.reviewComments,
         state: bundle.state,
         now,
@@ -256,7 +257,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, headSha)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
         footerHtml(boot.version, bundle)
       // The screen is interactive from here: reviewed state, dismissals, threads, and posting.
       // A stale canvas shows the diff of an older commit, so nothing is posted from it: a line

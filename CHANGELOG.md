@@ -126,9 +126,10 @@ Changes since 0.3.0.
   default** field of the settings dialog sets it. The control and `f`, which steps through the
   levels, change the level for one page only. Each layer and the sign-off dialog report how many
   diff lines are hidden.
-- Attention points and comment threads stay visible at every level. An annotation may only be
-  hidden by an aggressive fold that covers it whole and no other annotation; the fold then shows
-  the annotation's text instead of its title. A file with an annotation or an attention point never collapses.
+- Attention points, comment threads and pending review drafts stay visible at every level; a file
+  with a thread or a draft folds nothing. An annotation may only be hidden by an aggressive fold
+  that covers it whole and no other annotation; the fold then shows the annotation's text instead of
+  its title. A file with an annotation or an attention point never collapses.
 - The validator holds the generator to the shape of the levels: `collapsed` names a level, nothing
   in a test file hides at `light`, a `light` fold covers at most 40 lines of generated content, and
   a file with over 20 lines outside its annotations, no attention point, and nothing hidden fails
