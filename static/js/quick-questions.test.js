@@ -7,6 +7,7 @@ import {
   ASK_SOMETHING_ELSE,
   CLOSE_DELAY_MS,
   HOVER_DELAY_MS,
+  MENU_EDGE_PX,
   QQ_MENU_ID,
   quickMenuHtml,
   wireQuickQuestions,
@@ -202,6 +203,46 @@ describe('wireQuickQuestions in the odd cases', () => {
     expect(menu.isOpen?.()).toBe(false)
     menu.openFor?.(el('[data-ask-path]'))
     expect(menu.isOpen?.()).toBe(true)
+  })
+
+  /** happy-dom lays nothing out, so the menu's size is stated. @param {number} w @param {number} h */
+  const sizeMenu = (w, h) => {
+    Object.defineProperty(menuEl(), 'offsetWidth', { configurable: true, value: w })
+    Object.defineProperty(menuEl(), 'offsetHeight', { configurable: true, value: h })
+  }
+
+  /** @param {HTMLElement} target @param {Partial<DOMRect>} rect */
+  const placeTrigger = (target, rect) => {
+    target.getBoundingClientRect = () => /** @type {DOMRect} */ ({
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+      ...rect,
+    })
+  }
+
+  it('stays inside the window when the command sits near the right edge', () => {
+    const trigger = el('[data-ask-path]')
+    sizeMenu(260, 200)
+    placeTrigger(trigger, { left: 980, top: 20, bottom: 40, right: 1010, width: 30, height: 20 })
+    trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    // 1024 wide, so the menu ends at the far edge less its margin instead of at 980.
+    expect(menuEl().style.left).toBe(`${1024 - 260 - MENU_EDGE_PX}px`)
+  })
+
+  it('hangs above a command with no room below it', () => {
+    const trigger = el('[data-ask-path]')
+    sizeMenu(260, 200)
+    placeTrigger(trigger, { left: 40, top: 700, bottom: 720, right: 120, width: 80, height: 20 })
+    trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(menuEl().style.top).toBe('496px')
+    expect(menuEl().style.left).toBe('40px')
   })
 
   it('places itself under the command it opened on', () => {

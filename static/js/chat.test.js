@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 // The live AI Chat pane: the context chip, streaming, the comment cards, threads, and the width.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
@@ -9,6 +9,7 @@ import { GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthet
 import { setChatEnabled } from './ask.js'
 import {
   answerHtml,
+  CHAT_MINIMIZED_KEY,
   CHAT_WIDTH_DEFAULT,
   CHAT_WIDTH_KEY,
   CHAT_WIDTH_MAX,
@@ -16,9 +17,11 @@ import {
   clampWidth,
   proposedCommentHtml,
   QUICK_QUESTIONS,
+  readChatMinimized,
   readChatWidth,
   renderChatShell,
   wireChat,
+  writeChatMinimized,
   writeChatWidth,
 } from './chat.js'
 import { targetsFromFiles } from './proposed-comment.js'
@@ -47,7 +50,7 @@ function session() {
 function mount(api = {}, extra = {}) {
   setChatEnabled(true)
   const root = document.createElement('div')
-  root.innerHTML = renderChatShell({ enabled: true })
+  root.innerHTML = `<div class="layout">${renderChatShell({ enabled: true })}</div>`
   document.body.replaceChildren(root)
   const chat = wireChat({
     root,
@@ -147,6 +150,82 @@ describe('the chat width', () => {
     // A move after the drag ended changes nothing.
     document.dispatchEvent(new PointerEvent('pointermove', { clientX: 700 }))
     expect(root.style.getPropertyValue('--chat-w')).toBe('400px')
+  })
+})
+
+describe('minimizing a docked chat', () => {
+  // The pane docks into the grid above 1360px; below it the launcher opens a floating dialog.
+  /** Media queries read the happy-dom viewport, not `window.innerWidth`. @param {number} width */
+  const setViewportWidth = width => {
+    const win = /** @type {{ happyDOM: { setViewport: (v: { width: number }) => void } }} */ (
+      /** @type {unknown} */ (window)
+    )
+    win.happyDOM.setViewport({ width })
+  }
+  let previousWidth = 0
+  beforeEach(() => {
+    previousWidth = window.innerWidth
+    setViewportWidth(1500)
+  })
+  afterEach(() => {
+    setViewportWidth(previousWidth)
+  })
+
+  it('drops the chat column, offers the launcher, and keeps the draft', () => {
+    const { root } = mount()
+    const pane = el(root, '.chat')
+    const launcher = el(root, '#chat-launcher')
+    const box = /** @type {HTMLTextAreaElement} */ (el(root, '#msg'))
+    box.value = 'draft'
+    expect(pane.hidden).toBe(false)
+    expect(launcher.hidden).toBe(true)
+
+    el(root, '#chat-minimize').click()
+    expect(pane.hidden).toBe(true)
+    expect(el(root, '.layout').classList.contains('no-chat')).toBe(true)
+    expect(launcher.hidden).toBe(false)
+    expect(launcher.getAttribute('aria-expanded')).toBe('false')
+
+    launcher.click()
+    expect(pane.hidden).toBe(false)
+    expect(el(root, '.layout').classList.contains('no-chat')).toBe(false)
+    expect(launcher.hidden).toBe(true)
+    expect(box.value).toBe('draft')
+  })
+
+  it('is remembered per browser', () => {
+    /** @type {Record<string, string>} */
+    const store = {}
+    const storage = /** @type {Storage} */ (
+      /** @type {unknown} */ ({
+        getItem: (/** @type {string} */ k) => store[k] ?? null,
+        setItem: (/** @type {string} */ k, /** @type {string} */ v) => {
+          store[k] = v
+        },
+      })
+    )
+    expect(readChatMinimized(storage)).toBe(false)
+    expect(readChatMinimized(null)).toBe(false)
+
+    const { root } = mount({}, { storage })
+    el(root, '#chat-minimize').click()
+    expect(store[CHAT_MINIMIZED_KEY]).toBe('1')
+    expect(readChatMinimized(storage)).toBe(true)
+
+    // A reload with that memory starts minimized, out of the grid.
+    const again = mount({}, { storage })
+    expect(el(again.root, '.chat').hidden).toBe(true)
+    expect(el(again.root, '#chat-launcher').hidden).toBe(false)
+    again.root.querySelector('#chat-launcher')?.dispatchEvent(new MouseEvent('click'))
+    expect(store[CHAT_MINIMIZED_KEY]).toBe('0')
+
+    writeChatMinimized(null, true)
+  })
+
+  it('renders a minimized shell without the pane', () => {
+    expect(renderChatShell({ enabled: true, minimized: true })).toContain(
+      'class="chat" aria-labelledby="chat-h" hidden'
+    )
   })
 })
 

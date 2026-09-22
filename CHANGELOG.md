@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Review interface
+
+- AI Chat minimizes at any width. On a wide screen the docked pane drops out of the layout, the
+  canvas takes the width, and the launcher brings the chat back with its draft and transcript.
+  The minimized state is remembered per browser, beside the pane width.
+- Restoring the chat leaves the canvas where the reader left it, instead of scrolling down to the
+  composer it focuses.
+- The minimize command sits at the right edge of the chat header, where it stays when the header
+  wraps.
+- A quick-question menu opened from a command near the window edge stays inside the window, and
+  hangs above a command with no room below it.
+
+## 0.4.0
+
+Changes since 0.3.0.
+
 ### Review before the pull request
 
 - Two reviews of the work in a clone, each a target of its own: `pr-review prepare --branch` for
@@ -63,6 +79,14 @@
 - `pr-review import` and the canvas zips discovered on a pull request read the same rule, so the
   CLI no longer reports a canvas as stale that the page shows as current.
 
+### Canvas sharing
+
+- `pr-review publish` now shares PR/MR canvases automatically in a compressed comment and
+  updates the current account's existing canvas comment on subsequent publishes. The payload
+  is readable by anyone with access to the PR/MR. Oversized canvases can still be shared as ZIPs.
+- Discovery reads both compressed canvas comments and existing ZIP links.
+- Import rejects a canvas exported for a different pull request, including with `--force`.
+
 ### AI chat
 
 - The chat works on an outdated canvas again: it answers about the canvas on screen, with the
@@ -78,6 +102,25 @@
   Request-changes posts the review body as a merge request note.
 - New error codes: `GLAB_MISSING`, `GLAB_UNAUTHENTICATED`, `GITLAB_API_ERROR`. Exit code `4` covers
   both CLIs.
+
+### Fixes
+
+- Git commands select the requested project even when launched from a Git hook with inherited
+  repository environment variables.
+- GitHub attachment images render as external links, and Markdown comment editing uses a
+  single Write/Preview toggle.
+
+### Upgrade from 0.3.0
+
+1. Run `npm install -g @vintasoftware/pr-review-canvas@0.4.0` and restart `pr-review serve`.
+2. Run `pr-review install-skill` in each project to refresh the bundled skill. Preserve any
+   customizations first, and repeat custom directory flags if used.
+3. Publishing a PR/MR canvas now posts or updates a comment automatically. Use `pr-review export`
+   when you only want a local ZIP.
+4. For GitLab projects, install and authenticate `glab`. Set `PR_REVIEW_HOST=gitlab` for
+   self-hosted instances whose hostname does not contain `gitlab`.
+5. Local branch and uncommitted reviews need an `origin/HEAD` default branch or an explicit
+   `--base <ref>`.
 
 ## 0.3.0
 
