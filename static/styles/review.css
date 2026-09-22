@@ -65,6 +65,10 @@
   border-bottom: 1px solid var(--line);
   color: var(--fg);
 }
+.fold-count {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
 .summary,
 .rationale,
 .prose {

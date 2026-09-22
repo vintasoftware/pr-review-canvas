@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_SKIN, isSkin, SKINS, type Skin } from '../../static/js/skin.js'
 import { DEFAULT_THEME, isTheme, THEMES, type Theme } from '../../static/js/theme.js'
 
@@ -24,6 +25,8 @@ export const SettingsSchema = z.object({
   version: z.literal(1),
   skin: z.enum(SKINS),
   theme: z.enum(THEMES),
+  /** The reading level every review opens at; the control on the page changes it for one page. */
+  foldLevel: z.enum(FOLD_LEVELS),
   agent: z.enum(CHAT_AGENTS),
   model: z.string().min(1).nullable(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC),
@@ -35,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   version: 1,
   skin: DEFAULT_SKIN,
   theme: DEFAULT_THEME,
+  foldLevel: DEFAULT_FOLD_LEVEL,
   agent: 'claude',
   model: null,
   chatTimeoutSec: 600,
@@ -45,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const SettingsInputSchema = z.object({
   skin: z.enum(SKINS).optional(),
   theme: z.enum(THEMES).optional(),
+  foldLevel: z.enum(FOLD_LEVELS).optional(),
   agent: z.enum(CHAT_AGENTS).optional(),
   model: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),

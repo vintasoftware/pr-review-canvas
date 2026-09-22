@@ -9,6 +9,7 @@ import { renderChatShell } from './chat.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
 import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
+import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 
@@ -156,16 +157,14 @@ describe('header', () => {
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual(
       []
     )
-    // Without acpx there is nothing to configure, so settings is disabled with the reason.
+    // Without acpx or chat, settings still holds the reading level a review opens at.
     document.body.innerHTML = renderHeader(bundle({ chat: { enabled: false, acpx: false } }), {
       host: 'localhost:3010',
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
     })
-    const off = document.querySelector('#settings')
-    expect(off?.hasAttribute('disabled')).toBe(true)
-    expect(off?.getAttribute('title')).toBe('acpx is not installed')
+    expect(document.querySelector('#settings')?.hasAttribute('disabled')).toBe(false)
     document.body.innerHTML = renderHeader(bundle(), {
       host: 'localhost:3010',
       theme: 'auto',
@@ -519,5 +518,40 @@ describe('chat shell', () => {
     expect(aside?.querySelector('.chat-composer .cmd.fill')?.textContent).toBe('send')
     expect(aside?.querySelectorAll('button:disabled').length).toBe(0)
     expect(renderChatShell({ enabled: false })).toBe('')
+  })
+})
+
+describe('the reading level control', () => {
+  it('offers the three levels and says what the chosen one hides', () => {
+    document.body.innerHTML = foldLevelControlHtml('light', { total: 40, hidden: 0 })
+    const select = document.querySelector('select')
+    expect([...(select?.options ?? [])].map(o => o.value)).toEqual(['light', 'moderate', 'aggressive'])
+    expect(select?.value).toBe('light')
+    expect(document.querySelector('label')?.getAttribute('for')).toBe(select?.id)
+    expect(document.querySelector('.fold-hint')?.textContent).toContain(
+      'imports, whitespace, moved blocks, and generated files'
+    )
+  })
+
+  it('names what each level adds and how much of the diff it hides', () => {
+    // A level that hides nothing says so rather than showing 0.
+    expect(foldLevelHint('light', { total: 40, hidden: 0 })).toContain('nothing hidden yet')
+    expect(foldLevelHint('moderate', { total: 40, hidden: 12 })).toContain(
+      'also test bodies, helpers, wiring, templates'
+    )
+    expect(foldLevelHint('moderate', { total: 40, hidden: 12 })).toContain(
+      '12 of 40 lines hidden of the diff'
+    )
+    expect(foldLevelHint('aggressive', { total: 40, hidden: 30 })).toContain(
+      'only the code you have to judge'
+    )
+  })
+
+  it('follows a level chosen with the keyboard', () => {
+    document.body.innerHTML = foldLevelControlHtml('light', { total: 40, hidden: 0 })
+    refreshFoldLevel(document.body, 'aggressive', { total: 40, hidden: 30 })
+
+    expect(document.querySelector('select')?.value).toBe('aggressive')
+    expect(document.querySelector('.fold-hint')?.textContent).toContain('only the code you have to judge')
   })
 })

@@ -1,5 +1,11 @@
 // @vitest-environment node
-import { coveredStem, DEFAULT_TEST_PATTERNS, isTestPath, sourceStem } from './test-paths.js'
+import {
+  coveredStem,
+  DEFAULT_TEST_PATTERNS,
+  isHandWrittenTest,
+  isTestPath,
+  sourceStem,
+} from './test-paths.js'
 
 describe('test paths', () => {
   it('recognizes test files by name and folder', () => {
@@ -9,6 +15,43 @@ describe('test paths', () => {
     expect(isTestPath('__tests__/a.ts')).toBe(true)
     expect(isTestPath('src/testing/fakes.ts')).toBe(false)
     expect(isTestPath('src/contest.ts')).toBe(false)
+  })
+
+  it('recognises the test conventions of other stacks without a project config', () => {
+    // Python
+    expect(isTestPath('domain/pipelines/tests/test_actions.py')).toBe(true)
+    expect(isTestPath('domain/pipelines/tests/conftest.py')).toBe(true)
+    expect(isTestPath('app/test_views.py')).toBe(true)
+    expect(isTestPath('app/views_test.py')).toBe(true)
+    // Go, Elixir, Dart, Rust
+    expect(isTestPath('pkg/server/handler_test.go')).toBe(true)
+    expect(isTestPath('lib/shop/cart_test.exs')).toBe(true)
+    expect(isTestPath('lib/cart_test.dart')).toBe(true)
+    expect(isTestPath('tests/integration.rs')).toBe(true)
+    // Ruby
+    expect(isTestPath('spec/models/cart_spec.rb')).toBe(true)
+    // Java, Kotlin, PHP, C#, Swift
+    expect(isTestPath('src/test/java/shop/CartTest.java')).toBe(true)
+    expect(isTestPath('app/CartServiceTest.kt')).toBe(true)
+    expect(isTestPath('tests/Unit/CartTest.php')).toBe(true)
+    expect(isTestPath('Shop.Tests/CartTests.cs')).toBe(true)
+    expect(isTestPath('ShopTests/CartTests.swift')).toBe(true)
+    expect(isTestPath('test/fixtures/a.json')).toBe(true)
+    // Not tests
+    expect(isTestPath('domain/pipelines/models.py')).toBe(false)
+    expect(isTestPath('src/testing/fakes.ts')).toBe(false)
+    expect(isTestPath('src/contest.py')).toBe(false)
+    expect(isTestPath('src/TestUtils.ts')).toBe(false)
+    expect(isTestPath('src/latest.rb')).toBe(false)
+    expect(isTestPath('src/components/ABTest.tsx')).toBe(false)
+    expect(isTestPath('api/spec/openapi.yaml')).toBe(false)
+  })
+
+  it('tells hand-written tests from the snapshots and fixtures beside them', () => {
+    expect(isHandWrittenTest('src/app.test.ts')).toBe(true)
+    expect(isHandWrittenTest('src/__snapshots__/app.test.ts.snap')).toBe(false)
+    expect(isHandWrittenTest('tests/fixtures/users.json')).toBe(false)
+    expect(isHandWrittenTest('src/fixtures/users.json')).toBe(false)
   })
 
   it('takes the project config patterns instead of the built-in ones', () => {

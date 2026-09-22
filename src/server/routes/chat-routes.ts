@@ -1,6 +1,6 @@
-// The AI Chat pane's routes and the personal settings behind it. Every route here answers 404
-// when the project config turns chat off, so a repository that does not want an agent in the
-// loop has no agent surface at all.
+// The AI Chat pane's routes and the personal settings behind it. Every chat and agent route here
+// answers 404 when the project config turns chat off, so a repository that does not want an agent
+// in the loop has no agent surface at all; the settings file stays reachable for the reading level.
 import { Hono, type MiddlewareHandler } from 'hono'
 import { ChatBusyError } from '../../chat/chat-manager.js'
 import { ChatContextError } from '../../chat/context.js'
@@ -124,13 +124,22 @@ function withDiff(artifact: ReviewArtifact, headSha: string, derived: Derived | 
   return { artifact, headSha, files: derived.files, patches: derived.patches }
 }
 
-/** Every path this file serves, so the chat-disabled check covers all of them and nothing else. */
-export const CHAT_ROUTE_PATTERNS = ['/settings', '/settings/*', '/prs/:n/chat', '/prs/:n/chat/*'] as const
+/**
+ * Every chat path this file serves, so the chat-disabled check covers all of them and nothing
+ * else. `/settings` itself stays open: the settings file also holds the reading level a review
+ * opens at, which the page reads whether or not chat is on.
+ */
+export const CHAT_ROUTE_PATTERNS = [
+  '/settings/agents',
+  '/settings/agents/*',
+  '/prs/:n/chat',
+  '/prs/:n/chat/*',
+] as const
 
 export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
 
-  // With chat off, none of these routes exist. The patterns are listed rather than `*`: this
+  // With chat off, none of the chat routes exist. The patterns are listed rather than `*`: this
   // app is mounted at the API root, so a blanket middleware would answer for every route.
   const requireChat: MiddlewareHandler = async (_c, next) => {
     if (!ctx.projectConfig.config.chat.enabled) {

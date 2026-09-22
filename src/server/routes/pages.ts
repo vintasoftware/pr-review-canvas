@@ -61,6 +61,8 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
         'use /review/<number>, /review/branch, or /review/uncommitted'
       )
     }
+    // One read serves both the appearance and the reading level the canvas opens at.
+    const settings = await ctx.settings.read()
     return c.html(
       reviewPage(
         {
@@ -69,9 +71,10 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           repo: ctx.config.repo.name,
           version: ctx.version,
           host: ctx.config.host,
+          foldLevel: settings.foldLevel,
         },
         c.get('cspNonce'),
-        await appearanceFor(ctx, appearanceQuery(c))
+        appearanceForRequest(settings, appearanceQuery(c))
       )
     )
   })

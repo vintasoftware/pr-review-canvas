@@ -39,11 +39,41 @@ generation:
   #   rationale: 300
   #   diagram: 1500       # mermaid source, counted raw
 
-# Which paths count as tests, for the layering rules and the `test` pill on a file card.
-# Defaults to the JavaScript and TypeScript conventions below; name your own for other languages
-# (Python: '**/test_*.py', '**/tests/**'; Go: '**/*_test.go').
+# Which paths count as tests, for the layering rules, the `test` pill on a file card, and the
+# light reading level, which keeps test titles on screen. The defaults below match test
+# directories and file-name shapes across stacks (JS/TS, Python, Go, Ruby, Java, Kotlin, PHP,
+# C#, Swift, Elixir, Dart, Rust). A list here replaces them; add `'**/spec/**'` when that
+# directory holds tests in your repository. Snapshots and fixtures inside test paths may still
+# hide at light, since they are generated.
 tests:
-  patterns: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**']
+  patterns:
+    - '**/__tests__/**'
+    - '**/tests/**'
+    - '**/test/**'
+    - '**/*.test.*'
+    - '**/*.spec.*'
+    - '**/*_test.*'
+    - '**/*_spec.*'
+    - '**/test_*.py'
+    - '**/conftest.py'
+    - '**/*Test.java'
+    - '**/*Tests.java'
+    - '**/*Test.kt'
+    - '**/*Tests.kt'
+    - '**/*Test.scala'
+    - '**/*Tests.scala'
+    - '**/*Test.groovy'
+    - '**/*Tests.groovy'
+    - '**/*Test.cs'
+    - '**/*Tests.cs'
+    - '**/*Test.fs'
+    - '**/*Tests.fs'
+    - '**/*Test.vb'
+    - '**/*Tests.vb'
+    - '**/*Test.swift'
+    - '**/*Tests.swift'
+    - '**/*Test.php'
+    - '**/*Tests.php'
 
 chat:
   enabled: true # false removes the chat pane and its routes

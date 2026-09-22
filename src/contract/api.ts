@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { CanvasManifest } from './canvas-manifest.js'
 import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js'
 import type { SharedCanvasInfoSchema } from './discovery.js'
-import type { FileEntry, Pr, ReviewArtifact } from './review-artifact.js'
+import type { FileEntry, FoldLevel, Pr, ReviewArtifact } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
 import type { PrState } from './state.js'
 
@@ -232,4 +232,15 @@ export interface ChatStatus {
 
 export interface HomeData {
   recentPrs: Array<{ number: number; title: string; updatedAt: string }>
+}
+
+/** The JSON the review page carries in its bootstrap script; the app reads it before any request. */
+export interface ReviewBootstrap {
+  prNumber: ReviewKey
+  owner: string
+  repo: string
+  version: string
+  host: PublicHost
+  /** The reading level the canvas opens at, from the settings file. */
+  foldLevel: FoldLevel
 }
