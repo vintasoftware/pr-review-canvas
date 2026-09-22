@@ -60,7 +60,6 @@ async function checkDataDir(dir: string): Promise<DoctorCheck> {
   }
 }
 
-/** The skill the generation flow needs, in either harness's directory. */
 export type ReadSkill = (file: string) => Promise<string | null>
 
 const readSkillFile: ReadSkill = file => readFile(file, 'utf8')
@@ -72,8 +71,10 @@ export interface SkillCopy {
   dir: string
   /** `<dir>/pr-review-canvas`, relative to the repository. */
   path: string
-  /** Why the copy differs from the bundled skill, or null when it matches. */
-  stale: string | null
+  /** True when the copy's body or recorded hash differs from the bundled skill, or it cannot be read. */
+  stale: boolean
+  /** Why the copy could not be read, when it could not. */
+  error?: string
 }
 
 /**
@@ -98,16 +99,17 @@ export async function findSkillCopies(
       if (text === null) continue
       const { hash, frontmatter } = skillContent(text)
       const matches = hash === expected && frontmatter.getIn(['metadata', 'body-sha256']) === expected
-      copies.push({ kind, dir, path: rel, stale: matches ? null : rel })
+      copies.push({ kind, dir, path: rel, stale: !matches })
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        copies.push({ kind, dir, path: rel, stale: `${rel}: ${message(err)}` })
+        copies.push({ kind, dir, path: rel, stale: true, error: message(err) })
       }
     }
   }
   return copies
 }
 
+/** The skill the generation flow needs, in either harness's directory. */
 export async function checkSkill(
   repoRoot: string | null,
   readSkill: ReadSkill = readSkillFile
@@ -121,7 +123,9 @@ export async function checkSkill(
   } catch (err) {
     return { ok: false, detail: message(err), hint: 'reinstall the pr-review package' }
   }
-  const stale = copies.flatMap(copy => (copy.stale === null ? [] : [copy.stale]))
+  const stale = copies.flatMap(copy =>
+    copy.stale ? [copy.error === undefined ? copy.path : `${copy.path}: ${copy.error}`] : []
+  )
   if (stale.length > 0) {
     return {
       ok: false,
@@ -140,7 +144,7 @@ export async function checkSkill(
 }
 
 async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {
-  const hint = 'install with `npm install -g acpx` and check `acpx --version`'
+  const hint = 'install with `npm install -g acpx@latest` and check `acpx --version`'
   try {
     const version = (await deps.acpxVersion())?.trim()
     return version

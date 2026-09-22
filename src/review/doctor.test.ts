@@ -255,7 +255,7 @@ describe('pr-review doctor', () => {
       check: {
         ok: false,
         detail: 'acpx is missing or could not report its version',
-        hint: 'install with `npm install -g acpx` and check `acpx --version`',
+        hint: 'install with `npm install -g acpx@latest` and check `acpx --version`',
       },
       exit: 1,
     })),
@@ -291,7 +291,7 @@ describe('pr-review doctor', () => {
           acpx: {
             ok: false,
             detail: 'process timed out',
-            hint: 'install with `npm install -g acpx` and check `acpx --version`',
+            hint: 'install with `npm install -g acpx@latest` and check `acpx --version`',
           },
         },
       },

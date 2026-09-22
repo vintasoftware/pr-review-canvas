@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { appendFile, mkdir, realpath, rm } from 'node:fs/promises'
+import { appendFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { CliIo } from './commands.js'
@@ -14,6 +14,8 @@ let tmp: string
 let repo: string
 let globalRoot: string
 let packageRoot: string
+/** The acpx PATH runs when it came from `npm install -g`: a file inside the global package. */
+let globalAcpx: string
 
 beforeEach(async () => {
   tmp = await realpath(await makeTempDir('pr-review-upgrade-'))
@@ -22,6 +24,9 @@ beforeEach(async () => {
   packageRoot = path.join(globalRoot, NAME)
   await mkdir(repo, { recursive: true })
   await mkdir(packageRoot, { recursive: true })
+  globalAcpx = path.join(globalRoot, 'acpx', 'dist', 'cli.js')
+  await mkdir(path.dirname(globalAcpx), { recursive: true })
+  await writeFile(globalAcpx, '')
 })
 afterEach(() => rm(tmp, { recursive: true, force: true }))
 
@@ -34,7 +39,9 @@ interface Fake {
 function fake(opts: {
   version?: string
   latest?: Record<string, string>
+  /** The installed acpx version; null means acpx is not on PATH. */
   acpx?: string | null
+  acpxPath?: string
   confirm?: boolean | null
   failInstall?: boolean
   packageRoot?: string
@@ -47,6 +54,7 @@ function fake(opts: {
     packageRoot: opts.packageRoot ?? packageRoot,
     repoRoot: repo,
     acpxVersion: async () => (opts.acpx === undefined ? '0.13.2' : opts.acpx),
+    acpxPath: opts.acpx === null ? null : (opts.acpxPath ?? globalAcpx),
     run: async (_file, args) => {
       calls.push(args.join(' '))
       if (args[0] === 'view') {
@@ -109,8 +117,22 @@ describe('planUpgrade', () => {
     const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, packageRoot: tmp })
     const plan = await planUpgrade(deps)
     expect(plan.steps).toEqual([])
-    expect(plan.notes.join('\n')).toContain('not a global npm install')
-    expect(plan.notes.join('\n')).toContain('acpx 0.13.2 is up to date')
+    expect(plan.notes).toContain(
+      `${NAME} 0.6.0 is out, but the copy in use (${tmp}) is not the global npm install; update it the way you installed it`
+    )
+    expect(plan.notes).toContain('acpx 0.13.2 is up to date')
+  })
+
+  it('leaves an acpx that did not come from npm install -g to the user', async () => {
+    const elsewhere = path.join(tmp, 'pnpm', 'acpx')
+    await mkdir(path.dirname(elsewhere), { recursive: true })
+    await writeFile(elsewhere, '')
+    const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.19.1' }, acpxPath: elsewhere })
+    const plan = await planUpgrade(deps)
+    expect(plan.steps).toEqual([])
+    expect(plan.notes).toContain(
+      `acpx 0.19.1 is out, but the copy in use (${elsewhere}) is not the global npm install; update it the way you installed it`
+    )
   })
 
   it('suggests installing acpx instead of upgrading one that is missing', async () => {
@@ -139,7 +161,7 @@ describe('runUpgrade', () => {
 
     expect(await runUpgrade(deps, [], io)).toBe(0)
     expect(calls).toContain('install -g acpx@0.19.1')
-    expect((await findSkillCopies(repo)).every(copy => copy.stale === null)).toBe(true)
+    expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
     expect(err.join('\n')).toContain(
       `Commit and push ${CLAUDE_SKILLS_DIR}/pr-review-canvas so your team gets it.`
     )

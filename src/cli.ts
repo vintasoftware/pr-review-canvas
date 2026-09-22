@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
-import { createAgentRunner } from './acpx/acpx.js'
+import { ACPX_BIN, createAgentRunner, findOnPath } from './acpx/acpx.js'
 import {
   type CliIo,
   EXIT,
@@ -164,14 +164,10 @@ async function installSkillCommand(argv: string[]): Promise<number> {
   return runInstallSkill({ repoRoot, cwd }, rest, io)
 }
 
-/** npm is a `.cmd` on Windows, which only runs through a shell. */
 function runCommand(file: string, args: string[]): Promise<CommandResult> {
   return new Promise(resolve => {
-    execFile(
-      file,
-      args,
-      { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, shell: process.platform === 'win32' },
-      (err, stdout, stderr) => resolve({ ok: err === null, stdout, stderr })
+    execFile(file, args, { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) =>
+      resolve({ ok: err === null, stdout, stderr })
     )
   })
 }
@@ -203,6 +199,7 @@ async function upgradeCommand(argv: string[]): Promise<number> {
       packageRoot: PACKAGE_ROOT,
       repoRoot,
       acpxVersion: () => createAgentRunner().acpxVersion(),
+      acpxPath: findOnPath(ACPX_BIN, process.env),
       run: runCommand,
       confirm: confirmOnTerminal,
     },

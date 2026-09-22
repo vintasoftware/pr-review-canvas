@@ -24,6 +24,8 @@ export interface UpgradeDeps {
   /** The repository whose skill copies are refreshed, or null outside one. */
   repoRoot: string | null
   acpxVersion: () => Promise<string | null>
+  /** The acpx that PATH runs, which chat uses. */
+  acpxPath: string | null
   /** Runs one command without a shell. Only `npm` is run. */
   run: (file: string, args: string[]) => Promise<CommandResult>
   /** Asks a yes/no question, or returns null when there is no one to ask. */
@@ -61,16 +63,27 @@ async function latestVersion(deps: UpgradeDeps, name: string): Promise<string | 
   return result.ok && version !== '' ? version : null
 }
 
-/** Whether the running copy is the one `npm install -g` would replace. */
-async function installedGlobally(deps: UpgradeDeps): Promise<boolean> {
-  const root = await deps.run('npm', ['root', '-g'])
-  if (!root.ok) return false
+/**
+ * Whether `installed` lies in the copy of `name` that `npm install -g` replaces. Installing over
+ * any other copy (pnpm, brew, another node) would leave the one in use as it was.
+ */
+async function ownedByGlobalNpm(
+  globalRoot: string | null,
+  name: string,
+  installed: string
+): Promise<boolean> {
+  if (globalRoot === null) return false
   try {
-    const globalCopy = await realpath(path.join(root.stdout.trim(), deps.packageName))
-    return globalCopy === (await realpath(deps.packageRoot))
+    const globalCopy = await realpath(path.join(globalRoot, name))
+    const real = await realpath(installed)
+    return real === globalCopy || real.startsWith(`${globalCopy}${path.sep}`)
   } catch {
     return false
   }
+}
+
+function notGlobalNote(name: string, latest: string, installed: string): string {
+  return `${name} ${latest} is out, but the copy in use (${installed}) is not the global npm install; update it the way you installed it`
 }
 
 async function skillCopies(deps: UpgradeDeps): Promise<SkillCopy[]> {
@@ -81,39 +94,40 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
   const steps: UpgradeStep[] = []
   const notes: string[] = []
 
+  const root = await deps.run('npm', ['root', '-g'])
+  const globalRoot = root.ok ? root.stdout.trim() : null
   const latest = await latestVersion(deps, deps.packageName)
   let packageMoves = false
   if (latest === null) {
     notes.push(`${deps.packageName}: could not read the latest version from npm`)
   } else if (!isNewer(latest, deps.version)) {
     notes.push(`${deps.packageName} ${deps.version} is up to date`)
-  } else if (await installedGlobally(deps)) {
+  } else if (await ownedByGlobalNpm(globalRoot, deps.packageName, deps.packageRoot)) {
     steps.push({ kind: 'package', name: deps.packageName, from: deps.version, to: latest })
     packageMoves = true
   } else {
-    notes.push(
-      `${deps.packageName} ${latest} is out, but this copy (${deps.version}) runs from ${deps.packageRoot}, ` +
-        'not a global npm install; update it the way you installed it'
-    )
+    notes.push(notGlobalNote(deps.packageName, latest, deps.packageRoot))
   }
 
-  const acpx = (await deps.acpxVersion())?.trim() ?? null
+  const acpx = deps.acpxPath === null ? null : ((await deps.acpxVersion())?.trim() ?? null)
   const acpxLatest = acpx === null ? null : await latestVersion(deps, ACPX_PACKAGE)
-  if (acpx === null) {
+  if (acpx === null || deps.acpxPath === null) {
     notes.push('acpx is not installed; AI Chat needs it: npm install -g acpx@latest')
   } else if (acpxLatest === null) {
     notes.push('acpx: could not read the latest version from npm')
-  } else if (isNewer(acpxLatest, acpx)) {
+  } else if (!isNewer(acpxLatest, acpx)) {
+    notes.push(`acpx ${acpx} is up to date`)
+  } else if (await ownedByGlobalNpm(globalRoot, ACPX_PACKAGE, deps.acpxPath)) {
     steps.push({ kind: 'acpx', name: ACPX_PACKAGE, from: acpx, to: acpxLatest })
   } else {
-    notes.push(`acpx ${acpx} is up to date`)
+    notes.push(notGlobalNote(ACPX_PACKAGE, acpxLatest, deps.acpxPath))
   }
 
   if (deps.repoRoot === null) {
     notes.push('not in a repository, so no project skill to refresh')
   } else {
     const copies = await skillCopies(deps)
-    const stale = copies.filter(copy => copy.stale !== null)
+    const stale = copies.filter(copy => copy.stale)
     if (copies.length === 0) {
       notes.push('the project has no copy of the skill; run `pr-review install-skill` to add one')
     } else if (packageMoves) {
@@ -143,7 +157,7 @@ async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipp
   const written: string[] = []
   const skipped: string[] = []
   for (const copy of await skillCopies(deps)) {
-    if (copy.stale === null) continue
+    if (!copy.stale) continue
     try {
       await installSkill({ targets: [{ kind: copy.kind, dir: copy.dir }] })
       written.push(copy.path)

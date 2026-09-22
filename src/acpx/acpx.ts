@@ -144,7 +144,7 @@ const CodexCatalogSchema = z.object({
   models: z.array(z.object({ slug: z.string(), upgrade: z.object({ model: z.string() }).nullish() })),
 })
 
-/** The part of `sessions show` read here. acpx before 0.19 may not record the model. */
+/** The part of `sessions show` read here: the model the session last ran. */
 const SessionRecordSchema = z.object({ acpx: z.object({ current_model_id: z.string().min(1) }) })
 
 /** The path `name` runs from on this PATH, or null when it is not there. */

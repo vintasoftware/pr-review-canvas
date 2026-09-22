@@ -110,8 +110,7 @@ acpx --version
 pr-review doctor --all-checks
 ```
 
-Use acpx 0.19 or newer; `pr-review upgrade` updates an older one. With an older acpx, chat still
-runs, but threads started before a model was replaced may stay on it.
+`pr-review upgrade` keeps acpx up to date.
 
 Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
 the review server, then choose your agent in **settings**. The chat uses that agent's account.

@@ -50,7 +50,6 @@
   (`gpt-5.6-terra` runs as `gpt-6-sol`). With no saved model, a thread still on a replaced model
   moves to its replacement. `pin:<id>` sends one exact model ID as written, for either agent;
   Bedrock and Vertex Claude IDs run as written too.
-- AI Chat wants acpx 0.19 or newer. `pr-review upgrade` updates it.
 - Claude chat runs through the `claude` CLI on PATH instead of the older Claude Code bundled with
   acpx's adapter, so `opus` means the model Claude Code itself uses. Set `CLAUDE_CODE_EXECUTABLE`
   to choose another binary.
