@@ -1,10 +1,18 @@
 // @ts-check
 // Rows a reviewer can hide: the canvas folds the model named, and the folds the diff renderer
 // marked (import-only and whitespace-only changes, and moved blocks). Both open again when a
-// deep link lands inside them.
+// deep link lands inside them. The reader's level decides which of the model's folds apply; the
+// renderer's own folds are light, so they hide in every mode.
 import { findRow } from './anchors.js'
+import { DEFAULT_FOLD_LEVEL, foldsForLevel } from './fold-levels.js'
 
 /** @typedef {import('./contract-types.js').CodeFold} CodeFold */
+/** @typedef {import('./contract-types.js').FoldLevel} FoldLevel */
+
+/** Rows that keep their code open at every level. */
+const PINNED = '[data-decoration="point"], [data-decoration="thread"], [data-code-fold], .code-fold'
+/** Annotation band rows and the note row under them; only an aggressive fold may hide these. */
+const ANNOTATED = '.ann, [data-decoration="note"]'
 
 /**
  * @param {Element | null} summary
@@ -27,7 +35,8 @@ function coveredFoldSummary(summary, rows) {
 }
 
 /**
- * Finds the rows between both anchors. A decorated or overlapping range stays open.
+ * Finds the rows between both anchors. A range holding an attention point or a discussion stays
+ * open at every level; a range holding an annotation stays open below aggressive.
  * @param {HTMLElement} card
  * @param {string} key
  * @param {CodeFold} fold
@@ -47,18 +56,32 @@ function foldRows(card, key, fold) {
 
   const siblings = Array.from(first.parentElement.children)
   const from = siblings.indexOf(first)
-  const to = siblings.indexOf(last)
+  let to = siblings.indexOf(last)
 
   if (to < from) {
     return []
   }
 
+  const aggressive = (fold.level ?? DEFAULT_FOLD_LEVEL) === 'aggressive'
+
+  // An annotation's note row sits under the last line it covers, so an aggressive fold that ends
+  // on that line takes the note with it rather than leaving it stranded above open code.
+  if (aggressive) {
+    while (siblings[to + 1]?.matches('[data-decoration="note"]') === true) {
+      to++
+    }
+  }
+
   const rows = siblings.slice(from, to + 1).filter(row => row instanceof HTMLTableRowElement)
-  const hasDiscussion = rows.some(row => row.matches('.ann, [data-decoration], [data-code-fold], .code-fold'))
+  const trailing = siblings[to + 1]
+  const blocked =
+    rows.some(row => row.matches(PINNED)) ||
+    (!aggressive && rows.some(row => row.matches(ANNOTATED))) ||
+    trailing?.matches(aggressive ? PINNED : '[data-decoration]') === true
 
   const hasThread = Boolean(first.closest('table')?.querySelector('[data-decoration="thread"]'))
 
-  if (hasDiscussion || hasThread || last.nextElementSibling?.matches('[data-decoration]')) {
+  if (blocked || hasThread) {
     return []
   }
 
@@ -68,6 +91,19 @@ function foldRows(card, key, fold) {
   }
 
   return rows
+}
+
+/**
+ * What the toggle says. An aggressive fold that hides an annotation shows the annotation instead
+ * of its own title, so the reader still reads the explanation of the code it replaces.
+ * @param {readonly HTMLTableRowElement[]} rows
+ * @param {CodeFold} fold
+ * @returns {string}
+ */
+function foldLabel(rows, fold) {
+  const note = rows.find(row => row.matches('[data-decoration="note"]'))
+  const text = note?.querySelector('.prose')?.textContent?.trim()
+  return text === undefined || text === '' ? fold.title : text
 }
 
 /**
@@ -134,20 +170,28 @@ function wireFold(first, rows, title) {
 }
 
 /**
- * Adds title-only folds; ranges with annotations, attention points, or discussions stay open.
+ * Adds title-only folds for the reader's level; ranges with attention points or discussions stay
+ * open, and so do ranges with annotations below the aggressive level.
  * @param {HTMLElement} card
  * @param {string} key
  * @param {readonly CodeFold[]} folds
+ * @param {FoldLevel} [level] the reader's level; light when omitted
+ * @returns {number} how many rows the folds hide
  */
-export function applyCodeFolds(card, key, folds) {
-  for (const fold of folds) {
+export function applyCodeFolds(card, key, folds, level = DEFAULT_FOLD_LEVEL) {
+  let hidden = 0
+
+  for (const fold of foldsForLevel(folds, level)) {
     const rows = foldRows(card, key, fold)
     const first = rows[0]
 
     if (first !== undefined) {
-      wireFold(first, rows, fold.title)
+      wireFold(first, rows, foldLabel(rows, fold))
+      hidden += rows.length
     }
   }
+
+  return hidden
 }
 
 /**

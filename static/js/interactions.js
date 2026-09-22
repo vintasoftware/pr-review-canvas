@@ -24,13 +24,18 @@ import {
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
+import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
 import { pointAnchorId, sanitizeKey } from './keys.js'
 import {
+  cardOf,
+  getFoldLevel,
   getRenderContext,
   pathSet,
+  setCardCollapsed,
   setCardRenderedHook,
+  setFoldLevel,
   setRenderContext,
   updateRenderState,
 } from './layers.js'
@@ -38,11 +43,13 @@ import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from
 import { issueCommentHtml } from './overview.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
 import { layerProgress } from './progress.js'
+import { canvasHiddenLines, FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
   fillSignoffDialog,
   openSignoffDialog,
   showSignoffError,
+  setSignoffFolds,
   showSignoffResult,
   signoffBody,
 } from './signoff.js'
@@ -101,37 +108,6 @@ export function toast(root, message) {
     }, 5000)
   )
   return box
-}
-
-/**
- * The card a command belongs to, and the part of it that collapses.
- * @param {Element} el
- * @returns {{ card: HTMLElement, body: HTMLElement, chevron: Element | null } | null}
- */
-export function cardOf(el) {
-  const card = el.closest('article.file, section.layer')
-  const body = card?.querySelector(':scope > .file-body, :scope > .layer-body')
-  if (!(card instanceof HTMLElement && body instanceof HTMLElement)) {
-    return null
-  }
-  return { card, body, chevron: card.querySelector(':scope > .file-h > .chev, :scope > .layer-h > .chev') }
-}
-
-/**
- * Opens or collapses one card. Nothing else on the card changes, so clicking the chevron never
- * touches the reviewed box and the other way round.
- * @param {Element} el an element inside the card
- * @param {boolean} [collapsed] the state to set; the opposite of the current one when omitted
- */
-export function setCardCollapsed(el, collapsed) {
-  const parts = cardOf(el)
-  if (parts === null) {
-    return null
-  }
-  const next = collapsed ?? !parts.body.hidden
-  parts.body.toggleAttribute('hidden', next)
-  parts.chevron?.setAttribute('aria-expanded', next ? 'false' : 'true')
-  return next
 }
 
 /**
@@ -526,6 +502,9 @@ export function wireReview(root, session, opts = {}) {
   /** @param {HTMLElement} button @param {'APPROVE' | 'REQUEST_CHANGES'} event */
   const openSignoff = (button, event) => {
     const dialog = openSignoffDialog(root, { event })
+    const level = getFoldLevel()
+    const counts = canvasHiddenLines(session.artifact, getRenderContext()?.files ?? [], level)
+    setSignoffFolds(dialog, counts.hidden === 0 ? '' : `Read at the ${level} level · ${hiddenLabel(counts)}`)
     applyCapabilityGating(root, session.capabilities)
     signoffOpening += 1
     const opening = signoffOpening
@@ -567,6 +546,20 @@ export function wireReview(root, session, opts = {}) {
       },
       { pendingLabel: 'posting…' }
     )
+  }
+
+  /**
+   * Switches how much code the page hides, from the control or from the `f` key. The hint under
+   * the control says what the new level hides and how much of the diff that is.
+   * @param {string} value
+   */
+  const applyFoldLevel = value => {
+    if (!isFoldLevel(value) || value === getFoldLevel()) {
+      return
+    }
+    setFoldLevel(root, value)
+    refreshFoldLevel(root, session.artifact, value)
+    toast(root, `hiding code: ${value}`)
   }
 
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
@@ -743,6 +736,10 @@ export function wireReview(root, session, opts = {}) {
   /** @param {Event} event */
   const onChange = event => {
     const input = event.target
+    if (input instanceof HTMLSelectElement && input.id === FOLD_LEVEL_SELECT_ID) {
+      applyFoldLevel(input.value)
+      return
+    }
     if (!(input instanceof HTMLInputElement)) {
       return
     }
@@ -877,6 +874,10 @@ export function wireReview(root, session, opts = {}) {
         }
         break
       }
+      case 'fold-level':
+        // The key steps through the levels, so the reader can open the code up without the mouse.
+        applyFoldLevel(nextFoldLevel(getFoldLevel()))
+        break
       case 'overview':
         focusPointId = null
         focusItem('overview')

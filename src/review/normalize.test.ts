@@ -36,12 +36,32 @@ describe('normalize', () => {
       throw new Error('missing test file')
     }
 
-    file.collapsed = true
+    file.collapsed = 'moderate'
     file.folds = [{ title: 'runs', side: 'new', startLine: 2, endLine: 4 }]
     const saved = normalize(output, input())
     const restored = artifactToModelOutput(saved)
 
-    expect(restored.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')).toEqual(file)
+    // A fold with no level reads as light, so an older output hides exactly what it hid.
+    expect(restored.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')).toEqual({
+      ...file,
+      folds: [{ title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'light' }],
+    })
+  })
+
+  it('keeps the levels the model named on folds and on a collapsed file', () => {
+    const output = artifactToModelOutput(syntheticArtifact())
+    const file = output.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')
+    if (file === undefined) {
+      throw new Error('missing test file')
+    }
+
+    file.collapsed = 'aggressive'
+    file.folds = [{ title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'moderate' }]
+    const saved = normalize(output, input())
+    const stored = saved.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')
+
+    expect(stored?.collapsed).toBe('aggressive')
+    expect(stored?.folds?.[0]?.level).toBe('moderate')
   })
 
   it('assigns ids, marks tests, tags risk from config and model, and adds one point per missing test', () => {

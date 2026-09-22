@@ -2,11 +2,27 @@ import path from 'node:path'
 import { matchesGlob } from './glob.js'
 
 /**
- * What counts as a test file when the project config says nothing: the JavaScript and TypeScript
- * conventions this repository uses. `tests.patterns` in `pr-review.config.yml` replaces the list,
- * so a Python or Go project can name `test_*.py` or `*_test.go` instead.
+ * The test conventions found across stacks, by directory and by file-name shape rather than by
+ * language, so a repository without a `pr-review.config.yml` still gets its tests labelled,
+ * ordered after the code they cover, and kept open at the light reading level. Directories:
+ * `__tests__`, `tests`, `test`, `spec`. Names: `x.test.*` and `x.spec.*` (JS/TS), `x_test.*` (Go,
+ * Python, Elixir, Dart, Rust), `test_x.py` and `conftest.py` (pytest), `x_spec.*` (Ruby),
+ * `XTest.*` and `XTests.*` (Java, Kotlin, PHP, C#, Swift). `tests.patterns` replaces the list.
  */
-export const DEFAULT_TEST_PATTERNS: readonly string[] = ['**/*.test.*', '**/*.spec.*', '**/__tests__/**']
+export const DEFAULT_TEST_PATTERNS: readonly string[] = [
+  '**/__tests__/**',
+  '**/tests/**',
+  '**/test/**',
+  '**/spec/**',
+  '**/*.test.*',
+  '**/*.spec.*',
+  '**/*_test.*',
+  '**/*_spec.*',
+  '**/test_*.py',
+  '**/conftest.py',
+  '**/*Test.*',
+  '**/*Tests.*',
+]
 
 /** True when one of the patterns matches the repo-relative path. */
 export function isTestPath(filePath: string, patterns: readonly string[] = DEFAULT_TEST_PATTERNS): boolean {

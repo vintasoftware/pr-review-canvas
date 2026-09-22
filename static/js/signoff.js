@@ -49,6 +49,7 @@ export function signoffDialogHtml(opts) {
     `<h2 id="signoff-h">${esc(signoffTitle(opts.event))}</h2>` +
     `<p class="hint">This posts a review on ${esc(hostLabel())} as you. Edit the body first if you want to.</p>` +
     '<p class="signoff-target muted mono"></p>' +
+    '<p class="signoff-folds muted"></p>' +
     '<label class="sr" for="signoff-body">Review body</label>' +
     previewControlsHtml() +
     '<textarea id="signoff-body" rows="12" aria-busy="true"></textarea>' +
@@ -99,6 +100,20 @@ export function openSignoffDialog(root, opts) {
     dialog.showModal()
   } else {
     dialog.setAttribute('open', '')
+  }
+  return dialog
+}
+
+/**
+ * Records how much code the reader had hidden while reviewing, so the sign-off says what was
+ * read at a glance and what was read line by line.
+ * @param {HTMLDialogElement} dialog
+ * @param {string} note
+ */
+export function setSignoffFolds(dialog, note) {
+  const box = dialog.querySelector('.signoff-folds')
+  if (box !== null) {
+    box.textContent = note
   }
   return dialog
 }

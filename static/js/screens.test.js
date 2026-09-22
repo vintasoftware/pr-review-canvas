@@ -9,6 +9,7 @@ import { renderChatShell } from './chat.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
 import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
+import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 
@@ -518,5 +519,45 @@ describe('chat shell', () => {
     expect(aside?.querySelector('.chat-composer .cmd.fill')?.textContent).toBe('send')
     expect(aside?.querySelectorAll('button:disabled').length).toBe(0)
     expect(renderChatShell({ enabled: false })).toBe('')
+  })
+})
+
+describe('the reading level control', () => {
+  const artifact = syntheticArtifact()
+
+  it('offers the three levels and says what the chosen one hides', () => {
+    document.body.innerHTML = foldLevelControlHtml(artifact, 'light')
+    const select = document.querySelector('select')
+    expect([...(select?.options ?? [])].map(o => o.value)).toEqual(['light', 'moderate', 'aggressive'])
+    expect(select?.value).toBe('light')
+    expect(document.querySelector('label')?.getAttribute('for')).toBe(select?.id)
+    expect(document.querySelector('.fold-hint')?.textContent).toContain(
+      'imports, whitespace, moved blocks, and generated files'
+    )
+  })
+
+  it('names what each level adds and how much of the diff it hides', () => {
+    // Nothing is folded in the synthetic canvas, so the hint says so rather than showing 0.
+    expect(foldLevelHint(artifact, 'light')).toContain('nothing hidden yet')
+
+    const collapsed = {
+      ...artifact,
+      layers: artifact.layers.map(layer => ({
+        ...layer,
+        files: layer.files.map(f => ({ ...f, collapsed: /** @type {const} */ ('moderate') })),
+      })),
+    }
+    expect(foldLevelHint(collapsed, 'light')).toContain('nothing hidden yet')
+    expect(foldLevelHint(collapsed, 'moderate')).toContain('also test bodies, helpers, wiring, templates')
+    expect(foldLevelHint(collapsed, 'moderate')).toContain('lines hidden of the diff')
+    expect(foldLevelHint(collapsed, 'aggressive')).toContain('only the code you have to judge')
+  })
+
+  it('follows a level chosen with the keyboard', () => {
+    document.body.innerHTML = foldLevelControlHtml(artifact, 'light')
+    refreshFoldLevel(document.body, artifact, 'aggressive')
+
+    expect(document.querySelector('select')?.value).toBe('aggressive')
+    expect(document.querySelector('.fold-hint')?.textContent).toContain('only the code you have to judge')
   })
 })

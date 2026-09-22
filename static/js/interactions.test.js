@@ -15,15 +15,16 @@ import { setChatEnabled } from './ask.js'
 import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
+import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
 import {
-  askTargetFor,
   cardOf,
-  nextUnreviewedTarget,
+  hydrateAll,
+  hydrateFileCard,
+  renderLayers,
+  renderRail,
   setCardCollapsed,
-  toast,
-  wireReview,
-} from './interactions.js'
-import { hydrateAll, hydrateFileCard, renderLayers, renderRail, setRenderContext } from './layers.js'
+  setRenderContext,
+} from './layers.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
 

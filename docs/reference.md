@@ -91,7 +91,9 @@ pr-review prepare --base origin/main --head HEAD
 ```
 
 `validate` checks the supplied file against the context in `--canvas`. By default it returns
-`{ ok, errors }`; `--human` prints readable diagnostics. `--fix` edits overlong titles by removing
+`{ ok, errors }`; `--human` prints readable diagnostics. A `review.json` is held to the correctness
+rules only; the rules about what a fresh generation must hide (`FOLD_MISSING`, a test file
+collapsed at `light`) apply to a `model.json`, because an older canvas predates them. `--fix` edits overlong titles by removing
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
 limit and overlong prose require rewriting.
 
@@ -224,21 +226,21 @@ Lists you supply replace their defaults.
 Path patterns match repository-relative paths. `**` crosses directories; `*` and `?` match
 within one path segment.
 
-| Key                             | Default                                             | Details                                                                                                                                                                                                                    |
-| ------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`                       | `1`                                                 | The only supported configuration version                                                                                                                                                                                   |
-| `rulebook`                      | Unset                                               | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards                                                                               |
-| `layers`                        | `[]`                                                | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change |
-| `highRisk`                      | `[]`                                                | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer                                                                                                           |
-| `generation.mode`               | `strict`                                            | See [generation modes](#generation-modes)                                                                                                                                                                                  |
-| `generation.maxRepairRounds`    | `3`                                                 | Failed validation rounds allowed by the generation skill                                                                                                                                                                   |
-| `generation.inlineDiffMaxLines` | `1500`                                              | Maximum diff length to include directly in the generation prompt                                                                                                                                                           |
-| `generation.smallPrHunks`       | `10`                                                | At or below this hunk count, the prompt asks for one layer unless concerns differ                                                                                                                                          |
-| `generation.caps`               | See below                                           | Overrides individual text limits                                                                                                                                                                                           |
-| `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
-| `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
-| `canvas.keepForIdenticalDiff`   | `true`                                              | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                          |
-| `prompts`                       | Bundled templates                                   | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
+| Key                             | Default                                                                     | Details                                                                                                                                                                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                       | `1`                                                                         | The only supported configuration version                                                                                                                                                                                   |
+| `rulebook`                      | Unset                                                                       | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards                                                                               |
+| `layers`                        | `[]`                                                                        | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change |
+| `highRisk`                      | `[]`                                                                        | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer                                                                                                           |
+| `generation.mode`               | `strict`                                                                    | See [generation modes](#generation-modes)                                                                                                                                                                                  |
+| `generation.maxRepairRounds`    | `3`                                                                         | Failed validation rounds allowed by the generation skill                                                                                                                                                                   |
+| `generation.inlineDiffMaxLines` | `1500`                                                                      | Maximum diff length to include directly in the generation prompt                                                                                                                                                           |
+| `generation.smallPrHunks`       | `10`                                                                        | At or below this hunk count, the prompt asks for one layer unless concerns differ                                                                                                                                          |
+| `generation.caps`               | See below                                                                   | Overrides individual text limits                                                                                                                                                                                           |
+| `tests.patterns`                | Test directories and file-name shapes across stacks; see the example config | Paths treated as tests for review ordering, labels, and the light reading level                                                                                                                                            |
+| `chat.enabled`                  | `true`                                                                      | Set to `false` to disable AI Chat                                                                                                                                                                                          |
+| `canvas.keepForIdenticalDiff`   | `true`                                                                      | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                          |
+| `prompts`                       | Bundled templates                                                           | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
 provides no suggested groups; an empty `tests.patterns` list recognizes no files as tests.
@@ -370,6 +372,39 @@ start collapsed. Click the summary to expand them. Moves are detected within a f
 between files appear as deletions and additions. Edited moves keep their changed text visible.
 Collapsing content does not mark it reviewed.
 
+### Reading levels
+
+A **Hide code** control sits under the header's risk line, beside the review progress, and governs
+the whole canvas. The generator gives each range and each collapsed file the lowest level at which
+it hides, and the levels nest, so a range marked `light` is hidden in all three.
+
+| Level        | What it hides                                                                            |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `light`      | The diff as before: imports, whitespace, moves, and wholly generated files (the default) |
+| `moderate`   | Also test bodies under their titles, helpers, adapters, boilerplate, mappings and wiring |
+| `aggressive` | Also any block its title explains, so the change reads as pseudo-code                    |
+
+The line next to the control names what the chosen level hides and how much of the diff that is,
+so the effect is stated before the reader scrolls. Each layer repeats the count in its Files
+heading, and the sign-off dialog records the total, so a reviewer signs off knowing how much they
+did not read.
+
+Attention points and comment threads keep their code visible at every level. An annotation may
+only be hidden by an aggressive fold, which then shows the annotation's text in place of the fold
+title; a file that carries an annotation or an attention point never collapses, so the layer's
+core stays on screen at every level and hides only its routine ranges. Nothing in a test file
+hides at `light`; from `moderate` each test body folds under its own title, one fold per test, or
+the file collapses whole. A `light` fold is at most 40 lines of generated content. A file of more
+than 20 changed lines with no attention point and no annotation must
+hide something at some level, and a file over 60 lines that stays open must fold at least half of
+the lines outside its annotations and attention points by `aggressive`; either failure is
+`FOLD_MISSING`.
+
+The page opens at `light` every time and the choice is not saved, so two readers of the same
+canvas start from the same view. Press `f` to step through the levels. Changing the level redraws
+the diffs that are on screen and re-applies file collapse, so a card the reader opened by hand
+follows the new level.
+
 Files with patches longer than 2,000 lines wait behind **show diff**. A link into the file opens
 it automatically.
 
@@ -481,14 +516,15 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 Validation reports name the field, file, hunk, or line to fix. Common groups are:
 
-| Codes                                                           | What to check                                                  |
-| --------------------------------------------------------------- | -------------------------------------------------------------- |
-| `SCHEMA`, `TEXT_TOO_LONG`                                       | Required fields, types, and text limits                        |
-| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN`             | Each known hunk belongs to exactly one layer                   |
-| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                             | Referenced files exist in the relevant diff or PR head         |
-| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                            | Layers contain hunks and have unique keys                      |
-| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`            | At most one Other layer, last, without risk-tagged changes     |
-| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                | Tests follow the code they cover and use the appropriate layer |
-| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                |
-| `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together        |
-| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts             |
+| Codes                                                           | What to check                                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `SCHEMA`, `TEXT_TOO_LONG`                                       | Required fields, types, and text limits                                                                |
+| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN`             | Each known hunk belongs to exactly one layer                                                           |
+| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                             | Referenced files exist in the relevant diff or PR head                                                 |
+| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                            | Layers contain hunks and have unique keys                                                              |
+| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`            | At most one Other layer, last, without risk-tagged changes                                             |
+| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                | Tests follow the code they cover and use the appropriate layer                                         |
+| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                                                        |
+| `FOLD_MISSING`                                                  | A routine file over 20 lines hides something; an open file over 60 folds half of its unannotated lines |
+| `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                |
+| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                     |

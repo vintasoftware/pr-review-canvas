@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { FOLD_LEVELS } from '../../static/js/fold-levels.js'
 
 /** Character caps applied to model output. Numbers, so the prompt can print them. */
 export const TEXT_CAPS = {
@@ -78,6 +79,22 @@ export const HARNESSES = ['claude-code', 'codex', 'other'] as const
 
 export const SideSchema = z.enum(['new', 'old'])
 export type Side = z.infer<typeof SideSchema>
+
+export {
+  contains,
+  coveredRows,
+  DEFAULT_FOLD_LEVEL,
+  fileRows,
+  foldLevelOf,
+  foldLevelRank,
+  hiddenLines,
+} from '../../static/js/fold-levels.js'
+export { FOLD_LEVELS }
+export const FoldLevelSchema = z.enum(FOLD_LEVELS)
+export type FoldLevel = z.infer<typeof FoldLevelSchema>
+
+/** A fold with no level, and a `collapsed: true` written before levels existed, both read as light. */
+export const CollapsedSchema = z.union([z.boolean(), FoldLevelSchema])
 
 export const HunkSchema = z.object({
   id: z.string().min(1),
@@ -205,23 +222,32 @@ function codeFoldSchema(caps: Caps) {
     side: SideSchema,
     startLine: z.number().int().positive(),
     endLine: z.number().int().positive(),
+    /** The lowest reading level that hides this range. Absent means `light`. */
+    level: FoldLevelSchema.optional(),
   })
 }
 export const CodeFoldSchema = codeFoldSchema(ARTIFACT_HARD_CAPS)
 export type CodeFold = z.infer<typeof CodeFoldSchema>
 
-function layerFileBase(caps: Caps, foldTitleCap = caps.pointTitle) {
+function layerFileBase<C extends z.ZodType>(caps: Caps, foldTitleCap: number, collapsed: C) {
   return {
     path: z.string().min(1),
     hunks: z.array(z.string().min(1)).min(1),
     note: textOrEmpty(caps, 'annotation').optional(),
     annotations: z.array(annotationSchema(caps)),
-    collapsed: z.boolean().optional(),
+    /**
+     * The lowest reading level that hides the whole file body. A stored artifact still reads the
+     * `true` of a canvas written before levels existed as `light`; the model must name a level.
+     */
+    collapsed: collapsed.optional(),
     folds: z.array(codeFoldSchema({ ...caps, pointTitle: foldTitleCap })).optional(),
   }
 }
 
-export const LayerFileSchema = z.object({ ...layerFileBase(ARTIFACT_HARD_CAPS), isTest: z.boolean() })
+export const LayerFileSchema = z.object({
+  ...layerFileBase(ARTIFACT_HARD_CAPS, ARTIFACT_HARD_CAPS.pointTitle, CollapsedSchema),
+  isTest: z.boolean(),
+})
 export type LayerFile = z.infer<typeof LayerFileSchema>
 
 export const LayerKeySchema = z
@@ -317,7 +343,7 @@ export function modelOutputSchema(textCaps: TextCaps) {
         z.object({
           ...layerBase(caps),
           risk: z.array(z.object({ label: z.string().min(1), reason: z.string().min(1) })).optional(),
-          files: z.array(z.object(layerFileBase(caps, textCaps.pointTitle))),
+          files: z.array(z.object(layerFileBase(caps, textCaps.pointTitle, FoldLevelSchema))),
         })
       )
       .min(1),

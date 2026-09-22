@@ -23,6 +23,27 @@
 
 ### Review interface
 
+- Three reading levels, with one **Hide code** control beside the review progress, which names
+  what the chosen level hides and how much of the diff that is. The generator gives each fold and
+  each collapsed file the lowest level at which it hides, and the levels nest: `light` is the diff
+  as it always looked — imports, whitespace, moves, and wholly generated files; `moderate` also
+  hides test bodies under their titles, helpers, adapters, and wiring; `aggressive` also hides any
+  block its title explains, so a low-risk change reads as pseudo-code. The page opens at `light`
+  every time and the choice is not saved. Press `f` to step through the levels. Each layer and the
+  sign-off dialog report how many diff lines are hidden.
+- Attention points and comment threads stay visible at every level. An annotation may only be
+  hidden by an aggressive fold, which then shows the annotation's text instead of the fold title,
+  and a file with an annotation or an attention point never collapses.
+- The validator holds the generator to the shape of the levels: `collapsed` names a level, nothing
+  in a test file hides at `light`, a `light` fold covers at most 40 lines of generated content, and
+  a routine file over 20 lines that hides nothing fails with `FOLD_MISSING`, as does an open file
+  over 60 lines that folds less than half of its unannotated lines by `aggressive`. A stored
+  `review.json` is held to the correctness rules only, because an older canvas predates the rest.
+- The built-in test patterns now match test directories (`tests/`, `test/`, `spec/`) and
+  file-name shapes (`*_test.*`, `*_spec.*`, `test_*.py`, `conftest.py`, `*Test.*`, `*Tests.*`)
+  across stacks, not only the JavaScript conventions, so a repository without a
+  `pr-review.config.yml` gets its tests labelled, ordered, and kept open at light.
+  A canvas written before this change reads as `light`, so it hides exactly what it hid before.
 - A canvas is carried over to a later pull request head whose diff is identical to the one it
   was generated from, as after merging the base branch in without touching the changed files.
   The page shows it under a **Canvas still applies** note, review progress carries over, and

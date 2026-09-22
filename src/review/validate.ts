@@ -32,6 +32,12 @@ export interface ValidationInput {
   headPaths?: ReadonlySet<string>
   /** The globs that make a file a test; the project config's list, or the built-in one. */
   testPatterns?: readonly string[] | undefined
+  /**
+   * The output was read back from a stored `review.json`, whose generator may predate the rules
+   * about what a canvas must hide. Only the correctness rules apply then: coordinates, and the
+   * ranges no fold may cover. A fresh `model.json` is held to the full shape.
+   */
+  storedArtifact?: boolean | undefined
 }
 
 export type ValidationResult = ValidationReport & { output: ModelOutput | null }
@@ -560,7 +566,10 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
   checkTests(output, index, input.headPaths ?? new Set(), input.testPatterns ?? DEFAULT_TEST_PATTERNS, report)
   checkRisk(output, input.highRisk, report)
   checkAnnotations(output, index, report)
-  for (const error of validateFolds(output, input.files)) {
+  for (const error of validateFolds(output, input.files, {
+    testPatterns: input.testPatterns ?? DEFAULT_TEST_PATTERNS,
+    storedArtifact: input.storedArtifact === true,
+  })) {
     report.add(error.code, error.where ?? 'folds', error.message)
   }
   checkPoints(output, index, input.limits, report)

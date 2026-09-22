@@ -19,3 +19,29 @@ test('describes every header action and preserves tooltips after review progress
     'Write and preview a review requesting changes on GitHub'
   )
 })
+
+test('switches how much code is hidden from the control and from the keyboard', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.goto(reviewUrl)
+  const select = page.locator('#fold-level')
+  const hint = page.locator('.reading .fold-hint')
+
+  // Every reader opens the canvas at light; the choice is page state and is never saved.
+  await expect(select).toHaveValue('light')
+  await expect(hint).toContainText('imports, whitespace, moved blocks, and generated files')
+
+  await select.selectOption('moderate')
+  await expect(page.locator('.toast')).toHaveText('hiding code: moderate')
+  await expect(hint).toContainText('also test bodies, helpers, wiring, templates')
+
+  await page.locator('body').press('f')
+  await expect(select).toHaveValue('aggressive')
+  await expect(hint).toContainText('only the code you have to judge')
+  await page.locator('body').press('f')
+  await expect(select).toHaveValue('light')
+
+  await page.reload()
+  await expect(page.locator('#fold-level')).toHaveValue('light')
+})

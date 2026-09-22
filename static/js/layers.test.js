@@ -24,6 +24,7 @@ import {
   dotColor,
   elsewhereHtml,
   fileCount,
+  getFoldLevel,
   getRenderContext,
   hunkIdForPoint,
   hunkLayerIndex,
@@ -38,10 +39,12 @@ import {
   renderLayers,
   renderRail,
   setCardRenderedHook,
+  setFoldLevel,
   setRenderContext,
   testMapHtml,
   threadsForHunks,
 } from './layers.js'
+import { canvasHiddenLines, hiddenLabel, layerHiddenLines } from './reading-level.js'
 import { progressSummary } from './progress.js'
 import { buildThreads } from './threads.js'
 
@@ -299,6 +302,49 @@ describe('layer sections', () => {
     document.body.innerHTML = renderFileCard(file, undefined, layer, { ...cardContext, keepOpen: true })
     expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
     expect(document.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('collapses a file only from the level its `collapsed` field names', () => {
+    const layer = artifact.layers[0]
+    if (layer === undefined) {
+      throw new Error('missing layer')
+    }
+
+    const file = {
+      path: 'routine.ts',
+      hunks: ['routine_ts#1'],
+      isTest: false,
+      annotations: [],
+      collapsed: /** @type {const} */ ('moderate'),
+    }
+    const cardContext = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+
+    document.body.innerHTML = renderFileCard(file, undefined, layer, cardContext)
+    expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
+
+    setFoldLevel(document.body, 'moderate')
+    try {
+      document.body.innerHTML = renderFileCard(file, undefined, layer, {
+        ...cardContext,
+        firstCardFor: new Set(),
+      })
+      expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
+    } finally {
+      setFoldLevel(document.body, 'light')
+    }
+  })
+
+  it('counts the lines a level hides next to the file count', () => {
+    const layer = artifact.layers[0]
+    if (layer === undefined) {
+      throw new Error('missing layer')
+    }
+    const counts = layerHiddenLines(layer, files, 'light')
+
+    expect(counts.total).toBeGreaterThan(0)
+    expect(hiddenLabel({ total: 10, hidden: 0 })).toBe('')
+    expect(hiddenLabel({ total: 10, hidden: 4 })).toBe('4 of 10 lines hidden')
+    expect(canvasHiddenLines(artifact, files, 'light').total).toBeGreaterThanOrEqual(counts.total)
   })
 })
 
@@ -742,5 +788,70 @@ describe('the ask command on a card', () => {
     } finally {
       setChatEnabled(false)
     }
+  })
+})
+
+describe('the reading level', () => {
+  /** The synthetic canvas with one moderate fold over the body of the test it changes. */
+  function leveledArtifact() {
+    return {
+      ...artifact,
+      layers: artifact.layers.map(layer => ({
+        ...layer,
+        files: layer.files.map(f =>
+          f.path === 'src/app.test.ts'
+            ? {
+                ...f,
+                folds: [
+                  {
+                    title: 'runs',
+                    side: /** @type {const} */ ('new'),
+                    startLine: 3,
+                    endLine: 4,
+                    level: /** @type {const} */ ('moderate'),
+                  },
+                ],
+              }
+            : f
+        ),
+      })),
+    }
+  }
+
+  afterEach(() => {
+    setFoldLevel(document.body, 'light')
+    setRenderContext(null)
+  })
+
+  it('opens at light and folds the moderate range only once the reader raises the level', () => {
+    const leveled = leveledArtifact()
+    const context = { ...ctx(), artifact: leveled }
+    setRenderContext(context)
+    document.body.innerHTML = renderLayers(leveled, files, state)
+    hydrateAll(document.body, context)
+
+    expect(getFoldLevel()).toBe('light')
+    expect(document.querySelector('#file-src_app_test_ts .code-fold')).toBeNull()
+
+    expect(setFoldLevel(document.body, 'moderate')).toBeGreaterThan(0)
+    expect(getFoldLevel()).toBe('moderate')
+    expect(document.querySelector('#file-src_app_test_ts .code-fold button')?.textContent).toBe('runs')
+
+    setFoldLevel(document.body, 'light')
+    expect(document.querySelector('#file-src_app_test_ts .code-fold')).toBeNull()
+  })
+
+  it('counts the hidden lines of each layer in its Files heading', () => {
+    const leveled = leveledArtifact()
+    const context = { ...ctx(), artifact: leveled }
+    setRenderContext(context)
+    document.body.innerHTML = renderLayers(leveled, files, state)
+
+    const counter = document.querySelector('#layer-run-path .fold-count')
+    expect(counter?.textContent).toBe('')
+
+    setFoldLevel(document.body, 'moderate')
+    expect(counter?.textContent).toContain('2 of ')
+    expect(counter?.textContent).toContain(' lines hidden')
   })
 })

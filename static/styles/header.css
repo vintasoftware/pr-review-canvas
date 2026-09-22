@@ -46,6 +46,27 @@
   gap: 4px 16px;
   align-items: baseline;
 }
+/* How much code is hidden: a setting on the reading, so it sits with the progress line and not
+   among the commands, and says what it hides rather than leaving the reader to find out. */
+.reading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  margin-top: 14px;
+}
+.reading label {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.reading select {
+  padding: 2px 6px;
+  font-size: 13px;
+}
+.fold-hint {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
 .stripe {
   height: 6px;
   background: var(--stripe-y);

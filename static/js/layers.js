@@ -18,11 +18,13 @@ import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
+import { collapsesAt, DEFAULT_FOLD_LEVEL } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
+import { foldCountText, layerHiddenLines } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
 
 /**
@@ -35,6 +37,17 @@ import { anchorKey, buildThreads } from './threads.js'
  *   now: Date,
  * }} RenderContext
  */
+
+/**
+ * How much code the reader hides. Page state only: every open of a review starts at light, and
+ * the choice is never saved, so two readers of the same canvas start from the same view.
+ * @type {import('./contract-types.js').FoldLevel}
+ */
+let foldLevel = DEFAULT_FOLD_LEVEL
+
+export function getFoldLevel() {
+  return foldLevel
+}
 
 /** @type {RenderContext | null} */
 let renderContext = null
@@ -242,6 +255,53 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
 }
 
 /**
+ * Whether a card stays open whatever its `collapsed` level says: a discussion or an attention
+ * point on the file is what the reviewer came to see.
+ * @param {LayerFile} lf
+ * @param {string} layerId
+ * @param {ReviewArtifact} artifact
+ * @param {ReadonlySet<string> | undefined} commentPaths paths with a review comment
+ * @returns {boolean}
+ */
+export function cardKeepsOpen(lf, layerId, artifact, commentPaths) {
+  return (
+    commentPaths?.has(lf.path) === true ||
+    artifact.points.some(p => p.path === lf.path && p.layerId === layerId)
+  )
+}
+
+/**
+ * The card a command belongs to, and the part of it that collapses.
+ * @param {Element} el
+ * @returns {{ card: HTMLElement, body: HTMLElement, chevron: Element | null } | null}
+ */
+export function cardOf(el) {
+  const card = el.closest('article.file, section.layer')
+  const body = card?.querySelector(':scope > .file-body, :scope > .layer-body')
+  if (!(card instanceof HTMLElement && body instanceof HTMLElement)) {
+    return null
+  }
+  return { card, body, chevron: card.querySelector(':scope > .file-h > .chev, :scope > .layer-h > .chev') }
+}
+
+/**
+ * Opens or collapses one card. Nothing else on the card changes, so clicking the chevron never
+ * touches the reviewed box and the other way round.
+ * @param {Element} el an element inside the card
+ * @param {boolean} [collapsed] the state to set; the opposite of the current one when omitted
+ */
+export function setCardCollapsed(el, collapsed) {
+  const parts = cardOf(el)
+  if (parts === null) {
+    return null
+  }
+  const next = collapsed ?? !parts.body.hidden
+  parts.body.toggleAttribute('hidden', next)
+  parts.chevron?.setAttribute('aria-expanded', next ? 'false' : 'true')
+  return next
+}
+
+/**
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
@@ -252,8 +312,7 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const key = entry?.key ?? sanitizeKey(lf.path)
   const cardReviewedId = `layer:${layer.id}/file:${sanitizeKey(lf.path)}`
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
-  const collapsed =
-    cardReviewed || (lf.collapsed === true && lf.annotations.length === 0 && ctx.keepOpen !== true)
+  const collapsed = cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
   const isFirst = !ctx.firstCardFor.has(key)
   ctx.firstCardFor.add(key)
   const id = isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`
@@ -330,9 +389,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     .map(lf =>
       renderFileCard(lf, byPath.get(lf.path), layer, {
         ...ctx,
-        keepOpen:
-          ctx.commentPaths?.has(lf.path) === true ||
-          artifact.points.some(p => p.path === lf.path && p.layerId === layer.id),
+        keepOpen: cardKeepsOpen(lf, layer.id, artifact, ctx.commentPaths),
       })
     )
     .join('')
@@ -365,7 +422,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
     testMapHtml(layer, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
-    `<h3 class="lbl sub">Files · ${layer.files.length}</h3><div class="files">${cards}</div>` +
+    `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, files, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
     `<div class="layer-end"><button class="cmd" type="button" data-act="mark-layer" data-reviewed-id="${esc(layerReviewedId)}">mark layer as reviewed</button></div>` +
     '</div></section></pr-layer>'
   )
@@ -474,7 +531,7 @@ export function hydrateFileCard(card, ctx, opts = {}) {
     posted: postedUrls(ctx.state, ctx.comments),
     hiddenThreads: new Set(Object.keys(ctx.state.hiddenThreads).map(Number)),
   })
-  applyCodeFolds(card, key, lf?.folds ?? [])
+  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel)
   wireFoldReveal(card)
   cardRenderedHook?.(card)
   return { rendered: true, deferred: false, placed, missed }
@@ -605,4 +662,65 @@ export function hydrateAll(root, ctx) {
     }
   }
   return rendered
+}
+
+/**
+ * The layer file a card was rendered from, or undefined when the artifact no longer has it.
+ * @param {HTMLElement} card
+ * @param {ReviewArtifact} artifact
+ * @returns {LayerFile | undefined}
+ */
+function layerFileOf(card, artifact) {
+  const layerId = card.getAttribute('data-layer')
+  const path = card.getAttribute('data-path')
+  return artifact.layers.find(l => l.id === layerId)?.files.find(f => f.path === path)
+}
+
+/**
+ * Switches how much code the page hides. Every drawn card is redrawn, because a fold is decided
+ * while the diff is built; a card waiting to be drawn picks the level up by itself. A card the
+ * reader opened or closed by hand follows the new level too: changing the level is a request to
+ * change exactly that.
+ * @param {ParentNode} root
+ * @param {import('./contract-types.js').FoldLevel} level
+ * @returns {number} how many cards were redrawn
+ */
+export function setFoldLevel(root, level) {
+  foldLevel = level
+  const ctx = renderContext
+  if (ctx === null) {
+    return 0
+  }
+
+  for (const counter of Array.from(root.querySelectorAll('.fold-count'))) {
+    const layer = ctx.artifact.layers.find(l => l.id === counter.getAttribute('data-layer'))
+    if (layer !== undefined) {
+      counter.textContent = foldCountText(layerHiddenLines(layer, ctx.files, level))
+    }
+  }
+
+  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
+  let redrawn = 0
+  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+    if (!(card instanceof HTMLElement)) {
+      continue
+    }
+    const layerId = card.getAttribute('data-layer') ?? ''
+    const lf = layerFileOf(card, ctx.artifact)
+    if (lf !== undefined) {
+      setCardCollapsed(
+        card,
+        card.classList.contains('is-reviewed') ||
+          (collapsesAt(lf, level) && !cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths))
+      )
+    }
+    // A card that has not drawn its diff, or is holding a huge patch back, is left alone: it
+    // reads the level when it draws.
+    if (card.querySelector('.diff-host table.diff') !== null) {
+      hydrateFileCard(card, ctx, { force: true })
+      redrawn++
+    }
+  }
+
+  return redrawn
 }

@@ -15,7 +15,7 @@ import type {
   Side,
   TextCaps,
 } from '../contract/review-artifact.js'
-import { POINT_LEVELS } from '../contract/review-artifact.js'
+import { DEFAULT_FOLD_LEVEL, foldLevelOf, POINT_LEVELS } from '../contract/review-artifact.js'
 import { hunkForLine } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { matchesGlob } from './glob.js'
@@ -76,6 +76,23 @@ function unionRisk(layers: readonly Layer[]): RiskTag[] {
   return out
 }
 
+/** Stores one shape, so the page and a later validation never re-derive the default level. */
+function toLayerFile(
+  file: ModelLayer['files'][number],
+  testPatterns: readonly string[]
+): Layer['files'][number] {
+  const { collapsed, folds, ...rest } = file
+  const level = foldLevelOf(collapsed)
+  return {
+    ...rest,
+    isTest: isTestPath(file.path, testPatterns),
+    ...(level === null ? {} : { collapsed: level }),
+    ...(folds === undefined
+      ? {}
+      : { folds: folds.map(f => ({ ...f, level: f.level ?? DEFAULT_FOLD_LEVEL })) }),
+  }
+}
+
 function toLayer(
   layer: ModelLayer,
   index: number,
@@ -87,7 +104,7 @@ function toLayer(
     ...rest,
     id: `layer-${index + 1}`,
     risk: layerRisk(layer, highRisk),
-    files: files.map(f => ({ ...f, isTest: isTestPath(f.path, testPatterns) })),
+    files: files.map(f => toLayerFile(f, testPatterns)),
   }
 }
 
@@ -198,7 +215,15 @@ export function artifactToModelOutput(artifact: ReviewArtifact): ModelOutput {
       const modelRisk = risk
         .filter(r => r.source === 'model')
         .map(r => ({ label: r.label, reason: r.reason ?? '' }))
-      const out: ModelLayer = { ...rest, files: files.map(({ isTest: _isTest, ...f }) => f) }
+      // A canvas stored before levels existed says `collapsed: true`; the model's schema wants the
+      // level it stands for, so re-validating an older canvas reads it as light.
+      const out: ModelLayer = {
+        ...rest,
+        files: files.map(({ isTest: _isTest, collapsed, ...f }) => {
+          const level = foldLevelOf(collapsed)
+          return level === null ? f : { ...f, collapsed: level }
+        }),
+      }
       if (modelRisk.length > 0) {
         out.risk = modelRisk
       }

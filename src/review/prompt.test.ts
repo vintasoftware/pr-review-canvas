@@ -52,7 +52,9 @@ describe('renderPrompt', () => {
 
       expect(prompt).toContain('## Selective expansion')
       expect(prompt).toContain('Generate no explanation or confidence score for a fold')
-      expect(prompt).toContain('Collapsing never marks code as reviewed')
+      expect(prompt).toContain('Hiding code never marks it reviewed')
+      // The three levels reach the model, and aggressive is stated as the strong one.
+      expect(prompt).toContain('what must the reviewer judge to decide on this change?')
       expect(prompt).toContain('"folds": {')
       expect(prompt).toContain('"collapsed": {')
       expect(prompt).not.toContain('{{')
@@ -256,8 +258,9 @@ describe('renderPrompt', () => {
   })
 
   it('lists the project test patterns, and says so when there are none', () => {
+    // The built-in list is what the model sees when the project names none.
     expect(renderPrompt(context(), PATCHES, sources)).toContain(
-      'its path matches one of: `**/*.test.*`, `**/*.spec.*`, `**/__tests__/**`'
+      `its path matches one of: ${DEFAULT_TEST_PATTERNS.map(p => `\`${p}\``).join(', ')}`
     )
     expect(renderPrompt(context({ tests: { patterns: ['**/test_*.py'] } }), PATCHES, sources)).toContain(
       'its path matches one of: `**/test_*.py`'

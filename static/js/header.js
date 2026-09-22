@@ -4,8 +4,9 @@
 import { setDisabledReason } from './composer.js'
 import { esc, timeAgo } from './dom.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
-import { refreshRail } from './layers.js'
+import { getFoldLevel, refreshRail } from './layers.js'
 import { progressSummary } from './progress.js'
+import { foldLevelControlHtml } from './reading-level.js'
 import { approveBlockedReason } from './signoff.js'
 import { skinLabel } from './skin.js'
 import { themeLabel } from './theme.js'
@@ -85,6 +86,7 @@ export function renderHeader(bundle, opts) {
     ? 'Snapshot the working tree again and redraw'
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
   const progress = ready ? progressHtml(artifact, bundle.state) : ''
+  const reading = ready ? foldLevelControlHtml(artifact, getFoldLevel()) : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
@@ -104,7 +106,7 @@ export function renderHeader(bundle, opts) {
     `<p class="meta"><span>by ${authorHtml(pr.author, local)}</span>` +
     `<span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>${statePill(pr)}` +
     `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
-    `${largePrNoticeHtml(bundle)}${risk}${progress}</div></header>`
+    `${largePrNoticeHtml(bundle)}${risk}${reading}${progress}</div></header>`
   )
 }
 

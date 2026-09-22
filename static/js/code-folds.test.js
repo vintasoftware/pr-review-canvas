@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { findRow } from './anchors.js'
 import { applyCodeFolds, setFoldShown, wireFoldReveal } from './code-folds.js'
 import { followLink } from './deep-link.js'
+import { insertNoteRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { scrollIntoViewSafe } from './dom.js'
 
@@ -143,6 +144,73 @@ describe('applyCodeFolds', () => {
 
     expect(toggle(card).textContent).toBe('<img src=x onerror=alert(1)>')
     expect(card.querySelector('img')).toBeNull()
+  })
+
+  it('applies a fold only from its own level upwards', () => {
+    const card = mount()
+    const fold = { ...FOLD, level: /** @type {const} */ ('moderate') }
+
+    applyCodeFolds(card, 'src_app_ts', [fold], 'light')
+    expect(card.querySelector('.code-fold')).toBeNull()
+
+    applyCodeFolds(card, 'src_app_ts', [fold], 'moderate')
+    expect(toggle(card).textContent).toBe('run()')
+  })
+
+  it('draws only the outermost fold when one nests inside another', () => {
+    const card = mount()
+    const folds = [
+      { ...FOLD, title: 'the whole function', level: /** @type {const} */ ('moderate') },
+      {
+        title: 'the body',
+        side: /** @type {const} */ ('new'),
+        startLine: 2,
+        endLine: 3,
+        level: /** @type {const} */ ('light'),
+      },
+    ]
+
+    applyCodeFolds(card, 'src_app_ts', folds, 'light')
+    expect(Array.from(card.querySelectorAll('.code-fold'), row => row.textContent)).toEqual(['the body'])
+
+    document.body.replaceChildren()
+    const raised = mount()
+    applyCodeFolds(raised, 'src_app_ts', folds, 'moderate')
+    expect(Array.from(raised.querySelectorAll('.code-fold'), row => row.textContent)).toEqual([
+      'the whole function',
+    ])
+  })
+
+  it('hides an annotation only at the aggressive level, and shows its text instead of the title', () => {
+    const annotation = {
+      side: /** @type {const} */ ('new'),
+      startLine: 3,
+      endLine: 3,
+      text: 'The value is read twice on purpose.',
+    }
+
+    const light = mount()
+    insertNoteRow(light, 'src_app_ts', annotation)
+    applyCodeFolds(light, 'src_app_ts', [FOLD], 'light')
+    expect(light.querySelector('.code-fold')).toBeNull()
+
+    document.body.replaceChildren()
+    const card = mount()
+    insertNoteRow(card, 'src_app_ts', annotation)
+    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive')
+
+    expect(toggle(card).textContent).toBe('The value is read twice on purpose.')
+    expect(card.querySelector('[data-decoration="note"]')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('keeps an attention point visible at every level', () => {
+    const card = mount()
+    const point = document.createElement('tr')
+    point.setAttribute('data-decoration', 'point')
+    findRow(card, 'src_app_ts', 'new', 3)?.after(point)
+
+    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive')
+    expect(card.querySelector('.code-fold')).toBeNull()
   })
 })
 
