@@ -57,8 +57,8 @@ Changes since 0.4.0. Details are in the [reference](docs/reference.md).
 ### Upgrade from 0.4.0
 
 1. Run `npm install -g @vintasoftware/pr-review-canvas@0.5.0` and restart `pr-review serve`.
-   From now on, `pr-review upgrade` does this.
-2. Run `pr-review install-skill` in each project and commit the refreshed skill copies.
+   Later upgrades can use `pr-review upgrade`.
+2. Run `pr-review upgrade` in each project to refresh the skill copies, then commit them.
 3. Upgrade the whole team together, since 0.4.0 cannot open 0.5.0 canvases.
 4. If you override `generation-strict.md` or `generation-surfacing.md`, move judging rules into
    `judging-strict.md` or `judging-surfacing.md`. Regenerations use the `*-incremental.md`
