@@ -22,6 +22,7 @@ import {
   composerInput,
   composerPendingInput,
   composerRowHtml,
+  concealForComposer,
   focusComposer,
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
@@ -782,8 +783,7 @@ export function wireReview(root, session, opts = {}) {
         'block'
       )
       if (node !== null) {
-        host.querySelector('.prose')?.setAttribute('hidden', '')
-        host.querySelector('.tbtns')?.setAttribute('hidden', '')
+        concealForComposer(host)
       }
     },
     'pending-save': el => {

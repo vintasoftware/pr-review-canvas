@@ -1608,6 +1608,115 @@ describe('the pending review', () => {
     expect(root.querySelector('.pending-cmt .prose')?.textContent).toContain('one, revised')
   })
 
+  /**
+   * The draft in the layer, which is the copy the tests below edit. The same file is drawn again
+   * under Other changes, so a draft has more than one row on the page.
+   * @param {HTMLElement} root
+   */
+  function draftHost(root) {
+    const host = root.querySelector('tr.pending-row:not(.is-approx) .pending-cmt')
+    if (!(host instanceof HTMLElement)) {
+      throw new Error('no draft')
+    }
+    return host
+  }
+
+  /**
+   * The commands on that draft, as the reader sees them: hidden ones do not count.
+   * @param {HTMLElement} root
+   */
+  function draftCommands(root) {
+    const btns = draftHost(root).querySelectorAll(':scope > .tbtns:not([hidden]) button')
+    return [...btns].map(b => b.getAttribute('data-act'))
+  }
+
+  /**
+   * Queues one draft and opens the editor on it.
+   * @param {HTMLElement} root
+   */
+  async function editDraft(root) {
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    const host = draftHost(root)
+    const edit = host.querySelector('[data-act="pending-edit"]')
+    if (!(edit instanceof HTMLElement)) {
+      throw new Error('no edit command')
+    }
+    edit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    // While the box is open the draft itself is out of the way, so only one of the two shows.
+    expect(host.querySelector('.composer-box')).not.toBeNull()
+    expect(draftCommands(root)).toEqual([])
+    expect(host.querySelector(':scope > .prose')?.hasAttribute('hidden')).toBe(true)
+    return host
+  }
+
+  it('brings a draft back when its edit is cancelled', async () => {
+    const { root, session } = setup()
+    const host = await editDraft(root)
+
+    click(root, '.pending-cmt [data-act="composer-cancel"]')
+
+    // Cancelling leaves the draft exactly as it was, commands and all. Before, the box was taken
+    // away without putting back what it stood in front of, so edit and delete stayed hidden until
+    // something else redrew the row.
+    expect(host.querySelector('.composer-box')).toBeNull()
+    expect(host.querySelector(':scope > .prose')?.hasAttribute('hidden')).toBe(false)
+    expect(host.querySelector(':scope > .prose')?.textContent).toContain('one')
+    expect(draftCommands(root)).toEqual(['pending-edit', 'pending-delete'])
+    expect(session.pending[0]?.body).toBe('one')
+  })
+
+  it('brings a draft back when Escape closes its edit', async () => {
+    const { root } = setup()
+    const host = await editDraft(root)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+    expect(host.querySelector('.composer-box')).toBeNull()
+    expect(draftCommands(root)).toEqual(['pending-edit', 'pending-delete'])
+  })
+
+  it('brings a draft back when another composer takes the open box', async () => {
+    const { root } = setup()
+    const host = await editDraft(root)
+
+    // Opening a box elsewhere closes the edit, which must leave the draft readable too.
+    click(root, '#L-src_app_ts-new-5 .plus')
+
+    expect(host.querySelector('.composer-box')).toBeNull()
+    expect(root.querySelector('tr.composer')).not.toBeNull()
+    expect(draftCommands(root)).toEqual(['pending-edit', 'pending-delete'])
+  })
+
+  it('can be edited again straight after a cancelled edit', async () => {
+    const { root, calls, session } = setup()
+    const host = await editDraft(root)
+    click(root, '.pending-cmt [data-act="composer-cancel"]')
+    calls.length = 0
+
+    // The whole point of the commands coming back: the second edit is reachable, and works like
+    // the first.
+    expect(draftCommands(root)).toEqual(['pending-edit', 'pending-delete'])
+    const edit = host.querySelector('[data-act="pending-edit"]')
+    if (!(edit instanceof HTMLElement)) {
+      throw new Error('no edit command')
+    }
+    edit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const area = host.querySelector('textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    expect(area.value).toBe('one')
+    area.value = 'one, revised'
+    click(root, '[data-act="pending-save"]')
+    await flush()
+
+    expect(calls).toEqual([['pending-edit', { id: 'p1', body: 'one, revised' }]])
+    expect(session.pending[0]?.body).toBe('one, revised')
+    expect(draftCommands(root)).toEqual(['pending-edit', 'pending-delete'])
+  })
+
   it('deletes one draft and takes the bar away with the last of them', async () => {
     const { root, calls, session } = setup()
     write(root, 'one')

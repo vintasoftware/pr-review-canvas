@@ -3,6 +3,7 @@
 import {
   applyCapabilityGating,
   closeComposers,
+  concealForComposer,
   composerBody,
   composerHtml,
   composerInput,
@@ -217,6 +218,50 @@ describe('focusComposer and closeComposers', () => {
     expect(document.querySelectorAll('.composer-box').length).toBe(0)
     expect(document.querySelectorAll('tr.composer').length).toBe(0)
     expect(closeComposers(document)).toBe(0)
+  })
+})
+
+describe('concealForComposer', () => {
+  /** The markup a draft is drawn in: a body and its commands, with a box standing in for them. */
+  function draft() {
+    document.body.innerHTML =
+      '<div class="cmt pending-cmt"><span class="av"></span>' +
+      '<div class="prose">one</div>' +
+      '<span class="tbtns"><button data-act="pending-edit">edit</button></span></div>'
+    const host = document.querySelector('.pending-cmt')
+    if (host === null) {
+      throw new Error('no host')
+    }
+    host.insertAdjacentHTML(
+      'beforeend',
+      composerHtml({ id: 'c1', label: 'x', kind: 'inline', pendingId: 'p1' })
+    )
+    return host
+  }
+
+  it('hides what the box stands in for', () => {
+    const host = draft()
+    concealForComposer(host)
+    expect(host.querySelector('.prose')?.hasAttribute('hidden')).toBe(true)
+    expect(host.querySelector('.tbtns')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('puts it back when the box closes, however it closed', () => {
+    const host = draft()
+    concealForComposer(host)
+    expect(closeComposers(document)).toBe(1)
+    expect(host.querySelector('.composer-box')).toBeNull()
+    expect(host.querySelector('.prose')?.hasAttribute('hidden')).toBe(false)
+    expect(host.querySelector('.tbtns')?.hasAttribute('hidden')).toBe(false)
+  })
+
+  it('leaves alone what was hidden for its own reasons', () => {
+    const host = draft()
+    // A closed box never concealed this, so closing must not reveal it.
+    host.insertAdjacentHTML('beforeend', '<div class="extra" hidden>not mine</div>')
+    concealForComposer(host)
+    closeComposers(document)
+    expect(host.querySelector('.extra')?.hasAttribute('hidden')).toBe(true)
   })
 })
 

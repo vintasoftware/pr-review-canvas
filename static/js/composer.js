@@ -182,8 +182,41 @@ export function focusComposer(root, id) {
   return textarea
 }
 
+/** What a composer stands in for is marked with this while the box is open. */
+const CONCEALED = 'data-composer-concealed'
+
+/** The parts of a concealed host that the box stands in for. */
+const CONCEALED_PARTS = ':scope > .prose, :scope > .tbtns'
+
 /**
- * Removes every open composer under `root`, so only one is open at a time.
+ * Hides what a composer edits while the box is open, so the reader sees one of the two rather
+ * than the draft and its editor at once. The mark is what lets any close put it back.
+ * @param {Element} host the element the composer was appended to
+ */
+export function concealForComposer(host) {
+  host.setAttribute(CONCEALED, '')
+  for (const part of Array.from(host.querySelectorAll(CONCEALED_PARTS))) {
+    part.setAttribute('hidden', '')
+  }
+}
+
+/**
+ * Puts back everything a composer was concealing. Closing is the only way a box goes away, so
+ * doing this here covers cancel, Escape, and opening another box alike.
+ * @param {ParentNode} root
+ */
+export function revealConcealed(root) {
+  for (const host of Array.from(root.querySelectorAll(`[${CONCEALED}]`))) {
+    host.removeAttribute(CONCEALED)
+    for (const part of Array.from(host.querySelectorAll(CONCEALED_PARTS))) {
+      part.removeAttribute('hidden')
+    }
+  }
+}
+
+/**
+ * Removes every open composer under `root`, so only one is open at a time, and reveals whatever
+ * they were standing in for.
  * @param {ParentNode} root
  */
 export function closeComposers(root) {
@@ -193,6 +226,7 @@ export function closeComposers(root) {
     ;(row ?? box).remove()
     closed++
   }
+  revealConcealed(root)
   return closed
 }
 

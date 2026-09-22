@@ -72,6 +72,41 @@ for (const skin of ['terminal', 'github'] as const) {
   })
 }
 
+test('gives a draft its commands back when an edit is cancelled', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  const file = page.locator('article.file[data-path="src/app.ts"]').first()
+  await file.scrollIntoViewIfNeeded()
+
+  await file.locator('#L-src_app_ts-new-4 .plus').click()
+  const editor = file.locator('tr.composer')
+  await editor.locator('textarea').fill('this needs a guard')
+  await editor.locator('[data-act="composer-queue"]').click()
+
+  const draft = file.locator('tr.pending-row .pending-cmt').first()
+  await draft.locator('[data-act="pending-edit"]').click()
+  // The box stands in front of the draft, so neither the body nor its commands are on screen.
+  await expect(draft.locator('.composer-box')).toHaveCount(1)
+  await expect(draft.locator('[data-act="pending-edit"]')).toBeHidden()
+
+  await draft.locator('[data-act="composer-cancel"]').click()
+
+  // Cancelling puts the draft back as it was. It used to leave edit and delete hidden until some
+  // other change redrew the row, which left the draft stranded on the page.
+  await expect(draft.locator('.composer-box')).toHaveCount(0)
+  await expect(draft.locator('.prose')).toBeVisible()
+  await expect(draft.locator('.prose')).toContainText('this needs a guard')
+  await expect(draft.locator('[data-act="pending-edit"]')).toBeVisible()
+  await expect(draft.locator('[data-act="pending-delete"]')).toBeVisible()
+
+  // And the draft can be edited again, which is what the hidden commands had made impossible.
+  await draft.locator('[data-act="pending-edit"]').click()
+  await expect(draft.locator('.composer-box textarea')).toHaveValue('this needs a guard')
+  // Escape is the other way out, and puts the draft back the same way.
+  await page.keyboard.press('Escape')
+  await expect(draft.locator('.composer-box')).toHaveCount(0)
+  await expect(draft.locator('[data-act="pending-edit"]')).toBeVisible()
+})
+
 test('keeps a pending review across a reload', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
