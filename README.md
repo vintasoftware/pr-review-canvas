@@ -71,11 +71,9 @@ Run this from a project that has the skill installed:
 pr-review upgrade
 ```
 
-It lists what it will change and asks before changing anything. It upgrades pr-review and acpx
-with `npm install -g` when npm has newer versions. It also refreshes the project's copies of the
-skill when they no longer match the installed pr-review. When a copy changes, it tells you to
-commit and push it, so your team gets the same skill. Pass `--yes` to skip the question, for example
-in a script.
+It updates pr-review, acpx, and the project's skill copies, after showing the plan and asking.
+Commit and push any refreshed skill copies so your team uses the same skill. `--yes` skips the
+question.
 
 ## Set up a project
 
@@ -88,8 +86,7 @@ pr-review doctor --all-checks
 `install-skill` sets up **both Claude Code and Codex** in one command: `.claude/skills/pr-review-canvas`
 and `.agents/skills/pr-review-canvas`, respectively. These are portable copies you can commit to Git.
 `pr-review upgrade` refreshes them after the CLI changes. It also adds `.pr-review/settings.yml` to the
-project's `.gitignore`. Restart your coding agent if the skill
-does not appear. Repeat this setup for each project you want to review.
+project's `.gitignore`. Restart your coding agent if the skill does not appear. Repeat this setup for each project you want to review.
 
 `doctor` checks Git, your GitHub or GitLab remote, the matching CLI (`gh` or `glab`) and its login,
 write access to the local canvas directory, and whether installed skills match the current package.
@@ -109,8 +106,6 @@ npm install -g acpx@latest
 acpx --version
 pr-review doctor --all-checks
 ```
-
-`pr-review upgrade` keeps acpx up to date.
 
 Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
 the review server, then choose your agent in **settings**. The chat uses that agent's account.
@@ -147,11 +142,9 @@ merged `main` in without touching the changed files, for example, the canvas sti
 and the page says so. Set `canvas.keepForIdenticalDiff: false` in the project config to treat
 every commit as a new head.
 
-Regenerating for a new head is incremental: the run starts from the newest canvas of a commit the
-head was built on, and keeps the layers, folds, notes and attention points whose files the new
-commits leave untouched, word for word. Your review progress on those files follows the new canvas,
-however many regenerations back you made it, and the page names the canvas you marked. `--force` starts from a blank page instead, and
-`canvas.incremental: false` turns it off for the project.
+Regenerating for a new head updates the previous canvas. Content for untouched files is kept,
+and your review progress on them follows. `--force` starts from a blank page, and
+`canvas.incremental: false` turns this off. See [Incremental canvases](docs/reference.md#incremental-canvases).
 
 ## Configuration
 
@@ -165,12 +158,8 @@ Use **skin** and **theme** in the header to change the appearance, and **Hide co
 in the settings dialog to choose how much code a review hides when it opens.
 
 For AI Chat, open **settings**, choose Claude Code or Codex, and optionally enter a model ID.
-Leave the model blank to use the agent's default. A model ID picks a family, and each turn runs
-that family's newest model: `claude-opus-4-8` runs as `opus`, and a GPT model the Codex catalog
-marks as replaced runs as its replacement. The same goes for a blank model: a thread still on a
-replaced model moves to its replacement. Claude chat uses the `claude` CLI on your PATH, so a new
-model is available as soon as Claude Code updates. To pin one exact version, write
-`pin:` before the ID, as in `pin:claude-opus-4-8`; see
+Leave the model blank to use the agent's default. A model ID runs as the newest model of its family
+(`claude-opus-4-8` runs as `opus`); write `pin:claude-opus-4-8` to use that exact model. See
 [Model families](docs/reference.md#model-families). You can also adjust the reply timeout and
 maximum turns. Click **Test agent** to check the connection, then **save**.
 
