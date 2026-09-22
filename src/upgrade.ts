@@ -147,8 +147,6 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
     const stale = copies.filter(copy => copy.stale)
     if (copies.length === 0) {
       notes.push('the project has no copy of the skill; run `pr-review install-skill` to add one')
-    } else if (steps.some(step => step.kind === 'package')) {
-      notes.push('the new pr-review checks the project skill once it is installed')
     } else if (stale.length > 0) {
       steps.push({ kind: 'skill', paths: stale.map(copy => copy.path) })
     } else {
@@ -162,8 +160,7 @@ export function describeStep(step: UpgradeStep): string {
   if (step.kind === 'skill') {
     return `refresh the project skill: ${step.paths.join(', ')}`
   }
-  const then = step.kind === 'package' ? ', then let it refresh the project skill' : ''
-  return `upgrade ${step.name} ${step.from} -> ${step.to} (npm install -g ${step.name}@${step.to})${then}`
+  return `upgrade ${step.name} ${step.from} -> ${step.to} (npm install -g ${step.name}@${step.to})`
 }
 
 async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipped: string[] }> {
@@ -230,12 +227,12 @@ async function handOff(deps: UpgradeDeps): Promise<StepOutcome[]> {
 }
 
 /**
- * Runs every step in order. A failed npm install does not stop the rest. After the pr-review step,
- * the new version takes over whatever is left to check.
+ * Runs every step in order. A failed npm install does not stop the rest. Once pr-review itself is
+ * upgraded, the new version plans and runs whatever is left, so the skill it ships is checked and
+ * copied by its own code.
  */
 export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promise<StepOutcome[]> {
   const outcomes: StepOutcome[] = []
-  let handOffAfter = false
   for (const step of plan.steps) {
     if (step.kind === 'skill') {
       outcomes.push(await applySkillStep(step, deps))
@@ -248,9 +245,11 @@ export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promis
       continue
     }
     outcomes.push({ ...step, status: 'done' })
-    handOffAfter ||= step.kind === 'package'
+    if (step.kind === 'package') {
+      return [...outcomes, ...(await handOff(deps))]
+    }
   }
-  return handOffAfter ? [...outcomes, ...(await handOff(deps))] : outcomes
+  return outcomes
 }
 
 /** `upgrade [--yes]`: the plan on stderr, a confirmation, then one JSON line with what happened. */
@@ -269,6 +268,9 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
   }
   io.stderr('pr-review upgrade will:')
   for (const step of plan.steps) io.stderr(`  - ${describeStep(step)}`)
+  if (plan.steps.some(step => step.kind === 'package')) {
+    io.stderr('  Once pr-review is upgraded, the new version checks and runs the steps after it.')
+  }
 
   const confirmed = values.yes === true ? true : await deps.confirm('Proceed? [y/N] ')
   if (confirmed !== true) {

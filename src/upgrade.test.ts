@@ -133,15 +133,15 @@ describe('isNewer', () => {
 })
 
 describe('planUpgrade', () => {
-  it('plans pr-review and acpx, and leaves the skill to the new pr-review', async () => {
+  it('plans pr-review, acpx, and the stale skill copy, in that order', async () => {
     await installCopies()
+    await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nold\n')
     const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' } })
-    const plan = await planUpgrade(deps)
-    expect(plan.steps).toEqual([
+    expect((await planUpgrade(deps)).steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0' },
       { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1' },
+      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`] },
     ])
-    expect(plan.notes).toContain('the new pr-review checks the project skill once it is installed')
   })
 
   it('leaves a pr-review that is not the global npm install to the user', async () => {
@@ -240,6 +240,21 @@ describe('runUpgrade', () => {
     ])
     expect(err.filter(line => line.startsWith('The project skill changed.'))).toEqual([
       `The project skill changed. Commit and push ${CODEX_SKILLS_DIR}/pr-review-canvas so your team gets it.`,
+    ])
+  })
+
+  it('still refreshes the skill with the current pr-review when its own install fails', async () => {
+    await installCopies()
+    await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nold\n')
+    const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, failInstall: 'EACCES' })
+    const { io, out } = capture()
+
+    expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
+    expect(calls.some(call => call.startsWith('pr-review '))).toBe(false)
+    expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
+    expect(JSON.parse(out[0] ?? '').steps).toEqual([
+      { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0', status: 'failed', detail: 'EACCES' },
+      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`], status: 'done' },
     ])
   })
 
