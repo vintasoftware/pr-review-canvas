@@ -17,10 +17,15 @@ import { replacePostButton } from './comment-link.js'
 import {
   applyCapabilityGating,
   closeComposers,
+  composerBody,
   composerHtml,
   composerInput,
+  composerPendingInput,
   composerRowHtml,
+  concealForComposer,
   focusComposer,
+  revealConcealed,
+  refreshComposerCommands,
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
@@ -30,12 +35,14 @@ import { pointAnchorId, reviewedId } from './keys.js'
 import {
   getRenderContext,
   pathSet,
+  refreshCardDecorations,
   setCardRenderedHook,
   setRenderContext,
   updateRenderState,
 } from './layers.js'
 import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from './nav.js'
 import { issueCommentHtml } from './overview.js'
+import { pendingCount, refreshPendingBar } from './pending.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
 import { layerProgress } from './progress.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -50,6 +57,16 @@ import {
 /** @typedef {NonNullable<ReturnType<typeof import('./chat.js').wireChat>>} ChatHandle */
 
 const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
+
+/**
+ * The event a sign-off dialog is set to. An attribute that names none reads as a comment-only
+ * review, the one of the three that claims nothing.
+ * @param {string | null} raw
+ * @returns {import('./contract-types.js').ReviewEvent}
+ */
+export function signoffEvent(raw) {
+  return raw === 'APPROVE' || raw === 'REQUEST_CHANGES' ? raw : 'COMMENT'
+}
 
 /** @type {WeakMap<Element, ReturnType<typeof setTimeout>>} */
 const toastTimers = new WeakMap()
@@ -250,9 +267,29 @@ export function wireReview(root, session, opts = {}) {
     return layer === undefined ? state.reviewed[id] === true : layerProgress(layer, state) === 'done'
   }
 
+  let drawnPending = session.pending
+  let drawnComments = session.submittedComments
   /** Draws everything the local state decides, after it changed. */
   const onState = (/** @type {PrState} */ state) => {
     updateRenderState(state)
+    const ctx = getRenderContext()
+    if (ctx !== null) {
+      const changedPaths = new Set()
+      const previous = new Map(drawnPending.map(p => [p.id, p]))
+      for (const draft of state.pending) {
+        const old = previous.get(draft.id)
+        if (old === undefined || old.body !== draft.body) changedPaths.add(draft.path)
+        previous.delete(draft.id)
+      }
+      for (const draft of previous.values()) changedPaths.add(draft.path)
+      const added = session.submittedComments.filter(c => !drawnComments.some(old => old.id === c.id))
+      for (const comment of added) changedPaths.add(comment.path)
+      const next = { ...ctx, comments: [...ctx.comments, ...added] }
+      setRenderContext(next)
+      refreshCardDecorations(root, next, changedPaths, added)
+      drawnPending = state.pending
+      drawnComments = session.submittedComments
+    }
     refreshProgress(root, session.artifact, state)
     applyDismissed(root, session.artifact.points, state, {
       paths: paths(),
@@ -273,6 +310,8 @@ export function wireReview(root, session, opts = {}) {
         setCardCollapsed(parts.card, reviewed)
       }
     }
+    refreshPendingBar(root, state, session.headSha)
+    refreshComposerCommands(root, state.pending.length > 0)
     applyCapabilityGating(root, session.capabilities)
   }
   const unsubscribe = session.subscribe(onState)
@@ -347,6 +386,7 @@ export function wireReview(root, session, opts = {}) {
    */
   const openComposer = (anchor, options, shape) => {
     closeComposers(root)
+    options = { ...options, pendingActive: pendingCount(session.state) > 0 }
     const node =
       shape === 'row' ? rowFrom(doc, composerRowHtml(options)) : nodeFrom(doc, composerHtml(options))
     if (node === null) {
@@ -522,7 +562,7 @@ export function wireReview(root, session, opts = {}) {
     )
   }
 
-  /** @param {HTMLElement} button @param {'APPROVE' | 'REQUEST_CHANGES'} event */
+  /** @param {HTMLElement} button @param {import('./contract-types.js').ReviewEvent} event */
   const openSignoff = (button, event) => {
     const dialog = openSignoffDialog(root, { event })
     applyCapabilityGating(root, session.capabilities)
@@ -555,16 +595,121 @@ export function wireReview(root, session, opts = {}) {
     if (!(dialog instanceof HTMLDialogElement)) {
       return
     }
-    const event = dialog.getAttribute('data-event') === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES'
+    const event = signoffEvent(dialog.getAttribute('data-event'))
     const body = signoffBody(dialog)
     void runCommand(
       button,
       async () => {
-        const review = await session.postReview(event, body === '' ? undefined : body)
+        const { review, submitted, warnings } = await session.postReview(
+          event,
+          body === '' ? undefined : body
+        )
         showSignoffResult(dialog, review)
-        toast(root, event === 'APPROVE' ? 'approved on github' : 'changes requested on github')
+        for (const warning of warnings) {
+          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
+        }
+        const verdict =
+          review.state === 'APPROVED'
+            ? 'approved'
+            : review.state === 'CHANGES_REQUESTED'
+              ? 'changes requested'
+              : 'review posted'
+        toast(
+          root,
+          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
+        )
       },
       { pendingLabel: 'posting…' }
+    )
+  }
+
+  /**
+   * Adds what a composer holds to the pending review instead of posting it.
+   * @param {HTMLElement} button
+   * @param {Element} box
+   */
+  const queueFromComposer = (button, box) => {
+    const input = composerPendingInput(box)
+    if (input === null) {
+      showCommandError(button, 'write something first')
+      return
+    }
+    box.setAttribute('data-posting', '1')
+    void runCommand(
+      button,
+      async () => {
+        await session.addPending(input)
+        box.closest('tr.composer')?.remove()
+        box.remove()
+        toast(root, 'comment added to your review')
+      },
+      { pendingLabel: 'adding…' }
+    ).finally(() => box.removeAttribute('data-posting'))
+  }
+
+  /**
+   * Saves an edit to a draft that is already in the review.
+   * @param {HTMLElement} button
+   * @param {Element} box
+   */
+  const savePending = (button, box) => {
+    const id = box.getAttribute('data-pending-id')
+    const body = composerBody(box)
+    if (id === null) {
+      return
+    }
+    if (body === '') {
+      showCommandError(button, 'write something first')
+      return
+    }
+    void runCommand(
+      button,
+      async () => {
+        await session.editPending(id, body)
+        const host = box.parentElement
+        box.remove()
+        if (host !== null) revealConcealed(host.parentNode ?? root)
+        toast(root, 'draft updated')
+      },
+      { pendingLabel: 'saving…' }
+    )
+  }
+
+  /**
+   * Puts an attention point's text in the pending review instead of posting it. The point is
+   * tagged with its fingerprint, so once the review lands the point shows the comment it became.
+   * @param {HTMLElement} button
+   * @param {Point} point
+   */
+  const queuePoint = (button, point) => {
+    void runCommand(
+      button,
+      async () => {
+        await session.addPending({
+          path: point.path,
+          line: point.line,
+          side: point.side ?? 'new',
+          body: pointToMarkdown(point),
+          pointFingerprint: point.fingerprint,
+        })
+        toast(root, 'attention point added to your review')
+      },
+      { pendingLabel: 'adding…' }
+    )
+  }
+
+  /**
+   * @param {HTMLElement} button
+   * @param {string} id
+   */
+  const deletePending = (button, id) => {
+    void runCommand(
+      button,
+      async () => {
+        await session.deletePending(id)
+        toast(root, 'draft deleted')
+      },
+      { pendingLabel: 'deleting…' }
     )
   }
 
@@ -595,6 +740,12 @@ export function wireReview(root, session, opts = {}) {
         postPoint(el, point)
       }
     },
+    'point-queue': el => {
+      const point = pointById(el.getAttribute('data-point') ?? '')
+      if (point !== undefined) {
+        queuePoint(el, point)
+      }
+    },
     'comment-line': el => {
       const key = el.getAttribute('data-key') ?? ''
       const path = session.pathForKey(key)
@@ -614,6 +765,64 @@ export function wireReview(root, session, opts = {}) {
       if (box !== null) {
         postFromComposer(el, box)
       }
+    },
+    'composer-queue': el => {
+      const box = el.closest('.composer-box')
+      if (box !== null) {
+        queueFromComposer(el, box)
+      }
+    },
+    'pending-edit': el => {
+      const id = el.getAttribute('data-pending-id')
+      const draft = session.pending.find(p => p.id === id)
+      const host = el.closest('.pending-cmt')
+      if (draft === undefined || host === null) {
+        return
+      }
+      composerSeq += 1
+      // The box replaces the draft it edits, so the reader sees one of the two at a time.
+      const node = openComposer(
+        host,
+        {
+          id: `composer-${composerSeq}`,
+          label: `Edit your comment on ${draft.path}:${draft.line}`,
+          kind: 'inline',
+          body: draft.body,
+          pendingId: draft.id,
+        },
+        'block'
+      )
+      if (node !== null) {
+        concealForComposer(host)
+      }
+    },
+    'pending-save': el => {
+      const box = el.closest('.composer-box')
+      if (box !== null) {
+        savePending(el, box)
+      }
+    },
+    'pending-delete': el => {
+      const id = el.getAttribute('data-pending-id')
+      if (id !== null) {
+        deletePending(el, id)
+      }
+    },
+    'pending-finish': el => {
+      // Finishing a review is the same dialog the sign-off commands open; a review being written
+      // usually has something to say, so it opens on the verdict that claims nothing.
+      openSignoff(el, 'COMMENT')
+    },
+    'pending-discard': el => {
+      void runCommand(
+        el,
+        async () => {
+          const count = pendingCount(session.state)
+          await session.discardPending()
+          toast(root, `${count} pending comment${count === 1 ? '' : 's'} discarded`)
+        },
+        { pendingLabel: 'discarding…' }
+      )
     },
     'markdown-toggle': el => toggleMarkdownPreview(el),
     'composer-cancel': () => {
@@ -684,7 +893,7 @@ export function wireReview(root, session, opts = {}) {
       }
     },
     signoff: el => {
-      openSignoff(el, el.getAttribute('data-event') === 'APPROVE' ? 'APPROVE' : 'REQUEST_CHANGES')
+      openSignoff(el, signoffEvent(el.getAttribute('data-event')))
     },
     'signoff-post': el => postSignoff(el),
     'signoff-close': el => {

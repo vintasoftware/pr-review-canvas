@@ -9,7 +9,18 @@
 /** @typedef {import('./contract-types.js').PrState} PrState */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./contract-types.js').ReviewSummary} ReviewSummary */
-import { postComment, postReview, putDismissed, putReviewed, putThreadHidden } from './api.js'
+/** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
+import {
+  addPending,
+  deletePending,
+  discardPending,
+  editPending,
+  postComment,
+  postReview,
+  putDismissed,
+  putReviewed,
+  putThreadHidden,
+} from './api.js'
 
 /**
  * @typedef {{
@@ -18,6 +29,10 @@ import { postComment, postReview, putDismissed, putReviewed, putThreadHidden } f
  *   putThreadHidden: typeof putThreadHidden,
  *   postComment: typeof postComment,
  *   postReview: typeof postReview,
+ *   addPending: typeof addPending,
+ *   editPending: typeof editPending,
+ *   deletePending: typeof deletePending,
+ *   discardPending: typeof discardPending,
  * }} SessionApi
  */
 
@@ -37,7 +52,18 @@ import { postComment, postReview, putDismissed, putReviewed, putThreadHidden } f
 
 /** @param {Partial<SessionApi> | undefined} overrides */
 function withDefaults(overrides) {
-  return { putReviewed, putDismissed, putThreadHidden, postComment, postReview, ...overrides }
+  return {
+    putReviewed,
+    putDismissed,
+    putThreadHidden,
+    postComment,
+    postReview,
+    addPending,
+    editPending,
+    deletePending,
+    discardPending,
+    ...overrides,
+  }
 }
 
 export { reviewedId } from './keys.js'
@@ -47,6 +73,8 @@ export function createReviewSession(options) {
   const api = withDefaults(options.api)
   /** @type {PrState} */
   let state = options.state
+  /** @type {ReviewComment[]} */
+  let submittedComments = []
   /** @type {Capabilities} */
   let capabilities = options.capabilities
   const keyToPath = new Map(options.files.map(f => [f.key, f.path]))
@@ -121,6 +149,28 @@ export function createReviewSession(options) {
     if ((next.rev ?? 0) >= takenRev) {
       takenRev = next.rev ?? 0
       publish(next)
+    }
+  }
+
+  /**
+   * A change the server owns outright: the answer it sends is the new state. Unlike `change`
+   * there is nothing to show first and nothing to take back, because the page never guessed.
+   * @template {{ state: PrState }} T
+   * @param {() => Promise<T>} request
+   * @returns {Promise<T>}
+   */
+  const run = async request => {
+    inFlight += 1
+    try {
+      const answer = await request()
+      inFlight -= 1
+      takeAnswer(answer.state)
+      settle()
+      return answer
+    } catch (err) {
+      inFlight -= 1
+      settle()
+      throw err
     }
   }
 
@@ -227,27 +277,63 @@ export function createReviewSession(options) {
      * @returns {Promise<PostCommentResponse>}
      */
     async postComment(input) {
-      inFlight += 1
-      try {
-        const answer = await api.postComment(options.prNumber, { ...input, headSha: options.headSha })
-        inFlight -= 1
-        takeAnswer(answer.state)
-        settle()
-        return answer
-      } catch (err) {
-        inFlight -= 1
-        settle()
-        throw err
-      }
+      return run(() => api.postComment(options.prNumber, { ...input, headSha: options.headSha }))
+    },
+    /** Comments returned by reviews submitted during this session. */
+    get submittedComments() {
+      return submittedComments
+    },
+    /** The comments waiting in the pending review, oldest first. */
+    get pending() {
+      return state.pending ?? []
     },
     /**
-     * @param {'APPROVE' | 'REQUEST_CHANGES'} event
-     * @param {string} [body]
-     * @returns {Promise<ReviewSummary>}
+     * Writes one comment into the pending review. The answer carries the state that holds it, so
+     * the page draws the draft from the same place a reload would read it from.
+     * @param {Omit<import('./contract-types.js').AddPendingInput, 'headSha'>} input
+     * @returns {Promise<PrState>}
      */
-    async postReview(event, body) {
-      const input = body === undefined ? { event } : { event, body }
-      return (await api.postReview(options.prNumber, { ...input, headSha: options.headSha })).review
+    async addPending(input) {
+      return (await run(() => api.addPending(options.prNumber, { ...input, headSha: options.headSha }))).state
+    },
+    /**
+     * @param {string} id
+     * @param {string} body
+     * @returns {Promise<PrState>}
+     */
+    async editPending(id, body) {
+      return (await run(() => api.editPending(options.prNumber, id, body))).state
+    },
+    /**
+     * @param {string} id
+     * @returns {Promise<PrState>}
+     */
+    async deletePending(id) {
+      return (await run(() => api.deletePending(options.prNumber, id))).state
+    },
+    /** @returns {Promise<PrState>} */
+    async discardPending() {
+      return (await run(() => api.discardPending(options.prNumber))).state
+    },
+    /**
+     * Submits the review. The pending comments go out with it unless the caller says otherwise,
+     * and the answer's state is the one with them cleared.
+     * @param {import('./contract-types.js').ReviewEvent} event
+     * @param {string} [body]
+     * @param {{ includePending?: boolean }} [opts]
+     * @returns {Promise<import('./contract-types.js').PostReviewResponse>}
+     */
+    async postReview(event, body, opts = {}) {
+      const input = {
+        event,
+        ...(body === undefined ? {} : { body }),
+        ...(opts.includePending === undefined ? {} : { includePending: opts.includePending }),
+      }
+      return run(async () => {
+        const answer = await api.postReview(options.prNumber, { ...input, headSha: options.headSha })
+        submittedComments = [...submittedComments, ...answer.comments]
+        return answer
+      })
     },
   }
 }

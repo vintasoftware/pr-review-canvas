@@ -5,6 +5,7 @@ import { setDisabledReason } from './composer.js'
 import { esc, timeAgo } from './dom.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
 import { refreshRail } from './layers.js'
+import { pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { approveBlockedReason } from './signoff.js'
 import { skinLabel } from './skin.js'
@@ -84,7 +85,7 @@ export function renderHeader(bundle, opts) {
   const refreshTitle = local
     ? 'Snapshot the working tree again and redraw'
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
-  const progress = ready ? progressHtml(artifact, bundle.state) : ''
+  const progress = ready ? progressHtml(artifact, bundle.state, pr.headSha) : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
@@ -109,22 +110,31 @@ export function renderHeader(bundle, opts) {
 }
 
 /**
- * The thin line, its text, and the two sign-off commands. Approve stays disabled with the
- * reason until every layer that is not Other has been marked reviewed.
+ * The thin line, its text, the pending-review bar, and the three sign-off commands. Approve stays
+ * disabled with the reason until every layer that is not Other has been marked reviewed; a
+ * comment-only review and a request for changes are always allowed, since neither claims the
+ * change set was read in full.
  * @param {import('./contract-types.js').ReviewArtifact} artifact
  * @param {import('./contract-types.js').PrState} state
  */
-export function progressHtml(artifact, state) {
+export function progressHtml(artifact, state, headSha = artifact.pr.headSha) {
   const p = progressSummary(artifact, state)
   const blocked = approveBlockedReason(artifact, state)
+  const approveTitle = `Write and preview an approving review on ${esc(hostLabel())}`
   const approve =
-    `<button class="cmd" type="button" id="approve" data-tooltip="Write and preview an approving review on ${esc(hostLabel())}" data-act="signoff" data-event="APPROVE" data-needs-post` +
-    `${blocked === null ? ` title="Write and preview an approving review on ${esc(hostLabel())}"` : ` disabled data-disabled-reason="${esc(blocked)}" title="${esc(blocked)}"`}>approve on ${esc(currentHost().kind)}</button>`
+    `<button class="cmd" type="button" id="approve" data-tooltip="${approveTitle}" data-act="signoff" data-event="APPROVE" data-needs-post` +
+    `${blocked === null ? ` title="${approveTitle}"` : ` disabled data-disabled-reason="${esc(blocked)}" title="${esc(blocked)}"`}>approve on ${esc(currentHost().kind)}</button>`
+  const commentTitle = `Write and preview a review with no verdict on ${esc(hostLabel())}`
   return (
     `<div class="progress"><div class="pline" role="progressbar" aria-valuenow="${p.done}" aria-valuemin="0" aria-valuemax="${p.total}" aria-label="Layers reviewed"><span style="width:${p.percent}%"></span></div>` +
     `<span class="ptext">${p.done} of ${p.total} layers reviewed</span></div>` +
+    `<div class="pending-bar-host${pendingCount(state) > 0 ? ' has-pending' : ''}">${pendingBarHtml(
+      pendingCount(state),
+      state.pending.filter(draft => draft.headSha !== headSha)
+    )}</div>` +
     `<div class="signoff">${approve}` +
     `<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on ${esc(hostLabel())}" title="Write and preview a review requesting changes on ${esc(hostLabel())}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>` +
+    `<button class="cmd" type="button" id="comment-review" data-tooltip="${commentTitle}" title="${commentTitle}" data-act="signoff" data-event="COMMENT" data-needs-post>comment</button>` +
     '<span class="capability-note" role="status"></span></div>'
   )
 }

@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { ReviewKey } from '../contract/review-key.js'
 import { emptyState, type PrState, PrStateSchema } from '../contract/state.js'
+import type { AddPendingInput, PendingComment } from '../contract/pending.js'
 import { readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
 import type { PrStore } from './pr-store.js'
 
@@ -29,6 +30,19 @@ export interface StateStore {
   setDismissed(key: ReviewKey, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
   setThreadHidden(key: ReviewKey, rootCommentId: number, hidden: boolean): Promise<PrState>
   addPosted(key: ReviewKey, entry: PostedEntry): Promise<PrState>
+  /** Adds one comment to the pending review and returns the state that holds it. */
+  addPending(key: ReviewKey, input: AddPendingInput, headSha: string): Promise<PrState>
+  /** Rewrites one draft's body. A draft that is no longer there leaves the state alone. */
+  editPending(key: ReviewKey, id: string, body: string): Promise<PrState>
+  removePending(key: ReviewKey, id: string): Promise<PrState>
+  /** Discards every draft at the reviewer's request. */
+  clearPending(key: ReviewKey): Promise<PrState>
+  /** Acknowledge submitted versions, preserving drafts added or edited while posting. */
+  completePending(
+    key: ReviewKey,
+    submitted: ReadonlyArray<PendingComment>,
+    posted: PostedEntry[]
+  ): Promise<PrState>
 }
 
 export interface SetReviewedOptions {
@@ -51,7 +65,13 @@ function layerOf(id: string): string {
   return at === -1 ? id : id.slice(0, at)
 }
 
+/** Ids only have to be unique inside one state file; the clock and the counter make them so. */
+function pendingId(now: () => Date, seq: number): string {
+  return `p${now().getTime().toString(36)}-${seq.toString(36)}`
+}
+
 export function createStateStore(prs: PrStore, now: () => Date): StateStore {
+  let pendingSeq = 0
   const file = (key: ReviewKey): string => path.join(prs.prDir(key), 'state.json')
   const read = (key: ReviewKey): Promise<PrState> =>
     readJsonOrDefault(file(key), PrStateSchema, () => emptyState(now().toISOString()))
@@ -131,5 +151,41 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
         const posted = { ...entry, at: now().toISOString() }
         return { ...state, posted: [...state.posted, posted] }
       }),
+    addPending: (key, input, headSha) => {
+      pendingSeq += 1
+      const at = now().toISOString()
+      const draft: PendingComment = {
+        id: pendingId(now, pendingSeq),
+        path: input.path,
+        line: input.line,
+        side: input.side,
+        ...(input.startLine === undefined ? {} : { startLine: input.startLine }),
+        body: input.body,
+        ...(input.pointFingerprint === undefined ? {} : { pointFingerprint: input.pointFingerprint }),
+        headSha,
+        createdAt: at,
+        updatedAt: at,
+      }
+      return update(key, state => ({ ...state, pending: [...state.pending, draft] }))
+    },
+    editPending: (key, id, body) =>
+      update(key, state => ({
+        ...state,
+        pending: state.pending.map(p => (p.id === id ? { ...p, body, updatedAt: now().toISOString() } : p)),
+      })),
+    removePending: (key, id) =>
+      update(key, state => ({ ...state, pending: state.pending.filter(p => p.id !== id) })),
+    clearPending: key => update(key, state => ({ ...state, pending: [] })),
+    completePending: (key, submitted, posted) =>
+      update(key, state => ({
+        ...state,
+        pending: state.pending.filter(p => !submitted.some(s => s.id === p.id && s.body === p.body)),
+        posted: [
+          ...state.posted,
+          ...posted
+            .filter(p => !state.posted.some(s => s.commentId === p.commentId))
+            .map(p => ({ ...p, at: now().toISOString() })),
+        ],
+      })),
   }
 }

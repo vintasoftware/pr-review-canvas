@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Pending reviews
+
+- A comment on a diff line can go into a pending review instead of out on its own: **start a
+  review** holds it locally. Once a review is open, **add review comment** is the only way out of
+  the box, because a single comment would publish ahead of the review still being written. The
+  drafts are part of the review state, so they survive a reload, and nothing reaches the forge
+  until the review is submitted.
+- An attention point can join the review too, with **add to review** next to **post to github**.
+  It keeps both while a review is open, because its text is written in advance. Once the review
+  lands, the point shows the comment it became, as it does when posted directly.
+- A bar under the progress line says how many comments are waiting and offers to finish or discard
+  the review; each draft is drawn on its line with a **pending** badge and commands to edit or
+  delete it.
+- Submitting a review sends the drafts with it: on GitHub as the comments of the one call that
+  creates the review, so they land as a single review; on GitLab through native draft-note batch
+  publication. Existing GitLab drafts must be finished first. A refused batch retains local drafts;
+  a separate approval failure after publication is reported without submitting comments again.
+
+### Sign-off
+
+- A third verdict, **comment**, posts a review with no approval or rejection, next to the existing
+  **approve** and **request changes**, each of which already carries an editable review body.
+  Only approval still asks that every layer was read.
+
 ### Breaking
 
 - Reviewed marks are keyed by the layer's own key instead of its position in the canvas, so a

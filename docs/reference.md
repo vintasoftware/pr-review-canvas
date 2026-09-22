@@ -398,13 +398,61 @@ zone or `pr-review import <zip> --pr <n>`.
 
 You can post inline comments, replies, PR-level comments, and attention points. Inline comments
 must target lines in the diff. Posting uses your `gh` or `glab` account and remains subject to its
-repository permissions. On GitLab, **request changes** posts the review body as a merge request
-note; **approve** calls GitLab's approve API.
+repository permissions.
 
-The sign-off dialog previews an editable review body summarizing reviewed layers, dismissed
-attention points, and comments posted from the canvas. Approval requires every layer except
-**Other changes** to be reviewed for the current head. Requesting changes does not require that
-completion. If the head moves before submission, reload and review the current commit.
+Click a line number to comment on one line. Shift-click a second line number, or drag across a
+range, to select several lines: the comment then covers the whole range, and posts as a multi-line
+comment (`start_line` on GitHub, a `line_range` position on GitLab). A range must stay inside one
+chunk of the diff.
+
+### Pending reviews
+
+A comment on a diff line offers two commands while no review is open. **post to github** sends it
+on its own, at once. **start a review** puts it in a pending review instead, which is kept on your
+machine and posted to nobody until you submit it.
+
+Once a review is open, the box offers only **add review comment**. Posting a single comment would
+publish it while the rest of the review is still held back, so that way is closed for as long as
+anything is waiting, and the drafts go out together. Replies and pull-request comments are not part
+of a forge review's comment list, so they still post at once either way.
+
+An attention point carries **add to review** next to **post to github**, and keeps both even while
+a review is open: its text is written in advance, so sending one on its own is a use of its own
+rather than a comment jumping the queue. A point waiting in the review says **in your review** and
+is edited or dropped as the draft on its line. Once the review lands, the point shows the comment
+it became, the same as posting it directly.
+
+While a review has comments waiting, a bar sits under the progress line saying how many, and each
+draft is drawn on the diff with a **pending** badge and commands to edit or delete it. Drafts are
+part of the local review state, so they survive a reload. **discard** throws the whole pending
+review away; nothing has to be withdrawn from the forge, because nothing was sent there.
+
+Drafts from an earlier commit are listed separately in the pending bar with their original
+location and commit. They are submitted only when the stored diff is identical to the current
+diff and `canvas.keepForIdenticalDiff` is enabled. If the code changed, copy the text, delete the
+old draft, and write a comment on the current code. A draft added or edited while a review is
+being submitted stays pending.
+
+**finish your review** opens the sign-off dialog, which tells you how many drafts will go out with
+the review. On GitHub they are sent as the comments of the one call that creates the review, so
+they appear as a single review. GitLab stages the inline comments and summary as draft notes,
+then publishes them in one batch. Finish or discard any review already pending in GitLab first.
+A refused submission retains the local drafts and removes the remote drafts staged by that attempt.
+GitLab approval is a separate step; if it fails after publication, the comments remain published
+and the page asks you to approve in GitLab.
+
+### Sign-off
+
+Sign-off has the three verdicts the forge itself offers: **comment** posts a review with no
+verdict (nothing is approved or rejected), **approve**, and **request changes**. Each opens a
+dialog previewing an editable review body summarizing reviewed layers, dismissed attention points,
+and comments posted from the canvas, so an approval or a rejection always carries a comment.
+
+Approval requires every layer except **Other changes** to be reviewed for the current head.
+Requesting changes and a comment-only review do not require that completion. On GitLab,
+**approve** calls GitLab's approve API; **request changes** and **comment** post the review body
+as a merge request note. If the head moves before submission, reload and review the current
+commit.
 
 ### Outdated canvases
 
