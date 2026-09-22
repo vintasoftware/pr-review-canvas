@@ -6,13 +6,14 @@ import { join } from 'node:path'
 import { artifactToModelOutput } from '../review/normalize.js'
 import { prepare } from '../review/prepare.js'
 import { publish } from '../review/publish.js'
-import type { PostCommentResponse, PrBundle } from '../contract/api.js'
+import type { PostCommentResponse, PostReviewResponse, PrBundle } from '../contract/api.js'
 import { gitlabHost } from '../host/host.js'
 import { createApp } from '../server/app.js'
 import {
   createFakeGh,
   createFakeGit,
   ghJson,
+  ghHandler,
   ghPost,
   makeTestContext,
   TEST_REPO,
@@ -64,6 +65,9 @@ const ON_LINE_4 = {
 }
 
 function glabFor42() {
+  const drafts = new Map<number, { note: string; position?: unknown }>()
+  const published: Array<{ id: string; notes: ReturnType<typeof NOTE>[] }> = []
+  let nextDraft = 0
   return createFakeGh({
     routes: {
       user: ghJson({ username: 'alice' }),
@@ -71,15 +75,38 @@ function glabFor42() {
         permissions: { project_access: { access_level: 30 }, group_access: null },
       }),
       [MR_API]: ghJson(MR),
-      [`${MR_API}/discussions`]: ghJson([
+      [`${MR_API}/draft_notes`]: ghHandler(() => [...drafts.keys()].map(id => ({ id }))),
+      [`${MR_API}/discussions`]: ghHandler(() => [
         { id: 'd1', notes: [NOTE(1001, 'Look here', ON_LINE_4), NOTE(1002, 'Agreed', ON_LINE_4)] },
         { id: 'd2', notes: [NOTE(2001, 'Overall fine')] },
+        ...published,
       ]),
     },
     graphql: [
       { project: { mergeRequest: { diffStatsSummary: { additions: 7, deletions: 5, fileCount: 7 } } } },
     ],
     postRoutes: {
+      [`${MR_API}/draft_notes`]: ghPost(body => {
+        const id = ++nextDraft
+        drafts.set(id, body as { note: string; position?: unknown })
+        return { id }
+      }),
+      [`${MR_API}/draft_notes/bulk_publish`]: ghPost(() => {
+        for (const [id, draft] of drafts) {
+          published.push({ id: `published-${id}`, notes: [NOTE(7000 + id, draft.note, draft.position)] })
+        }
+        drafts.clear()
+        return null
+      }),
+      ...Object.fromEntries(
+        [1, 2, 3].map(id => [
+          `${MR_API}/draft_notes/${id}`,
+          ghPost(() => {
+            drafts.delete(id)
+            return null
+          }),
+        ])
+      ),
       [`${MR_API}/discussions`]: ghPost(() => ({ id: 'd3', notes: [NOTE(5001, 'New thread', ON_LINE_4)] })),
       [`${MR_API}/discussions/d1/notes`]: ghPost(() => NOTE(5002, 'A reply', ON_LINE_4)),
       [`${MR_API}/notes`]: ghPost(() => NOTE(6001, 'Overall looks fine')),
@@ -239,6 +266,8 @@ describe('a GitLab origin', () => {
     expect(
       await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'REQUEST_CHANGES', body: 'not yet' }, NO_DIFF)
     ).toEqual({
+      comments: [],
+      warnings: [],
       id: 6001,
       state: 'CHANGES_REQUESTED',
       url: `${MR.web_url}#note_6001`,
@@ -254,11 +283,11 @@ describe('a GitLab origin', () => {
     expect(gh.calls.filter(c => c.kind === 'post').map(c => c.path)).toEqual([`${MR_API}/notes`])
   })
 
-  it('posts the pending comments as discussions before the verdict', async () => {
+  it('publishes pending comments and summary together, then approves', async () => {
     const gh = glabFor42()
     t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
     const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
-    await GL.postReview(
+    const result = await GL.postReview(
       gh,
       TEST_REPO,
       42,
@@ -281,10 +310,174 @@ describe('a GitLab origin', () => {
       },
       derived
     )
-    // GitLab has no batch call, so the draft is its own discussion, and it goes out first.
     const posts = gh.calls.filter(c => c.kind === 'post').map(c => c.path)
-    expect(posts).toEqual([`${MR_API}/discussions`, `${MR_API}/notes`, `${MR_API}/approve`])
-    const discussion = gh.calls.find(c => c.kind === 'post' && c.path.endsWith('/discussions'))
-    expect(discussion?.body).toMatchObject({ body: 'needs a guard' })
+    expect(posts).toEqual([
+      `${MR_API}/draft_notes`,
+      `${MR_API}/draft_notes`,
+      `${MR_API}/draft_notes/bulk_publish`,
+      `${MR_API}/approve`,
+    ])
+    const discussion = gh.calls.find(c => c.kind === 'post' && c.path.endsWith('/draft_notes'))
+    expect(discussion?.body).toMatchObject({
+      note: 'needs a guard',
+      position: { head_sha: HEAD_SHA, new_line: 4 },
+    })
+    expect(result.comments).toMatchObject([{ id: 7001, body: 'needs a guard', line: 4 }])
+  })
+  it.each(['stage', 'publish'])(
+    'removes its remote drafts on %s refusal and can retry without duplicates',
+    async failure => {
+      const gh = glabFor42()
+      t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
+      const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      const input = {
+        event: 'COMMENT' as const,
+        body: 'summary',
+        comments: [
+          {
+            id: 'p1',
+            path: 'src/app.ts',
+            line: 4,
+            side: 'new' as const,
+            body: 'batch comment',
+            headSha: HEAD_SHA,
+            createdAt: 't',
+            updatedAt: 't',
+          },
+        ],
+      }
+      const original = gh.post
+      let fail = true
+      const postSpy = vi.spyOn(gh, 'post').mockImplementation(async (path, body, method) => {
+        if (
+          fail &&
+          ((failure === 'publish' && path.endsWith('/bulk_publish')) ||
+            (failure === 'stage' && (body as { note?: string }).note === 'summary'))
+        ) {
+          throw new Error('refused')
+        }
+        return original(path, body, method)
+      })
+      await expect(GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, input, derived)).rejects.toThrow('refused')
+      expect(await gh.api(`${MR_API}/draft_notes`)).toEqual([])
+      expect(postSpy).toHaveBeenCalledWith(`${MR_API}/draft_notes/1`, {}, 'DELETE')
+      fail = false
+      const result = await GL.postReview(gh, TEST_REPO, 42, HEAD_SHA, input, derived)
+      expect(result.comments).toHaveLength(1)
+      expect(result.comments[0]?.body).toBe('batch comment')
+    }
+  )
+
+  it('preserves a review already drafted in the GitLab UI', async () => {
+    const gh = glabFor42()
+    await gh.post(`${MR_API}/draft_notes`, { note: 'UI draft' })
+    await expect(
+      GL.postReview(
+        gh,
+        TEST_REPO,
+        42,
+        HEAD_SHA,
+        {
+          event: 'COMMENT',
+          body: 'summary',
+          comments: [
+            {
+              id: 'p1',
+              path: 'src/app.ts',
+              line: 4,
+              side: 'new',
+              body: 'canvas draft',
+              headSha: HEAD_SHA,
+              createdAt: 't',
+              updatedAt: 't',
+            },
+          ],
+        },
+        NO_DIFF
+      )
+    ).rejects.toThrow('Finish or discard')
+    expect(await gh.api(`${MR_API}/draft_notes`)).toEqual([{ id: 1 }])
+    expect(gh.calls.filter(c => c.kind === 'post')).toHaveLength(1)
+  })
+  it.each(['approval', 'refresh'])(
+    'reports a %s failure after publication without failing the submission',
+    async failure => {
+      const gh = glabFor42()
+      t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
+      const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      const originalPost = gh.post
+      const originalApi = gh.api
+      let published = false
+      vi.spyOn(gh, 'post').mockImplementation(async (path, body, method) => {
+        if (failure === 'approval' && path.endsWith('/approve')) throw new Error('approval refused')
+        const result = await originalPost(path, body, method)
+        if (path.endsWith('/bulk_publish')) published = true
+        return result
+      })
+      vi.spyOn(gh, 'api').mockImplementation(async (path, params) => {
+        if (failure === 'refresh' && published && path.endsWith('/discussions')) throw new Error('offline')
+        return originalApi(path, params)
+      })
+      const result = await GL.postReview(
+        gh,
+        TEST_REPO,
+        42,
+        HEAD_SHA,
+        {
+          event: 'APPROVE',
+          body: 'summary',
+          comments: [
+            {
+              id: 'p1',
+              path: 'src/app.ts',
+              line: 4,
+              side: 'new',
+              body: 'canvas draft',
+              headSha: HEAD_SHA,
+              createdAt: 't',
+              updatedAt: 't',
+            },
+          ],
+        },
+        derived
+      )
+      expect(result.state).toBe(failure === 'approval' ? 'COMMENTED' : 'APPROVED')
+      expect(result.warnings).toHaveLength(1)
+      expect(result.warnings[0]).toContain(
+        failure === 'approval' ? 'approval failed' : 'could not be refreshed'
+      )
+      expect(await gh.api(`${MR_API}/draft_notes`)).toEqual([])
+      expect(gh.calls.filter(c => c.path.endsWith('/bulk_publish'))).toHaveLength(1)
+    }
+  )
+  it('submits locally saved drafts through the review route and returns their published threads', async () => {
+    const gh = glabFor42()
+    t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
+    await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    const app = createApp(t.ctx)
+    await app.request('/api/prs/42', { headers: LOCAL })
+    const draft = await app.request(
+      ...post('/api/prs/42/pending', {
+        path: 'src/app.ts',
+        line: 4,
+        side: 'new',
+        body: 'route draft',
+        headSha: HEAD_SHA,
+      })
+    )
+    expect(draft.status).toBe(201)
+    const submitted = await app.request(
+      ...post('/api/prs/42/review', {
+        event: 'COMMENT',
+        body: 'summary',
+        headSha: HEAD_SHA,
+      })
+    )
+    expect(submitted.status).toBe(201)
+    const result = (await submitted.json()) as PostReviewResponse
+    expect(result.state.pending).toEqual([])
+    expect(result.submitted).toBe(1)
+    expect(result.comments).toMatchObject([{ id: 7001, body: 'route draft', line: 4 }])
+    expect((await t.ctx.prs.readComments(42))?.reviewComments.some(c => c.id === 7001)).toBe(true)
   })
 })

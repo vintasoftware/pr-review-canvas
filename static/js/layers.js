@@ -15,7 +15,7 @@ import { askButtonHtml } from './ask.js'
 import { applyCodeFolds, wireFoldReveal } from './code-folds.js'
 import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
-import { applyDecorations } from './diff-decorations.js'
+import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { hunkForLine } from './hunks.js'
@@ -31,6 +31,7 @@ import { anchorKey, buildThreads } from './threads.js'
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
  *   patches: Record<string, string> | null,
+ *   headSha: string,
  *   comments: ReadonlyArray<ReviewComment>,
  *   state: PrState,
  *   now: Date,
@@ -490,7 +491,7 @@ function decorateCard(card, ctx, at) {
       p => p.path === at.entry.path && at.hunkIds.has(hunkIdForPoint(p, at.entry))
     ),
     threads: threadsForHunks(ctx.comments, at.entry, at.hunkIds),
-    pending: pendingForPath(ctx.state, at.entry.path),
+    pending: draftsForCard(ctx, at.entry, at.hunkIds),
     paths: pathSet(ctx.files),
     now: ctx.now,
     state: ctx.state,
@@ -500,34 +501,40 @@ function decorateCard(card, ctx, at) {
 }
 
 /**
- * Draws the decorations of every card whose diff is already on the page again, from the current
- * context. A card that has not been drawn yet is left alone: it reads the context when it draws.
- *
- * This is how a pending comment appears and disappears without redrawing any diff, so open folds
- * and the reader's scroll position survive it.
+ * Drafts only belong to the diff and hunk they were written on. Earlier-commit drafts are
+ * available in the pending bar, and the server checks diff equality before submitting them.
+ * @param {RenderContext} ctx
+ * @param {FileEntry} entry
+ * @param {ReadonlySet<string>} hunkIds
+ */
+function draftsForCard(ctx, entry, hunkIds) {
+  return pendingForPath(ctx.state, entry.path).filter(
+    p => p.headSha === ctx.headSha && hunkIds.has(hunkForLine(entry.hunks, p.side, p.line)?.id ?? '')
+  )
+}
+
+/** Update only drafts and newly posted threads; preserve existing decorations and editors.
  * @param {ParentNode} root
  * @param {RenderContext} ctx
- * @returns {number} how many cards were redrawn
+ * @param {ReadonlySet<string>} paths
+ * @param {ReadonlyArray<ReviewComment>} [submitted]
  */
-export function refreshCardDecorations(root, ctx) {
+export function refreshCardDecorations(root, ctx, paths = pathSet(ctx.files), submitted = []) {
   let redrawn = 0
-  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+  for (const card of root.querySelectorAll('article.file')) {
+    if (!(card instanceof HTMLElement) || !paths.has(card.getAttribute('data-path') ?? '')) continue
     const key = card.getAttribute('data-key')
-    const layerId = card.getAttribute('data-layer')
     const host = card.querySelector('.diff-host')
-    if (!(card instanceof HTMLElement) || key === null || layerId === null) {
-      continue
-    }
-    // Nothing is drawn for a card still holding its patch back, so there is nothing to decorate.
-    if (!(host instanceof HTMLElement) || host.querySelector('table.diff') === null) {
-      continue
-    }
     const entry = ctx.files.find(f => f.key === key)
-    if (entry === undefined) {
+    if (key === null || entry === undefined || host === null || host.querySelector('table.diff') === null)
       continue
-    }
     const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
-    decorateCard(card, ctx, { key, layerId, entry, hunkIds })
+    refreshPendingRows(card, key, draftsForCard(ctx, entry, hunkIds), ctx.now)
+    for (const thread of threadsForHunks(submitted, entry, hunkIds)) {
+      if (card.querySelector(`[data-thread="${thread.root.id}"]`) === null) {
+        insertThreadRow(card, key, thread, { now: ctx.now })
+      }
+    }
     cardRenderedHook?.(card)
     redrawn++
   }

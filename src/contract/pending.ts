@@ -47,8 +47,3 @@ export const EditPendingInputSchema = z.object({
   body: z.string().min(1).max(COMMENT_BODY_MAX),
 })
 export type EditPendingInput = z.infer<typeof EditPendingInputSchema>
-
-/** The label the page and the review body use for a count of drafts. */
-export function pendingLabel(count: number): string {
-  return count === 1 ? '1 pending comment' : `${count} pending comments`
-}

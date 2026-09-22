@@ -1,3 +1,4 @@
+import { rm as removeDirectory } from 'node:fs/promises'
 // @vitest-environment node
 // The routes that change something: local review state, comments, and the sign-off review.
 import type { PostCommentResponse, PostReviewResponse, StateResponse } from '../contract/api.js'
@@ -9,6 +10,8 @@ import {
   type FakeGh,
   type FakeGhOptions,
   ghJson,
+  ghHandler,
+  moveFakeHead,
   ghPost,
   ghPostError,
   makeTestContext,
@@ -18,10 +21,10 @@ import {
 import {
   BASE_SHA,
   GH_PULL,
-  GH_REVIEW_COMMENTS,
   ghFor42,
   gitFor42,
   HEAD_SHA,
+  SYNTHETIC_DIFF,
   syntheticArtifact,
 } from '../testing/synthetic.js'
 import { createApp } from './app.js'
@@ -690,6 +693,32 @@ describe('POST /api/prs/:n/review', () => {
   })
 })
 
+/** This fake creates the review's comments from the actual submitted payload. */
+function reviewGh() {
+  let created: Array<typeof POSTED_INLINE & { start_line?: number }> = []
+  const gh = ghFor42({
+    postRoutes: {
+      ...POST_ROUTES,
+      'repos/acme/widgets/pulls/42/reviews': ghPost(body => {
+        const input = body as {
+          comments?: Array<{ path: string; line: number; side: string; body: string; start_line?: number }>
+        }
+        created = (input.comments ?? []).map((c, index) => ({
+          ...POSTED_INLINE,
+          ...c,
+          id: 5001 + index,
+          original_line: c.line,
+        }))
+        return POSTED_REVIEW
+      }),
+    },
+    routes: {
+      'repos/acme/widgets/pulls/42/reviews/7001/comments': ghHandler(() => created),
+    },
+  })
+  return gh
+}
+
 describe('the pending review', () => {
   let t: TestContext
   afterEach(async () => {
@@ -705,6 +734,122 @@ describe('the pending review', () => {
   }
 
   const DRAFT = { path: 'src/app.ts', line: 4, side: 'new', body: 'needs a guard' }
+
+  it('preserves newly added and edited drafts while a review is being posted', async () => {
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const gh = ghFor42({
+      postRoutes: {
+        ...POST_ROUTES,
+        'repos/acme/widgets/pulls/42/reviews': ghPost(async () => {
+          entered.resolve()
+          await release.promise
+          return POSTED_REVIEW
+        }),
+      },
+    })
+    t = await contextWithCanvas(gh)
+    const app = createApp(t.ctx)
+    const first = await json<StateResponse>(await app.request(...post('/api/prs/42/pending', DRAFT)))
+    const id = first.state.pending[0]!.id
+    const submission = app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    await entered.promise
+    await app.request(...post('/api/prs/42/pending', { ...DRAFT, line: 5, body: 'new draft' }))
+    await app.request(...patch(`/api/prs/42/pending/${id}`, { body: 'edited during submission' }))
+    release.resolve()
+    expect((await submission).status).toBe(201)
+    expect((await t.ctx.state.read(42)).pending.map(p => p.body)).toEqual([
+      'edited during submission',
+      'new draft',
+    ])
+  })
+
+  it.each([true, false])(
+    'checks draft identity after two head transitions (identical diff: %s)',
+    async identical => {
+      const gh = reviewGh()
+      const git = gitFor42()
+      t = await makeTestContext({ gh, git })
+      const artifact = syntheticArtifact()
+      await t.ctx.canvases.write(HEAD_SHA, artifact, MANIFEST, 42)
+      await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      const app = createApp(t.ctx)
+      await app.request(...post('/api/prs/42/pending', { ...DRAFT, headSha: HEAD_SHA }))
+      for (const headSha of ['c'.repeat(40), 'd'.repeat(40)]) {
+        const diff = identical ? SYNTHETIC_DIFF : SYNTHETIC_DIFF.replace('a() + b()', `a() * ${headSha[0]}()`)
+        moveFakeHead(git, {
+          headRef: 'pull/42/head',
+          baseRef: 'refs/pr/42/base',
+          headSha,
+          mergeBaseSha: BASE_SHA,
+          diff,
+        })
+        await t.ctx.canvases.write(
+          headSha,
+          { ...artifact, pr: { ...artifact.pr, headSha } },
+          { ...MANIFEST, headSha },
+          42
+        )
+        await t.ctx.derived.ensure(headSha, BASE_SHA)
+        await app.request('/api/prs/42?refresh=1', { headers: LOCAL })
+        expect((await t.ctx.state.read(42)).pending[0]?.headSha).toBe(HEAD_SHA)
+      }
+      const response = await app.request(
+        ...post('/api/prs/42/review', { event: 'COMMENT', headSha: 'd'.repeat(40), body: 'a look' })
+      )
+      expect(response.status).toBe(identical ? 201 : 409)
+      expect(gh.calls.filter(c => c.kind === 'post')).toHaveLength(identical ? 1 : 0)
+      expect((await t.ctx.state.read(42)).pending).toHaveLength(identical ? 0 : 1)
+    }
+  )
+
+  it.each(['disabled', 'missing'] as const)('refuses old drafts when diff reuse is %s', async condition => {
+    const gh = reviewGh()
+    const git = gitFor42()
+    t = await makeTestContext({ gh, git })
+    const artifact = syntheticArtifact()
+    await t.ctx.canvases.write(HEAD_SHA, artifact, MANIFEST, 42)
+    await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    const app = createApp(t.ctx)
+    await app.request(...post('/api/prs/42/pending', DRAFT))
+    const headSha = 'c'.repeat(40)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF,
+    })
+    await t.ctx.canvases.write(
+      headSha,
+      { ...artifact, pr: { ...artifact.pr, headSha } },
+      { ...MANIFEST, headSha },
+      42
+    )
+    await t.ctx.derived.ensure(headSha, BASE_SHA)
+    await app.request('/api/prs/42?refresh=1', { headers: LOCAL })
+    if (condition === 'disabled') t.ctx.projectConfig.config.canvas.keepForIdenticalDiff = false
+    else await removeDirectory(t.ctx.derived.derivedDir(HEAD_SHA), { recursive: true })
+    const response = await app.request(
+      ...post('/api/prs/42/review', { event: 'COMMENT', headSha, body: 'a look' })
+    )
+    expect(response.status).toBe(409)
+    expect((await t.ctx.state.read(42)).pending).toHaveLength(1)
+    expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
+  })
+
+  it('does not retry a successful post when its receipt read fails', async () => {
+    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    const app = createApp(t.ctx)
+    await app.request(...post('/api/prs/42/pending', DRAFT))
+    const response = await app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    expect(response.status).toBe(201)
+    const answer = await json<PostReviewResponse>(response)
+    expect(answer.review.id).toBe(7001)
+    expect(answer.comments).toEqual([])
+    expect(answer.warnings[0]).toContain('Review posted, but its comments could not be loaded')
+    expect(answer.state.pending).toEqual([])
+  })
 
   it('keeps a comment locally and posts nothing while it waits', async () => {
     const gh = ghFor42({ postRoutes: POST_ROUTES })
@@ -802,11 +947,7 @@ describe('the pending review', () => {
   })
 
   it('marks the point posted once the review its draft went out with has landed', async () => {
-    // After the review lands, the forge lists the comment it created alongside the older ones.
-    const gh = ghFor42({
-      postRoutes: POST_ROUTES,
-      routes: { 'repos/acme/widgets/pulls/42/comments': ghJson([...GH_REVIEW_COMMENTS, POSTED_INLINE]) },
-    })
+    const gh = reviewGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     // A draft that came from an attention point carries the point's fingerprint.
@@ -815,7 +956,12 @@ describe('the pending review', () => {
     )
     expect((await t.ctx.state.read(42)).pending[0]?.pointFingerprint).toBe('fp-1')
 
-    await app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    const response = await json<PostReviewResponse>(
+      await app.request(...post('/api/prs/42/review', { event: 'COMMENT', body: 'a look' }))
+    )
+    expect(response.comments).toMatchObject([{ id: 5001, body: POSTED_INLINE.body }])
+    expect(response.warnings).toEqual([])
+    expect((await t.ctx.prs.readComments(42))?.reviewComments).toContainEqual(response.comments[0])
     // The review call names none of the comments it made, so the draft is found in the list the
     // forge returns and the point is recorded as posted, the way posting it directly would.
     const state = await t.ctx.state.read(42)

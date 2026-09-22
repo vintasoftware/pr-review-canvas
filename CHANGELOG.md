@@ -16,8 +16,9 @@
   the review; each draft is drawn on its line with a **pending** badge and commands to edit or
   delete it.
 - Submitting a review sends the drafts with it: on GitHub as the comments of the one call that
-  creates the review, so they land as a single review; on GitLab as one inline discussion each,
-  posted before the verdict. A review the forge refuses leaves the drafts waiting.
+  creates the review, so they land as a single review; on GitLab through native draft-note batch
+  publication. Existing GitLab drafts must be finished first. A refused batch retains local drafts;
+  a separate approval failure after publication is reported without submitting comments again.
 
 ### Sign-off
 

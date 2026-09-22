@@ -151,6 +151,8 @@ describe('createReviewSession', () => {
         sent.push(input)
         return {
           review: { id: 7, state: 'APPROVED', url: 'https://github.com/r', submittedAt: null },
+          comments: [],
+          warnings: [],
           submitted: 0,
           state: BASE,
         }

@@ -5,7 +5,7 @@ import { setDisabledReason } from './composer.js'
 import { esc, timeAgo } from './dom.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
 import { refreshRail } from './layers.js'
-import { pendingBarHtml, pendingCount, refreshPendingBar } from './pending.js'
+import { pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { approveBlockedReason } from './signoff.js'
 import { skinLabel } from './skin.js'
@@ -85,7 +85,7 @@ export function renderHeader(bundle, opts) {
   const refreshTitle = local
     ? 'Snapshot the working tree again and redraw'
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
-  const progress = ready ? progressHtml(artifact, bundle.state) : ''
+  const progress = ready ? progressHtml(artifact, bundle.state, pr.headSha) : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
@@ -117,7 +117,7 @@ export function renderHeader(bundle, opts) {
  * @param {import('./contract-types.js').ReviewArtifact} artifact
  * @param {import('./contract-types.js').PrState} state
  */
-export function progressHtml(artifact, state) {
+export function progressHtml(artifact, state, headSha = artifact.pr.headSha) {
   const p = progressSummary(artifact, state)
   const blocked = approveBlockedReason(artifact, state)
   const approveTitle = `Write and preview an approving review on ${esc(hostLabel())}`
@@ -128,7 +128,10 @@ export function progressHtml(artifact, state) {
   return (
     `<div class="progress"><div class="pline" role="progressbar" aria-valuenow="${p.done}" aria-valuemin="0" aria-valuemax="${p.total}" aria-label="Layers reviewed"><span style="width:${p.percent}%"></span></div>` +
     `<span class="ptext">${p.done} of ${p.total} layers reviewed</span></div>` +
-    `<div class="pending-bar-host${pendingCount(state) > 0 ? ' has-pending' : ''}">${pendingBarHtml(pendingCount(state))}</div>` +
+    `<div class="pending-bar-host${pendingCount(state) > 0 ? ' has-pending' : ''}">${pendingBarHtml(
+      pendingCount(state),
+      state.pending.filter(draft => draft.headSha !== headSha)
+    )}</div>` +
     `<div class="signoff">${approve}` +
     `<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on ${esc(hostLabel())}" title="Write and preview a review requesting changes on ${esc(hostLabel())}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>` +
     `<button class="cmd" type="button" id="comment-review" data-tooltip="${commentTitle}" title="${commentTitle}" data-act="signoff" data-event="COMMENT" data-needs-post>comment</button>` +
@@ -159,7 +162,6 @@ export function refreshProgress(root, artifact, state) {
     text.textContent = `${p.done} of ${p.total} layers reviewed`
   }
   setDisabledReason(root.querySelector('#approve'), approveBlockedReason(artifact, state))
-  refreshPendingBar(root, state)
   refreshRail(root, artifact, state)
   return p
 }

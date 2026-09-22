@@ -126,6 +126,24 @@ describe('refreshPendingBar', () => {
     expect(root.querySelector('.pending-bar')).toBeNull()
   })
 
+  it('keeps earlier-commit drafts separate and preserves the expanded list on other state changes', () => {
+    document.body.innerHTML = '<div class="pending-bar-host"></div>'
+    const state = { ...BASE, pending: [draft()] }
+    const head = 'f'.repeat(40)
+    refreshPendingBar(document.body, state, head)
+    const details = document.querySelector('details')
+    expect(details?.textContent).toContain('Comments written on earlier commits')
+    expect(details?.textContent).toContain('src/app.ts:4')
+    expect(details?.querySelector('[data-act="pending-delete"]')).not.toBeNull()
+    expect(details?.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe(draft().body)
+    details?.setAttribute('open', '')
+    refreshPendingBar(document.body, { ...state, reviewed: { 'layer:x': true } }, head)
+    expect(document.querySelector('details')).toBe(details)
+    expect(details?.open).toBe(true)
+    refreshPendingBar(document.body, { ...state, pending: [...state.pending, draft({ id: 'p2' })] }, head)
+    expect(document.querySelector('details')?.open).toBe(true)
+  })
+
   it('does nothing when the page has no place for the bar', () => {
     document.body.innerHTML = '<div></div>'
     expect(refreshPendingBar(document.body, { ...BASE, pending: [draft()] })).toBe(1)

@@ -422,10 +422,19 @@ draft is drawn on the diff with a **pending** badge and commands to edit or dele
 part of the local review state, so they survive a reload. **discard** throws the whole pending
 review away; nothing has to be withdrawn from the forge, because nothing was sent there.
 
+Drafts from an earlier commit are listed separately in the pending bar with their original
+location and commit. They are submitted only when the stored diff is identical to the current
+diff and `canvas.keepForIdenticalDiff` is enabled. If the code changed, copy the text, delete the
+old draft, and write a comment on the current code. A draft added or edited while a review is
+being submitted stays pending.
+
 **finish your review** opens the sign-off dialog, which tells you how many drafts will go out with
 the review. On GitHub they are sent as the comments of the one call that creates the review, so
-they appear as a single review. GitLab has no batch call, so each draft is posted as its own
-inline discussion before the verdict. A review the forge refuses leaves the drafts where they are.
+they appear as a single review. GitLab stages the inline comments and summary as draft notes,
+then publishes them in one batch. Finish or discard any review already pending in GitLab first.
+A refused submission retains the local drafts and removes the remote drafts staged by that attempt.
+GitLab approval is a separate step; if it fails after publication, the comments remain published
+and the page asks you to approve in GitLab.
 
 ### Sign-off
 

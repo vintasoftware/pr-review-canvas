@@ -1,7 +1,12 @@
 import { shareGithubCanvas } from '../github/canvas-comment.js'
 import { shareGitlabCanvas } from '../gitlab/canvas-comment.js'
 import type { Capabilities, PublicHost, ReviewSummary } from '../contract/api.js'
-import type { FetchCommentsResult, PostCommentInput, PostCommentResult } from '../contract/comments.js'
+import type {
+  FetchCommentsResult,
+  PostCommentInput,
+  PostCommentResult,
+  ReviewComment,
+} from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
 import { GITHUB_ATTACHMENTS } from '../github/attachments.js'
 import { probeCapabilities } from '../github/capabilities.js'
@@ -23,6 +28,12 @@ import type { AttachmentLink } from './attachments.js'
 import { GH_CLI, glabCli, type HostClient, type HostCliSpec } from './client.js'
 
 export type HostKind = PublicHost['kind']
+
+/** The review and the comments created by this submission. */
+export interface PostedReview extends ReviewSummary {
+  comments: ReviewComment[]
+  warnings: string[]
+}
 
 /** How canvas zips attached to a review are found and fetched on one forge. */
 export interface HostAttachments {
@@ -71,7 +82,7 @@ export interface Host {
   ): Promise<PostCommentResult>
   /**
    * Submits the review, with the comments the reviewer had waiting. GitHub takes them in the one
-   * call that creates the review; GitLab posts them itself before the verdict, which is why the
+   * call that creates the review; GitLab stages and batch-publishes draft notes, which is why the
    * diff is passed here too.
    */
   postReview(
@@ -81,7 +92,7 @@ export interface Host {
     headSha: string,
     input: { event: ReviewEvent; body: string; comments?: ReadonlyArray<PendingComment> },
     diff: Derived
-  ): Promise<ReviewSummary>
+  ): Promise<PostedReview>
   probeCapabilities(client: HostClient, repo: Repo): Promise<Capabilities>
   canvasCommentLimit: number
   shareCanvas(client: HostClient, repo: Repo, number: number, body: string): Promise<string>

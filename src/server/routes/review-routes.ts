@@ -8,7 +8,7 @@ import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
-import { lookupCanvas } from '../../review/carry-over.js'
+import { lookupCanvas, samePatches } from '../../review/carry-over.js'
 import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
 import { canvasBelongsTo } from '../../store/canvas-store.js'
@@ -139,14 +139,19 @@ function requireInlineTarget(diff: Derived, target: Parameters<typeof checkInlin
 
 /**
  * The `posted` entries for drafts that came from attention points, found in the comment list the
- * forge returns after the review landed. A review is created in one call that does not name the
- * comments it made, so each draft is matched by where it sits and what it says — the same path,
- * side, line and body it was submitted with. A draft that matches nothing is skipped: the point
- * simply keeps its post command.
+ * forge created in this submission. Match the full range and body inside that receipt,
+ * never against historical comments. A failed comment read is reported by the host adapter.
  */
 export function postedFromPending(
   pending: ReadonlyArray<PendingComment>,
-  comments: ReadonlyArray<{ id: number; path: string; line: number | null; side: string; body: string }>
+  comments: ReadonlyArray<{
+    id: number
+    path: string
+    line: number | null
+    startLine?: number | undefined
+    side: string
+    body: string
+  }>
 ): Array<{ commentId: number; pointFingerprint: string }> {
   const entries: Array<{ commentId: number; pointFingerprint: string }> = []
   const used = new Set<number>()
@@ -159,6 +164,7 @@ export function postedFromPending(
         !used.has(c.id) &&
         c.path === draft.path &&
         c.line === draft.line &&
+        (c.startLine ?? c.line) === (draft.startLine ?? draft.line) &&
         c.side === draft.side &&
         c.body === draft.body
     )
@@ -261,7 +267,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       requireInlineTarget(diff, input)
     }
     const posted = await ctx.config.host.postComment(ctx.gh, ctx.config.repo, number, pr.headSha, input, diff)
-    await appendComment(ctx, number, posted)
+    await appendComments(ctx, number, [posted])
     const entry =
       input.kind === 'inline' && input.pointFingerprint !== undefined
         ? { commentId: posted.comment.id, pointFingerprint: input.pointFingerprint }
@@ -343,9 +349,29 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     // The drafts read here are the ones that go out. A draft written after this read stays in the
     // pending review instead of being dropped by the clear below.
     const pending = input.includePending ? (await ctx.state.read(number)).pending : []
-    // GitLab posts the drafts itself, one discussion at a time, and needs the diff to place them.
+    // GitLab needs the diff to position its draft notes.
     const diff = pending.length === 0 ? { files: [], patches: {} } : await requireDerived(ctx, pr.headSha)
-    const review = await ctx.config.host.postReview(
+    for (const head of new Set(pending.map(p => p.headSha))) {
+      if (head === pr.headSha) continue
+      const original = await ctx.derived.read(head)
+      if (
+        !ctx.projectConfig.config.canvas.keepForIdenticalDiff ||
+        original === null ||
+        !samePatches(original, diff)
+      ) {
+        throw new AppError(
+          'CANVAS_STALE',
+          'pending comments were written on a different diff',
+          409,
+          'copy or delete the earlier-commit drafts in the pending review, then comment on the current code'
+        )
+      }
+    }
+    const {
+      comments: submittedComments,
+      warnings,
+      ...review
+    } = await ctx.config.host.postReview(
       ctx.gh,
       ctx.config.repo,
       number,
@@ -353,17 +379,21 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       { event: input.event, body, comments: pending },
       diff
     )
-    let next = state
-    if (pending.length > 0) {
-      // The review landed, so the drafts are no longer pending whatever happens next. The comment
-      // list is fetched again because the review call does not name the comments it created.
-      next = await ctx.state.clearPending(number)
-      const fresh = await loader.refreshComments(number).catch(() => null)
-      for (const entry of postedFromPending(pending, fresh?.comments.reviewComments ?? [])) {
-        next = await ctx.state.addPosted(number, entry)
-      }
+    const next =
+      pending.length === 0
+        ? await ctx.state.read(number)
+        : await ctx.state.completePending(number, pending, postedFromPending(pending, submittedComments))
+    if (submittedComments.length > 0) {
+      await appendComments(
+        ctx,
+        number,
+        submittedComments.map(comment => ({ kind: 'review', comment }))
+      )
     }
-    return c.json({ review, submitted: pending.length, state: next }, 201)
+    return c.json(
+      { review, submitted: pending.length, state: next, comments: submittedComments, warnings },
+      201
+    )
   })
 
   return api
@@ -372,8 +402,12 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
 /** One append at a time per PR, so two posts that land together do not overwrite each other. */
 const appendChains = new Map<number, Promise<unknown>>()
 
-function appendComment(ctx: AppContext, number: number, posted: PostCommentResult): Promise<void> {
-  const run = () => writeAppendedComment(ctx, number, posted)
+function appendComments(
+  ctx: AppContext,
+  number: number,
+  posted: ReadonlyArray<PostCommentResult>
+): Promise<void> {
+  const run = () => writeAppendedComments(ctx, number, posted)
   const chained = (appendChains.get(number) ?? Promise.resolve()).then(run, run)
   appendChains.set(
     number,
@@ -386,30 +420,27 @@ function appendComment(ctx: AppContext, number: number, posted: PostCommentResul
  * Keeps the cached comments in step with what was just posted, so a reload shows it once. With
  * nothing cached there is nothing to keep in step: the next read fetches the list from GitHub.
  */
-async function writeAppendedComment(
+async function writeAppendedComments(
   ctx: AppContext,
   number: number,
-  posted: PostCommentResult
+  posted: ReadonlyArray<PostCommentResult>
 ): Promise<void> {
   const comments = await ctx.prs.readComments(number)
   if (comments === null) {
     return
   }
-  if (posted.kind === 'review') {
-    if (comments.reviewComments.some(c => c.id === posted.comment.id)) {
-      return
-    }
-    await ctx.prs.writeComments(number, {
-      ...comments,
-      reviewComments: [...comments.reviewComments, posted.comment],
-    })
-    return
+  const reviewComments = [...comments.reviewComments]
+  const issueComments = [...comments.issueComments]
+  for (const entry of posted) {
+    const list = entry.kind === 'review' ? reviewComments : issueComments
+    if (list.some(c => c.id === entry.comment.id)) continue
+    if (entry.kind === 'review') reviewComments.push(entry.comment)
+    else issueComments.push(entry.comment)
   }
-  if (comments.issueComments.some(c => c.id === posted.comment.id)) {
-    return
+  if (
+    reviewComments.length !== comments.reviewComments.length ||
+    issueComments.length !== comments.issueComments.length
+  ) {
+    await ctx.prs.writeComments(number, { ...comments, reviewComments, issueComments })
   }
-  await ctx.prs.writeComments(number, {
-    ...comments,
-    issueComments: [...comments.issueComments, posted.comment],
-  })
 }

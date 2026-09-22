@@ -170,6 +170,8 @@ export interface ReviewBodyResponse {
 
 export interface PostReviewResponse {
   review: ReviewSummary
+  comments: ReviewComment[]
+  warnings: string[]
   /** How many pending comments went out with the review. */
   submitted: number
   /** The state after the pending review was cleared, so the page drops its drafts in one step. */

@@ -24,15 +24,3 @@ export const PostReviewInputSchema = z.object({
     .optional(),
 })
 export type PostReviewInput = z.infer<typeof PostReviewInputSchema>
-
-/** How the forge names the state of a review it accepted, for a review the tool posted itself. */
-export function reviewStateFor(event: ReviewEvent): string {
-  switch (event) {
-    case 'APPROVE':
-      return 'APPROVED'
-    case 'REQUEST_CHANGES':
-      return 'CHANGES_REQUESTED'
-    case 'COMMENT':
-      return 'COMMENTED'
-  }
-}

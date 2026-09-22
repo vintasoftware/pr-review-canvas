@@ -88,3 +88,15 @@
   background: var(--warn-bg);
   border-left: 3px solid var(--warn);
 }
+
+.earlier-pending {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+}
+
+.earlier-draft + .earlier-draft {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--warn);
+}

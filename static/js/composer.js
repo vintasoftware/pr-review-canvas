@@ -36,6 +36,7 @@ function dataAttributes(opts) {
     ['data-in-reply-to', opts.inReplyToId],
     ['data-fingerprint', opts.pointFingerprint],
     ['data-pending-id', opts.pendingId],
+    ['data-pending-active', opts.pendingActive === true ? '1' : '0'],
   ]
   return pairs
     .filter(([, value]) => value !== undefined)
@@ -72,6 +73,25 @@ function commandsHtml(opts) {
     post() +
     cancel
   )
+}
+
+/** Keep an open inline composer's commands in step when another action starts a review.
+ * @param {ParentNode} root
+ * @param {boolean} active
+ */
+export function refreshComposerCommands(root, active) {
+  for (const box of root.querySelectorAll('.composer-box[data-kind="inline"]')) {
+    if (
+      box.hasAttribute('data-pending-id') ||
+      box.hasAttribute('data-posting') ||
+      (box.getAttribute('data-pending-active') === '1') === active
+    )
+      continue
+    const actions = box.querySelector('.composer-actions')
+    if (actions !== null)
+      actions.innerHTML = commandsHtml({ id: box.id, label: '', kind: 'inline', pendingActive: active })
+    box.setAttribute('data-pending-active', active ? '1' : '0')
+  }
 }
 
 /**

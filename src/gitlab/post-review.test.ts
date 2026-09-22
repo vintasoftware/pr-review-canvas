@@ -87,6 +87,8 @@ describe('postGitlabReview', () => {
         WEB
       )
     ).toEqual({
+      comments: [],
+      warnings: [],
       id: 8,
       state: 'CHANGES_REQUESTED',
       url: `${WEB}/acme/widgets/-/merge_requests/42#note_8`,

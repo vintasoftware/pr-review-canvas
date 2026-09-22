@@ -24,6 +24,8 @@ import {
   composerRowHtml,
   concealForComposer,
   focusComposer,
+  revealConcealed,
+  refreshComposerCommands,
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
@@ -273,9 +275,29 @@ export function wireReview(root, session, opts = {}) {
     return layer === undefined ? state.reviewed[id] === true : layerProgress(layer, state) === 'done'
   }
 
+  let drawnPending = session.pending
+  let drawnComments = session.submittedComments
   /** Draws everything the local state decides, after it changed. */
   const onState = (/** @type {PrState} */ state) => {
     updateRenderState(state)
+    const ctx = getRenderContext()
+    if (ctx !== null) {
+      const changedPaths = new Set()
+      const previous = new Map(drawnPending.map(p => [p.id, p]))
+      for (const draft of state.pending) {
+        const old = previous.get(draft.id)
+        if (old === undefined || old.body !== draft.body) changedPaths.add(draft.path)
+        previous.delete(draft.id)
+      }
+      for (const draft of previous.values()) changedPaths.add(draft.path)
+      const added = session.submittedComments.filter(c => !drawnComments.some(old => old.id === c.id))
+      for (const comment of added) changedPaths.add(comment.path)
+      const next = { ...ctx, comments: [...ctx.comments, ...added] }
+      setRenderContext(next)
+      refreshCardDecorations(root, next, changedPaths, added)
+      drawnPending = state.pending
+      drawnComments = session.submittedComments
+    }
     refreshProgress(root, session.artifact, state)
     applyDismissed(root, session.artifact.points, state, {
       paths: paths(),
@@ -296,22 +318,11 @@ export function wireReview(root, session, opts = {}) {
         setCardCollapsed(parts.card, reviewed)
       }
     }
-    refreshPendingBar(root, state)
+    refreshPendingBar(root, state, session.headSha)
+    refreshComposerCommands(root, state.pending.length > 0)
     applyCapabilityGating(root, session.capabilities)
   }
   const unsubscribe = session.subscribe(onState)
-
-  /**
-   * Draws the decorations of the cards on screen again, which is what makes a pending comment
-   * appear, change or go away. Only the rows around the diff are rebuilt: the diff itself, the
-   * folds the reader opened, and where they are on the page all stay as they are.
-   */
-  const redrawCards = () => {
-    const ctx = getRenderContext()
-    if (ctx !== null) {
-      refreshCardDecorations(root, ctx)
-    }
-  }
 
   /** @param {import('./contract-types.js').PostCommentInput} input */
   const postComment = async input => {
@@ -383,6 +394,7 @@ export function wireReview(root, session, opts = {}) {
    */
   const openComposer = (anchor, options, shape) => {
     closeComposers(root)
+    options = { ...options, pendingActive: pendingCount(session.state) > 0 }
     const node =
       shape === 'row' ? rowFrom(doc, composerRowHtml(options)) : nodeFrom(doc, composerHtml(options))
     if (node === null) {
@@ -415,7 +427,6 @@ export function wireReview(root, session, opts = {}) {
       path: target.path,
       line: target.line,
       side: target.side,
-      pendingActive: pendingCount(session.state) > 0,
     }
     if (target.startLine !== undefined && target.startLine !== target.line) {
       options.startLine = target.startLine
@@ -597,11 +608,13 @@ export function wireReview(root, session, opts = {}) {
     void runCommand(
       button,
       async () => {
-        const { review, submitted } = await session.postReview(event, body === '' ? undefined : body)
+        const { review, submitted, warnings } = await session.postReview(
+          event,
+          body === '' ? undefined : body
+        )
         showSignoffResult(dialog, review)
-        // The drafts left with the review, so the rows that drew them are redrawn without them.
-        if (submitted > 0) {
-          redrawCards()
+        for (const warning of warnings) {
+          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
         }
         toast(
           root,
@@ -630,7 +643,6 @@ export function wireReview(root, session, opts = {}) {
         await session.addPending(input)
         box.closest('tr.composer')?.remove()
         box.remove()
-        redrawCards()
         toast(root, 'comment added to your review')
       },
       { pendingLabel: 'adding…' }
@@ -656,7 +668,9 @@ export function wireReview(root, session, opts = {}) {
       button,
       async () => {
         await session.editPending(id, body)
-        redrawCards()
+        const host = box.parentElement
+        box.remove()
+        if (host !== null) revealConcealed(host.parentNode ?? root)
         toast(root, 'draft updated')
       },
       { pendingLabel: 'saving…' }
@@ -680,7 +694,6 @@ export function wireReview(root, session, opts = {}) {
           body: pointToMarkdown(point),
           pointFingerprint: point.fingerprint,
         })
-        redrawCards()
         toast(root, 'attention point added to your review')
       },
       { pendingLabel: 'adding…' }
@@ -696,7 +709,6 @@ export function wireReview(root, session, opts = {}) {
       button,
       async () => {
         await session.deletePending(id)
-        redrawCards()
         toast(root, 'draft deleted')
       },
       { pendingLabel: 'deleting…' }
@@ -809,7 +821,6 @@ export function wireReview(root, session, opts = {}) {
         async () => {
           const count = pendingCount(session.state)
           await session.discardPending()
-          redrawCards()
           toast(root, `${count} pending comment${count === 1 ? '' : 's'} discarded`)
         },
         { pendingLabel: 'discarding…' }

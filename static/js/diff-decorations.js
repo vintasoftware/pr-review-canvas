@@ -159,28 +159,52 @@ export function insertThreadRow(card, key, t, opts) {
 export function insertPendingRows(card, key, drafts, now) {
   let placed = 0
   let missed = 0
-  // One row per line, so two drafts on the same line sit together in the order they were written.
-  const byLine = new Map()
-  for (const p of drafts) {
-    const at = `${p.side}:${p.line}`
-    byLine.set(at, [...(byLine.get(at) ?? []), p])
-  }
-  for (const group of [...byLine.values()].reverse()) {
-    const first = group[0]
-    const near = nearestRow(card, key, first.side, first.line)
+  for (const draft of drafts) {
+    const near = nearestRow(card, key, draft.side, draft.line)
     if (near === null) {
-      missed += group.length
+      missed++
       continue
     }
-    const row = firstRow(pendingRowHtml(group, now))
+    const row = firstRow(pendingRowHtml([draft], now))
     row.setAttribute(DECORATION, 'pending')
-    if (near.approx) {
-      row.classList.add('is-approx')
+    row.dataset['pendingId'] = draft.id
+    row.dataset['pendingBody'] = draft.body
+    if (near.approx) row.classList.add('is-approx')
+    let after = near.row
+    while (
+      after.nextElementSibling instanceof HTMLTableRowElement &&
+      after.nextElementSibling.getAttribute(DECORATION) === 'pending'
+    ) {
+      after = after.nextElementSibling
     }
-    near.row.insertAdjacentElement('afterend', row)
-    placed += group.length
+    after.insertAdjacentElement('afterend', row)
+    placed++
   }
   return { placed, missed }
+}
+
+/** Update draft rows without replacing thread replies, annotations, or active editors.
+ * @param {HTMLElement} card
+ * @param {string} key
+ * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} drafts
+ * @param {Date} now
+ */
+export function refreshPendingRows(card, key, drafts, now) {
+  const remaining = new Map(drafts.map(p => [p.id, p]))
+  for (const row of card.querySelectorAll('tr[data-decoration="pending"]')) {
+    const draft = remaining.get(row.getAttribute('data-pending-id') ?? '')
+    if (draft === undefined) {
+      row.remove()
+      continue
+    }
+    remaining.delete(draft.id)
+    if (row.getAttribute('data-pending-body') !== draft.body) {
+      const prose = row.querySelector('.pending-cmt > .prose')
+      if (prose !== null) prose.innerHTML = renderMarkdown(draft.body, { github: true })
+      row.setAttribute('data-pending-body', draft.body)
+    }
+  }
+  insertPendingRows(card, key, [...remaining.values()], now)
 }
 
 /**

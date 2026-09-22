@@ -21,6 +21,8 @@ describe('postReview', () => {
       },
     })
     expect(await postReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: 'looks good' })).toEqual({
+      comments: [],
+      warnings: [],
       id: 7001,
       state: 'APPROVED',
       url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7001',

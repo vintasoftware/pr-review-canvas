@@ -70,7 +70,15 @@ function setup(opts = {}) {
   const state = opts.state ?? BASE
   const threadComments = opts.comments ?? comments
   const bundle = bundleFor(state)
-  const ctx = { artifact, files, patches, comments: threadComments, state, now: NOW }
+  const ctx = {
+    artifact,
+    headSha: artifact.pr.headSha,
+    files,
+    patches,
+    comments: threadComments,
+    state,
+    now: NOW,
+  }
   setRenderContext(ctx)
   const paths = new Set(files.map(f => f.path))
   document.body.innerHTML =
@@ -139,9 +147,26 @@ function setup(opts = {}) {
     postReview: async (_pr, input) => {
       calls.push(['review', input])
       // The route sends back the state with the drafts cleared, and says how many went out.
-      const submitted = input.includePending === false ? 0 : stored.pending.length
+      const drafts = input.includePending === false ? [] : stored.pending
+      const created = drafts.map((p, index) => ({
+        ...postedReviewComment({ ...p, kind: 'inline' }),
+        id: 8001 + index,
+        url: `https://github.com/acme/widgets/pull/42#discussion_r${8001 + index}`,
+      }))
+      const submitted = drafts.length
       if (submitted > 0) {
-        stored = { ...stored, pending: [] }
+        stored = {
+          ...stored,
+          pending: [],
+          posted: [
+            ...stored.posted,
+            ...drafts.map((p, index) => ({
+              commentId: 8001 + index,
+              at: NOW.toISOString(),
+              ...(p.pointFingerprint === undefined ? {} : { pointFingerprint: p.pointFingerprint }),
+            })),
+          ],
+        }
       }
       return {
         review: {
@@ -151,6 +176,8 @@ function setup(opts = {}) {
           submittedAt: null,
         },
         submitted,
+        comments: created,
+        warnings: [],
         state: stored,
       }
     },
@@ -483,7 +510,15 @@ describe('attention points', () => {
   })
 
   it('posts a point anchored on the old side', async () => {
-    setRenderContext({ artifact, files, patches, comments, state: BASE, now: NOW })
+    setRenderContext({
+      artifact,
+      headSha: artifact.pr.headSha,
+      files,
+      patches,
+      comments,
+      state: BASE,
+      now: NOW,
+    })
     document.body.innerHTML =
       '<div id="root"><button data-act="point-post" data-point="p-3">post</button></div>'
     const root = document.querySelector('#root')
@@ -705,7 +740,7 @@ describe('what the page remembers after a reload', () => {
     const { root, session } = setup({
       capabilities: { canComment: false, tokenKind: 'classic', login: 'octocat', reason: 'no repo scope' },
     })
-    const ctx = { artifact, files, patches, comments, state: BASE, now: NOW }
+    const ctx = { artifact, headSha: artifact.pr.headSha, files, patches, comments, state: BASE, now: NOW }
     const card = root.querySelector('article.file#file-src_new_name_ts')
     if (!(card instanceof HTMLElement)) {
       throw new Error('no card')
@@ -1097,7 +1132,15 @@ describe('a page that lost the elements a command expects', () => {
    * @param {string} html
    */
   function bare(html) {
-    setRenderContext({ artifact, files, patches, comments, state: BASE, now: NOW })
+    setRenderContext({
+      artifact,
+      headSha: artifact.pr.headSha,
+      files,
+      patches,
+      comments,
+      state: BASE,
+      now: NOW,
+    })
     document.body.innerHTML = `<div id="root">${html}</div>`
     const root = document.querySelector('#root')
     if (!(root instanceof HTMLElement)) {
@@ -1133,6 +1176,8 @@ describe('a page that lost the elements a command expects', () => {
           calls.push(['review', {}])
           return {
             review: { id: 1, state: 'APPROVED', url: 'https://github.com/x', submittedAt: null },
+            comments: [],
+            warnings: [],
             submitted: 0,
             state: BASE,
           }
@@ -1512,6 +1557,107 @@ describe('the pending review', () => {
     area.value = body
     return area
   }
+
+  it('keeps a new composer and existing threads when an earlier add finishes', async () => {
+    const release = Promise.withResolvers()
+    const { root, session } = setup({
+      api: {
+        addPending: async (_pr, input) => {
+          await release.promise
+          return {
+            prNumber: 42,
+            state: {
+              ...BASE,
+              pending: [
+                {
+                  ...input,
+                  headSha: HEAD,
+                  id: 'held',
+                  createdAt: NOW.toISOString(),
+                  updatedAt: NOW.toISOString(),
+                },
+              ],
+            },
+          }
+        },
+      },
+    })
+    const thread = root.querySelector('tr.thread')
+    const point = root.querySelector('tr.ifind')
+    write(root, 'first comment')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    const next = write(root, 'unsaved second comment')
+    release.resolve(undefined)
+    await flush()
+    expect(session.pending).toHaveLength(1)
+    expect(next.isConnected).toBe(true)
+    expect(next.value).toBe('unsaved second comment')
+    expect(root.querySelector('tr.composer [data-act="composer-post"]')).toBeNull()
+    expect(root.querySelector('tr.composer [data-act="composer-queue"]')?.textContent).toBe(
+      'add review comment'
+    )
+    expect(root.querySelector('tr.thread')).toBe(thread)
+    expect(root.querySelector('tr.ifind')).toBe(point)
+    expect(root.querySelectorAll('tr.pending-row')).toHaveLength(1)
+    expect(root.querySelector('tr.pending-row')?.closest('article')?.getAttribute('data-layer')).toBe(
+      'layer-1'
+    )
+  })
+
+  it('draws a queued comment when the last concurrent state operation settles', async () => {
+    const release = Promise.withResolvers()
+    const { root, session } = setup({
+      api: {
+        putDismissed: async () => {
+          await release.promise
+          throw new Error('dismiss refused')
+        },
+      },
+    })
+    const dismissal = session.setDismissed('fp-1', true).catch(() => undefined)
+    write(root, 'queued while dismissing')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    expect(root.querySelector('tr.pending-row')).toBeNull()
+    release.resolve(undefined)
+    await dismissal
+    expect(root.querySelector('tr.pending-row .prose')?.textContent).toContain('queued while dismissing')
+  })
+
+  it('keeps an AI-edited inline comment inside the open review', async () => {
+    const { root, wiring } = setup()
+    write(root, 'first comment')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    const button = document.createElement('button')
+    root.append(button)
+    wiring.onProposedComment(
+      'edit',
+      { path: 'src/app.ts', line: 3, side: 'new', body: 'AI suggestion' },
+      button
+    )
+    expect(root.querySelector('.composer-box')?.querySelector('textarea')?.value).toBe('AI suggestion')
+    expect(root.querySelector('.composer-box [data-act="composer-post"]')).toBeNull()
+    expect(root.querySelector('.composer-box [data-act="composer-queue"]')?.textContent).toBe(
+      'add review comment'
+    )
+  })
+
+  it('shows the submitted point as a posted thread and link without reloading', async () => {
+    const { root, session } = setup()
+    click(root, '[data-point="p-1"] [data-act="point-queue"]')
+    await flush()
+    const body = session.pending[0]?.body
+    const answer = await session.postReview('COMMENT', 'a look')
+    const posted = answer.comments[0]
+    expect(posted?.body).toBe(body)
+    expect(root.querySelector(`tr.thread[data-thread="${posted?.id}"] .prose`)?.textContent).toContain(
+      'Sum instead of product'
+    )
+    const point = root.querySelector('li[data-point="p-1"]')
+    expect(point?.querySelector('[data-act="point-queue"]')).toBeNull()
+    expect(point?.querySelector('.tbtns a')?.getAttribute('href')).toBe(posted?.url)
+  })
 
   it('starts a review instead of posting, and says so on the page', async () => {
     const { root, calls, session } = setup()

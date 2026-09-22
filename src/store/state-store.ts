@@ -34,8 +34,14 @@ export interface StateStore {
   /** Rewrites one draft's body. A draft that is no longer there leaves the state alone. */
   editPending(key: ReviewKey, id: string, body: string): Promise<PrState>
   removePending(key: ReviewKey, id: string): Promise<PrState>
-  /** Drops every draft: the review was submitted, or the reviewer discarded it. */
+  /** Discards every draft at the reviewer's request. */
   clearPending(key: ReviewKey): Promise<PrState>
+  /** Acknowledge submitted versions, preserving drafts added or edited while posting. */
+  completePending(
+    key: ReviewKey,
+    submitted: ReadonlyArray<PendingComment>,
+    posted: PostedEntry[]
+  ): Promise<PrState>
 }
 
 /** `layer:<id>` or `layer:<id>/file:<key>`, with the ids and keys the artifact uses. */
@@ -161,5 +167,16 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
     removePending: (key, id) =>
       update(key, state => ({ ...state, pending: state.pending.filter(p => p.id !== id) })),
     clearPending: key => update(key, state => ({ ...state, pending: [] })),
+    completePending: (key, submitted, posted) =>
+      update(key, state => ({
+        ...state,
+        pending: state.pending.filter(p => !submitted.some(s => s.id === p.id && s.body === p.body)),
+        posted: [
+          ...state.posted,
+          ...posted
+            .filter(p => !state.posted.some(s => s.commentId === p.commentId))
+            .map(p => ({ ...p, at: now().toISOString() })),
+        ],
+      })),
   }
 }

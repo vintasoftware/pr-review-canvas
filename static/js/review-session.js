@@ -9,6 +9,7 @@
 /** @typedef {import('./contract-types.js').PrState} PrState */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./contract-types.js').ReviewSummary} ReviewSummary */
+/** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 import {
   addPending,
   deletePending,
@@ -79,6 +80,8 @@ export function createReviewSession(options) {
   const api = withDefaults(options.api)
   /** @type {PrState} */
   let state = options.state
+  /** @type {ReviewComment[]} */
+  let submittedComments = []
   /** @type {Capabilities} */
   let capabilities = options.capabilities
   const keyToPath = new Map(options.files.map(f => [f.key, f.path]))
@@ -159,8 +162,9 @@ export function createReviewSession(options) {
   /**
    * A change the server owns outright: the answer it sends is the new state. Unlike `change`
    * there is nothing to show first and nothing to take back, because the page never guessed.
-   * @param {() => Promise<{ state: PrState }>} request
-   * @returns {Promise<PrState>}
+   * @template {{ state: PrState }} T
+   * @param {() => Promise<T>} request
+   * @returns {Promise<T>}
    */
   const run = async request => {
     inFlight += 1
@@ -169,7 +173,7 @@ export function createReviewSession(options) {
       inFlight -= 1
       takeAnswer(answer.state)
       settle()
-      return answer.state
+      return answer
     } catch (err) {
       inFlight -= 1
       settle()
@@ -280,18 +284,11 @@ export function createReviewSession(options) {
      * @returns {Promise<PostCommentResponse>}
      */
     async postComment(input) {
-      inFlight += 1
-      try {
-        const answer = await api.postComment(options.prNumber, { ...input, headSha: options.headSha })
-        inFlight -= 1
-        takeAnswer(answer.state)
-        settle()
-        return answer
-      } catch (err) {
-        inFlight -= 1
-        settle()
-        throw err
-      }
+      return run(() => api.postComment(options.prNumber, { ...input, headSha: options.headSha }))
+    },
+    /** Comments returned by reviews submitted during this session. */
+    get submittedComments() {
+      return submittedComments
     },
     /** The comments waiting in the pending review, oldest first. */
     get pending() {
@@ -304,7 +301,7 @@ export function createReviewSession(options) {
      * @returns {Promise<PrState>}
      */
     async addPending(input) {
-      return await run(() => api.addPending(options.prNumber, { ...input, headSha: options.headSha }))
+      return (await run(() => api.addPending(options.prNumber, { ...input, headSha: options.headSha }))).state
     },
     /**
      * @param {string} id
@@ -312,18 +309,18 @@ export function createReviewSession(options) {
      * @returns {Promise<PrState>}
      */
     async editPending(id, body) {
-      return await run(() => api.editPending(options.prNumber, id, body))
+      return (await run(() => api.editPending(options.prNumber, id, body))).state
     },
     /**
      * @param {string} id
      * @returns {Promise<PrState>}
      */
     async deletePending(id) {
-      return await run(() => api.deletePending(options.prNumber, id))
+      return (await run(() => api.deletePending(options.prNumber, id))).state
     },
     /** @returns {Promise<PrState>} */
     async discardPending() {
-      return await run(() => api.discardPending(options.prNumber))
+      return (await run(() => api.discardPending(options.prNumber))).state
     },
     /**
      * Submits the review. The pending comments go out with it unless the caller says otherwise,
@@ -331,7 +328,7 @@ export function createReviewSession(options) {
      * @param {import('./contract-types.js').ReviewEvent} event
      * @param {string} [body]
      * @param {{ includePending?: boolean }} [opts]
-     * @returns {Promise<{ review: ReviewSummary, submitted: number }>}
+     * @returns {Promise<import('./contract-types.js').PostReviewResponse>}
      */
     async postReview(event, body, opts = {}) {
       const input = {
@@ -339,18 +336,11 @@ export function createReviewSession(options) {
         ...(body === undefined ? {} : { body }),
         ...(opts.includePending === undefined ? {} : { includePending: opts.includePending }),
       }
-      inFlight += 1
-      try {
+      return run(async () => {
         const answer = await api.postReview(options.prNumber, { ...input, headSha: options.headSha })
-        inFlight -= 1
-        takeAnswer(answer.state)
-        settle()
-        return { review: answer.review, submitted: answer.submitted }
-      } catch (err) {
-        inFlight -= 1
-        settle()
-        throw err
-      }
+        submittedComments = [...submittedComments, ...answer.comments]
+        return answer
+      })
     },
   }
 }

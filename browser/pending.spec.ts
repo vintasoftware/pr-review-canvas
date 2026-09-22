@@ -19,6 +19,7 @@ for (const skin of ['terminal', 'github'] as const) {
     // The draft is drawn under its line, badged as not posted.
     const draft = file.locator('tr.pending-row .pending-cmt')
     await expect(draft).toHaveCount(1)
+    await expect(page.locator('tr.pending-row .pending-cmt')).toHaveCount(1)
     await expect(draft.locator('.pill.pending')).toHaveText('pending')
     await expect(draft.locator('.prose')).toContainText('this needs a guard')
     await expect(editor).toHaveCount(0)
@@ -168,4 +169,20 @@ test('adds an attention point to the review and gives it back on delete', async 
   await expect(point.locator('.pill.pending')).toHaveCount(0)
   await expect(point.locator('[data-act="point-post"]')).toHaveCount(1)
   await expect(point.locator('[data-act="point-queue"]')).toHaveCount(1)
+})
+
+test('turns a submitted attention point into a posted thread and link', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  const point = page.locator('li[data-point="p-1"]')
+  await point.locator('[data-act="point-queue"]').click()
+  await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
+  await page.locator('[data-act="pending-finish"]').click()
+  const dialog = page.locator('#signoff-dialog')
+  await expect(dialog.locator('[data-act="signoff-post"]')).toBeEnabled()
+  await dialog.locator('[data-act="signoff-post"]').click()
+  await expect(dialog.locator('.signoff-result')).toContainText('Posted')
+  await expect(page.locator('tr.pending-row')).toHaveCount(0)
+  await expect(page.locator('tr.thread[data-thread="8001"]')).toContainText('Sum instead of product')
+  await expect(point.locator('.tbtns a')).toHaveAttribute('href', /discussion_r8001$/)
+  await expect(point.locator('[data-act="point-queue"]')).toHaveCount(0)
 })

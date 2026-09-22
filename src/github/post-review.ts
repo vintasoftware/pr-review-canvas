@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import type { PendingComment } from '../contract/pending.js'
 import type { ReviewEvent } from '../contract/reviews.js'
-import type { ReviewSummary } from '../contract/api.js'
+import type { PostedReview } from '../host/host.js'
 import type { Repo } from '../contract/review-artifact.js'
-import type { HostClient } from '../host/client.js'
+import { fetchAllPages, type HostClient } from '../host/client.js'
+import { mapReviewComment } from './comments.js'
 import { ghSide } from './post-comment.js'
 
 const GhReviewSchema = z.object({
@@ -49,7 +50,7 @@ export async function postReview(
   number: number,
   headSha: string,
   input: { event: ReviewEvent; body: string; comments?: ReadonlyArray<PendingComment> }
-): Promise<ReviewSummary> {
+): Promise<PostedReview> {
   const comments = input.comments ?? []
   const raw = await gh.post(`repos/${repo.owner}/${repo.name}/pulls/${number}/reviews`, {
     event: input.event,
@@ -58,5 +59,27 @@ export async function postReview(
     ...(comments.length === 0 ? {} : { comments: reviewComments(comments) }),
   })
   const r = GhReviewSchema.parse(raw)
-  return { id: r.id, state: r.state, url: r.html_url, submittedAt: r.submitted_at ?? null }
+  const posted: PostedReview = {
+    id: r.id,
+    state: r.state,
+    url: r.html_url,
+    submittedAt: r.submitted_at ?? null,
+    comments: [],
+    warnings: [],
+  }
+  if (comments.length > 0) {
+    try {
+      const rawComments = await fetchAllPages(
+        gh,
+        `repos/${repo.owner}/${repo.name}/pulls/${number}/reviews/${r.id}/comments`
+      )
+      posted.comments = rawComments.map(c => mapReviewComment(c, new Set()))
+    } catch (err) {
+      // The write succeeded. A failed read must not invite submitting the same review again.
+      posted.warnings.push(
+        `Review posted, but its comments could not be loaded: ${err instanceof Error ? err.message : String(err)}. Refresh to see them.`
+      )
+    }
+  }
+  return posted
 }
