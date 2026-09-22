@@ -50,7 +50,8 @@ export function wireChatPanel(root, pane, opts = {}) {
       }
       sync()
     }
-    pane.querySelector('textarea')?.focus()
+    // The composer sits low in a tall sticky pane, so plain focus() would scroll the canvas to it.
+    pane.querySelector('textarea')?.focus({ preventScroll: true })
   }
 
   function close() {

@@ -101,3 +101,21 @@ test('minimizes the docked chat on a wide screen and remembers it', async ({ pag
   await expect(page.locator('.layout > .chat')).toBeVisible()
   await expect(page.locator('#msg')).toBeFocused()
 })
+
+test('leaves the canvas scrolled where it was across minimize and restore', async ({ page, reviewUrl }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await page.goto(reviewUrl)
+  const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
+  const minimize = page.getByRole('button', { name: 'Minimize AI Chat' })
+  await minimize.click()
+  await launcher.click()
+  await expect(page.locator('#msg')).toBeFocused()
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
+
+  await page.evaluate(() => window.scrollTo(0, 600))
+  const scrolled = await page.evaluate(() => window.scrollY)
+  expect(scrolled).toBeGreaterThan(0)
+  await minimize.click()
+  await launcher.click()
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolled)
+})

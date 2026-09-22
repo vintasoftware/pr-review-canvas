@@ -18,6 +18,10 @@
 .chat-launcher[hidden] {
   display: none;
 }
+/* Always the last thing on its row, whether or not the header wraps. */
+.chat-minimize {
+  margin-left: auto;
+}
 @media (max-width: 1360px) {
   dialog.chat-dialog {
     position: fixed;
