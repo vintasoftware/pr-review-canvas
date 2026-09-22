@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Review interface
+
+- AI Chat minimizes at any width. On a wide screen the docked pane drops out of the layout, the
+  canvas takes the width, and the launcher brings the chat back with its draft and transcript.
+  The minimized state is remembered per browser, beside the pane width.
+- Restoring the chat leaves the canvas where the reader left it, instead of scrolling down to the
+  composer it focuses.
+- The minimize command sits at the right edge of the chat header, where it stays when the header
+  wraps.
+- A quick-question menu opened from a command near the window edge stays inside the window, and
+  hangs above a command with no room below it.
+
 ## 0.4.0
 
 Changes since 0.3.0.
