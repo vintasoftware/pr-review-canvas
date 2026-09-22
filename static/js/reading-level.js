@@ -90,20 +90,31 @@ export function foldLevelHint(artifact, level) {
 }
 
 /**
+ * The levels as options, with one selected. The control on the page and the default field of the
+ * settings dialog are the same list.
+ * @param {FoldLevel} level
+ * @returns {string}
+ */
+export function foldLevelOptionsHtml(level) {
+  return FOLD_LEVELS.map(
+    l => `<option value="${esc(l)}"${l === level ? ' selected' : ''}>${esc(l)}</option>`
+  ).join('')
+}
+
+/**
  * How much of the diff the page hides. One control for the whole canvas, next to the review
  * progress rather than among the commands, because it changes what the reader sees and does not
- * act on the pull request. The page opens at light every time; the choice is not saved.
+ * act on the pull request. The page opens at the level saved in the settings dialog; a change
+ * here holds for this page only.
  * @param {ReviewArtifact} artifact
  * @param {FoldLevel} level
  * @returns {string}
  */
 export function foldLevelControlHtml(artifact, level) {
-  const options = FOLD_LEVELS.map(
-    l => `<option value="${esc(l)}"${l === level ? ' selected' : ''}>${esc(l)}</option>`
-  ).join('')
+  const options = foldLevelOptionsHtml(level)
   return (
     `<div class="reading"><label for="${FOLD_LEVEL_SELECT_ID}">Hide code</label>` +
-    `<select id="${FOLD_LEVEL_SELECT_ID}" title="How much of the diff the page hides. Press f to step through the levels.">${options}</select>` +
+    `<select id="${FOLD_LEVEL_SELECT_ID}" title="How much of the diff this page hides. Press f to step through the levels; the settings dialog sets the default.">${options}</select>` +
     `<span class="fold-hint" role="status">${esc(foldLevelHint(artifact, level))}</span></div>`
   )
 }

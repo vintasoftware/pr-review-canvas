@@ -28,7 +28,8 @@ test('switches how much code is hidden from the control and from the keyboard', 
   const select = page.locator('#fold-level')
   const hint = page.locator('.reading .fold-hint')
 
-  // Every reader opens the canvas at light; the choice is page state and is never saved.
+  // The canvas opens at the level saved in settings.yml, light until changed; a change from the
+  // control is page state and is not saved.
   await expect(select).toHaveValue('light')
   await expect(hint).toContainText('imports, whitespace, moved blocks, and generated files')
 
@@ -44,4 +45,44 @@ test('switches how much code is hidden from the control and from the keyboard', 
 
   await page.reload()
   await expect(page.locator('#fold-level')).toHaveValue('light')
+})
+
+test('offers the default reading level in the settings dialog and saves it', async ({ page, reviewUrl }) => {
+  // The harness runs with chat off, which turns the settings routes off too, so the dialog's
+  // requests are answered here. The store and the routes are covered by the unit tests.
+  const response = {
+    settings: { foldLevel: 'moderate', agent: 'claude', model: null, chatTimeoutSec: 600, maxTurns: null },
+    overrides: {},
+    file: '/repo/.pr-review/settings.yml',
+    project: { file: null, chatEnabled: true, rulebook: null, layers: 0, highRisk: 0 },
+  }
+  await page.route('**/api/prs/42', async route => {
+    const fetched = await route.fetch()
+    const bundle = await fetched.json()
+    bundle.chat.enabled = true
+    await route.fulfill({ response: fetched, json: bundle })
+  })
+  await page.route('**/api/prs/42/chat/threads', route =>
+    route.fulfill({ json: { threads: [], activeThread: null } })
+  )
+  await page.route('**/api/settings/agents', route =>
+    route.fulfill({ json: { acpx: { installed: true, version: '0.13.2' }, agents: [] } })
+  )
+  const saved: unknown[] = []
+  await page.route('**/api/settings', async route => {
+    if (route.request().method() === 'PUT') {
+      saved.push(route.request().postDataJSON())
+    }
+    await route.fulfill({ json: response })
+  })
+
+  await page.goto(reviewUrl)
+  await page.locator('#settings').click()
+  const level = page.locator('#settings-dialog #set-fold-level')
+  await expect(level).toHaveValue('moderate')
+  await level.selectOption('aggressive')
+  await page.locator('[data-act="settings-save"]').click()
+  await expect(page.locator('#settings-dialog')).toBeHidden()
+  expect(saved).toHaveLength(1)
+  expect(saved[0]).toMatchObject({ foldLevel: 'aggressive' })
 })

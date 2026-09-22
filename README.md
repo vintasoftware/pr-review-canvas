@@ -135,10 +135,12 @@ every commit as a new head.
 
 ### User-local preferences
 
-Your appearance and AI Chat preferences are saved in `.pr-review/settings.yml` in your local
-project directory. This file is ignored by Git, so each teammate can use their own settings.
+Your appearance, reading level, and AI Chat preferences are saved in `.pr-review/settings.yml`
+in your local project directory. This file is ignored by Git, so each teammate can use their own
+settings.
 
-Use **skin** and **theme** in the header to change the appearance.
+Use **skin** and **theme** in the header to change the appearance, and **Hide code by default**
+in the settings dialog to choose how much code a review hides when it opens.
 
 For AI Chat, open **settings**, choose Claude Code or Codex, and optionally enter a model ID.
 Leave the model blank to use the agent's default. You can also adjust the reply timeout and

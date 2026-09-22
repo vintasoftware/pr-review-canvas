@@ -217,6 +217,7 @@ describe('the settings routes', () => {
       version: 1,
       skin: 'terminal',
       theme: 'auto',
+      foldLevel: 'light',
       agent: 'claude',
       model: null,
       chatTimeoutSec: 600,
@@ -242,12 +243,19 @@ describe('the settings routes', () => {
     const res = await app.request('/api/settings', {
       method: 'PUT',
       headers: POST,
-      body: JSON.stringify({ agent: 'codex', model: 'gpt-5.2', chatTimeoutSec: 300, maxTurns: 4 }),
+      body: JSON.stringify({
+        foldLevel: 'aggressive',
+        agent: 'codex',
+        model: 'gpt-5.2',
+        chatTimeoutSec: 300,
+        maxTurns: 4,
+      }),
     })
     expect((await json<SettingsResponse>(res)).settings).toEqual({
       version: 1,
       skin: 'terminal',
       theme: 'auto',
+      foldLevel: 'aggressive',
       agent: 'codex',
       model: 'gpt-5.2',
       chatTimeoutSec: 300,

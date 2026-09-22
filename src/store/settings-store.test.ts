@@ -39,6 +39,7 @@ describe('createSettingsStore', () => {
       version: 1,
       skin: 'terminal',
       theme: 'auto',
+      foldLevel: 'light',
       agent: 'codex',
       model: 'gpt-5.2',
       chatTimeoutSec: 900,
@@ -58,11 +59,23 @@ describe('createSettingsStore', () => {
       version: 1,
       skin: 'terminal',
       theme: 'auto',
+      foldLevel: 'light',
       agent: 'codex',
       model: null,
       chatTimeoutSec: 120,
       maxTurns: null,
     })
+  })
+
+  it('saves the reading level a review opens at, next to its comment', async () => {
+    const store = createSettingsStore(dataDir)
+    await store.ensureFile()
+    expect(SETTINGS_TEMPLATE).toContain('foldLevel: light')
+    expect((await store.write({ foldLevel: 'moderate' })).foldLevel).toBe('moderate')
+    const text = await readFile(store.file, 'utf8')
+    expect(text).toContain('# How much code a review hides when it opens')
+    expect(text).toContain('foldLevel: moderate')
+    expect((await store.read()).foldLevel).toBe('moderate')
   })
 
   it('writes a good file over one that is not YAML', async () => {
@@ -83,6 +96,7 @@ describe('parseSettings', () => {
   it('falls back to the defaults for values that do not fit', () => {
     expect(parseSettings('agent: gemini\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('chatTimeoutSec: 5\n')).toEqual(DEFAULT_SETTINGS)
+    expect(parseSettings('foldLevel: everything\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('- a\n- b\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('just a string')).toEqual(DEFAULT_SETTINGS)
   })
@@ -121,6 +135,7 @@ describe('two saves that arrive together', () => {
       version: 1,
       skin: 'terminal',
       theme: 'auto',
+      foldLevel: 'light',
       agent: 'codex',
       model: null,
       chatTimeoutSec: 900,

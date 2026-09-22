@@ -28,9 +28,11 @@
   each collapsed file the lowest level at which it hides, and the levels nest: `light` is the diff
   as it always looked — imports, whitespace, moves, and wholly generated files; `moderate` also
   hides test bodies under their titles, helpers, adapters, and wiring; `aggressive` also hides any
-  block its title explains, so a low-risk change reads as pseudo-code. The page opens at `light`
-  every time and the choice is not saved. Press `f` to step through the levels. Each layer and the
-  sign-off dialog report how many diff lines are hidden.
+  block its title explains, so a low-risk change reads as pseudo-code. The page opens at the level
+  saved as `foldLevel` in `.pr-review/settings.yml`, `light` until changed; the **Hide code by
+  default** field of the settings dialog sets it. The control and `f`, which steps through the
+  levels, change the level for one page only. Each layer and the sign-off dialog report how many
+  diff lines are hidden.
 - Attention points and comment threads stay visible at every level. An annotation may only be
   hidden by an aggressive fold, which then shows the annotation's text instead of the fold title,
   and a file with an annotation or an attention point never collapses.

@@ -1,11 +1,14 @@
 // @ts-check
-// The settings dialog: the personal chat settings this browser can change, and a read-only look
-// at the project config, which is committed and belongs to the repository.
+// The settings dialog: the personal settings this browser can change, the reading level a review
+// opens at and the chat settings, and a read-only look at the project config, which is committed
+// and belongs to the repository.
 /** @typedef {import('./contract-types.js').AgentsResponse} AgentsResponse */
 /** @typedef {import('./contract-types.js').SettingsResponse} SettingsResponse */
 import { fetchAgents, fetchSettings, probeAgent, saveSettings } from './api.js'
 import { runCommand } from './commands.js'
 import { esc, qs } from './dom.js'
+import { isFoldLevel } from './fold-levels.js'
+import { foldLevelOptionsHtml } from './reading-level.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
 
@@ -52,6 +55,9 @@ export function settingsDialogHtml(data, agents) {
     (agents.acpx.installed
       ? ''
       : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
+    '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
+    `<select id="set-fold-level">${foldLevelOptionsHtml(settings.foldLevel)}</select></div>` +
+    '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
     '<div class="field"><label for="set-agent">Agent</label>' +
     `<select id="set-agent">${options}</select></div>` +
     '<div class="field"><label for="set-model">Model</label>' +
@@ -129,12 +135,16 @@ export async function openSettingsDialog(root, opener, opts = {}) {
 
 /** The values the dialog holds right now, as the PUT body. */
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
+  const foldLevel = qs('#set-fold-level', dialog)
   const agent = qs('#set-agent', dialog)
   const model = qs('#set-model', dialog)
   const timeout = qs('#set-timeout', dialog)
   const turns = qs('#set-turns', dialog)
   /** @type {import('./contract-types.js').SettingsInput} */
   const input = {}
+  if (foldLevel instanceof HTMLSelectElement && isFoldLevel(foldLevel.value)) {
+    input.foldLevel = foldLevel.value
+  }
   if (agent instanceof HTMLSelectElement && agent.value !== '') {
     input.agent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)
   }

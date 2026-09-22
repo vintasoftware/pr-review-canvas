@@ -16,6 +16,7 @@ const SETTINGS = {
     version: 1,
     skin: 'terminal',
     theme: 'auto',
+    foldLevel: 'light',
     agent: 'claude',
     model: null,
     chatTimeoutSec: 600,
@@ -99,6 +100,18 @@ describe('settingsDialogHtml', () => {
     expect(settingsDialogHtml(SETTINGS, AGENTS)).toContain('starts a new chat thread')
   })
 
+  it('offers the three reading levels with the saved one selected', () => {
+    const html = settingsDialogHtml(
+      { ...SETTINGS, settings: { ...SETTINGS.settings, foldLevel: 'moderate' } },
+      AGENTS
+    )
+    expect(html).toContain('<label for="set-fold-level">Hide code by default</label>')
+    expect(html).toContain('<option value="light">light</option>')
+    expect(html).toContain('<option value="moderate" selected>moderate</option>')
+    expect(html).toContain('<option value="aggressive">aggressive</option>')
+    expect(html).toContain('The level every review opens at')
+  })
+
   it('shows the project config read-only, with its path', () => {
     const html = settingsDialogHtml(SETTINGS, AGENTS)
     expect(html).toContain('Project config (read-only)')
@@ -161,11 +174,23 @@ describe('readSettingsForm', () => {
     const holder = document.createElement('div')
     holder.innerHTML = settingsDialogHtml(SETTINGS, AGENTS)
     expect(readSettingsForm(holder)).toEqual({
+      foldLevel: 'light',
       agent: 'claude',
       model: null,
       chatTimeoutSec: 600,
       maxTurns: null,
     })
+  })
+
+  it('reads the reading level the reader picked', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(SETTINGS, AGENTS)
+    const select = holder.querySelector('#set-fold-level')
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('no level select')
+    }
+    select.value = 'aggressive'
+    expect(readSettingsForm(holder).foldLevel).toBe('aggressive')
   })
 })
 
@@ -212,7 +237,13 @@ describe('openSettingsDialog', () => {
     agent.value = 'codex'
     el(dialog, '[data-act="settings-save"]').click()
     await flush()
-    expect(saved[0]).toEqual({ agent: 'codex', model: null, chatTimeoutSec: 600, maxTurns: null })
+    expect(saved[0]).toEqual({
+      foldLevel: 'light',
+      agent: 'codex',
+      model: null,
+      chatTimeoutSec: 600,
+      maxTurns: null,
+    })
     expect(saved[1]).toBe('claude')
     expect(dialog.hasAttribute('open')).toBe(false)
   })
@@ -281,6 +312,7 @@ describe('the dialog with parts missing', () => {
       AGENTS
     )
     expect(readSettingsForm(holder)).toEqual({
+      foldLevel: 'light',
       agent: 'claude',
       model: 'gpt-5.2',
       chatTimeoutSec: 120,

@@ -5,8 +5,9 @@
 
 /**
  * The levels, from the least hiding to the most. They nest: a fold hides at its own level and at
- * every level above it, so `light` folds are hidden in all three modes. The page opens at `light`
- * and keeps the choice for the session only.
+ * every level above it, so `light` folds are hidden in all three modes. The page opens at the
+ * level saved in the settings file, `light` until the reader picks another, and a change from
+ * the control holds for the session only.
  */
 export const FOLD_LEVELS = /** @type {const} */ (['light', 'moderate', 'aggressive'])
 

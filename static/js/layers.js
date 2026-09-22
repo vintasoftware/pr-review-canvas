@@ -39,8 +39,9 @@ import { anchorKey, buildThreads } from './threads.js'
  */
 
 /**
- * How much code the reader hides. Page state only: every open of a review starts at light, and
- * the choice is never saved, so two readers of the same canvas start from the same view.
+ * How much code the reader hides. Page state: a review opens at the level saved in the settings
+ * file, light until the reader picks another, and the control or the `f` key changes it for this
+ * page only, so the file holds a default rather than the last thing the reader did.
  * @type {import('./contract-types.js').FoldLevel}
  */
 let foldLevel = DEFAULT_FOLD_LEVEL

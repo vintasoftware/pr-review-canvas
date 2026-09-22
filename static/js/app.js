@@ -24,7 +24,14 @@ import { errorCardHtml } from './errors.js'
 import { renderHeader } from './header.js'
 import { wireDropZone } from './import-zone.js'
 import { toast, wireReview } from './interactions.js'
-import { defineLayerElements, pathSet, renderLayers, renderRail, setRenderContext } from './layers.js'
+import {
+  defineLayerElements,
+  pathSet,
+  renderLayers,
+  renderRail,
+  setFoldLevel,
+  setRenderContext,
+} from './layers.js'
 import { renderOverview } from './overview.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
@@ -36,7 +43,7 @@ import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
-/** @typedef {{ prNumber: ReviewKey, owner: string, repo: string, version: string, host: import('./contract-types.js').PublicHost }} Bootstrap */
+/** @typedef {import('./contract-types.js').ReviewBootstrap} Bootstrap */
 
 /** @returns {Bootstrap | null} */
 function readBootstrap() {
@@ -160,6 +167,9 @@ export class PrAppElement extends HTMLElement {
     setHost(this.bootstrap.host)
     this.theme = readTheme(document.documentElement)
     this.skin = readSkin(document.documentElement)
+    // The reading level the canvas opens at comes from the settings file with the page, so the
+    // first draw hides what the reader asked for.
+    setFoldLevel(this, this.bootstrap.foldLevel)
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
       () => null

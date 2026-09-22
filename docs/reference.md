@@ -331,6 +331,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `version`        | `1`        | `1`                                              |
 | `skin`           | `terminal` | `terminal`, `github`                             |
 | `theme`          | `auto`     | `auto`, `light`, `dark`                          |
+| `foldLevel`      | `light`    | `light`, `moderate`, `aggressive`                |
 | `agent`          | `claude`   | `claude`, `codex`                                |
 | `model`          | `null`     | A model ID, or `null` for the agent's default    |
 | `chatTimeoutSec` | `600`      | Integer seconds, 30–3600                         |
@@ -402,10 +403,12 @@ lines that leaves more than 20 lines open at `moderate` outside its attention po
 more at `aggressive`. A smaller layer reads whole, and only the file rules apply to it. Each
 failure is `FOLD_MISSING`. An annotation marks what to read; it does not excuse the rows around it.
 
-The page opens at `light` every time and the choice is not saved, so two readers of the same
-canvas start from the same view. Press `f` to step through the levels. Changing the level redraws
-the diffs that are on screen and re-applies file collapse, so a card the reader opened by hand
-follows the new level.
+The page opens at the level saved as `foldLevel` in `settings.yml`, `light` until changed. The
+**Hide code by default** field of the settings dialog sets it. The control and the `f` key, which
+steps through the levels, change the level for that page only, so the file holds a default rather
+than the last thing the reader did. Changing
+the level redraws the diffs that are on screen and re-applies file collapse, so a card the reader
+opened by hand follows the new level.
 
 Files with patches longer than 2,000 lines wait behind **show diff**. A link into the file opens
 it automatically.
