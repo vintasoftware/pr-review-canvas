@@ -350,7 +350,7 @@ describe('reviewed state', () => {
     box.checked = true
     box.dispatchEvent(new Event('change', { bubbles: true }))
     await flush()
-    expect(calls).toEqual([['reviewed', { id: 'layer:layer-1/file:src_app_ts', reviewed: true }]])
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path/file:src_app_ts', reviewed: true }]])
     expect(root.querySelector('article.file#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
     expect(root.querySelector('.tree .layers .m')?.textContent).toContain('1 of 3 files')
     expect(root.querySelector('.toast')?.textContent).toBe('file marked reviewed')
@@ -360,7 +360,7 @@ describe('reviewed state', () => {
     const { root, calls } = setup()
     click(root, '.layer-end [data-act="mark-layer"]')
     await flush()
-    expect(calls).toEqual([['reviewed', { id: 'layer:layer-1', reviewed: true }]])
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
     expect(root.querySelector('.ptext')?.textContent).toBe('1 of 1 layers reviewed')
     expect(root.querySelector('.pline span')?.getAttribute('style')).toContain('100%')
     expect(root.querySelector('section.layer > .layer-body')?.hasAttribute('hidden')).toBe(true)
@@ -387,8 +387,8 @@ describe('reviewed state', () => {
     const reviewed = {
       ...BASE,
       reviewed: {
-        'layer:layer-1': /** @type {const} */ (true),
-        'layer:layer-1/file:src_app_ts': /** @type {const} */ (true),
+        'layer:run-path': /** @type {const} */ (true),
+        'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
       },
     }
     const { root } = setup({
@@ -410,9 +410,9 @@ describe('reviewed state', () => {
     const byFiles = {
       ...BASE,
       reviewed: {
-        'layer:layer-1/file:src_app_ts': /** @type {const} */ (true),
-        'layer:layer-1/file:src_new_name_ts': /** @type {const} */ (true),
-        'layer:layer-1/file:src_app_test_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_new_name_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_app_test_ts': /** @type {const} */ (true),
       },
     }
     const { root } = setup({ state: byFiles })
@@ -426,7 +426,7 @@ describe('reviewed state', () => {
   })
 
   it('opens a reviewed card again when it is unmarked', async () => {
-    const reviewed = { ...BASE, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const reviewed = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     const { root } = setup({ state: reviewed })
     expect(root.querySelector('section.layer > .layer-body')?.hasAttribute('hidden')).toBe(true)
     const box = root.querySelector('section.layer input[data-reviewed-id]')
@@ -448,10 +448,10 @@ describe('reviewed state', () => {
   })
 
   it('unmarks a layer from the command under its files', async () => {
-    const { root, calls } = setup({ state: { ...BASE, reviewed: { 'layer:layer-1': true } } })
+    const { root, calls } = setup({ state: { ...BASE, reviewed: { 'layer:run-path': true } } })
     click(root, '.layer-end [data-act="mark-layer"]')
     await flush()
-    expect(calls).toEqual([['reviewed', { id: 'layer:layer-1', reviewed: false }]])
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: false }]])
     expect(root.querySelector('section.layer > .layer-body')?.hasAttribute('hidden')).toBe(false)
     expect(root.querySelector('.toast')?.textContent).toBe('layer reopened')
   })
@@ -461,7 +461,7 @@ describe('reviewed state', () => {
     setRenderContext(null)
     click(root, '.layer-end [data-act="mark-layer"]')
     await flush()
-    expect(calls).toEqual([['reviewed', { id: 'layer:layer-1', reviewed: true }]])
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
   })
 })
 
@@ -968,8 +968,8 @@ describe('keyboard', () => {
     key('R')
     await flush()
     expect(calls).toEqual([
-      ['reviewed', { id: 'layer:layer-1/file:src_app_ts', reviewed: true }],
-      ['reviewed', { id: 'layer:layer-1', reviewed: true }],
+      ['reviewed', { id: 'layer:run-path/file:src_app_ts', reviewed: true }],
+      ['reviewed', { id: 'layer:run-path', reviewed: true }],
     ])
     expect(root.querySelector('.ptext')?.textContent).toBe('1 of 1 layers reviewed')
   })
@@ -1020,7 +1020,7 @@ describe('capability gating and sign-off', () => {
       pending: 0,
     }
     const { root, calls } = setup({
-      state: { ...BASE, reviewed: { 'layer:layer-1': true } },
+      state: { ...BASE, reviewed: { 'layer:run-path': true } },
       fetchReviewBody: async () => preview,
     })
     click(root, '#approve')
@@ -1041,7 +1041,7 @@ describe('capability gating and sign-off', () => {
   it('announces the returned outcome when comments publish but approval fails', async () => {
     const warning = 'Comments published, but approval failed. Approve the merge request in GitLab.'
     const { root } = setup({
-      state: { ...BASE, reviewed: { 'layer:layer-1': true } },
+      state: { ...BASE, reviewed: { 'layer:run-path': true } },
       fetchReviewBody: async () => ({ headSha: HEAD, body: 'ship it', unreviewed: [], pending: 1 }),
       api: {
         postReview: async (_pr, input) => {
@@ -1227,11 +1227,11 @@ describe('a page that lost the elements a command expects', () => {
 
   it('marks a layer reviewed even when its card is gone from the page', async () => {
     const { root, calls } = bare(
-      '<button data-act="mark-layer" data-reviewed-id="layer:layer-1">mark</button>'
+      '<button data-act="mark-layer" data-reviewed-id="layer:run-path">mark</button>'
     )
     click(root, '[data-act="mark-layer"]')
     await flush()
-    expect(calls).toEqual([['reviewed', { id: 'layer:layer-1', reviewed: true }]])
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
   })
 
   it('does nothing for commands whose target is missing', async () => {
@@ -1251,7 +1251,7 @@ describe('a page that lost the elements a command expects', () => {
         '<button data-act="signoff-close">close</button>' +
         '<button data-act="pr-comment">comment</button>' +
         '<button data-act="nothing">x</button>' +
-        '<button disabled data-act="mark-layer" data-reviewed-id="layer:layer-1">off</button>'
+        '<button disabled data-act="mark-layer" data-reviewed-id="layer:run-path">off</button>'
     )
     for (const el of Array.from(root.querySelectorAll('button'))) {
       el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -1295,13 +1295,13 @@ describe('a page that lost the elements a command expects', () => {
 
   it('marks a reviewed checkbox that stands outside a label, and ignores other controls', async () => {
     const { root, calls } = bare(
-      '<input type="checkbox" id="a" data-reviewed-id="layer:layer-1" checked><input type="checkbox" id="c"><select id="b"></select>'
+      '<input type="checkbox" id="a" data-reviewed-id="layer:run-path" checked><input type="checkbox" id="c"><select id="b"></select>'
     )
     for (const el of Array.from(root.querySelectorAll('input, select'))) {
       el.dispatchEvent(new Event('change', { bubbles: true }))
     }
     await flush()
-    expect(calls).toEqual([['reviewed', { id: 'layer:layer-1', reviewed: true }]])
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
   })
 
   it('ignores a click that lands on no command', () => {
@@ -1361,7 +1361,7 @@ describe('the AI Chat commands', () => {
       throw new Error('no ask command on the layer card')
     }
     ask.click()
-    expect(chat.calls).toEqual([['ask', { kind: 'layer', layerId: 'layer-1' }]])
+    expect(chat.calls).toEqual([['ask', { kind: 'layer', layerId: 'run-path' }]])
     setChatEnabled(false)
   })
 
@@ -1493,12 +1493,12 @@ describe('askTargetFor', () => {
       kind: 'point',
       fingerprint: point.fingerprint,
     })
-    expect(askTargetFor(root, 'layer-run-path', null, null)).toEqual({ kind: 'layer', layerId: 'layer-1' })
+    expect(askTargetFor(root, 'layer-run-path', null, null)).toEqual({ kind: 'layer', layerId: 'run-path' })
     expect(askTargetFor(root, null, null, null)).toEqual({ kind: 'pr' })
     // A point or a card the page does not show falls through to the next choice.
     expect(askTargetFor(root, 'layer-run-path', 'p-nope', null)).toEqual({
       kind: 'layer',
-      layerId: 'layer-1',
+      layerId: 'run-path',
     })
     expect(askTargetFor(root, 'overview', null, null)).toEqual({ kind: 'pr' })
     setChatEnabled(false)
@@ -1636,7 +1636,7 @@ describe('the pending review', () => {
     expect(root.querySelector('tr.ifind')).toBe(point)
     expect(root.querySelectorAll('tr.pending-row')).toHaveLength(1)
     expect(root.querySelector('tr.pending-row')?.closest('article')?.getAttribute('data-layer')).toBe(
-      'layer-1'
+      'run-path'
     )
   })
 

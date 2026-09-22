@@ -21,7 +21,6 @@ import {
   putReviewed,
   putThreadHidden,
 } from './api.js'
-import { sanitizeKey } from './keys.js'
 
 /**
  * @typedef {{
@@ -67,13 +66,7 @@ function withDefaults(overrides) {
   }
 }
 
-/**
- * @param {string} layerId
- * @param {string} [path]
- */
-export function reviewedId(layerId, path) {
-  return path === undefined ? `layer:${layerId}` : `layer:${layerId}/file:${sanitizeKey(path)}`
-}
+export { reviewedId } from './keys.js'
 
 /** @param {SessionOptions} options */
 export function createReviewSession(options) {

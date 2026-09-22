@@ -123,6 +123,12 @@ export interface PrBundle {
   stale?: StaleInfo
   /** Set on a ready bundle whose canvas was generated for another commit with an identical diff. */
   carriedOver?: CarriedOverInfo
+  /**
+   * The canvas the reviewed marks on this page were made on, when they followed a line of descent
+   * onto this one; absent when none did. Not necessarily this canvas's own basis: the reviewer may
+   * have marked nothing on the canvases in between.
+   */
+  marksCarriedFrom?: string
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */

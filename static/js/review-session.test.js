@@ -34,8 +34,8 @@ function answers(state) {
 
 describe('reviewedId', () => {
   it('names a layer and one of its files', () => {
-    expect(reviewedId('layer-1')).toBe('layer:layer-1')
-    expect(reviewedId('layer-1', 'src/app.ts')).toBe('layer:layer-1/file:src_app_ts')
+    expect(reviewedId('run-path')).toBe('layer:run-path')
+    expect(reviewedId('run-path', 'src/app.ts')).toBe('layer:run-path/file:src_app_ts')
   })
 })
 
@@ -44,7 +44,7 @@ describe('createReviewSession', () => {
     const s = session({})
     expect(s.pathForKey('src_app_ts')).toBe('src/app.ts')
     expect(s.pathForKey('nope')).toBeUndefined()
-    expect(s.isReviewed('layer:layer-1')).toBe(false)
+    expect(s.isReviewed('layer:run-path')).toBe(false)
     expect(s.artifact).toBe(artifact)
     expect(s.prNumber).toBe(42)
   })
@@ -54,20 +54,20 @@ describe('createReviewSession', () => {
     const seen = []
     const served = {
       ...BASE,
-      reviewed: { 'layer:layer-1': /** @type {const} */ (true) },
+      reviewed: { 'layer:run-path': /** @type {const} */ (true) },
       updatedAt: 'server',
     }
     const s = session(
       {
         putReviewed: async () => {
           // By now the page already shows the change.
-          expect(s.isReviewed('layer:layer-1')).toBe(true)
+          expect(s.isReviewed('layer:run-path')).toBe(true)
           return answers(served)
         },
       },
       state => seen.push(state)
     )
-    await s.setReviewed('layer:layer-1', true)
+    await s.setReviewed('layer:run-path', true)
     expect(seen.map(st => st.updatedAt)).toEqual([BASE.updatedAt, 'server'])
     expect(s.state).toBe(served)
   })
@@ -82,17 +82,17 @@ describe('createReviewSession', () => {
       },
       state => seen.push(state)
     )
-    await expect(s.setReviewed('layer:layer-1', true)).rejects.toBe(failure)
+    await expect(s.setReviewed('layer:run-path', true)).rejects.toBe(failure)
     expect(s.state).toEqual(BASE)
-    expect(seen.map(st => st.reviewed['layer:layer-1'])).toEqual([true, undefined])
+    expect(seen.map(st => st.reviewed['layer:run-path'])).toEqual([true, undefined])
   })
 
   it('unmarks a layer', async () => {
     const s = session({
       putReviewed: async (_pr, _id, reviewed) => answers({ ...BASE, reviewed: reviewed ? { x: true } : {} }),
     })
-    await s.setReviewed('layer:layer-1', true)
-    const off = await s.setReviewed('layer:layer-1', false)
+    await s.setReviewed('layer:run-path', true)
+    const off = await s.setReviewed('layer:run-path', false)
     expect(off.reviewed).toEqual({})
   })
 
@@ -174,7 +174,7 @@ describe('createReviewSession', () => {
   })
 
   it('puts a mark, a dismissal, and a hidden thread back when the server refuses to undo them', async () => {
-    const marked = { ...BASE, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const marked = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     const s = createReviewSession({
       prNumber: 42,
       artifact,
@@ -192,10 +192,10 @@ describe('createReviewSession', () => {
         putThreadHidden: () => Promise.reject(new Error('offline')),
       },
     })
-    await expect(s.setReviewed('layer:layer-1', false)).rejects.toThrow('offline')
+    await expect(s.setReviewed('layer:run-path', false)).rejects.toThrow('offline')
     await expect(s.setDismissed('fp-1', false)).rejects.toThrow('offline')
     await expect(s.setThreadHidden(1001, false)).rejects.toThrow('offline')
-    expect(s.state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect(s.state.reviewed).toEqual({ 'layer:run-path': true })
     expect(Object.keys(s.state.dismissed)).toEqual(['fp-1'])
     expect(Object.keys(s.state.hiddenThreads)).toEqual(['1001'])
   })
@@ -205,9 +205,9 @@ describe('createReviewSession', () => {
     const counts = []
     const s = session({ putReviewed: async () => answers(BASE) })
     const off = s.subscribe(() => counts.push(1))
-    await s.setReviewed('layer:layer-1', true)
+    await s.setReviewed('layer:run-path', true)
     off()
-    await s.setReviewed('layer:layer-1', false)
+    await s.setReviewed('layer:run-path', false)
     expect(counts).toHaveLength(2)
   })
 
@@ -237,7 +237,7 @@ describe('changes that overlap', () => {
         putDismissed: async () => answers({ ...BASE, dismissed: { 'fp-1': { at: 'server' } } }),
       },
     })
-    const failing = s.setReviewed('layer:layer-1', true)
+    const failing = s.setReviewed('layer:run-path', true)
     await s.setDismissed('fp-1', true)
     finish[0]?.()
     await expect(failing).rejects.toThrow('offline')
@@ -257,21 +257,21 @@ describe('changes that overlap', () => {
       state: {
         ...BASE,
         rev: 7,
-        reviewed: { 'layer:layer-1': true, 'layer:layer-1/file:src_app_ts': true },
+        reviewed: { 'layer:run-path': true, 'layer:run-path/file:src_app_ts': true },
       },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
       api: {
         putReviewed: (_pr, id) =>
-          id === 'layer:layer-1'
+          id === 'layer:run-path'
             ? new Promise((_resolve, reject) => {
                 finish.push(() => reject(new Error('offline')))
               })
             : Promise.resolve(answers(cleared)),
       },
     })
-    const failing = s.setReviewed('layer:layer-1', false)
-    await s.setReviewed('layer:layer-1/file:src_app_ts', false)
+    const failing = s.setReviewed('layer:run-path', false)
+    await s.setReviewed('layer:run-path/file:src_app_ts', false)
     finish[0]?.()
     await expect(failing).rejects.toThrow('offline')
     expect(s.state.reviewed).toEqual({})
@@ -307,7 +307,7 @@ describe('changes that overlap', () => {
         }),
       },
     })
-    const failing = s.setReviewed('layer:layer-1', true)
+    const failing = s.setReviewed('layer:run-path', true)
     await s.postComment({ kind: 'issue', body: 'x' })
     finish[0]?.()
     await expect(failing).rejects.toThrow('offline')
@@ -330,12 +330,12 @@ describe('changes that overlap', () => {
           answers({ ...BASE, rev: revs.shift() ?? 0, reviewed: { [id]: /** @type {const} */ (true) } }),
       },
     })
-    await s.setReviewed('layer:layer-1', true)
+    await s.setReviewed('layer:run-path', true)
     expect(s.state.rev).toBe(9)
     // A second call answers with an older write, which says nothing new about the page.
-    await s.setReviewed('layer:layer-2', true)
+    await s.setReviewed('layer:other', true)
     expect(s.state.rev).toBe(9)
-    expect(s.state.reviewed).toEqual({ 'layer:layer-1': true, 'layer:layer-2': true })
+    expect(s.state.reviewed).toEqual({ 'layer:run-path': true, 'layer:other': true })
   })
 
   it('keeps the exact value a failed change replaced, reason and time included', async () => {
@@ -370,15 +370,15 @@ describe('changes that overlap', () => {
           }),
       },
     })
-    const first = s.setReviewed('layer:layer-1', true)
-    const second = s.setReviewed('layer:layer-2', true)
+    const first = s.setReviewed('layer:run-path', true)
+    const second = s.setReviewed('layer:other', true)
     // The server wrote the first call (rev 5) and then the second (rev 6), but the answer of
     // the second one overtakes the first on the way back.
-    finish[1]?.({ ...BASE, rev: 6, reviewed: { 'layer:layer-1': true, 'layer:layer-2': true } })
-    finish[0]?.({ ...BASE, rev: 5, reviewed: { 'layer:layer-1': true } })
+    finish[1]?.({ ...BASE, rev: 6, reviewed: { 'layer:run-path': true, 'layer:other': true } })
+    finish[0]?.({ ...BASE, rev: 5, reviewed: { 'layer:run-path': true } })
     await Promise.all([first, second])
     expect(s.state.rev).toBe(6)
-    expect(s.state.reviewed).toEqual({ 'layer:layer-1': true, 'layer:layer-2': true })
+    expect(s.state.reviewed).toEqual({ 'layer:run-path': true, 'layer:other': true })
   })
 
   it('takes the state of the answer that comes back last when no write count is given', async () => {
@@ -398,18 +398,18 @@ describe('changes that overlap', () => {
           }),
       },
     })
-    const first = s.setReviewed('layer:layer-1', true)
-    const second = s.setReviewed('layer:layer-2', true)
+    const first = s.setReviewed('layer:run-path', true)
+    const second = s.setReviewed('layer:other', true)
     // The second call reaches the server first, so its answer knows only its own mark. The
     // first call is written after it, and its answer, which comes back last, holds both.
-    finish[1]?.({ ...BASE, reviewed: { 'layer:layer-2': true } })
+    finish[1]?.({ ...BASE, reviewed: { 'layer:other': true } })
     finish[0]?.({
       ...BASE,
-      reviewed: { 'layer:layer-1': true, 'layer:layer-2': true },
+      reviewed: { 'layer:run-path': true, 'layer:other': true },
       updatedAt: 'from the server',
     })
     await Promise.all([first, second])
-    expect(s.state.reviewed).toEqual({ 'layer:layer-1': true, 'layer:layer-2': true })
+    expect(s.state.reviewed).toEqual({ 'layer:run-path': true, 'layer:other': true })
     expect(s.state.updatedAt).toBe('from the server')
   })
 })

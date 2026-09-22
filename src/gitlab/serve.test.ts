@@ -283,7 +283,7 @@ describe('a GitLab origin', () => {
     expect(gh.calls.filter(c => c.kind === 'post').map(c => c.path)).toEqual([`${MR_API}/notes`])
   })
 
-  it('publishes pending comments and summary together, then approves', async () => {
+  it.each(['APPROVE', 'REQUEST_CHANGES'] as const)('batch publishes a %s review', async event => {
     const gh = glabFor42()
     t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
     const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
@@ -293,8 +293,8 @@ describe('a GitLab origin', () => {
       42,
       HEAD_SHA,
       {
-        event: 'APPROVE',
-        body: 'ship it',
+        event,
+        body: event === 'APPROVE' ? 'ship it' : '',
         comments: [
           {
             id: 'p1',
@@ -313,10 +313,11 @@ describe('a GitLab origin', () => {
     const posts = gh.calls.filter(c => c.kind === 'post').map(c => c.path)
     expect(posts).toEqual([
       `${MR_API}/draft_notes`,
-      `${MR_API}/draft_notes`,
+      ...(event === 'APPROVE' ? [`${MR_API}/draft_notes`] : []),
       `${MR_API}/draft_notes/bulk_publish`,
-      `${MR_API}/approve`,
+      ...(event === 'APPROVE' ? [`${MR_API}/approve`] : []),
     ])
+    expect(result.state).toBe(event === 'APPROVE' ? 'APPROVED' : 'CHANGES_REQUESTED')
     const discussion = gh.calls.find(c => c.kind === 'post' && c.path.endsWith('/draft_notes'))
     expect(discussion?.body).toMatchObject({
       note: 'needs a guard',
@@ -480,4 +481,78 @@ describe('a GitLab origin', () => {
     expect(result.comments).toMatchObject([{ id: 7001, body: 'route draft', line: 4 }])
     expect((await t.ctx.prs.readComments(42))?.reviewComments.some(c => c.id === 7001)).toBe(true)
   })
+  it.each(['changed head', 'concurrent draft', 'replaced draft', 'cleanup failure'])(
+    'retains local drafts after %s prevents GitLab submission',
+    async failure => {
+      const gh = glabFor42()
+      t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
+      await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      expect(
+        (
+          await app.request(
+            ...post('/api/prs/42/pending', {
+              path: 'src/app.ts',
+              line: 4,
+              side: 'new',
+              body: 'keep this draft',
+              headSha: HEAD_SHA,
+            })
+          )
+        ).status
+      ).toBe(201)
+      const originalApi = gh.api
+      const originalPost = gh.post
+      vi.spyOn(gh, 'api').mockImplementation(async (path, params) => {
+        if (failure === 'changed head' && path === MR_API) {
+          return { ...MR, diff_refs: { ...MR.diff_refs, head_sha: 'c'.repeat(40) } }
+        }
+        return originalApi(path, params)
+      })
+      vi.spyOn(gh, 'post').mockImplementation(async (path, body, method) => {
+        if (failure === 'cleanup failure' && (path.endsWith('/bulk_publish') || method === 'DELETE')) {
+          throw new Error('GitLab unavailable')
+        }
+        const result = await originalPost(path, body, method)
+        if (
+          (failure === 'concurrent draft' || failure === 'replaced draft') &&
+          path.endsWith('/draft_notes') &&
+          (body as { note?: string }).note === 'summary'
+        ) {
+          if (failure === 'replaced draft') await originalPost(`${MR_API}/draft_notes/1`, {}, 'DELETE')
+          await originalPost(path, { note: 'new UI draft' })
+        }
+        return result
+      })
+      const response = await app.request(
+        ...post('/api/prs/42/review', {
+          event: 'COMMENT',
+          body: 'summary',
+          headSha: HEAD_SHA,
+        })
+      )
+      expect(response.status).toBe(500)
+      expect((await t.ctx.state.read(42)).pending.map(p => p.body)).toEqual(['keep this draft'])
+      const text = await response.text()
+      expect(text).toContain(
+        failure === 'changed head'
+          ? 'merge request changed'
+          : failure === 'concurrent draft' || failure === 'replaced draft'
+            ? 'pending review changed'
+            : 'staged drafts remain'
+      )
+      const remote = await gh.api(`${MR_API}/draft_notes`)
+      expect(remote).toEqual(
+        failure === 'changed head'
+          ? []
+          : failure === 'concurrent draft' || failure === 'replaced draft'
+            ? [{ id: 3 }]
+            : [{ id: 1 }, { id: 2 }]
+      )
+      if (failure !== 'cleanup failure') {
+        expect(gh.calls.some(c => c.path.endsWith('/bulk_publish'))).toBe(false)
+      }
+    }
+  )
 })

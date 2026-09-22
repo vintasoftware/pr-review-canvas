@@ -48,7 +48,7 @@ describe('mergeProjectConfig', () => {
       },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
       chat: { enabled: false },
-      canvas: { keepForIdenticalDiff: true },
+      canvas: { keepForIdenticalDiff: true, incremental: true },
     })
     expect(ProjectConfigSchema.parse(config)).toEqual(config)
     const allCaps = Object.fromEntries(Object.keys(TEXT_CAPS).map(k => [k, 1]))
@@ -78,11 +78,17 @@ describe('mergeProjectConfig', () => {
     })
   })
 
-  it('reads the merge-commit setting and defaults it to on', () => {
-    expect(mergeProjectConfig({}).config.canvas).toEqual({ keepForIdenticalDiff: true })
-    expect(mergeProjectConfig({ canvas: {} }).config.canvas).toEqual({ keepForIdenticalDiff: true })
+  it('reads the canvas settings and defaults both to on', () => {
+    const on = { keepForIdenticalDiff: true, incremental: true }
+    expect(mergeProjectConfig({}).config.canvas).toEqual(on)
+    expect(mergeProjectConfig({ canvas: {} }).config.canvas).toEqual(on)
     expect(mergeProjectConfig({ canvas: { keepForIdenticalDiff: false } }).config.canvas).toEqual({
       keepForIdenticalDiff: false,
+      incremental: true,
+    })
+    expect(mergeProjectConfig({ canvas: { incremental: false } }).config.canvas).toEqual({
+      keepForIdenticalDiff: true,
+      incremental: false,
     })
     expect(mergeProjectConfig({ canvas: { keepForIdenticalDiff: 'no' } }).warnings[0]).toContain(
       'canvas.keepForIdenticalDiff'

@@ -9,6 +9,7 @@ import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { lookupCanvas, samePatches } from '../../review/carry-over.js'
+import { marksForCanvas } from '../../review/carry-marks.js'
 import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
 import { canvasBelongsTo } from '../../store/canvas-store.js'
@@ -108,7 +109,28 @@ async function canvasForSignOff(
   if (artifact === null) {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
-  return { artifact, state: stateForCanvas(stored, found.headSha) }
+  return { artifact, state: (await marksForCanvas(ctx, artifact, found.headSha, stored)).state }
+}
+
+/**
+ * The marks the state should start from when the next write keys it to `canvasSha`: none when the
+ * marks already describe that canvas, otherwise the ones that may follow it from its basis. The
+ * same rule the bundle showed the reviewer, recomputed here rather than taken from the page.
+ */
+async function adoptedMarks(
+  ctx: AppContext,
+  key: ReviewKey,
+  canvasSha: string
+): Promise<Record<string, true> | undefined> {
+  const stored = await ctx.state.read(key)
+  if (stored.reviewedCanvasSha === canvasSha) {
+    return undefined
+  }
+  const artifact = await ctx.canvases.readArtifact(canvasSha)
+  if (artifact === null) {
+    return undefined
+  }
+  return (await marksForCanvas(ctx, artifact, canvasSha, stored)).state.reviewed
 }
 
 /**
@@ -226,7 +248,10 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     if (canvasSha !== pr.headSha) {
       await requireCanvasOf(ctx, key, canvasSha)
     }
-    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, canvasSha)))
+    // The first mark on a canvas adopts the marks that followed it from the canvas it descends
+    // from, so the page's carried ticks survive the write instead of being replaced.
+    const carried = await adoptedMarks(ctx, key, canvasSha)
+    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, { canvasSha, carried })))
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {

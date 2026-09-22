@@ -116,27 +116,29 @@ describe('state routes', () => {
     const before = await json<StateResponse>(await app.request('/api/prs/42/state', { headers: LOCAL }))
     expect(before.prNumber).toBe(42)
     expect(before.state).toEqual(await t.ctx.state.read(42))
-    const res = await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
+    const res = await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     expect(res.status).toBe(200)
-    expect((await json<StateResponse>(res)).state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect((await json<StateResponse>(res)).state.reviewed).toEqual({ 'layer:run-path': true })
     const after = await json<StateResponse>(await app.request('/api/prs/42/state', { headers: LOCAL }))
-    expect(after.state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect(after.state.reviewed).toEqual({ 'layer:run-path': true })
   })
 
   it('marks one file of a layer reviewed through the id with a slash', async () => {
     const app = createApp(t.ctx)
     const res = await app.request(
-      ...put('/api/prs/42/reviewed/layer:layer-1/file:src_app_ts', { reviewed: true })
+      ...put('/api/prs/42/reviewed/layer:run-path/file:src_app_ts', { reviewed: true })
     )
-    expect((await json<StateResponse>(res)).state.reviewed).toEqual({ 'layer:layer-1/file:src_app_ts': true })
+    expect((await json<StateResponse>(res)).state.reviewed).toEqual({
+      'layer:run-path/file:src_app_ts': true,
+    })
   })
 
   it('refuses a reviewed id that is not a layer or layer file', async () => {
     const app = createApp(t.ctx)
     for (const id of [
       'nope:layer-1',
-      'layer:layer-1/file:a/b',
-      'layer:layer-1/nope:x',
+      'layer:run-path/file:a/b',
+      'layer:run-path/nope:x',
       encodeURIComponent('../x'),
     ]) {
       const res = await app.request(...put(`/api/prs/42/reviewed/${id}`, { reviewed: true }))
@@ -147,9 +149,9 @@ describe('state routes', () => {
 
   it('refuses a body that is not the shape the route expects', async () => {
     const app = createApp(t.ctx)
-    const bad = await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: 'yes' }))
+    const bad = await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: 'yes' }))
     expect(bad.status).toBe(400)
-    const notJson = await app.request('/api/prs/42/reviewed/layer:layer-1', {
+    const notJson = await app.request('/api/prs/42/reviewed/layer:run-path', {
       method: 'PUT',
       headers: SAME_ORIGIN,
       body: 'nope',
@@ -183,18 +185,18 @@ describe('state routes', () => {
   it('keeps both changes when two state writes arrive together', async () => {
     const app = createApp(t.ctx)
     await Promise.all([
-      app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true })),
+      app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true })),
       app.request(...put('/api/prs/42/points/fp-2/dismissed', { dismissed: true })),
     ])
     const after = await json<StateResponse>(await app.request('/api/prs/42/state', { headers: LOCAL }))
-    expect(after.state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect(after.state.reviewed).toEqual({ 'layer:run-path': true })
     expect(Object.keys(after.state.dismissed)).toEqual(['fp-2'])
   })
 
   it('rejects every state write that does not come from this page', async () => {
     const app = createApp(t.ctx)
     const paths: Array<[string, unknown]> = [
-      ['/api/prs/42/reviewed/layer:layer-1', { reviewed: true }],
+      ['/api/prs/42/reviewed/layer:run-path', { reviewed: true }],
       ['/api/prs/42/points/fp-1/dismissed', { dismissed: true }],
       ['/api/prs/42/threads/1001/hidden', { hidden: true }],
     ]
@@ -545,7 +547,7 @@ describe('POST /api/prs/:n/review', () => {
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
-    await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
+    await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
     expect(res.status).toBe(201)
     const answer = await json<PostReviewResponse>(res)
@@ -619,7 +621,7 @@ describe('POST /api/prs/:n/review', () => {
     const gh = ghFor42({ postRoutes: POST_ROUTES })
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
-    await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
+    await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     // The same marks, recorded against a commit this pull request has left behind.
     await t.ctx.state.update(42, state => ({ ...state, reviewedCanvasSha: 'c'.repeat(40) }))
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
@@ -635,7 +637,7 @@ describe('POST /api/prs/:n/review', () => {
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     // A state file written before the tool recorded the commit of a mark.
-    await t.ctx.state.update(42, state => ({ ...state, reviewed: { 'layer:layer-1': true } }))
+    await t.ctx.state.update(42, state => ({ ...state, reviewed: { 'layer:run-path': true } }))
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
     expect(res.status).toBe(409)
     expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
@@ -645,7 +647,7 @@ describe('POST /api/prs/:n/review', () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
     const res = await app.request(
-      ...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true, headSha: 'c'.repeat(40) })
+      ...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true, headSha: 'c'.repeat(40) })
     )
     expect(res.status).toBe(409)
     expect((await json<{ error: { code: string } }>(res)).error.code).toBe('CANVAS_STALE')
@@ -655,7 +657,7 @@ describe('POST /api/prs/:n/review', () => {
   it('hides marks of another commit from the page and from the review body', async () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
-    await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
+    await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     await t.ctx.state.update(42, state => ({ ...state, reviewedCanvasSha: 'c'.repeat(40) }))
     const bundle = await json<{ state: { reviewed: Record<string, true> } }>(
       await app.request('/api/prs/42', { headers: LOCAL })
@@ -670,7 +672,7 @@ describe('POST /api/prs/:n/review', () => {
   it('records the commit the layers were read on', async () => {
     t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
     const app = createApp(t.ctx)
-    await app.request(...put('/api/prs/42/reviewed/layer:layer-1', { reviewed: true }))
+    await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(HEAD_SHA)
   })
 

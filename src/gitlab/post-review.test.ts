@@ -95,4 +95,35 @@ describe('postGitlabReview', () => {
       submittedAt: '2026-09-10T12:00:00Z',
     })
   })
+  it('propagates a refused approval when no batch was published', async () => {
+    const gh = createFakeGh({
+      postRoutes: {
+        'projects/acme%2Fwidgets/merge_requests/42/approve': ghPost(() => {
+          throw new Error('approval refused')
+        }),
+      },
+    })
+    await expect(
+      postGitlabReview(gh, TEST_REPO, 42, HEAD_SHA, { event: 'APPROVE', body: '' }, WEB)
+    ).rejects.toThrow('approval refused')
+  })
+  it('uses the submission time when GitLab omits the note timestamp', async () => {
+    const gh = createFakeGh({
+      postRoutes: {
+        'projects/acme%2Fwidgets/merge_requests/42/notes': ghPost(() => ({ id: 8 })),
+      },
+    })
+    const before = Date.now()
+    const result = await postGitlabReview(
+      gh,
+      TEST_REPO,
+      42,
+      HEAD_SHA,
+      { event: 'COMMENT', body: 'review summary' },
+      WEB
+    )
+    expect(result.state).toBe('COMMENTED')
+    expect(Date.parse(result.submittedAt!)).toBeGreaterThanOrEqual(before)
+    expect(Date.parse(result.submittedAt!)).toBeLessThanOrEqual(Date.now())
+  })
 })

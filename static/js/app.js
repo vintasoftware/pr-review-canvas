@@ -13,13 +13,19 @@ import {
   saveAppearance,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { readChatWidth, renderChatShell, wireChat } from './chat.js'
+import { readChatMinimized, readChatWidth, renderChatShell, wireChat } from './chat.js'
 import { runCommand, wireCopyCommands } from './commands.js'
 import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
 import { esc, qs } from './dom.js'
 import { exportCanvasZip } from './download.js'
-import { carriedOverBarHtml, renderEmptyState, renderStaleState, staleBarHtml } from './empty-state.js'
+import {
+  carriedOverBarHtml,
+  marksCarriedBarHtml,
+  renderEmptyState,
+  renderStaleState,
+  staleBarHtml,
+} from './empty-state.js'
 import { errorCardHtml } from './errors.js'
 import { renderHeader } from './header.js'
 import { wireDropZone } from './import-zone.js'
@@ -31,7 +37,7 @@ import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
 import { openSettingsDialog } from './settings.js'
-import { applySkin, nextSkin, readSkin, skinLabel } from './skin.js'
+import { applySkin, DEFAULT_SKIN, nextSkin, readSkin, skinLabel } from './skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
@@ -109,7 +115,7 @@ export class PrAppElement extends HTMLElement {
   /** @type {import('./theme.js').Theme} */
   theme = 'auto'
   /** @type {import('./skin.js').Skin} */
-  skin = 'terminal'
+  skin = DEFAULT_SKIN
   /** @type {{ stop: () => void } | null} */
   diagrams = null
   /** @type {{ stop: () => void } | null} */
@@ -199,6 +205,7 @@ export class PrAppElement extends HTMLElement {
     const header = renderHeader(bundle, { host: location.host, theme: this.theme, skin: this.skin, now })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
+    const chatMinimized = chatEnabled && readChatMinimized(storage)
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     const showsCanvas = bundle.artifact !== undefined && (bundle.status === 'ready' || this.viewStale)
@@ -234,10 +241,12 @@ export class PrAppElement extends HTMLElement {
           : bundle.carriedOver
             ? carriedOverBarHtml(bundle.carriedOver)
             : ''
+      const marksBar =
+        bundle.marksCarriedFrom === undefined ? '' : marksCarriedBarHtml(bundle.marksCarriedFrom)
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage) })}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
         footerHtml(boot.version, bundle)
       // The screen is interactive from here: reviewed state, dismissals, threads, and posting.
       // A stale canvas shows the diff of an older commit, so nothing is posted from it: a line

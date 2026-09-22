@@ -172,7 +172,7 @@ describe('dismissed points', () => {
     const first = points[0]
     document.body.innerHTML =
       `<span class="sevsum">${sevsumHtml(artifact.points, artifact.layers)}</span>` +
-      '<section data-layer="layer-1"><span class="point-count">1</span>' +
+      '<section data-layer="run-path"><span class="point-count">1</span>' +
       `<ol>${first === undefined ? '' : pointCardHtml(first, ctx)}</ol></section>` +
       dismissedListHtml(artifact.points, BASE, ctx)
     applyDismissed(document, artifact.points, dismissed, ctx)

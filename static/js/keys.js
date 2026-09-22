@@ -95,3 +95,15 @@ export function layerAnchorId(layerKey) {
 export function pointAnchorId(pointId) {
   return `point-${pointId}`
 }
+
+/**
+ * The id of a reviewed mark: one layer, or one file of it. The layer's key names it, so a
+ * regenerated canvas that reorders its layers still points a reviewer's progress at the same
+ * concern. The server (`src/contract/keys.ts`) and the page both call this, so the two sides
+ * cannot drift; `REVIEWED_ID_RE` in the state store validates this grammar at the route.
+ * @param {string} layerKey
+ * @param {string} [path]
+ */
+export function reviewedId(layerKey, path) {
+  return path === undefined ? `layer:${layerKey}` : `layer:${layerKey}/file:${sanitizeKey(path)}`
+}

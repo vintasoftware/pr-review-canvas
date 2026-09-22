@@ -23,9 +23,10 @@ export interface StateStore {
   /**
    * Marks one layer or file. `canvasSha` is the commit of the canvas the page was showing: when it
    * differs from the one the marks describe, the old marks are dropped, because they were about
-   * other code.
+   * other code, and `carried` takes their place — the marks the caller worked out may follow that
+   * canvas from the one it was generated from.
    */
-  setReviewed(key: ReviewKey, id: string, reviewed: boolean, canvasSha?: string): Promise<PrState>
+  setReviewed(key: ReviewKey, id: string, reviewed: boolean, opts?: SetReviewedOptions): Promise<PrState>
   setDismissed(key: ReviewKey, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
   setThreadHidden(key: ReviewKey, rootCommentId: number, hidden: boolean): Promise<PrState>
   addPosted(key: ReviewKey, entry: PostedEntry): Promise<PrState>
@@ -42,6 +43,13 @@ export interface StateStore {
     submitted: ReadonlyArray<PendingComment>,
     posted: PostedEntry[]
   ): Promise<PrState>
+}
+
+export interface SetReviewedOptions {
+  /** The commit of the canvas the page was showing. */
+  canvasSha?: string | undefined
+  /** Marks that follow `canvasSha` from the canvas it was generated from; used on the first write. */
+  carried?: Readonly<Record<string, true>> | undefined
 }
 
 /** `layer:<id>` or `layer:<id>/file:<key>`, with the ids and keys the artifact uses. */
@@ -91,13 +99,14 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
   return {
     read,
     update,
-    setReviewed: (key, id, reviewed, canvasSha) =>
+    setReviewed: (key, id, reviewed, opts) =>
       update(key, state => {
+        const canvasSha = opts?.canvasSha
         const sameCanvas =
           canvasSha === undefined ||
           state.reviewedCanvasSha === undefined ||
           state.reviewedCanvasSha === canvasSha
-        const next = sameCanvas ? { ...state.reviewed } : {}
+        const next = sameCanvas ? { ...state.reviewed } : { ...opts?.carried }
         if (reviewed) {
           next[id] = true
         } else {

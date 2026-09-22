@@ -232,6 +232,7 @@ export async function publish(
     generatedAt: now,
     generator,
     testPatterns: context.tests.patterns,
+    basisCanvasSha: context.basis?.canvasSha,
   })
   const manifest = buildManifest(context, artifact, ctx.version)
   // A snapshot commit is on no branch, so it must never be offered as a pull request's canvas.

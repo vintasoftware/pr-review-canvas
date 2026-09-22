@@ -35,16 +35,16 @@ function stateWith(partial: Partial<PrState>): PrState {
 describe('unreviewedLayers', () => {
   it('counts only the layers that are not Other', () => {
     const artifact = syntheticArtifact()
-    expect(unreviewedLayers(artifact, emptyState('x')).map(l => l.id)).toEqual(['layer-1'])
-    expect(unreviewedLayers(artifact, stateWith({ reviewed: { 'layer:layer-1': true } }))).toEqual([])
+    expect(unreviewedLayers(artifact, emptyState('x')).map(l => l.id)).toEqual(['run-path'])
+    expect(unreviewedLayers(artifact, stateWith({ reviewed: { 'layer:run-path': true } }))).toEqual([])
   })
 
   it('counts a layer as reviewed when every one of its files is', () => {
     const artifact = syntheticArtifact()
     const reviewed = {
-      'layer:layer-1/file:src_app_ts': true,
-      'layer:layer-1/file:src_new_name_ts': true,
-      'layer:layer-1/file:src_app_test_ts': true,
+      'layer:run-path/file:src_app_ts': true,
+      'layer:run-path/file:src_new_name_ts': true,
+      'layer:run-path/file:src_app_test_ts': true,
     } as const
     expect(unreviewedLayers(artifact, stateWith({ reviewed: { ...reviewed } }))).toEqual([])
   })
@@ -63,7 +63,7 @@ describe('buildReviewBody', () => {
   it('lists the layers read, the points set aside, and the comments posted', () => {
     const artifact = syntheticArtifact()
     const state = stateWith({
-      reviewed: { 'layer:layer-1': true },
+      reviewed: { 'layer:run-path': true },
       dismissed: { 'fp-3': { at: '2026-09-10T12:00:00.000Z' } },
       posted: [{ commentId: 5001, at: '2026-09-10T12:00:00.000Z' }],
     })

@@ -31,7 +31,7 @@ import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decoratio
 import { flash, scrollIntoViewSafe } from './dom.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
-import { pointAnchorId, sanitizeKey } from './keys.js'
+import { pointAnchorId, reviewedId } from './keys.js'
 import {
   getRenderContext,
   pathSet,
@@ -177,8 +177,7 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     if (item === undefined || item.kind !== kind || item.other) {
       continue
     }
-    const id =
-      item.kind === 'file' ? `layer:${item.layerId}/file:${sanitizeKey(item.path)}` : `layer:${item.layerId}`
+    const id = item.kind === 'file' ? reviewedId(item.layerKey, item.path) : reviewedId(item.layerKey)
     if (!session.isReviewed(id)) {
       return root.querySelector(`#${cssEscape(item.id)}`)
     }
@@ -264,7 +263,7 @@ export function wireReview(root, session, opts = {}) {
     if (id.includes('/file:')) {
       return state.reviewed[id] === true
     }
-    const layer = session.artifact.layers.find(l => `layer:${l.id}` === id)
+    const layer = session.artifact.layers.find(l => reviewedId(l.key) === id)
     return layer === undefined ? state.reviewed[id] === true : layerProgress(layer, state) === 'done'
   }
 
@@ -1057,10 +1056,7 @@ export function wireReview(root, session, opts = {}) {
         if (found === null || found === undefined || found.kind === 'overview') {
           break
         }
-        const id =
-          found.kind === 'file'
-            ? `layer:${found.layerId}/file:${sanitizeKey(found.path)}`
-            : `layer:${found.layerId}`
+        const id = found.kind === 'file' ? reviewedId(found.layerKey, found.path) : reviewedId(found.layerKey)
         const parts = cardForReviewedId(root, id)
         const box = parts?.card.querySelector('input[data-reviewed-id]')
         if (box instanceof HTMLElement) {

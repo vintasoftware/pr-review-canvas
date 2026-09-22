@@ -37,7 +37,7 @@ describe('createSettingsStore', () => {
     const saved = await store.write({ agent: 'codex', model: 'gpt-5.2', chatTimeoutSec: 900, maxTurns: 6 })
     expect(saved).toEqual({
       version: 1,
-      skin: 'terminal',
+      skin: 'github',
       theme: 'auto',
       agent: 'codex',
       model: 'gpt-5.2',
@@ -56,7 +56,7 @@ describe('createSettingsStore', () => {
     await store.write({ agent: 'codex' })
     expect(await store.write({ chatTimeoutSec: 120 })).toEqual({
       version: 1,
-      skin: 'terminal',
+      skin: 'github',
       theme: 'auto',
       agent: 'codex',
       model: null,
@@ -119,7 +119,7 @@ describe('two saves that arrive together', () => {
     expect(timeout.chatTimeoutSec).toBe(900)
     expect(await store.read()).toEqual({
       version: 1,
-      skin: 'terminal',
+      skin: 'github',
       theme: 'auto',
       agent: 'codex',
       model: null,

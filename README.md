@@ -131,6 +131,12 @@ merged `main` in without touching the changed files, for example, the canvas sti
 and the page says so. Set `canvas.keepForIdenticalDiff: false` in the project config to treat
 every commit as a new head.
 
+Regenerating for a new head is incremental: the run starts from the newest canvas of a commit the
+head was built on, and keeps the layers, folds, notes and attention points whose files the new
+commits leave untouched, word for word. Your review progress on those files follows the new canvas,
+however many regenerations back you made it, and the page names the canvas you marked. `--force` starts from a blank page instead, and
+`canvas.incremental: false` turns it off for the project.
+
 ## Configuration
 
 ### User-local preferences

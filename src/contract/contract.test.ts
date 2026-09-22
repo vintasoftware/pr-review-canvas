@@ -29,7 +29,7 @@ describe('small contracts', () => {
   it('emptyState is a valid PrState', () => {
     const state = emptyState('2026-09-10T12:00:00.000Z')
     expect(PrStateSchema.parse(state)).toEqual({
-      version: 1,
+      version: 2,
       rev: 0,
       reviewed: {},
       hiddenThreads: {},

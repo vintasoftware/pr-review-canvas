@@ -97,7 +97,7 @@ async function withOldCanvas(scenario: Scenario = {}): Promise<TestContext> {
   runner = createFakeRunner()
   const config: ProjectConfig = {
     ...DEFAULT_PROJECT_CONFIG,
-    canvas: { keepForIdenticalDiff: scenario.keepForIdenticalDiff ?? true },
+    canvas: { keepForIdenticalDiff: scenario.keepForIdenticalDiff ?? true, incremental: true },
   }
   git = gitWithMerge(scenario.git)
   const pull = scenario.body === undefined ? GH_PULL : { ...GH_PULL, body: scenario.body }
@@ -155,7 +155,7 @@ function prNowAt(sha: string): void {
 
 /** A mark on the one layer of the synthetic canvas, with whatever body the test wants to send. */
 async function markLayer1(body: Record<string, unknown>): Promise<Response> {
-  return createApp(t.ctx).request('/api/prs/42/reviewed/layer:layer-1', {
+  return createApp(t.ctx).request('/api/prs/42/reviewed/layer:run-path', {
     method: 'PUT',
     headers: JSON_POST,
     body: JSON.stringify(body),
@@ -242,7 +242,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasSha: OLD_SHA })
     expect(res.status).toBe(200)
     expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(OLD_SHA)
-    expect((await bundle()).state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect((await bundle()).state.reviewed).toEqual({ 'layer:run-path': true })
     // The head moves again with the identical diff: the canvas and its marks still apply.
     headMovedTo('c'.repeat(40))
     const b = await bundle(true)
@@ -252,7 +252,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
       currentHeadSha: 'c'.repeat(40),
       commitsBehind: 5,
     })
-    expect(b.state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect(b.state.reviewed).toEqual({ 'layer:run-path': true })
     const body = await json<ReviewBodyResponse>(
       await createApp(t.ctx).request('/api/prs/42/review/body', { headers: LOCAL })
     )
@@ -267,7 +267,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(OLD_SHA)
     const outdated = await bundle()
     expect(outdated.status).toBe('stale')
-    expect(outdated.state.reviewed).toEqual({ 'layer:layer-1': true })
+    expect(outdated.state.reviewed).toEqual({ 'layer:run-path': true })
     // A canvas generated for the head afterwards starts unreviewed.
     await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), manifest(HEAD_SHA), 42)
     const current = await bundle()
@@ -324,7 +324,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
 
   it('lets the sign-off routes use the canvas and the carried-over marks without a page load first', async () => {
     await withOldCanvas()
-    await t.ctx.state.setReviewed(42, 'layer:layer-1', true, OLD_SHA)
+    await t.ctx.state.setReviewed(42, 'layer:run-path', true, { canvasSha: OLD_SHA })
     const app = createApp(t.ctx)
     const body = await json<ReviewBodyResponse>(
       await app.request('/api/prs/42/review/body', { headers: LOCAL })

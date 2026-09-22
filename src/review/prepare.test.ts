@@ -12,6 +12,7 @@ import {
   ghFor42,
   gitFor42,
   HEAD_SHA,
+  SYNTHETIC_DIFF,
   SYNTHETIC_FILES,
   syntheticArtifact,
 } from '../testing/synthetic.js'
@@ -240,5 +241,97 @@ describe('prepare', () => {
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
     expect(context.rulebook).toEqual({ path: 'nope.md', text: null })
     expect(GH_PULL.number).toBe(42)
+  })
+})
+
+describe('prepare with a basis canvas', () => {
+  const OLD = 'e'.repeat(40)
+
+  /** The clone as of PR 42, plus an earlier commit of the same branch that has a canvas. */
+  function gitWithOld() {
+    const git = gitFor42()
+    Object.assign(git.options.refs ?? {}, { old: OLD })
+    Object.assign(git.options.diffs ?? {}, { [`${BASE_SHA}..${OLD}`]: SYNTHETIC_DIFF })
+    git.options.ancestors = { ...git.options.ancestors, [`${OLD}..${HEAD_SHA}`]: true }
+    return git
+  }
+
+  async function withOldCanvas(incremental = true): Promise<TestContext> {
+    t = await makeTestContext({ git: gitWithOld(), gh: ghFor42() })
+    t.ctx.projectConfig = {
+      config: { ...DEFAULT_PROJECT_CONFIG, canvas: { keepForIdenticalDiff: true, incremental } },
+      warnings: [],
+      source: null,
+    }
+    await t.ctx.canvases.write(
+      OLD,
+      syntheticArtifact(),
+      {
+        formatVersion: 1,
+        tool: { name: 'pr-review', version: '0.5.0' },
+        repo: syntheticArtifact().pr.repo,
+        prNumber: 42,
+        headSha: OLD,
+        mergeBaseSha: BASE_SHA,
+        baseRef: 'main',
+        headRef: 'feat/b',
+        generatedAt: '2026-09-10T11:00:00.000Z',
+        generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
+      },
+      42
+    )
+    return t
+  }
+
+  it('splits the basis canvas into the prompt and records it in the context', async () => {
+    await withOldCanvas()
+    const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
+    expect(context.basis?.canvasSha).toBe(OLD)
+    // The head's diff is the one the canvas was generated from, so everything carries.
+    expect(context.basis?.files.changed).toEqual([])
+    expect(context.basis?.layers.map(l => l.status)).toEqual(['carried', 'carried'])
+    const prompt = await readFile(result.promptPath, 'utf8')
+    expect(prompt).toContain('Update the review canvas')
+    expect(prompt).toContain(OLD)
+    expect(prompt).toContain('Carry these as they stand')
+    expect(prompt).not.toContain('{{')
+  })
+
+  it('starts from a blank page for --force and when the setting is off', async () => {
+    await withOldCanvas()
+    const forced = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts(true))
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(forced.contextPath, 'utf8')))
+    expect(context.basis).toBeUndefined()
+    expect(await readFile(forced.promptPath, 'utf8')).not.toContain('Update the review canvas')
+    await t.cleanup()
+    await withOldCanvas(false)
+    const off = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
+    const offContext = GenerationContextSchema.parse(JSON.parse(await readFile(off.contextPath, 'utf8')))
+    expect(offContext.basis).toBeUndefined()
+  })
+
+  it('has no basis when the only other canvas is not a commit the head was built on', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    await t.ctx.canvases.write(
+      OLD,
+      syntheticArtifact(),
+      {
+        formatVersion: 1,
+        tool: { name: 'pr-review', version: '0.5.0' },
+        repo: syntheticArtifact().pr.repo,
+        prNumber: 42,
+        headSha: OLD,
+        mergeBaseSha: BASE_SHA,
+        baseRef: 'main',
+        headRef: 'feat/b',
+        generatedAt: '2026-09-10T11:00:00.000Z',
+        generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
+      },
+      42
+    )
+    const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
+    expect(context.basis).toBeUndefined()
   })
 })
