@@ -93,6 +93,16 @@ describe('applyCodeFolds', () => {
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
   })
 
+  it('leaves a fold the level has not reached alone when a deep link lands in it', () => {
+    const card = mount()
+    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'moderate' }], 'light', false)
+
+    expect(followLink('#line:src/app.ts:3', document.body)).toBe(true)
+    setCodeFoldLevel(card, 'moderate', false)
+    expect(toggle(card).getAttribute('aria-expanded')).toBe('false')
+    expect(findRow(card, 'src_app_ts', 'new', 3)?.hidden).toBe(true)
+  })
+
   it('opens the folds of a linked hunk', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)

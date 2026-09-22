@@ -102,6 +102,59 @@ describe('validateFolds', () => {
     ])
   })
 
+  it('reads nesting the same whichever fold comes first', () => {
+    const { output, file, fold } = fixture()
+    fold.level = 'moderate'
+    file.folds = [{ title: 'the body', side: 'new', startLine: 4, endLine: 5, level: 'light' }, fold]
+    expect(validateFolds(output, files)).toEqual([])
+
+    fold.level = 'light'
+    file.folds[0]!.level = 'moderate'
+    expect(validateFolds(output, files)).toEqual([
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message:
+          `${where}: fold 2 partly overlaps an earlier fold, uses another coordinate side in the same ` +
+          'chunk, or nests inside a fold of the same or a lower level',
+      },
+    ])
+  })
+
+  it('keeps folds in separate chunks apart, and one chunk to one coordinate side', () => {
+    const { output, file } = fixture()
+    file.hunks = ['src_app_ts#1', 'src_app_ts#2']
+    file.folds?.push({ title: 'tail', side: 'new', startLine: 11, endLine: 13, level: 'light' })
+    expect(validateFolds(output, files)).toEqual([])
+
+    file.folds?.push({ title: 'old return', side: 'old', startLine: 2, endLine: 2, level: 'light' })
+    expect(validateFolds(output, files)).toEqual([
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message:
+          `${where}: fold 3 partly overlaps an earlier fold, uses another coordinate side in the same ` +
+          'chunk, or nests inside a fold of the same or a lower level',
+      },
+    ])
+  })
+
+  it('places the missing-test marker of a deleted file on its old side', () => {
+    const { output, layer } = fixture()
+    const gone = 'layer:run/file:src/gone.ts'
+    layer.tests = [{ behavior: 'handles failure', status: 'missing' }]
+    layer.files.unshift({
+      path: 'src/gone.ts',
+      hunks: ['src_gone_ts#1'],
+      annotations: [],
+      folds: [{ title: 'removed', side: 'old', startLine: 1, endLine: 2, level: 'light' }],
+    })
+
+    expect(validateFolds(output, files)).toEqual([
+      { code: 'FOLD_INVALID', where: gone, message: `${gone}: fold 1 would hide an attention point` },
+    ])
+  })
+
   it('keeps annotated code expanded below the aggressive level', () => {
     const { output, file } = fixture()
     file.annotations = [{ side: 'new', startLine: 4, endLine: 4, text: 'A decision here' }]

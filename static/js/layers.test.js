@@ -39,6 +39,7 @@ import {
   renderFileCard,
   renderLayerSection,
   renderLayers,
+  refreshFolds,
   renderRail,
   setCardRenderedHook,
   setFoldLevel,
@@ -959,6 +960,14 @@ describe('the reading level', () => {
       const { hidden } = layerHiddenLines(layer, context, 'light')
       expect([titles.length, hidden > 0]).toEqual(discussion.length === 0 ? [1, true] : [0, false])
     }
+  })
+
+  it('refreshes nothing before the page has a render context', () => {
+    setRenderContext(null)
+    document.body.innerHTML = renderLayers(artifact, files, state)
+    const before = document.body.innerHTML
+    refreshFolds(document.body)
+    expect(document.body.innerHTML).toBe(before)
   })
 
   it('counts the hidden lines of each layer in its Files heading', () => {
