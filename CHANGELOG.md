@@ -36,9 +36,15 @@
   and a file with an annotation or an attention point never collapses.
 - The validator holds the generator to the shape of the levels: `collapsed` names a level, nothing
   in a test file hides at `light`, a `light` fold covers at most 40 lines of generated content, and
-  a routine file over 20 lines that hides nothing fails with `FOLD_MISSING`, as does an open file
-  over 60 lines that folds less than half of its unannotated lines by `aggressive`. A stored
-  `review.json` is held to the correctness rules only, because an older canvas predates the rest.
+  a file with over 20 lines outside its annotations, no attention point, and nothing hidden fails
+  with `FOLD_MISSING`, as does an open file over 60 lines that folds less than half of its lines
+  outside attention points by `aggressive`. An annotation marks what to read; it does not excuse
+  the rows around it, and annotated rows count towards the half because an aggressive fold may
+  hide them. A stored `review.json` is held to the correctness rules only, because an older canvas
+  predates the rest.
+- A layer of more than 100 changed lines that leaves more than 20 lines open at `moderate` and
+  hides nothing more at `aggressive` fails with `FOLD_MISSING` too. A smaller layer reads whole,
+  and only the file rules apply to it.
 - The built-in test patterns now match test directories (`tests/`, `test/`, `spec/`) and
   file-name shapes (`*_test.*`, `*_spec.*`, `test_*.py`, `conftest.py`, `*Test.*`, `*Tests.*`)
   across stacks, not only the JavaScript conventions, so a repository without a

@@ -229,33 +229,33 @@ describe('validateFolds', () => {
     expect(validateFolds(output, files)).toEqual([])
   })
 
+  /** A sixty-line added file with no point and no annotation: the reading levels have nothing to do. */
+  const big: FileEntry = {
+    path: 'src/big.ts',
+    key: 'src_big_ts',
+    status: 'added',
+    additions: 60,
+    deletions: 0,
+    hunks: [
+      {
+        id: 'src_big_ts#1',
+        header: '@@ -0,0 +1,60 @@',
+        oldStart: 0,
+        oldLines: 0,
+        newStart: 1,
+        newLines: 60,
+      },
+    ],
+  }
+  const bigWhere = 'layer:run/file:src/big.ts'
+
+  function withBig(over: Partial<ModelLayer['files'][number]> = {}) {
+    const { output, layer } = fixture()
+    layer.files = [{ path: 'src/big.ts', hunks: ['src_big_ts#1'], annotations: [], ...over }]
+    return { output, layer }
+  }
+
   describe('a routine file that hides nothing', () => {
-    /** A sixty-line added file with no point and no annotation: the reading levels have nothing to do. */
-    const big: FileEntry = {
-      path: 'src/big.ts',
-      key: 'src_big_ts',
-      status: 'added',
-      additions: 60,
-      deletions: 0,
-      hunks: [
-        {
-          id: 'src_big_ts#1',
-          header: '@@ -0,0 +1,60 @@',
-          oldStart: 0,
-          oldLines: 0,
-          newStart: 1,
-          newLines: 60,
-        },
-      ],
-    }
-    const bigWhere = 'layer:run/file:src/big.ts'
-
-    function withBig(over: Partial<ModelLayer['files'][number]> = {}) {
-      const { output, layer } = fixture()
-      layer.files = [{ path: 'src/big.ts', hunks: ['src_big_ts#1'], annotations: [], ...over }]
-      return { output, layer }
-    }
-
     it('is refused', () => {
       const { output } = withBig()
       expect(validateFolds(output, [...files, big])).toEqual([
@@ -267,23 +267,40 @@ describe('validateFolds', () => {
       ])
     })
 
-    it('passes once it collapses, folds a range, or carries an annotation or a point', () => {
+    it('passes once it collapses or folds a range', () => {
       expect(validateFolds(withBig({ collapsed: 'aggressive' }).output, [...files, big])).toEqual([])
       expect(
         validateFolds(
           withBig({
-            folds: [{ title: 'wiring', side: 'new', startLine: 10, endLine: 40, level: 'moderate' }],
+            folds: [{ title: 'wiring', side: 'new', startLine: 10, endLine: 40, level: 'aggressive' }],
           }).output,
           [...files, big]
         )
       ).toEqual([])
+    })
+
+    it('is not excused by an annotation, which marks what to read and leaves the rest routine', () => {
+      const annotation = { side: 'new' as const, startLine: 5, endLine: 5, text: 'Read this.' }
+      expect(validateFolds(withBig({ annotations: [annotation] }).output, [...files, big])).toEqual([
+        {
+          code: 'FOLD_MISSING',
+          where: bigWhere,
+          message: `${bigWhere}: 60 changed lines, 59 of them outside its annotations, and nothing hidden at any level; an annotation marks what to read — fold the routine ranges around it`,
+        },
+      ])
+
+      // Once the routine ranges fold, the annotation stays open below aggressive as before.
+      const fold: CodeFold = { title: 'wiring', side: 'new', startLine: 10, endLine: 40, level: 'aggressive' }
       expect(
-        validateFolds(
-          withBig({ annotations: [{ side: 'new', startLine: 5, endLine: 5, text: 'Read this.' }] }).output,
-          [...files, big]
-        )
+        validateFolds(withBig({ annotations: [annotation], folds: [fold] }).output, [...files, big])
       ).toEqual([])
 
+      // A file whose annotations leave few rows uncovered has nothing routine left to fold.
+      const wide = { side: 'new' as const, startLine: 1, endLine: 40, text: 'All of this is the rule.' }
+      expect(validateFolds(withBig({ annotations: [wide] }).output, [...files, big])).toEqual([])
+    })
+
+    it('may stay open for an attention point', () => {
       const { output } = withBig()
       output.points = [
         { kind: 'decision', level: 'fyi', title: 'Why', path: 'src/big.ts', line: 3, body: 'Because.' },
@@ -363,7 +380,7 @@ describe('validateFolds', () => {
       return output
     }
 
-    it('is refused when less than half of its unannotated rows fold', () => {
+    it('is refused when less than half of its rows outside attention points fold', () => {
       const output = withCore([
         { title: 'ceremony', side: 'new', startLine: 150, endLine: 189, level: 'aggressive' },
       ])
@@ -371,12 +388,12 @@ describe('validateFolds', () => {
         {
           code: 'FOLD_MISSING',
           where: coreWhere,
-          message: `${coreWhere}: 40 of 200 changed lines hide at aggressive; a core file keeps its defining lines and annotations and folds the rest, at least half of the 190 lines outside them`,
+          message: `${coreWhere}: 40 of 200 changed lines hide at aggressive; a core file keeps its defining lines and folds the rest, at least half of the 200 lines outside its attention points`,
         },
       ])
     })
 
-    it('passes once folds cover half of what is not annotated, at any mix of levels', () => {
+    it('passes once folds cover half of it, at any mix of levels', () => {
       const output = withCore([
         { title: 'accessors', side: 'new', startLine: 30, endLine: 79, level: 'moderate' },
         { title: 'formatting', side: 'new', startLine: 120, endLine: 169, level: 'aggressive' },
@@ -384,11 +401,135 @@ describe('validateFolds', () => {
       expect(validateFolds(output, [...files, core])).toEqual([])
     })
 
+    it('counts annotated rows as rows to fold, so annotating more does not lower the bar', () => {
+      // Ninety rows hide; the annotation adds nothing to that, even though it covers ten rows.
+      const short = withCore([
+        { title: 'ceremony', side: 'new', startLine: 100, endLine: 189, level: 'aggressive' },
+      ])
+      expect(validateFolds(short, [...files, core])).toHaveLength(1)
+
+      // An aggressive fold over the annotated rows is allowed and counts towards the half.
+      const overAnnotation = withCore([
+        { title: 'the rule, then ceremony', side: 'new', startLine: 10, endLine: 19, level: 'aggressive' },
+        { title: 'ceremony', side: 'new', startLine: 100, endLine: 189, level: 'aggressive' },
+      ])
+      expect(validateFolds(overAnnotation, [...files, core])).toEqual([])
+    })
+
     it('does not ask a stored artifact or a small file for it', () => {
-      const output = withCore([])
+      const output = withCore([
+        { title: 'one accessor', side: 'new', startLine: 30, endLine: 34, level: 'aggressive' },
+      ])
+      expect(validateFolds(output, [...files, core])).toHaveLength(1)
       expect(validateFolds(output, [...files, core], { storedArtifact: true })).toEqual([])
       const small = { ...core, hunks: [{ ...core.hunks[0]!, newLines: 60 }] }
       expect(validateFolds(output, [...files, small])).toEqual([])
+    })
+  })
+
+  describe('a layer that hides the same at moderate and aggressive', () => {
+    const layerWhere = 'layer:run'
+
+    /** A 120-line added file: on its own it makes a layer bigger than the small-layer floor. */
+    const wide: FileEntry = {
+      path: 'src/wide.ts',
+      key: 'src_wide_ts',
+      status: 'added',
+      additions: 120,
+      deletions: 0,
+      hunks: [
+        {
+          id: 'src_wide_ts#1',
+          header: '@@ -0,0 +1,120 @@',
+          oldStart: 0,
+          oldLines: 0,
+          newStart: 1,
+          newLines: 120,
+        },
+      ],
+    }
+
+    /** Seventy rows fold at moderate, so the file passes its own core rule and fifty rows stay open. */
+    const moderate: CodeFold = { title: 'wiring', side: 'new', startLine: 1, endLine: 70, level: 'moderate' }
+
+    function withWide(over: Partial<ModelLayer['files'][number]> = {}) {
+      const { output, layer } = fixture()
+      layer.files = [{ path: 'src/wide.ts', hunks: ['src_wide_ts#1'], annotations: [], ...over }]
+      return { output, layer }
+    }
+
+    it('is refused while moderate leaves more than a routine file open', () => {
+      expect(validateFolds(withWide({ folds: [moderate] }).output, [...files, wide])).toEqual([
+        {
+          code: 'FOLD_MISSING',
+          where: layerWhere,
+          message: `${layerWhere}: 50 changed lines stay open at moderate outside the attention points, and aggressive hides none of them; aggressive leaves only the core on screen — collapse the files outside it, fold the routine ranges inside it`,
+        },
+      ])
+    })
+
+    it('passes once aggressive hides anything more, in any file of the layer', () => {
+      const more: CodeFold = {
+        title: 'formatting',
+        side: 'new',
+        startLine: 80,
+        endLine: 82,
+        level: 'aggressive',
+      }
+      expect(validateFolds(withWide({ folds: [moderate, more] }).output, [...files, wide])).toEqual([])
+
+      const { output, layer } = withWide({ folds: [moderate] })
+      layer.files.push({
+        path: 'src/app.ts',
+        hunks: ['src_app_ts#1'],
+        annotations: [],
+        collapsed: 'aggressive',
+      })
+      expect(validateFolds(output, files.concat(wide))).toEqual([])
+    })
+
+    it('leaves the layer alone when moderate already shows only a routine file or less', () => {
+      expect(
+        validateFolds(withWide({ folds: [{ ...moderate, endLine: 100 }] }).output, [...files, wide])
+      ).toEqual([])
+
+      // Attention points are never hidden, so their rows are not open rows aggressive could take.
+      const { output } = withWide({ folds: [{ ...moderate, endLine: 99 }] })
+      expect(validateFolds(output, [...files, wide])).toHaveLength(1)
+      output.points = [
+        { kind: 'decision', level: 'fyi', title: 'Why', path: 'src/wide.ts', line: 110, body: 'Because.' },
+      ]
+      expect(validateFolds(output, [...files, wide])).toEqual([])
+    })
+
+    it('leaves a small layer alone: it reads whole, and only the file rules apply', () => {
+      // Sixty rows, thirty-one of them folded at moderate and nothing more at aggressive.
+      const small: CodeFold = { title: 'wiring', side: 'new', startLine: 10, endLine: 40, level: 'moderate' }
+      expect(validateFolds(withBig({ folds: [small] }).output, [...files, big])).toEqual([])
+
+      // The same shape in a layer over the floor is refused.
+      const { output, layer } = withBig({ folds: [small] })
+      layer.files.push({
+        path: 'src/wide.ts',
+        hunks: ['src_wide_ts#1'],
+        annotations: [],
+        collapsed: 'moderate',
+      })
+      expect(validateFolds(output, [...files, big, wide])).toHaveLength(1)
+    })
+
+    it('speaks beside a file rule, since each names its own fix', () => {
+      const { output } = withWide()
+      expect(validateFolds(output, [...files, wide]).map(e => e.where)).toEqual([
+        'layer:run/file:src/wide.ts',
+        layerWhere,
+      ])
+    })
+
+    it('is accepted from a stored artifact, whose generator may predate the rule', () => {
+      expect(
+        validateFolds(withWide({ folds: [moderate] }).output, [...files, wide], { storedArtifact: true })
+      ).toEqual([])
     })
   })
 

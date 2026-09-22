@@ -394,11 +394,13 @@ only be hidden by an aggressive fold, which then shows the annotation's text in 
 title; a file that carries an annotation or an attention point never collapses, so the layer's
 core stays on screen at every level and hides only its routine ranges. Nothing in a test file
 hides at `light`; from `moderate` each test body folds under its own title, one fold per test, or
-the file collapses whole. A `light` fold is at most 40 lines of generated content. A file of more
-than 20 changed lines with no attention point and no annotation must
-hide something at some level, and a file over 60 lines that stays open must fold at least half of
-the lines outside its annotations and attention points by `aggressive`; either failure is
-`FOLD_MISSING`.
+the file collapses whole. A `light` fold is at most 40 lines of generated content. A file with
+more than 20 changed lines outside its annotations and no attention point must hide something at
+some level; a file over 60 lines that stays open must fold at least half of the lines outside its
+attention points by `aggressive`, annotated lines included; and a layer of more than 100 changed
+lines that leaves more than 20 lines open at `moderate` outside its attention points must hide
+more at `aggressive`. A smaller layer reads whole, and only the file rules apply to it. Each
+failure is `FOLD_MISSING`. An annotation marks what to read; it does not excuse the rows around it.
 
 The page opens at `light` every time and the choice is not saved, so two readers of the same
 canvas start from the same view. Press `f` to step through the levels. Changing the level redraws
@@ -516,15 +518,15 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 Validation reports name the field, file, hunk, or line to fix. Common groups are:
 
-| Codes                                                           | What to check                                                                                          |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `SCHEMA`, `TEXT_TOO_LONG`                                       | Required fields, types, and text limits                                                                |
-| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN`             | Each known hunk belongs to exactly one layer                                                           |
-| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                             | Referenced files exist in the relevant diff or PR head                                                 |
-| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                            | Layers contain hunks and have unique keys                                                              |
-| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`            | At most one Other layer, last, without risk-tagged changes                                             |
-| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                | Tests follow the code they cover and use the appropriate layer                                         |
-| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                                                        |
-| `FOLD_MISSING`                                                  | A routine file over 20 lines hides something; an open file over 60 folds half of its unannotated lines |
-| `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                |
-| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                     |
+| Codes                                                           | What to check                                                                                                                |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `SCHEMA`, `TEXT_TOO_LONG`                                       | Required fields, types, and text limits                                                                                      |
+| `HUNK_UNASSIGNED`, `HUNK_DUPLICATE`, `HUNK_UNKNOWN`             | Each known hunk belongs to exactly one layer                                                                                 |
+| `PATH_UNKNOWN`, `TEST_PATH_UNKNOWN`                             | Referenced files exist in the relevant diff or PR head                                                                       |
+| `LAYER_EMPTY`, `LAYER_KEY_DUPLICATE`                            | Layers contain hunks and have unique keys                                                                                    |
+| `OTHER_DUPLICATE`, `OTHER_NOT_LAST`, `RISK_IN_OTHER`            | At most one Other layer, last, without risk-tagged changes                                                                   |
+| `TEST_NOT_LAST`, `TEST_IN_OTHER`                                | Tests follow the code they cover and use the appropriate layer                                                               |
+| `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                                                                              |
+| `FOLD_MISSING`                                                  | A file over 20 unannotated lines hides something; an open file over 60 folds half; a layer over 100 hides more at aggressive |
+| `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                                      |
+| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                           |

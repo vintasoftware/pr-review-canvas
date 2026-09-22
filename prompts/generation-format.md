@@ -138,10 +138,14 @@ something at `aggressive`: the whole file when it is not the core, its routine r
 
 The validator enforces the shape of this: `collapsed` must name a level (`true` is refused); no
 fold or collapse in a test file may be `light`; a `light` fold covers at most forty lines; a file
-of more than twenty changed lines with no attention point, no annotation, and neither `collapsed`
-nor a fold fails with `FOLD_MISSING`; and a file of more than sixty changed lines that stays open
-must fold at least half of the lines outside its annotations and attention points, or fails the
-same way.
+with more than twenty changed lines outside its annotations, no attention point, and neither
+`collapsed` nor a fold fails with `FOLD_MISSING`; a file of more than sixty changed lines that
+stays open must fold at least half of the lines outside its attention points, annotated lines
+included, or fails the same way; and a layer of more than a hundred changed lines that leaves more
+than twenty lines open at `moderate` outside its attention points and hides nothing more at
+`aggressive` fails the same way. A smaller layer reads whole, and only the file rules apply to it.
+An annotation is not a way past these: it marks the lines to read, and the rows around it still
+fold.
 
 Keep visible at every level: security boundaries, destructive operations, ordering and
 concurrency rules, performance assumptions, and other consequential behavior that needs the
