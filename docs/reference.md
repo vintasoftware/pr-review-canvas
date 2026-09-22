@@ -324,15 +324,15 @@ placed in Other while its source is in a regular layer.
 
 The data directory's `settings.yml` accepts these keys and values:
 
-| Key              | Default    | Accepted values                                  |
-| ---------------- | ---------- | ------------------------------------------------ |
-| `version`        | `1`        | `1`                                              |
-| `skin`           | `terminal` | `terminal`, `github`                             |
-| `theme`          | `auto`     | `auto`, `light`, `dark`                          |
-| `agent`          | `claude`   | `claude`, `codex`                                |
-| `model`          | `null`     | A model ID, or `null` for the agent's default    |
-| `chatTimeoutSec` | `600`      | Integer seconds, 30–3600                         |
-| `maxTurns`       | `null`     | Integer 1–100, or `null` for the agent's default |
+| Key              | Default  | Accepted values                                  |
+| ---------------- | -------- | ------------------------------------------------ |
+| `version`        | `1`      | `1`                                              |
+| `skin`           | `github` | `terminal`, `github`                             |
+| `theme`          | `auto`   | `auto`, `light`, `dark`                          |
+| `agent`          | `claude` | `claude`, `codex`                                |
+| `model`          | `null`   | A model ID, or `null` for the agent's default    |
+| `chatTimeoutSec` | `600`    | Integer seconds, 30–3600                         |
+| `maxTurns`       | `null`   | Integer 1–100, or `null` for the agent's default |
 
 Invalid settings fall back to defaults. URL parameters `?skin=github&theme=light` can override
 appearance for one page load without saving it.

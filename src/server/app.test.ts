@@ -149,7 +149,7 @@ describe('createApp', () => {
       expect(html).toContain('<script type="module" src="/static/js/app.js"></script>')
       // The skin and the theme come from the settings file, so the server paints both onto the
       // tag itself and the page carries no script that picks them.
-      expect(html).toContain('<html lang="en" data-skin="terminal" data-theme="auto">')
+      expect(html).toContain('<html lang="en" data-skin="github" data-theme="auto">')
       expect(html).not.toContain('localStorage')
       expect(html).not.toContain('@@ -')
     })
@@ -196,20 +196,20 @@ describe('createApp', () => {
       const put = (body: unknown) =>
         app.request('/api/appearance', { method: 'PUT', headers: PUT, body: JSON.stringify(body) })
       expect(await json(await app.request('/api/appearance', { headers: LOCAL }))).toEqual({
-        skin: 'terminal',
+        skin: 'github',
         theme: 'auto',
       })
-      const saved = await put({ skin: 'github' })
+      const saved = await put({ skin: 'terminal' })
       expect(saved.status).toBe(200)
-      expect(await json(saved)).toEqual({ skin: 'github', theme: 'auto' })
+      expect(await json(saved)).toEqual({ skin: 'terminal', theme: 'auto' })
       // Saving the theme keeps the skin that was already there.
-      expect(await json(await put({ theme: 'dark' }))).toEqual({ skin: 'github', theme: 'dark' })
+      expect(await json(await put({ theme: 'dark' }))).toEqual({ skin: 'terminal', theme: 'dark' })
       expect(await json(await app.request('/api/appearance', { headers: LOCAL }))).toEqual({
-        skin: 'github',
+        skin: 'terminal',
         theme: 'dark',
       })
       expect(await t.ctx.settings.read()).toMatchObject({
-        skin: 'github',
+        skin: 'terminal',
         theme: 'dark',
         agent: 'claude',
         chatTimeoutSec: 600,
@@ -224,7 +224,7 @@ describe('createApp', () => {
         expect([body, res.status]).toEqual([body, 400])
         expect((await json<{ error: { code: string } }>(res)).error.code).toBe('BAD_REQUEST')
       }
-      expect(await t.ctx.settings.read()).toMatchObject({ skin: 'terminal', theme: 'auto' })
+      expect(await t.ctx.settings.read()).toMatchObject({ skin: 'github', theme: 'auto' })
     })
   })
 

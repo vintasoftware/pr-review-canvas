@@ -5,7 +5,7 @@ import { applySkin, DEFAULT_SKIN, isSkin, nextSkin, readSkin, SKINS, skinLabel }
 describe('skin', () => {
   it('cycles terminal → github → terminal', () => {
     expect(SKINS).toEqual(['terminal', 'github'])
-    expect(DEFAULT_SKIN).toBe('terminal')
+    expect(DEFAULT_SKIN).toBe('github')
     expect(nextSkin('terminal')).toBe('github')
     expect(nextSkin('github')).toBe('terminal')
     expect(skinLabel('github')).toBe('skin: github')
@@ -23,9 +23,9 @@ describe('skin', () => {
     root.setAttribute('data-skin', 'github')
     expect(readSkin(root)).toBe('github')
     root.setAttribute('data-skin', 'neon')
-    expect(readSkin(root)).toBe('terminal')
+    expect(readSkin(root)).toBe('github')
     root.removeAttribute('data-skin')
-    expect(readSkin(root)).toBe('terminal')
+    expect(readSkin(root)).toBe('github')
   })
 
   it('repaints the page by writing the attribute', () => {

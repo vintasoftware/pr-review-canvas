@@ -11,7 +11,7 @@ export const SKINS = /** @type {const} */ (['terminal', 'github'])
 /** @typedef {(typeof SKINS)[number]} Skin */
 
 /** The look a page wears when the settings file says nothing. */
-export const DEFAULT_SKIN = /** @type {Skin} */ ('terminal')
+export const DEFAULT_SKIN = /** @type {Skin} */ ('github')
 
 /**
  * @param {unknown} value
@@ -37,7 +37,7 @@ export function readSkin(root) {
  */
 export function nextSkin(skin) {
   const next = SKINS[SKINS.indexOf(skin) + 1]
-  return next ?? DEFAULT_SKIN
+  return next ?? SKINS[0]
 }
 
 /**

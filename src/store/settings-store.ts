@@ -11,7 +11,7 @@ export const SETTINGS_TEMPLATE = `# Personal pr-review settings. Gitignored: thi
 version: 1
 
 # The look of the page: terminal or github.
-skin: terminal
+skin: ${DEFAULT_SETTINGS.skin}
 
 # Light or dark: auto follows the operating system, light and dark pin one.
 theme: auto

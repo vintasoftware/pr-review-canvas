@@ -45,22 +45,13 @@ async function clickAppearance(page: Page, selector: string) {
   expect((await saved).ok()).toBe(true)
 }
 
-test('starts in the terminal skin, switches to github, and remembers the choice', async ({
+test('starts in the github skin, switches to terminal, and remembers the choice', async ({
   page,
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
   const root = page.locator('html')
   const toggle = page.locator('#skin-toggle')
-  await expect(root).toHaveAttribute('data-skin', 'terminal')
-  await expect(toggle).toHaveText('skin: terminal')
-  expect(await readLook(page)).toMatchObject({
-    cardRadius: '0px',
-    stripeHeight: '6px',
-    commandBracket: '"[ "',
-  })
-
-  await clickAppearance(page, '#skin-toggle')
   await expect(root).toHaveAttribute('data-skin', 'github')
   await expect(toggle).toHaveText('skin: github')
   expect(await readLook(page)).toMatchObject({
@@ -69,15 +60,24 @@ test('starts in the terminal skin, switches to github, and remembers the choice'
     commandBracket: 'none',
   })
 
-  // The choice is saved in .pr-review/settings.yml, and the server renders it onto <html>.
-  await page.reload()
-  await expect(root).toHaveAttribute('data-skin', 'github')
-  await expect(page.locator('#skin-toggle')).toHaveText('skin: github')
-
   await clickAppearance(page, '#skin-toggle')
   await expect(root).toHaveAttribute('data-skin', 'terminal')
+  await expect(toggle).toHaveText('skin: terminal')
+  expect(await readLook(page)).toMatchObject({
+    cardRadius: '0px',
+    stripeHeight: '6px',
+    commandBracket: '"[ "',
+  })
+
+  // The choice is saved in .pr-review/settings.yml, and the server renders it onto <html>.
   await page.reload()
   await expect(root).toHaveAttribute('data-skin', 'terminal')
+  await expect(page.locator('#skin-toggle')).toHaveText('skin: terminal')
+
+  await clickAppearance(page, '#skin-toggle')
+  await expect(root).toHaveAttribute('data-skin', 'github')
+  await page.reload()
+  await expect(root).toHaveAttribute('data-skin', 'github')
 })
 
 test('cycles the theme auto → light → dark and remembers it the same way', async ({ page, reviewUrl }) => {
@@ -89,10 +89,10 @@ test('cycles the theme auto → light → dark and remembers it the same way', a
 
   await clickAppearance(page, '#theme-toggle')
   await expect(root).toHaveAttribute('data-theme', 'light')
-  await expect(page.locator('section.layer > .layer-h')).toHaveCSS('background-color', 'rgb(243, 243, 243)')
+  await expect(page.locator('section.layer > .layer-h')).toHaveCSS('background-color', 'rgb(246, 248, 250)')
   await clickAppearance(page, '#theme-toggle')
   await expect(root).toHaveAttribute('data-theme', 'dark')
-  await expect(page.locator('section.layer > .layer-h')).toHaveCSS('background-color', 'rgb(48, 51, 65)')
+  await expect(page.locator('section.layer > .layer-h')).toHaveCSS('background-color', 'rgb(38, 44, 54)')
 
   // Saved in .pr-review/settings.yml next to the skin, and rendered onto <html> on the next load.
   await page.reload()
@@ -113,17 +113,17 @@ test('lets the query pick the look for one load of a page that runs no app modul
   const { origin } = new URL(reviewUrl)
   const root = page.locator('html')
   const panel = page.locator('main.home .panel').first()
-  await page.goto(`${origin}/?skin=github&theme=dark`)
-  await expect(root).toHaveAttribute('data-skin', 'github')
+  await page.goto(`${origin}/?skin=terminal&theme=dark`)
+  await expect(root).toHaveAttribute('data-skin', 'terminal')
   await expect(root).toHaveAttribute('data-theme', 'dark')
-  await expect(panel).toHaveCSS('border-top-left-radius', '6px')
-  await expect(panel).toHaveCSS('background-color', 'rgb(33, 40, 48)')
+  await expect(panel).toHaveCSS('border-top-left-radius', '0px')
+  await expect(panel).toHaveCSS('background-color', 'rgb(40, 42, 58)')
 
   // Nothing was saved, so the next load is the default again.
   await page.goto(`${origin}/`)
-  await expect(root).toHaveAttribute('data-skin', 'terminal')
+  await expect(root).toHaveAttribute('data-skin', 'github')
   await expect(root).toHaveAttribute('data-theme', 'auto')
-  await expect(panel).toHaveCSS('border-top-left-radius', '0px')
+  await expect(panel).toHaveCSS('border-top-left-radius', '6px')
 })
 
 const COMBINATIONS = [
