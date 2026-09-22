@@ -171,7 +171,12 @@ function setup(opts = {}) {
       return {
         review: {
           id: 7001,
-          state: 'APPROVED',
+          state:
+            input.event === 'APPROVE'
+              ? 'APPROVED'
+              : input.event === 'REQUEST_CHANGES'
+                ? 'CHANGES_REQUESTED'
+                : 'COMMENTED',
           url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7001',
           submittedAt: null,
         },
@@ -1031,6 +1036,37 @@ describe('capability gating and sign-off', () => {
     )
     click(root, '[data-act="signoff-close"]')
     expect(dialog instanceof HTMLDialogElement && dialog.open).toBe(false)
+  })
+
+  it('announces the returned outcome when comments publish but approval fails', async () => {
+    const warning = 'Comments published, but approval failed. Approve the merge request in GitLab.'
+    const { root } = setup({
+      state: { ...BASE, reviewed: { 'layer:layer-1': true } },
+      fetchReviewBody: async () => ({ headSha: HEAD, body: 'ship it', unreviewed: [], pending: 1 }),
+      api: {
+        postReview: async (_pr, input) => {
+          expect(input.event).toBe('APPROVE')
+          return {
+            review: {
+              id: 42,
+              state: 'COMMENTED',
+              url: 'https://gitlab.com/acme/widgets/-/merge_requests/42',
+              submittedAt: null,
+            },
+            submitted: 1,
+            comments: [],
+            warnings: [warning],
+            state: BASE,
+          }
+        },
+      },
+    })
+    click(root, '#approve')
+    await flush()
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment')
+    expect(root.querySelector('.signoff-result')?.textContent).toContain(warning)
   })
 
   it('sends no body when the reader emptied the box, and says that changes were asked for', async () => {

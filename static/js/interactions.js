@@ -58,13 +58,6 @@ import {
 
 const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
-/** What the page says after each kind of review landed. */
-const SIGNOFF_TOAST = {
-  APPROVE: 'approved',
-  REQUEST_CHANGES: 'changes requested',
-  COMMENT: 'review posted',
-}
-
 /**
  * The event a sign-off dialog is set to. An attribute that names none reads as a comment-only
  * review, the one of the three that claims nothing.
@@ -616,9 +609,15 @@ export function wireReview(root, session, opts = {}) {
         for (const warning of warnings) {
           dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
         }
+        const verdict =
+          review.state === 'APPROVED'
+            ? 'approved'
+            : review.state === 'CHANGES_REQUESTED'
+              ? 'changes requested'
+              : 'review posted'
         toast(
           root,
-          `${SIGNOFF_TOAST[event]}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
+          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
         )
       },
       { pendingLabel: 'posting…' }
