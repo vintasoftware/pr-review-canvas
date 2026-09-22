@@ -44,7 +44,8 @@ pr-review publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|
 `prepare` returns `canvasDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`, and `status`.
 A status of `exists` means that head already has a canvas. With `--force`, preparation clears the
 previous generation's working files while keeping the published canvas available until a new
-publish succeeds.
+publish succeeds. `--force` also skips the [incremental update](#incremental-canvases), so omit it
+when regenerating for a new head.
 
 ### Reviewing before the pull request exists
 
