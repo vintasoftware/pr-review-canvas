@@ -12,6 +12,9 @@ export const HOVER_DELAY_MS = 150
 /** The pointer crosses a gap between the command and the menu, so closing waits out the crossing. */
 export const CLOSE_DELAY_MS = 200
 export const QQ_MENU_ID = 'qq-menu'
+/** The gap between a command and its menu, and the room the menu keeps from the window edge. */
+export const MENU_GAP_PX = 4
+export const MENU_EDGE_PX = 8
 export const ASK_SOMETHING_ELSE = 'ask something else…'
 
 /** @returns {string} */
@@ -77,8 +80,18 @@ export function wireQuickQuestions(root, options) {
     el.setAttribute('aria-expanded', 'true')
     menu.hidden = false
     const rect = el.getBoundingClientRect()
-    menu.style.left = `${Math.round(rect.left)}px`
-    menu.style.top = `${Math.round(rect.bottom + 4)}px`
+    // The menu is positioned against the window, so a command near an edge would push it off
+    // screen: keep it inside, and hang it above a command with no room below.
+    const view = doc.defaultView ?? window
+    // `clientWidth` leaves out the scrollbar; a document that does not report it falls back.
+    const roomAcross = doc.documentElement.clientWidth || view.innerWidth
+    const roomDown = doc.documentElement.clientHeight || view.innerHeight
+    const below = rect.bottom + MENU_GAP_PX
+    const top =
+      below + menu.offsetHeight > roomDown - MENU_EDGE_PX ? rect.top - MENU_GAP_PX - menu.offsetHeight : below
+    const left = Math.min(rect.left, roomAcross - menu.offsetWidth - MENU_EDGE_PX)
+    menu.style.left = `${Math.round(Math.max(MENU_EDGE_PX, left))}px`
+    menu.style.top = `${Math.round(Math.max(MENU_EDGE_PX, top))}px`
   }
 
   const clearTimer = () => {

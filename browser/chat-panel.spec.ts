@@ -119,3 +119,19 @@ test('leaves the canvas scrolled where it was across minimize and restore', asyn
   await launcher.click()
   expect(await page.evaluate(() => window.scrollY)).toBe(scrolled)
 })
+
+test('keeps the quick-question menu inside the window with the chat minimized', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await page.goto(reviewUrl)
+  await page.getByRole('button', { name: 'Minimize AI Chat' }).click()
+  // With the chat gone the layer command sits near the right edge, where the menu used to spill.
+  await page.getByRole('button', { name: 'Ask about this layer' }).hover()
+  const menu = page.locator('#qq-menu')
+  await expect(menu).toBeVisible()
+  const box = (await menu.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(1600)
+})
