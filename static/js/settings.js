@@ -25,18 +25,43 @@ export function modelOptionsHtml(agent) {
 }
 
 /**
- * @param {SettingsResponse} data
+ * The chat agent's fields, with the notice about acpx when it is missing.
+ * @param {SettingsResponse['settings']} settings
  * @param {AgentsResponse} agents
  * @returns {string}
  */
-export function settingsDialogHtml(data, agents) {
-  const { settings, overrides, project } = data
+function chatFieldsHtml(settings, agents) {
   const options = agents.agents
     .map(a => {
       const reason = a.available ? '' : ` (${a.reason ?? 'not available'})`
       return `<option value="${esc(a.id)}"${a.id === settings.agent ? ' selected' : ''}${a.available ? '' : ' disabled'}>${esc(a.id)}${esc(reason)}</option>`
     })
     .join('')
+  return (
+    (agents.acpx.installed
+      ? ''
+      : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
+    '<div class="field"><label for="set-agent">Agent</label>' +
+    `<select id="set-agent">${options}</select></div>` +
+    '<div class="field"><label for="set-model">Model</label>' +
+    `<input id="set-model" list="model-list" value="${esc(settings.model ?? '')}" placeholder="the agent's default">` +
+    `<datalist id="model-list">${modelOptionsHtml(settings.agent)}</datalist></div>` +
+    '<div class="field"><label for="set-timeout">Chat timeout (seconds)</label>' +
+    `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
+    '<div class="field"><label for="set-turns">Max turns</label>' +
+    `<input id="set-turns" type="number" min="1" max="100" value="${esc(settings.maxTurns ?? '')}" placeholder="the agent's default"></div>` +
+    '<p class="muted small">Changing the agent starts a new chat thread; the old ones stay in the list.</p>'
+  )
+}
+
+/**
+ * @param {SettingsResponse} data
+ * @param {AgentsResponse | null} agents null when the project turns chat off, so the dialog holds
+ *   only what the page itself reads
+ * @returns {string}
+ */
+export function settingsDialogHtml(data, agents) {
+  const { settings, overrides, project } = data
   const overrideNote =
     overrides.agent === undefined && overrides.model === undefined
       ? ''
@@ -52,22 +77,10 @@ export function settingsDialogHtml(data, agents) {
     `<dialog id="${SETTINGS_DIALOG_ID}" class="settings" aria-labelledby="settings-h">` +
     '<h2 id="settings-h">Settings</h2>' +
     overrideNote +
-    (agents.acpx.installed
-      ? ''
-      : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
     '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
     `<select id="set-fold-level">${foldLevelOptionsHtml(settings.foldLevel)}</select></div>` +
     '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
-    '<div class="field"><label for="set-agent">Agent</label>' +
-    `<select id="set-agent">${options}</select></div>` +
-    '<div class="field"><label for="set-model">Model</label>' +
-    `<input id="set-model" list="model-list" value="${esc(settings.model ?? '')}" placeholder="the agent's default">` +
-    `<datalist id="model-list">${modelOptionsHtml(settings.agent)}</datalist></div>` +
-    '<div class="field"><label for="set-timeout">Chat timeout (seconds)</label>' +
-    `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
-    '<div class="field"><label for="set-turns">Max turns</label>' +
-    `<input id="set-turns" type="number" min="1" max="100" value="${esc(settings.maxTurns ?? '')}" placeholder="the agent's default"></div>` +
-    '<p class="muted small">Changing the agent starts a new chat thread; the old ones stay in the list.</p>' +
+    (agents === null ? '' : chatFieldsHtml(settings, agents)) +
     `<p class="muted small mono">${esc(data.file)}</p>` +
     '<div class="panel-ro"><h3>Project config (read-only)</h3>' +
     `<ul class="plain"><li>chat enabled: ${project.chatEnabled ? 'yes' : 'no'}</li>` +
@@ -81,7 +94,9 @@ export function settingsDialogHtml(data, agents) {
     `<p class="muted small mono">${esc(project.file ?? 'built-in defaults (no pr-review.config.yml)')}</p></div>` +
     '<p class="probe-result" role="status"></p>' +
     '<div class="dialog-actions">' +
-    '<button class="cmd" type="button" data-act="settings-probe">test agent</button>' +
+    (agents === null
+      ? ''
+      : '<button class="cmd" type="button" data-act="settings-probe">test agent</button>') +
     '<button class="cmd fill" type="button" data-act="settings-save">save</button>' +
     '<button class="cmd" type="button" data-act="settings-close">close</button>' +
     '</div></dialog>'
@@ -110,7 +125,9 @@ export async function openSettingsDialog(root, opener, opts = {}) {
   const loaded = await runCommand(
     opener,
     async () => {
-      const [data, agents] = await Promise.all([api.fetchSettings(), api.fetchAgents()])
+      // With chat off the agent routes do not exist, and the dialog holds only the reading level.
+      const data = await api.fetchSettings()
+      const agents = data.project.chatEnabled ? await api.fetchAgents() : null
       return { data, agents }
     },
     { pendingLabel: 'loading…' }

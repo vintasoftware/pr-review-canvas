@@ -8,7 +8,7 @@ const files = SYNTHETIC_FILES.map(toFileEntry)
 const where = 'layer:run/file:src/app.ts'
 
 function fixture() {
-  const fold: CodeFold = { title: 'run()', side: 'new', startLine: 3, endLine: 5 }
+  const fold: CodeFold = { title: 'run()', side: 'new', startLine: 3, endLine: 5, level: 'light' }
   const file: ModelLayer['files'][number] = {
     path: 'src/app.ts',
     hunks: ['src_app_ts#1'],
@@ -56,7 +56,7 @@ describe('validateFolds', () => {
 
   it('rejects folds that partly overlap', () => {
     const { output, file } = fixture()
-    file.folds?.push({ title: 'return value', side: 'new', startLine: 2, endLine: 4 })
+    file.folds?.push({ title: 'return value', side: 'new', startLine: 2, endLine: 4, level: 'light' })
 
     expect(validateFolds(output, files)).toEqual([
       {
@@ -134,6 +134,35 @@ describe('validateFolds', () => {
         code: 'FOLD_INVALID',
         where,
         message: `${where}: a file with annotations never collapses; fold the ranges around them instead`,
+      },
+    ])
+  })
+
+  it('lets an aggressive fold hide one whole annotation, since its title shows only that one', () => {
+    const { output, file, fold } = fixture()
+    fold.level = 'aggressive'
+    const note = (startLine: number, endLine: number) => ({
+      side: 'new' as const,
+      startLine,
+      endLine,
+      text: 'A decision here',
+    })
+
+    file.annotations = [note(3, 3), note(5, 5)]
+    expect(validateFolds(output, files)).toEqual([
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message: `${where}: fold 1 hides 2 annotations; an aggressive fold may hide one, and shows its text`,
+      },
+    ])
+
+    file.annotations = [note(4, 6)]
+    expect(validateFolds(output, files)).toEqual([
+      {
+        code: 'FOLD_INVALID',
+        where,
+        message: `${where}: fold 1 hides part of an annotation; an aggressive fold covers a whole annotation or none of it`,
       },
     ])
   })
@@ -228,6 +257,16 @@ describe('validateFolds', () => {
     tests.folds[0]!.level = 'moderate'
     expect(validateFolds(output, files)).toEqual([])
   })
+
+  it.each(['src/__snapshots__/app.test.ts.snap', 'tests/fixtures/users.json'])(
+    'lets generated content in a test path, %s, collapse at light',
+    snapshotPath => {
+      const { output, layer } = fixture()
+      layer.files.push({ path: snapshotPath, hunks: ['snap#1'], annotations: [], collapsed: 'light' })
+
+      expect(validateFolds(output, files)).toEqual([])
+    }
+  )
 
   /** A sixty-line added file with no point and no annotation: the reading levels have nothing to do. */
   const big: FileEntry = {
@@ -536,7 +575,7 @@ describe('validateFolds', () => {
   it('allows separate ranges and keeps older output without folds valid', () => {
     const { output, file, fold } = fixture()
     fold.endLine = 3
-    file.folds?.push({ title: 'return', side: 'new', startLine: 4, endLine: 5 })
+    file.folds?.push({ title: 'return', side: 'new', startLine: 4, endLine: 5, level: 'light' })
     expect(validateFolds(output, files)).toEqual([])
 
     file.folds = undefined

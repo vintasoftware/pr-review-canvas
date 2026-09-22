@@ -202,6 +202,21 @@ describe('openSettingsDialog', () => {
     expect(el(dialog, '#set-agent')).toBeTruthy()
   })
 
+  it('holds only the reading level when the project turns chat off, and asks for no agents', async () => {
+    let asked = false
+    const dialog = await open({
+      fetchSettings: async () => ({ ...SETTINGS, project: { ...SETTINGS.project, chatEnabled: false } }),
+      fetchAgents: async () => {
+        asked = true
+        return AGENTS
+      },
+    })
+    expect(asked).toBe(false)
+    expect(el(dialog, '#set-fold-level')).toBeTruthy()
+    expect(dialog.querySelector('#set-agent')).toBeNull()
+    expect(dialog.querySelector('[data-act="settings-probe"]')).toBeNull()
+  })
+
   it('shows the failure next to the command when the settings cannot be read', async () => {
     const opener = document.createElement('button')
     opener.textContent = 'settings'

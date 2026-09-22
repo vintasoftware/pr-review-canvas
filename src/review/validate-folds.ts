@@ -9,15 +9,14 @@ import type {
 import {
   contains,
   coveredRows,
-  DEFAULT_FOLD_LEVEL,
   fileRows,
-  foldLevelOf,
   foldLevelRank,
   hiddenLines,
+  UNDISCUSSED,
 } from '../contract/review-artifact.js'
 import type { ValidationError } from '../contract/validation.js'
 import { hunkForLine } from '../git/patch-lines.js'
-import { DEFAULT_TEST_PATTERNS, isTestPath } from './test-paths.js'
+import { DEFAULT_TEST_PATTERNS, isHandWrittenTest } from './test-paths.js'
 
 /**
  * Rows a reviewer reads without help. Above this many diff rows outside its annotations, a file
@@ -56,7 +55,7 @@ type SourceRange = Pick<CodeFold, 'side' | 'startLine' | 'endLine'>
 type LeveledRange = SourceRange & { level: FoldLevel }
 type ModelFile = ModelLayer['files'][number]
 
-/** One file's folds as the rules read them: every level filled in, and the ranges a fold may not cover. */
+/** One file's folds as the rules read them, with the ranges a fold may not cover. */
 interface FileFolds {
   file: ModelFile
   hunks: readonly Hunk[]
@@ -90,6 +89,11 @@ function assignedHunk(fold: SourceRange, file: ModelFile, hunks: readonly Hunk[]
   }
 
   return start
+}
+
+/** Whether `outer` holds every line of `inner`, on the same side. */
+function covers(outer: SourceRange, inner: SourceRange): boolean {
+  return outer.side === inner.side && outer.startLine <= inner.startLine && inner.endLine <= outer.endLine
 }
 
 /** Different coordinate sides in one hunk need the full patch to prove they are separate. */
@@ -182,8 +186,8 @@ function fileFolds(
     where: `layer:${layer.key}/file:${file.path}`,
     pinned,
     annotations: [...file.annotations],
-    folds: (file.folds ?? []).map(fold => ({ ...fold, level: fold.level ?? DEFAULT_FOLD_LEVEL })),
-    collapsed: foldLevelOf(file.collapsed),
+    folds: file.folds ?? [],
+    collapsed: file.collapsed ?? null,
     rows,
     judged: Math.max(rows - coveredRows(pinned), 0),
   }
@@ -245,8 +249,19 @@ function correctnessErrors({
       fail(`fold ${index + 1} would hide an attention point`)
     }
 
-    if (fold.level !== 'aggressive' && annotations.some(range => rangesOverlap(fold, range, hunks))) {
+    // An aggressive fold shows the text of the annotation it hides as its title, so it hides one
+    // whole annotation at most: a second one, or a part of one, would vanish without its text.
+    const hidden = annotations.filter(range => rangesOverlap(fold, range, hunks))
+    if (hidden.length > 0 && fold.level !== 'aggressive') {
       fail(`fold ${index + 1} would hide an annotation, which only an aggressive fold may do`)
+    } else if (hidden.length > 1) {
+      fail(
+        `fold ${index + 1} hides ${hidden.length} annotations; an aggressive fold may hide one, and shows its text`
+      )
+    } else if (hidden.some(range => !covers(fold, range))) {
+      fail(
+        `fold ${index + 1} hides part of an annotation; an aggressive fold covers a whole annotation or none of it`
+      )
     }
   }
 
@@ -255,7 +270,7 @@ function correctnessErrors({
 
 /**
  * The rules a fresh generation meets for one file, about what the reading levels must be given to
- * hide: a test file keeps its titles at light, a light fold is one generated block, a file with
+ * hide: a hand-written test file keeps its titles at light, a light fold is one generated block, a file with
  * over `ROUTINE_ROWS` unannotated rows and no attention point hides something somewhere, and an
  * open core file folds half of what the reviewer need not judge by aggressive. A stored canvas
  * may predate them.
@@ -266,7 +281,8 @@ function generationErrors(
 ): ValidationError[] {
   const errors: ValidationError[] = []
 
-  // Light leaves tests exactly as the diff shows them; the bodies fold from moderate.
+  // Light leaves tests exactly as the diff shows them; the bodies fold from moderate. Snapshots
+  // and fixtures are generated, so they are not held to this.
   if (isTest && collapsed === 'light') {
     errors.push(
       error(
@@ -325,7 +341,7 @@ function generationErrors(
   } else if (rows > CORE_FILE_ROWS) {
     // Every fold hides at aggressive, whatever its own level, so what the reader is left with
     // there is the page's own count.
-    const { hidden } = hiddenLines(file, hunks, 'aggressive')
+    const { hidden } = hiddenLines(file, hunks, 'aggressive', UNDISCUSSED)
     if (hidden < Math.ceil(judged * AGGRESSIVE_MIN_HIDDEN)) {
       errors.push(
         error(
@@ -357,8 +373,8 @@ function layerErrors(layer: ModelLayer, files: readonly FileFolds[]): Validation
   for (const folds of files) {
     rows += folds.rows
     judged += folds.judged
-    hiddenAtModerate += hiddenLines(folds.file, folds.hunks, 'moderate').hidden
-    hiddenAtAggressive += hiddenLines(folds.file, folds.hunks, 'aggressive').hidden
+    hiddenAtModerate += hiddenLines(folds.file, folds.hunks, 'moderate', UNDISCUSSED).hidden
+    hiddenAtAggressive += hiddenLines(folds.file, folds.hunks, 'aggressive', UNDISCUSSED).hidden
   }
 
   const open = Math.max(judged - hiddenAtModerate, 0)
@@ -401,7 +417,7 @@ export function validateFolds(
     return [
       ...layerFiles.flatMap(folds => [
         ...correctnessErrors(folds),
-        ...generationErrors(folds, isTestPath(folds.file.path, testPatterns)),
+        ...generationErrors(folds, isHandWrittenTest(folds.file.path, testPatterns)),
       ]),
       ...layerErrors(layer, layerFiles),
     ]

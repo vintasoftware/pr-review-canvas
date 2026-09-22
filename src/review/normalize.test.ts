@@ -37,15 +37,11 @@ describe('normalize', () => {
     }
 
     file.collapsed = 'moderate'
-    file.folds = [{ title: 'runs', side: 'new', startLine: 2, endLine: 4 }]
+    file.folds = [{ title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'light' }]
     const saved = normalize(output, input())
     const restored = artifactToModelOutput(saved)
 
-    // A fold with no level reads as light, so an older output hides exactly what it hid.
-    expect(restored.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')).toEqual({
-      ...file,
-      folds: [{ title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'light' }],
-    })
+    expect(restored.layers[0]?.files.find(entry => entry.path === 'src/app.test.ts')).toEqual(file)
   })
 
   it('keeps the levels the model named on folds and on a collapsed file', () => {

@@ -29,6 +29,7 @@ import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
 import { pointAnchorId, reviewedId } from './keys.js'
 import {
+  canvasHiddenLines,
   cardOf,
   getFoldLevel,
   getRenderContext,
@@ -43,7 +44,7 @@ import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from
 import { issueCommentHtml } from './overview.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
 import { layerProgress } from './progress.js'
-import { canvasHiddenLines, FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
+import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
   fillSignoffDialog,
@@ -211,6 +212,9 @@ export function wireReview(root, session, opts = {}) {
     getRenderContext()?.files.find(f => f.path === path)?.key ?? null
   /** The time the page was drawn, which the comments it adds are timed against. */
   const renderNow = () => getRenderContext()?.now ?? new Date()
+  /** @param {import('./contract-types.js').FoldLevel} level */
+  const hiddenAt = level =>
+    canvasHiddenLines(getRenderContext() ?? { artifact: session.artifact, files: [], comments: [] }, level)
 
   /**
    * Whether a card counts as reviewed, read the same way the page was first drawn: a layer is
@@ -502,7 +506,7 @@ export function wireReview(root, session, opts = {}) {
   const openSignoff = (button, event) => {
     const dialog = openSignoffDialog(root, { event })
     const level = getFoldLevel()
-    const counts = canvasHiddenLines(session.artifact, getRenderContext()?.files ?? [], level)
+    const counts = hiddenAt(level)
     setSignoffFolds(dialog, counts.hidden === 0 ? '' : `Read at the ${level} level · ${hiddenLabel(counts)}`)
     applyCapabilityGating(root, session.capabilities)
     signoffOpening += 1
@@ -557,7 +561,7 @@ export function wireReview(root, session, opts = {}) {
       return
     }
     setFoldLevel(root, value)
-    refreshFoldLevel(root, session.artifact, value)
+    refreshFoldLevel(root, value, hiddenAt(value))
     toast(root, `hiding code: ${value}`)
   }
 

@@ -83,8 +83,8 @@ Changes since 0.3.0.
   levels, change the level for one page only. Each layer and the sign-off dialog report how many
   diff lines are hidden.
 - Attention points and comment threads stay visible at every level. An annotation may only be
-  hidden by an aggressive fold, which then shows the annotation's text instead of the fold title,
-  and a file with an annotation or an attention point never collapses.
+  hidden by an aggressive fold that covers it whole and no other annotation; the fold then shows
+  the annotation's text instead of its title. A file with an annotation or an attention point never collapses.
 - The validator holds the generator to the shape of the levels: `collapsed` names a level, nothing
   in a test file hides at `light`, a `light` fold covers at most 40 lines of generated content, and
   a file with over 20 lines outside its annotations, no attention point, and nothing hidden fails
@@ -96,9 +96,9 @@ Changes since 0.3.0.
 - A layer of more than 100 changed lines that leaves more than 20 lines open at `moderate` and
   hides nothing more at `aggressive` fails with `FOLD_MISSING` too. A smaller layer reads whole,
   and only the file rules apply to it.
-- The built-in test patterns now match test directories (`tests/`, `test/`, `spec/`) and
-  file-name shapes (`*_test.*`, `*_spec.*`, `test_*.py`, `conftest.py`, `*Test.*`, `*Tests.*`)
-  across stacks, not only the JavaScript conventions, so a repository without a
+- The built-in test patterns now match test directories (`tests/`, `test/`) and file-name
+  shapes (`*_test.*`, `*_spec.*`, `test_*.py`, `conftest.py`, and `*Test`/`*Tests` in Java,
+  Kotlin, Scala, Groovy, C#, F#, VB, Swift and PHP) across stacks, not only the JavaScript conventions, so a repository without a
   `pr-review.config.yml` gets its tests labelled, ordered, and kept open at light.
   A canvas written before this change reads as `light`, so it hides exactly what it hid before.
 - A canvas is carried over to a later pull request head whose diff is identical to the one it

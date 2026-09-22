@@ -86,8 +86,9 @@ much more than the one below it:
 - **light — the diff as a reviewer has always seen it.** Nothing hand-written hides. The page
   already folds imports, whitespace-only rewrites, and moved blocks by itself; `light` adds only
   wholly generated content — lock files, snapshots, migrations, generated clients and fixtures —
-  as `collapsed: "light"` or a `light` fold over the generated block. Tests are untouched at
-  `light`: no fold and no collapse in a test file carries this level.
+  as `collapsed: "light"` or a `light` fold over the generated block. Snapshots and fixtures
+  count as generated even inside a test directory. Tests are untouched at `light`: no fold and no
+  collapse in any other test file carries this level.
 - **moderate — what would a reviewer skip once they trust the layer's rationale?** Each test
   body, folded under its own title so the list of titles reads as the spec of the change: one
   fold per test, starting on the line after its title; a range that spans several tests hides the
@@ -100,7 +101,8 @@ much more than the one below it:
   the code an attention point or annotation names, and the few lines that carry the layer's core
   mechanism. Everything else in the layer hides behind a title. The reader follows the change as
   pseudo-code and expands what they want to see. This is the only level that may hide an
-  annotation, and the page then shows the annotation's text in place of the fold title.
+  annotation. Such a fold covers one whole annotation and no other, and the page then shows the
+  annotation's text in place of the fold title.
 
 Aggressive is a strong instruction, not a slight increase over moderate. On a typical layer it
 leaves a small fraction of the changed lines on screen. Check your output before you finish: a
@@ -177,7 +179,7 @@ hides too, behind the annotation's text.
   of its ends. A function spanning several hunks can use a separate titled range in each hunk,
   or the whole file can collapse instead.
 - Two folds are either separate, or one sits wholly inside the other with the lower level inside.
-  A short test body at `light` inside its whole test class at `moderate` is valid; two ranges that
+  A test body at `moderate` inside its whole test class at `aggressive` is valid; two ranges that
   cross each other are not.
 - When the declaration line is in the diff, start the fold on the line after it, so the reader
   keeps the signature and can still find where the symbol is defined. The title then states what

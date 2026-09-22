@@ -395,18 +395,19 @@ so the effect is stated before the reader scrolls. Each layer repeats the count 
 heading, and the sign-off dialog records the total, so a reviewer signs off knowing how much they
 did not read.
 
-Attention points and comment threads keep their code visible at every level. An annotation may
-only be hidden by an aggressive fold, which then shows the annotation's text in place of the fold
-title; a file that carries an annotation or an attention point never collapses, so the layer's
-core stays on screen at every level and hides only its routine ranges. Nothing in a test file
-hides at `light`; from `moderate` each test body folds under its own title, one fold per test, or
-the file collapses whole. A `light` fold is at most 40 lines of generated content. A file with
-more than 20 changed lines outside its annotations and no attention point must hide something at
-some level; a file over 60 lines that stays open must fold at least half of the lines outside its
-attention points by `aggressive`, annotated lines included; and a layer of more than 100 changed
-lines that leaves more than 20 lines open at `moderate` outside its attention points must hide
-more at `aggressive`. A smaller layer reads whole, and only the file rules apply to it. Each
-failure is `FOLD_MISSING`. An annotation marks what to read; it does not excuse the rows around it.
+Attention points and comment threads keep their code visible at every level. An annotation may only
+be hidden by an aggressive fold that covers the whole annotation and no other one; the fold then
+shows the annotation's text in place of its title. A file that carries an annotation or an attention
+point never collapses, so the layer's core stays on screen at every level and hides only its routine
+ranges. Nothing in a test file hides at `light`, except snapshots and fixtures, which are generated;
+from `moderate` each test body folds under its own title, one fold per test, or the file collapses
+whole. A `light` fold is at most 40 lines of generated content. A file with more than 20 changed
+lines outside its annotations and no attention point must hide something at some level; a file over
+60 lines that stays open must fold at least half of the lines outside its attention points by
+`aggressive`, annotated lines included; and a layer of more than 100 changed lines that leaves more
+than 20 lines open at `moderate` outside its attention points must hide more at `aggressive`. A
+smaller layer reads whole, and only the file rules apply to it. Each failure is `FOLD_MISSING`. An
+annotation marks what to read; it does not excuse the rows around it.
 
 The page opens at the level saved as `foldLevel` in `settings.yml`, `light` until changed. The
 **Hide code by default** field of the settings dialog sets it. The control and the `f` key, which

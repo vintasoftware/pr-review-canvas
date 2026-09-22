@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { FOLD_LEVELS } from '../../static/js/fold-levels.js'
+import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 
 /** Character caps applied to model output. Numbers, so the prompt can print them. */
 export const TEXT_CAPS = {
@@ -83,18 +83,29 @@ export type Side = z.infer<typeof SideSchema>
 export {
   contains,
   coveredRows,
-  DEFAULT_FOLD_LEVEL,
   fileRows,
-  foldLevelOf,
   foldLevelRank,
   hiddenLines,
+  UNDISCUSSED,
 } from '../../static/js/fold-levels.js'
 export { FOLD_LEVELS }
 export const FoldLevelSchema = z.enum(FOLD_LEVELS)
 export type FoldLevel = z.infer<typeof FoldLevelSchema>
 
-/** A fold with no level, and a `collapsed: true` written before levels existed, both read as light. */
-export const CollapsedSchema = z.union([z.boolean(), FoldLevelSchema])
+/**
+ * How a stored canvas names its levels. One written before levels existed says `collapsed: true`
+ * and gives its folds no level; both read as light, so it hides exactly what it hid before. Past
+ * this parse every canvas names a level wherever it hides something.
+ */
+const STORED_LEVELS = {
+  collapsed: z
+    .union([z.boolean(), FoldLevelSchema])
+    .transform(value => (value === true ? DEFAULT_FOLD_LEVEL : value === false ? undefined : value)),
+  fold: FoldLevelSchema.default(DEFAULT_FOLD_LEVEL),
+}
+/** The model names a level for every fold and every collapsed file. */
+const MODEL_LEVELS = { collapsed: FoldLevelSchema, fold: FoldLevelSchema }
+type Levels = typeof STORED_LEVELS | typeof MODEL_LEVELS
 
 export const HunkSchema = z.object({
   id: z.string().min(1),
@@ -216,36 +227,33 @@ export function annotationSchema(caps: Caps) {
 export const AnnotationSchema = annotationSchema(ARTIFACT_HARD_CAPS)
 export type Annotation = z.infer<typeof AnnotationSchema>
 
-function codeFoldSchema(caps: Caps) {
+function codeFoldSchema(caps: Caps, level: Levels['fold']) {
   return z.object({
     title: z.string().max(caps.pointTitle).regex(/\S/, 'A fold title must contain visible text'),
     side: SideSchema,
     startLine: z.number().int().positive(),
     endLine: z.number().int().positive(),
-    /** The lowest reading level that hides this range. Absent means `light`. */
-    level: FoldLevelSchema.optional(),
+    /** The lowest reading level that hides this range. */
+    level,
   })
 }
-export const CodeFoldSchema = codeFoldSchema(ARTIFACT_HARD_CAPS)
+export const CodeFoldSchema = codeFoldSchema(ARTIFACT_HARD_CAPS, STORED_LEVELS.fold)
 export type CodeFold = z.infer<typeof CodeFoldSchema>
 
-function layerFileBase<C extends z.ZodType>(caps: Caps, foldTitleCap: number, collapsed: C) {
+function layerFileBase<L extends Levels>(caps: Caps, foldTitleCap: number, levels: L) {
   return {
     path: z.string().min(1),
     hunks: z.array(z.string().min(1)).min(1),
     note: textOrEmpty(caps, 'annotation').optional(),
     annotations: z.array(annotationSchema(caps)),
-    /**
-     * The lowest reading level that hides the whole file body. A stored artifact still reads the
-     * `true` of a canvas written before levels existed as `light`; the model must name a level.
-     */
-    collapsed: collapsed.optional(),
-    folds: z.array(codeFoldSchema({ ...caps, pointTitle: foldTitleCap })).optional(),
+    /** The lowest reading level that hides the whole file body. */
+    collapsed: levels.collapsed.optional(),
+    folds: z.array(codeFoldSchema({ ...caps, pointTitle: foldTitleCap }, levels.fold)).optional(),
   }
 }
 
 export const LayerFileSchema = z.object({
-  ...layerFileBase(ARTIFACT_HARD_CAPS, ARTIFACT_HARD_CAPS.pointTitle, CollapsedSchema),
+  ...layerFileBase(ARTIFACT_HARD_CAPS, ARTIFACT_HARD_CAPS.pointTitle, STORED_LEVELS),
   isTest: z.boolean(),
 })
 export type LayerFile = z.infer<typeof LayerFileSchema>
@@ -352,7 +360,7 @@ export function modelOutputSchema(textCaps: TextCaps) {
         z.object({
           ...layerBase(caps),
           risk: z.array(z.object({ label: z.string().min(1), reason: z.string().min(1) })).optional(),
-          files: z.array(z.object(layerFileBase(caps, textCaps.pointTitle, FoldLevelSchema))),
+          files: z.array(z.object(layerFileBase(caps, textCaps.pointTitle, MODEL_LEVELS))),
         })
       )
       .min(1),

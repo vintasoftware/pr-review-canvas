@@ -27,7 +27,9 @@ import {
   getFoldLevel,
   getRenderContext,
   hunkIdForPoint,
+  canvasHiddenLines,
   hunkLayerIndex,
+  layerHiddenLines,
   hydrateAll,
   hydrateFileCard,
   layerDiagramHtml,
@@ -44,7 +46,7 @@ import {
   testMapHtml,
   threadsForHunks,
 } from './layers.js'
-import { canvasHiddenLines, hiddenLabel, layerHiddenLines } from './reading-level.js'
+import { hiddenLabel } from './reading-level.js'
 import { progressSummary } from './progress.js'
 import { buildThreads } from './threads.js'
 
@@ -212,7 +214,7 @@ describe('layer sections', () => {
     }
     expect(layerDiagramHtml(layer)).toBe('')
     const drawn = { ...layer, diagram: { mermaid: 'stateDiagram-v2\n  [*] --> active', links: {} } }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set(), comments: [] }
     document.body.innerHTML = renderLayerSection(drawn, 0, artifact, files, state, cctx)
     const body = document.querySelector('section.layer > .layer-body > .body')
     expect([...(body?.children ?? [])].map(el => el.className)).toEqual([
@@ -236,7 +238,7 @@ describe('layer sections', () => {
       rationale: 'The swap.\n\n```mermaid\nflowchart LR\n  A --> B\n```',
       decisions: 'We kept it.\n\n```mermaid\nflowchart LR\n  C --> D\n```',
     }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set(), comments: [] }
     document.body.innerHTML = renderLayerSection(fenced, 0, artifact, files, state, cctx)
     expect([...document.querySelectorAll('.diagram')].map(el => el.getAttribute('data-mermaid'))).toEqual([
       'flowchart LR\n  A --> B',
@@ -251,7 +253,7 @@ describe('layer sections', () => {
     if (!layer) {
       throw new Error('no layer')
     }
-    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
+    const cctx = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set(), comments: [] }
     const html = renderFileCard(
       { path: 'ghost.ts', hunks: ['ghost_ts#1'], isTest: false, annotations: [] },
       undefined,
@@ -292,7 +294,7 @@ describe('layer sections', () => {
       hunks: ['routine_ts#1'],
       isTest: false,
       annotations: [],
-      collapsed: true,
+      collapsed: /** @type {const} */ ('light'),
     }
     const cardContext = { hunkIndex: hunkLayerIndex(artifact), paths, firstCardFor: new Set() }
     document.body.innerHTML = renderFileCard(file, undefined, layer, cardContext)
@@ -341,12 +343,14 @@ describe('layer sections', () => {
     if (layer === undefined) {
       throw new Error('missing layer')
     }
-    const counts = layerHiddenLines(layer, files, 'light')
+    const counts = layerHiddenLines(layer, { artifact, files, comments: [] }, 'light')
 
     expect(counts.total).toBeGreaterThan(0)
     expect(hiddenLabel({ total: 10, hidden: 0 })).toBe('')
     expect(hiddenLabel({ total: 10, hidden: 4 })).toBe('4 of 10 lines hidden')
-    expect(canvasHiddenLines(artifact, files, 'light').total).toBeGreaterThanOrEqual(counts.total)
+    expect(canvasHiddenLines({ artifact, files, comments: [] }, 'light').total).toBeGreaterThanOrEqual(
+      counts.total
+    )
   })
 })
 
@@ -833,14 +837,78 @@ describe('the reading level', () => {
     hydrateAll(document.body, context)
 
     expect(getFoldLevel()).toBe('light')
-    expect(document.querySelector('#file-src_app_test_ts .code-fold')).toBeNull()
+    expect(document.querySelector('#file-src_app_test_ts .code-fold:not([hidden])')).toBeNull()
 
-    expect(setFoldLevel(document.body, 'moderate')).toBeGreaterThan(0)
+    setFoldLevel(document.body, 'moderate')
     expect(getFoldLevel()).toBe('moderate')
     expect(document.querySelector('#file-src_app_test_ts .code-fold button')?.textContent).toBe('runs')
 
     setFoldLevel(document.body, 'light')
-    expect(document.querySelector('#file-src_app_test_ts .code-fold')).toBeNull()
+    expect(document.querySelector('#file-src_app_test_ts .code-fold:not([hidden])')).toBeNull()
+  })
+
+  it('changes the level without redrawing a card, so an open composer keeps its draft', () => {
+    const leveled = leveledArtifact()
+    const context = { ...ctx(), artifact: leveled }
+    setRenderContext(context)
+    document.body.innerHTML = renderLayers(leveled, files, state)
+    hydrateAll(document.body, context)
+    const card = document.querySelector('#file-src_app_test_ts')
+    const table = card?.querySelector('table.diff')
+    const draft = document.createElement('tr')
+    draft.innerHTML = '<td><textarea></textarea></td>'
+    table?.querySelector('tr')?.after(draft)
+    const textarea = draft.querySelector('textarea')
+    if (textarea !== null) {
+      textarea.value = 'half a comment'
+    }
+
+    setFoldLevel(document.body, 'moderate')
+    setFoldLevel(document.body, 'aggressive')
+
+    expect(card?.querySelector('table.diff')).toBe(table)
+    expect(draft.isConnected).toBe(true)
+    expect(draft.hidden).toBe(false)
+    expect(textarea?.value).toBe('half a comment')
+  })
+
+  it('folds nothing in a card with a thread, and counts nothing hidden there', () => {
+    /** @param {import('./contract-types.js').LayerFile} f */
+    const folded = f =>
+      f.path === 'src/app.ts'
+        ? {
+            ...f,
+            folds: [
+              {
+                title: 'the rest',
+                side: /** @type {const} */ ('new'),
+                startLine: 1,
+                endLine: 2,
+                level: /** @type {const} */ ('light'),
+              },
+            ],
+          }
+        : f
+    const leveled = {
+      ...artifact,
+      layers: artifact.layers.map(layer => ({ ...layer, files: layer.files.map(folded) })),
+    }
+    const layer = leveled.layers.find(l => l.files.some(f => f.path === 'src/app.ts'))
+    if (layer === undefined) {
+      throw new Error('missing layer')
+    }
+
+    for (const discussion of [[], comments]) {
+      const context = { ...ctx(), artifact: leveled, comments: discussion }
+      setRenderContext(context)
+      document.body.innerHTML = renderLayers(leveled, files, state, discussion)
+      hydrateAll(document.body, context)
+      const titles = document.querySelectorAll(
+        `article.file[data-layer="${layer.id}"][data-path="src/app.ts"] .code-fold:not([hidden])`
+      )
+      const { hidden } = layerHiddenLines(layer, context, 'light')
+      expect([titles.length, hidden > 0]).toEqual(discussion.length === 0 ? [1, true] : [0, false])
+    }
   })
 
   it('counts the hidden lines of each layer in its Files heading', () => {

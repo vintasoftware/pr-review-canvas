@@ -13,7 +13,7 @@ export const FOLD_LEVELS = /** @type {const} */ (['light', 'moderate', 'aggressi
 
 /** @typedef {(typeof FOLD_LEVELS)[number]} FoldLevel */
 
-/** The level a fold or a collapsed file falls back to when the model named none. */
+/** The level a review opens at until the reader saves another, and the level of an older canvas's folds. */
 export const DEFAULT_FOLD_LEVEL = 'light'
 
 /**
@@ -44,20 +44,6 @@ export function hidesAt(level, current) {
 }
 
 /**
- * The level of a fold or of a file's `collapsed` field. A legacy `collapsed: true` and a fold
- * written before levels existed both read as `light`, so an older canvas hides exactly what it
- * hid before.
- * @param {FoldLevel | boolean | undefined} value
- * @returns {FoldLevel | null} null when the value does not hide anything
- */
-export function foldLevelOf(value) {
-  if (value === undefined || value === false) {
-    return null
-  }
-  return value === true ? DEFAULT_FOLD_LEVEL : value
-}
-
-/**
  * The level after `level`, back to the first after the last, so one key can step through them.
  * @param {FoldLevel} level
  * @returns {FoldLevel}
@@ -67,10 +53,11 @@ export function nextFoldLevel(level) {
 }
 
 /**
- * @typedef {{ side: 'new' | 'old', startLine: number, endLine: number, level?: FoldLevel | undefined }} Range
+ * @typedef {{ side: 'new' | 'old', startLine: number, endLine: number }} Span
+ * @typedef {Span & { level: FoldLevel }} Range
  * @typedef {{
- *   collapsed?: FoldLevel | boolean | undefined,
- *   annotations: readonly Range[],
+ *   collapsed?: FoldLevel | undefined,
+ *   annotations: readonly Span[],
  *   folds?: readonly Range[] | undefined,
  *   hunks: readonly string[],
  * }} FoldedFile
@@ -79,8 +66,8 @@ export function nextFoldLevel(level) {
 /**
  * Whether `inner` sits wholly inside `outer` without being the same range. The validator allows
  * this only when the inner fold has the lower level; the page then draws the outer one alone.
- * @param {Range} outer
- * @param {Range} inner
+ * @param {Span} outer
+ * @param {Span} inner
  */
 export function contains(outer, inner) {
   return (
@@ -101,7 +88,7 @@ export function contains(outer, inner) {
  * @returns {T[]}
  */
 export function foldsForLevel(folds, level) {
-  const applicable = folds.filter(fold => hidesAt(fold.level ?? DEFAULT_FOLD_LEVEL, level))
+  const applicable = folds.filter(fold => hidesAt(fold.level, level))
   return applicable.filter(fold => !applicable.some(other => contains(other, fold)))
 }
 
@@ -113,14 +100,13 @@ export function foldsForLevel(folds, level) {
  * @returns {boolean}
  */
 export function collapsesAt(file, level) {
-  const collapseLevel = foldLevelOf(file.collapsed)
-  return collapseLevel !== null && hidesAt(collapseLevel, level) && file.annotations.length === 0
+  return file.collapsed !== undefined && hidesAt(file.collapsed, level) && file.annotations.length === 0
 }
 
 /**
  * Rows a set of ranges covers, each row counted once where ranges nest or touch. The one count
  * the page's counters and the validator's thresholds share.
- * @param {ReadonlyArray<Pick<Range, 'side' | 'startLine' | 'endLine'>>} ranges
+ * @param {readonly Span[]} ranges
  * @returns {number}
  */
 export function coveredRows(ranges) {
@@ -159,17 +145,31 @@ export function fileRows(file, hunks) {
 }
 
 /**
+ * What the review's discussion keeps open in one file card: `keepsOpen` when a comment or an
+ * attention point stops the card collapsing, `threaded` when a thread drawn in its chunks stops
+ * every fold. The page decides both once per card, and the card and its counter read the answer.
+ * @typedef {{ keepsOpen: boolean, threaded: boolean }} Discussion
+ */
+
+/** A file nobody has discussed yet, as the validator sees every file of a fresh generation. */
+export const UNDISCUSSED = /** @type {Discussion} */ ({ keepsOpen: false, threaded: false })
+
+/**
  * How many diff lines a file shows, and how many of them `level` hides. Measured from the model,
  * so the counter reads the same before and after a card draws its diff.
  * @param {FoldedFile} file
  * @param {ReadonlyArray<{ id: string, oldLines: number, newLines: number }>} hunks every hunk of the file
  * @param {FoldLevel} level
+ * @param {Discussion} discussion
  * @returns {{ total: number, hidden: number }}
  */
-export function hiddenLines(file, hunks, level) {
+export function hiddenLines(file, hunks, level, discussion) {
   const total = fileRows(file, hunks)
-  if (collapsesAt(file, level)) {
+  if (collapsesAt(file, level) && !discussion.keepsOpen) {
     return { total, hidden: total }
+  }
+  if (discussion.threaded) {
+    return { total, hidden: 0 }
   }
   return { total, hidden: coveredRows(foldsForLevel(file.folds ?? [], level)) }
 }

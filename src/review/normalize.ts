@@ -15,7 +15,7 @@ import type {
   Side,
   TextCaps,
 } from '../contract/review-artifact.js'
-import { DEFAULT_FOLD_LEVEL, foldLevelOf, POINT_LEVELS } from '../contract/review-artifact.js'
+import { POINT_LEVELS } from '../contract/review-artifact.js'
 import { hunkForLine } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { matchesGlob } from './glob.js'
@@ -78,23 +78,6 @@ function unionRisk(layers: readonly Layer[]): RiskTag[] {
   return out
 }
 
-/** Stores one shape, so the page and a later validation never re-derive the default level. */
-function toLayerFile(
-  file: ModelLayer['files'][number],
-  testPatterns: readonly string[]
-): Layer['files'][number] {
-  const { collapsed, folds, ...rest } = file
-  const level = foldLevelOf(collapsed)
-  return {
-    ...rest,
-    isTest: isTestPath(file.path, testPatterns),
-    ...(level === null ? {} : { collapsed: level }),
-    ...(folds === undefined
-      ? {}
-      : { folds: folds.map(f => ({ ...f, level: f.level ?? DEFAULT_FOLD_LEVEL })) }),
-  }
-}
-
 /**
  * A layer's id is its own key, which the validator has already checked is unique here. A reviewed
  * mark is keyed by it, so a regenerated canvas that reorders or renames its layers keeps the
@@ -110,7 +93,7 @@ function toLayer(
     ...rest,
     id: layer.key,
     risk: layerRisk(layer, highRisk),
-    files: files.map(f => toLayerFile(f, testPatterns)),
+    files: files.map(f => ({ ...f, isTest: isTestPath(f.path, testPatterns) })),
   }
 }
 
@@ -225,15 +208,7 @@ export function artifactToModelOutput(artifact: ReviewArtifact): ModelOutput {
       const modelRisk = risk
         .filter(r => r.source === 'model')
         .map(r => ({ label: r.label, reason: r.reason ?? '' }))
-      // A canvas stored before levels existed says `collapsed: true`; the model's schema wants the
-      // level it stands for, so re-validating an older canvas reads it as light.
-      const out: ModelLayer = {
-        ...rest,
-        files: files.map(({ isTest: _isTest, collapsed, ...f }) => {
-          const level = foldLevelOf(collapsed)
-          return level === null ? f : { ...f, collapsed: level }
-        }),
-      }
+      const out: ModelLayer = { ...rest, files: files.map(({ isTest: _isTest, ...f }) => f) }
       if (modelRisk.length > 0) {
         out.risk = modelRisk
       }

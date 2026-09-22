@@ -12,19 +12,19 @@
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./threads.js').Thread} Thread */
 import { askButtonHtml } from './ask.js'
-import { applyCodeFolds, wireFoldReveal } from './code-folds.js'
+import { applyCodeFolds, setCodeFoldLevel, wireFoldReveal } from './code-folds.js'
 import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
-import { collapsesAt, DEFAULT_FOLD_LEVEL } from './fold-levels.js'
+import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
-import { foldCountText, layerHiddenLines } from './reading-level.js'
+import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
 
 /**
@@ -272,6 +272,57 @@ export function cardKeepsOpen(lf, layerId, artifact, commentPaths) {
 }
 
 /**
+ * @typedef {{
+ *   artifact: ReviewArtifact,
+ *   files: ReadonlyArray<FileEntry>,
+ *   comments: ReadonlyArray<ReviewComment>,
+ * }} CountContext
+ * @typedef {import('./reading-level.js').HiddenCounts} HiddenCounts
+ */
+
+/**
+ * How many diff lines a level hides in one layer, against what the layer shows in all. Counted
+ * from the model, so a card that has not drawn its diff yet still counts, and with the rules the
+ * card draws by: a card the discussion keeps open hides nothing by collapsing, and a card with a
+ * thread in its chunks folds nothing.
+ * @param {Layer} layer
+ * @param {CountContext} ctx
+ * @param {import('./contract-types.js').FoldLevel} level
+ * @returns {HiddenCounts}
+ */
+export function layerHiddenLines(layer, ctx, level) {
+  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
+  let total = 0
+  let hidden = 0
+  for (const lf of layer.files) {
+    const entry = ctx.files.find(f => f.path === lf.path)
+    const counts = hiddenLines(lf, entry?.hunks ?? [], level, {
+      keepsOpen: cardKeepsOpen(lf, layer.id, ctx.artifact, commentPaths),
+      threaded: entry !== undefined && threadsForHunks(ctx.comments, entry, new Set(lf.hunks)).length > 0,
+    })
+    total += counts.total
+    hidden += counts.hidden
+  }
+  return { total, hidden }
+}
+
+/**
+ * The same over every layer, for the hint under the control and the sign-off note.
+ * @param {CountContext} ctx
+ * @param {import('./contract-types.js').FoldLevel} level
+ * @returns {HiddenCounts}
+ */
+export function canvasHiddenLines(ctx, level) {
+  return ctx.artifact.layers.reduce(
+    (sum, layer) => {
+      const counts = layerHiddenLines(layer, ctx, level)
+      return { total: sum.total + counts.total, hidden: sum.hidden + counts.hidden }
+    },
+    { total: 0, hidden: 0 }
+  )
+}
+
+/**
  * The card a command belongs to, and the part of it that collapses.
  * @param {Element} el
  * @returns {{ card: HTMLElement, body: HTMLElement, chevron: Element | null } | null}
@@ -381,16 +432,17 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
  * @param {ReviewArtifact} artifact
  * @param {ReadonlyArray<FileEntry>} files
  * @param {PrState} state
- * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, commentPaths?: ReadonlySet<string> }} ctx
+ * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, comments: ReadonlyArray<ReviewComment> }} ctx
  * @returns {string}
  */
 export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const byPath = new Map(files.map(f => [f.path, f]))
+  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
   const cards = layer.files
     .map(lf =>
       renderFileCard(lf, byPath.get(lf.path), layer, {
         ...ctx,
-        keepOpen: cardKeepsOpen(lf, layer.id, artifact, ctx.commentPaths),
+        keepOpen: cardKeepsOpen(lf, layer.id, artifact, commentPaths),
       })
     )
     .join('')
@@ -423,7 +475,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
     testMapHtml(layer, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
-    `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, files, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
+    `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, { artifact, files, comments: ctx.comments }, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
     `<div class="layer-end"><button class="cmd" type="button" data-act="mark-layer" data-reviewed-id="${esc(layerReviewedId)}">mark layer as reviewed</button></div>` +
     '</div></section></pr-layer>'
   )
@@ -443,7 +495,7 @@ export function renderLayers(artifact, files, state, comments = []) {
     firstCardFor: new Set(),
     state,
     posted: postedUrls(state, comments),
-    commentPaths: new Set(comments.map(comment => comment.path)),
+    comments,
   }
   return artifact.layers.map((layer, i) => renderLayerSection(layer, i, artifact, files, state, ctx)).join('')
 }
@@ -532,7 +584,8 @@ export function hydrateFileCard(card, ctx, opts = {}) {
     posted: postedUrls(ctx.state, ctx.comments),
     hiddenThreads: new Set(Object.keys(ctx.state.hiddenThreads).map(Number)),
   })
-  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel)
+  // A thread in the card's chunks keeps all of its code open; layerHiddenLines counts the same.
+  applyCodeFolds(card, key, threads.length > 0 ? [] : (lf?.folds ?? []), foldLevel)
   wireFoldReveal(card)
   cardRenderedHook?.(card)
   return { rendered: true, deferred: false, placed, missed }
@@ -678,30 +731,28 @@ function layerFileOf(card, artifact) {
 }
 
 /**
- * Switches how much code the page hides. Every drawn card is redrawn, because a fold is decided
- * while the diff is built; a card waiting to be drawn picks the level up by itself. A card the
- * reader opened or closed by hand follows the new level too: changing the level is a request to
- * change exactly that.
+ * Switches how much code the page hides. Each drawn card switches which of its wired folds are
+ * active, without rebuilding its diff, so an open composer or a thread keeps its place; a card
+ * waiting to be drawn picks the level up when it draws. A card the reader opened or closed by hand
+ * follows the new level too: changing the level is a request to change exactly that.
  * @param {ParentNode} root
  * @param {import('./contract-types.js').FoldLevel} level
- * @returns {number} how many cards were redrawn
  */
 export function setFoldLevel(root, level) {
   foldLevel = level
   const ctx = renderContext
   if (ctx === null) {
-    return 0
+    return
   }
 
   for (const counter of Array.from(root.querySelectorAll('.fold-count'))) {
     const layer = ctx.artifact.layers.find(l => l.id === counter.getAttribute('data-layer'))
     if (layer !== undefined) {
-      counter.textContent = foldCountText(layerHiddenLines(layer, ctx.files, level))
+      counter.textContent = foldCountText(layerHiddenLines(layer, ctx, level))
     }
   }
 
   const commentPaths = new Set(ctx.comments.map(comment => comment.path))
-  let redrawn = 0
   for (const card of Array.from(root.querySelectorAll('article.file'))) {
     if (!(card instanceof HTMLElement)) {
       continue
@@ -715,13 +766,6 @@ export function setFoldLevel(root, level) {
           (collapsesAt(lf, level) && !cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths))
       )
     }
-    // A card that has not drawn its diff, or is holding a huge patch back, is left alone: it
-    // reads the level when it draws.
-    if (card.querySelector('.diff-host table.diff') !== null) {
-      hydrateFileCard(card, ctx, { force: true })
-      redrawn++
-    }
+    setCodeFoldLevel(card, level)
   }
-
-  return redrawn
 }

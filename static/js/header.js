@@ -4,7 +4,7 @@
 import { setDisabledReason } from './composer.js'
 import { esc, timeAgo } from './dom.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
-import { getFoldLevel, refreshRail } from './layers.js'
+import { canvasHiddenLines, getFoldLevel, refreshRail } from './layers.js'
 import { progressSummary } from './progress.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { approveBlockedReason } from './signoff.js'
@@ -86,7 +86,13 @@ export function renderHeader(bundle, opts) {
     ? 'Snapshot the working tree again and redraw'
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
   const progress = ready ? progressHtml(artifact, bundle.state) : ''
-  const reading = ready ? foldLevelControlHtml(artifact, getFoldLevel()) : ''
+  const level = getFoldLevel()
+  const reading = ready
+    ? foldLevelControlHtml(
+        level,
+        canvasHiddenLines({ artifact, files: bundle.files, comments: bundle.comments.reviewComments }, level)
+      )
+    : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
@@ -95,7 +101,7 @@ export function renderHeader(bundle, opts) {
     `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
     `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
     `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
-    `<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog"${bundle.chat.enabled || bundle.chat.acpx ? ' title="Configure the default reading level and the AI chat agent, model, and limits"' : ' disabled title="acpx is not installed"'}>settings</button>` +
+    '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level and the AI chat agent, model, and limits">settings</button>' +
     '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
     `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal and GitHub styling">${esc(skinLabel(opts.skin))}</button>` +
     `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +

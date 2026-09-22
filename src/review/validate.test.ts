@@ -81,12 +81,14 @@ describe('validateModelOutput', () => {
   })
 
   it.each([
-    { title: '', side: 'new', startLine: 2, endLine: 4 },
-    { title: '   ', side: 'new', startLine: 2, endLine: 4 },
-    { title: 'runs', side: 'head', startLine: 2, endLine: 4 },
-    { title: 'runs', side: 'new', startLine: 0, endLine: 4 },
-    { title: 'runs', side: 'new', startLine: 2.5, endLine: 4 },
-    { title: 'runs', side: 'new', startLine: 2 },
+    { title: '', side: 'new', startLine: 2, endLine: 4, level: 'light' },
+    { title: '   ', side: 'new', startLine: 2, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'head', startLine: 2, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 0, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 2.5, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 2, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 2, endLine: 4 },
+    { title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'none' },
   ])('rejects malformed fold JSON: %o', fold => {
     const output = clean()
     const file = output.layers[0]?.files[0]
@@ -111,7 +113,7 @@ describe('validateModelOutput', () => {
       throw new Error('missing test file')
     }
 
-    file.folds = [{ title, side: 'new', startLine: 2, endLine: 4 }]
+    file.folds = [{ title, side: 'new', startLine: 2, endLine: 4, level: 'light' }]
     expect(errorsOf(output)).toEqual([expect.objectContaining({ code: 'TEXT_TOO_LONG' })])
   })
 

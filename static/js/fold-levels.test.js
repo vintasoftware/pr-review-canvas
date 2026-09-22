@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest'
 import {
   collapsesAt,
   coveredRows,
-  foldLevelOf,
   foldsForLevel,
   hiddenLines,
   hidesAt,
   isFoldLevel,
   nextFoldLevel,
+  UNDISCUSSED,
 } from './fold-levels.js'
 
 const HUNKS = [
@@ -29,15 +29,6 @@ describe('hidesAt', () => {
     expect(hidesAt('light', 'aggressive')).toBe(true)
     expect(hidesAt('moderate', 'light')).toBe(false)
     expect(hidesAt('aggressive', 'moderate')).toBe(false)
-  })
-})
-
-describe('foldLevelOf', () => {
-  it('reads a canvas written before levels existed as light', () => {
-    expect(foldLevelOf(true)).toBe('light')
-    expect(foldLevelOf('aggressive')).toBe('aggressive')
-    expect(foldLevelOf(false)).toBeNull()
-    expect(foldLevelOf(undefined)).toBeNull()
   })
 })
 
@@ -70,11 +61,12 @@ describe('foldsForLevel', () => {
     endLine: 8,
     level: /** @type {const} */ ('light'),
   }
-  const other = { side: /** @type {const} */ ('new'), startLine: 30, endLine: 33 }
-
-  it('keeps a fold with no level at light', () => {
-    expect(foldsForLevel([other], 'light')).toEqual([other])
-  })
+  const other = {
+    side: /** @type {const} */ ('new'),
+    startLine: 30,
+    endLine: 33,
+    level: /** @type {const} */ ('light'),
+  }
 
   it('drops the folds the level does not reach', () => {
     expect(foldsForLevel([outer, inner], 'light')).toEqual([inner])
@@ -120,25 +112,40 @@ describe('coveredRows', () => {
 
 describe('hiddenLines', () => {
   it('counts the rows of the file own hunks, the longer side of each', () => {
-    expect(hiddenLines(file(), HUNKS, 'light')).toEqual({ total: 16, hidden: 0 })
+    expect(hiddenLines(file(), HUNKS, 'light', UNDISCUSSED)).toEqual({ total: 16, hidden: 0 })
   })
 
   it('counts a collapsed file as wholly hidden', () => {
-    expect(hiddenLines(file({ collapsed: true }), HUNKS, 'light')).toEqual({ total: 16, hidden: 16 })
+    expect(hiddenLines(file({ collapsed: 'light' }), HUNKS, 'light', UNDISCUSSED)).toEqual({
+      total: 16,
+      hidden: 16,
+    })
   })
 
-  it('counts the folds the level applies, and never more than the file shows', () => {
-    const folds = [
-      { side: /** @type {const} */ ('new'), startLine: 1, endLine: 4 },
-      {
-        side: /** @type {const} */ ('new'),
-        startLine: 8,
-        endLine: 10,
-        level: /** @type {const} */ ('moderate'),
-      },
-    ]
+  const folds = [
+    { side: /** @type {const} */ ('new'), startLine: 1, endLine: 4, level: /** @type {const} */ ('light') },
+    {
+      side: /** @type {const} */ ('new'),
+      startLine: 8,
+      endLine: 10,
+      level: /** @type {const} */ ('moderate'),
+    },
+  ]
 
-    expect(hiddenLines(file({ folds }), HUNKS, 'light')).toEqual({ total: 16, hidden: 4 })
-    expect(hiddenLines(file({ folds }), HUNKS, 'moderate')).toEqual({ total: 16, hidden: 7 })
+  it('counts the folds the level applies, and never more than the file shows', () => {
+    expect(hiddenLines(file({ folds }), HUNKS, 'light', UNDISCUSSED)).toEqual({ total: 16, hidden: 4 })
+    expect(hiddenLines(file({ folds }), HUNKS, 'moderate', UNDISCUSSED)).toEqual({ total: 16, hidden: 7 })
+  })
+
+  it('counts nothing hidden where the discussion keeps the code open, as the card draws it', () => {
+    const collapsed = file({ collapsed: 'light', folds })
+    expect(hiddenLines(collapsed, HUNKS, 'light', { keepsOpen: true, threaded: false })).toEqual({
+      total: 16,
+      hidden: 4,
+    })
+    expect(hiddenLines(collapsed, HUNKS, 'light', { keepsOpen: true, threaded: true })).toEqual({
+      total: 16,
+      hidden: 0,
+    })
   })
 })
