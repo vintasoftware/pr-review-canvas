@@ -6,7 +6,7 @@ test('shows one layer at a time once the setting is saved, on this page and afte
 }) => {
   await page.goto(reviewUrl)
   const overview = page.locator('#overview')
-  const layer = page.locator('section.layer[data-layer="layer-1"]')
+  const layer = page.locator('#layer-run-path')
   const other = page.locator('#layer-other')
   await expect(overview).toBeVisible()
   await expect(layer).toBeVisible()
