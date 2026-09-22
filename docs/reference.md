@@ -199,7 +199,7 @@ directories.
 ### Upgrade options
 
 ```text
-pr-review upgrade [--yes] [--repo <dir>]
+pr-review upgrade [--yes] [--only package,acpx,skill] [--repo <dir>]
 ```
 
 `upgrade` checks three things, prints a plan to stderr, and asks `Proceed? [y/N]`:
@@ -207,19 +207,22 @@ pr-review upgrade [--yes] [--repo <dir>]
 | What              | When it changes                                                             | How                                                        |
 | ----------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | pr-review         | npm has a newer version, and this copy is the global npm install            | `npm install -g @vintasoftware/pr-review-canvas@<version>` |
-| acpx              | acpx is installed and npm has a newer version                               | `npm install -g acpx@<version>`                            |
+| acpx              | npm has a newer version, and the acpx on PATH is the global npm install     | `npm install -g acpx@<version>`                            |
 | The project skill | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one | The same copy `install-skill` makes                        |
 
-When pr-review itself upgrades, it then runs the new version's `pr-review upgrade --yes`, so the
-new code plans and runs the remaining steps, including the skill; one run brings both up to date.
-If the pr-review install fails, the current version runs the remaining steps itself. `upgrade` does not install acpx or add a skill copy that is not
+When pr-review itself upgrades, the skill step covers every copy, since the new version can ship a
+new skill. The new version then runs `pr-review upgrade --yes --only <kinds>`, naming the kinds of
+step confirmed after the pr-review one, so its own code checks and copies its own skill and it
+takes no step the plan did not show. If the pr-review install fails, the current version runs the
+remaining steps itself. `--only` limits any run to the kinds it names; the rest are listed in
+`notes`. `upgrade` does not install acpx or add a skill copy that is not
 there; it names the command that does. It does not replace an unmanaged skill directory, which
 needs `install-skill --force`. A pr-review run from a clone or through `npx` is left alone, with a
 note to update it the way it was installed.
 
 Without a terminal to ask, `upgrade` prints the plan and changes nothing; `--yes` applies it
 without asking. stdout carries one JSON line: `applied`, and after applying, `ok` and each step's
-`status` (`done`, `unchanged`, or `failed`, with a `detail`). The exit code is `1` when a step
+`status` (`done` or `failed`, with a `detail`). The exit code is `1` when a step
 failed. When a skill copy changes, stderr says to commit and push it.
 
 ### Output and exit codes

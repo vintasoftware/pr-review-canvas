@@ -61,7 +61,7 @@ const USAGE = `usage: pr-review <command> [flags]
                    (both flags: the named commit is exported and the number stamps the zip)
   import <zip> [--pr <n>] [--force] [--repo <dir>] [--data-dir <dir>]
   doctor [--all-checks] [--repo <dir>] [--data-dir <dir>]
-  upgrade [--yes] [--repo <dir>]
+  upgrade [--yes] [--only package,acpx,skill] [--repo <dir>]
                    (updates pr-review and acpx with npm, and refreshes the project's skill copies;
                     lists the changes and asks first unless --yes)
 

@@ -133,14 +133,16 @@ describe('isNewer', () => {
 })
 
 describe('planUpgrade', () => {
-  it('plans pr-review, acpx, and the stale skill copy, in that order', async () => {
+  it('plans pr-review, acpx, then every skill copy, since a new pr-review can ship a new skill', async () => {
     await installCopies()
-    await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nold\n')
     const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' } })
     expect((await planUpgrade(deps)).steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0' },
       { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1' },
-      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`] },
+      {
+        kind: 'skill',
+        paths: [`${CLAUDE_SKILLS_DIR}/pr-review-canvas`, `${CODEX_SKILLS_DIR}/pr-review-canvas`],
+      },
     ])
   })
 
@@ -231,7 +233,7 @@ describe('runUpgrade', () => {
     const { io, out, err } = capture()
 
     expect(await runUpgrade(deps, [], io)).toBe(0)
-    expect(calls).toContain(`pr-review 0.6.0 upgrade --yes --repo ${repo}`)
+    expect(calls).toContain(`pr-review 0.6.0 upgrade --yes --only acpx,skill --repo ${repo}`)
     expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
     expect(JSON.parse(out[0] ?? '').steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0', status: 'done' },
@@ -259,6 +261,7 @@ describe('runUpgrade', () => {
   })
 
   it('reports a new pr-review that does not answer as a failed skill step', async () => {
+    await installCopies()
     const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, garbledInstalled: true })
     const { io, out } = capture()
     expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
@@ -308,9 +311,39 @@ describe('runUpgrade', () => {
   })
 
   it('hands off without --repo outside a repository', async () => {
+    const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' }, repoRoot: null })
+    expect(await runUpgrade(deps, ['--yes'], capture().io)).toBe(0)
+    expect(calls).toContain('pr-review 0.6.0 upgrade --yes --only acpx')
+    expect(calls).toContain('install -g acpx@0.19.1')
+  })
+
+  it('does not start the new pr-review when no step follows its upgrade', async () => {
     const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, repoRoot: null })
     expect(await runUpgrade(deps, ['--yes'], capture().io)).toBe(0)
-    expect(calls).toContain('pr-review 0.6.0 upgrade --yes')
+    expect(calls.some(call => call.startsWith('pr-review '))).toBe(false)
+  })
+
+  it('takes only the kinds of step --only names, and says what it left out', async () => {
+    await installCopies()
+    await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nold\n')
+    const { deps, calls } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.19.1' } })
+    const { io, out } = capture()
+    expect(await runUpgrade(deps, ['--yes', '--only', 'skill'], io)).toBe(0)
+    expect(calls.some(call => call.startsWith('install'))).toBe(false)
+    const report = JSON.parse(out[0] ?? '')
+    expect(report.steps).toEqual([
+      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`], status: 'done' },
+    ])
+    expect(report.notes).toContain(
+      'left out by --only: upgrade acpx 0.13.2 -> 0.19.1 (npm install -g acpx@0.19.1)'
+    )
+  })
+
+  it('refuses an --only it does not know', async () => {
+    const { deps } = fake({ latest: {} })
+    await expect(runUpgrade(deps, ['--only', 'skill,everything'], capture().io)).rejects.toThrow(
+      '--only takes a comma list of package, acpx, skill; got "skill,everything"'
+    )
   })
 
   it('names the install that failed when npm says nothing', async () => {

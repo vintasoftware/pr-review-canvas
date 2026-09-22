@@ -5,7 +5,7 @@ import { realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { z } from 'zod'
-import { type CliIo, EXIT, printJson } from './commands.js'
+import { type CliIo, EXIT, printJson, UsageError } from './commands.js'
 import { findSkillCopies, type ReadSkill, type SkillCopy } from './review/doctor.js'
 import { installSkill, SkillDirExistsError } from './review/install-skill.js'
 
@@ -35,6 +35,10 @@ export interface UpgradeDeps {
   confirm: (question: string) => Promise<boolean | null>
   readSkill?: ReadSkill
 }
+
+/** What one step upgrades, in the order a plan runs them. */
+const StepKindSchema = z.enum(['package', 'acpx', 'skill'])
+type StepKind = z.infer<typeof StepKindSchema>
 
 const NpmStepSchema = z.object({
   kind: z.enum(['package', 'acpx']),
@@ -144,11 +148,13 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
     notes.push('not in a repository, so no project skill to refresh')
   } else {
     const copies = await skillCopies(deps)
-    const stale = copies.filter(copy => copy.stale)
+    // A new pr-review can ship a new skill, so every copy is in question once the package moves.
+    const packageMoves = steps.some(step => step.kind === 'package')
+    const toCheck = copies.filter(copy => packageMoves || copy.stale)
     if (copies.length === 0) {
       notes.push('the project has no copy of the skill; run `pr-review install-skill` to add one')
-    } else if (stale.length > 0) {
-      steps.push({ kind: 'skill', paths: stale.map(copy => copy.path) })
+    } else if (toCheck.length > 0) {
+      steps.push({ kind: 'skill', paths: toCheck.map(copy => copy.path) })
     } else {
       notes.push(`the project skill matches pr-review ${deps.version}`)
     }
@@ -158,7 +164,7 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
 
 export function describeStep(step: UpgradeStep): string {
   if (step.kind === 'skill') {
-    return `refresh the project skill: ${step.paths.join(', ')}`
+    return `refresh the project skill where it differs from pr-review's: ${step.paths.join(', ')}`
   }
   return `upgrade ${step.name} ${step.from} -> ${step.to} (npm install -g ${step.name}@${step.to})`
 }
@@ -196,13 +202,16 @@ async function applySkillStep(
 }
 
 /**
- * The new pr-review's own `upgrade --yes`, which finds itself current and refreshes the skill. Its
- * report's steps join this one's, so this process stays the one that prints them.
+ * The new pr-review's own `upgrade --yes --only <kinds>`: it plans again with its own code, and runs
+ * only the kinds of step the user confirmed. Its report's steps join this one's, so this process
+ * stays the one that prints them.
  */
-async function handOff(deps: UpgradeDeps): Promise<StepOutcome[]> {
+async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<StepOutcome[]> {
   const result = await deps.runInstalled([
     'upgrade',
     '--yes',
+    '--only',
+    kinds.join(','),
     ...(deps.repoRoot === null ? [] : ['--repo', deps.repoRoot]),
   ])
   let report: unknown
@@ -233,7 +242,7 @@ async function handOff(deps: UpgradeDeps): Promise<StepOutcome[]> {
  */
 export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promise<StepOutcome[]> {
   const outcomes: StepOutcome[] = []
-  for (const step of plan.steps) {
+  for (const [index, step] of plan.steps.entries()) {
     if (step.kind === 'skill') {
       outcomes.push(await applySkillStep(step, deps))
       continue
@@ -245,21 +254,54 @@ export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promis
       continue
     }
     outcomes.push({ ...step, status: 'done' })
-    if (step.kind === 'package') {
-      return [...outcomes, ...(await handOff(deps))]
+    const rest = plan.steps.slice(index + 1)
+    if (step.kind === 'package' && rest.length > 0) {
+      return [
+        ...outcomes,
+        ...(await handOff(
+          deps,
+          rest.map(later => later.kind)
+        )),
+      ]
     }
   }
   return outcomes
 }
 
-/** `upgrade [--yes]`: the plan on stderr, a confirmation, then one JSON line with what happened. */
+/** `--only package,acpx,skill`: the kinds of step this run may take. */
+function parseOnly(raw: string | undefined): ReadonlySet<StepKind> | null {
+  if (raw === undefined) return null
+  const kinds = z.array(StepKindSchema).safeParse(raw.split(','))
+  if (!kinds.success) {
+    throw new UsageError(`--only takes a comma list of ${StepKindSchema.options.join(', ')}; got "${raw}"`)
+  }
+  return new Set(kinds.data)
+}
+
+/**
+ * `upgrade [--yes] [--only <kinds>]`: the plan on stderr, a confirmation, then one JSON line with
+ * what happened.
+ */
 export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): Promise<number> {
   const { values } = parseArgs({
     args: argv,
-    options: { yes: { type: 'boolean', short: 'y' } },
+    options: { yes: { type: 'boolean', short: 'y' }, only: { type: 'string' } },
     strict: true,
   })
-  const plan = await planUpgrade(deps)
+  const only = parseOnly(values.only)
+  const full = await planUpgrade(deps)
+  const plan: UpgradePlan =
+    only === null
+      ? full
+      : {
+          steps: full.steps.filter(step => only.has(step.kind)),
+          notes: [
+            ...full.notes,
+            ...full.steps
+              .filter(step => !only.has(step.kind))
+              .map(step => `left out by --only: ${describeStep(step)}`),
+          ],
+        }
   for (const note of plan.notes) io.stderr(`  ${note}`)
   if (plan.steps.length === 0) {
     io.stderr('Everything is up to date.')
