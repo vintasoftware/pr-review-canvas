@@ -91,9 +91,9 @@ pr-review prepare --base origin/main --head HEAD
 ```
 
 `validate` checks the supplied file against the context in `--canvas`. By default it returns
-`{ ok, errors }`; `--human` prints readable diagnostics. A `review.json` is held to the correctness
-rules only; the rules about what a fresh generation must hide (`FOLD_MISSING`, a test file
-collapsed at `light`) apply to a `model.json`, because an older canvas predates them. `--fix` edits overlong titles by removing
+`{ ok, errors }`; `--human` prints readable diagnostics. A `review.json` is checked for
+correctness only. The folding rules (`FOLD_MISSING`, a test file collapsed at `light`) apply only
+to a `model.json`, because older canvases predate them. `--fix` edits overlong titles by removing
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
 limit and overlong prose require rewriting.
 
@@ -212,20 +212,22 @@ pr-review upgrade [--yes] [--only package,acpx,skill] [--repo <dir>]
 | acpx              | npm has a newer version, and the acpx on PATH is the global npm install     | `npm install -g acpx@<version>`                            |
 | The project skill | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one | The same copy `install-skill` makes                        |
 
-When pr-review itself upgrades, the skill step covers every copy, since the new version can ship a
-new skill. The new version then runs `pr-review upgrade --yes --only <kinds>`, naming the kinds of
-step confirmed after the pr-review one, so its own code checks and copies its own skill and it
-takes no step the plan did not show. If the pr-review install fails, the current version runs the
-remaining steps itself. `--only` limits any run to the kinds it names; the rest are listed in
-`notes`. `upgrade` does not install acpx or add a skill copy that is not
-there; it names the command that does. It does not replace an unmanaged skill directory, which
-needs `install-skill --force`. A pr-review run from a clone or through `npx` is left alone, with a
-note to update it the way it was installed.
+When pr-review itself upgrades, the skill step covers every copy, since the new version may ship
+a new skill. After installing, it runs the new version as `pr-review upgrade --yes --only <kinds>`
+with the confirmed steps, so the new version copies its own skill and takes only the steps the plan
+showed. If the install fails, the current version runs the remaining steps itself.
 
-Without a terminal to ask, `upgrade` prints the plan and changes nothing; `--yes` applies it
-without asking. stdout carries one JSON line: `applied`, and after applying, `ok` and each step's
-`status` (`done` or `failed`, with a `detail`). The exit code is `1` when a step
-failed. When a skill copy changes, stderr says to commit and push it.
+- `--only` limits the run to the named kinds. Skipped kinds are listed in `notes`.
+- `upgrade` does not install a missing acpx or add a missing skill copy. It prints the command
+  that does.
+- An unmanaged skill directory is left alone; replace it with `install-skill --force`.
+- A pr-review run from a clone or through `npx` is left alone, with a note to update it the way it
+  was installed.
+
+Without a terminal, `upgrade` prints the plan and changes nothing. `--yes` applies it without
+asking. stdout is one JSON line with `applied` and, after applying, `ok` and each step's `status`
+(`done` or `failed`, with a `detail`). The exit code is `1` when a step fails. When a skill copy
+changes, stderr says to commit and push it.
 
 ### Output and exit codes
 
@@ -378,8 +380,8 @@ appearance for one page load without saving it.
 
 #### Model families
 
-Each chat turn runs the newest model of the family you saved. A trailing `[...]`, such as `[1m]` or
-`[high]`, is kept.
+Each chat turn runs the newest model of the saved model's family. A trailing `[...]`, such as
+`[1m]` or `[high]`, is kept.
 
 - **Claude:** an Anthropic model ID becomes its family alias, which the `claude` CLI resolves to
   its newest model. `claude-opus-4-8[1m]` runs as `opus[1m]`, and `claude-haiku-4-5-20251001` runs
@@ -387,11 +389,11 @@ Each chat turn runs the newest model of the family you saved. A trailing `[...]`
 - **Codex:** a GPT model follows the `upgrade` links in the Codex model catalog
   (`codex debug models`) to the model that replaced it, even under a new name: `gpt-5.6-terra` runs
   as `gpt-6-sol`. A model with no `upgrade` link runs as saved.
-- **Blank model:** the agent's own default applies. If a thread's session is still on a replaced
-  model, for example one started before a release, the turn moves it to the replacement.
+- **Blank model:** the agent's default applies. A thread still on a replaced model moves to its
+  replacement.
 
-To pin one exact version, write `pin:` before the ID. The ID after it is sent as written, for
-either agent:
+To pin an exact version, prefix the ID with `pin:`. The ID is then sent as written, for either
+agent:
 
 | Agent  | Example                   | Runs                       |
 | ------ | ------------------------- | -------------------------- |
@@ -405,8 +407,8 @@ Bedrock and Vertex Claude IDs, such as `us.anthropic.claude-opus-4-8-v1:0` or
 `claude-opus-4-8@20260801`, run as written without `pin:`. They work only when Claude Code is set
 up for that provider, for example with `CLAUDE_CODE_USE_BEDROCK=1` or `CLAUDE_CODE_USE_VERTEX=1`.
 
-Claude chat runs the `claude` CLI on PATH through `CLAUDE_CODE_EXECUTABLE`. Set that variable before
-`pr-review serve` to use another binary.
+Claude chat runs the `claude` CLI on PATH, or the Claude Code bundled with acpx when there is none.
+To use another binary, set `CLAUDE_CODE_EXECUTABLE` before `pr-review serve`.
 
 By default, Git worktrees of the same clone share the main checkout's data directory. Separate
 clones have separate data. An explicit data-directory override also relocates `settings.yml`,
@@ -443,42 +445,44 @@ Collapsing content does not mark it reviewed.
 
 ### Reading levels
 
-A **Hide code** control sits under the header's risk line, beside the review progress, and governs
-the whole canvas. The generator gives each range and each collapsed file the lowest level at which
-it hides, and the levels nest, so a range marked `light` is hidden in all three.
+The **Hide code** control, beside the review progress, sets how much of the canvas is hidden. The
+levels nest: whatever `light` hides, `moderate` and `aggressive` hide too. The generator gives each
+fold and each collapsed file the lowest level at which it hides.
 
 | Level        | What it hides                                                                            |
 | ------------ | ---------------------------------------------------------------------------------------- |
-| `light`      | The diff as before: imports, whitespace, moves, and wholly generated files (the default) |
+| `light`      | Imports, whitespace, moves, and wholly generated files (the default)                     |
 | `moderate`   | Also test bodies under their titles, helpers, adapters, boilerplate, mappings and wiring |
 | `aggressive` | Also any block its title explains, so the change reads as pseudo-code                    |
 
-The line next to the control names what the chosen level hides and how much of the diff that is,
-so the effect is stated before the reader scrolls. Each layer repeats the count in its Files
-heading, and the sign-off dialog records the total, so a reviewer signs off knowing how much they
-did not read.
+The control shows what the chosen level hides and how many lines that is. Each layer shows its count
+in its Files heading, and the sign-off dialog records the total.
 
-Attention points, comment threads and pending review drafts keep their code visible at every level;
-a file with a thread or a draft folds nothing. An annotation may only be hidden by an aggressive
-fold that covers the whole annotation and no other one; the fold then shows the annotation's text in
-place of its title. A file that carries an annotation or an attention point never collapses, so the
-layer's core stays on screen at every level and hides only its routine ranges. Nothing in a test
-file hides at `light`, except snapshots and fixtures, which are generated; from `moderate` each test
-body folds under its own title, one fold per test, or the file collapses whole. A `light` fold is at
-most 40 lines of generated content. A file with more than 20 changed lines outside its annotations
-and no attention point must hide something at some level; a file over 60 lines that stays open must
-fold at least half of the lines outside its attention points by `aggressive`, annotated lines
-included; and a layer of more than 100 changed lines that leaves more than 20 lines open at
-`moderate` outside its attention points must hide more at `aggressive`. A smaller layer reads whole,
-and only the file rules apply to it. Each failure is `FOLD_MISSING`. An annotation marks what to
-read; it does not excuse the rows around it.
+The page opens at `foldLevel` from `settings.yml` (`light` by default), which the **Hide code by
+default** field in the settings dialog sets. The control and the `f` key change the level for the
+current page only. Changing the level redraws the visible diffs and re-applies file collapse,
+including cards opened by hand.
 
-The page opens at the level saved as `foldLevel` in `settings.yml`, `light` until changed. The
-**Hide code by default** field of the settings dialog sets it. The control and the `f` key, which
-steps through the levels, change the level for that page only, so the file holds a default rather
-than the last thing the reader did. Changing
-the level redraws the diffs that are on screen and re-applies file collapse, so a card the reader
-opened by hand follows the new level.
+These always stay visible:
+
+- Attention points, comment threads, and pending review drafts. A file with a thread or a draft
+  folds nothing.
+- Files with an annotation or an attention point. They never collapse whole.
+- Annotations, except under an `aggressive` fold that covers the whole annotation and no other. That
+  fold shows the annotation's text instead of its title.
+- Test files at `light`, except snapshots and fixtures. From `moderate`, each test body folds under
+  its own title, or the file collapses whole.
+
+Validation fails with `FOLD_MISSING` when the generator hides too little:
+
+- A file with more than 20 changed lines outside its annotations and no attention point hides
+  nothing at any level.
+- An open file over 60 lines folds less than half of its lines outside attention points by
+  `aggressive`. Annotated lines count, since an aggressive fold may hide them.
+- A layer over 100 changed lines leaves more than 20 lines open at `moderate` (outside attention
+  points) and hides nothing more at `aggressive`. Smaller layers only need to pass the file rules.
+
+A `light` fold may cover at most 40 lines of generated content.
 
 Files with patches longer than 2,000 lines wait behind **show diff**. A link into the file opens
 it automatically.
@@ -512,44 +516,39 @@ chunk of the diff.
 
 ### Pending reviews
 
-A comment on a diff line offers two commands while no review is open. **post to github** sends it
-on its own, at once. **start a review** puts it in a pending review instead, which is kept on your
-machine and posted to nobody until you submit it.
+A pending review holds comments on your machine until you submit them together.
 
-Once a review is open, the box offers only **add review comment**. Posting a single comment would
-publish it while the rest of the review is still held back, so that way is closed for as long as
-anything is waiting, and the drafts go out together. Replies and pull-request comments are not part
-of a forge review's comment list, so they still post at once either way.
+- **post to github** on a diff-line comment posts it at once. **start a review** adds it to a new
+  pending review instead.
+- While a review is open, a diff-line comment can only **add review comment**, so no comment
+  publishes ahead of the review. Replies and pull-request comments are not part of a forge review,
+  so they still post at once.
+- An attention point keeps both **post to github** and **add to review**, since its text is written
+  in advance. A point in the review shows **in your review**; edit or remove it as the draft on its
+  line. After submission, the point shows the comment it became.
+- A bar under the progress line shows how many drafts are waiting. Each draft appears on its line
+  with a **pending** badge and edit and delete commands. Drafts are saved in the local review state
+  and survive a reload. **discard** drops the whole review; nothing was sent to the forge.
+- Drafts from an earlier commit are listed separately in the bar with their original location and
+  commit. They are submitted only when the stored diff is identical to the current one and
+  `canvas.keepForIdenticalDiff` is on. Otherwise, copy the text, delete the draft, and comment on
+  the current code.
+- A draft added or edited during submission stays pending.
 
-An attention point carries **add to review** next to **post to github**, and keeps both even while
-a review is open: its text is written in advance, so sending one on its own is a use of its own
-rather than a comment jumping the queue. A point waiting in the review says **in your review** and
-is edited or dropped as the draft on its line. Once the review lands, the point shows the comment
-it became, the same as posting it directly.
+**finish your review** opens the sign-off dialog, which shows how many drafts go out with the
+review:
 
-While a review has comments waiting, a bar sits under the progress line saying how many, and each
-draft is drawn on the diff with a **pending** badge and commands to edit or delete it. Drafts are
-part of the local review state, so they survive a reload. **discard** throws the whole pending
-review away; nothing has to be withdrawn from the forge, because nothing was sent there.
+- **GitHub:** the drafts are the comments of the single call that creates the review.
+- **GitLab:** the inline comments and summary are staged as draft notes and published in one batch.
+  Finish or discard any review already pending in GitLab first. Approval is a separate call; if it
+  fails after publication, the comments stay published and the page asks you to approve in GitLab.
 
-Drafts from an earlier commit are listed separately in the pending bar with their original
-location and commit. They are submitted only when the stored diff is identical to the current
-diff and `canvas.keepForIdenticalDiff` is enabled. If the code changed, copy the text, delete the
-old draft, and write a comment on the current code. A draft added or edited while a review is
-being submitted stays pending.
-
-**finish your review** opens the sign-off dialog, which tells you how many drafts will go out with
-the review. On GitHub they are sent as the comments of the one call that creates the review, so
-they appear as a single review. GitLab stages the inline comments and summary as draft notes,
-then publishes them in one batch. Finish or discard any review already pending in GitLab first.
-A refused submission retains the local drafts and removes the remote drafts staged by that attempt.
-GitLab approval is a separate step; if it fails after publication, the comments remain published
-and the page asks you to approve in GitLab.
+A refused submission keeps the local drafts and removes the remote drafts that attempt staged.
 
 ### Sign-off
 
-Sign-off has the three verdicts the forge itself offers: **comment** posts a review with no
-verdict (nothing is approved or rejected), **approve**, and **request changes**. Each opens a
+Sign-off offers three verdicts: **approve**, **request changes**, and **comment**, which posts a
+review with no verdict. Each opens a
 dialog previewing an editable review body summarizing reviewed layers, dismissed attention points,
 and comments posted from the canvas, so an approval or a rejection always carries a comment.
 
@@ -583,30 +582,30 @@ one on screen.
 
 ## Incremental canvases
 
-Regenerating a canvas for a new head does not start from a blank page. `pr-review prepare` looks
-for the newest canvas generated for a commit the head was built on, the **basis canvas**, and
-compares its diff with the head's file by file. Every file whose patch is byte-identical is
-untouched, and the prompt tells the generator to carry that canvas's work for it word for word:
-whole layers when none of their files moved, and otherwise the notes, folds and annotations of the
-files that did not, together with the attention points sitting in them. A carried point keeps its
-kind, path and title, so it keeps its identity and any dismissal you made. Layers and points whose
-files the head changed are decided again, and the summary and the risk tags are always written
-again, since they describe the whole change set.
+When a canvas is regenerated for a new head, `pr-review prepare` starts from the **basis canvas**:
+the newest canvas of a commit the head was built on. A canvas of a commit the head no longer
+contains is never a basis. `--force` starts from a blank page, and `canvas.incremental: false`
+turns this off for the project.
 
-A canvas of a commit the head no longer contains is never a basis, however recent it is. `--force`
-starts from a blank page, and `canvas.incremental: false` turns the behavior off for the project.
-The canvas records the basis it came from, and nothing else: which of your review marks may follow
-it is worked out on your own machine, from the two canvases and your own clone.
+`prepare` compares the basis diff with the head diff file by file. A file whose patch is
+byte-identical is untouched. The prompt tells the generator to copy, word for word:
 
-Your review progress follows an incremental canvas for the parts you have already seen. Each canvas
-records the one it was generated from, and your marks follow that line of descent however long it
-is: marking nothing on an intermediate canvas does not strand them, because the canvas you marked
-and the canvas on screen are compared directly. A file's mark follows when that file is in both of
-those canvases under the same layer key and its patch is byte-identical; a layer's mark follows only
-when the layer holds exactly the same files and none of them changed, since that mark claims the
-whole layer was read. A file that changed and changed back counts as untouched, because it is. When
-any mark follows, the page names the canvas you made it on. A machine that does not have that
-canvas, or cannot rebuild either diff, carries nothing and starts the marks empty.
+- whole layers whose files are all untouched;
+- in other layers, the notes, folds, annotations, and attention points of untouched files.
+
+Everything else is decided again. The summary and risk tags are always rewritten. A carried
+attention point keeps its kind, path, and title, so it keeps its fingerprint and any dismissal.
+
+The canvas records only which basis it came from. Your server decides which review marks follow,
+using the two canvases and your clone:
+
+- A file's mark follows when the file is in both canvases, under the same layer key, with a
+  byte-identical patch.
+- A layer's mark follows only when the layer has exactly the same files and none changed.
+
+The canvas you marked is compared directly with the one on screen, so marks survive any number of
+regenerations in between. When a mark follows, the page names the canvas you made it on. If your
+machine lacks that canvas or cannot rebuild either diff, no marks follow.
 
 ## AI Chat
 
