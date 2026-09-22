@@ -2,7 +2,7 @@
 import { appendFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { CliIo } from './commands.js'
+import { type CliIo, splitCommonFlags } from './commands.js'
 import { findSkillCopies } from './review/doctor.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill } from './review/install-skill.js'
 import { makeTempDir } from './testing/fakes.js'
@@ -35,7 +35,11 @@ interface Fake {
   calls: string[]
 }
 
-/** npm answers from `latest`; a name missing from it is one npm cannot find. */
+/**
+ * A machine with npm on it. `npm view` answers from `latest` (a missing name is one npm cannot
+ * find), and `npm install -g` changes what is installed, so the next look sees the new version.
+ * `runInstalled` runs the real upgrade as whatever pr-review version is installed by then.
+ */
 function fake(opts: {
   version?: string
   latest?: Record<string, string>
@@ -43,30 +47,58 @@ function fake(opts: {
   acpx?: string | null
   acpxPath?: string
   confirm?: boolean | null
-  failInstall?: boolean
+  /** npm install fails with this stderr. */
+  failInstall?: string
+  /** The installed pr-review prints something other than its report. */
+  garbledInstalled?: boolean
   packageRoot?: string
+  repoRoot?: string | null
+  /** `npm root -g` fails. */
+  noGlobalRoot?: boolean
 }): Fake {
   const calls: string[] = []
+  const installed: Record<string, string | null> = {
+    [NAME]: opts.version ?? '0.5.0',
+    acpx: opts.acpx === undefined ? '0.13.2' : opts.acpx,
+  }
   const ok = (stdout: string): CommandResult => ({ ok: true, stdout, stderr: '' })
-  const deps: UpgradeDeps = {
+  const depsFor = (version: string): UpgradeDeps => ({
     packageName: NAME,
-    version: opts.version ?? '0.5.0',
+    version,
     packageRoot: opts.packageRoot ?? packageRoot,
-    repoRoot: repo,
-    acpxVersion: async () => (opts.acpx === undefined ? '0.13.2' : opts.acpx),
-    acpxPath: opts.acpx === null ? null : (opts.acpxPath ?? globalAcpx),
+    repoRoot: opts.repoRoot === undefined ? repo : opts.repoRoot,
+    acpxVersion: async () => installed['acpx'] ?? null,
+    acpxPath: installed['acpx'] === null ? null : (opts.acpxPath ?? globalAcpx),
     run: async (_file, args) => {
       calls.push(args.join(' '))
       if (args[0] === 'view') {
-        const version = opts.latest?.[args[1] ?? '']
-        return version === undefined ? { ok: false, stdout: '', stderr: 'E404' } : ok(`${version}\n`)
+        const latest = opts.latest?.[args[1] ?? '']
+        return latest === undefined ? { ok: false, stdout: '', stderr: 'E404' } : ok(`${latest}\n`)
       }
-      if (args[0] === 'root') return ok(`${globalRoot}\n`)
-      return opts.failInstall ? { ok: false, stdout: '', stderr: 'npm ERR! EACCES' } : ok('')
+      if (args[0] === 'root') {
+        return opts.noGlobalRoot ? { ok: false, stdout: '', stderr: 'EACCES' } : ok(`${globalRoot}\n`)
+      }
+      if (opts.failInstall !== undefined) return { ok: false, stdout: '', stderr: opts.failInstall }
+      const [pkg, to] = (args[2] ?? '').split(/@(?=[^@]*$)/)
+      installed[pkg ?? ''] = to ?? null
+      return ok('')
+    },
+    runInstalled: async args => {
+      calls.push(`pr-review ${installed[NAME]} ${args.join(' ')}`)
+      if (opts.garbledInstalled) return { ok: false, stdout: 'Segmentation fault', stderr: 'boom' }
+      // What cli.ts does with the arguments: the command name, then the common flags.
+      const [command, ...flags] = args
+      const { repo: childRepo, rest } = splitCommonFlags(flags)
+      const child = capture()
+      const code =
+        command === 'upgrade' && (childRepo ?? null) === (opts.repoRoot === undefined ? repo : opts.repoRoot)
+          ? await runUpgrade(depsFor(installed[NAME] ?? ''), rest, child.io)
+          : 2
+      return { ok: code === 0, stdout: child.out.join('\n'), stderr: child.err.join('\n') }
     },
     confirm: async () => (opts.confirm === undefined ? true : opts.confirm),
-  }
-  return { deps, calls }
+  })
+  return { deps: depsFor(installed[NAME] ?? ''), calls }
 }
 
 function capture(): { io: CliIo; out: string[]; err: string[] } {
@@ -88,6 +120,8 @@ describe('isNewer', () => {
   it.each([
     ['0.19.1', '0.13.2', true],
     ['1.2.10', '1.2.9', true],
+    ['1.2.1', '1.2', true],
+    ['1.2', '1.2.0', false],
     ['0.5.0', '0.5.0', false],
     ['0.4.0', '0.5.0', false],
     ['v1.0.0', '0.9.9', true],
@@ -99,18 +133,15 @@ describe('isNewer', () => {
 })
 
 describe('planUpgrade', () => {
-  it('plans pr-review, acpx, and a skill check after the package moves', async () => {
+  it('plans pr-review and acpx, and leaves the skill to the new pr-review', async () => {
     await installCopies()
     const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' } })
-    expect((await planUpgrade(deps)).steps).toEqual([
+    const plan = await planUpgrade(deps)
+    expect(plan.steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0' },
       { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1' },
-      {
-        kind: 'skill',
-        paths: [`${CLAUDE_SKILLS_DIR}/pr-review-canvas`, `${CODEX_SKILLS_DIR}/pr-review-canvas`],
-        afterPackage: true,
-      },
     ])
+    expect(plan.notes).toContain('the new pr-review checks the project skill once it is installed')
   })
 
   it('leaves a pr-review that is not the global npm install to the user', async () => {
@@ -135,6 +166,31 @@ describe('planUpgrade', () => {
     )
   })
 
+  it('plans nothing it cannot confirm when npm does not answer', async () => {
+    const { deps } = fake({ latest: {} })
+    const plan = await planUpgrade({
+      ...deps,
+      run: async () => ({ ok: false, stdout: '', stderr: 'npm: not found' }),
+    })
+    expect(plan.steps).toEqual([])
+    expect(plan.notes).toEqual([
+      `${NAME}: could not read the latest version from npm`,
+      'acpx: could not read the latest version from npm',
+      'the project has no copy of the skill; run `pr-review install-skill` to add one',
+    ])
+  })
+
+  it('upgrades nothing in place when npm has no global root', async () => {
+    const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' }, noGlobalRoot: true })
+    expect((await planUpgrade(deps)).steps).toEqual([])
+  })
+
+  it('has no skill to look at outside a repository', async () => {
+    const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.13.2' } })
+    const plan = await planUpgrade({ ...deps, repoRoot: null })
+    expect(plan.notes).toContain('not in a repository, so no project skill to refresh')
+  })
+
   it('suggests installing acpx instead of upgrading one that is missing', async () => {
     const { deps } = fake({ latest: { [NAME]: '0.5.0' }, acpx: null })
     const plan = await planUpgrade(deps)
@@ -147,7 +203,7 @@ describe('planUpgrade', () => {
     await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nedited\n')
     const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.19.1' }, acpx: '0.19.1' })
     expect((await planUpgrade(deps)).steps).toEqual([
-      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`], afterPackage: false },
+      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`] },
     ])
   })
 })
@@ -166,6 +222,37 @@ describe('runUpgrade', () => {
       `Commit and push ${CLAUDE_SKILLS_DIR}/pr-review-canvas so your team gets it.`
     )
     expect(JSON.parse(out[0] ?? '')).toMatchObject({ applied: true, ok: true })
+  })
+
+  it('hands the skill to the new pr-review after upgrading itself', async () => {
+    await installCopies()
+    await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nold\n')
+    const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' } })
+    const { io, out, err } = capture()
+
+    expect(await runUpgrade(deps, [], io)).toBe(0)
+    expect(calls).toContain(`pr-review 0.6.0 upgrade --yes --repo ${repo}`)
+    expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
+    expect(JSON.parse(out[0] ?? '').steps).toEqual([
+      { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0', status: 'done' },
+      { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1', status: 'done' },
+      { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`], status: 'done' },
+    ])
+    expect(err.filter(line => line.startsWith('The project skill changed.'))).toEqual([
+      `The project skill changed. Commit and push ${CODEX_SKILLS_DIR}/pr-review-canvas so your team gets it.`,
+    ])
+  })
+
+  it('reports a new pr-review that does not answer as a failed skill step', async () => {
+    const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, garbledInstalled: true })
+    const { io, out } = capture()
+    expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
+    expect(JSON.parse(out[0] ?? '').steps.at(-1)).toEqual({
+      kind: 'skill',
+      paths: [],
+      status: 'failed',
+      detail: 'the new pr-review did not report a result; run `pr-review upgrade` again\nboom',
+    })
   })
 
   it('changes nothing when the answer is no, or when there is no one to ask', async () => {
@@ -187,8 +274,42 @@ describe('runUpgrade', () => {
     expect(calls).toContain('install -g acpx@0.19.1')
   })
 
+  it('leaves a stale skill directory it did not make, and says how to replace it', async () => {
+    const handMade = path.join(repo, CLAUDE_SKILLS_DIR, 'pr-review-canvas')
+    await mkdir(handMade, { recursive: true })
+    await writeFile(path.join(handMade, 'SKILL.md'), '---\nname: pr-review-canvas\n---\nmine\n')
+    const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.13.2' } })
+    const { io, out, err } = capture()
+    expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
+    expect(JSON.parse(out[0] ?? '').steps).toEqual([
+      {
+        kind: 'skill',
+        paths: [],
+        status: 'failed',
+        detail: `not a managed copy, left alone: ${CLAUDE_SKILLS_DIR}/pr-review-canvas; run \`pr-review install-skill --force\` to replace it`,
+      },
+    ])
+    expect(err.some(line => line.startsWith('The project skill changed.'))).toBe(false)
+  })
+
+  it('hands off without --repo outside a repository', async () => {
+    const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, repoRoot: null })
+    expect(await runUpgrade(deps, ['--yes'], capture().io)).toBe(0)
+    expect(calls).toContain('pr-review 0.6.0 upgrade --yes')
+  })
+
+  it('names the install that failed when npm says nothing', async () => {
+    const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.19.1' }, failInstall: '' })
+    const { io, out } = capture()
+    expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
+    expect(JSON.parse(out[0] ?? '').steps[0]).toMatchObject({
+      status: 'failed',
+      detail: 'npm install failed',
+    })
+  })
+
   it('reports a failed install and exits 1', async () => {
-    const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.19.1' }, failInstall: true })
+    const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.19.1' }, failInstall: 'npm ERR! EACCES' })
     const { io, out } = capture()
     expect(await runUpgrade(deps, ['-y'], io)).toBe(1)
     expect(JSON.parse(out[0] ?? '')).toMatchObject({

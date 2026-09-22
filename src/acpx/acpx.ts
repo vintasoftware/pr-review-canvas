@@ -374,19 +374,13 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
       }
       // Codex keeps the catalog it last fetched on disk, so this answers in milliseconds.
       const result = await execQuiet('codex', ['debug', 'models'], { timeoutSec: 20 })
-      let parsed: unknown
+      // A failed call, output that is not JSON, and an unknown shape all mean no known upgrades.
       try {
-        parsed = JSON.parse(result.stdout)
+        const catalog = CodexCatalogSchema.parse(JSON.parse(result.stdout))
+        return new Map(catalog.models.flatMap(m => (m.upgrade ? [[m.slug, m.upgrade.model] as const] : [])))
       } catch {
         return new Map()
       }
-      const catalog = CodexCatalogSchema.safeParse(parsed)
-      if (!catalog.success) {
-        return new Map()
-      }
-      return new Map(
-        catalog.data.models.flatMap(m => (m.upgrade ? [[m.slug, m.upgrade.model] as const] : []))
-      )
     },
 
     async sessionModel(options) {
@@ -394,12 +388,9 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         cwd: options.cwd,
         timeoutSec: SHOW_TIMEOUT_SEC,
       })
-      if (!result.ok) {
-        return null
-      }
+      // A missing session prints an error line instead, which fails the schema like any other.
       try {
-        const record = SessionRecordSchema.safeParse(JSON.parse(result.stdout))
-        return record.success ? record.data.acpx.current_model_id : null
+        return SessionRecordSchema.parse(JSON.parse(result.stdout)).acpx.current_model_id
       } catch {
         return null
       }

@@ -201,6 +201,8 @@ async function upgradeCommand(argv: string[]): Promise<number> {
       acpxVersion: () => createAgentRunner().acpxVersion(),
       acpxPath: findOnPath(ACPX_BIN, process.env),
       run: runCommand,
+      runInstalled: args =>
+        runCommand(process.execPath, [path.join(PACKAGE_ROOT, 'bin', 'pr-review.mjs'), ...args]),
       confirm: confirmOnTerminal,
     },
     rest,

@@ -210,8 +210,8 @@ pr-review upgrade [--yes] [--repo <dir>]
 | acpx              | acpx is installed and npm has a newer version                               | `npm install -g acpx@<version>`                            |
 | The project skill | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one | The same copy `install-skill` makes                        |
 
-When pr-review itself upgrades, the skill copies are compared again with the new package's skill,
-so one run brings both up to date. `upgrade` does not install acpx or add a skill copy that is not
+When pr-review itself upgrades, it then runs the new version's `pr-review upgrade --yes`, so the
+new code checks and copies the new skill; one run brings both up to date. `upgrade` does not install acpx or add a skill copy that is not
 there; it names the command that does. It does not replace an unmanaged skill directory, which
 needs `install-skill --force`. A pr-review run from a clone or through `npx` is left alone, with a
 note to update it the way it was installed.

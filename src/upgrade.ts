@@ -1,9 +1,10 @@
 // `pr-review upgrade`: brings pr-review, acpx, and the project's copy of the skill up to date. It
-// says what it will change and asks first; the skill is checked again after pr-review itself moves,
-// since a new package can ship a new skill.
+// says what it will change and asks first. Once pr-review itself moves, the new version checks the
+// skill, so the skill it ships is stamped by the code that ships it.
 import { realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
+import { z } from 'zod'
 import { type CliIo, EXIT, printJson } from './commands.js'
 import { findSkillCopies, type ReadSkill, type SkillCopy } from './review/doctor.js'
 import { installSkill, SkillDirExistsError } from './review/install-skill.js'
@@ -28,15 +29,33 @@ export interface UpgradeDeps {
   acpxPath: string | null
   /** Runs one command without a shell. Only `npm` is run. */
   run: (file: string, args: string[]) => Promise<CommandResult>
+  /** Runs `pr-review <args>` from the package on disk, which is the new one after its upgrade. */
+  runInstalled: (args: string[]) => Promise<CommandResult>
   /** Asks a yes/no question, or returns null when there is no one to ask. */
   confirm: (question: string) => Promise<boolean | null>
   readSkill?: ReadSkill
 }
 
-export type UpgradeStep =
-  | { kind: 'package' | 'acpx'; name: string; from: string; to: string }
-  /** `afterPackage`: the copies are compared again once the new package is on disk. */
-  | { kind: 'skill'; paths: string[]; afterPackage: boolean }
+const NpmStepSchema = z.object({
+  kind: z.enum(['package', 'acpx']),
+  name: z.string(),
+  from: z.string(),
+  to: z.string(),
+})
+const SkillStepSchema = z.object({ kind: z.literal('skill'), paths: z.array(z.string()) })
+const OutcomeFields = {
+  status: z.enum(['done', 'failed']),
+  detail: z.string().optional(),
+}
+const StepOutcomeSchema = z.discriminatedUnion('kind', [
+  NpmStepSchema.extend(OutcomeFields),
+  SkillStepSchema.extend(OutcomeFields),
+])
+/** What an applied upgrade prints, and so what the parent reads back from the new version. */
+const AppliedReportSchema = z.object({ steps: z.array(StepOutcomeSchema) })
+
+export type UpgradeStep = z.infer<typeof NpmStepSchema> | z.infer<typeof SkillStepSchema>
+export type StepOutcome = z.infer<typeof StepOutcomeSchema>
 
 export interface UpgradePlan {
   steps: UpgradeStep[]
@@ -97,19 +116,17 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
   const root = await deps.run('npm', ['root', '-g'])
   const globalRoot = root.ok ? root.stdout.trim() : null
   const latest = await latestVersion(deps, deps.packageName)
-  let packageMoves = false
   if (latest === null) {
     notes.push(`${deps.packageName}: could not read the latest version from npm`)
   } else if (!isNewer(latest, deps.version)) {
     notes.push(`${deps.packageName} ${deps.version} is up to date`)
   } else if (await ownedByGlobalNpm(globalRoot, deps.packageName, deps.packageRoot)) {
     steps.push({ kind: 'package', name: deps.packageName, from: deps.version, to: latest })
-    packageMoves = true
   } else {
     notes.push(notGlobalNote(deps.packageName, latest, deps.packageRoot))
   }
 
-  const acpx = deps.acpxPath === null ? null : ((await deps.acpxVersion())?.trim() ?? null)
+  const acpx = deps.acpxPath === null ? null : await deps.acpxVersion()
   const acpxLatest = acpx === null ? null : await latestVersion(deps, ACPX_PACKAGE)
   if (acpx === null || deps.acpxPath === null) {
     notes.push('acpx is not installed; AI Chat needs it: npm install -g acpx@latest')
@@ -130,10 +147,10 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
     const stale = copies.filter(copy => copy.stale)
     if (copies.length === 0) {
       notes.push('the project has no copy of the skill; run `pr-review install-skill` to add one')
-    } else if (packageMoves) {
-      steps.push({ kind: 'skill', paths: copies.map(copy => copy.path), afterPackage: true })
+    } else if (steps.some(step => step.kind === 'package')) {
+      notes.push('the new pr-review checks the project skill once it is installed')
     } else if (stale.length > 0) {
-      steps.push({ kind: 'skill', paths: stale.map(copy => copy.path), afterPackage: false })
+      steps.push({ kind: 'skill', paths: stale.map(copy => copy.path) })
     } else {
       notes.push(`the project skill matches pr-review ${deps.version}`)
     }
@@ -143,15 +160,11 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
 
 export function describeStep(step: UpgradeStep): string {
   if (step.kind === 'skill') {
-    const which = step.paths.join(', ')
-    return step.afterPackage
-      ? `refresh the project skill (${which}) if the new pr-review ships a different one`
-      : `refresh the project skill: ${which}`
+    return `refresh the project skill: ${step.paths.join(', ')}`
   }
-  return `upgrade ${step.name} ${step.from} -> ${step.to} (npm install -g ${step.name}@${step.to})`
+  const then = step.kind === 'package' ? ', then let it refresh the project skill' : ''
+  return `upgrade ${step.name} ${step.from} -> ${step.to} (npm install -g ${step.name}@${step.to})${then}`
 }
-
-export type StepOutcome = UpgradeStep & { status: 'done' | 'unchanged' | 'failed'; detail?: string }
 
 async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipped: string[] }> {
   const written: string[] = []
@@ -169,25 +182,63 @@ async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipp
   return { written, skipped }
 }
 
+async function applySkillStep(
+  step: z.infer<typeof SkillStepSchema>,
+  deps: UpgradeDeps
+): Promise<StepOutcome> {
+  const { written, skipped } = await applySkill(deps)
+  if (skipped.length > 0) {
+    return {
+      ...step,
+      paths: written,
+      status: 'failed',
+      detail: `not a managed copy, left alone: ${skipped.join(', ')}; run \`pr-review install-skill --force\` to replace it`,
+    }
+  }
+  return { ...step, paths: written, status: 'done' }
+}
+
 /**
- * Runs every step in order. A failed npm install does not stop the rest: the skill step compares
- * against whatever package is on disk by then.
+ * The new pr-review's own `upgrade --yes`, which finds itself current and refreshes the skill. Its
+ * report's steps join this one's, so this process stays the one that prints them.
+ */
+async function handOff(deps: UpgradeDeps): Promise<StepOutcome[]> {
+  const result = await deps.runInstalled([
+    'upgrade',
+    '--yes',
+    ...(deps.repoRoot === null ? [] : ['--repo', deps.repoRoot]),
+  ])
+  let report: unknown
+  try {
+    // The report is the last line; String() turns a missing one into text JSON.parse rejects.
+    report = JSON.parse(String(result.stdout.trim().split('\n').at(-1)))
+  } catch {
+    report = null
+  }
+  const parsed = AppliedReportSchema.safeParse(report)
+  if (parsed.success) return parsed.data.steps
+  return [
+    {
+      kind: 'skill',
+      paths: [],
+      status: 'failed',
+      detail:
+        `the new pr-review did not report a result; run \`pr-review upgrade\` again\n` +
+        result.stderr.trim().split('\n').slice(-3).join('\n'),
+    },
+  ]
+}
+
+/**
+ * Runs every step in order. A failed npm install does not stop the rest. After the pr-review step,
+ * the new version takes over whatever is left to check.
  */
 export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promise<StepOutcome[]> {
   const outcomes: StepOutcome[] = []
+  let handOffAfter = false
   for (const step of plan.steps) {
     if (step.kind === 'skill') {
-      const { written, skipped } = await applySkill(deps)
-      const detail =
-        skipped.length === 0
-          ? undefined
-          : `not a managed copy, left alone: ${skipped.join(', ')}; run \`pr-review install-skill --force\` to replace it`
-      outcomes.push({
-        ...step,
-        paths: written,
-        status: skipped.length > 0 ? 'failed' : written.length > 0 ? 'done' : 'unchanged',
-        ...(detail === undefined ? {} : { detail }),
-      })
+      outcomes.push(await applySkillStep(step, deps))
       continue
     }
     const result = await deps.run('npm', ['install', '-g', `${step.name}@${step.to}`])
@@ -197,8 +248,9 @@ export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promis
       continue
     }
     outcomes.push({ ...step, status: 'done' })
+    handOffAfter ||= step.kind === 'package'
   }
-  return outcomes
+  return handOffAfter ? [...outcomes, ...(await handOff(deps))] : outcomes
 }
 
 /** `upgrade [--yes]`: the plan on stderr, a confirmation, then one JSON line with what happened. */
@@ -231,7 +283,8 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
       `  ${outcome.status}: ${describeStep(outcome)}${outcome.detail ? `\n    ${outcome.detail}` : ''}`
     )
   }
-  const refreshed = outcomes.flatMap(o => (o.kind === 'skill' && o.status !== 'unchanged' ? o.paths : []))
+  // A skill step lists only the copies it wrote, failed or not.
+  const refreshed = outcomes.flatMap(o => (o.kind === 'skill' ? o.paths : []))
   if (refreshed.length > 0) {
     io.stderr(`The project skill changed. Commit and push ${refreshed.join(' and ')} so your team gets it.`)
   }

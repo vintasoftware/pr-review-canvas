@@ -51,6 +51,10 @@ describe('latestModel', () => {
     expect(latestModel('codex', 'pin: gpt-5.6-terra[high]', CODEX)).toBe('gpt-5.6-terra[high]')
   })
 
+  it('leaves an id it cannot split into model and setting as it is', () => {
+    expect(latestModel('codex', '[high]', CODEX)).toBe('[high]')
+  })
+
   it('stops on a loop in the catalog', () => {
     expect(
       latestModel(
