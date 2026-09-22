@@ -27,12 +27,13 @@ import { postToLabel } from './host.js'
 import { splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
 
 export const CHAT_WIDTH_KEY = 'pr-review.chat-width'
+export const CHAT_MINIMIZED_KEY = 'pr-review.chat-minimized'
 export const CHAT_WIDTH_MIN = 280
 export const CHAT_WIDTH_MAX = 560
 export const CHAT_WIDTH_DEFAULT = 340
 
 /**
- * @param {{ enabled: boolean, width?: number }} opts
+ * @param {{ enabled: boolean, width?: number, minimized?: boolean }} opts
  * @returns {string} '' when AI Chat is disabled
  */
 export function renderChatShell(opts) {
@@ -40,8 +41,10 @@ export function renderChatShell(opts) {
     return ''
   }
   const width = clampWidth(opts.width ?? CHAT_WIDTH_DEFAULT)
+  // The launcher starts hidden and `wireChatPanel` reveals it where it belongs, so a docked
+  // chat never paints a launcher over itself on the first frame.
   return (
-    '<aside class="chat" aria-labelledby="chat-h">' +
+    `<aside class="chat" aria-labelledby="chat-h"${opts.minimized ? ' hidden' : ''}>` +
     `<button class="handle" type="button" id="chat-handle" role="separator" aria-orientation="vertical" aria-label="Resize AI Chat" aria-valuenow="${width}" aria-valuemin="${CHAT_WIDTH_MIN}" aria-valuemax="${CHAT_WIDTH_MAX}"></button>` +
     '<div class="chat-h"><h2 id="chat-h">AI Chat</h2><label class="sr" for="thread">Thread</label>' +
     '<select id="thread"></select>' +
@@ -60,7 +63,7 @@ export function renderChatShell(opts) {
     '<span class="muted small">enter to send</span></div></form>' +
     '</aside>' +
     '<dialog class="chat-dialog" id="chat-dialog" aria-labelledby="chat-h"></dialog>' +
-    '<button class="chat-launcher" id="chat-launcher" type="button" aria-controls="chat-dialog" aria-expanded="false">AI Chat</button>'
+    '<button class="chat-launcher" id="chat-launcher" type="button" hidden aria-controls="chat-dialog" aria-expanded="false">AI Chat</button>'
   )
 }
 
@@ -100,6 +103,23 @@ export function readChatWidth(storage) {
  */
 export function writeChatWidth(storage, width) {
   storage?.setItem(CHAT_WIDTH_KEY, String(clampWidth(width)))
+}
+
+/**
+ * Only a wide screen stores this: a floating chat always starts minimized.
+ * @param {Storage | null} storage
+ * @returns {boolean}
+ */
+export function readChatMinimized(storage) {
+  return (storage === null ? null : storage.getItem(CHAT_MINIMIZED_KEY)) === '1'
+}
+
+/**
+ * @param {Storage | null} storage
+ * @param {boolean} minimized
+ */
+export function writeChatMinimized(storage, minimized) {
+  storage?.setItem(CHAT_MINIMIZED_KEY, minimized ? '1' : '0')
 }
 
 /** The questions the quick menu offers, and the one that just focuses the box. */
@@ -749,7 +769,10 @@ export function wireChat(options) {
   }
 
   const stopResize = wireResize(pane, root, storage, applyWidth)
-  const panel = wireChatPanel(root, pane)
+  const panel = wireChatPanel(root, pane, {
+    minimized: readChatMinimized(storage),
+    onMinimizedChange: minimized => writeChatMinimized(storage, minimized),
+  })
 
   form.addEventListener('submit', onSubmit)
   root.addEventListener('click', onClick)

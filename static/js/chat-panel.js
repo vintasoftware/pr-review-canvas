@@ -1,42 +1,64 @@
 // @ts-check
 
 /** Keeps the same chat mounted while switching between the sidebar and floating panel.
+ *
+ * The chat minimizes at every width. Narrow screens float it over the canvas, so minimizing
+ * closes the dialog; wide screens dock it in the layout grid, so minimizing drops the column.
+ * Either way the launcher brings back the same pane with its draft and transcript intact.
+ *
  * @param {HTMLElement} root
  * @param {HTMLElement} pane
+ * @param {{ minimized?: boolean, onMinimizedChange?: (minimized: boolean) => void }} [opts]
  */
-export function wireChatPanel(root, pane) {
+export function wireChatPanel(root, pane, opts = {}) {
   const dialog = /** @type {HTMLDialogElement} */ (root.querySelector('#chat-dialog'))
   const launcher = /** @type {HTMLButtonElement} */ (root.querySelector('#chat-launcher'))
   const minimize = /** @type {HTMLButtonElement} */ (root.querySelector('#chat-minimize'))
+  const layout = root.querySelector('.layout')
   const narrow = window.matchMedia('(max-width: 1360px)')
   const mobile = window.matchMedia('(max-width: 600px)')
-  let expanded = false
+  /** Floating panels start minimized; a docked one starts the way the reader last left it. */
+  let floating = false
+  let docked = !opts.minimized
+
+  const shown = () => (narrow.matches ? floating : docked)
 
   function sync() {
     if (dialog.open) dialog.close()
     if (narrow.matches) {
       dialog.append(pane)
-      if (expanded) {
+      pane.hidden = false
+      if (floating) {
         if (mobile.matches) dialog.showModal()
         else dialog.show()
       }
     } else {
       dialog.before(pane)
+      pane.hidden = !docked
     }
-    launcher.setAttribute('aria-expanded', String(narrow.matches && expanded))
-    launcher.hidden = narrow.matches && expanded
+    layout?.classList.toggle('no-chat', !narrow.matches && !docked)
+    launcher.setAttribute('aria-expanded', String(shown()))
+    launcher.hidden = shown()
   }
 
   function open() {
-    if (narrow.matches && !expanded) {
-      expanded = true
+    if (!shown()) {
+      if (narrow.matches) floating = true
+      else {
+        docked = true
+        opts.onMinimizedChange?.(false)
+      }
       sync()
     }
     pane.querySelector('textarea')?.focus()
   }
 
   function close() {
-    expanded = false
+    if (narrow.matches) floating = false
+    else {
+      docked = false
+      opts.onMinimizedChange?.(true)
+    }
     sync()
     launcher.focus()
   }

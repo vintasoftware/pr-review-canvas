@@ -1,30 +1,24 @@
-.chat-launcher,
-.chat-minimize {
+/* The launcher stands in for the chat at every width; the script hides it while the chat is up. */
+.chat-launcher {
+  display: block;
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 10;
+  padding: 14px 20px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  box-shadow: 0 4px 20px #0003;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-launcher[hidden] {
   display: none;
 }
 @media (max-width: 1360px) {
-  .chat-launcher {
-    display: block;
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    z-index: 10;
-    padding: 14px 20px;
-    border: 1px solid var(--ink);
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--bg);
-    box-shadow: 0 4px 20px #0003;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .chat-launcher[hidden] {
-    display: none;
-  }
-  .chat-minimize {
-    display: inline-block;
-  }
   dialog.chat-dialog {
     position: fixed;
     inset: auto 20px 20px auto;

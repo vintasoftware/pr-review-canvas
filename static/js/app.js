@@ -13,7 +13,7 @@ import {
   saveAppearance,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { readChatWidth, renderChatShell, wireChat } from './chat.js'
+import { readChatMinimized, readChatWidth, renderChatShell, wireChat } from './chat.js'
 import { runCommand, wireCopyCommands } from './commands.js'
 import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
@@ -199,6 +199,7 @@ export class PrAppElement extends HTMLElement {
     const header = renderHeader(bundle, { host: location.host, theme: this.theme, skin: this.skin, now })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
+    const chatMinimized = chatEnabled && readChatMinimized(storage)
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     const showsCanvas = bundle.artifact !== undefined && (bundle.status === 'ready' || this.viewStale)
@@ -236,7 +237,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage) })}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
         footerHtml(boot.version, bundle)
       // The screen is interactive from here: reviewed state, dismissals, threads, and posting.
       // A stale canvas shows the diff of an older commit, so nothing is posted from it: a line
