@@ -246,7 +246,7 @@ describe('header', () => {
     expect(riskLineHtml([{ label: 'auth', source: 'model', reason: 'touches tokens' }])).toBe(
       '<p class="touches"><span>touches:</span><span class="pill risk model" title="touches tokens">auth</span></p>'
     )
-    const state = { ...emptyState('x'), reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const state = { ...emptyState('x'), reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     document.body.innerHTML = renderHeader(bundle({ state }), {
       host: 'h',
       theme: 'auto',
@@ -274,7 +274,7 @@ describe('header', () => {
       throw new Error('no root')
     }
     expect(root.querySelector('#approve')?.hasAttribute('disabled')).toBe(true)
-    const done = { ...base, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const done = { ...base, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     expect(refreshProgress(root, artifact, done)).toEqual({ done: 1, total: 1, percent: 100 })
     expect(root.querySelector('.ptext')?.textContent).toBe('1 of 1 layers reviewed')
     expect(root.querySelector('.pline')?.getAttribute('aria-valuenow')).toBe('1')

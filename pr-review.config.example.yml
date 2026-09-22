@@ -53,3 +53,7 @@ canvas:
   # from, as after merging the base branch in. Set false to mark the canvas outdated on every new
   # commit.
   keepForIdenticalDiff: true
+  # Regenerating a canvas for a new head starts from the newest canvas of a commit the head was
+  # built on, keeping the layers, folds, notes and attention points its diff leaves untouched.
+  # Set false to generate every canvas from a blank page, as `--force` always does.
+  incremental: true

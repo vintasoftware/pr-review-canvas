@@ -29,6 +29,8 @@ export interface NormalizeInput {
   caps: TextCaps
   generatedAt: string
   generator: Generator
+  /** The canvas this one was generated from, when the run was incremental. */
+  basisCanvasSha?: string | undefined
   /** The globs that make a file a test; the project config's list, or the built-in one. */
   testPatterns?: readonly string[] | undefined
 }
@@ -76,16 +78,20 @@ function unionRisk(layers: readonly Layer[]): RiskTag[] {
   return out
 }
 
+/**
+ * A layer's id is its own key, which the validator has already checked is unique here. A reviewed
+ * mark is keyed by it, so a regenerated canvas that reorders or renames its layers keeps the
+ * reviewer's progress pointing at the same concern; a position could not.
+ */
 function toLayer(
   layer: ModelLayer,
-  index: number,
   highRisk: readonly HighRiskRule[],
   testPatterns: readonly string[]
 ): Layer {
   const { risk: _modelRisk, files, ...rest } = layer
   return {
     ...rest,
-    id: `layer-${index + 1}`,
+    id: layer.key,
     risk: layerRisk(layer, highRisk),
     files: files.map(f => ({ ...f, isTest: isTestPath(f.path, testPatterns) })),
   }
@@ -167,12 +173,12 @@ function sortPoints(points: Unassigned[]): Point[] {
 
 export function normalize(output: ModelOutput, input: NormalizeInput): ReviewArtifact {
   const testPatterns = input.testPatterns ?? DEFAULT_TEST_PATTERNS
-  const layers = output.layers.map((l, i) => toLayer(l, i, input.highRisk, testPatterns))
+  const layers = output.layers.map(l => toLayer(l, input.highRisk, testPatterns))
   const points = [
     ...output.points.map(p => modelPoint(p, layers, input.files)),
     ...layers.flatMap(l => testPoints(l, input.files, input.caps.pointTitle)),
   ]
-  return {
+  const artifact: ReviewArtifact = {
     version: 1,
     pr: input.pr,
     files: [...input.files],
@@ -184,6 +190,10 @@ export function normalize(output: ModelOutput, input: NormalizeInput): ReviewArt
     generator: input.generator,
     source: 'local',
   }
+  if (input.basisCanvasSha !== undefined) {
+    artifact.basisCanvasSha = input.basisCanvasSha
+  }
+  return artifact
 }
 
 /**

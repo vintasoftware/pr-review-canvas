@@ -34,7 +34,7 @@ describe('renderChatContext', () => {
   })
 
   it('gives a layer its title, its rationale, and its files', async () => {
-    const block = await renderChatContext({ kind: 'layer', layerId: 'layer-1' }, sources())
+    const block = await renderChatContext({ kind: 'layer', layerId: 'run-path' }, sources())
     expect(block).toContain('## Context: layer · Run path')
     expect(block).toContain('The change to `run()` and its test.')
     expect(block).toContain('- `src/app.ts` (src_app_ts#1)')

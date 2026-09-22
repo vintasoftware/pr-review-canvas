@@ -9,6 +9,7 @@ export {
   parseHunkId,
   parseLineId,
   pointAnchorId,
+  reviewedId,
   sanitizeKey,
   uniqueKey,
 } from '../../static/js/keys.js'

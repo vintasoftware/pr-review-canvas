@@ -238,6 +238,7 @@ within one path segment.
 | `tests.patterns`                | `['**/*.test.*', '**/*.spec.*', '**/__tests__/**']` | Paths treated as tests for review ordering and labels                                                                                                                                                                      |
 | `chat.enabled`                  | `true`                                              | Set to `false` to disable AI Chat                                                                                                                                                                                          |
 | `canvas.keepForIdenticalDiff`   | `true`                                              | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                          |
+| `canvas.incremental`            | `true`                                              | Regenerate a canvas for a new head by updating the newest canvas of a commit the head was built on; see [incremental canvases](#incremental-canvases). Set to `false` to generate every canvas from a blank page           |
 | `prompts`                       | Bundled templates                                   | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                  |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
@@ -259,14 +260,18 @@ affects canvas generation; chat answers the reviewer's selected question.
 
 The `prompts` map in `pr-review.config.yml` accepts these keys:
 
-| Key                       | Purpose                               |
-| ------------------------- | ------------------------------------- |
-| `generation-format.md`    | Schema and output rules               |
-| `generation-strict.md`    | Instructions for strict mode          |
-| `generation-surfacing.md` | Instructions for surfacing mode       |
-| `quality-standards.md`    | Bundled code standards                |
-| `layering-guidance.md`    | Guidance for grouping related changes |
-| `chat-seed.md`            | Opening AI Chat instructions          |
+| Key                                   | Purpose                                                     |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `generation-format.md`                | Schema and output rules                                     |
+| `generation-strict.md`                | Instructions for strict mode                                |
+| `generation-surfacing.md`             | Instructions for surfacing mode                             |
+| `generation-strict-incremental.md`    | Strict mode, updating an existing canvas                    |
+| `generation-surfacing-incremental.md` | Surfacing mode, updating an existing canvas                 |
+| `judging-strict.md`                   | Strict mode's judging rules, shared by both of its tasks    |
+| `judging-surfacing.md`                | Surfacing mode's judging rules, shared by both of its tasks |
+| `quality-standards.md`                | Bundled code standards                                      |
+| `layering-guidance.md`                | Guidance for grouping related changes                       |
+| `chat-seed.md`                        | Opening AI Chat instructions                                |
 
 Each configured file replaces a whole template. Paths resolve from the project root,
 including when running from a subdirectory or using `--repo`. Absolute paths work for
@@ -432,6 +437,33 @@ same rule, so the CLI never calls a canvas stale that the page shows as current.
 
 AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
 one on screen.
+
+## Incremental canvases
+
+Regenerating a canvas for a new head does not start from a blank page. `pr-review prepare` looks
+for the newest canvas generated for a commit the head was built on, the **basis canvas**, and
+compares its diff with the head's file by file. Every file whose patch is byte-identical is
+untouched, and the prompt tells the generator to carry that canvas's work for it word for word:
+whole layers when none of their files moved, and otherwise the notes, folds and annotations of the
+files that did not, together with the attention points sitting in them. A carried point keeps its
+kind, path and title, so it keeps its identity and any dismissal you made. Layers and points whose
+files the head changed are decided again, and the summary and the risk tags are always written
+again, since they describe the whole change set.
+
+A canvas of a commit the head no longer contains is never a basis, however recent it is. `--force`
+starts from a blank page, and `canvas.incremental: false` turns the behavior off for the project.
+The canvas records the basis it came from, and nothing else: which of your review marks may follow
+it is worked out on your own machine, from the two canvases and your own clone.
+
+Your review progress follows an incremental canvas for the parts you have already seen. Each canvas
+records the one it was generated from, and your marks follow that line of descent however long it
+is: marking nothing on an intermediate canvas does not strand them, because the canvas you marked
+and the canvas on screen are compared directly. A file's mark follows when that file is in both of
+those canvases under the same layer key and its patch is byte-identical; a layer's mark follows only
+when the layer holds exactly the same files and none of them changed, since that mark claims the
+whole layer was read. A file that changed and changed back counts as untouched, because it is. When
+any mark follows, the page names the canvas you made it on. A machine that does not have that
+canvas, or cannot rebuild either diff, carries nothing and starts the marks empty.
 
 ## AI Chat
 

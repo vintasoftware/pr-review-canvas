@@ -2,7 +2,14 @@ import { z } from 'zod'
 import { DefaultLayerSchema, GenerationModeSchema, HighRiskRuleSchema } from '../project-config.js'
 import { DEFAULT_TEST_PATTERNS } from '../review/test-paths.js'
 import { type LocalKey, LocalKeySchema } from './review-key.js'
-import { FileEntrySchema, LIMITS, PrSchema, RepoSchema, type TextCaps } from './review-artifact.js'
+import {
+  FileEntrySchema,
+  LIMITS,
+  POINT_KINDS,
+  PrSchema,
+  RepoSchema,
+  type TextCaps,
+} from './review-artifact.js'
 
 /**
  * What `prepare` was asked to describe: a pull request, two refs, or one of the two reviews of
@@ -46,6 +53,48 @@ const capsShape = {
   diagram: z.number().int().positive(),
 } satisfies Record<keyof TextCaps, z.ZodNumber>
 
+/** Which files the head changes relative to the basis canvas's diff, by path. */
+export const FileDeltaSchema = z.object({
+  unchanged: z.array(z.string()),
+  changed: z.array(z.string()),
+  added: z.array(z.string()),
+  removed: z.array(z.string()),
+})
+export type FileDelta = z.infer<typeof FileDeltaSchema>
+
+export const BasisSplitLayerSchema = z.object({
+  key: z.string().min(1),
+  title: z.string(),
+  /** `carried` when the head touches none of the layer's files. */
+  status: z.enum(['carried', 're-judged']),
+  carriedFiles: z.array(z.string()),
+  reJudgedFiles: z.array(z.string()),
+})
+export type BasisSplitLayer = z.infer<typeof BasisSplitLayerSchema>
+
+export const BasisSplitPointSchema = z.object({
+  kind: z.enum(POINT_KINDS),
+  path: z.string().min(1),
+  title: z.string(),
+  status: z.enum(['carried', 're-judged']),
+})
+export type BasisSplitPoint = z.infer<typeof BasisSplitPointSchema>
+
+/**
+ * The basis canvas of an incremental run, already divided into what the head leaves untouched and
+ * what has to be decided anew. `prepare` computes it, so the generator reads two lists instead of
+ * comparing diffs itself, and `publish` records `canvasSha` on the canvas it stores.
+ */
+export const BasisSplitSchema = z.object({
+  canvasSha: z.string().regex(/^[0-9a-f]{40}$/),
+  /** Absolute path of the basis canvas's `review.json`, in the canvas store. */
+  reviewJsonPath: z.string().min(1),
+  files: FileDeltaSchema,
+  layers: z.array(BasisSplitLayerSchema),
+  points: z.array(BasisSplitPointSchema),
+})
+export type BasisSplit = z.infer<typeof BasisSplitSchema>
+
 /**
  * `context.json`: everything the agent and `publish` need about one prepared canvas. Written by
  * `prepare` next to `prompt.md`; `publish` validates `model.json` against the hunk index and the
@@ -87,6 +136,8 @@ export const GenerationContextSchema = z.object({
   smallPr: z.boolean(),
   /** More than 400 files or 50 000 changed lines: the prompt inlines nothing and tightens the caps. */
   largePr: z.boolean(),
+  /** Absent when this canvas is generated from a blank page: no basis, `--force`, or turned off. */
+  basis: BasisSplitSchema.optional(),
   preparedAt: z.string(),
 })
 export type GenerationContext = z.infer<typeof GenerationContextSchema>
