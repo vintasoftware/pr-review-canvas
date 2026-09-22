@@ -63,7 +63,7 @@ afterEach(() => document.body.replaceChildren())
 describe('applyCodeFolds', () => {
   it('shows only the title and expands all rows between the anchors, including deletions', () => {
     const card = mount()
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
 
     expect(toggle(card).textContent).toBe('run()')
     expect(toggle(card).getAttribute('aria-expanded')).toBe('false')
@@ -86,7 +86,7 @@ describe('applyCodeFolds', () => {
 
   it('opens a fold when a deep link points to one of its lines', () => {
     const card = mount()
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
 
     expect(followLink('#line:src/app.ts:3', document.body)).toBe(true)
     expect(findRow(card, 'src_app_ts', 'new', 3)?.hidden).toBe(false)
@@ -95,7 +95,7 @@ describe('applyCodeFolds', () => {
 
   it('opens the folds of a linked hunk', () => {
     const card = mount()
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
 
     expect(followLink('#hunk:src/app.ts#1', document.body)).toBe(true)
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
@@ -108,7 +108,7 @@ describe('applyCodeFolds', () => {
     const summary = document.createElement('tr')
     summary.className = 'more fold'
     row?.before(summary)
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
 
     expect(followLink('#line:src/app.ts:3', document.body)).toBe(true)
     expect(row?.hidden).toBe(false)
@@ -124,7 +124,7 @@ describe('applyCodeFolds', () => {
     discussion.setAttribute('data-decoration', decoration)
     row?.after(discussion)
 
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
     expect(card.querySelector('.code-fold')).toBeNull()
     expect(row?.hidden).toBe(false)
   })
@@ -138,21 +138,22 @@ describe('applyCodeFolds', () => {
         { ...FOLD, endLine: 500 },
         { ...FOLD, startLine: 4, endLine: 1 },
       ],
-      'light'
+      'light',
+      false
     )
     expect(card.querySelector('.code-fold')).toBeNull()
   })
 
   it('wires a drawn diff once, so a repeated call adds no second title', () => {
     const card = mount()
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
     expect(Array.from(card.querySelectorAll('.code-fold'), row => row.textContent)).toEqual(['run()'])
   })
 
   it('treats the title as plain text', () => {
     const card = mount()
-    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, title: '<img src=x onerror=alert(1)>' }], 'light')
+    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, title: '<img src=x onerror=alert(1)>' }], 'light', false)
 
     expect(toggle(card).textContent).toBe('<img src=x onerror=alert(1)>')
     expect(card.querySelector('img')).toBeNull()
@@ -166,15 +167,15 @@ describe('applyCodeFolds', () => {
     draft.className = 'composer'
     findRow(card, 'src_app_ts', 'new', 5)?.after(draft)
 
-    applyCodeFolds(card, 'src_app_ts', [fold], 'light')
+    applyCodeFolds(card, 'src_app_ts', [fold], 'light', false)
     expect(shownTitles(card)).toEqual([])
     expect(card.querySelector('tr[hidden]:not(.code-fold)')).toBeNull()
 
-    setCodeFoldLevel(card, 'moderate')
+    setCodeFoldLevel(card, 'moderate', false)
     expect(shownTitles(card)).toEqual(['run()'])
     expect(findRow(card, 'src_app_ts', 'new', 2)?.hidden).toBe(true)
 
-    setCodeFoldLevel(card, 'light')
+    setCodeFoldLevel(card, 'light', false)
     expect(shownTitles(card)).toEqual([])
     expect(card.querySelector('tr[hidden]:not(.code-fold)')).toBeNull()
     expect(card.querySelector('table')).toBe(table)
@@ -183,21 +184,34 @@ describe('applyCodeFolds', () => {
 
   it('keeps a fold the reader expanded open while the level still applies it, and folds it again once it returns', () => {
     const card = mount()
-    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
     toggle(card).click()
 
-    setCodeFoldLevel(card, 'moderate')
+    setCodeFoldLevel(card, 'moderate', false)
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
     expect(findRow(card, 'src_app_ts', 'new', 2)?.hidden).toBe(false)
 
     const nested = mount()
     const outer = { ...FOLD, title: 'the whole function', level: /** @type {const} */ ('moderate') }
-    applyCodeFolds(nested, 'src_app_ts', [outer, { ...FOLD, startLine: 2, endLine: 3 }], 'light')
-    setCodeFoldLevel(nested, 'moderate')
-    setCodeFoldLevel(nested, 'light')
+    applyCodeFolds(nested, 'src_app_ts', [outer, { ...FOLD, startLine: 2, endLine: 3 }], 'light', false)
+    setCodeFoldLevel(nested, 'moderate', false)
+    setCodeFoldLevel(nested, 'light', false)
     expect(shownTitles(nested)).toEqual(['run()'])
     expect(findRow(nested, 'src_app_ts', 'new', 2)?.hidden).toBe(true)
     expect(findRow(nested, 'src_app_ts', 'new', 1)?.hidden).toBe(false)
+  })
+
+  it('turns every fold off once a thread sits in the card, and back on when it goes', () => {
+    const card = mount()
+    applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
+    expect(shownTitles(card)).toEqual(['run()'])
+
+    setCodeFoldLevel(card, 'light', true)
+    expect(shownTitles(card)).toEqual([])
+    expect(card.querySelector('tr[hidden]:not(.code-fold)')).toBeNull()
+
+    setCodeFoldLevel(card, 'light', false)
+    expect(shownTitles(card)).toEqual(['run()'])
   })
 
   it('draws only the outermost fold when one nests inside another', () => {
@@ -213,10 +227,10 @@ describe('applyCodeFolds', () => {
       },
     ]
 
-    applyCodeFolds(card, 'src_app_ts', folds, 'light')
+    applyCodeFolds(card, 'src_app_ts', folds, 'light', false)
     expect(shownTitles(card)).toEqual(['the body'])
 
-    setCodeFoldLevel(card, 'moderate')
+    setCodeFoldLevel(card, 'moderate', false)
     expect(shownTitles(card)).toEqual(['the whole function'])
   })
 
@@ -230,13 +244,13 @@ describe('applyCodeFolds', () => {
 
     const light = mount()
     insertNoteRow(light, 'src_app_ts', annotation)
-    applyCodeFolds(light, 'src_app_ts', [{ ...FOLD, level: 'moderate' }], 'moderate')
+    applyCodeFolds(light, 'src_app_ts', [{ ...FOLD, level: 'moderate' }], 'moderate', false)
     expect(light.querySelector('.code-fold')).toBeNull()
 
     document.body.replaceChildren()
     const card = mount()
     insertNoteRow(card, 'src_app_ts', annotation)
-    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive')
+    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive', false)
 
     expect(toggle(card).textContent).toBe('The value is read twice on purpose.')
     expect(card.querySelector('[data-decoration="note"]')?.hasAttribute('hidden')).toBe(true)
@@ -248,7 +262,7 @@ describe('applyCodeFolds', () => {
     point.setAttribute('data-decoration', 'point')
     findRow(card, 'src_app_ts', 'new', 3)?.after(point)
 
-    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive')
+    applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive', false)
     expect(card.querySelector('.code-fold')).toBeNull()
   })
 })
@@ -345,7 +359,7 @@ it('leaves ranges spanning separate table bodies open', () => {
   const body = document.createElement('tbody')
   table.appendChild(body)
   body.appendChild(last)
-  applyCodeFolds(card, 'src_app_ts', [FOLD], 'light')
+  applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
   expect(card.querySelector('.code-fold')).toBeNull()
   expect(last.hidden).toBe(false)
 })
@@ -363,7 +377,7 @@ it('ignores reveal events on folded rows without a summary', () => {
 it('includes a preceding noise summary when all of its rows belong to the code fold', () => {
   const card = mountFolded()
   const summary = foldSummary(card)
-  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 2, endLine: 2 }], 'light')
+  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 2, endLine: 2 }], 'light', false)
   expect(summary.hidden).toBe(true)
   toggle(card).click()
   expect(summary.hidden).toBe(true)
@@ -376,7 +390,7 @@ it('keeps a noise summary visible when its rows extend beyond the code fold', ()
   const next = findRow(card, 'src_app_ts', 'new', 3)
   if (!next) throw new Error('missing diff row')
   next.classList.add('folded')
-  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 2, endLine: 2 }], 'light')
+  applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, startLine: 2, endLine: 2 }], 'light', false)
   expect(summary.hidden).toBe(false)
   expect(next.hidden).toBe(false)
   expect(toggle(card).getAttribute('aria-expanded')).toBe('false')

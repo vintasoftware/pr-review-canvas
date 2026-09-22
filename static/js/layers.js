@@ -281,25 +281,44 @@ export function cardKeepsOpen(lf, layerId, artifact, commentPaths) {
  */
 
 /**
+ * What the discussion keeps open in one card: a comment or an attention point stops it
+ * collapsing, and a thread in its chunks stops every fold. The card's folds and its counter both
+ * read this one answer, from the comments on the page now, so they cannot disagree.
+ * @param {LayerFile} lf
+ * @param {string} layerId
+ * @param {CountContext} ctx
+ * @param {ReadonlySet<string>} commentPaths paths with a review comment
+ * @returns {import('./fold-levels.js').Discussion}
+ */
+function cardDiscussion(lf, layerId, ctx, commentPaths) {
+  const entry = ctx.files.find(f => f.path === lf.path)
+  return {
+    keepsOpen: cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths),
+    threaded: entry !== undefined && threadsForHunks(ctx.comments, entry, new Set(lf.hunks)).length > 0,
+  }
+}
+
+/** @param {CountContext} ctx */
+function commentPathsOf(ctx) {
+  return new Set(ctx.comments.map(comment => comment.path))
+}
+
+/**
  * How many diff lines a level hides in one layer, against what the layer shows in all. Counted
- * from the model, so a card that has not drawn its diff yet still counts, and with the rules the
- * card draws by: a card the discussion keeps open hides nothing by collapsing, and a card with a
- * thread in its chunks folds nothing.
+ * from the model, so a card that has not drawn its diff yet still counts, and with the card's own
+ * discussion rule.
  * @param {Layer} layer
  * @param {CountContext} ctx
  * @param {import('./contract-types.js').FoldLevel} level
  * @returns {HiddenCounts}
  */
 export function layerHiddenLines(layer, ctx, level) {
-  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
+  const commentPaths = commentPathsOf(ctx)
   let total = 0
   let hidden = 0
   for (const lf of layer.files) {
     const entry = ctx.files.find(f => f.path === lf.path)
-    const counts = hiddenLines(lf, entry?.hunks ?? [], level, {
-      keepsOpen: cardKeepsOpen(lf, layer.id, ctx.artifact, commentPaths),
-      threaded: entry !== undefined && threadsForHunks(ctx.comments, entry, new Set(lf.hunks)).length > 0,
-    })
+    const counts = hiddenLines(lf, entry?.hunks ?? [], level, cardDiscussion(lf, layer.id, ctx, commentPaths))
     total += counts.total
     hidden += counts.hidden
   }
@@ -584,8 +603,8 @@ export function hydrateFileCard(card, ctx, opts = {}) {
     posted: postedUrls(ctx.state, ctx.comments),
     hiddenThreads: new Set(Object.keys(ctx.state.hiddenThreads).map(Number)),
   })
-  // A thread in the card's chunks keeps all of its code open; layerHiddenLines counts the same.
-  applyCodeFolds(card, key, threads.length > 0 ? [] : (lf?.folds ?? []), foldLevel)
+  const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).threaded
+  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, threaded)
   wireFoldReveal(card)
   cardRenderedHook?.(card)
   return { rendered: true, deferred: false, placed, missed }
@@ -731,10 +750,9 @@ function layerFileOf(card, artifact) {
 }
 
 /**
- * Switches how much code the page hides. Each drawn card switches which of its wired folds are
- * active, without rebuilding its diff, so an open composer or a thread keeps its place; a card
- * waiting to be drawn picks the level up when it draws. A card the reader opened or closed by hand
- * follows the new level too: changing the level is a request to change exactly that.
+ * Switches how much code the page hides. A card the reader opened or closed by hand follows the
+ * new level too: changing the level is a request to change exactly that. The folds and counters
+ * then follow as refreshFolds says.
  * @param {ParentNode} root
  * @param {import('./contract-types.js').FoldLevel} level
  */
@@ -745,27 +763,49 @@ export function setFoldLevel(root, level) {
     return
   }
 
-  for (const counter of Array.from(root.querySelectorAll('.fold-count'))) {
-    const layer = ctx.artifact.layers.find(l => l.id === counter.getAttribute('data-layer'))
-    if (layer !== undefined) {
-      counter.textContent = foldCountText(layerHiddenLines(layer, ctx, level))
-    }
-  }
-
-  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
+  const commentPaths = commentPathsOf(ctx)
   for (const card of Array.from(root.querySelectorAll('article.file'))) {
-    if (!(card instanceof HTMLElement)) {
-      continue
-    }
-    const layerId = card.getAttribute('data-layer') ?? ''
-    const lf = layerFileOf(card, ctx.artifact)
-    if (lf !== undefined) {
+    const lf = card instanceof HTMLElement ? layerFileOf(card, ctx.artifact) : undefined
+    if (card instanceof HTMLElement && lf !== undefined) {
       setCardCollapsed(
         card,
         card.classList.contains('is-reviewed') ||
-          (collapsesAt(lf, level) && !cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths))
+          (collapsesAt(lf, level) &&
+            !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths))
       )
     }
-    setCodeFoldLevel(card, level)
+  }
+  refreshFolds(root)
+}
+
+/**
+ * Points every drawn card's folds, and every layer's counter, at the level and at the comments
+ * on the page now. Each card switches which of its wired folds are active without rebuilding its
+ * diff, so an open composer or a thread keeps its place; a card with a thread folds nothing. A
+ * card waiting to be drawn picks both up when it draws. Called when the level changes and when a
+ * comment is posted, and leaves alone which cards the reader opened.
+ * @param {ParentNode} root
+ */
+export function refreshFolds(root) {
+  const ctx = renderContext
+  if (ctx === null) {
+    return
+  }
+
+  for (const counter of Array.from(root.querySelectorAll('.fold-count'))) {
+    const layer = ctx.artifact.layers.find(l => l.id === counter.getAttribute('data-layer'))
+    if (layer !== undefined) {
+      counter.textContent = foldCountText(layerHiddenLines(layer, ctx, foldLevel))
+    }
+  }
+
+  const commentPaths = commentPathsOf(ctx)
+  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+    const lf = card instanceof HTMLElement ? layerFileOf(card, ctx.artifact) : undefined
+    if (card instanceof HTMLElement) {
+      const layerId = card.getAttribute('data-layer') ?? ''
+      const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPaths).threaded
+      setCodeFoldLevel(card, foldLevel, threaded)
+    }
   }
 }

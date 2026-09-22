@@ -34,6 +34,7 @@ import {
   getFoldLevel,
   getRenderContext,
   pathSet,
+  refreshFolds,
   setCardCollapsed,
   setCardRenderedHook,
   setFoldLevel,
@@ -266,6 +267,9 @@ export function wireReview(root, session, opts = {}) {
         ...ctx,
         comments: [...ctx.comments.filter(c => c.id !== answer.comment.id), answer.comment],
       })
+      // A new thread keeps its card's code open at every level, and the counters say so.
+      refreshFolds(root)
+      refreshFoldLevel(root, getFoldLevel(), hiddenAt(getFoldLevel()))
       onState(session.state)
     }
     return answer

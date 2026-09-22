@@ -39,14 +39,17 @@ const HEAD = artifact.pr.headSha
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 
-/** @param {import('./contract-types.js').PrState} state */
-function bundleFor(state) {
+/**
+ * @param {import('./contract-types.js').PrState} state
+ * @param {import('./contract-types.js').ReviewArtifact} [canvas]
+ */
+function bundleFor(state, canvas = artifact) {
   return /** @type {import('./contract-types.js').PrBundle} */ ({
     status: 'ready',
     pr: artifact.pr,
     files,
     derivable: true,
-    artifact,
+    artifact: canvas,
     canvas: { headSha: artifact.pr.headSha, source: 'local', manifest: null },
     skillCommand: '/pr-review-canvas 42',
     comments: {
@@ -65,19 +68,20 @@ function bundleFor(state) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void }} [opts]
+ * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact }} [opts]
  */
 function setup(opts = {}) {
   const state = opts.state ?? BASE
   const threadComments = opts.comments ?? comments
-  const bundle = bundleFor(state)
-  const ctx = { artifact, files, patches, comments: threadComments, state, now: NOW }
+  const canvas = opts.artifact ?? artifact
+  const bundle = bundleFor(state, canvas)
+  const ctx = { artifact: canvas, files, patches, comments: threadComments, state, now: NOW }
   setRenderContext(ctx)
   const paths = new Set(files.map(f => f.path))
   document.body.innerHTML =
     `<pr-app id="root">${renderHeader(bundle, { host: 'localhost:3010', theme: 'auto', skin: 'terminal', now: NOW })}` +
     `<div class="layout">${renderRail(artifact, state)}<main id="main">${renderOverview(bundle, { paths, now: NOW })}` +
-    `${renderLayers(artifact, files, state, comments)}</main></div></pr-app>`
+    `${renderLayers(canvas, files, state, threadComments)}</main></div></pr-app>`
   const root = document.querySelector('#root')
   if (!(root instanceof HTMLElement)) {
     throw new Error('no root')
@@ -151,7 +155,7 @@ function setup(opts = {}) {
   }
   const session = createReviewSession({
     prNumber: 42,
-    artifact,
+    artifact: canvas,
     files,
     state,
     capabilities: opts.capabilities ?? { canComment: true, tokenKind: 'classic', login: 'octocat' },
@@ -542,6 +546,63 @@ describe('comment composers', () => {
       'look here'
     )
     expect(root.querySelector('.toast')?.textContent).toBe('comment posted to github')
+  })
+
+  it('keeps the code of a newly posted thread open when the level rises, and counts it open', async () => {
+    const test = 'src/app.test.ts'
+    const folded = {
+      ...artifact,
+      layers: artifact.layers.map(layer => ({
+        ...layer,
+        files: layer.files.map(f =>
+          f.path === test
+            ? {
+                ...f,
+                folds: [
+                  {
+                    title: 'runs',
+                    side: /** @type {const} */ ('new'),
+                    startLine: 3,
+                    endLine: 4,
+                    level: /** @type {const} */ ('moderate'),
+                  },
+                ],
+              }
+            : f
+        ),
+      })),
+    }
+    const { root } = setup({ artifact: folded, comments: [] })
+    const select = root.querySelector('#fold-level')
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('no level control')
+    }
+    const counter = root.querySelector('.fold-count')
+    const line = () => root.querySelector('#L-src_app_test_ts-new-3')
+    const pick = (/** @type {string} */ level) => {
+      select.value = level
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    // Without a thread the fold hides the test body at moderate, and the counter says so.
+    pick('moderate')
+    expect(line()?.hasAttribute('hidden')).toBe(true)
+    expect(counter?.textContent).toContain('lines hidden')
+    pick('light')
+
+    click(root, '#L-src_app_test_ts-new-3 .plus')
+    const area = root.querySelector('tr.composer textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    area.value = 'why this value?'
+    click(root, 'tr.composer [data-act="composer-post"]')
+    await flush()
+
+    pick('moderate')
+    expect(line()?.hasAttribute('hidden')).toBe(false)
+    expect(root.querySelector('#file-src_app_test_ts .code-fold:not([hidden])')).toBeNull()
+    expect(counter?.textContent).toBe('')
   })
 
   it('refuses to post an empty box and keeps it open', async () => {
