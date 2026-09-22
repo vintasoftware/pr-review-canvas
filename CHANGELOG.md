@@ -59,6 +59,26 @@
   and a layer's mark follows only when the layer holds exactly the same files and none of them
   changed. When any mark follows, the page names the canvas it was made on.
 
+### Upgrades
+
+- `pr-review upgrade` upgrades pr-review and acpx with `npm install -g` when npm has newer
+  versions. It also refreshes the project's skill copies that no longer match the installed
+  pr-review. It lists the changes and asks first, or applies them with `--yes`. When a skill copy
+  changes, it says to commit and push it. `doctor` and `serve` now suggest it for a stale skill.
+
+### AI chat
+
+- A saved model runs as the newest model of its family. A versioned Claude ID such as
+  `claude-opus-4-8[1m]` runs as the `opus[1m]` alias, and a GPT model that the Codex catalog marks
+  as replaced runs as its replacement, even when the new model has a different name
+  (`gpt-5.6-terra` runs as `gpt-6-sol`). With no saved model, a thread still on a replaced model
+  moves to its replacement. `pin:<id>` sends one exact model ID as written, for either agent;
+  Bedrock and Vertex Claude IDs run as written too.
+- Claude chat runs through the `claude` CLI on PATH instead of the older Claude Code bundled with
+  acpx's adapter, so `opus` means the model Claude Code itself uses. Set `CLAUDE_CODE_EXECUTABLE`
+  to choose another binary.
+- The settings dialog suggests family aliases for Claude and the current GPT models for Codex.
+
 ### Review interface
 
 - AI Chat minimizes at any width. On a wide screen the docked pane drops out of the layout, the

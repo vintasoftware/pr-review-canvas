@@ -63,6 +63,20 @@ Install the command globally once, for use in any project:
 npm install -g @vintasoftware/pr-review-canvas
 ```
 
+### Upgrade
+
+Run this from a project that has the skill installed:
+
+```bash
+pr-review upgrade
+```
+
+It lists what it will change and asks before changing anything. It upgrades pr-review and acpx
+with `npm install -g` when npm has newer versions. It also refreshes the project's copies of the
+skill when they no longer match the installed pr-review. When a copy changes, it tells you to
+commit and push it, so your team gets the same skill. Pass `--yes` to skip the question, for example
+in a script.
+
 ## Set up a project
 
 ```bash
@@ -73,7 +87,7 @@ pr-review doctor --all-checks
 
 `install-skill` sets up **both Claude Code and Codex** in one command: `.claude/skills/pr-review-canvas`
 and `.agents/skills/pr-review-canvas`, respectively. These are portable copies you can commit to Git.
-Re-run `pr-review install-skill` after upgrading the CLI to refresh them. It also adds `.pr-review/settings.yml` to the
+`pr-review upgrade` refreshes them after the CLI changes. It also adds `.pr-review/settings.yml` to the
 project's `.gitignore`. Restart your coding agent if the skill
 does not appear. Repeat this setup for each project you want to review.
 
@@ -91,10 +105,12 @@ or modified. The warning includes the reinstall command and does not block start
 To ask questions about a PR inside the canvas, install `acpx` globally:
 
 ```bash
-npm install -g acpx
+npm install -g acpx@latest
 acpx --version
 pr-review doctor --all-checks
 ```
+
+`pr-review upgrade` keeps acpx up to date.
 
 Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
 the review server, then choose your agent in **settings**. The chat uses that agent's account.
@@ -147,7 +163,13 @@ project directory. This file is ignored by Git, so each teammate can use their o
 Use **skin** and **theme** in the header to change the appearance.
 
 For AI Chat, open **settings**, choose Claude Code or Codex, and optionally enter a model ID.
-Leave the model blank to use the agent's default. You can also adjust the reply timeout and
+Leave the model blank to use the agent's default. A model ID picks a family, and each turn runs
+that family's newest model: `claude-opus-4-8` runs as `opus`, and a GPT model the Codex catalog
+marks as replaced runs as its replacement. The same goes for a blank model: a thread still on a
+replaced model moves to its replacement. Claude chat uses the `claude` CLI on your PATH, so a new
+model is available as soon as Claude Code updates. To pin one exact version, write
+`pin:` before the ID, as in `pin:claude-opus-4-8`; see
+[Model families](docs/reference.md#model-families). You can also adjust the reply timeout and
 maximum turns. Click **Test agent** to check the connection, then **save**.
 
 Switching agents starts a new thread and keeps earlier threads. Server flags `--agent` and

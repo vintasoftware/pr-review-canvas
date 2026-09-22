@@ -4,7 +4,10 @@
  * `src/testing/fake-runner.ts` or spawn `src/testing/fake-acpx.mjs` through this adapter.
  */
 import { type ChildProcess, execFile, type SpawnOptions, spawn } from 'node:child_process'
+import { accessSync, constants } from 'node:fs'
+import path from 'node:path'
 import { promisify } from 'node:util'
+import { z } from 'zod'
 import {
   type AgentErrorCode,
   type AgentEvent,
@@ -13,6 +16,7 @@ import {
   mapAcpxMessage,
   scrubForLog,
 } from './events.js'
+import type { ModelUpgrades } from './models.js'
 import { createNdjsonSplitter, NdjsonError } from './ndjson.js'
 
 const execFileAsync = promisify(execFile)
@@ -23,6 +27,8 @@ export const ACPX_BIN = 'acpx'
 export const KILL_GRACE_MS = 3000
 /** A cancel that has not answered by then is given up on, and the child is killed instead. */
 export const CANCEL_TIMEOUT_SEC = 30
+/** `sessions show` reads a local record, so it answers fast or not at all. */
+export const SHOW_TIMEOUT_SEC = 20
 /** The runner's deadline sits this far past acpx's, so acpx reports its own timeout first. */
 export const DEADLINE_SLACK_MS = 15_000
 
@@ -68,6 +74,10 @@ export interface AgentRunner {
   acpxVersion(): Promise<string | null>
   /** Whether one agent's own CLI is installed and logged in. */
   availability(agent: string): Promise<{ installed: boolean; authenticated: boolean; reason?: string }>
+  /** Which models the agent's catalog says were replaced, and by what. Empty when it says nothing. */
+  modelUpgrades(agent: string): Promise<ModelUpgrades>
+  /** The model the named session last ran, or null when acpx does not say. */
+  sessionModel(options: { agent: string; session: string; cwd: string }): Promise<string | null>
 }
 
 /**
@@ -115,6 +125,10 @@ export function buildEnsureArgs(agent: string, session: string, cwd: string, tim
   return [...commonAcpxArgs(cwd, timeoutSec), agent, 'sessions', 'ensure', '-s', session]
 }
 
+export function buildShowArgs(agent: string, session: string, cwd: string): string[] {
+  return [...commonAcpxArgs(cwd, SHOW_TIMEOUT_SEC), agent, 'sessions', 'show', session]
+}
+
 export function buildExecArgs(agent: string, cwd: string, timeoutSec: number, prompt: string): string[] {
   return [...commonAcpxArgs(cwd, timeoutSec), agent, 'exec', prompt]
 }
@@ -125,16 +139,62 @@ const AUTH_CHECKS: Readonly<Record<string, { bin: string; args: string[] }>> = {
   codex: { bin: 'codex', args: ['login', 'status'] },
 }
 
+/** The part of `codex debug models` read here: each model and the one that replaced it. */
+const CodexCatalogSchema = z.object({
+  models: z.array(z.object({ slug: z.string(), upgrade: z.object({ model: z.string() }).nullish() })),
+})
+
+/** The part of `sessions show` read here: the model the session last ran. */
+const SessionRecordSchema = z.object({ acpx: z.object({ current_model_id: z.string().min(1) }) })
+
+/** The path `name` runs from on this PATH, or null when it is not there. */
+export function findOnPath(name: string, env: NodeJS.ProcessEnv): string | null {
+  for (const dir of (env['PATH'] ?? '').split(path.delimiter)) {
+    if (dir === '') {
+      continue
+    }
+    const candidate = path.join(dir, name)
+    try {
+      accessSync(candidate, constants.X_OK)
+      return candidate
+    } catch {
+      // Not in this directory.
+    }
+  }
+  return null
+}
+
+/**
+ * The environment acpx runs under. Without `CLAUDE_CODE_EXECUTABLE`, the Claude adapter runs the
+ * Claude Code build bundled with it, which can be months behind the installed one and so resolves
+ * `opus` to an older model. A value the user set already is kept.
+ */
+export function acpxEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (env['CLAUDE_CODE_EXECUTABLE'] !== undefined) {
+    return env
+  }
+  const claude = findOnPath('claude', env)
+  return claude === null ? env : { ...env, CLAUDE_CODE_EXECUTABLE: claude }
+}
+
 /** Only the one call shape the runner makes, so a test double is a plain function. */
 export type SpawnImpl = (file: string, args: string[], options: SpawnOptions) => ChildProcess
 export type ExecFileImpl = (
   file: string,
   args: string[],
-  options: { cwd?: string; timeout?: number; maxBuffer?: number; killSignal?: NodeJS.Signals }
+  options: {
+    cwd?: string
+    timeout?: number
+    maxBuffer?: number
+    killSignal?: NodeJS.Signals
+    env?: NodeJS.ProcessEnv
+  }
 ) => Promise<{ stdout: string; stderr: string }>
 
 export interface CreateAgentRunnerOptions {
   bin?: string
+  /** The environment acpx gets, before `acpxEnv` fills it in. Defaults to this process's. */
+  env?: NodeJS.ProcessEnv
   spawnImpl?: SpawnImpl
   execFileImpl?: ExecFileImpl
   /** How far the runner's own deadline sits past acpx's. Tests shorten it. */
@@ -189,6 +249,7 @@ function createEventQueue(): {
 
 export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRunner {
   const bin = opts.bin ?? ACPX_BIN
+  const env = acpxEnv(opts.env ?? process.env)
   const slackMs = opts.deadlineSlackMs ?? DEADLINE_SLACK_MS
   const cancelGraceMs = opts.cancelGraceMs ?? CANCEL_TIMEOUT_SEC * 1000
   const spawnImpl = opts.spawnImpl ?? spawn
@@ -201,9 +262,7 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
     args: string[],
     options: { cwd?: string; timeoutSec?: number; killSignal?: NodeJS.Signals } = {}
   ): Promise<{ ok: boolean; stdout: string; stderr: string; error?: unknown }> => {
-    const call: { cwd?: string; timeout?: number; maxBuffer?: number; killSignal?: NodeJS.Signals } = {
-      maxBuffer: 4 * 1024 * 1024,
-    }
+    const call: Parameters<ExecFileImpl>[2] = { maxBuffer: 4 * 1024 * 1024, env }
     if (options.cwd !== undefined) {
       call.cwd = options.cwd
     }
@@ -226,6 +285,7 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
     run(options) {
       return startRun(
         bin,
+        env,
         spawnImpl,
         options,
         // The cancel call gets its own timeout, and SIGKILL when it elapses: a cancel that hangs
@@ -307,6 +367,34 @@ export function createAgentRunner(opts: CreateAgentRunnerOptions = {}): AgentRun
         reason: `\`${check.bin} ${check.args.join(' ')}\` failed; log in and try again`,
       }
     },
+
+    async modelUpgrades(agent) {
+      if (agent !== 'codex') {
+        return new Map()
+      }
+      // Codex keeps the catalog it last fetched on disk, so this answers in milliseconds.
+      const result = await execQuiet('codex', ['debug', 'models'], { timeoutSec: 20 })
+      // A failed call, output that is not JSON, and an unknown shape all mean no known upgrades.
+      try {
+        const catalog = CodexCatalogSchema.parse(JSON.parse(result.stdout))
+        return new Map(catalog.models.flatMap(m => (m.upgrade ? [[m.slug, m.upgrade.model] as const] : [])))
+      } catch {
+        return new Map()
+      }
+    },
+
+    async sessionModel(options) {
+      const result = await execQuiet(bin, buildShowArgs(options.agent, options.session, options.cwd), {
+        cwd: options.cwd,
+        timeoutSec: SHOW_TIMEOUT_SEC,
+      })
+      // A missing session prints an error line instead, which fails the schema like any other.
+      try {
+        return SessionRecordSchema.parse(JSON.parse(result.stdout)).acpx.current_model_id
+      } catch {
+        return null
+      }
+    },
   }
 }
 
@@ -367,6 +455,7 @@ export function readExecStream(stdout: string): {
 /** Spawns one prompt turn and turns its output into events. */
 function startRun(
   bin: string,
+  env: NodeJS.ProcessEnv,
   spawnImpl: SpawnImpl,
   options: AgentRunOptions,
   cancelCall: (args: string[]) => Promise<unknown>,
@@ -385,7 +474,11 @@ function startRun(
 
   let child: ChildProcess
   try {
-    child = spawnImpl(bin, buildPromptArgs(options), { cwd: options.cwd, stdio: ['pipe', 'pipe', 'pipe'] })
+    child = spawnImpl(bin, buildPromptArgs(options), {
+      cwd: options.cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
   } catch {
     queue.push({ type: 'error', code: 'AGENT_MISSING', message: `${bin} could not be started` })
     queue.end()

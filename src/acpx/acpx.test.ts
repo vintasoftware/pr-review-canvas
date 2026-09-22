@@ -2,12 +2,13 @@
 // The spawn path against a real child process: src/testing/fake-acpx.mjs stands in for acpx and
 // plays the scenarios the spike showed, the exit-0-without-an-answer one included.
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PACKAGE_ROOT } from '../paths.js'
 import {
+  acpxEnv,
   type AgentRunner,
   buildCancelArgs,
   buildEnsureArgs,
@@ -15,6 +16,7 @@ import {
   buildPromptArgs,
   commonAcpxArgs,
   createAgentRunner,
+  findOnPath,
   readExecStream,
 } from './acpx.js'
 import type { AgentEvent } from './events.js'
@@ -426,6 +428,95 @@ describe('createAgentRunner().acpxVersion and .availability', () => {
   })
 })
 
+describe('the environment acpx runs under', () => {
+  it('points the Claude adapter at the claude on PATH', async () => {
+    const bin = path.join(tmp, 'claude')
+    await writeFile(bin, '#!/bin/sh\n', { mode: 0o755 })
+    expect(findOnPath('claude', { PATH: `/nowhere${path.delimiter}${tmp}` })).toBe(bin)
+    expect(acpxEnv({ PATH: tmp })['CLAUDE_CODE_EXECUTABLE']).toBe(bin)
+  })
+
+  it('keeps an executable the user chose, and adds none when claude is missing', () => {
+    expect(acpxEnv({ PATH: tmp, CLAUDE_CODE_EXECUTABLE: '/opt/claude' })['CLAUDE_CODE_EXECUTABLE']).toBe(
+      '/opt/claude'
+    )
+    expect(acpxEnv({ PATH: tmp })).not.toHaveProperty('CLAUDE_CODE_EXECUTABLE')
+  })
+
+  it('passes it to every acpx call', async () => {
+    const seen: Array<NodeJS.ProcessEnv | undefined> = []
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      env: { PATH: '', CLAUDE_CODE_EXECUTABLE: '/opt/claude' },
+      execFileImpl: async (_file, _args, options) => {
+        seen.push(options.env)
+        return { stdout: '0.19.1', stderr: '' }
+      },
+    })
+    await agentRunner.acpxVersion()
+    expect(seen[0]?.['CLAUDE_CODE_EXECUTABLE']).toBe('/opt/claude')
+  })
+})
+
+describe('the model upgrades', () => {
+  const catalog = JSON.stringify({
+    models: [
+      { slug: 'gpt-6-sol', upgrade: null, priority: 2 },
+      { slug: 'gpt-5.6-terra', upgrade: { model: 'gpt-6-sol', migration_markdown: 'Meet GPT-6 Sol' } },
+    ],
+  })
+
+  it('reads the Codex catalog', async () => {
+    const calls: string[][] = []
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      execFileImpl: async (file, args) => {
+        calls.push([file, ...args])
+        return { stdout: catalog, stderr: '' }
+      },
+    })
+    expect(await agentRunner.modelUpgrades('codex')).toEqual(new Map([['gpt-5.6-terra', 'gpt-6-sol']]))
+    expect(calls).toEqual([['codex', 'debug', 'models']])
+  })
+
+  it('reads the model a session last ran', async () => {
+    const calls: string[][] = []
+    const agentRunner = createAgentRunner({
+      bin: 'acpx',
+      execFileImpl: async (_file, args) => {
+        calls.push(args)
+        return { stdout: JSON.stringify({ name: 's1', acpx: { current_model_id: 'gpt-6-sol' } }), stderr: '' }
+      },
+    })
+    expect(await agentRunner.sessionModel({ agent: 'codex', session: 's1', cwd: '/repo' })).toBe('gpt-6-sol')
+    expect(calls[0]?.slice(-4)).toEqual(['codex', 'sessions', 'show', 's1'])
+  })
+
+  it('has no session model when acpx refuses or does not record one', async () => {
+    const missing = createAgentRunner({
+      bin: 'acpx',
+      execFileImpl: async () => {
+        throw Object.assign(new Error('no session'), { code: 1 })
+      },
+    })
+    expect(await missing.sessionModel({ agent: 'claude', session: 's1', cwd: '/repo' })).toBeNull()
+    const old = createAgentRunner({
+      bin: 'acpx',
+      execFileImpl: async () => ({ stdout: '{"name":"s1"}', stderr: '' }),
+    })
+    expect(await old.sessionModel({ agent: 'claude', session: 's1', cwd: '/repo' })).toBeNull()
+  })
+
+  it('is empty when the catalog cannot be read, and for claude', async () => {
+    const broken = createAgentRunner({
+      bin: 'acpx',
+      execFileImpl: async () => ({ stdout: 'nope', stderr: '' }),
+    })
+    expect(await broken.modelUpgrades('codex')).toEqual(new Map())
+    expect(await broken.modelUpgrades('claude')).toEqual(new Map())
+  })
+})
+
 describe('the runner in the odd cases', () => {
   it('reports a spawn that throws instead of failing later', async () => {
     const agentRunner = createAgentRunner({
@@ -486,6 +577,7 @@ describe('the runner in the odd cases', () => {
     const calls: Array<{ file: string; args: string[]; options: { cwd?: string; timeout?: number } }> = []
     const agentRunner = createAgentRunner({
       bin: 'acpx',
+      env: {},
       execFileImpl: async (file, args, options) => {
         calls.push({ file, args, options })
         return { stdout: '', stderr: '' }
@@ -493,8 +585,8 @@ describe('the runner in the odd cases', () => {
     })
     await agentRunner.exec({ agent: 'claude', prompt: 'Reply OK', cwd: '/repo', timeoutSec: 30 })
     await agentRunner.acpxVersion()
-    expect(calls[0]?.options).toEqual({ cwd: '/repo', timeout: 45_000, maxBuffer: 4 * 1024 * 1024 })
-    expect(calls[1]?.options).toEqual({ timeout: 20_000, maxBuffer: 4 * 1024 * 1024 })
+    expect(calls[0]?.options).toEqual({ cwd: '/repo', timeout: 45_000, maxBuffer: 4 * 1024 * 1024, env: {} })
+    expect(calls[1]?.options).toEqual({ timeout: 20_000, maxBuffer: 4 * 1024 * 1024, env: {} })
   })
 })
 
