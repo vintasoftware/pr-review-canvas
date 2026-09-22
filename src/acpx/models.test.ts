@@ -17,8 +17,8 @@ describe('latestModel', () => {
     ['claude-haiku-4-5-20251001', 'haiku'],
     ['claude-fable-5-1', 'fable'],
     ['Claude-Opus-4-1', 'opus'],
-  ])('runs the Claude pin %s as the alias %s', (pinned, alias) => {
-    expect(latestModel('claude', pinned, new Map())).toBe(alias)
+  ])('runs the versioned Claude id %s as the alias %s', (versioned, alias) => {
+    expect(latestModel('claude', versioned, new Map())).toBe(alias)
   })
 
   it.each([
@@ -44,6 +44,11 @@ describe('latestModel', () => {
   it('leaves a current or unknown GPT model as it is', () => {
     expect(latestModel('codex', 'gpt-6-astra', CODEX)).toBe('gpt-6-astra')
     expect(latestModel('codex', 'gpt-5.2', new Map())).toBe('gpt-5.2')
+  })
+
+  it('sends a pinned id as written, for either agent', () => {
+    expect(latestModel('claude', 'pin:claude-opus-4-8', new Map())).toBe('claude-opus-4-8')
+    expect(latestModel('codex', 'pin: gpt-5.6-terra[high]', CODEX)).toBe('gpt-5.6-terra[high]')
   })
 
   it('stops on a loop in the catalog', () => {

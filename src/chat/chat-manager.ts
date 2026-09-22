@@ -79,7 +79,7 @@ interface RunningTurn {
 /**
  * The `--model` of one turn: the newest model of the saved family. With no saved model the agent's
  * own default applies, unless the session is on a model that has since been replaced: a thread
- * started months ago, or a default pinned to an old id.
+ * started months ago, or a default set to an old id.
  */
 async function modelForTurn(
   runner: AgentRunner,
