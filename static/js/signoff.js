@@ -15,6 +15,9 @@ export const SIGNOFF_DIALOG_ID = 'signoff-dialog'
 /** Why the post command waits: the body the server writes is not there yet. */
 export const LOADING_REASON = 'the review body is still loading'
 
+/** Why it waits after the body failed to load: there is nothing to post. */
+export const FAILED_REASON = 'the review body could not be loaded'
+
 /**
  * Why approve is not allowed yet, or null when it is. Other changes never counts.
  * @param {ReviewArtifact} artifact
@@ -207,6 +210,14 @@ export function showSignoffError(dialog, message) {
   const result = dialog.querySelector('.signoff-result')
   if (result !== null) {
     result.textContent = message
+  }
+  // The load this reports is over, so the box stops saying it is busy. Posting stays out of
+  // reach, but for the reason that is true now rather than the one that was true before.
+  const area = dialog.querySelector('textarea')
+  if (area instanceof HTMLTextAreaElement && area.getAttribute('aria-busy') === 'true') {
+    area.removeAttribute('aria-busy')
+    area.placeholder = ''
+    setDisabledReason(dialog.querySelector('[data-act="signoff-post"]'), FAILED_REASON)
   }
   return result
 }

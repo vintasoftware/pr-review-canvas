@@ -5,6 +5,7 @@ import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   approveBlockedReason,
   externalLink,
+  FAILED_REASON,
   fillSignoffDialog,
   openSignoffDialog,
   SIGNOFF_DIALOG_ID,
@@ -108,6 +109,29 @@ describe('the sign-off dialog', () => {
     showSignoffError(dialog, 'the server said no')
     expect(dialog.querySelector('.signoff-result')?.textContent).toBe('the server said no')
     expect(dialog.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('stops saying the body is loading once the load has failed', () => {
+    const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
+    const area = dialog.querySelector('textarea')
+    expect(area?.getAttribute('aria-busy')).toBe('true')
+    showSignoffError(dialog, 'the server said no')
+    // The box kept announcing itself as busy with an error beside it, and the reason posting was
+    // out of reach still named a load that was over.
+    expect(area?.hasAttribute('aria-busy')).toBe(false)
+    expect(area?.placeholder).toBe('')
+    expect(dialog.querySelector('[data-act="signoff-post"]')?.getAttribute('data-disabled-reason')).toBe(
+      FAILED_REASON
+    )
+  })
+
+  it('leaves a body that did load alone when a later command fails', () => {
+    const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
+    fillSignoffDialog(dialog, { headSha: 'b'.repeat(40), body: 'Reviewed.', unreviewed: [], pending: 0 })
+    showSignoffError(dialog, 'the server said no')
+    // Posting failed, not loading, so the body the reviewer may want to retry with stays put.
+    expect(signoffBody(dialog)).toBe('Reviewed.')
+    expect(dialog.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(false)
   })
 
   it('builds a link only for an http address', () => {
