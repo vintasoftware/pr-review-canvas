@@ -1,4 +1,7 @@
+import { execFile } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { createAgentRunner } from './acpx/acpx.js'
 import {
@@ -23,8 +26,10 @@ import { loadProjectConfig } from './project-config.js'
 import { checkSkill } from './review/doctor.js'
 import { type AppContext, createAppContext, readPackageVersion } from './server/context.js'
 import { startServer } from './server/node-server.js'
+import { PACKAGE_ROOT } from './paths.js'
 import { readJson } from './store/atomic-json.js'
 import { ensureDataDir } from './store/data-dir.js'
+import { type CommandResult, runUpgrade } from './upgrade.js'
 
 const SUBCOMMANDS = [
   'serve',
@@ -35,6 +40,7 @@ const SUBCOMMANDS = [
   'import',
   'install-skill',
   'doctor',
+  'upgrade',
 ] as const
 
 const USAGE = `usage: pr-review <command> [flags]
@@ -55,6 +61,9 @@ const USAGE = `usage: pr-review <command> [flags]
                    (both flags: the named commit is exported and the number stamps the zip)
   import <zip> [--pr <n>] [--force] [--repo <dir>] [--data-dir <dir>]
   doctor [--all-checks] [--repo <dir>] [--data-dir <dir>]
+  upgrade [--yes] [--repo <dir>]
+                   (updates pr-review and acpx with npm, and refreshes the project's skill copies;
+                    lists the changes and asks first unless --yes)
 
 Every command prints one JSON line on success and { "error": { code, message, hint } } on failure.
 Exit codes: 0 ok, 1 error, 2 usage, 4 gh/glab missing or not logged in, 5 invalid model output.
@@ -155,6 +164,53 @@ async function installSkillCommand(argv: string[]): Promise<number> {
   return runInstallSkill({ repoRoot, cwd }, rest, io)
 }
 
+/** npm is a `.cmd` on Windows, which only runs through a shell. */
+function runCommand(file: string, args: string[]): Promise<CommandResult> {
+  return new Promise(resolve => {
+    execFile(
+      file,
+      args,
+      { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, shell: process.platform === 'win32' },
+      (err, stdout, stderr) => resolve({ ok: err === null, stdout, stderr })
+    )
+  })
+}
+
+async function confirmOnTerminal(question: string): Promise<boolean | null> {
+  if (!process.stdin.isTTY || !process.stderr.isTTY) return null
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim())
+  } finally {
+    rl.close()
+  }
+}
+
+async function upgradeCommand(argv: string[]): Promise<number> {
+  const { repo, rest } = splitCommonFlags(argv)
+  const cwd = process.cwd()
+  let repoRoot: string | null
+  try {
+    repoRoot = await resolveRepoRoot(createGit(repo === undefined ? cwd : path.resolve(cwd, repo)))
+  } catch {
+    repoRoot = null
+  }
+  const pkg = JSON.parse(await readFile(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as { name: string }
+  return runUpgrade(
+    {
+      packageName: pkg.name,
+      version: readPackageVersion(),
+      packageRoot: PACKAGE_ROOT,
+      repoRoot,
+      acpxVersion: () => createAgentRunner().acpxVersion(),
+      run: runCommand,
+      confirm: confirmOnTerminal,
+    },
+    rest,
+    io
+  )
+}
+
 export async function main(argv: string[]): Promise<number> {
   // `pnpm review -- --port 3011` forwards the `--` itself; drop it so parseArgs sees the flags.
   const [command, ...rest] = argv.filter(a => a !== '--')
@@ -174,6 +230,8 @@ export async function main(argv: string[]): Promise<number> {
         return await installSkillCommand(rest)
       case 'doctor':
         return await doctorCommand(rest)
+      case 'upgrade':
+        return await upgradeCommand(rest)
       default: {
         const { repo, dataDir, rest: own } = splitCommonFlags(rest)
         const ctx = await buildContext(repo, dataDir)

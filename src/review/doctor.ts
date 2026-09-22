@@ -37,7 +37,7 @@ export interface DoctorDeps {
   acpxVersion: () => Promise<string | null>
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
   dataDirOverride?: string | undefined
-  readSkill?: (file: string) => Promise<string | null>
+  readSkill?: ReadSkill
 }
 
 function message(err: unknown): string {
@@ -61,52 +61,82 @@ async function checkDataDir(dir: string): Promise<DoctorCheck> {
 }
 
 /** The skill the generation flow needs, in either harness's directory. */
+export type ReadSkill = (file: string) => Promise<string | null>
+
+const readSkillFile: ReadSkill = file => readFile(file, 'utf8')
+
+/** One copy of the skill in the repository, next to how it compares with the bundled one. */
+export interface SkillCopy {
+  kind: 'claude' | 'codex'
+  /** The skills directory the copy sits in, absolute. */
+  dir: string
+  /** `<dir>/pr-review-canvas`, relative to the repository. */
+  path: string
+  /** Why the copy differs from the bundled skill, or null when it matches. */
+  stale: string | null
+}
+
+/**
+ * The copies of the skill in `.claude/skills` and `.agents/skills`. A directory without one is
+ * left out. Throws when the bundled skill itself cannot be read.
+ */
+export async function findSkillCopies(
+  repoRoot: string,
+  readSkill: ReadSkill = readSkillFile
+): Promise<SkillCopy[]> {
+  const expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
+  const copies: SkillCopy[] = []
+  for (const [kind, skillsDir] of [
+    ['claude', CLAUDE_SKILLS_DIR],
+    ['codex', CODEX_SKILLS_DIR],
+  ] as const) {
+    const dir = path.join(repoRoot, skillsDir)
+    const target = path.join(dir, SKILL_NAME)
+    const rel = path.relative(repoRoot, target)
+    try {
+      const text = await readSkill(path.join(target, 'SKILL.md'))
+      if (text === null) continue
+      const { hash, frontmatter } = skillContent(text)
+      const matches = hash === expected && frontmatter.getIn(['metadata', 'body-sha256']) === expected
+      copies.push({ kind, dir, path: rel, stale: matches ? null : rel })
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        copies.push({ kind, dir, path: rel, stale: `${rel}: ${message(err)}` })
+      }
+    }
+  }
+  return copies
+}
+
 export async function checkSkill(
   repoRoot: string | null,
-  readSkill: NonNullable<DoctorDeps['readSkill']> = file => readFile(file, 'utf8')
+  readSkill: ReadSkill = readSkillFile
 ): Promise<DoctorCheck> {
   if (repoRoot === null) {
     return { ok: false, detail: 'no repository, so no skill directory to look in', hint: 'run from a clone' }
   }
-  const targets = [CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR].map(dir => path.join(repoRoot, dir, SKILL_NAME))
-  const found: string[] = []
-  const stale: string[] = []
-  let expected: string
+  let copies: SkillCopy[]
   try {
-    expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
+    copies = await findSkillCopies(repoRoot, readSkill)
   } catch (err) {
     return { ok: false, detail: message(err), hint: 'reinstall the pr-review package' }
   }
-  for (const target of targets) {
-    try {
-      const text = await readSkill(path.join(target, 'SKILL.md'))
-      if (text === null) continue
-      found.push(path.relative(repoRoot, target))
-      const { hash, frontmatter } = skillContent(text)
-      if (hash !== expected || frontmatter.getIn(['metadata', 'body-sha256']) !== expected) {
-        stale.push(path.relative(repoRoot, target))
-      }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        stale.push(`${path.relative(repoRoot, target)}: ${message(err)}`)
-      }
-    }
-  }
+  const stale = copies.flatMap(copy => (copy.stale === null ? [] : [copy.stale]))
   if (stale.length > 0) {
     return {
       ok: false,
       detail: `outdated or modified skill: ${stale.join(', ')}`,
-      hint: 'run `pr-review install-skill`',
+      hint: 'run `pr-review upgrade` or `pr-review install-skill`',
     }
   }
-  if (found.length === 0) {
+  if (copies.length === 0) {
     return {
       ok: false,
       detail: `${SKILL_NAME} is in neither ${CLAUDE_SKILLS_DIR} nor ${CODEX_SKILLS_DIR}`,
       hint: 'run `pr-review install-skill`',
     }
   }
-  return { ok: true, detail: found.join(', ') }
+  return { ok: true, detail: copies.map(copy => copy.path).join(', ') }
 }
 
 async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {

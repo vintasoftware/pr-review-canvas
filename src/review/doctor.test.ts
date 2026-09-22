@@ -46,7 +46,7 @@ describe('runDoctorChecks', () => {
     )
     expect(report.checks.skill.ok).toBe(false)
     expect(report.checks.skill.detail).toContain(CODEX_SKILLS_DIR)
-    expect(report.checks.skill.hint).toBe('run `pr-review install-skill`')
+    expect(report.checks.skill.hint).toBe('run `pr-review upgrade` or `pr-review install-skill`')
   })
 
   it('accepts copies after Git converts line endings to CRLF', async () => {
