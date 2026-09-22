@@ -35,6 +35,22 @@ _Avoid_: Offline AI, code never leaves the machine
 A canvas generated for an earlier commit of the pull request, shown as current because the head's diff is identical to the one the canvas was generated from.
 _Avoid_: Merge-tolerant canvas, approximately matching canvas
 
+**Incremental canvas**:
+A canvas generated for a new commit of a pull request that already had one, built by updating that earlier canvas rather than by starting from a blank page.
+_Avoid_: Partial canvas, diff of canvases
+
+**Basis canvas**:
+The earlier canvas an incremental canvas is built from: the newest one generated for a commit the head was built on. A canvas from a line of work the head no longer contains is never a basis.
+_Avoid_: Parent canvas, carried-over canvas
+
+**Carried**:
+Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched.
+_Avoid_: Cached, approved, still valid
+
+**Re-judged**:
+Content of the basis canvas that the head's diff touched, which the generator decides anew. It may come back the same, changed, or not at all.
+_Avoid_: Invalidated, rejected, expired
+
 **Outdated canvas**:
 A canvas of another commit of the pull request that the head's diff no longer matches, shown with the diff of its own commit and a bar saying so. Review marks made on it stay with it and never count for a later canvas.
 _Avoid_: Stale review, expired canvas

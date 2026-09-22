@@ -12,25 +12,27 @@ export const ChatThreadSchema = z.object({
 export type ChatThread = z.infer<typeof ChatThreadSchema>
 
 /**
- * State files written before the marks were keyed to the canvas carry `reviewedHeadSha`, which
- * held the same commit under its older name. The old key is read when the new one is absent, so
- * a reviewer's marks survive the upgrade; the next write stores the new name.
+ * Version 1 keyed a reviewed mark by the layer's position in the canvas (`layer:layer-2`). Marks
+ * are keyed by the layer's own key now, so a regenerated canvas that reorders its layers keeps
+ * them straight, and the old positional marks cannot be translated without the canvas they were
+ * made on. They are dropped; the rest of the file (dismissals, posted comments, chat threads)
+ * carries over untouched.
  */
-const withRenamedMarksKey = (raw: unknown): unknown => {
+const dropPositionalMarks = (raw: unknown): unknown => {
   if (raw === null || typeof raw !== 'object') {
     return raw
   }
-  const { reviewedHeadSha, ...rest } = raw as Record<string, unknown>
-  if (reviewedHeadSha === undefined || 'reviewedCanvasSha' in rest) {
-    return raw
+  const { reviewedHeadSha: _reviewedHeadSha, ...rest } = raw as Record<string, unknown>
+  if (rest['version'] !== 1) {
+    return rest
   }
-  return { ...rest, reviewedCanvasSha: reviewedHeadSha }
+  return { ...rest, version: 2, reviewed: {}, reviewedCanvasSha: undefined }
 }
 
 export const PrStateSchema = z.preprocess(
-  withRenamedMarksKey,
+  dropPositionalMarks,
   z.object({
-    version: z.literal(1),
+    version: z.literal(2),
     /**
      * Counts the writes to this file. The page uses it to tell a newer answer from an older one
      * when two of its requests overlap. Absent in state files of older tool versions.
@@ -40,7 +42,8 @@ export const PrStateSchema = z.preprocess(
     /**
      * The commit of the canvas the reviewed marks were made on: the head, or the commit a carried-over
      * canvas was generated for. A canvas for another commit describes other code, so the marks start
-     * again with it. Absent in state files of older tool versions.
+     * again with it, unless that canvas names this one as its basis and the code behind a mark is
+     * untouched. Absent in state files of older tool versions.
      */
     reviewedCanvasSha: z.string().optional(),
     hiddenThreads: z.record(z.string(), z.object({ at: z.string() })),
@@ -56,7 +59,7 @@ export type PrState = z.infer<typeof PrStateSchema>
 
 export function emptyState(updatedAt: string): PrState {
   return {
-    version: 1,
+    version: 2,
     rev: 0,
     reviewed: {},
     hiddenThreads: {},

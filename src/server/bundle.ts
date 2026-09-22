@@ -15,6 +15,7 @@ import { describeLocalWork, resolveLocalBase } from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
+import { marksForCanvas } from '../review/carry-marks.js'
 import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
@@ -320,6 +321,8 @@ async function bundleBase(
     diff: ShownDiff
     /** The commit of the canvas on screen: the marks the page shows are the ones made on it. */
     canvasSha: string
+    /** The canvas on screen, when there is one: marks may follow the line of descent onto it. */
+    artifact: ReviewArtifact | null
     warnings: string[]
   }
 ): Promise<Omit<PrBundle, 'status' | 'skillCommand'>> {
@@ -333,13 +336,19 @@ async function bundleBase(
   if (chatEnabled && !acpx.installed) {
     input.warnings.push('acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on')
   }
+  // With no canvas to read, a mark counts only when it was made on this very commit. With one,
+  // marks made on a canvas it descends from follow it wherever the diff is untouched.
+  const marks =
+    input.artifact === null
+      ? { state: stateForCanvas(stored, input.canvasSha), carriedFrom: undefined }
+      : await marksForCanvas(ctx, input.artifact, input.canvasSha, stored)
   return {
     pr: input.pr,
     files: input.diff.files,
     derivable: input.diff.derivable,
     comments: input.comments,
-    // Marks made on another canvas describe other code, so the page never shows them as reviewed.
-    state: stateForCanvas(stored, input.canvasSha),
+    state: marks.state,
+    ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
     capabilities,
     chat: {
       enabled: chatEnabled && acpx.installed,
@@ -400,6 +409,7 @@ export async function resolveLocalBundle(
     capabilities: Promise.resolve(LOCAL_CAPABILITIES),
     diff,
     canvasSha: reviewedCommit(found, pr),
+    artifact: loaded?.artifact ?? null,
     warnings,
   })
   const { warning: _screenWarning, ...screenFields } = screen
@@ -430,6 +440,7 @@ export async function resolveBundle(
       capabilities,
       diff,
       canvasSha: pr.headSha,
+      artifact: null,
       warnings,
     })
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
@@ -472,6 +483,7 @@ export async function resolveBundle(
     capabilities,
     diff,
     canvasSha: reviewedCommit(found, pr),
+    artifact: loaded?.artifact ?? null,
     warnings,
   })
   const shared = sharedCanvas === null ? {} : { sharedCanvas }

@@ -72,13 +72,13 @@ describe('rail', () => {
   })
 
   it('shows partial and done dots and the active item', () => {
-    const partial = { ...state, reviewed: { 'layer:layer-1/file:src_app_ts': /** @type {const} */ (true) } }
+    const partial = { ...state, reviewed: { 'layer:run-path/file:src_app_ts': /** @type {const} */ (true) } }
     document.body.innerHTML = renderRail(artifact, partial, { activeId: 'layer-run-path' })
     const a = document.querySelector('a[href="#layer-run-path"]')
     expect(a?.getAttribute('aria-current')).toBe('location')
     expect(a?.querySelector('.dot')?.className).toBe('dot half')
     expect(a?.querySelector('.m')?.textContent).toBe('1 of 3 files · schema')
-    const done = { ...state, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const done = { ...state, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     document.body.innerHTML = renderRail(artifact, done)
     expect(document.querySelector('a[href="#layer-run-path"] .dot')?.className).toBe('dot on')
     document.body.innerHTML = renderRail(
@@ -113,7 +113,7 @@ describe('layer sections', () => {
   it('renders a file card that was already reviewed as checked and folded away', () => {
     const reviewed = {
       ...state,
-      reviewed: { 'layer:layer-1/file:src_app_ts': /** @type {const} */ (true) },
+      reviewed: { 'layer:run-path/file:src_app_ts': /** @type {const} */ (true) },
     }
     document.body.innerHTML = renderLayers(artifact, files, reviewed)
     const card = document.querySelector('article.file#file-src_app_ts')
@@ -122,7 +122,7 @@ describe('layer sections', () => {
     expect(card?.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('false')
     const box = card?.querySelector('input[data-reviewed-id]')
     expect(box?.hasAttribute('checked')).toBe(true)
-    expect(box?.getAttribute('data-reviewed-id')).toBe('layer:layer-1/file:src_app_ts')
+    expect(box?.getAttribute('data-reviewed-id')).toBe('layer:run-path/file:src_app_ts')
   })
 
   it('renders a semantic layer with header bar, controls outside any toggle, rationale, cards, and the reviewed command', () => {
@@ -139,7 +139,9 @@ describe('layer sections', () => {
     expect(layerChevron?.nextElementSibling?.tagName).toBe('H2')
     // The pane is off in this render, so the layer carries no way to ask about it.
     expect([...(section?.querySelectorAll('.layer-ctl .cmd') ?? [])].map(b => b.textContent)).toEqual([])
-    expect(section?.querySelector('.layer-ctl input')?.getAttribute('data-reviewed-id')).toBe('layer:layer-1')
+    expect(section?.querySelector('.layer-ctl input')?.getAttribute('data-reviewed-id')).toBe(
+      'layer:run-path'
+    )
     expect(section?.querySelector('.layer-end .cmd')?.getAttribute('data-act')).toBe('mark-layer')
     expect(section?.querySelector('.rationale a[href="#line:src/app.ts:4"]')?.textContent).toBe('line 4')
     expect([...(section?.querySelectorAll('.judgment .lbl') ?? [])].map(h => h.textContent)).toEqual([
@@ -271,7 +273,7 @@ describe('layer sections', () => {
     expect(
       elsewhereHtml({ path: entry.path, hunks: [], isTest: false, annotations: [] }, entry, layer, new Map())
     ).toBe('')
-    const done = { ...state, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const done = { ...state, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     document.body.innerHTML = renderLayerSection(layer, 0, artifact, files, done, cctx)
     expect(document.querySelector('.layer-ctl input')?.hasAttribute('checked')).toBe(true)
   })
@@ -736,7 +738,7 @@ describe('the ask command on a card', () => {
       document.body.innerHTML = renderLayers(artifact, files, state, comments)
       const layerAsk = document.querySelector('.layer-ctl [data-act="ask"]')
       expect(layerAsk?.textContent).toBe('ask about this layer')
-      expect(layerAsk?.getAttribute('data-ask-layer')).toBe('layer-1')
+      expect(layerAsk?.getAttribute('data-ask-layer')).toBe('run-path')
       const fileAsk = document.querySelector('article.file [data-act="ask"]')
       expect(fileAsk?.getAttribute('data-ask-path')).toBe('src/app.ts')
     } finally {
