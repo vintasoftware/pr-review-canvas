@@ -39,6 +39,7 @@ describe('createSettingsStore', () => {
       version: 1,
       skin: 'github',
       theme: 'auto',
+      layerView: 'all',
       agent: 'codex',
       model: 'gpt-5.2',
       chatTimeoutSec: 900,
@@ -58,6 +59,7 @@ describe('createSettingsStore', () => {
       version: 1,
       skin: 'github',
       theme: 'auto',
+      layerView: 'all',
       agent: 'codex',
       model: null,
       chatTimeoutSec: 120,
@@ -102,8 +104,17 @@ describe('applySettings', () => {
   it('writes every field the schema names, so a hand-edited file gains what it lacks', () => {
     const { text } = applySettings('agent: claude\n', {})
     expect(text).toContain('version: 1')
+    expect(text).toContain('layerView: all')
     expect(text).toContain('model: null')
     expect(text).toContain('maxTurns: null')
+  })
+
+  it('saves the layer view under its comment, and refuses one it does not know', () => {
+    const { text, settings } = applySettings(SETTINGS_TEMPLATE, { layerView: 'one' })
+    expect(settings.layerView).toBe('one')
+    expect(text).toContain('# How a review shows its layers')
+    expect(text).toContain('layerView: one')
+    expect(parseSettings('layerView: some\n')).toEqual(DEFAULT_SETTINGS)
   })
 })
 
@@ -121,6 +132,7 @@ describe('two saves that arrive together', () => {
       version: 1,
       skin: 'github',
       theme: 'auto',
+      layerView: 'all',
       agent: 'codex',
       model: null,
       chatTimeoutSec: 900,

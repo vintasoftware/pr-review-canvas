@@ -16,6 +16,10 @@ skin: ${DEFAULT_SETTINGS.skin}
 # Light or dark: auto follows the operating system, light and dark pin one.
 theme: auto
 
+# How a review shows its layers: all on one page, or one at a time with the rail to move between
+# them.
+layerView: all
+
 # Which agent answers in the AI Chat pane: claude or codex.
 agent: claude
 
@@ -121,6 +125,7 @@ export function applySettings(text: string, input: SettingsInput): { text: strin
   doc.set('version', 1)
   doc.set('skin', settings.skin)
   doc.set('theme', settings.theme)
+  doc.set('layerView', settings.layerView)
   doc.set('agent', settings.agent)
   doc.set('model', settings.model)
   doc.set('chatTimeoutSec', settings.chatTimeoutSec)
@@ -135,6 +140,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.theme !== undefined) {
     out.theme = input.theme
+  }
+  if (input.layerView !== undefined) {
+    out.layerView = input.layerView
   }
   if (input.agent !== undefined) {
     out.agent = input.agent

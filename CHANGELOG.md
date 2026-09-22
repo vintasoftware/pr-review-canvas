@@ -13,6 +13,11 @@
   wraps.
 - A quick-question menu opened from a command near the window edge stays inside the window, and
   hangs above a command with no room below it.
+- A **Show layers** field in the settings dialog, saved as `layerView` in `.pr-review/settings.yml`.
+  At `one at a time` the canvas shows the overview or a single layer, so the page scrolls through
+  one layer only; the rail moves between them and marks the one that shows, `j` and `k` step
+  through the layers, and a link into a layer shows that layer first. The save applies to the
+  open page. The default, `all`, is the canvas as one page.
 
 ## 0.4.0
 

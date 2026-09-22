@@ -20,7 +20,8 @@ export function markRailCurrent(root, anchorId) {
 
 /**
  * Follows the section at the upper third of the viewport. Section sizes can change as diffs
- * and diagrams load, so those changes also update the selection.
+ * and diagrams load, so those changes also update the selection. A hidden section (the page
+ * showing one layer at a time hides the others) is not on screen and is never the one read.
  * @param {HTMLElement} root
  */
 export function initScrollSpy(root) {
@@ -32,8 +33,9 @@ export function initScrollSpy(root) {
   let frame = 0
   const update = () => {
     frame = 0
-    let active = sections[0]
-    for (const section of sections) {
+    const shown = sections.filter(section => !section.hidden)
+    let active = shown[0]
+    for (const section of shown) {
       if (section.getBoundingClientRect().top > window.innerHeight / 3) {
         break
       }

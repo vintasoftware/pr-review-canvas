@@ -13,6 +13,7 @@ export type {
   PrBundle,
   PublicHost,
   ReviewBodyResponse,
+  ReviewBootstrap,
   ReviewSummary,
   SharedCanvasFetchResponse,
   SharedCanvasInfo,

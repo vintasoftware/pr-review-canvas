@@ -1,7 +1,7 @@
 import { html, raw } from 'hono/html'
 import type { HtmlEscapedString } from 'hono/utils/html'
-import type { ErrorEnvelope, HomeData } from '../contract/api.js'
-import { keyLabel, keyToString, type LocalKey, type ReviewKey } from '../contract/review-key.js'
+import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.js'
+import { keyLabel, keyToString, type LocalKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 
@@ -70,11 +70,11 @@ ${opts.app ? html`<script type="module" src="/static/js/app.js"></script>` : ''}
 }
 
 export function reviewPage(
-  page: { prNumber: ReviewKey; owner: string; repo: string; version: string; host: Host },
+  page: Omit<ReviewBootstrap, 'host'> & { host: Host },
   nonce: string,
   appearance: Appearance
 ): Html {
-  const bootstrap = { ...page, host: publicHost(page.host) }
+  const bootstrap: ReviewBootstrap = { ...page, host: publicHost(page.host) }
   const key = keyToString(bootstrap.prNumber)
   const what =
     typeof bootstrap.prNumber === 'number' ? `${page.host.nounShort} #${key}` : keyLabel(bootstrap.prNumber)

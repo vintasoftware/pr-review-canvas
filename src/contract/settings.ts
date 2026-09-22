@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 import { DEFAULT_SKIN, isSkin, SKINS, type Skin } from '../../static/js/skin.js'
 import { DEFAULT_THEME, isTheme, THEMES, type Theme } from '../../static/js/theme.js'
 
@@ -8,6 +9,8 @@ export type { Skin } from '../../static/js/skin.js'
 export { DEFAULT_SKIN, SKINS } from '../../static/js/skin.js'
 export type { Theme } from '../../static/js/theme.js'
 export { DEFAULT_THEME, THEMES } from '../../static/js/theme.js'
+export type { LayerView } from '../../static/js/layer-views.js'
+export { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 
 /** The agents the chat knows how to reach through acpx. */
 export const CHAT_AGENTS = ['claude', 'codex'] as const
@@ -24,6 +27,8 @@ export const SettingsSchema = z.object({
   version: z.literal(1),
   skin: z.enum(SKINS),
   theme: z.enum(THEMES),
+  /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
+  layerView: z.enum(LAYER_VIEWS),
   agent: z.enum(CHAT_AGENTS),
   model: z.string().min(1).nullable(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC),
@@ -35,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   version: 1,
   skin: DEFAULT_SKIN,
   theme: DEFAULT_THEME,
+  layerView: DEFAULT_LAYER_VIEW,
   agent: 'claude',
   model: null,
   chatTimeoutSec: 600,
@@ -45,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const SettingsInputSchema = z.object({
   skin: z.enum(SKINS).optional(),
   theme: z.enum(THEMES).optional(),
+  layerView: z.enum(LAYER_VIEWS).optional(),
   agent: z.enum(CHAT_AGENTS).optional(),
   model: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),

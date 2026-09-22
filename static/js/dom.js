@@ -69,7 +69,9 @@ export function flash(el, ms = 2000) {
 }
 
 /**
- * scrollIntoView without throwing in environments that lack it.
+ * scrollIntoView without throwing in environments that lack it. `reveal-code` goes up first, so
+ * whatever hides the target, a code fold around it or a layer the page is not showing, opens it
+ * before the scroll.
  * @param {Element} el
  */
 export function scrollIntoViewSafe(el) {

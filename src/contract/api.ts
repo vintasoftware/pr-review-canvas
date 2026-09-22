@@ -4,6 +4,7 @@ import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js
 import type { SharedCanvasInfoSchema } from './discovery.js'
 import type { FileEntry, Pr, ReviewArtifact } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
+import type { LayerView } from './settings.js'
 import type { PrState } from './state.js'
 
 export const ERROR_CODES = [
@@ -218,4 +219,15 @@ export interface ChatStatus {
 
 export interface HomeData {
   recentPrs: Array<{ number: number; title: string; updatedAt: string }>
+}
+
+/** The JSON the review page carries in its bootstrap script; the app reads it before any request. */
+export interface ReviewBootstrap {
+  prNumber: ReviewKey
+  owner: string
+  repo: string
+  version: string
+  host: PublicHost
+  /** Whether the canvas shows every layer, or one at a time, from the settings file. */
+  layerView: LayerView
 }

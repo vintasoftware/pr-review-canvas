@@ -307,10 +307,11 @@ export function wireReview(root, session, opts = {}) {
     if (el instanceof HTMLElement) {
       el.classList.add('is-focused')
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
-      // the reader moved to instead of the command they pressed the key on.
+      // the reader moved to instead of the command they pressed the key on. The scroll comes
+      // first because it also brings a hidden layer on screen, and a hidden card takes no focus.
       el.tabIndex = -1
-      el.focus({ preventScroll: true })
       scrollIntoViewSafe(el)
+      el.focus({ preventScroll: true })
     }
     return el
   }

@@ -329,6 +329,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `version`        | `1`      | `1`                                              |
 | `skin`           | `github` | `terminal`, `github`                             |
 | `theme`          | `auto`   | `auto`, `light`, `dark`                          |
+| `layerView`      | `all`    | `all`, `one`                                     |
 | `agent`          | `claude` | `claude`, `codex`                                |
 | `model`          | `null`   | A model ID, or `null` for the agent's default    |
 | `chatTimeoutSec` | `600`    | Integer seconds, 30–3600                         |
@@ -372,6 +373,15 @@ Collapsing content does not mark it reviewed.
 
 Files with patches longer than 2,000 lines wait behind **show diff**. A link into the file opens
 it automatically.
+
+### One layer at a time
+
+By default the canvas is one page: the overview, then every layer in order. Set **Show layers**
+to **one at a time** in the settings dialog to see the overview or a single layer at once. The rail
+moves between them and marks the one that shows, `j` and `k` step through the layers, and any
+link into a layer, from the overview, a diagram, another layer, or the AI Chat, shows that layer
+first. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
+holds for every review until changed.
 
 ### Finding shared canvases
 

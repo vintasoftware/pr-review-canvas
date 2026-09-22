@@ -26,6 +26,7 @@ import { wireDropZone } from './import-zone.js'
 import { toast, wireReview } from './interactions.js'
 import { defineLayerElements, pathSet, renderLayers, renderRail, setRenderContext } from './layers.js'
 import { renderOverview } from './overview.js'
+import { initOneLayer } from './one-layer.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
@@ -36,7 +37,7 @@ import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
-/** @typedef {{ prNumber: ReviewKey, owner: string, repo: string, version: string, host: import('./contract-types.js').PublicHost }} Bootstrap */
+/** @typedef {import('./contract-types.js').ReviewBootstrap} Bootstrap */
 
 /** @returns {Bootstrap | null} */
 function readBootstrap() {
@@ -116,6 +117,13 @@ export class PrAppElement extends HTMLElement {
   deepLinks = null
   /** @type {{ stop: () => void } | null} */
   scrollSpy = null
+  /**
+   * Whether the canvas shows every layer or one at a time. Made once per boot, from the setting
+   * the page came with, and kept across renders: it redraws with each one, and a save in the
+   * settings dialog changes its view without a reload.
+   * @type {ReturnType<typeof initOneLayer> | null}
+   */
+  layerView = null
   /** @type {{ stop: () => void } | null} */
   interactions = null
   /** @type {ReturnType<typeof wireChat>} */
@@ -139,6 +147,8 @@ export class PrAppElement extends HTMLElement {
     this.deepLinks = null
     this.scrollSpy?.stop()
     this.scrollSpy = null
+    this.layerView?.stop()
+    this.layerView = null
     this.interactions?.stop()
     this.interactions = null
     this.stopChat()
@@ -160,6 +170,8 @@ export class PrAppElement extends HTMLElement {
     setHost(this.bootstrap.host)
     this.theme = readTheme(document.documentElement)
     this.skin = readSkin(document.documentElement)
+    this.layerView?.stop()
+    this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
       () => null
@@ -263,7 +275,10 @@ export class PrAppElement extends HTMLElement {
       })
       const interactions = wireReview(this, session, {
         chat: () => this.chat,
-        openSettings: el => void openSettingsDialog(this, el),
+        openSettings: el =>
+          void openSettingsDialog(this, el, {
+            onSaved: data => this.layerView?.setView(data.settings.layerView),
+          }),
       })
       this.interactions = interactions
       if (chatEnabled) {
@@ -298,6 +313,9 @@ export class PrAppElement extends HTMLElement {
     }
     // Mermaid is fetched only when this screen holds a diagram, and again on a theme flip.
     this.diagrams = initDiagrams(this)
+    // One layer at a time hides the rest before the URL is followed, so a link into a layer lands
+    // on a layer that is showing.
+    this.layerView?.redraw()
     // The cards are in the page now, so a link in the URL has something to land on.
     this.deepLinks = initDeepLinks(this)
     this.scrollSpy = initScrollSpy(this)
