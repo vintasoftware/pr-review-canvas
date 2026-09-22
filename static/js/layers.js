@@ -12,17 +12,20 @@
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./threads.js').Thread} Thread */
 import { askButtonHtml } from './ask.js'
-import { applyCodeFolds, wireFoldReveal } from './code-folds.js'
+import { applyCodeFolds, setCodeFoldLevel, wireFoldReveal } from './code-folds.js'
 import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
-import { applyDecorations } from './diff-decorations.js'
+import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
+import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
+import { pendingForPath } from './pending.js'
 import { pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
+import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
 
 /**
@@ -30,11 +33,24 @@ import { anchorKey, buildThreads } from './threads.js'
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
  *   patches: Record<string, string> | null,
+ *   headSha: string,
  *   comments: ReadonlyArray<ReviewComment>,
  *   state: PrState,
  *   now: Date,
  * }} RenderContext
  */
+
+/**
+ * How much code the reader hides. Page state: a review opens at the level saved in the settings
+ * file, light until the reader picks another, and the control or the `f` key changes it for this
+ * page only, so the file holds a default rather than the last thing the reader did.
+ * @type {import('./contract-types.js').FoldLevel}
+ */
+let foldLevel = DEFAULT_FOLD_LEVEL
+
+export function getFoldLevel() {
+  return foldLevel
+}
 
 /** @type {RenderContext | null} */
 let renderContext = null
@@ -242,6 +258,126 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
 }
 
 /**
+ * Whether a card stays open whatever its `collapsed` level says: a discussion or an attention
+ * point on the file is what the reviewer came to see.
+ * @param {LayerFile} lf
+ * @param {string} layerId
+ * @param {ReviewArtifact} artifact
+ * @param {ReadonlySet<string> | undefined} commentPaths paths with a review comment
+ * @returns {boolean}
+ */
+export function cardKeepsOpen(lf, layerId, artifact, commentPaths) {
+  return (
+    commentPaths?.has(lf.path) === true ||
+    artifact.points.some(p => p.path === lf.path && p.layerId === layerId)
+  )
+}
+
+/**
+ * What the counters and the discussion rule read of the page: the canvas, its diff, the comments,
+ * and the pending drafts in the state, which belong to `headSha`.
+ * @typedef {Pick<RenderContext, 'artifact' | 'files' | 'comments' | 'state' | 'headSha'>} CountContext
+ * @typedef {import('./reading-level.js').HiddenCounts} HiddenCounts
+ */
+
+/**
+ * What the discussion keeps open in one card: a comment or an attention point stops it
+ * collapsing, and a thread or a pending draft in its chunks stops every fold. The card's folds and
+ * its counter both read this one answer, from the comments and drafts on the page now, so they
+ * cannot disagree.
+ * @param {LayerFile} lf
+ * @param {string} layerId
+ * @param {CountContext} ctx
+ * @param {ReadonlySet<string>} commentPaths paths with a review comment
+ * @returns {import('./fold-levels.js').Discussion}
+ */
+function cardDiscussion(lf, layerId, ctx, commentPaths) {
+  const entry = ctx.files.find(f => f.path === lf.path)
+  const hunkIds = new Set(lf.hunks)
+  return {
+    keepsOpen: cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths),
+    discussed:
+      entry !== undefined &&
+      (threadsForHunks(ctx.comments, entry, hunkIds).length > 0 ||
+        draftsForCard(ctx, entry, hunkIds).length > 0),
+  }
+}
+
+/** @param {CountContext} ctx */
+function commentPathsOf(ctx) {
+  return new Set(ctx.comments.map(comment => comment.path))
+}
+
+/**
+ * How many diff lines a level hides in one layer, against what the layer shows in all. Counted
+ * from the model, so a card that has not drawn its diff yet still counts, and with the card's own
+ * discussion rule.
+ * @param {Layer} layer
+ * @param {CountContext} ctx
+ * @param {import('./contract-types.js').FoldLevel} level
+ * @returns {HiddenCounts}
+ */
+export function layerHiddenLines(layer, ctx, level) {
+  const commentPaths = commentPathsOf(ctx)
+  let total = 0
+  let hidden = 0
+  for (const lf of layer.files) {
+    const entry = ctx.files.find(f => f.path === lf.path)
+    const counts = hiddenLines(lf, entry?.hunks ?? [], level, cardDiscussion(lf, layer.id, ctx, commentPaths))
+    total += counts.total
+    hidden += counts.hidden
+  }
+  return { total, hidden }
+}
+
+/**
+ * The same over every layer, for the hint under the control and the sign-off note.
+ * @param {CountContext} ctx
+ * @param {import('./contract-types.js').FoldLevel} level
+ * @returns {HiddenCounts}
+ */
+export function canvasHiddenLines(ctx, level) {
+  return ctx.artifact.layers.reduce(
+    (sum, layer) => {
+      const counts = layerHiddenLines(layer, ctx, level)
+      return { total: sum.total + counts.total, hidden: sum.hidden + counts.hidden }
+    },
+    { total: 0, hidden: 0 }
+  )
+}
+
+/**
+ * The card a command belongs to, and the part of it that collapses.
+ * @param {Element} el
+ * @returns {{ card: HTMLElement, body: HTMLElement, chevron: Element | null } | null}
+ */
+export function cardOf(el) {
+  const card = el.closest('article.file, section.layer')
+  const body = card?.querySelector(':scope > .file-body, :scope > .layer-body')
+  if (!(card instanceof HTMLElement && body instanceof HTMLElement)) {
+    return null
+  }
+  return { card, body, chevron: card.querySelector(':scope > .file-h > .chev, :scope > .layer-h > .chev') }
+}
+
+/**
+ * Opens or collapses one card. Nothing else on the card changes, so clicking the chevron never
+ * touches the reviewed box and the other way round.
+ * @param {Element} el an element inside the card
+ * @param {boolean} [collapsed] the state to set; the opposite of the current one when omitted
+ */
+export function setCardCollapsed(el, collapsed) {
+  const parts = cardOf(el)
+  if (parts === null) {
+    return null
+  }
+  const next = collapsed ?? !parts.body.hidden
+  parts.body.toggleAttribute('hidden', next)
+  parts.chevron?.setAttribute('aria-expanded', next ? 'false' : 'true')
+  return next
+}
+
+/**
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
@@ -252,8 +388,7 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const key = entry?.key ?? sanitizeKey(lf.path)
   const cardReviewedId = reviewedId(layer.key, lf.path)
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
-  const collapsed =
-    cardReviewed || (lf.collapsed === true && lf.annotations.length === 0 && ctx.keepOpen !== true)
+  const collapsed = cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
   const isFirst = !ctx.firstCardFor.has(key)
   ctx.firstCardFor.add(key)
   const id = isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`
@@ -321,18 +456,17 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
  * @param {ReviewArtifact} artifact
  * @param {ReadonlyArray<FileEntry>} files
  * @param {PrState} state
- * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, commentPaths?: ReadonlySet<string> }} ctx
+ * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, posted?: ReadonlyMap<string, string>, comments: ReadonlyArray<ReviewComment>, headSha: string }} ctx
  * @returns {string}
  */
 export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const byPath = new Map(files.map(f => [f.path, f]))
+  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
   const cards = layer.files
     .map(lf =>
       renderFileCard(lf, byPath.get(lf.path), layer, {
         ...ctx,
-        keepOpen:
-          ctx.commentPaths?.has(lf.path) === true ||
-          artifact.points.some(p => p.path === lf.path && p.layerId === layer.id),
+        keepOpen: cardKeepsOpen(lf, layer.id, artifact, commentPaths),
       })
     )
     .join('')
@@ -365,7 +499,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
     testMapHtml(layer, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
-    `<h3 class="lbl sub">Files · ${layer.files.length}</h3><div class="files">${cards}</div>` +
+    `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, { artifact, files, comments: ctx.comments, state, headSha: ctx.headSha }, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
     `<div class="layer-end"><button class="cmd" type="button" data-act="mark-layer" data-reviewed-id="${esc(layerReviewedId)}">mark layer as reviewed</button></div>` +
     '</div></section></pr-layer>'
   )
@@ -377,15 +511,17 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
  * @param {ReadonlyArray<FileEntry>} files
  * @param {PrState} state
  * @param {ReadonlyArray<ReviewComment>} [comments] so a point that was posted says so
+ * @param {string} [headSha] the commit the page's drafts belong to, as in the render context
  */
-export function renderLayers(artifact, files, state, comments = []) {
+export function renderLayers(artifact, files, state, comments = [], headSha = artifact.pr.headSha) {
   const ctx = {
     hunkIndex: hunkLayerIndex(artifact),
     paths: pathSet(files),
     firstCardFor: new Set(),
     state,
     posted: postedUrls(state, comments),
-    commentPaths: new Set(comments.map(comment => comment.path)),
+    comments,
+    headSha,
   }
   return artifact.layers.map((layer, i) => renderLayerSection(layer, i, artifact, files, state, ctx)).join('')
 }
@@ -457,27 +593,87 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   }
   const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
   host.innerHTML = renderDiff({ key: entry.key, path: entry.path, lang: entry.lang }, patch, { hunkIds })
-  const layer = ctx.artifact.layers.find(l => l.id === layerId)
-  const lf = layer?.files.find(f => f.path === entry.path)
-  const annotations = lf?.annotations ?? []
-  const points = ctx.artifact.points.filter(
-    p => p.path === entry.path && hunkIds.has(hunkIdForPoint(p, entry))
-  )
-  const threads = threadsForHunks(ctx.comments, entry, hunkIds)
-  const { placed, missed } = applyDecorations(card, key, {
-    annotations,
-    points,
-    threads,
+  const lf = layerFileOf(ctx, layerId, entry.path)
+  const { placed, missed } = decorateCard(card, ctx, { key, layerId, entry, hunkIds })
+  const discussed = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).discussed
+  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, discussed)
+  wireFoldReveal(card)
+  cardRenderedHook?.(card)
+  return { rendered: true, deferred: false, placed, missed }
+}
+
+/**
+ * @param {RenderContext} ctx
+ * @param {string} layerId
+ * @param {string} path
+ */
+function layerFileOf(ctx, layerId, path) {
+  return ctx.artifact.layers.find(l => l.id === layerId)?.files.find(f => f.path === path)
+}
+
+/**
+ * Puts every decoration on one drawn card: the annotations of its layer, the attention points and
+ * comment threads of the hunks it shows, and the pending comments anchored in it. The call is
+ * idempotent, so it is also how a card is brought up to date after the state changed.
+ * @param {HTMLElement} card
+ * @param {RenderContext} ctx
+ * @param {{ key: string, layerId: string, entry: FileEntry, hunkIds: ReadonlySet<string> }} at
+ */
+function decorateCard(card, ctx, at) {
+  return applyDecorations(card, at.key, {
+    annotations: layerFileOf(ctx, at.layerId, at.entry.path)?.annotations ?? [],
+    points: ctx.artifact.points.filter(
+      p => p.path === at.entry.path && at.hunkIds.has(hunkIdForPoint(p, at.entry))
+    ),
+    threads: threadsForHunks(ctx.comments, at.entry, at.hunkIds),
+    pending: draftsForCard(ctx, at.entry, at.hunkIds),
     paths: pathSet(ctx.files),
     now: ctx.now,
     state: ctx.state,
     posted: postedUrls(ctx.state, ctx.comments),
     hiddenThreads: new Set(Object.keys(ctx.state.hiddenThreads).map(Number)),
   })
-  applyCodeFolds(card, key, lf?.folds ?? [])
-  wireFoldReveal(card)
-  cardRenderedHook?.(card)
-  return { rendered: true, deferred: false, placed, missed }
+}
+
+/**
+ * Drafts only belong to the diff and hunk they were written on. Earlier-commit drafts are
+ * available in the pending bar, and the server checks diff equality before submitting them.
+ * @param {CountContext} ctx
+ * @param {FileEntry} entry
+ * @param {ReadonlySet<string>} hunkIds
+ */
+function draftsForCard(ctx, entry, hunkIds) {
+  return pendingForPath(ctx.state, entry.path).filter(
+    p => p.headSha === ctx.headSha && hunkIds.has(hunkForLine(entry.hunks, p.side, p.line)?.id ?? '')
+  )
+}
+
+/** Update only drafts and newly posted threads; preserve existing decorations and editors.
+ * @param {ParentNode} root
+ * @param {RenderContext} ctx
+ * @param {ReadonlySet<string>} paths
+ * @param {ReadonlyArray<ReviewComment>} [submitted]
+ */
+export function refreshCardDecorations(root, ctx, paths = pathSet(ctx.files), submitted = []) {
+  let redrawn = 0
+  for (const card of root.querySelectorAll('article.file')) {
+    if (!(card instanceof HTMLElement) || !paths.has(card.getAttribute('data-path') ?? '')) continue
+    const key = card.getAttribute('data-key')
+    const host = card.querySelector('.diff-host')
+    const entry = ctx.files.find(f => f.key === key)
+    if (key === null || entry === undefined || host === null || host.querySelector('table.diff') === null)
+      continue
+    const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
+    refreshPendingRows(card, key, draftsForCard(ctx, entry, hunkIds), ctx.now)
+    for (const thread of threadsForHunks(submitted, entry, hunkIds)) {
+      if (card.querySelector(`[data-thread="${thread.root.id}"]`) === null) {
+        insertThreadRow(card, key, thread, { now: ctx.now })
+      }
+    }
+    cardRenderedHook?.(card)
+    redrawn++
+  }
+  return redrawn
 }
 
 /**
@@ -605,4 +801,71 @@ export function hydrateAll(root, ctx) {
     }
   }
   return rendered
+}
+
+/**
+ * Switches how much code the page hides. A card the reader opened or closed by hand follows the
+ * new level too: changing the level is a request to change exactly that. The folds and counters
+ * then follow as refreshFolds says.
+ * @param {ParentNode} root
+ * @param {import('./contract-types.js').FoldLevel} level
+ */
+export function setFoldLevel(root, level) {
+  foldLevel = level
+  const ctx = renderContext
+  if (ctx === null) {
+    return
+  }
+
+  const commentPaths = commentPathsOf(ctx)
+  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+    const lf =
+      card instanceof HTMLElement
+        ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
+        : undefined
+    if (card instanceof HTMLElement && lf !== undefined) {
+      setCardCollapsed(
+        card,
+        card.classList.contains('is-reviewed') ||
+          (collapsesAt(lf, level) &&
+            !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths))
+      )
+    }
+  }
+  refreshFolds(root)
+}
+
+/**
+ * Points every drawn card's folds, and every layer's counter, at the level and at the comments
+ * on the page now. Each card switches which of its wired folds are active without rebuilding its
+ * diff, so an open composer or a thread keeps its place; a card with a thread folds nothing. A
+ * card waiting to be drawn picks both up when it draws. Called when the level changes and when a
+ * comment is posted, and leaves alone which cards the reader opened.
+ * @param {ParentNode} root
+ */
+export function refreshFolds(root) {
+  const ctx = renderContext
+  if (ctx === null) {
+    return
+  }
+
+  for (const counter of Array.from(root.querySelectorAll('.fold-count'))) {
+    const layer = ctx.artifact.layers.find(l => l.id === counter.getAttribute('data-layer'))
+    if (layer !== undefined) {
+      counter.textContent = foldCountText(layerHiddenLines(layer, ctx, foldLevel))
+    }
+  }
+
+  const commentPaths = commentPathsOf(ctx)
+  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+    const lf =
+      card instanceof HTMLElement
+        ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
+        : undefined
+    if (card instanceof HTMLElement) {
+      const layerId = card.getAttribute('data-layer') ?? ''
+      const discussed = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPaths).discussed
+      setCodeFoldLevel(card, foldLevel, discussed)
+    }
+  }
 }

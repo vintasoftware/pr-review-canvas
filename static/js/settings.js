@@ -1,16 +1,19 @@
 // @ts-check
-// The settings dialog: the personal settings this browser can change, how layers show and the
-// chat settings, and a read-only look at the project config, which is committed and belongs to
-// the repository.
+// The settings dialog: the personal settings this browser can change, the reading level a review
+// opens at, how layers show, and the chat settings, and a read-only look at the project config,
+// which is committed and belongs to the repository.
 /** @typedef {import('./contract-types.js').AgentsResponse} AgentsResponse */
 /** @typedef {import('./contract-types.js').SettingsResponse} SettingsResponse */
 import { fetchAgents, fetchSettings, probeAgent, saveSettings } from './api.js'
 import { runCommand } from './commands.js'
 import { esc, qs } from './dom.js'
+import { isFoldLevel } from './fold-levels.js'
 import { isLayerView, LAYER_VIEW_LABELS, LAYER_VIEWS } from './layer-views.js'
+import { foldLevelOptionsHtml } from './reading-level.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
 
+/**
 /**
  * The layer views as options, with one selected.
  * @param {import('./layer-views.js').LayerView} view
@@ -22,10 +25,13 @@ function layerViewOptionsHtml(view) {
   ).join('')
 }
 
-/** Model ids the input suggests per agent. Free text is allowed; this is only a shortcut. */
+/**
+ * Model ids the input suggests per agent. Free text is allowed; this is only a shortcut. The
+ * server runs the newest model of whichever family is saved, so these do not go stale.
+ */
 export const MODEL_SUGGESTIONS = {
-  claude: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'],
-  codex: ['gpt-5.2', 'gpt-5.2[high]'],
+  claude: ['opus', 'opus[1m]', 'sonnet', 'haiku', 'fable'],
+  codex: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra[high]'],
 }
 
 /** @param {string} agent */
@@ -35,18 +41,43 @@ export function modelOptionsHtml(agent) {
 }
 
 /**
- * @param {SettingsResponse} data
+ * The chat agent's fields, with the notice about acpx when it is missing.
+ * @param {SettingsResponse['settings']} settings
  * @param {AgentsResponse} agents
  * @returns {string}
  */
-export function settingsDialogHtml(data, agents) {
-  const { settings, overrides, project } = data
+function chatFieldsHtml(settings, agents) {
   const options = agents.agents
     .map(a => {
       const reason = a.available ? '' : ` (${a.reason ?? 'not available'})`
       return `<option value="${esc(a.id)}"${a.id === settings.agent ? ' selected' : ''}${a.available ? '' : ' disabled'}>${esc(a.id)}${esc(reason)}</option>`
     })
     .join('')
+  return (
+    (agents.acpx.installed
+      ? ''
+      : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
+    '<div class="field"><label for="set-agent">Agent</label>' +
+    `<select id="set-agent">${options}</select></div>` +
+    '<div class="field"><label for="set-model">Model</label>' +
+    `<input id="set-model" list="model-list" value="${esc(settings.model ?? '')}" placeholder="the agent's default">` +
+    `<datalist id="model-list">${modelOptionsHtml(settings.agent)}</datalist></div>` +
+    '<div class="field"><label for="set-timeout">Chat timeout (seconds)</label>' +
+    `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
+    '<div class="field"><label for="set-turns">Max turns</label>' +
+    `<input id="set-turns" type="number" min="1" max="100" value="${esc(settings.maxTurns ?? '')}" placeholder="the agent's default"></div>` +
+    '<p class="muted small">Changing the agent starts a new chat thread; the old ones stay in the list.</p>'
+  )
+}
+
+/**
+ * @param {SettingsResponse} data
+ * @param {AgentsResponse | null} agents null when the project turns chat off, so the dialog holds
+ *   only what the page itself reads
+ * @returns {string}
+ */
+export function settingsDialogHtml(data, agents) {
+  const { settings, overrides, project } = data
   const overrideNote =
     overrides.agent === undefined && overrides.model === undefined
       ? ''
@@ -62,22 +93,13 @@ export function settingsDialogHtml(data, agents) {
     `<dialog id="${SETTINGS_DIALOG_ID}" class="settings" aria-labelledby="settings-h">` +
     '<h2 id="settings-h">Settings</h2>' +
     overrideNote +
-    (agents.acpx.installed
-      ? ''
-      : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
+    '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
+    `<select id="set-fold-level">${foldLevelOptionsHtml(settings.foldLevel)}</select></div>` +
+    '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
     '<div class="field"><label for="set-layer-view">Show layers</label>' +
     `<select id="set-layer-view">${layerViewOptionsHtml(settings.layerView)}</select></div>` +
     '<p class="muted small">One at a time shows the overview or a single layer. The rail and the <span class="mono">j</span> and <span class="mono">k</span> keys move between them.</p>' +
-    '<div class="field"><label for="set-agent">Agent</label>' +
-    `<select id="set-agent">${options}</select></div>` +
-    '<div class="field"><label for="set-model">Model</label>' +
-    `<input id="set-model" list="model-list" value="${esc(settings.model ?? '')}" placeholder="the agent's default">` +
-    `<datalist id="model-list">${modelOptionsHtml(settings.agent)}</datalist></div>` +
-    '<div class="field"><label for="set-timeout">Chat timeout (seconds)</label>' +
-    `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
-    '<div class="field"><label for="set-turns">Max turns</label>' +
-    `<input id="set-turns" type="number" min="1" max="100" value="${esc(settings.maxTurns ?? '')}" placeholder="the agent's default"></div>` +
-    '<p class="muted small">Changing the agent starts a new chat thread; the old ones stay in the list.</p>' +
+    (agents === null ? '' : chatFieldsHtml(settings, agents)) +
     `<p class="muted small mono">${esc(data.file)}</p>` +
     '<div class="panel-ro"><h3>Project config (read-only)</h3>' +
     `<ul class="plain"><li>chat enabled: ${project.chatEnabled ? 'yes' : 'no'}</li>` +
@@ -91,7 +113,9 @@ export function settingsDialogHtml(data, agents) {
     `<p class="muted small mono">${esc(project.file ?? 'built-in defaults (no pr-review.config.yml)')}</p></div>` +
     '<p class="probe-result" role="status"></p>' +
     '<div class="dialog-actions">' +
-    '<button class="cmd" type="button" data-act="settings-probe">test agent</button>' +
+    (agents === null
+      ? ''
+      : '<button class="cmd" type="button" data-act="settings-probe">test agent</button>') +
     '<button class="cmd fill" type="button" data-act="settings-save">save</button>' +
     '<button class="cmd" type="button" data-act="settings-close">close</button>' +
     '</div></dialog>'
@@ -120,7 +144,9 @@ export async function openSettingsDialog(root, opener, opts = {}) {
   const loaded = await runCommand(
     opener,
     async () => {
-      const [data, agents] = await Promise.all([api.fetchSettings(), api.fetchAgents()])
+      // With chat off the agent routes do not exist, and the dialog holds only the reading level.
+      const data = await api.fetchSettings()
+      const agents = data.project.chatEnabled ? await api.fetchAgents() : null
       return { data, agents }
     },
     { pendingLabel: 'loading…' }
@@ -145,6 +171,7 @@ export async function openSettingsDialog(root, opener, opts = {}) {
 
 /** The values the dialog holds right now, as the PUT body. */
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
+  const foldLevel = qs('#set-fold-level', dialog)
   const layerView = qs('#set-layer-view', dialog)
   const agent = qs('#set-agent', dialog)
   const model = qs('#set-model', dialog)
@@ -152,6 +179,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const turns = qs('#set-turns', dialog)
   /** @type {import('./contract-types.js').SettingsInput} */
   const input = {}
+  if (foldLevel instanceof HTMLSelectElement && isFoldLevel(foldLevel.value)) {
+    input.foldLevel = foldLevel.value
+  }
   if (layerView instanceof HTMLSelectElement && isLayerView(layerView.value)) {
     input.layerView = layerView.value
   }

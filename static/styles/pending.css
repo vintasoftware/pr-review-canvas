@@ -1,0 +1,102 @@
+/* The pending review: the bar that says one is open, and the drafts drawn on the diff. */
+
+.pending-bar-host:empty {
+  display: none;
+}
+
+.pending-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  color: var(--fg);
+  background: var(--warn-bg);
+  /* The heavy left edge is what carries across the page: a review is open and unsent. */
+  border: 1px solid var(--warn);
+  border-left: 4px solid var(--warn);
+}
+
+/* The dot pulses so an open review is noticed on a page the reader has scrolled far down. */
+.pending-mark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: var(--warn);
+  border-radius: 50%;
+  animation: pending-pulse 2s ease-in-out infinite;
+}
+
+@keyframes pending-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending-mark {
+    animation: none;
+  }
+}
+
+.pending-bar .pending-text {
+  flex: 1 1 260px;
+}
+
+.pending-bar .pending-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* A draft on the diff reads as unfinished: dashed edge, and the badge that names it. */
+.cmt.pending-cmt {
+  padding: 8px;
+  background: var(--warn-bg);
+  border: 1px dashed var(--warn);
+}
+
+.pending-av {
+  color: var(--fg-muted);
+  border-color: var(--warn);
+}
+
+/* The avatar column covers the byline and the body, so the commands clear both. */
+.cmt.pending-cmt .tbtns {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pill.pending {
+  color: var(--bg);
+  background: var(--warn);
+}
+
+.signoff-pending:empty {
+  display: none;
+}
+
+.signoff-pending.has-pending {
+  padding: 6px 8px;
+  background: var(--warn-bg);
+  border-left: 3px solid var(--warn);
+}
+
+.earlier-pending {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+}
+
+.earlier-draft + .earlier-draft {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--warn);
+}

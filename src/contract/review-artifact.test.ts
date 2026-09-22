@@ -23,10 +23,40 @@ async function loadFixture(): Promise<unknown> {
 }
 
 describe('ReviewArtifactSchema', () => {
-  it('accepts the PR #278 fixture unchanged', async () => {
+  it('reads the PR #278 fixture, written before levels, with each collapsed file at light', async () => {
     const raw = await loadFixture()
     const parsed = ReviewArtifactSchema.parse(raw)
-    expect(parsed).toEqual(raw)
+    const levelled = JSON.parse(JSON.stringify(raw).replaceAll('"collapsed":true', '"collapsed":"light"'))
+    expect(parsed).toEqual(levelled)
+    // Stored again and read back, the canvas stays as the first read left it.
+    expect(ReviewArtifactSchema.parse(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed)
+  })
+
+  it('reads a fold with no level as light and `collapsed: false` as open', () => {
+    const artifact = syntheticArtifact()
+    const layer = artifact.layers[0]
+    const [first, second] = layer?.files ?? []
+    if (layer === undefined || first === undefined || second === undefined) {
+      throw new Error('missing layer files')
+    }
+    const legacy = {
+      ...artifact,
+      layers: [
+        {
+          ...layer,
+          files: [
+            { ...first, collapsed: false, folds: [{ title: 'runs', side: 'new', startLine: 2, endLine: 3 }] },
+            { ...second, collapsed: true },
+            ...layer.files.slice(2),
+          ],
+        },
+        ...artifact.layers.slice(1),
+      ],
+    }
+    const files = ReviewArtifactSchema.parse(JSON.parse(JSON.stringify(legacy))).layers[0]?.files
+    expect(files?.[0]?.collapsed).toBeUndefined()
+    expect(files?.[0]?.folds?.[0]?.level).toBe('light')
+    expect(files?.[1]?.collapsed).toBe('light')
   })
 
   it('accepts the synthetic artifact and round-trips it', () => {
@@ -79,6 +109,21 @@ describe('ModelOutputSchema', () => {
   it('accepts a minimal model output', () => {
     const parsed = ModelOutputSchema.parse({ summary: 'x', layers: [layer], points: [] })
     expect(parsed).toEqual({ summary: 'x', layers: [layer], points: [] })
+  })
+
+  it('makes the model name the level of every fold and every collapsed file', () => {
+    const [file] = layer.files
+    const fold = { title: 'runs', side: 'new', startLine: 2, endLine: 3 }
+    const withFile = (over: object) =>
+      ModelOutputSchema.safeParse({
+        summary: 'x',
+        layers: [{ ...layer, files: [{ ...file, ...over }] }],
+        points: [],
+      }).success
+
+    expect(withFile({ collapsed: 'moderate', folds: [{ ...fold, level: 'light' }] })).toBe(true)
+    expect(withFile({ collapsed: true })).toBe(false)
+    expect(withFile({ folds: [fold] })).toBe(false)
   })
 
   it('drops layerId from model points: publish assigns it', () => {

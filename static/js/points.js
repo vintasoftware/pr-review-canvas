@@ -5,6 +5,7 @@
 import { askButtonHtml } from './ask.js'
 import { viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
+import { pendingForPoint } from './pending.js'
 import { postToLabel } from './host.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
@@ -66,10 +67,32 @@ export function pointContext(p) {
 }
 
 /**
- * The commands every point carries. `copy` puts the markdown on the clipboard, `post to github`
- * opens nothing and posts it at the anchor, `dismiss` takes the point off the page.
+ * What a point offers for getting its text onto the forge: the link to the comment it was posted
+ * as, the note that it is waiting in the review, or the two ways to send it. Unlike the box on a
+ * diff line, a point keeps both ways while a review is open: its text is written in advance, so
+ * firing one off on its own is a use of its own, not a comment jumping the queue.
  * @param {Point} p
- * @param {{ dismissed?: boolean, postedUrl?: string | undefined }} [opts]
+ * @param {{ postedUrl?: string | undefined, queued?: boolean }} opts
+ */
+function pointSendHtml(p, opts) {
+  if (opts.postedUrl !== undefined) {
+    return viewCommentHtml(opts.postedUrl)
+  }
+  if (opts.queued === true) {
+    return '<span class="pill pending queued">in your review</span>'
+  }
+  return (
+    `<button class="cmd" type="button" data-act="point-post" data-point="${esc(p.id)}" data-needs-post>${postToLabel()}</button>` +
+    `<button class="cmd" type="button" data-act="point-queue" data-point="${esc(p.id)}">add to review</button>`
+  )
+}
+
+/**
+ * The commands every point carries. `copy` puts the markdown on the clipboard, `post to github`
+ * opens nothing and posts it at the anchor, `add to review` holds it as a draft instead, and
+ * `dismiss` takes the point off the page.
+ * @param {Point} p
+ * @param {{ dismissed?: boolean, postedUrl?: string | undefined, queued?: boolean }} [opts]
  * @returns {string}
  */
 export function pointCommandsHtml(p, opts = {}) {
@@ -78,15 +101,22 @@ export function pointCommandsHtml(p, opts = {}) {
     ? `<button class="cmd" type="button" data-act="point-restore" data-fingerprint="${fp}">restore</button>`
     : `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`
   return (
-    '<span class="tbtns">' +
+    `<span class="tbtns" data-queued="${opts.queued === true ? '1' : '0'}">` +
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}">copy</button>` +
-    (opts.postedUrl === undefined
-      ? `<button class="cmd" type="button" data-act="point-post" data-point="${esc(p.id)}" data-needs-post>${postToLabel()}</button>`
-      : viewCommentHtml(opts.postedUrl)) +
+    pointSendHtml(p, opts) +
     askButtonHtml(pointContext(p)) +
     toggle +
     '</span>'
   )
+}
+
+/**
+ * Whether this point is waiting in the review, read from the state the renderer was given.
+ * @param {Point} p
+ * @param {{ state?: PrState }} ctx
+ */
+export function queuedFor(p, ctx) {
+  return pendingForPoint(ctx.state, p.fingerprint) !== undefined
 }
 
 /**
@@ -130,7 +160,7 @@ export function pointCardHtml(p, ctx) {
     `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>` +
     `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
-    `${pointCommandsHtml(p, { postedUrl: posted })}</div></li>`
+    `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</div></li>`
   )
 }
 
@@ -154,7 +184,7 @@ export function dismissedListHtml(points, state, ctx, expanded = false) {
         `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>` +
         `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
         `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
-        `${pointCommandsHtml(p, { dismissed: true, postedUrl: posted })}</div></li>`
+        `${pointCommandsHtml(p, { dismissed: true, postedUrl: posted, queued: queuedFor(p, { state }) })}</div></li>`
       )
     })
     .join('')
@@ -183,6 +213,7 @@ export function applyDismissed(root, points, state, ctx) {
     }
     const dismissed = state.dismissed[point.fingerprint] !== undefined
     el.toggleAttribute('hidden', dismissed)
+    refreshPointCommands(el, point, { dismissed, state, ...ctx })
   }
   for (const counter of Array.from(root.querySelectorAll('.point-count'))) {
     const layerId = counter.closest('[data-layer]')?.getAttribute('data-layer')
@@ -213,6 +244,35 @@ export function applyDismissed(root, points, state, ctx) {
 }
 
 /**
+ * Draws a point's commands again when it has just joined the review or just left it, wherever the
+ * point is on the page. Nothing else is touched: a command that is mid-request keeps its state,
+ * because neither posting nor dismissing changes whether the point is waiting in the review.
+ * @param {Element} el the element that carries `data-point`
+ * @param {Point} p
+ * @param {{ dismissed: boolean, state: PrState, posted?: ReadonlyMap<string, string> }} ctx
+ * @returns {boolean} true when the commands were drawn again
+ */
+export function refreshPointCommands(el, p, ctx) {
+  const tbtns = el.querySelector('.tbtns')
+  const queued = queuedFor(p, ctx)
+  if (tbtns === null || (tbtns.getAttribute('data-queued') === '1') === queued) {
+    return false
+  }
+  const template = document.createElement('template')
+  template.innerHTML = pointCommandsHtml(p, {
+    dismissed: ctx.dismissed,
+    queued,
+    ...(postedFor(p, ctx) === undefined ? {} : { postedUrl: postedFor(p, ctx) }),
+  })
+  const next = template.content.firstElementChild
+  if (next === null) {
+    return false
+  }
+  tbtns.replaceWith(next)
+  return true
+}
+
+/**
  * The inline row under a diff line.
  * @param {Point} p
  * @param {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string> }} ctx
@@ -224,7 +284,7 @@ export function pointRowHtml(p, ctx) {
     `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}><td class="code x" colspan="4">` +
     `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
-    `${pointCommandsHtml(p, { postedUrl: posted })}</td></tr>`
+    `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</td></tr>`
   )
 }
 

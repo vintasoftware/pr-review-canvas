@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 import { DEFAULT_SKIN, isSkin, SKINS, type Skin } from '../../static/js/skin.js'
 import { DEFAULT_THEME, isTheme, THEMES, type Theme } from '../../static/js/theme.js'
@@ -27,6 +28,8 @@ export const SettingsSchema = z.object({
   version: z.literal(1),
   skin: z.enum(SKINS),
   theme: z.enum(THEMES),
+  /** The reading level every review opens at; the control on the page changes it for one page. */
+  foldLevel: z.enum(FOLD_LEVELS),
   /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
   layerView: z.enum(LAYER_VIEWS),
   agent: z.enum(CHAT_AGENTS),
@@ -40,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   version: 1,
   skin: DEFAULT_SKIN,
   theme: DEFAULT_THEME,
+  foldLevel: DEFAULT_FOLD_LEVEL,
   layerView: DEFAULT_LAYER_VIEW,
   agent: 'claude',
   model: null,
@@ -51,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const SettingsInputSchema = z.object({
   skin: z.enum(SKINS).optional(),
   theme: z.enum(THEMES).optional(),
+  foldLevel: z.enum(FOLD_LEVELS).optional(),
   layerView: z.enum(LAYER_VIEWS).optional(),
   agent: z.enum(CHAT_AGENTS).optional(),
   model: z.string().max(200).nullable().optional(),

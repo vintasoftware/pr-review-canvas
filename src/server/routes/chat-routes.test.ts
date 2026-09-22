@@ -217,6 +217,7 @@ describe('the settings routes', () => {
       version: 1,
       skin: 'github',
       theme: 'auto',
+      foldLevel: 'light',
       layerView: 'all',
       agent: 'claude',
       model: null,
@@ -243,12 +244,19 @@ describe('the settings routes', () => {
     const res = await app.request('/api/settings', {
       method: 'PUT',
       headers: POST,
-      body: JSON.stringify({ agent: 'codex', model: 'gpt-5.2', chatTimeoutSec: 300, maxTurns: 4 }),
+      body: JSON.stringify({
+        foldLevel: 'aggressive',
+        agent: 'codex',
+        model: 'gpt-5.2',
+        chatTimeoutSec: 300,
+        maxTurns: 4,
+      }),
     })
     expect((await json<SettingsResponse>(res)).settings).toEqual({
       version: 1,
       skin: 'github',
       theme: 'auto',
+      foldLevel: 'aggressive',
       layerView: 'all',
       agent: 'codex',
       model: 'gpt-5.2',
@@ -307,11 +315,9 @@ describe('with chat turned off in the project config', () => {
     t = await context({ chat: false })
   })
 
-  it('answers 404 on every chat and settings route', async () => {
+  it('answers 404 on every chat and agent route', async () => {
     const app = createApp(t.ctx)
     const routes: Array<[string, RequestInit]> = [
-      ['/api/settings', { headers: LOCAL }],
-      ['/api/settings', { method: 'PUT', headers: POST, body: '{}' }],
       ['/api/settings/agents', { headers: LOCAL }],
       ['/api/settings/agents/claude/probe', { method: 'POST', headers: POST }],
       ['/api/prs/42/chat/threads', { headers: LOCAL }],
@@ -325,6 +331,20 @@ describe('with chat turned off in the project config', () => {
       expect([url, res.status]).toEqual([url, 404])
       expect((await json<ErrorEnvelope>(res)).error.message).toContain('chat is turned off')
     }
+  })
+
+  it('still reads and writes the settings file, which holds the reading level', async () => {
+    const app = createApp(t.ctx)
+    const read = await json<SettingsResponse>(await app.request('/api/settings', { headers: LOCAL }))
+    expect([read.settings.foldLevel, read.project.chatEnabled]).toEqual(['light', false])
+    const saved = await app.request('/api/settings', {
+      method: 'PUT',
+      headers: POST,
+      body: JSON.stringify({ foldLevel: 'moderate' }),
+    })
+    expect(saved.status).toBe(200)
+    const again = await json<SettingsResponse>(await app.request('/api/settings', { headers: LOCAL }))
+    expect(again.settings.foldLevel).toBe('moderate')
   })
 
   it('still serves the look of the page, which is not an agent surface', async () => {

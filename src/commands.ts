@@ -213,7 +213,11 @@ async function validateFile(
   }
   const artifact = ReviewArtifactSchema.safeParse(parsed.raw)
   const input = artifact.success ? artifactToModelOutput(artifact.data satisfies ReviewArtifact) : parsed.raw
-  const result = validateModelOutput(input, await validationInput(ctx, context, input))
+  // A stored canvas may predate the rules about what a generation must hide; only its correctness is checked.
+  const result = validateModelOutput(input, {
+    ...(await validationInput(ctx, context, input)),
+    storedArtifact: artifact.success,
+  })
   return { ok: result.ok, errors: result.errors }
 }
 

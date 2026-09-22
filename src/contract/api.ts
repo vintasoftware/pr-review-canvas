@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { CanvasManifest } from './canvas-manifest.js'
 import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js'
 import type { SharedCanvasInfoSchema } from './discovery.js'
-import type { FileEntry, Pr, ReviewArtifact } from './review-artifact.js'
+import type { FileEntry, FoldLevel, Pr, ReviewArtifact } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
 import type { LayerView } from './settings.js'
 import type { PrState } from './state.js'
@@ -169,12 +169,20 @@ export interface ReviewSummary {
 export interface ReviewBodyResponse {
   headSha: string
   body: string
+  /** How many pending comments would go out with the review. */
+  pending: number
   /** The titles of the layers that still need a look; approve is refused while this is not empty. */
   unreviewed: string[]
 }
 
 export interface PostReviewResponse {
   review: ReviewSummary
+  comments: ReviewComment[]
+  warnings: string[]
+  /** How many pending comments went out with the review. */
+  submitted: number
+  /** The state after the pending review was cleared, so the page drops its drafts in one step. */
+  state: PrState
 }
 
 export interface PatchesResponse {
@@ -234,6 +242,8 @@ export interface ReviewBootstrap {
   repo: string
   version: string
   host: PublicHost
+  /** The reading level the canvas opens at, from the settings file. */
+  foldLevel: FoldLevel
   /** Whether the canvas shows every layer, or one at a time, from the settings file. */
   layerView: LayerView
 }

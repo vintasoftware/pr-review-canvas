@@ -74,35 +74,129 @@ Project-configured layers (optional guidance):
 
 ## Selective expansion
 
-Keep the reading path focused by collapsing code that is already well understood and supported
-by evidence you read. This changes its initial presentation only: every hunk stays assigned and
-the reviewer can expand the full diff. Collapsing never marks code as reviewed.
+The reader chooses how much of the diff is on screen, with one control over the whole page. This
+changes the initial presentation only: every hunk stays assigned and the reviewer can expand
+anything. Hiding code never marks it reviewed.
 
-- For a test case with meaningful assertions that cover its behavior, show the test title and
-  collapse its body. Keep weak assertions, important omissions, and tests that explain a decision open.
-- Collapse straightforward, well-tested helpers, adapters, and conventional boilerplate when
-  there is no unresolved design choice, performance concern, or other non-functional requirement
-  to examine. A familiar pattern or a passing test name alone is insufficient evidence.
-- Repeated mappings, wiring, fixtures, and generated sections can collapse when their behavior
-  and relevant checks are understood. Keep the representative example open if it teaches the
-  pattern; collapse repetitions that add no new decision.
-- Keep security boundaries, destructive operations, ordering and concurrency rules, performance
-  assumptions, and other consequential behavior visible when they need the reviewer's attention.
-  Keep annotations, attention points, unresolved test gaps, and discussion visible.
-- For an entire routine file, set its `collapsed` field to `true`. Its file header remains visible.
-  Keep tests with the feature they cover even when their bodies are collapsed; confidence is not
-  a reason to move meaningful behavior into Other.
-- Within a file, use `folds`: `{ "title": "test or function/class title", "side": "new",
-  "startLine": 12, "endLine": 28 }`. Each range is inclusive and inside one assigned hunk.
-  The page shows only the title until expanded. Use `old` for a deletion; use one coordinate side
-  for all folds in a hunk, and keep ranges separate. Rows between the two anchors, including
-  interleaved deletions, are part of the fold. Pick boundaries that keep the whole change together.
-  Leave partial or ambiguous ranges open. A function spanning several hunks can use a separate
-  titled range in each hunk, or the whole file can start collapsed when appropriate.
+Give every fold and every collapsed file the lowest of the three levels at which it should hide.
+The levels nest, so a `light` fold is also hidden at `moderate` and `aggressive`; write each one
+once, at its own level. The three levels answer three different questions, and each one hides
+much more than the one below it:
+
+- **light — the diff as a reviewer has always seen it.** Nothing hand-written hides. The page
+  already folds imports, whitespace-only rewrites, and moved blocks by itself; `light` adds only
+  wholly generated content — lock files, snapshots, migrations, generated clients and fixtures —
+  as `collapsed: "light"` or a `light` fold over the generated block. Snapshots and fixtures
+  count as generated even inside a test directory. Tests are untouched at `light`: no fold and no
+  collapse in any other test file carries this level.
+- **moderate — what would a reviewer skip once they trust the layer's rationale?** Each test
+  body, folded under its own title so the list of titles reads as the spec of the change: one
+  fold per test, starting on the line after its title; a range that spans several tests hides the
+  titles and is not what this level means. Then everything whose contract its signature, its
+  name, or the layer rationale already states: helpers and adapters, data-transfer and
+  serialization types, request handlers and views that follow the project's pattern, templates
+  and markup, dependency wiring and registration, repeated mappings, configuration. Keep the one
+  representative example open if it teaches a pattern the rest repeats.
+- **aggressive — what must the reviewer judge to decide on this change?** Only that stays open:
+  the code an attention point or annotation names, and the few lines that carry the layer's core
+  mechanism. Everything else in the layer hides behind a title. The reader follows the change as
+  pseudo-code and expands what they want to see. This is the only level that may hide an
+  annotation. Such a fold covers one whole annotation and no other, and the page then shows the
+  annotation's text in place of the fold title.
+
+Aggressive is a strong instruction, not a slight increase over moderate. On a typical layer it
+leaves a small fraction of the changed lines on screen. Check your output before you finish: a
+layer where `moderate` and `aggressive` hide about the same amount has not applied `aggressive`.
+
+Decide first what the layer's **core** is, because the core never collapses at any level. The
+core is the file or two the reviewer must read to own the change: the file your rationale sends
+them to first, the file that defines the layer's new concepts (a schema, a type, a contract, a
+state machine), and every file you annotated. An annotation marks code worth reading; collapsing
+its file would hide the code and the explanation together, with only a path left to say so. Not
+having an attention point does not make a file routine: a new schema with no open question is
+still what everything else in the layer is built on.
+
+Then the two mechanisms split the work:
+
+- `folds` are for the core. The file stays open, and folds hide its routine parts behind titles.
+  At `aggressive` the core file shows its defining lines and its annotations, and nothing else:
+  expect more than half of it to sit inside folds. In a data type the field or column
+  declarations and the constraints stay; the framework's ceremony folds, whatever the stack calls
+  it — string conversion and equality, accessors and builders, type-checker-only blocks, query
+  helpers and repositories, derived-property boilerplate. In a function the signature and the
+  annotated lines stay; argument parsing, presenters, formatting, and error-to-response mapping
+  fold. Inside a core file, folds are `aggressive` by default: at `moderate` the reviewer still
+  reads the core in full and trusts only the other files to the rationale, so the two levels
+  differ by exactly this. Give a core-file range `moderate` only when it is pure ceremony — a
+  repeated import pattern, generated accessors, a type-checker-only block, string conversion.
+  Check the core files before you finish: mostly open at `moderate`, mostly folded at
+  `aggressive`. One fold per contiguous routine block; several small folds are better than one
+  wide title that overstates what it covers.
+- `collapsed` is for everything that is not the core. It hides a file's whole body behind its
+  header. At `moderate` and `aggressive` that is most files of a layer.
+
+A file that carries more than about twenty changed lines and no attention point should hide
+something at `aggressive`: the whole file when it is not the core, its routine ranges when it is.
+
+The validator enforces the shape of this: `collapsed` must name a level (`true` is refused); no
+fold or collapse in a test file may be `light`; a `light` fold covers at most forty lines; a file
+with more than twenty changed lines outside its annotations, no attention point, and neither
+`collapsed` nor a fold fails with `FOLD_MISSING`; a file of more than sixty changed lines that
+stays open must fold at least half of the lines outside its attention points, annotated lines
+included, or fails the same way; and a layer of more than a hundred changed lines that leaves more
+than twenty lines open at `moderate` outside its attention points and hides nothing more at
+`aggressive` fails the same way. A smaller layer reads whole, and only the file rules apply to it.
+An annotation is not a way past these: it marks the lines to read, and the rows around it still
+fold.
+
+Keep visible at every level: security boundaries, destructive operations, ordering and
+concurrency rules, performance assumptions, and other consequential behavior that needs the
+reviewer's attention. Attention points, unresolved test gaps, and discussion are never folded.
+Leaving such a file fully open at every level is the failure this control exists to prevent.
+
+An example of the two together, for a file whose new `settle()` matters and whose rest does not:
+
+```json
+{
+  "path": "domain/billing/actions.py",
+  "hunks": ["domain_billing_actions_py#1"],
+  "annotations": [{ "side": "new", "startLine": 61, "endLine": 66, "text": "Refunds settle before the ledger write, so a failed write leaves no money moved." }],
+  "folds": [
+    { "title": "the retry helper, unchanged in behavior", "side": "new", "startLine": 12, "endLine": 28, "level": "moderate" },
+    { "title": "settle() moves the money, then writes the ledger", "side": "new", "startLine": 55, "endLine": 80, "level": "aggressive" }
+  ]
+}
+```
+
+At `light` the file reads in full. At `moderate` the helper hides. At `aggressive` `settle()`
+hides too, behind the annotation's text.
+
+- A fold is `{ "title": "what the block does", "side": "new", "startLine": 12, "endLine": 28,
+  "level": "light" }`. Each range is inclusive and inside one assigned hunk. The page shows only
+  the title until expanded. Use `old` for a deletion; use one coordinate side for all folds in a
+  hunk. Rows between the two anchors, including interleaved deletions, are part of the fold. Pick
+  boundaries that keep the whole change together. Leave a range open when you cannot place both
+  of its ends. A function spanning several hunks can use a separate titled range in each hunk,
+  or the whole file can collapse instead.
+- Two folds are either separate, or one sits wholly inside the other with the lower level inside.
+  A test body at `moderate` inside its whole test class at `aggressive` is valid; two ranges that
+  cross each other are not.
+- When the declaration line is in the diff, start the fold on the line after it, so the reader
+  keeps the signature and can still find where the symbol is defined. The title then states what
+  the body does rather than repeating the name. When the declaration is outside the diff, the
+  title names the symbol.
+- Set a file's `collapsed` field to the level at which its whole body hides; its header stays
+  visible. `light` is for wholly generated files, such as lock files, snapshots, and migrations,
+  never for a test file, a template, or anything hand-written.
+  At `moderate`, collapse every file the layer rationale already accounts for. At `aggressive`,
+  collapse every file outside the layer's core, which is most of them. A file with an annotation
+  or an attention point never collapses, at any level: it is core, and it uses folds. Keep tests
+  with the feature they cover even when their bodies are collapsed; confidence is not a reason to
+  move meaningful behavior into Other.
 - Generate no explanation or confidence score for a fold. The title is plain text. Use the actual test title or symbol
   name when it fits. For a longer name, use a faithful excerpt with an ellipsis within the fold-title
   cap, preserving the behavior and distinguishing condition. The full name remains in the expanded
-  code. Omit `collapsed` and `folds` where the code should start open.
+  code. Omit `collapsed` and `folds` where the code should start open at every level.
 
 ## Length rules
 

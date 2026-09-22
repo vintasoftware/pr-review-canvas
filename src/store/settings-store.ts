@@ -16,6 +16,10 @@ skin: ${DEFAULT_SETTINGS.skin}
 # Light or dark: auto follows the operating system, light and dark pin one.
 theme: auto
 
+# How much code a review hides when it opens: light, moderate, or aggressive. The Hide code
+# control on the page changes it for that page only.
+foldLevel: light
+
 # How a review shows its layers: all on one page, or one at a time with the rail to move between
 # them.
 layerView: all
@@ -125,6 +129,7 @@ export function applySettings(text: string, input: SettingsInput): { text: strin
   doc.set('version', 1)
   doc.set('skin', settings.skin)
   doc.set('theme', settings.theme)
+  doc.set('foldLevel', settings.foldLevel)
   doc.set('layerView', settings.layerView)
   doc.set('agent', settings.agent)
   doc.set('model', settings.model)
@@ -140,6 +145,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.theme !== undefined) {
     out.theme = input.theme
+  }
+  if (input.foldLevel !== undefined) {
+    out.foldLevel = input.foldLevel
   }
   if (input.layerView !== undefined) {
     out.layerView = input.layerView

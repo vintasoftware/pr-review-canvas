@@ -12,6 +12,8 @@ import {
   pointsByLevel,
   pointToMarkdown,
   postedUrls,
+  queuedFor,
+  refreshPointCommands,
   sevsumHtml,
 } from './points.js'
 
@@ -54,6 +56,7 @@ describe('points', () => {
     expect([...(li?.querySelectorAll('button.cmd') ?? [])].map(b => b.textContent)).toEqual([
       'copy',
       'post to github',
+      'add to review',
       'dismiss',
     ])
     // Only "ask" waits for the chat pane; the other three work.
@@ -177,4 +180,102 @@ describe('dismissed points', () => {
     expect(document.querySelector('li.finding')?.hasAttribute('hidden')).toBe(true)
     expect(document.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
   })
+
+  it('offers both ways to send a point, and says so once it is waiting in the review', () => {
+    const p = points[0]
+    if (!p) {
+      throw new Error('no point')
+    }
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state })}</ol>`
+    // A point's text is written in advance, so it keeps both ways out even with a review open.
+    expect([...document.querySelectorAll('li.finding button.cmd')].map(b => b.textContent)).toEqual([
+      'copy',
+      'post to github',
+      'add to review',
+      'dismiss',
+    ])
+    expect(queuedFor(p, { state })).toBe(false)
+
+    const queued = { ...state, pending: [draftFor(p)] }
+    expect(queuedFor(p, { state: queued })).toBe(true)
+    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state: queued })}</ol>`
+    const marker = document.querySelector('li.finding .pill.pending')
+    expect(marker?.textContent).toBe('in your review')
+    // Neither way out is offered again while it waits: the draft itself is edited on the diff.
+    expect(document.querySelector('[data-act="point-post"]')).toBeNull()
+    expect(document.querySelector('[data-act="point-queue"]')).toBeNull()
+  })
+
+  it('draws a point that is already posted as its link, whatever the review holds', () => {
+    const p = points[0]
+    if (!p) {
+      throw new Error('no point')
+    }
+    const state = { ...emptyState('2026-09-10T12:00:00.000Z'), pending: [draftFor(p)] }
+    const posted = new Map([[p.fingerprint, 'https://github.com/x#r1001']])
+    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state, posted })}</ol>`
+    expect(document.querySelector('.tbtns a')?.textContent).toBe('view comment')
+  })
+
+  it('redraws a point only when it joins the review or leaves it', () => {
+    const p = points[0]
+    if (!p) {
+      throw new Error('no point')
+    }
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state })}</ol>`
+    const el = document.querySelector('li.finding')
+    if (el === null) {
+      throw new Error('no point element')
+    }
+    // Nothing changed, so the commands are left exactly as they are.
+    expect(refreshPointCommands(el, p, { dismissed: false, state })).toBe(false)
+
+    const queued = { ...state, pending: [draftFor(p)] }
+    expect(refreshPointCommands(el, p, { dismissed: false, state: queued })).toBe(true)
+    expect(el.querySelector('.pill.pending')?.textContent).toBe('in your review')
+    expect(refreshPointCommands(el, p, { dismissed: false, state: queued })).toBe(false)
+
+    // Taking the draft away puts both commands back.
+    expect(refreshPointCommands(el, p, { dismissed: false, state })).toBe(true)
+    expect([...el.querySelectorAll('button.cmd')].map(b => b.getAttribute('data-act'))).toEqual([
+      null,
+      'point-post',
+      'point-queue',
+      'point-dismiss',
+    ])
+  })
+
+  it('puts a point into and out of the review wherever it is drawn', () => {
+    const p = points[0]
+    if (!p) {
+      throw new Error('no point')
+    }
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    document.body.innerHTML =
+      `<ol class="findings">${pointCardHtml(p, { ...ctx, state })}</ol>` +
+      `<table><tbody>${pointRowHtml(p, { ...ctx, state })}</tbody></table>`
+    const queued = { ...state, pending: [draftFor(p)] }
+    applyDismissed(document.body, points, queued, ctx)
+    expect(document.querySelectorAll('.pill.pending.queued').length).toBe(2)
+    applyDismissed(document.body, points, state, ctx)
+    expect(document.querySelectorAll('.pill.pending.queued').length).toBe(0)
+    expect(document.querySelectorAll('[data-act="point-queue"]').length).toBe(2)
+  })
 })
+
+/** @param {import('./contract-types.js').Point} p */
+function draftFor(p) {
+  return /** @type {import('./contract-types.js').PendingComment} */ ({
+    id: 'p1',
+    path: p.path,
+    line: p.line,
+    side: p.side ?? 'new',
+    body: pointToMarkdown(p),
+    pointFingerprint: p.fingerprint,
+    headSha: 'a'.repeat(40),
+    createdAt: '2026-09-10T12:00:00.000Z',
+    updatedAt: '2026-09-10T12:00:00.000Z',
+  })
+}

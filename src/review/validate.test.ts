@@ -60,12 +60,13 @@ describe('validateModelOutput', () => {
       throw new Error('missing test file')
     }
 
-    file.collapsed = true
-    file.folds = [{ title: 'runs', side: 'new', startLine: 2, endLine: 4 }]
+    // A test file keeps its titles at light, so it collapses from moderate.
+    file.collapsed = 'moderate'
+    file.folds = [{ title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'moderate' }]
 
     expect(validateModelOutput(output, input())).toEqual({ ok: true, errors: [], output })
 
-    file.folds[0] = { title: 'runs', side: 'new', startLine: 2, endLine: 400 }
+    file.folds[0] = { title: 'runs', side: 'new', startLine: 2, endLine: 400, level: 'moderate' }
     const invalid = validateModelOutput(output, input())
 
     expect(invalid.output).toBeNull()
@@ -80,12 +81,14 @@ describe('validateModelOutput', () => {
   })
 
   it.each([
-    { title: '', side: 'new', startLine: 2, endLine: 4 },
-    { title: '   ', side: 'new', startLine: 2, endLine: 4 },
-    { title: 'runs', side: 'head', startLine: 2, endLine: 4 },
-    { title: 'runs', side: 'new', startLine: 0, endLine: 4 },
-    { title: 'runs', side: 'new', startLine: 2.5, endLine: 4 },
-    { title: 'runs', side: 'new', startLine: 2 },
+    { title: '', side: 'new', startLine: 2, endLine: 4, level: 'light' },
+    { title: '   ', side: 'new', startLine: 2, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'head', startLine: 2, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 0, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 2.5, endLine: 4, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 2, level: 'light' },
+    { title: 'runs', side: 'new', startLine: 2, endLine: 4 },
+    { title: 'runs', side: 'new', startLine: 2, endLine: 4, level: 'none' },
   ])('rejects malformed fold JSON: %o', fold => {
     const output = clean()
     const file = output.layers[0]?.files[0]
@@ -110,7 +113,7 @@ describe('validateModelOutput', () => {
       throw new Error('missing test file')
     }
 
-    file.folds = [{ title, side: 'new', startLine: 2, endLine: 4 }]
+    file.folds = [{ title, side: 'new', startLine: 2, endLine: 4, level: 'light' }]
     expect(errorsOf(output)).toEqual([expect.objectContaining({ code: 'TEXT_TOO_LONG' })])
   })
 
@@ -739,13 +742,26 @@ describe('validateModelOutput', () => {
       JSON.parse(await readFile(path.join(PACKAGE_ROOT, '__fixtures__/pr-278/review.json'), 'utf8'))
     )
     const { config } = await import('../project-config.js').then(m => m.loadProjectConfig(PACKAGE_ROOT))
+    // The canvas predates the reading levels, so it hides nothing and collapses test files at
+    // what now reads as light. Those are shape rules for a fresh generation; a stored artifact is
+    // held to the correctness rules only.
     const result = validateModelOutput(artifactToModelOutput(artifact), {
       files: artifact.files,
       caps: TEXT_CAPS,
       limits: LIMITS,
       highRisk: config.highRisk,
+      storedArtifact: true,
     })
     expect(result.errors.map(formatValidationError)).toEqual([])
     expect(result.ok).toBe(true)
+
+    const fresh = validateModelOutput(artifactToModelOutput(artifact), {
+      files: artifact.files,
+      caps: TEXT_CAPS,
+      limits: LIMITS,
+      highRisk: config.highRisk,
+    })
+    expect(fresh.ok).toBe(false)
+    expect(new Set(fresh.errors.map(error => error.code))).toEqual(new Set(['FOLD_MISSING', 'FOLD_INVALID']))
   })
 })

@@ -149,14 +149,27 @@ describe('createReviewSession', () => {
     const s = session({
       postReview: async (_pr, input) => {
         sent.push(input)
-        return { review: { id: 7, state: 'APPROVED', url: 'https://github.com/r', submittedAt: null } }
+        return {
+          review: { id: 7, state: 'APPROVED', url: 'https://github.com/r', submittedAt: null },
+          comments: [],
+          warnings: [],
+          submitted: 0,
+          state: BASE,
+        }
       },
     })
-    expect((await s.postReview('APPROVE')).id).toBe(7)
+    expect((await s.postReview('APPROVE')).review.id).toBe(7)
     await s.postReview('REQUEST_CHANGES', 'edited')
+    await s.postReview('COMMENT', 'no verdict', { includePending: false })
     expect(sent).toEqual([
       { event: 'APPROVE', headSha: artifact.pr.headSha },
       { event: 'REQUEST_CHANGES', body: 'edited', headSha: artifact.pr.headSha },
+      {
+        event: 'COMMENT',
+        body: 'no verdict',
+        includePending: false,
+        headSha: artifact.pr.headSha,
+      },
     ])
   })
 

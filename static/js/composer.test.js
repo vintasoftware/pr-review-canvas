@@ -3,6 +3,7 @@
 import {
   applyCapabilityGating,
   closeComposers,
+  concealForComposer,
   composerBody,
   composerHtml,
   composerInput,
@@ -50,11 +51,50 @@ describe('composerHtml', () => {
     expect(box.getAttribute('data-line')).toBe('4')
     expect(box.hasAttribute('data-start-line')).toBe(false)
     expect(box.querySelector('label')?.getAttribute('for')).toBe('c1-t')
+    // With no review open, a comment on a diff line can go either way, so both commands are
+    // there, with starting a review first.
     expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
       'markdown-toggle',
+      'composer-queue',
       'composer-post',
       'composer-cancel',
     ])
+    expect(box.querySelector('[data-act="composer-queue"]')?.textContent).toBe('start a review')
+  })
+
+  it('drops the single-comment command once a review is open', () => {
+    const box = mount(
+      composerHtml({
+        id: 'c1',
+        label: 'Comment on src/app.ts:4',
+        kind: 'inline',
+        path: 'src/app.ts',
+        line: 4,
+        side: 'new',
+        pendingActive: true,
+      })
+    )
+    // Posting one comment on its own would publish it while the review is still held back, so
+    // the only way left is into the review.
+    expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
+      'markdown-toggle',
+      'composer-queue',
+      'composer-cancel',
+    ])
+    expect(box.querySelector('[data-act="composer-queue"]')?.textContent).toBe('add review comment')
+  })
+
+  it('keeps one command on a reply and a pull-request comment, which no review holds', () => {
+    for (const kind of /** @type {const} */ (['reply', 'issue'])) {
+      const box = mount(
+        composerHtml({ id: `c-${kind}`, label: 'Reply', kind, inReplyToId: 7, pendingActive: true })
+      )
+      expect([...box.querySelectorAll('button')].map(b => b.getAttribute('data-act'))).toEqual([
+        'markdown-toggle',
+        'composer-post',
+        'composer-cancel',
+      ])
+    }
   })
 
   it('escapes the draft and the label it is given', () => {
@@ -178,6 +218,50 @@ describe('focusComposer and closeComposers', () => {
     expect(document.querySelectorAll('.composer-box').length).toBe(0)
     expect(document.querySelectorAll('tr.composer').length).toBe(0)
     expect(closeComposers(document)).toBe(0)
+  })
+})
+
+describe('concealForComposer', () => {
+  /** The markup a draft is drawn in: a body and its commands, with a box standing in for them. */
+  function draft() {
+    document.body.innerHTML =
+      '<div class="cmt pending-cmt"><span class="av"></span>' +
+      '<div class="prose">one</div>' +
+      '<span class="tbtns"><button data-act="pending-edit">edit</button></span></div>'
+    const host = document.querySelector('.pending-cmt')
+    if (host === null) {
+      throw new Error('no host')
+    }
+    host.insertAdjacentHTML(
+      'beforeend',
+      composerHtml({ id: 'c1', label: 'x', kind: 'inline', pendingId: 'p1' })
+    )
+    return host
+  }
+
+  it('hides what the box stands in for', () => {
+    const host = draft()
+    concealForComposer(host)
+    expect(host.querySelector('.prose')?.hasAttribute('hidden')).toBe(true)
+    expect(host.querySelector('.tbtns')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('puts it back when the box closes, however it closed', () => {
+    const host = draft()
+    concealForComposer(host)
+    expect(closeComposers(document)).toBe(1)
+    expect(host.querySelector('.composer-box')).toBeNull()
+    expect(host.querySelector('.prose')?.hasAttribute('hidden')).toBe(false)
+    expect(host.querySelector('.tbtns')?.hasAttribute('hidden')).toBe(false)
+  })
+
+  it('leaves alone what was hidden for its own reasons', () => {
+    const host = draft()
+    // A closed box never concealed this, so closing must not reveal it.
+    host.insertAdjacentHTML('beforeend', '<div class="extra" hidden>not mine</div>')
+    concealForComposer(host)
+    closeComposers(document)
+    expect(host.querySelector('.extra')?.hasAttribute('hidden')).toBe(true)
   })
 })
 
