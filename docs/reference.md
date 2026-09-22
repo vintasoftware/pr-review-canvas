@@ -329,18 +329,48 @@ placed in Other while its source is in a regular layer.
 
 The data directory's `settings.yml` accepts these keys and values:
 
-| Key              | Default  | Accepted values                                  |
-| ---------------- | -------- | ------------------------------------------------ |
-| `version`        | `1`      | `1`                                              |
-| `skin`           | `github` | `terminal`, `github`                             |
-| `theme`          | `auto`   | `auto`, `light`, `dark`                          |
-| `agent`          | `claude` | `claude`, `codex`                                |
-| `model`          | `null`   | A model ID, or `null` for the agent's default    |
-| `chatTimeoutSec` | `600`    | Integer seconds, 30–3600                         |
-| `maxTurns`       | `null`   | Integer 1–100, or `null` for the agent's default |
+| Key              | Default  | Accepted values                                   |
+| ---------------- | -------- | ------------------------------------------------- |
+| `version`        | `1`      | `1`                                               |
+| `skin`           | `github` | `terminal`, `github`                              |
+| `theme`          | `auto`   | `auto`, `light`, `dark`                           |
+| `agent`          | `claude` | `claude`, `codex`                                 |
+| `model`          | `null`   | A model ID, or `null` for the agent's default (1) |
+| `chatTimeoutSec` | `600`    | Integer seconds, 30–3600                          |
+| `maxTurns`       | `null`   | Integer 1–100, or `null` for the agent's default  |
+
+(1) A model ID names a family; see [Model families](#model-families).
 
 Invalid settings fall back to defaults. URL parameters `?skin=github&theme=light` can override
 appearance for one page load without saving it.
+
+#### Model families
+
+Each chat turn runs the newest model of the family you saved. A trailing `[...]`, such as `[1m]` or
+`[high]`, is kept.
+
+- **Claude:** an Anthropic model ID becomes its family alias, which the `claude` CLI resolves to
+  its newest model. `claude-opus-4-8[1m]` runs as `opus[1m]`, and `claude-haiku-4-5-20251001` runs
+  as `haiku`.
+- **Codex:** a GPT model follows the `upgrade` links in the Codex model catalog
+  (`codex debug models`) to the model that replaced it, even under a new name: `gpt-5.6-terra` runs
+  as `gpt-6-sol`. A model with no `upgrade` link runs as saved.
+- **Blank model:** the agent's own default applies. If a thread's session is still on a replaced
+  model, for example one started before a release, the turn moves it to the replacement.
+
+To pin one exact Claude version, use a provider-prefixed ID. These run as saved:
+
+| Provider       | Example ID                          |
+| -------------- | ----------------------------------- |
+| Amazon Bedrock | `us.anthropic.claude-opus-4-8-v1:0` |
+| Google Vertex  | `claude-opus-4-8@20260801`          |
+
+A provider-prefixed ID works only when Claude Code is set up for that provider, for example with
+`CLAUDE_CODE_USE_BEDROCK=1` or `CLAUDE_CODE_USE_VERTEX=1`. With the Anthropic API there is no pin.
+A replaced GPT model always runs as its replacement, so GPT has no pin either.
+
+Claude chat runs the `claude` CLI on PATH through `CLAUDE_CODE_EXECUTABLE`. Set that variable before
+`pr-review serve` to use another binary.
 
 By default, Git worktrees of the same clone share the main checkout's data directory. Separate
 clones have separate data. An explicit data-directory override also relocates `settings.yml`,

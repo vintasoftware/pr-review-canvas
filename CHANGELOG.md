@@ -35,6 +35,19 @@
   and a layer's mark follows only when the layer holds exactly the same files and none of them
   changed. When any mark follows, the page names the canvas it was made on.
 
+### AI chat
+
+- A saved model runs as the newest model of its family. A pinned Claude ID such as
+  `claude-opus-4-8[1m]` runs as the `opus[1m]` alias, and a GPT model that the Codex catalog marks
+  as replaced runs as its replacement, even when the new model has a different name
+  (`gpt-5.6-terra` runs as `gpt-6-sol`). With no saved model, a thread still on a replaced model
+  moves to its replacement. A Bedrock or Vertex Claude ID pins one version.
+- AI Chat wants acpx 0.19 or newer: `npm install -g acpx@latest`.
+- Claude chat runs through the `claude` CLI on PATH instead of the older Claude Code bundled with
+  acpx's adapter, so `opus` means the model Claude Code itself uses. Set `CLAUDE_CODE_EXECUTABLE`
+  to choose another binary.
+- The settings dialog suggests family aliases for Claude and the current GPT models for Codex.
+
 ### Review interface
 
 - AI Chat minimizes at any width. On a wide screen the docked pane drops out of the layout, the

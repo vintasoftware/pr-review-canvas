@@ -9,10 +9,13 @@ import { esc, qs } from './dom.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
 
-/** Model ids the input suggests per agent. Free text is allowed; this is only a shortcut. */
+/**
+ * Model ids the input suggests per agent. Free text is allowed; this is only a shortcut. The
+ * server runs the newest model of whichever family is saved, so these do not go stale.
+ */
 export const MODEL_SUGGESTIONS = {
-  claude: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'],
-  codex: ['gpt-5.2', 'gpt-5.2[high]'],
+  claude: ['opus', 'opus[1m]', 'sonnet', 'haiku', 'fable'],
+  codex: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra[high]'],
 }
 
 /** @param {string} agent */

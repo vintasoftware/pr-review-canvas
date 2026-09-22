@@ -15,6 +15,10 @@ export interface FakeRunnerOptions {
   delayMs?: number
   /** Holds `ensureSession` until it resolves, so a test can act while a turn is still setting up. */
   ensureGate?: Promise<void>
+  /** What `modelUpgrades` answers, per agent. */
+  modelUpgrades?: Record<string, Record<string, string>>
+  /** What `sessionModel` answers for every session; null by default. */
+  sessionModel?: string | null
 }
 
 export interface FakeRunner extends AgentRunner {
@@ -92,6 +96,12 @@ export function createFakeRunner(options: FakeRunnerOptions = {}): FakeRunner {
     },
     async availability(agent) {
       return options.availability?.[agent] ?? { installed: true, authenticated: true }
+    },
+    async modelUpgrades(agent) {
+      return new Map(Object.entries(options.modelUpgrades?.[agent] ?? {}))
+    },
+    async sessionModel() {
+      return options.sessionModel ?? null
     },
   }
 }

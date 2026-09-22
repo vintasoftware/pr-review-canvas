@@ -2,6 +2,7 @@
 // and keep the transcript. The lock is what makes `CHAT_BUSY` a real answer rather than two
 // agents writing into one thread.
 import type { AgentRunner } from '../acpx/acpx.js'
+import { latestModel } from '../acpx/models.js'
 import type { ChatContext, ChatEvent, ChatThreadsResponse, ChatTurn } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
@@ -73,6 +74,29 @@ interface RunningTurn {
   run: { cancel: () => Promise<void> } | null
   /** True once a stop arrived, which can be before the agent has started. */
   stopped: boolean
+}
+
+/**
+ * The `--model` of one turn: the newest model of the saved family. With no saved model the agent's
+ * own default applies, unless the session is on a model that has since been replaced: a thread
+ * started months ago, or a default pinned to an old id.
+ */
+async function modelForTurn(
+  runner: AgentRunner,
+  settings: Settings,
+  session: string,
+  cwd: string
+): Promise<string | undefined> {
+  const upgrades = await runner.modelUpgrades(settings.agent)
+  if (settings.model !== null) {
+    return latestModel(settings.agent, settings.model, upgrades)
+  }
+  const current = await runner.sessionModel({ agent: settings.agent, session, cwd })
+  if (current === null) {
+    return undefined
+  }
+  const latest = latestModel(settings.agent, current, upgrades)
+  return latest === current ? undefined : latest
 }
 
 export function createChatManager(deps: ChatManagerDeps): ChatManager {
@@ -232,6 +256,8 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       context: input.context,
     })
 
+    const model = await modelForTurn(deps.runner, settings, thread.name, deps.repoRoot)
+
     // A stop that arrived while the turn was setting up means no agent is started at all. The
     // transcript is written before the events, so a reader who leaves now still finds it there.
     if (slot.stopped) {
@@ -255,7 +281,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       prompt,
       cwd: deps.repoRoot,
       timeoutSec: settings.chatTimeoutSec,
-      model: settings.model ?? undefined,
+      model,
       maxTurns: settings.maxTurns ?? undefined,
       // The runner scrubs the line before it gets here; this only writes it down.
       onRawLine: line => {
