@@ -129,7 +129,7 @@ pr-review publish <canvasDir> --agent <your agent id> --model <model id if you k
 ```
 
 - `--agent`: a free-text id of the agent product you are: `claude`, `codex`, `gemini`, ...
-- `--model`: the model id when you know it (`claude-opus-4-1`, `gpt-5`, ...); omit it otherwise.
+- `--model`: the model id when you know it (`claude-opus-5-5`, `gpt-6-astra`, ...); omit it otherwise.
 - `--harness`: `claude-code` when you run inside Claude Code, `codex` inside Codex, `other`
   anywhere else.
 

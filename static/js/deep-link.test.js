@@ -244,6 +244,7 @@ describe('a rendered review screen', () => {
     const state = emptyState(NOW.toISOString())
     setRenderContext({
       artifact,
+      headSha: artifact.pr.headSha,
       files: artifact.files,
       patches: toPatchMap(SYNTHETIC_FILES),
       comments: [],

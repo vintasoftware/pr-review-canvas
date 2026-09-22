@@ -274,6 +274,37 @@ describe('createChatManager() threads and settings', () => {
     expect(runner.runs[0]?.agent).toBe('codex')
   })
 
+  it('runs the newest model of the saved family', async () => {
+    await settings.write({ agent: 'codex', model: 'gpt-5.6-terra[high]' })
+    build({ runner: createFakeRunner({ modelUpgrades: { codex: { 'gpt-5.6-terra': 'gpt-6-sol' } } }) })
+    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    expect(runner.runs[0]?.model).toBe('gpt-6-sol[high]')
+  })
+
+  it('moves a Claude thread with no saved model from a versioned id to its alias', async () => {
+    build({ runner: createFakeRunner({ sessionModel: 'claude-opus-5' }) })
+    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    expect(runner.runs[0]?.model).toBe('opus')
+  })
+
+  it('moves a Codex thread with no saved model off a model the catalog replaced', async () => {
+    await settings.write({ agent: 'codex' })
+    build({
+      runner: createFakeRunner({
+        sessionModel: 'gpt-5.6-terra',
+        modelUpgrades: { codex: { 'gpt-5.6-terra': 'gpt-6-sol' } },
+      }),
+    })
+    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    expect(runner.runs[0]?.model).toBe('gpt-6-sol')
+  })
+
+  it("leaves a thread with no saved model on the agent's default when it is current", async () => {
+    build({ runner: createFakeRunner({ sessionModel: 'opus[1m]' }) })
+    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    expect(runner.runs[0]?.model).toBeUndefined()
+  })
+
   it('passes the timeout and the turn cap the settings hold', async () => {
     await settings.write({ chatTimeoutSec: 120, maxTurns: 3 })
     await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))

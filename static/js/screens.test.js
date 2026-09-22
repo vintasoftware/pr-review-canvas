@@ -186,6 +186,7 @@ describe('header', () => {
     expect([...(hdr?.querySelectorAll('.signoff .cmd') ?? [])].map(b => b.textContent)).toEqual([
       'approve on github',
       'request changes',
+      'comment',
     ])
     // Approve waits for every layer; request changes is allowed at any time.
     expect([...(hdr?.querySelectorAll('.signoff .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual([

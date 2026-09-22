@@ -46,7 +46,7 @@ describe('runDoctorChecks', () => {
     )
     expect(report.checks.skill.ok).toBe(false)
     expect(report.checks.skill.detail).toContain(CODEX_SKILLS_DIR)
-    expect(report.checks.skill.hint).toBe('run `pr-review install-skill`')
+    expect(report.checks.skill.hint).toBe('run `pr-review upgrade` or `pr-review install-skill`')
   })
 
   it('accepts copies after Git converts line endings to CRLF', async () => {
@@ -255,7 +255,7 @@ describe('pr-review doctor', () => {
       check: {
         ok: false,
         detail: 'acpx is missing or could not report its version',
-        hint: 'install with `npm install -g acpx` and check `acpx --version`',
+        hint: 'install with `npm install -g acpx@latest` and check `acpx --version`',
       },
       exit: 1,
     })),
@@ -291,7 +291,7 @@ describe('pr-review doctor', () => {
           acpx: {
             ok: false,
             detail: 'process timed out',
-            hint: 'install with `npm install -g acpx` and check `acpx --version`',
+            hint: 'install with `npm install -g acpx@latest` and check `acpx --version`',
           },
         },
       },

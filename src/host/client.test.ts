@@ -86,6 +86,14 @@ describe.each<{ spec: HostCliSpec; env: Record<string, string> }>([
 ])('createHostClient for $spec.cli', ({ spec, env }) => {
   const cli = spec.cli
 
+  it('accepts empty success responses from publishing and deleting draft notes', async () => {
+    const { exec, calls } = fakeExec(() => ({ stdout: '' }))
+    const client = createHostClient(spec, exec)
+    expect(await client.post('draft_notes/bulk_publish', {})).toBeNull()
+    expect(await client.post('draft_notes/1', {}, 'DELETE')).toBeNull()
+    expect(calls[1]).toContain('DELETE')
+  })
+
   it('runs the binary with its instance in the environment, pins GET, and passes params as fields', async () => {
     const { exec, calls, options } = fakeExec(() => ({ stdout: '[{"id":1}]' }))
     const client = createHostClient(spec, exec)

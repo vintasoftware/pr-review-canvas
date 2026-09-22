@@ -9,6 +9,7 @@ import { findRow, nearestRow } from './anchors.js'
 import { viewCommentHtml } from './comment-link.js'
 import { esc, fragment, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
+import { pendingRowHtml } from './pending.js'
 import { pointRowHtml } from './points.js'
 
 const DECORATION = 'data-decoration'
@@ -147,6 +148,66 @@ export function insertThreadRow(card, key, t, opts) {
 }
 
 /**
+ * The drafts of one file, drawn under the lines they comment on. A draft whose line is not on the
+ * page (a fold, or a file drawn short) goes under the nearest row, like every other decoration.
+ * @param {HTMLElement} card
+ * @param {string} key
+ * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} drafts
+ * @param {Date} now
+ * @returns {{ placed: number, missed: number }}
+ */
+export function insertPendingRows(card, key, drafts, now) {
+  let placed = 0
+  let missed = 0
+  for (const draft of drafts) {
+    const near = nearestRow(card, key, draft.side, draft.line)
+    if (near === null) {
+      missed++
+      continue
+    }
+    const row = firstRow(pendingRowHtml([draft], now))
+    row.setAttribute(DECORATION, 'pending')
+    row.dataset['pendingId'] = draft.id
+    row.dataset['pendingBody'] = draft.body
+    if (near.approx) row.classList.add('is-approx')
+    let after = near.row
+    while (
+      after.nextElementSibling instanceof HTMLTableRowElement &&
+      after.nextElementSibling.getAttribute(DECORATION) === 'pending'
+    ) {
+      after = after.nextElementSibling
+    }
+    after.insertAdjacentElement('afterend', row)
+    placed++
+  }
+  return { placed, missed }
+}
+
+/** Update draft rows without replacing thread replies, annotations, or active editors.
+ * @param {HTMLElement} card
+ * @param {string} key
+ * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} drafts
+ * @param {Date} now
+ */
+export function refreshPendingRows(card, key, drafts, now) {
+  const remaining = new Map(drafts.map(p => [p.id, p]))
+  for (const row of card.querySelectorAll('tr[data-decoration="pending"]')) {
+    const draft = remaining.get(row.getAttribute('data-pending-id') ?? '')
+    if (draft === undefined) {
+      row.remove()
+      continue
+    }
+    remaining.delete(draft.id)
+    if (row.getAttribute('data-pending-body') !== draft.body) {
+      const prose = row.querySelector('.pending-cmt > .prose')
+      if (prose !== null) prose.innerHTML = renderMarkdown(draft.body, { github: true })
+      row.setAttribute('data-pending-body', draft.body)
+    }
+  }
+  insertPendingRows(card, key, [...remaining.values()], now)
+}
+
+/**
  * @param {string} html
  * @returns {HTMLTableRowElement}
  */
@@ -166,7 +227,7 @@ function firstRow(html) {
  * right after the anchor row, so they are added in reverse).
  * @param {HTMLElement} card
  * @param {string} key
- * @param {{ annotations: ReadonlyArray<Annotation>, points: ReadonlyArray<Point>, threads: ReadonlyArray<Thread>, paths: ReadonlySet<string>, now: Date, state?: import('./contract-types.js').PrState, posted?: ReadonlyMap<string, string>, hiddenThreads?: ReadonlySet<number> }} data
+ * @param {{ annotations: ReadonlyArray<Annotation>, points: ReadonlyArray<Point>, threads: ReadonlyArray<Thread>, pending?: ReadonlyArray<import('./contract-types.js').PendingComment>, paths: ReadonlySet<string>, now: Date, state?: import('./contract-types.js').PrState, posted?: ReadonlyMap<string, string>, hiddenThreads?: ReadonlySet<number> }} data
  * @returns {{ placed: number, missed: number }}
  */
 export function applyDecorations(card, key, data) {
@@ -185,6 +246,11 @@ export function applyDecorations(card, key, data) {
       missed++
     }
   }
+  // Drafts are added before the threads, so under one line they end up after them: the comment
+  // that is already on the forge reads first, the one still being written reads last.
+  const drafts = insertPendingRows(card, key, data.pending ?? [], data.now)
+  placed += drafts.placed
+  missed += drafts.missed
   for (const t of [...data.threads].reverse()) {
     count(
       insertThreadRow(card, key, t, { now: data.now, hidden: data.hiddenThreads?.has(t.root.id) ?? false })

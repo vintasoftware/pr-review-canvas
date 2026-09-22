@@ -15,13 +15,14 @@ import { askButtonHtml } from './ask.js'
 import { applyCodeFolds, setCodeFoldLevel, wireFoldReveal } from './code-folds.js'
 import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
-import { applyDecorations } from './diff-decorations.js'
+import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
+import { pendingForPath } from './pending.js'
 import { pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
 import { foldCountText } from './reading-level.js'
@@ -32,6 +33,7 @@ import { anchorKey, buildThreads } from './threads.js'
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
  *   patches: Record<string, string> | null,
+ *   headSha: string,
  *   comments: ReadonlyArray<ReviewComment>,
  *   state: PrState,
  *   now: Date,
@@ -586,28 +588,87 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   }
   const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
   host.innerHTML = renderDiff({ key: entry.key, path: entry.path, lang: entry.lang }, patch, { hunkIds })
-  const layer = ctx.artifact.layers.find(l => l.id === layerId)
-  const lf = layer?.files.find(f => f.path === entry.path)
-  const annotations = lf?.annotations ?? []
-  const points = ctx.artifact.points.filter(
-    p => p.path === entry.path && hunkIds.has(hunkIdForPoint(p, entry))
-  )
-  const threads = threadsForHunks(ctx.comments, entry, hunkIds)
-  const { placed, missed } = applyDecorations(card, key, {
-    annotations,
-    points,
-    threads,
+  const lf = layerFileOf(ctx, layerId, entry.path)
+  const { placed, missed } = decorateCard(card, ctx, { key, layerId, entry, hunkIds })
+  const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).threaded
+  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, threaded)
+  wireFoldReveal(card)
+  cardRenderedHook?.(card)
+  return { rendered: true, deferred: false, placed, missed }
+}
+
+/**
+ * @param {RenderContext} ctx
+ * @param {string} layerId
+ * @param {string} path
+ */
+function layerFileOf(ctx, layerId, path) {
+  return ctx.artifact.layers.find(l => l.id === layerId)?.files.find(f => f.path === path)
+}
+
+/**
+ * Puts every decoration on one drawn card: the annotations of its layer, the attention points and
+ * comment threads of the hunks it shows, and the pending comments anchored in it. The call is
+ * idempotent, so it is also how a card is brought up to date after the state changed.
+ * @param {HTMLElement} card
+ * @param {RenderContext} ctx
+ * @param {{ key: string, layerId: string, entry: FileEntry, hunkIds: ReadonlySet<string> }} at
+ */
+function decorateCard(card, ctx, at) {
+  return applyDecorations(card, at.key, {
+    annotations: layerFileOf(ctx, at.layerId, at.entry.path)?.annotations ?? [],
+    points: ctx.artifact.points.filter(
+      p => p.path === at.entry.path && at.hunkIds.has(hunkIdForPoint(p, at.entry))
+    ),
+    threads: threadsForHunks(ctx.comments, at.entry, at.hunkIds),
+    pending: draftsForCard(ctx, at.entry, at.hunkIds),
     paths: pathSet(ctx.files),
     now: ctx.now,
     state: ctx.state,
     posted: postedUrls(ctx.state, ctx.comments),
     hiddenThreads: new Set(Object.keys(ctx.state.hiddenThreads).map(Number)),
   })
-  const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).threaded
-  applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, threaded)
-  wireFoldReveal(card)
-  cardRenderedHook?.(card)
-  return { rendered: true, deferred: false, placed, missed }
+}
+
+/**
+ * Drafts only belong to the diff and hunk they were written on. Earlier-commit drafts are
+ * available in the pending bar, and the server checks diff equality before submitting them.
+ * @param {RenderContext} ctx
+ * @param {FileEntry} entry
+ * @param {ReadonlySet<string>} hunkIds
+ */
+function draftsForCard(ctx, entry, hunkIds) {
+  return pendingForPath(ctx.state, entry.path).filter(
+    p => p.headSha === ctx.headSha && hunkIds.has(hunkForLine(entry.hunks, p.side, p.line)?.id ?? '')
+  )
+}
+
+/** Update only drafts and newly posted threads; preserve existing decorations and editors.
+ * @param {ParentNode} root
+ * @param {RenderContext} ctx
+ * @param {ReadonlySet<string>} paths
+ * @param {ReadonlyArray<ReviewComment>} [submitted]
+ */
+export function refreshCardDecorations(root, ctx, paths = pathSet(ctx.files), submitted = []) {
+  let redrawn = 0
+  for (const card of root.querySelectorAll('article.file')) {
+    if (!(card instanceof HTMLElement) || !paths.has(card.getAttribute('data-path') ?? '')) continue
+    const key = card.getAttribute('data-key')
+    const host = card.querySelector('.diff-host')
+    const entry = ctx.files.find(f => f.key === key)
+    if (key === null || entry === undefined || host === null || host.querySelector('table.diff') === null)
+      continue
+    const hunkIds = new Set((host.getAttribute('data-hunks') ?? '').split(',').filter(Boolean))
+    refreshPendingRows(card, key, draftsForCard(ctx, entry, hunkIds), ctx.now)
+    for (const thread of threadsForHunks(submitted, entry, hunkIds)) {
+      if (card.querySelector(`[data-thread="${thread.root.id}"]`) === null) {
+        insertThreadRow(card, key, thread, { now: ctx.now })
+      }
+    }
+    cardRenderedHook?.(card)
+    redrawn++
+  }
+  return redrawn
 }
 
 /**
@@ -738,18 +799,6 @@ export function hydrateAll(root, ctx) {
 }
 
 /**
- * The layer file a card was rendered from, or undefined when the artifact no longer has it.
- * @param {HTMLElement} card
- * @param {ReviewArtifact} artifact
- * @returns {LayerFile | undefined}
- */
-function layerFileOf(card, artifact) {
-  const layerId = card.getAttribute('data-layer')
-  const path = card.getAttribute('data-path')
-  return artifact.layers.find(l => l.id === layerId)?.files.find(f => f.path === path)
-}
-
-/**
  * Switches how much code the page hides. A card the reader opened or closed by hand follows the
  * new level too: changing the level is a request to change exactly that. The folds and counters
  * then follow as refreshFolds says.
@@ -765,7 +814,10 @@ export function setFoldLevel(root, level) {
 
   const commentPaths = commentPathsOf(ctx)
   for (const card of Array.from(root.querySelectorAll('article.file'))) {
-    const lf = card instanceof HTMLElement ? layerFileOf(card, ctx.artifact) : undefined
+    const lf =
+      card instanceof HTMLElement
+        ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
+        : undefined
     if (card instanceof HTMLElement && lf !== undefined) {
       setCardCollapsed(
         card,
@@ -801,7 +853,10 @@ export function refreshFolds(root) {
 
   const commentPaths = commentPathsOf(ctx)
   for (const card of Array.from(root.querySelectorAll('article.file'))) {
-    const lf = card instanceof HTMLElement ? layerFileOf(card, ctx.artifact) : undefined
+    const lf =
+      card instanceof HTMLElement
+        ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
+        : undefined
     if (card instanceof HTMLElement) {
       const layerId = card.getAttribute('data-layer') ?? ''
       const threaded = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPaths).threaded

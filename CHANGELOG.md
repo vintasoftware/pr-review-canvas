@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Pending reviews
+
+- A comment on a diff line can go into a pending review instead of out on its own: **start a
+  review** holds it locally. Once a review is open, **add review comment** is the only way out of
+  the box, because a single comment would publish ahead of the review still being written. The
+  drafts are part of the review state, so they survive a reload, and nothing reaches the forge
+  until the review is submitted.
+- An attention point can join the review too, with **add to review** next to **post to github**.
+  It keeps both while a review is open, because its text is written in advance. Once the review
+  lands, the point shows the comment it became, as it does when posted directly.
+- A bar under the progress line says how many comments are waiting and offers to finish or discard
+  the review; each draft is drawn on its line with a **pending** badge and commands to edit or
+  delete it.
+- Submitting a review sends the drafts with it: on GitHub as the comments of the one call that
+  creates the review, so they land as a single review; on GitLab through native draft-note batch
+  publication. Existing GitLab drafts must be finished first. A refused batch retains local drafts;
+  a separate approval failure after publication is reported without submitting comments again.
+
+### Sign-off
+
+- A third verdict, **comment**, posts a review with no approval or rejection, next to the existing
+  **approve** and **request changes**, each of which already carries an editable review body.
+  Only approval still asks that every layer was read.
+
 ### Breaking
 
 - Reviewed marks are keyed by the layer's own key instead of its position in the canvas, so a
@@ -34,6 +58,26 @@
   canvas it was made on and the one on screen under the same layer key with a byte-identical patch,
   and a layer's mark follows only when the layer holds exactly the same files and none of them
   changed. When any mark follows, the page names the canvas it was made on.
+
+### Upgrades
+
+- `pr-review upgrade` upgrades pr-review and acpx with `npm install -g` when npm has newer
+  versions. It also refreshes the project's skill copies that no longer match the installed
+  pr-review. It lists the changes and asks first, or applies them with `--yes`. When a skill copy
+  changes, it says to commit and push it. `doctor` and `serve` now suggest it for a stale skill.
+
+### AI chat
+
+- A saved model runs as the newest model of its family. A versioned Claude ID such as
+  `claude-opus-4-8[1m]` runs as the `opus[1m]` alias, and a GPT model that the Codex catalog marks
+  as replaced runs as its replacement, even when the new model has a different name
+  (`gpt-5.6-terra` runs as `gpt-6-sol`). With no saved model, a thread still on a replaced model
+  moves to its replacement. `pin:<id>` sends one exact model ID as written, for either agent;
+  Bedrock and Vertex Claude IDs run as written too.
+- Claude chat runs through the `claude` CLI on PATH instead of the older Claude Code bundled with
+  acpx's adapter, so `opus` means the model Claude Code itself uses. Set `CLAUDE_CODE_EXECUTABLE`
+  to choose another binary.
+- The settings dialog suggests family aliases for Claude and the current GPT models for Codex.
 
 ### Review interface
 

@@ -15,15 +15,15 @@ For setup and the basic review workflow, see the [README](../README.md).
 
 ### Repository and runtime options
 
-| Option                           | Applies to                 | Default and behavior                                                                                             |
-| -------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `--repo <dir>`                   | All commands               | Uses the current directory when omitted; resolves the repository root from there                                 |
-| `--data-dir <dir>`               | All except `install-skill` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
-| `--port <n>`                     | `serve`                    | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
-| `--agent claude\|codex`          | `serve`                    | Overrides the saved chat agent for this run                                                                      |
-| `--model <id>`                   | `serve`                    | Overrides the saved chat model for this run                                                                      |
-| `--fixture-canvas <review.json>` | `serve`                    | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
-| `PR_REVIEW_HOST=gitlab`          | Environment                | Treats a non-github.com origin as GitLab (self-hosted hosts whose name does not contain `gitlab`)                |
+| Option                           | Applies to                               | Default and behavior                                                                                             |
+| -------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--repo <dir>`                   | All commands                             | Uses the current directory when omitted; resolves the repository root from there                                 |
+| `--data-dir <dir>`               | All except `install-skill` and `upgrade` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
+| `--port <n>`                     | `serve`                                  | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
+| `--agent claude\|codex`          | `serve`                                  | Overrides the saved chat agent for this run                                                                      |
+| `--model <id>`                   | `serve`                                  | Overrides the saved chat model for this run                                                                      |
+| `--fixture-canvas <review.json>` | `serve`                                  | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
+| `PR_REVIEW_HOST=gitlab`          | Environment                              | Treats a non-github.com origin as GitLab (self-hosted hosts whose name does not contain `gitlab`)                |
 
 Repository operations require an `origin` remote on **github.com** or **GitLab** (gitlab.com, a
 hostname that contains `gitlab`, or any host with `PR_REVIEW_HOST=gitlab`). GitHub Enterprise Server
@@ -190,13 +190,42 @@ Each installed `SKILL.md` records `metadata.body-sha256` in its YAML frontmatter
 covers the body after the closing frontmatter delimiter, with CRLF normalized to LF. `doctor`
 compares the recorded hash and actual body against the skill bundled with the running CLI. Any
 outdated or modified copy in `.claude/skills` or `.agents/skills` fails the skill check, even if the
-other copy is current. Refresh copies with `pr-review install-skill` (repeat any custom directory
-flags used during installation). Automatic discovery checks the two default directories.
+other copy is current. Refresh copies with `pr-review upgrade` or `pr-review install-skill` (repeat
+any custom directory flags used during installation). Automatic discovery checks the two default directories.
 
 `serve` runs this skill check automatically and prints failures with a repair hint to stderr.
 Warnings do not prevent the server from starting. Use `doctor --all-checks` for full diagnostics.
 The `.gitignore` update always applies to the selected repository root, even with custom skill
 directories.
+
+### Upgrade options
+
+```text
+pr-review upgrade [--yes] [--only package,acpx,skill] [--repo <dir>]
+```
+
+`upgrade` checks three things, prints a plan to stderr, and asks `Proceed? [y/N]`:
+
+| What              | When it changes                                                             | How                                                        |
+| ----------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| pr-review         | npm has a newer version, and this copy is the global npm install            | `npm install -g @vintasoftware/pr-review-canvas@<version>` |
+| acpx              | npm has a newer version, and the acpx on PATH is the global npm install     | `npm install -g acpx@<version>`                            |
+| The project skill | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one | The same copy `install-skill` makes                        |
+
+When pr-review itself upgrades, the skill step covers every copy, since the new version can ship a
+new skill. The new version then runs `pr-review upgrade --yes --only <kinds>`, naming the kinds of
+step confirmed after the pr-review one, so its own code checks and copies its own skill and it
+takes no step the plan did not show. If the pr-review install fails, the current version runs the
+remaining steps itself. `--only` limits any run to the kinds it names; the rest are listed in
+`notes`. `upgrade` does not install acpx or add a skill copy that is not
+there; it names the command that does. It does not replace an unmanaged skill directory, which
+needs `install-skill --force`. A pr-review run from a clone or through `npx` is left alone, with a
+note to update it the way it was installed.
+
+Without a terminal to ask, `upgrade` prints the plan and changes nothing; `--yes` applies it
+without asking. stdout carries one JSON line: `applied`, and after applying, `ok` and each step's
+`status` (`done` or `failed`, with a `detail`). The exit code is `1` when a step
+failed. When a skill copy changes, stderr says to commit and push it.
 
 ### Output and exit codes
 
@@ -331,19 +360,53 @@ placed in Other while its source is in a regular layer.
 
 The data directory's `settings.yml` accepts these keys and values:
 
-| Key              | Default  | Accepted values                                  |
-| ---------------- | -------- | ------------------------------------------------ |
-| `version`        | `1`      | `1`                                              |
-| `skin`           | `github` | `terminal`, `github`                             |
-| `theme`          | `auto`   | `auto`, `light`, `dark`                          |
-| `foldLevel`      | `light`  | `light`, `moderate`, `aggressive`                |
-| `agent`          | `claude` | `claude`, `codex`                                |
-| `model`          | `null`   | A model ID, or `null` for the agent's default    |
-| `chatTimeoutSec` | `600`    | Integer seconds, 30–3600                         |
-| `maxTurns`       | `null`   | Integer 1–100, or `null` for the agent's default |
+| Key              | Default  | Accepted values                                   |
+| ---------------- | -------- | ------------------------------------------------- |
+| `version`        | `1`      | `1`                                               |
+| `skin`           | `github` | `terminal`, `github`                              |
+| `theme`          | `auto`   | `auto`, `light`, `dark`                           |
+| `foldLevel`      | `light`  | `light`, `moderate`, `aggressive`                 |
+| `agent`          | `claude` | `claude`, `codex`                                 |
+| `model`          | `null`   | A model ID, or `null` for the agent's default (1) |
+| `chatTimeoutSec` | `600`    | Integer seconds, 30–3600                          |
+| `maxTurns`       | `null`   | Integer 1–100, or `null` for the agent's default  |
+
+(1) A model ID names a family; see [Model families](#model-families).
 
 Invalid settings fall back to defaults. URL parameters `?skin=github&theme=light` can override
 appearance for one page load without saving it.
+
+#### Model families
+
+Each chat turn runs the newest model of the family you saved. A trailing `[...]`, such as `[1m]` or
+`[high]`, is kept.
+
+- **Claude:** an Anthropic model ID becomes its family alias, which the `claude` CLI resolves to
+  its newest model. `claude-opus-4-8[1m]` runs as `opus[1m]`, and `claude-haiku-4-5-20251001` runs
+  as `haiku`.
+- **Codex:** a GPT model follows the `upgrade` links in the Codex model catalog
+  (`codex debug models`) to the model that replaced it, even under a new name: `gpt-5.6-terra` runs
+  as `gpt-6-sol`. A model with no `upgrade` link runs as saved.
+- **Blank model:** the agent's own default applies. If a thread's session is still on a replaced
+  model, for example one started before a release, the turn moves it to the replacement.
+
+To pin one exact version, write `pin:` before the ID. The ID after it is sent as written, for
+either agent:
+
+| Agent  | Example                   | Runs                       |
+| ------ | ------------------------- | -------------------------- |
+| Claude | `pin:claude-opus-4-8`     | Opus 4.8                   |
+| Codex  | `pin:gpt-5.6-terra[high]` | GPT-5.6 Terra, high effort |
+
+The agent must still offer the model. Claude Code refuses some combinations, for example
+`claude-opus-4-8[1m]`, and the turn fails with the agent's error.
+
+Bedrock and Vertex Claude IDs, such as `us.anthropic.claude-opus-4-8-v1:0` or
+`claude-opus-4-8@20260801`, run as written without `pin:`. They work only when Claude Code is set
+up for that provider, for example with `CLAUDE_CODE_USE_BEDROCK=1` or `CLAUDE_CODE_USE_VERTEX=1`.
+
+Claude chat runs the `claude` CLI on PATH through `CLAUDE_CODE_EXECUTABLE`. Set that variable before
+`pr-review serve` to use another binary.
 
 By default, Git worktrees of the same clone share the main checkout's data directory. Separate
 clones have separate data. An explicit data-directory override also relocates `settings.yml`,
@@ -439,13 +502,61 @@ zone or `pr-review import <zip> --pr <n>`.
 
 You can post inline comments, replies, PR-level comments, and attention points. Inline comments
 must target lines in the diff. Posting uses your `gh` or `glab` account and remains subject to its
-repository permissions. On GitLab, **request changes** posts the review body as a merge request
-note; **approve** calls GitLab's approve API.
+repository permissions.
 
-The sign-off dialog previews an editable review body summarizing reviewed layers, dismissed
-attention points, and comments posted from the canvas. Approval requires every layer except
-**Other changes** to be reviewed for the current head. Requesting changes does not require that
-completion. If the head moves before submission, reload and review the current commit.
+Click a line number to comment on one line. Shift-click a second line number, or drag across a
+range, to select several lines: the comment then covers the whole range, and posts as a multi-line
+comment (`start_line` on GitHub, a `line_range` position on GitLab). A range must stay inside one
+chunk of the diff.
+
+### Pending reviews
+
+A comment on a diff line offers two commands while no review is open. **post to github** sends it
+on its own, at once. **start a review** puts it in a pending review instead, which is kept on your
+machine and posted to nobody until you submit it.
+
+Once a review is open, the box offers only **add review comment**. Posting a single comment would
+publish it while the rest of the review is still held back, so that way is closed for as long as
+anything is waiting, and the drafts go out together. Replies and pull-request comments are not part
+of a forge review's comment list, so they still post at once either way.
+
+An attention point carries **add to review** next to **post to github**, and keeps both even while
+a review is open: its text is written in advance, so sending one on its own is a use of its own
+rather than a comment jumping the queue. A point waiting in the review says **in your review** and
+is edited or dropped as the draft on its line. Once the review lands, the point shows the comment
+it became, the same as posting it directly.
+
+While a review has comments waiting, a bar sits under the progress line saying how many, and each
+draft is drawn on the diff with a **pending** badge and commands to edit or delete it. Drafts are
+part of the local review state, so they survive a reload. **discard** throws the whole pending
+review away; nothing has to be withdrawn from the forge, because nothing was sent there.
+
+Drafts from an earlier commit are listed separately in the pending bar with their original
+location and commit. They are submitted only when the stored diff is identical to the current
+diff and `canvas.keepForIdenticalDiff` is enabled. If the code changed, copy the text, delete the
+old draft, and write a comment on the current code. A draft added or edited while a review is
+being submitted stays pending.
+
+**finish your review** opens the sign-off dialog, which tells you how many drafts will go out with
+the review. On GitHub they are sent as the comments of the one call that creates the review, so
+they appear as a single review. GitLab stages the inline comments and summary as draft notes,
+then publishes them in one batch. Finish or discard any review already pending in GitLab first.
+A refused submission retains the local drafts and removes the remote drafts staged by that attempt.
+GitLab approval is a separate step; if it fails after publication, the comments remain published
+and the page asks you to approve in GitLab.
+
+### Sign-off
+
+Sign-off has the three verdicts the forge itself offers: **comment** posts a review with no
+verdict (nothing is approved or rejected), **approve**, and **request changes**. Each opens a
+dialog previewing an editable review body summarizing reviewed layers, dismissed attention points,
+and comments posted from the canvas, so an approval or a rejection always carries a comment.
+
+Approval requires every layer except **Other changes** to be reviewed for the current head.
+Requesting changes and a comment-only review do not require that completion. On GitLab,
+**approve** calls GitLab's approve API; **request changes** and **comment** post the review body
+as a merge request note. If the head moves before submission, reload and review the current
+commit.
 
 ### Outdated canvases
 

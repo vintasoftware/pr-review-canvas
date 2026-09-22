@@ -59,8 +59,35 @@ const state = emptyState(NOW.toISOString())
 
 /** @returns {import('./layers.js').RenderContext} */
 function ctx() {
-  return { artifact, files, patches, comments, state, now: NOW }
+  return { artifact, headSha: artifact.pr.headSha, files, patches, comments, state, now: NOW }
 }
+
+describe('pending draft placement', () => {
+  it('only places a draft on the displayed head and its owning hunk', () => {
+    const pending = [
+      {
+        id: 'p1',
+        path: 'src/app.ts',
+        line: 4,
+        side: /** @type {const} */ ('new'),
+        body: 'a comment',
+        headSha: artifact.pr.headSha,
+        createdAt: NOW.toISOString(),
+        updatedAt: NOW.toISOString(),
+      },
+    ]
+    const withDraft = { ...state, pending }
+    document.body.innerHTML = renderLayers(artifact, files, withDraft)
+    hydrateAll(document, { ...ctx(), state: withDraft })
+    expect(document.querySelectorAll('tr.pending-row')).toHaveLength(1)
+    expect(document.querySelector('tr.pending-row')?.closest('article')?.getAttribute('data-layer')).toBe(
+      'run-path'
+    )
+    document.body.innerHTML = renderLayers(artifact, files, withDraft)
+    hydrateAll(document, { ...ctx(), state: withDraft, headSha: 'f'.repeat(40) })
+    expect(document.querySelectorAll('tr.pending-row')).toHaveLength(0)
+  })
+})
 
 describe('rail', () => {
   it('lists overview, layers with dots, and Other muted', () => {
@@ -759,6 +786,7 @@ describe('PR #278 fixture render', () => {
       document.body.innerHTML = renderLayers(fixture, fixture.files, state)
       const rendered = hydrateAll(document, {
         artifact: fixture,
+        headSha: fixture.pr.headSha,
         files: fixture.files,
         patches: toPatchMap(live),
         comments: [],

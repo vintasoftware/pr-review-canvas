@@ -5,6 +5,7 @@ import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   approveBlockedReason,
   externalLink,
+  FAILED_REASON,
   fillSignoffDialog,
   openSignoffDialog,
   SIGNOFF_DIALOG_ID,
@@ -76,7 +77,12 @@ describe('the sign-off dialog', () => {
 
   it('shows the generated body and the commit it lands on', () => {
     const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
-    fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'Reviewed 1 of 1 layer.', unreviewed: [] })
+    fillSignoffDialog(dialog, {
+      headSha: 'a'.repeat(40),
+      body: 'Reviewed 1 of 1 layer.',
+      unreviewed: [],
+      pending: 0,
+    })
     expect(signoffBody(dialog)).toBe('Reviewed 1 of 1 layer.')
     expect(dialog.querySelector('textarea')?.hasAttribute('aria-busy')).toBe(false)
     expect(dialog.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(false)
@@ -105,6 +111,29 @@ describe('the sign-off dialog', () => {
     expect(dialog.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(true)
   })
 
+  it('stops saying the body is loading once the load has failed', () => {
+    const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
+    const area = dialog.querySelector('textarea')
+    expect(area?.getAttribute('aria-busy')).toBe('true')
+    showSignoffError(dialog, 'the server said no')
+    // The box kept announcing itself as busy with an error beside it, and the reason posting was
+    // out of reach still named a load that was over.
+    expect(area?.hasAttribute('aria-busy')).toBe(false)
+    expect(area?.placeholder).toBe('')
+    expect(dialog.querySelector('[data-act="signoff-post"]')?.getAttribute('data-disabled-reason')).toBe(
+      FAILED_REASON
+    )
+  })
+
+  it('leaves a body that did load alone when a later command fails', () => {
+    const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
+    fillSignoffDialog(dialog, { headSha: 'b'.repeat(40), body: 'Reviewed.', unreviewed: [], pending: 0 })
+    showSignoffError(dialog, 'the server said no')
+    // Posting failed, not loading, so the body the reviewer may want to retry with stays put.
+    expect(signoffBody(dialog)).toBe('Reviewed.')
+    expect(dialog.querySelector('[data-act="signoff-post"]')?.hasAttribute('disabled')).toBe(false)
+  })
+
   it('builds a link only for an http address', () => {
     expect(externalLink('javascript:alert(1)', 'x').hasAttribute('href')).toBe(false)
     const ok = externalLink('https://github.com/x', 'x')
@@ -120,7 +149,9 @@ describe('a dialog the page stripped of its parts', () => {
       throw new Error('no dialog')
     }
     expect(signoffBody(dialog)).toBe('')
-    expect(fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'x', unreviewed: [] })).toBe(dialog)
+    expect(
+      fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'x', unreviewed: [], pending: 0 })
+    ).toBe(dialog)
     expect(
       showSignoffResult(dialog, { id: 1, state: 'APPROVED', url: 'https://x.test', submittedAt: null })
     ).toBeNull()

@@ -35,6 +35,7 @@ describe('small contracts', () => {
       hiddenThreads: {},
       posted: [],
       dismissed: {},
+      pending: [],
       chat: { threads: [] },
       updatedAt: '2026-09-10T12:00:00.000Z',
     })

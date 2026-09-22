@@ -239,6 +239,7 @@ export class PrAppElement extends HTMLElement {
         artifact,
         files,
         patches,
+        headSha: staleSha ?? bundle.pr.headSha,
         comments: bundle.comments.reviewComments,
         state: bundle.state,
         now,

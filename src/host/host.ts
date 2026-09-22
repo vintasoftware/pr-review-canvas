@@ -1,12 +1,18 @@
 import { shareGithubCanvas } from '../github/canvas-comment.js'
 import { shareGitlabCanvas } from '../gitlab/canvas-comment.js'
 import type { Capabilities, PublicHost, ReviewSummary } from '../contract/api.js'
-import type { FetchCommentsResult, PostCommentInput, PostCommentResult } from '../contract/comments.js'
+import type {
+  FetchCommentsResult,
+  PostCommentInput,
+  PostCommentResult,
+  ReviewComment,
+} from '../contract/comments.js'
 import type { Repo } from '../contract/review-artifact.js'
 import { GITHUB_ATTACHMENTS } from '../github/attachments.js'
 import { probeCapabilities } from '../github/capabilities.js'
 import { fetchComments } from '../github/comments.js'
 import { postComment } from '../github/post-comment.js'
+import type { PendingComment } from '../contract/pending.js'
 import type { ReviewEvent } from '../contract/reviews.js'
 import { postReview } from '../github/post-review.js'
 import { fetchPrMeta } from '../github/pr.js'
@@ -22,6 +28,12 @@ import type { AttachmentLink } from './attachments.js'
 import { GH_CLI, glabCli, type HostClient, type HostCliSpec } from './client.js'
 
 export type HostKind = PublicHost['kind']
+
+/** The review and the comments created by this submission. */
+export interface PostedReview extends ReviewSummary {
+  comments: ReviewComment[]
+  warnings: string[]
+}
 
 /** How canvas zips attached to a review are found and fetched on one forge. */
 export interface HostAttachments {
@@ -68,13 +80,19 @@ export interface Host {
     input: PostCommentInput,
     diff: Derived
   ): Promise<PostCommentResult>
+  /**
+   * Submits the review, with the comments the reviewer had waiting. GitHub takes them in the one
+   * call that creates the review; GitLab stages and batch-publishes draft notes, which is why the
+   * diff is passed here too.
+   */
   postReview(
     client: HostClient,
     repo: Repo,
     number: number,
     headSha: string,
-    input: { event: ReviewEvent; body: string }
-  ): Promise<ReviewSummary>
+    input: { event: ReviewEvent; body: string; comments?: ReadonlyArray<PendingComment> },
+    diff: Derived
+  ): Promise<PostedReview>
   probeCapabilities(client: HostClient, repo: Repo): Promise<Capabilities>
   canvasCommentLimit: number
   shareCanvas(client: HostClient, repo: Repo, number: number, body: string): Promise<string>
@@ -121,8 +139,8 @@ export function gitlabHost(hostname: string): Host {
       fetchGitlabComments(client, repo, number, headSha, now, webBase),
     postComment: (client, repo, number, headSha, input, diff) =>
       postGitlabComment(client, repo, number, headSha, input, { webBase, ...diff }),
-    postReview: (client, repo, number, headSha, input) =>
-      postGitlabReview(client, repo, number, headSha, input, webBase),
+    postReview: (client, repo, number, headSha, input, diff) =>
+      postGitlabReview(client, repo, number, headSha, input, webBase, diff),
     probeCapabilities: probeGitlabCapabilities,
     canvasCommentLimit: 1_000_000,
     shareCanvas: (client, repo, number, body) => shareGitlabCanvas(client, repo, number, body, webBase),

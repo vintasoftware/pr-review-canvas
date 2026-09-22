@@ -177,6 +177,60 @@ export function postComment(prNumber, input, opts = {}) {
 }
 
 /**
+ * Adds one comment to the pending review. Nothing reaches the forge: it is kept in the local
+ * state until the review is submitted.
+ * @param {ReviewKey} prNumber
+ * @param {import('./contract-types.js').AddPendingInput} input
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').StateResponse>}
+ */
+export function addPending(prNumber, input, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/pending`, {
+    method: 'POST',
+    body: input,
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
+ * @param {ReviewKey} prNumber
+ * @param {string} id
+ * @param {string} body
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').StateResponse>}
+ */
+export function editPending(prNumber, id, body, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/pending/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { body },
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
+ * @param {ReviewKey} prNumber
+ * @param {string} id
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').StateResponse>}
+ */
+export function deletePending(prNumber, id, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/pending/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
+ * Throws the whole pending review away.
+ * @param {ReviewKey} prNumber
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').StateResponse>}
+ */
+export function discardPending(prNumber, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/pending`, { method: 'DELETE', fetchImpl: opts.fetchImpl })
+}
+
+/**
  * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').ReviewBodyResponse>}
@@ -187,7 +241,7 @@ export function fetchReviewBody(prNumber, opts = {}) {
 
 /**
  * @param {ReviewKey} prNumber
- * @param {{ event: 'APPROVE' | 'REQUEST_CHANGES', body?: string, headSha?: string }} input
+ * @param {{ event: import('./contract-types.js').ReviewEvent, body?: string, headSha?: string, includePending?: boolean }} input
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').PostReviewResponse>}
  */

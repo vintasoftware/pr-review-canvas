@@ -27,6 +27,12 @@ _Avoid_: Proven bug, automatic finding
 The reviewer's record of which changes they have examined, kept against the canvas they examined them on rather than against a commit. Progress survives every later commit that canvas keeps applying to.
 _Avoid_: Test coverage, approval
 
+**Pending review**:
+A review the reviewer is still writing: comments anchored to lines, kept in the local review state
+and posted to nobody, until one submission sends them together with a verdict. Discarding it
+withdraws nothing, because nothing was ever sent.
+_Avoid_: Draft pull request, unsaved comment, queued request
+
 **Local review app**:
 The review interface and saved review state on the reviewer's machine. GitHub operations and AI requests still communicate with their respective services.
 _Avoid_: Offline AI, code never leaves the machine

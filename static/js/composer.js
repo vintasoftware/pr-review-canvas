@@ -20,6 +20,8 @@ import { noPostingTitle, postToLabel } from './host.js'
  *   inReplyToId?: number,
  *   pointFingerprint?: string,
  *   body?: string,
+ *   pendingActive?: boolean,
+ *   pendingId?: string,
  * }} ComposerOptions
  */
 
@@ -33,6 +35,8 @@ function dataAttributes(opts) {
     ['data-start-line', opts.startLine],
     ['data-in-reply-to', opts.inReplyToId],
     ['data-fingerprint', opts.pointFingerprint],
+    ['data-pending-id', opts.pendingId],
+    ['data-pending-active', opts.pendingActive === true ? '1' : '0'],
   ]
   return pairs
     .filter(([, value]) => value !== undefined)
@@ -41,7 +45,57 @@ function dataAttributes(opts) {
 }
 
 /**
- * The box itself. The textarea carries the draft; the two commands act on the nearest
+ * The commands under the box, which are the ones the forge's own page offers.
+ *
+ * With no review open, a comment on a diff line can go either way: into a review it starts, or
+ * straight out on its own. Once a review is open it can only join it. Posting one comment on its
+ * own would publish it while the rest of the review is still held back, so that way is closed for
+ * as long as something is waiting, and the drafts are submitted together.
+ *
+ * A draft being edited has neither: it is already in the review, so it is only saved.
+ * @param {ComposerOptions} opts
+ */
+function commandsHtml(opts) {
+  const cancel = '<button class="cmd" type="button" data-act="composer-cancel">cancel</button>'
+  if (opts.pendingId !== undefined) {
+    return `<button class="cmd fill" type="button" data-act="pending-save">save</button>${cancel}`
+  }
+  const post = (lead = false) =>
+    `<button class="cmd${lead ? ' fill' : ''}" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>`
+  if (opts.kind !== 'inline') {
+    return `${post(true)}${cancel}`
+  }
+  if (opts.pendingActive === true) {
+    return `<button class="cmd fill" type="button" data-act="composer-queue">add review comment</button>${cancel}`
+  }
+  return (
+    `<button class="cmd fill" type="button" data-act="composer-queue">start a review</button>` +
+    post() +
+    cancel
+  )
+}
+
+/** Keep an open inline composer's commands in step when another action starts a review.
+ * @param {ParentNode} root
+ * @param {boolean} active
+ */
+export function refreshComposerCommands(root, active) {
+  for (const box of root.querySelectorAll('.composer-box[data-kind="inline"]')) {
+    if (
+      box.hasAttribute('data-pending-id') ||
+      box.hasAttribute('data-posting') ||
+      (box.getAttribute('data-pending-active') === '1') === active
+    )
+      continue
+    const actions = box.querySelector('.composer-actions')
+    if (actions !== null)
+      actions.innerHTML = commandsHtml({ id: box.id, label: '', kind: 'inline', pendingActive: active })
+    box.setAttribute('data-pending-active', active ? '1' : '0')
+  }
+}
+
+/**
+ * The box itself. The textarea carries the draft; the commands act on the nearest
  * `.composer-box` ancestor.
  * @param {ComposerOptions} opts
  */
@@ -51,8 +105,7 @@ export function composerHtml(opts) {
     `<label class="sr" for="${esc(opts.id)}-t">${esc(opts.label)}</label>` +
     previewControlsHtml() +
     `<textarea id="${esc(opts.id)}-t" rows="3" placeholder="${esc(opts.label)}">${esc(opts.body ?? '')}</textarea>` +
-    `<div class="composer-actions"><button class="cmd fill" type="button" data-act="composer-post" data-needs-post>${postToLabel()}</button>` +
-    '<button class="cmd" type="button" data-act="composer-cancel">cancel</button></div></div>'
+    `<div class="composer-actions">${commandsHtml(opts)}</div></div>`
   )
 }
 
@@ -79,6 +132,24 @@ export function pendingCommentHtml() {
 export function composerBody(box) {
   const textarea = box.querySelector('textarea')
   return textarea instanceof HTMLTextAreaElement ? textarea.value.trim() : ''
+}
+
+/**
+ * What this composer would add to the pending review, or null when it is empty or is not a
+ * comment on a diff line. Only inline comments can wait: a reply and a PR-level comment have
+ * no place in a forge review's comment list.
+ * @param {Element} box
+ * @returns {Omit<import('./contract-types.js').AddPendingInput, 'headSha'> | null}
+ */
+export function composerPendingInput(box) {
+  const input = composerInput(box)
+  return input === null || input.kind !== 'inline' ? null : stripKind(input)
+}
+
+/** @param {Extract<PostCommentInput, { kind: 'inline' }>} input */
+function stripKind(input) {
+  const { kind: _kind, ...rest } = input
+  return rest
 }
 
 /**
@@ -131,8 +202,41 @@ export function focusComposer(root, id) {
   return textarea
 }
 
+/** What a composer stands in for is marked with this while the box is open. */
+const CONCEALED = 'data-composer-concealed'
+
+/** The parts of a concealed host that the box stands in for. */
+const CONCEALED_PARTS = ':scope > .prose, :scope > .tbtns'
+
 /**
- * Removes every open composer under `root`, so only one is open at a time.
+ * Hides what a composer edits while the box is open, so the reader sees one of the two rather
+ * than the draft and its editor at once. The mark is what lets any close put it back.
+ * @param {Element} host the element the composer was appended to
+ */
+export function concealForComposer(host) {
+  host.setAttribute(CONCEALED, '')
+  for (const part of Array.from(host.querySelectorAll(CONCEALED_PARTS))) {
+    part.setAttribute('hidden', '')
+  }
+}
+
+/**
+ * Puts back everything a composer was concealing. Closing is the only way a box goes away, so
+ * doing this here covers cancel, Escape, and opening another box alike.
+ * @param {ParentNode} root
+ */
+export function revealConcealed(root) {
+  for (const host of Array.from(root.querySelectorAll(`[${CONCEALED}]`))) {
+    host.removeAttribute(CONCEALED)
+    for (const part of Array.from(host.querySelectorAll(CONCEALED_PARTS))) {
+      part.removeAttribute('hidden')
+    }
+  }
+}
+
+/**
+ * Removes every open composer under `root`, so only one is open at a time, and reveals whatever
+ * they were standing in for.
  * @param {ParentNode} root
  */
 export function closeComposers(root) {
@@ -142,6 +246,7 @@ export function closeComposers(root) {
     ;(row ?? box).remove()
     closed++
   }
+  revealConcealed(root)
   return closed
 }
 
