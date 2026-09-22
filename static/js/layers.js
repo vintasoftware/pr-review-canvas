@@ -20,7 +20,7 @@ import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
-import { fileAnchorId, layerAnchorId, sanitizeKey } from './keys.js'
+import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
@@ -311,7 +311,7 @@ export function setCardCollapsed(el, collapsed) {
  */
 export function renderFileCard(lf, entry, layer, ctx) {
   const key = entry?.key ?? sanitizeKey(lf.path)
-  const cardReviewedId = `layer:${layer.id}/file:${sanitizeKey(lf.path)}`
+  const cardReviewedId = reviewedId(layer.key, lf.path)
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
   const collapsed = cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
   const isFirst = !ctx.firstCardFor.has(key)
@@ -413,7 +413,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
           .join('')}</span>`
       : ''
   const reviewed = layerProgress(layer, state) === 'done'
-  const layerReviewedId = `layer:${layer.id}`
+  const layerReviewedId = reviewedId(layer.key)
   return (
     `<pr-layer><section class="layer${reviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h" style="--dc:${dotColor(index)}">` +
     `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !reviewed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${esc(layer.title)}${risks}</h2>` +

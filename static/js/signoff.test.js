@@ -34,7 +34,7 @@ describe('approveBlockedReason', () => {
   })
 
   it('clears once every layer that is not Other is reviewed', () => {
-    const done = { ...BASE, reviewed: { 'layer:layer-1': /** @type {const} */ (true) } }
+    const done = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     expect(approveBlockedReason(artifact, done)).toBeNull()
   })
 })

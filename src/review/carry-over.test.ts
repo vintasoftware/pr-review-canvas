@@ -23,7 +23,10 @@ import { lookupCanvas, samePatches, standsForHead } from './carry-over.js'
 /** The commit the canvas describes; the pull request moved on to HEAD_SHA afterwards. */
 const OLD = 'e'.repeat(40)
 const FORCE_PUSHED = 'f'.repeat(40)
-const STRICT: ProjectConfig = { ...DEFAULT_PROJECT_CONFIG, canvas: { keepForIdenticalDiff: false } }
+const STRICT: ProjectConfig = {
+  ...DEFAULT_PROJECT_CONFIG,
+  canvas: { keepForIdenticalDiff: false, incremental: true },
+}
 const PR: Pr = { ...syntheticArtifact().pr, headSha: HEAD_SHA }
 const CANVAS = { headSha: OLD, mergeBaseSha: BASE_SHA }
 

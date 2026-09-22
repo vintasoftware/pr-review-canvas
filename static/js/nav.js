@@ -5,9 +5,11 @@
 import { fileAnchorId, layerAnchorId, sanitizeKey } from './keys.js'
 
 /**
+ * `layerId` names the layer for chat targets; `layerKey` is what a reviewed mark is keyed by, and
+ * a file item carries its layer's key so it can name the layer's mark without looking the layer up.
  * @typedef {{ kind: 'overview', id: 'overview' }
- *   | { kind: 'layer', id: string, layerId: string, key: string, other: boolean }
- *   | { kind: 'file', id: string, layerId: string, key: string, path: string, isTest: boolean, other: boolean }} NavItem
+ *   | { kind: 'layer', id: string, layerId: string, layerKey: string, key: string, other: boolean }
+ *   | { kind: 'file', id: string, layerId: string, layerKey: string, key: string, path: string, isTest: boolean, other: boolean }} NavItem
  */
 
 /**
@@ -26,13 +28,29 @@ export function buildNavOrder(artifact) {
   const seen = new Set()
   for (const layer of layers) {
     const other = layer.kind === 'other'
-    out.push({ kind: 'layer', id: layerAnchorId(layer.key), layerId: layer.id, key: layer.key, other })
+    out.push({
+      kind: 'layer',
+      id: layerAnchorId(layer.key),
+      layerId: layer.id,
+      layerKey: layer.key,
+      key: layer.key,
+      other,
+    })
     for (const f of layer.files) {
       const key = sanitizeKey(f.path)
       // The first card of a file carries the plain id; later cards of the same file add the layer key.
       const id = seen.has(key) ? `${fileAnchorId(key)}-${layer.key}` : fileAnchorId(key)
       seen.add(key)
-      out.push({ kind: 'file', id, layerId: layer.id, key, path: f.path, isTest: f.isTest, other })
+      out.push({
+        kind: 'file',
+        id,
+        layerId: layer.id,
+        layerKey: layer.key,
+        key,
+        path: f.path,
+        isTest: f.isTest,
+        other,
+      })
     }
   }
   return out

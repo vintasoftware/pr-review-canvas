@@ -324,6 +324,15 @@ export const ReviewArtifactSchema = z.object({
   generator: GeneratorSchema,
   source: z.enum(['local', 'import']),
   importedAt: z.string().optional(),
+  /**
+   * The basis canvas this one was generated from, when the run was incremental. It records where
+   * the carried content came from; a reviewer's server recomputes for itself which marks may
+   * follow, so this sha is a pointer and never a claim about what was reviewed.
+   */
+  basisCanvasSha: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
 })
 export type ReviewArtifact = z.infer<typeof ReviewArtifactSchema>
 

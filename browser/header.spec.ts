@@ -8,7 +8,7 @@ test('describes every header action and preserves tooltips after review progress
   for (const button of await page.locator('.hdr button').all()) {
     await expect(button).toHaveAttribute('title', /\S.+/)
   }
-  await page.locator('section.layer[data-layer="layer-1"] [data-act="mark-layer"]').click()
+  await page.locator('section.layer[data-layer="run-path"] [data-act="mark-layer"]').click()
   await expect(page.locator('#approve')).toBeEnabled()
   await expect(page.locator('#approve')).toHaveAttribute(
     'title',

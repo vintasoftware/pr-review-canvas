@@ -1,7 +1,7 @@
 // Renders prompt.md from the selected generation template and the prepared context. The template carries
 // the prose; this module fills the `{{TOKENS}}` with data so a wording change never touches code.
 import { z } from 'zod'
-import { type GenerationContext, LARGE_PR } from '../contract/generation-context.js'
+import { type BasisSplit, type GenerationContext, LARGE_PR } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
@@ -12,20 +12,48 @@ export { PROMPTS_DIR }
 
 export interface PromptSources {
   generation: Record<GenerationMode, string>
+  /** The same two modes, worded as an update of a basis canvas. Used when `ctx.basis` is set. */
+  incremental: Record<GenerationMode, string>
+  /**
+   * The judging rules of each mode: the half of the task that does not change between writing a
+   * canvas and updating one. Both task files of a mode end with it, so its wording has one home.
+   */
+  judging: Record<GenerationMode, string>
   format: string
   layeringGuidance: string
   qualityStandards: string
 }
 
 export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<PromptSources> {
-  const [format, layeringGuidance, qualityStandards, strict, surfacing] = await Promise.all([
+  const [
+    format,
+    layeringGuidance,
+    qualityStandards,
+    strict,
+    surfacing,
+    strictInc,
+    surfacingInc,
+    judgingStrict,
+    judgingSurfacing,
+  ] = await Promise.all([
     loadPromptFile('generation-format.md', dir, project),
     loadPromptFile('layering-guidance.md', dir, project),
     loadPromptFile('quality-standards.md', dir, project),
     loadPromptFile('generation-strict.md', dir, project),
     loadPromptFile('generation-surfacing.md', dir, project),
+    loadPromptFile('generation-strict-incremental.md', dir, project),
+    loadPromptFile('generation-surfacing-incremental.md', dir, project),
+    loadPromptFile('judging-strict.md', dir, project),
+    loadPromptFile('judging-surfacing.md', dir, project),
   ])
-  return { format, layeringGuidance, qualityStandards, generation: { strict, surfacing } }
+  return {
+    format,
+    layeringGuidance,
+    qualityStandards,
+    generation: { strict, surfacing },
+    incremental: { strict: strictInc, surfacing: surfacingInc },
+    judging: { strict: judgingStrict, surfacing: judgingSurfacing },
+  }
 }
 
 /** The line ranges of a hunk header; the trailing function context can hold backticks. */
@@ -197,6 +225,74 @@ export function schemaMarkdown(ctx: GenerationContext): string {
   return `\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\``
 }
 
+function list(items: readonly string[], empty: string): string {
+  return items.length === 0 ? `_${empty}_` : items.map(i => `- \`${i}\``).join('\n')
+}
+
+function basisMarkdown(basis: BasisSplit | undefined): string {
+  if (basis === undefined) {
+    return ''
+  }
+  return [
+    `- Basis canvas: \`${basis.canvasSha}\``,
+    `- Its canvas file: \`${basis.reviewJsonPath}\` — read it for the wording you carry`,
+  ].join('\n')
+}
+
+function fileDeltaMarkdown(basis: BasisSplit | undefined): string {
+  if (basis === undefined) {
+    return ''
+  }
+  const f = basis.files
+  return [
+    `**Untouched** — the patch is byte-identical to the basis canvas's:\n\n${list(f.unchanged, 'none')}`,
+    `**Changed** — the patch differs, so every line number in it may have moved:\n\n${list(f.changed, 'none')}`,
+    `**New** — not in the basis canvas at all:\n\n${list(f.added, 'none')}`,
+    `**Gone** — in the basis canvas, not in this diff:\n\n${list(f.removed, 'none')}`,
+  ].join('\n\n')
+}
+
+/** The two lists the generator works from: what to copy across, and what to decide anew. */
+function carriedMarkdown(basis: BasisSplit | undefined): string {
+  if (basis === undefined) {
+    return ''
+  }
+  const layers = basis.layers
+    .filter(l => l.status === 'carried')
+    .map(l => `- layer \`${l.key}\` — **${l.title}** (${l.carriedFiles.length} files, all untouched)`)
+  const files = basis.layers
+    .filter(l => l.status === 're-judged')
+    .flatMap(l => l.carriedFiles.map(p => `- \`${p}\`, from layer \`${l.key}\``))
+  const points = basis.points
+    .filter(p => p.status === 'carried')
+    .map(p => `- ${p.kind} on \`${p.path}\` — "${p.title}"`)
+  return [
+    `**Whole layers** — copy the layer with its title, rationale, decisions, checkByHand, tests, files, notes, folds, and annotations:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
+    `**Single files of a re-judged layer** — the file is untouched, so its note, folds, and annotations still fit wherever you put the file:\n\n${files.length === 0 ? '_none_' : files.join('\n')}`,
+    `**Attention points** — repeat the kind, path, and title exactly, so the point keeps its identity and any dismissal the reviewer made:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+  ].join('\n\n')
+}
+
+function reJudgedMarkdown(basis: BasisSplit | undefined): string {
+  if (basis === undefined) {
+    return ''
+  }
+  const layers = basis.layers
+    .filter(l => l.status === 're-judged')
+    .map(
+      l =>
+        `- layer \`${l.key}\` — **${l.title}**; touched: ${l.reJudgedFiles.map(p => `\`${p}\``).join(', ')}`
+    )
+  const points = basis.points
+    .filter(p => p.status === 're-judged')
+    .map(p => `- ${p.kind} on \`${p.path}\` — "${p.title}"`)
+  return [
+    `**Layers** — the head touched at least one of their files, so decide the grouping, the prose, and the anchors again:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
+    `**Attention points** — the code under them moved; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    '**The summary and the pull-request-wide risk** are always written again: they describe the whole change set, which the new commits changed.',
+  ].join('\n\n')
+}
+
 /** Selects one task and fills its data and format placeholders before the generator sees it. */
 export function renderPrompt(
   ctx: GenerationContext,
@@ -227,12 +323,23 @@ export function renderPrompt(
     TEST_PATTERNS: testPatternsMarkdown(ctx),
     SMALL_PR: smallPrMarkdown(ctx),
     MAX_REPAIR_ROUNDS: String(ctx.generation.maxRepairRounds),
+    BASIS: basisMarkdown(ctx.basis),
+    FILE_DELTA: fileDeltaMarkdown(ctx.basis),
+    CARRIED: carriedMarkdown(ctx.basis),
+    RE_JUDGED: reJudgedMarkdown(ctx.basis),
   }
-  const template = sources.generation[ctx.generation.mode].replace('{{FORMAT}}', () => sources.format)
+  // A prepared basis picks the incremental wording: one prompt states one job, with no conditions.
+  // Both wordings end with the mode's judging rules, which are assembled first so the tokens inside
+  // them are filled by the one pass below.
+  const task = ctx.basis === undefined ? sources.generation : sources.incremental
+  const template = task[ctx.generation.mode]
+    .replace('{{JUDGING}}', () => sources.judging[ctx.generation.mode])
+    .replace('{{FORMAT}}', () => sources.format)
   return template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {
     const value = tokens[name]
     if (value === undefined) {
-      throw new Error(`generation-${ctx.generation.mode}.md uses an unknown token {{${name}}}`)
+      const suffix = ctx.basis === undefined ? '' : '-incremental'
+      throw new Error(`generation-${ctx.generation.mode}${suffix}.md uses an unknown token {{${name}}}`)
     }
     return value
   })

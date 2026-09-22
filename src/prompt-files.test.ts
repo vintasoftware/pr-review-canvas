@@ -20,6 +20,10 @@ it('overrides all generation sources individually, with bundled fallback for omi
     ['generation-format.md', (s: typeof bundled) => s.format],
     ['generation-strict.md', (s: typeof bundled) => s.generation.strict],
     ['generation-surfacing.md', (s: typeof bundled) => s.generation.surfacing],
+    ['generation-strict-incremental.md', (s: typeof bundled) => s.incremental.strict],
+    ['generation-surfacing-incremental.md', (s: typeof bundled) => s.incremental.surfacing],
+    ['judging-strict.md', (s: typeof bundled) => s.judging.strict],
+    ['judging-surfacing.md', (s: typeof bundled) => s.judging.surfacing],
     ['layering-guidance.md', (s: typeof bundled) => s.layeringGuidance],
     ['quality-standards.md', (s: typeof bundled) => s.qualityStandards],
   ] as const) {

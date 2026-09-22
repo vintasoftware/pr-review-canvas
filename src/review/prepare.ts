@@ -3,6 +3,7 @@
 import { appendFile, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import {
+  type BasisSplit,
   type GenerationContext,
   isLargePr,
   type PrepareTarget,
@@ -16,6 +17,8 @@ import { fetchPrRefs } from '../git/pr-refs.js'
 import { toPr } from '../host/pr.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
+import type { Derived } from '../store/derived-store.js'
+import { fileDelta, findBasisCanvas, splitBasis } from './incremental.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
 
 export interface PrepareOptions {
@@ -131,6 +134,45 @@ async function clearCanvasDir(canvasDir: string): Promise<void> {
   }
 }
 
+/**
+ * The basis canvas of this run, split into what carries and what is re-judged, or null when the
+ * canvas is generated from a blank page: `--force`, `canvas.incremental: false`, no canvas of an
+ * ancestor commit, or a basis whose canvas or diff this machine can no longer read.
+ *
+ * Only a pull request's canvases are owned by a number; a refs or local run considers the canvases
+ * that carry no number, the same ownership rule the store's own lookup uses.
+ */
+async function resolveBasis(
+  ctx: AppContext,
+  target: PrepareTarget,
+  pr: Pr,
+  head: Derived
+): Promise<BasisSplit | null> {
+  const prNumber = target.kind === 'pr' ? target.number : undefined
+  const sha = await findBasisCanvas(ctx.canvases, ctx.git, prNumber, pr.headSha)
+  if (sha === null) {
+    return null
+  }
+  const [artifact, manifest] = await Promise.all([
+    ctx.canvases.readArtifact(sha),
+    ctx.canvases.readManifest(sha),
+  ])
+  if (artifact === null || manifest === null) {
+    return null
+  }
+  const basis = await ctx.derived.readOrBuild(sha, manifest.mergeBaseSha)
+  if (basis === null) {
+    return null
+  }
+  const files = fileDelta(basis, head)
+  return {
+    canvasSha: sha,
+    reviewJsonPath: path.join(ctx.canvases.canvasDir(sha), 'review.json'),
+    files,
+    ...splitBasis(artifact, files),
+  }
+}
+
 /** The target with its base resolved, which is the form `context.json` records. */
 async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promise<PrepareTarget> {
   if (input.kind !== 'local') {
@@ -215,6 +257,11 @@ export async function prepare(
     smallPr: derived.files.reduce((n, f) => n + f.hunks.length, 0) <= config.generation.smallPrHunks,
     largePr: isLargePr({ files: derived.files.length, additions, deletions }),
     preparedAt: ctx.now().toISOString(),
+  }
+  // `--force` means start over, so it never reads a basis, whatever the project config says.
+  const basis = opts.force || !config.canvas.incremental ? null : await resolveBasis(ctx, target, pr, derived)
+  if (basis !== null) {
+    context.basis = basis
   }
   const sources =
     opts.promptSources ??
