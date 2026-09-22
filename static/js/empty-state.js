@@ -202,7 +202,7 @@ export function marksCarriedBarHtml(markedCanvasSha) {
   return (
     '<div class="stale-bar carried-over-bar" role="status"><strong>Review progress carried over.</strong> ' +
     esc(
-      `You marked these on the canvas of ${markedCanvasSha.slice(0, 7)}; the layers and files this one leaves untouched keep those marks.`
+      `You marked these on the canvas of ${markedCanvasSha.slice(0, 7)}; a file whose diff has not changed since keeps its mark, and a layer keeps its own when it still holds exactly those files.`
     ) +
     '</div>'
   )

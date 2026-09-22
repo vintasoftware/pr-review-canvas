@@ -1,7 +1,14 @@
 import { z } from 'zod'
 import { DefaultLayerSchema, GenerationModeSchema, HighRiskRuleSchema } from '../project-config.js'
 import { DEFAULT_TEST_PATTERNS } from '../review/test-paths.js'
-import { FileEntrySchema, LIMITS, PrSchema, RepoSchema, type TextCaps } from './review-artifact.js'
+import {
+  FileEntrySchema,
+  LIMITS,
+  POINT_KINDS,
+  PrSchema,
+  RepoSchema,
+  type TextCaps,
+} from './review-artifact.js'
 
 /** What `prepare` was asked to describe: a pull request, or two refs before a PR exists. */
 export const PrepareTargetSchema = z.discriminatedUnion('kind', [
@@ -43,7 +50,7 @@ export const BasisSplitLayerSchema = z.object({
 export type BasisSplitLayer = z.infer<typeof BasisSplitLayerSchema>
 
 export const BasisSplitPointSchema = z.object({
-  kind: z.string().min(1),
+  kind: z.enum(POINT_KINDS),
   path: z.string().min(1),
   title: z.string(),
   status: z.enum(['carried', 're-judged']),

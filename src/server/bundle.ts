@@ -217,7 +217,8 @@ export async function resolveBundle(
     }
   }
   const shared = sharedCanvas === null ? {} : { sharedCanvas }
-  // Marks made on another commit describe other code, so the page never shows them as reviewed.
+  // With no canvas to read, a mark counts only when it was made on this very head; the canvas
+  // paths below ask `marksForCanvas` instead, so each path states the rule it uses once.
   const base = { ...bare, state: stateForCanvas(stored, reviewedCommit(found, pr)) }
 
   if (found.status === 'missing') {
@@ -237,10 +238,10 @@ export async function resolveBundle(
   }
   // A canvas exists for this PR, so regenerating always needs --force.
   const skillCommand = buildSkillCommand(number, { force: true })
-  // Marks made on the canvas this one was generated from follow it where the diff is untouched.
+  // Marks made on a canvas this one descends from follow it where the diff is untouched.
   const marks = await marksForCanvas(ctx, loaded.artifact, found.headSha, stored)
   const withMarks = {
-    ...base,
+    ...bare,
     state: marks.state,
     ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
   }
