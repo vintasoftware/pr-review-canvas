@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Check version and choose release channel
+        id: version
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          if [[ "$version" == *-* ]]; then
+            echo 'dist-tag=next' >> "$GITHUB_OUTPUT"
+            echo 'prerelease=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'dist-tag=latest' >> "$GITHUB_OUTPUT"
+            echo 'prerelease=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: '.node-version'
+          package-manager-cache: false
+
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.11.0
+
+      # CI already ran the full suite on this commit. This package ships source and needs no build.
+      - name: Pack and inspect the release
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP" --json > "$RUNNER_TEMP/pack.json"
+          cat "$RUNNER_TEMP/pack.json"
+          archive=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/pack.json", "utf8"))[0].filename')
+          echo "RELEASE_ARCHIVE=$RUNNER_TEMP/$archive" >> "$GITHUB_ENV"
+
+      - name: Publish to npm with provenance
+        if: github.event_name == 'push'
+        env:
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+        run: npm publish "$RELEASE_ARCHIVE" --ignore-scripts --provenance --access public --tag "$DIST_TAG"
+
+      - name: Create GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+            --generate-notes --prerelease="$PRERELEASE"

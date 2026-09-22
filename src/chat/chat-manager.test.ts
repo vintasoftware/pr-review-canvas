@@ -29,7 +29,7 @@ let manager: ChatManager
 
 function target(): ChatTarget {
   return {
-    prNumber: 42,
+    key: 42,
     headSha: HEAD_SHA,
     artifact,
     files,

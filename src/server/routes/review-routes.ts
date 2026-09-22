@@ -10,12 +10,14 @@ import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { lookupCanvas } from '../../review/carry-over.js'
 import { marksForCanvas } from '../../review/carry-marks.js'
 import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
+import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
+import { canvasBelongsTo } from '../../store/canvas-store.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
-import type { PrLoader } from '../bundle.js'
+import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
-import { parsePrNumber } from './api.js'
+import { parseTargetKey, requirePrNumber } from './api.js'
 
 const ReviewedBodySchema = z.object({
   reviewed: z.boolean(),
@@ -66,13 +68,14 @@ async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: str
   return parsed.data
 }
 
-/** Refuses a commit that is not an indexed canvas of this pull request. */
-async function requireCanvasOf(ctx: AppContext, number: number, canvasSha: string): Promise<void> {
+/** Refuses a commit that is not an indexed canvas of this target. */
+async function requireCanvasOf(ctx: AppContext, key: ReviewKey, canvasSha: string): Promise<void> {
   const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
-  if (entry === undefined || (entry.prNumber !== undefined && entry.prNumber !== number)) {
+  // The same rule the lookups use, so a mark can only be keyed to a canvas this target shows.
+  if (entry === undefined || !canvasBelongsTo(entry, key)) {
     throw new AppError(
       'CANVAS_NOT_FOUND',
-      `${canvasSha.slice(0, 7)} is not a canvas of pull request ${number}`,
+      `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,
       404,
       'reload the page'
     )
@@ -115,10 +118,10 @@ async function canvasForSignOff(
  */
 async function adoptedMarks(
   ctx: AppContext,
-  number: number,
+  key: ReviewKey,
   canvasSha: string
 ): Promise<Record<string, true> | undefined> {
-  const stored = await ctx.state.read(number)
+  const stored = await ctx.state.read(key)
   if (stored.reviewedCanvasSha === canvasSha) {
     return undefined
   }
@@ -145,18 +148,18 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
   }
 
-  const stateBody = (number: number, state: StateResponse['state']): StateResponse => ({
-    prNumber: number,
+  const stateBody = (key: ReviewKey, state: StateResponse['state']): StateResponse => ({
+    prNumber: key,
     state,
   })
 
   api.get('/prs/:n/state', async c => {
-    const number = parsePrNumber(c.req.param('n'))
-    return c.json(stateBody(number, await ctx.state.read(number)))
+    const key = parseTargetKey(c.req.param('n'))
+    return c.json(stateBody(key, await ctx.state.read(key)))
   })
 
   api.put('/prs/:n/reviewed/:id{.+}', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const id = c.req.param('id')
     if (!isReviewedId(id)) {
       throw new AppError(
@@ -167,32 +170,34 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       )
     }
     const body = await readBody(c.req.raw, ReviewedBodySchema, '{ "reviewed": true }')
-    const pr = await loader.currentPr(number)
-    requireSameHead(body.headSha, pr.headSha)
+    // A mark is made against the canvas on screen, which for a local review is the snapshot the
+    // page was drawn from, not whatever the working tree holds a keystroke later.
+    const pr = await loader.currentTarget(key)
+    if (!isLocalKey(key)) {
+      requireSameHead(body.headSha, pr.headSha)
+    }
     // The page sends back the canvas commit the bundle keyed its marks to, so a toggle costs no
-    // git work; the index, not git, says the commit is a canvas of this pull request.
+    // git work; the index, not git, says the commit is a canvas of this target.
     const canvasSha = body.canvasSha ?? pr.headSha
     if (canvasSha !== pr.headSha) {
-      await requireCanvasOf(ctx, number, canvasSha)
+      await requireCanvasOf(ctx, key, canvasSha)
     }
-    // The first mark on a canvas adopts the marks that followed it from the canvas it was
-    // generated from, so the page's carried ticks survive the write instead of being replaced.
-    const carried = await adoptedMarks(ctx, number, canvasSha)
-    return c.json(
-      stateBody(number, await ctx.state.setReviewed(number, id, body.reviewed, { canvasSha, carried }))
-    )
+    // The first mark on a canvas adopts the marks that followed it from the canvas it descends
+    // from, so the page's carried ticks survive the write instead of being replaced.
+    const carried = await adoptedMarks(ctx, key, canvasSha)
+    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, { canvasSha, carried })))
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const fingerprint = c.req.param('fingerprint')
     const body = await readBody(c.req.raw, DismissedBodySchema, '{ "dismissed": true, "reason": "…" }')
-    const next = await ctx.state.setDismissed(number, fingerprint, body.dismissed, body.reason)
-    return c.json(stateBody(number, next))
+    const next = await ctx.state.setDismissed(key, fingerprint, body.dismissed, body.reason)
+    return c.json(stateBody(key, next))
   })
 
   api.put('/prs/:n/threads/:rootCommentId/hidden', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'hiding a comment thread')
     const rootId = z.coerce.number().int().positive().safeParse(c.req.param('rootCommentId'))
     if (!rootId.success) {
       throw new AppError('BAD_REQUEST', 'the thread id is the numeric id of its first comment', 400)
@@ -202,12 +207,15 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.get('/prs/:n/capabilities', async c => {
-    parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
+    if (isLocalKey(key)) {
+      return c.json(LOCAL_CAPABILITIES)
+    }
     return c.json(await ctx.capabilities.get({ refresh: c.req.query('refresh') === '1' }))
   })
 
   api.post('/prs/:n/comments', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'posting a comment')
     const input = await readBody(c.req.raw, PostCommentInputSchema, 'an inline, reply, or issue comment')
     await requirePosting()
     const pr = await loader.currentPr(number)
@@ -240,7 +248,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.get('/prs/:n/review/body', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'the sign-off summary')
     const pr = await loader.currentPr(number)
     const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
@@ -253,7 +261,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.post('/prs/:n/review', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'submitting a review')
     const input = await readBody(c.req.raw, PostReviewInputSchema, '{ "event": "APPROVE" }')
     await requirePosting()
     const pr = await loader.currentPr(number)

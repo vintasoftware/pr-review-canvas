@@ -37,6 +37,14 @@ export interface FakeGitOptions {
   counts?: Record<string, number>
   /** Commits the fake origin serves when they are fetched by sha. */
   fetchable?: string[]
+  /** The checked-out branch; null stands for a detached HEAD. */
+  branch?: string | null
+  /** The commit `snapshotWorktree` answers with; null means the working tree matches HEAD. */
+  snapshot?: string | null
+  /** `<ref>` → what it points at, short form; unlisted refs are not symbolic. */
+  symbolicRefs?: Record<string, string>
+  /** `git config user.name`. */
+  user?: string | null
 }
 
 export interface FakeGit extends Git {
@@ -132,6 +140,35 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     remoteUrl: async name => {
       calls.push(['remote', 'get-url', name])
       return options.remotes?.[name] ?? null
+    },
+    symbolicRef: async name => {
+      calls.push(['symbolic-ref', name])
+      return options.symbolicRefs?.[name] ?? null
+    },
+    configuredUser: async () => {
+      calls.push(['config', 'user.name'])
+      return options.user ?? null
+    },
+    currentBranch: async () => {
+      calls.push(['symbolic-ref', 'HEAD'])
+      return options.branch === undefined ? 'feature' : options.branch
+    },
+    firstExistingRef: async wanted => {
+      calls.push(['rev-parse', ...wanted])
+      return wanted.find(ref => refs[ref] !== undefined) ?? null
+    },
+    snapshotWorktree: async () => {
+      // The commands the real adapter runs, so a test that asserts on `calls` reads the truth.
+      calls.push(['add', '-A'], ['write-tree'])
+      const sha = options.snapshot ?? null
+      if (sha !== null) {
+        shas.add(sha)
+        calls.push(['commit-tree', sha])
+      }
+      return sha
+    },
+    anchorCommit: async sha => {
+      calls.push(['update-ref', sha])
     },
   }
 }

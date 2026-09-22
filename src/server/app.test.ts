@@ -149,7 +149,7 @@ describe('createApp', () => {
       expect(html).toContain('<script type="module" src="/static/js/app.js"></script>')
       // The skin and the theme come from the settings file, so the server paints both onto the
       // tag itself and the page carries no script that picks them.
-      expect(html).toContain('<html lang="en" data-skin="terminal" data-theme="auto">')
+      expect(html).toContain('<html lang="en" data-skin="github" data-theme="auto">')
       expect(html).not.toContain('localStorage')
       expect(html).not.toContain('@@ -')
     })
@@ -196,20 +196,20 @@ describe('createApp', () => {
       const put = (body: unknown) =>
         app.request('/api/appearance', { method: 'PUT', headers: PUT, body: JSON.stringify(body) })
       expect(await json(await app.request('/api/appearance', { headers: LOCAL }))).toEqual({
-        skin: 'terminal',
+        skin: 'github',
         theme: 'auto',
       })
-      const saved = await put({ skin: 'github' })
+      const saved = await put({ skin: 'terminal' })
       expect(saved.status).toBe(200)
-      expect(await json(saved)).toEqual({ skin: 'github', theme: 'auto' })
+      expect(await json(saved)).toEqual({ skin: 'terminal', theme: 'auto' })
       // Saving the theme keeps the skin that was already there.
-      expect(await json(await put({ theme: 'dark' }))).toEqual({ skin: 'github', theme: 'dark' })
+      expect(await json(await put({ theme: 'dark' }))).toEqual({ skin: 'terminal', theme: 'dark' })
       expect(await json(await app.request('/api/appearance', { headers: LOCAL }))).toEqual({
-        skin: 'github',
+        skin: 'terminal',
         theme: 'dark',
       })
       expect(await t.ctx.settings.read()).toMatchObject({
-        skin: 'github',
+        skin: 'terminal',
         theme: 'dark',
         agent: 'claude',
         chatTimeoutSec: 600,
@@ -224,7 +224,7 @@ describe('createApp', () => {
         expect([body, res.status]).toEqual([body, 400])
         expect((await json<{ error: { code: string } }>(res)).error.code).toBe('BAD_REQUEST')
       }
-      expect(await t.ctx.settings.read()).toMatchObject({ skin: 'terminal', theme: 'auto' })
+      expect(await t.ctx.settings.read()).toMatchObject({ skin: 'github', theme: 'auto' })
     })
   })
 
@@ -429,7 +429,7 @@ describe('createApp', () => {
       expect(bundle.derivable).toBe(false)
       expect(bundle.files).toEqual(syntheticArtifact().files)
       expect(bundle.warnings).toEqual([
-        'the PR head or merge base is not in the local clone; diffs are not available',
+        'the head or merge base is not in the local clone; diffs are not available',
         'showing the --fixture-canvas artifact (dev only)',
       ])
     })
@@ -455,7 +455,11 @@ describe('createApp', () => {
       const bad = await app.request('/api/prs/x', { headers: LOCAL })
       expect(bad.status).toBe(400)
       expect(await json(bad)).toEqual({
-        error: { code: 'BAD_REQUEST', message: 'not a pull request number: x' },
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'not a review target: x',
+          hint: 'use a PR number, `branch`, or `uncommitted`',
+        },
       })
     })
 
@@ -493,7 +497,7 @@ describe('createApp', () => {
       t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     })
 
-    it('serves patches as JSON after the bundle built them, and 404 before', async () => {
+    it('serves patches for the head it is asked for, and 404s for one it cannot build', async () => {
       const app = createApp(t.ctx)
       const before = await app.request(`/api/prs/42/patches?headSha=${'e'.repeat(40)}`, { headers: LOCAL })
       expect(before.status).toBe(404)
@@ -509,10 +513,7 @@ describe('createApp', () => {
       expect(await json(badSha)).toEqual({
         error: { code: 'BAD_REQUEST', message: 'headSha must be a 40-character lowercase hex sha' },
       })
-      // The bundle builds derived/; patches are read from it.
-      const notBuilt = await app.request('/api/prs/42/patches', { headers: LOCAL })
-      expect(notBuilt.status).toBe(404)
-      await app.request('/api/prs/42', { headers: LOCAL })
+      // The route builds the target's own head itself, so it does not need the bundle first.
       const res = await app.request('/api/prs/42/patches', { headers: LOCAL })
       expect(res.status).toBe(200)
       const body = await json<{ headSha: string; patches: Record<string, string> }>(res)

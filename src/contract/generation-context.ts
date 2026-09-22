@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DefaultLayerSchema, GenerationModeSchema, HighRiskRuleSchema } from '../project-config.js'
 import { DEFAULT_TEST_PATTERNS } from '../review/test-paths.js'
+import { type LocalKey, LocalKeySchema } from './review-key.js'
 import {
   FileEntrySchema,
   LIMITS,
@@ -10,12 +11,34 @@ import {
   type TextCaps,
 } from './review-artifact.js'
 
-/** What `prepare` was asked to describe: a pull request, or two refs before a PR exists. */
+/**
+ * What `prepare` was asked to describe: a pull request, two refs, or one of the two reviews of
+ * work in this clone that has no pull request yet. A `local` target names only its base, because
+ * its head is whatever the branch or the working tree holds when the command runs.
+ */
+export const LocalPrepareTargetSchema = z.object({
+  kind: z.literal('local'),
+  base: z.string().min(1),
+  /** Which local review this is, which is also the key it is filed and served under. */
+  source: LocalKeySchema,
+})
+export type LocalPrepareTarget = z.infer<typeof LocalPrepareTargetSchema>
+
 export const PrepareTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('pr'), number: z.number().int().positive() }),
   z.object({ kind: z.literal('refs'), base: z.string().min(1), head: z.string().min(1) }),
+  LocalPrepareTargetSchema,
 ])
 export type PrepareTarget = z.infer<typeof PrepareTargetSchema>
+
+/**
+ * What the CLI parsed, before git has been asked anything. A local review's base may still be
+ * open here: only the clone knows which branch `origin/HEAD` points at. `prepare` resolves it and
+ * records the answer, so `publish` reads a base that cannot drift.
+ */
+export type PrepareTargetInput =
+  | Extract<PrepareTarget, { kind: 'pr' } | { kind: 'refs' }>
+  | { kind: 'local'; base?: string | undefined; source: LocalKey }
 
 const capsShape = {
   summary: z.number().int().positive(),

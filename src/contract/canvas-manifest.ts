@@ -28,6 +28,8 @@ export const CanvasIndexSchema = z.object({
        * of descent can be walked from the index alone, without opening every canvas on the way.
        */
       basisCanvasSha: z.string().optional(),
+      /** A snapshot of uncommitted work: it sits on no branch, so no pull request can claim it. */
+      worktree: z.boolean().optional(),
     })
   ),
 })

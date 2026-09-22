@@ -42,6 +42,19 @@ export function largePrNoticeHtml(bundle) {
   )
 }
 
+/**
+ * The author, linked to their page on the forge. A local review's author is the name this clone
+ * commits as, which is no forge login, so it stays plain text.
+ * @param {string} author
+ * @param {boolean} local
+ * @returns {string}
+ */
+function authorHtml(author, local) {
+  return local
+    ? esc(author)
+    : `<a href="${esc(authorProfileUrl(author))}" target="_blank" rel="noopener noreferrer">${esc(author)}</a>`
+}
+
 /** @param {PrBundle['pr']} pr */
 export function statePill(pr) {
   const state = pr.state === 'open' && pr.draft ? 'draft' : pr.state
@@ -62,15 +75,24 @@ export function renderHeader(bundle, opts) {
     ? `<span class="pill agent">${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''} · ${esc(artifact.generator.harness)}</span><span>generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`
     : ''
   const number = pr.number === null ? '' : `<span class="mono num">#${pr.number}</span>`
+  // Work that is not pushed has no page on the forge, and nothing to refresh from it either.
+  const local = bundle.local !== undefined
+  const forgeLink =
+    pr.url === ''
+      ? ''
+      : `<a class="cmd" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(currentHost().kind)}</a>`
+  const refreshTitle = local
+    ? 'Snapshot the working tree again and redraw'
+    : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
   const progress = ready ? progressHtml(artifact, bundle.state) : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
     `<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
     '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
-    `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for this PR" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
+    `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
     `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
-    `<button class="cmd" type="button" id="refresh" title="Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}">refresh</button>` +
+    `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
     `<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog"${bundle.chat.enabled || bundle.chat.acpx ? ' title="Configure the AI chat agent, model, and limits"' : ' disabled title="acpx is not installed"'}>settings</button>` +
     '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
     `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal and GitHub styling">${esc(skinLabel(opts.skin))}</button>` +
@@ -78,8 +100,8 @@ export function renderHeader(bundle, opts) {
     '</div></div>' +
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
-    `<div class="title"><h1>${number}${esc(pr.title)}</h1><a class="cmd" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(currentHost().kind)}</a></div>` +
-    `<p class="meta"><span>by <a href="${esc(authorProfileUrl(pr.author))}" target="_blank" rel="noopener noreferrer">${esc(pr.author)}</a></span>` +
+    `<div class="title"><h1>${number}${esc(pr.title)}</h1>${forgeLink}</div>` +
+    `<p class="meta"><span>by ${authorHtml(pr.author, local)}</span>` +
     `<span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>${statePill(pr)}` +
     `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
     `${largePrNoticeHtml(bundle)}${risk}${progress}</div></header>`

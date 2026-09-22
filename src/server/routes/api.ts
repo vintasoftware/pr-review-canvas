@@ -9,24 +9,45 @@ import type {
   PatchesResponse,
   SharedCanvasFetchResponse,
 } from '../../contract/api.js'
+import { isLocalKey, parseReviewKey, type ReviewKey } from '../../contract/review-key.js'
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { publicHost } from '../../host/host.js'
 import { lookupCanvas } from '../../review/carry-over.js'
-import { createPrLoader, resolveBundle, runDiscovery } from '../bundle.js'
+import { createPrLoader, resolveBundle, resolveLocalBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { chatRoutes } from './chat-routes.js'
 import { reviewRoutes } from './review-routes.js'
 
-export const PrNumberSchema = z.coerce.number().int().positive()
-
-export function parsePrNumber(raw: string): number {
-  const parsed = PrNumberSchema.safeParse(raw)
-  if (!parsed.success) {
-    throw new AppError('BAD_REQUEST', `not a pull request number: ${raw}`, 400)
+/** The target a route's `:n` names: a pull request number, or `local` for work with no PR yet. */
+export function parseTargetKey(raw: string): ReviewKey {
+  const key = parseReviewKey(raw)
+  if (key === null) {
+    throw new AppError(
+      'BAD_REQUEST',
+      `not a review target: ${raw}`,
+      400,
+      'use a PR number, `branch`, or `uncommitted`'
+    )
   }
-  return parsed.data
+  return key
+}
+
+/**
+ * The pull request behind a key, for the routes that talk to the forge. Local work has none, and
+ * saying so is better than letting the call fail somewhere inside the host client.
+ */
+export function requirePrNumber(key: ReviewKey, what: string): number {
+  if (isLocalKey(key)) {
+    throw new AppError(
+      'BAD_REQUEST',
+      `${what} needs a pull request, and this canvas describes work that has none yet`,
+      400,
+      'open the pull request, then review it at /review/<number>'
+    )
+  }
+  return key
 }
 
 const ContextQuerySchema = z.object({
@@ -76,12 +97,14 @@ function parseHeadShaQuery(raw: string | undefined): string | undefined {
 async function currentCanvasSha(
   ctx: AppContext,
   loader: ReturnType<typeof createPrLoader>,
-  number: number
+  key: ReviewKey
 ): Promise<string> {
-  const pr = await loader.currentPr(number)
-  const found = await lookupCanvas(ctx, number, pr)
+  const pr = await loader.currentTarget(key)
+  const found = isLocalKey(key)
+    ? await ctx.canvases.findForLocal(key, pr.headSha)
+    : await lookupCanvas(ctx, key, pr)
   if (found.status === 'missing') {
-    throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
+    throw new AppError('CANVAS_NOT_FOUND', `no canvas for ${String(key)}`, 404, 'generate one first')
   }
   return found.headSha
 }
@@ -170,15 +193,24 @@ export function apiRoutes(ctx: AppContext): Hono {
   })
 
   api.get('/prs/:n', async c => {
-    const number = parsePrNumber(c.req.param('n'))
-    const bundle = await resolveBundle(ctx, loader, number, { refresh: c.req.query('refresh') === '1' })
+    const key = parseTargetKey(c.req.param('n'))
+    const opts = { refresh: c.req.query('refresh') === '1', poll: c.req.query('poll') === '1' }
+    const bundle = isLocalKey(key)
+      ? await resolveLocalBundle(ctx, loader, key, opts)
+      : await resolveBundle(ctx, loader, key, opts)
     return c.json(bundle)
   })
 
   api.get('/prs/:n/patches', async c => {
-    const number = parsePrNumber(c.req.param('n'))
-    const headSha = parseHeadShaQuery(c.req.query('headSha')) ?? (await loader.currentPr(number)).headSha
-    const derived = await ctx.derived.read(headSha)
+    const key = parseTargetKey(c.req.param('n'))
+    const pr = await loader.currentTarget(key)
+    const headSha = parseHeadShaQuery(c.req.query('headSha')) ?? pr.headSha
+    // Only the target's own head has a merge base to build from; any other sha the page names is
+    // an older canvas, whose diffs were written when that canvas was drawn.
+    const derived = await ctx.derived.readOrBuild(
+      headSha,
+      headSha === pr.headSha ? pr.mergeBaseSha : undefined
+    )
     if (derived === null) {
       throw new AppError(
         'NOT_FOUND',
@@ -192,13 +224,13 @@ export function apiRoutes(ctx: AppContext): Hono {
   })
 
   api.get('/prs/:n/comments', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'reading comments')
     const { comments } = await loader.refreshComments(number)
     return c.json(comments)
   })
 
   api.get('/prs/:n/context', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const parsed = ContextQuerySchema.safeParse(c.req.query())
     if (!parsed.success) {
       throw new AppError('BAD_REQUEST', 'context needs path, side (new|old), from, to', 400)
@@ -207,7 +239,7 @@ export function apiRoutes(ctx: AppContext): Hono {
     if (q.to < q.from || q.to - q.from + 1 > CONTEXT_MAX_LINES) {
       throw new AppError('BAD_REQUEST', `request between 1 and ${CONTEXT_MAX_LINES} lines`, 400)
     }
-    const pr = await loader.currentPr(number)
+    const pr = await loader.currentTarget(key)
     const lines = await ctx.derived.readLines(
       pr.headSha,
       q.side === 'new' ? 'head' : 'base',
@@ -229,10 +261,12 @@ export function apiRoutes(ctx: AppContext): Hono {
   })
 
   api.get('/prs/:n/export', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const key = parseTargetKey(c.req.param('n'))
     const requested = parseHeadShaQuery(c.req.query('headSha'))
-    const headSha = requested ?? (await currentCanvasSha(ctx, loader, number))
-    const zip = await buildCanvasZipFor(ctx, headSha, number)
+    const headSha = requested ?? (await currentCanvasSha(ctx, loader, key))
+    // A local canvas is exported without a number, which is what makes it importable on the
+    // pull request once that exists.
+    const zip = await buildCanvasZipFor(ctx, headSha, isLocalKey(key) ? undefined : key)
     // The name is built from the repo slug, the PR number, and the sha, so it holds no user text.
     return new Response(new Blob([zip.bytes]), {
       headers: {
@@ -243,7 +277,7 @@ export function apiRoutes(ctx: AppContext): Hono {
   })
 
   api.post('/prs/:n/import', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'importing a shared canvas')
     const { file, force } = await readUpload(c.req.raw)
     if (!(file instanceof File)) {
       throw new AppError('BAD_REQUEST', 'send the zip as the multipart field `file`', 400)
@@ -265,7 +299,7 @@ export function apiRoutes(ctx: AppContext): Hono {
   })
 
   api.post('/prs/:n/shared-canvas/fetch', async c => {
-    const number = parsePrNumber(c.req.param('n'))
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'looking for a shared canvas')
     // Looking again means looking at the pull request as it is now, not at the cached copy.
     const { pr, comments } = await loader.load(number, { refresh: true })
     const discovery = await runDiscovery(ctx, pr, comments, { refresh: true })

@@ -7,6 +7,10 @@
   height: 100vh;
   background: transparent;
 }
+/* Minimized on a wide screen: the pane stays mounted with its draft, out of the grid. */
+.chat[hidden] {
+  display: none;
+}
 .handle {
   position: absolute;
   left: -1px;

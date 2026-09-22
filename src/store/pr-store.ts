@@ -2,39 +2,48 @@ import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { type CommentsPayload, CommentsPayloadSchema } from '../contract/comments.js'
 import { type DiscoveryCache, DiscoveryCacheSchema } from '../contract/discovery.js'
+import { type LocalPrepareTarget, LocalPrepareTargetSchema } from '../contract/generation-context.js'
+import { isLocalKey, keyToString, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import { type Pr, PrSchema } from '../contract/review-artifact.js'
 import { readJson, readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
 
-/** PR-keyed files: the cached PR meta and the last comments payload. */
+/** Target-keyed files: the cached PR meta and the last comments payload. */
 export interface PrStore {
-  prDir(number: number): string
-  readPr(number: number): Promise<Pr | null>
-  writePr(pr: Pr): Promise<void>
+  prDir(key: ReviewKey): string
+  readPr(key: ReviewKey): Promise<Pr | null>
+  /** The key is passed in, because the local review's meta carries no number of its own. */
+  writePr(key: ReviewKey, pr: Pr): Promise<void>
   readComments(number: number): Promise<CommentsPayload | null>
   writeComments(number: number, comments: CommentsPayload): Promise<void>
   /** The last attachment scan, so an unchanged PR is not scanned again. */
   readDiscovery(number: number): Promise<DiscoveryCache | null>
   writeDiscovery(number: number, discovery: DiscoveryCache): Promise<void>
-  /** PR numbers with a cached pr.json, newest first by file mtime. */
+  /** PR numbers with a cached pr.json, newest first by file mtime. Local reviews are not ones. */
   listRecent(limit: number): Promise<Array<{ number: number; title: string; updatedAt: string }>>
+  /** What this local review was last prepared for, so the page can resolve the same head again. */
+  readLocalTarget(key: LocalKey): Promise<LocalPrepareTarget | null>
+  writeLocalTarget(key: LocalKey, target: LocalPrepareTarget): Promise<void>
 }
 
 export function createPrStore(repoRoot: string): PrStore {
-  const prDir = (number: number): string => {
-    if (!Number.isInteger(number) || number <= 0) {
-      throw new Error(`not a pull request number: ${number}`)
+  const prDir = (key: ReviewKey): string => {
+    if (!isLocalKey(key) && (!Number.isInteger(key) || key <= 0)) {
+      throw new Error(`not a pull request number: ${String(key)}`)
     }
-    return path.join(repoRoot, 'prs', String(number))
+    return path.join(repoRoot, 'prs', keyToString(key))
   }
   return {
     prDir,
-    readPr: number => readJson(path.join(prDir(number), 'pr.json'), PrSchema),
-    writePr: async pr => {
-      if (pr.number === null) {
-        throw new Error('cannot cache a pre-PR change set under prs/')
+    readPr: key => readJson(path.join(prDir(key), 'pr.json'), PrSchema),
+    writePr: async (key, pr) => {
+      if (!isLocalKey(key) && pr.number !== key) {
+        throw new Error(`pull request ${String(key)} cannot hold the meta of ${String(pr.number)}`)
       }
-      await writeJsonAtomic(path.join(prDir(pr.number), 'pr.json'), pr)
+      await writeJsonAtomic(path.join(prDir(key), 'pr.json'), pr)
     },
+    readLocalTarget: key =>
+      readJsonOrDefault(path.join(prDir(key), 'target.json'), LocalPrepareTargetSchema, () => null),
+    writeLocalTarget: (key, target) => writeJsonAtomic(path.join(prDir(key), 'target.json'), target),
     readComments: number => readJson(path.join(prDir(number), 'comments.json'), CommentsPayloadSchema),
     writeComments: (number, comments) => writeJsonAtomic(path.join(prDir(number), 'comments.json'), comments),
     readDiscovery: number =>

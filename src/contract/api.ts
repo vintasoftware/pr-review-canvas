@@ -3,6 +3,7 @@ import type { CanvasManifest } from './canvas-manifest.js'
 import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js'
 import type { SharedCanvasInfoSchema } from './discovery.js'
 import type { FileEntry, Pr, ReviewArtifact } from './review-artifact.js'
+import type { LocalKey, ReviewKey } from './review-key.js'
 import type { PrState } from './state.js'
 
 export const ERROR_CODES = [
@@ -130,6 +131,8 @@ export interface PrBundle {
   marksCarriedFrom?: string
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
+  /** Set on a local review: work that has no pull request, so the forge side of the page is off. */
+  local?: LocalKey
   comments: CommentsPayload
   state: PrState
   capabilities: Capabilities
@@ -143,7 +146,8 @@ export interface PrBundle {
 
 /** Every answer of a state route, so the page can replace its copy of the state in one step. */
 export interface StateResponse {
-  prNumber: number
+  /** The target the state belongs to: a pull request number, or `local`. */
+  prNumber: ReviewKey
   state: PrState
 }
 

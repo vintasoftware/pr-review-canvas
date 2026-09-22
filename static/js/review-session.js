@@ -23,7 +23,7 @@ import { postComment, postReview, putDismissed, putReviewed, putThreadHidden } f
 
 /**
  * @typedef {{
- *   prNumber: number,
+ *   prNumber: import('./contract-types.js').ReviewKey,
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
  *   state: PrState,
