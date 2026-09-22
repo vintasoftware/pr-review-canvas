@@ -129,9 +129,13 @@ and generated review notes. Publishing shares this information with everyone who
 
 ### Update an outdated canvas
 
-After pushing new commits, run `/pr-review-canvas 123` again. To rewrite a canvas for the
-same commit, run `/pr-review-canvas 123 --force`. Publishing updates your canvas comment automatically.
-Reviewers click **refresh**.
+After pushing new commits, run `/pr-review-canvas 123` again, without `--force`. The run updates
+the previous canvas: content for untouched files is kept, and reviewers' progress on them follows.
+Publishing updates your canvas comment automatically. Reviewers click **refresh**.
+
+`--force` regenerates from a blank page, whether or not the commit already has a canvas. Use it to
+rewrite a canvas for the same commit. Set `canvas.incremental: false` to always start from a blank
+page. See [Incremental canvases](docs/reference.md#incremental-canvases).
 
 When the saved canvas describes a different PR head, **Canvas is outdated** appears at
 the top. You can still read the older canvas, with its commit and distance shown; posting
@@ -141,10 +145,6 @@ A head whose diff is identical to the canvas's does not outdate it: after **Upda
 merged `main` in without touching the changed files, for example, the canvas still applies
 and the page says so. Set `canvas.keepForIdenticalDiff: false` in the project config to treat
 every commit as a new head.
-
-Regenerating for a new head updates the previous canvas. Content for untouched files is kept,
-and your review progress on them follows. `--force` starts from a blank page, and
-`canvas.incremental: false` turns this off. See [Incremental canvases](docs/reference.md#incremental-canvases).
 
 ## Configuration
 
