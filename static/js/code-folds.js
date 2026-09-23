@@ -25,6 +25,7 @@ const ANNOTATED = '.ann, [data-decoration="note"]'
  *   summaries: Set<HTMLTableRowElement>,
  *   header: HTMLTableRowElement,
  *   toggle: HTMLButtonElement,
+ *   count: HTMLSpanElement,
  *   active: boolean,
  *   expanded: boolean,
  * }} WiredFold
@@ -133,11 +134,13 @@ function foldLabel(rows, fold) {
 }
 
 /**
- * Inserts the fold's title above its first row.
+ * Inserts the fold's title above its first row, with a chevron and a count of the code lines it
+ * hides, so a folded range reads as hidden code rather than as a stray heading.
  * @param {HTMLTableRowElement} first
  * @param {string} title
+ * @param {number} lines code lines under the fold
  */
-function createToggle(first, title) {
+function createToggle(first, title, lines) {
   const header = document.createElement('tr')
   header.className = 'more code-fold'
 
@@ -145,15 +148,19 @@ function createToggle(first, title) {
   cell.colSpan = 4
 
   const toggle = document.createElement('button')
-  toggle.className = 'cmd'
+  toggle.className = 'fold-toggle'
   toggle.type = 'button'
   toggle.textContent = title
 
-  cell.appendChild(toggle)
+  const count = document.createElement('span')
+  count.className = 'fold-lines'
+  count.dataset['lines'] = `${lines} ${lines === 1 ? 'line' : 'lines'}`
+
+  cell.append(toggle, count)
   header.appendChild(cell)
   first.before(header)
 
-  return { header, toggle }
+  return { header, toggle, count }
 }
 
 /**
@@ -164,6 +171,7 @@ function createToggle(first, title) {
 function paintFold(wired) {
   wired.header.hidden = !wired.active
   wired.toggle.setAttribute('aria-expanded', String(wired.active && wired.expanded))
+  wired.count.textContent = ` · ${wired.count.dataset['lines']}${wired.expanded ? '' : ' hidden'}`
   for (const [index, row] of wired.rows.entries()) {
     if (wired.active) {
       row.hidden = !wired.expanded || wired.summaries.has(row)
@@ -236,7 +244,8 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
     if (first === undefined) {
       continue
     }
-    const { header, toggle } = createToggle(first, foldLabel(rows, fold))
+    const lines = rows.filter(row => row.id !== '').length
+    const { header, toggle, count } = createToggle(first, foldLabel(rows, fold), lines)
     toggle.setAttribute(
       'aria-controls',
       rows
@@ -251,6 +260,7 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
       summaries: new Set(rows.filter(row => coveredFoldSummary(row, rows))),
       header,
       toggle,
+      count,
       active: false,
       expanded: false,
     }

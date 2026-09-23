@@ -202,7 +202,8 @@
 [data-skin='github'] .diagram-h {
   border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0;
 }
-[data-skin='github'] .chev {
+[data-skin='github'] .chev,
+[data-skin='github'] .fold-toggle::before {
   color: var(--fg-muted);
 }
 [data-skin='github'] .summary h3,

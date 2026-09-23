@@ -152,6 +152,37 @@ tr.more td {
   background: var(--panel-2);
   border-top: 1px solid var(--line);
 }
+/* A model fold's title row. The chevron points right while the code is hidden and turns down once
+   the reader opens it, like a layer or file card's chevron. */
+.fold-toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-toggle::before {
+  content: '>';
+  display: inline-block;
+  width: 1ch;
+  margin-right: 8px;
+  color: var(--ink);
+  font-size: 1.15em;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 0.12s ease-out;
+}
+.fold-toggle[aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+.fold-toggle:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 tr.folded {
   display: none;
 }
