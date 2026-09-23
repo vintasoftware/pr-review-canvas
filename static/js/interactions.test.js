@@ -1241,12 +1241,21 @@ describe('keyboard', () => {
   })
 
   it('leaves the point alone once R moves the ring to the next layer', async () => {
-    const [runPath, ...rest] = artifact.layers
-    if (runPath === undefined) {
+    const [runPath, other] = artifact.layers
+    if (runPath === undefined || other === undefined) {
       throw new Error('fixture changed')
     }
-    const second = { ...runPath, id: 'second', key: 'second', title: 'Second' }
-    const { root, calls } = setup({ artifact: { ...artifact, layers: [runPath, second, ...rest] } })
+    // A second layer takes a file out of Other, so each chunk still has one layer, as publish checks.
+    const moved = (/** @type {{ path: string }} */ f) => f.path === 'src/new.ts'
+    const second = {
+      ...runPath,
+      id: 'second',
+      key: 'second',
+      title: 'Second',
+      files: other.files.filter(moved),
+    }
+    const rest = { ...other, files: other.files.filter(f => !moved(f)) }
+    const { root, calls } = setup({ artifact: { ...artifact, layers: [runPath, second, rest] } })
     key(']')
     expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
     key('R')

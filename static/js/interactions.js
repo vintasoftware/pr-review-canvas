@@ -459,15 +459,15 @@ export function wireReview(root, session, opts = {}) {
      * Where a point sits on the page: its card, or for a point of the Other layer, which has no
      * card, its row in the diff. A diff not drawn yet stands in with its file card.
      * @param {Point} point
-     * @returns {{ point: Point, el: Element, row: boolean } | null}
+     * @returns {{ point: Point, el: Element, exact: boolean } | null}
      */
     const place = point => {
       const el = byId(pointAnchorId(point.id)) ?? root.querySelector(`[data-point="${cssEscape(point.id)}"]`)
       if (el !== null) {
-        return { point, el, row: true }
+        return { point, el, exact: true }
       }
       const card = fileCardOf(root, point.path, point.layerId)
-      return card === null || drawn.has(card) ? null : { point, el: card, row: false }
+      return card === null || drawn.has(card) ? null : { point, el: card, exact: false }
     }
     const pick = () => {
       const onPage = points
@@ -481,7 +481,7 @@ export function wireReview(root, session, opts = {}) {
       return direction === 1
         ? onPage.find(
             p =>
-              (!p.row && p.el === from) ||
+              (!p.exact && p.el === from) ||
               (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
           )
         : onPage.findLast(p => (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0)
@@ -489,7 +489,7 @@ export function wireReview(root, session, opts = {}) {
     let found = pick()
     // Draws only the diff that holds the target, then picks again, since its rows order the
     // points inside it. Each round draws one more card, so the loop ends.
-    while (found !== undefined && !found.row) {
+    while (found !== undefined && !found.exact) {
       drawn.add(found.el)
       drawCardOf(root, found.point.path, found.point.layerId)
       found = pick()
