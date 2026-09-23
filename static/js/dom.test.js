@@ -69,6 +69,8 @@ describe('qs, flash, scrollIntoViewSafe', () => {
     Object.defineProperty(el, 'scrollIntoView', { value: scrolled, configurable: true })
     scrollIntoViewSafe(el)
     expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
+    scrollIntoViewSafe(el, 'start')
+    expect(scrolled).toHaveBeenLastCalledWith({ block: 'start' })
     Object.defineProperty(el, 'scrollIntoView', { value: undefined, configurable: true })
     expect(() => scrollIntoViewSafe(el)).not.toThrow()
     vi.useRealTimers()

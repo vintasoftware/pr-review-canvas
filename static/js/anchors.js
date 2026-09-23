@@ -119,9 +119,14 @@ export function jumpTo(href, root = document) {
  * on. The card draws itself (`pr-file` in layers.js); this only asks it to do so now.
  * @param {ParentNode} root
  * @param {string} path
+ * @param {string} [layerId] the layer whose card of the file to draw; the file's first card otherwise
  */
-export function drawCardOf(root, path) {
-  const card = root.querySelector(`#${cssEscape(fileAnchorId(keyFromPath(path)))}`)?.closest('pr-file')
+export function drawCardOf(root, path, layerId) {
+  const file =
+    layerId === undefined
+      ? root.querySelector(`#${cssEscape(fileAnchorId(keyFromPath(path)))}`)
+      : root.querySelector(`article.file[data-layer="${cssEscape(layerId)}"][data-path="${cssEscape(path)}"]`)
+  const card = file?.closest('pr-file')
   const draw = /** @type {{ renderNow?: (force?: boolean) => boolean }} */ (card)?.renderNow
   if (typeof draw === 'function' && card !== null && card !== undefined) {
     // Force, so a card holding a huge patch behind `[ show diff ]` still has the row to land on.

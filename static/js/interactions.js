@@ -8,7 +8,7 @@ import { toggleMarkdownPreview } from './composer.js'
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 /** @typedef {import('./selection.js').Selection} Selection */
-import { cssEscape, findRow } from './anchors.js'
+import { cssEscape, drawCardOf, findRow } from './anchors.js'
 import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
@@ -47,7 +47,7 @@ import {
   setRenderContext,
   updateRenderState,
 } from './layers.js'
-import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from './nav.js'
+import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer, readingItem } from './nav.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
@@ -64,8 +64,48 @@ import {
 } from './signoff.js'
 
 /** @typedef {NonNullable<ReturnType<typeof import('./chat.js').wireChat>>} ChatHandle */
+/** @typedef {import('./nav.js').NavItem} NavItem */
 
 const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
+
+/** Pixels left above a card the keys scroll to, so its focus ring shows. */
+const FOCUS_GAP = 8
+/** How far below the top of the screen a card's top may sit and still be the one being read. */
+const READING_SLACK = 16
+
+/**
+ * An element's top in viewport pixels, or null when it is not drawn: hidden, or on a page
+ * without layout.
+ * @param {Element} el
+ */
+function drawnTop(el) {
+  const rect = el.getBoundingClientRect()
+  return rect.width === 0 && rect.height === 0 ? null : rect.top
+}
+
+/**
+ * False for an element inside a collapsed card or a closed details, which a key should not stop at.
+ * @param {Element} el
+ */
+function isShown(el) {
+  return (
+    el.closest('[hidden]') === null && (el.parentElement?.closest('details:not([open])') ?? null) === null
+  )
+}
+
+/**
+ * Opens every collapsed card and closed details around an element, so a key can show it.
+ * @param {Element} el
+ */
+function revealAround(el) {
+  for (let node = el.parentElement; node !== null; node = node.parentElement) {
+    if (node instanceof HTMLDetailsElement && !node.open) {
+      node.open = true
+    } else if (node.hidden && node.matches('.file-body, .layer-body')) {
+      setCardCollapsed(node, false)
+    }
+  }
+}
 
 /**
  * The event a sign-off dialog is set to. An attribute that names none reads as a comment-only
@@ -220,6 +260,9 @@ export function wireReview(root, session, opts = {}) {
   let focusId = null
   /** @type {string | null} */
   let focusPointId = null
+  /** The element that holds the ring, which the step keys measure from. */
+  /** @type {HTMLElement | null} */
+  let focusedEl = null
   let pendingG = false
   let composerSeq = 0
   let signoffOpening = 0
@@ -331,43 +374,127 @@ export function wireReview(root, session, opts = {}) {
   // A card drawn later carries posting commands of its own, which the same rules apply to.
   setCardRenderedHook(card => applyCapabilityGating(card, session.capabilities))
 
+  /** The height of the outdated-canvas bar, which sticks to the top of the screen over the cards. */
+  const stickyTop = () => {
+    const bar = root.querySelector('.stale-bar')
+    return bar === null ? 0 : bar.getBoundingClientRect().height
+  }
+
   /**
    * @param {string} id
    * @param {Element | null} [element] where to put the ring when the id names nothing on screen
+   * @param {ScrollLogicalPosition} [block] `start` for a card, `center` for a point
    */
-  const focusItem = (id, element) => {
+  const focusItem = (id, element, block = 'start') => {
     focusId = id
     const el = root.querySelector(`#${cssEscape(id)}`) ?? element
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
       marked.classList.remove('is-focused')
     }
+    focusedEl = null
     if (el instanceof HTMLElement) {
+      focusedEl = el
       el.classList.add('is-focused')
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
       el.tabIndex = -1
       el.focus({ preventScroll: true })
-      scrollIntoViewSafe(el)
+      el.style.scrollMarginTop = `${stickyTop() + FOCUS_GAP}px`
+      scrollIntoViewSafe(el, block)
     }
     return el
   }
 
   /**
-   * The attention point the keys act on, kept by id so that dismissing one does not move the
-   * next key press onto its neighbour.
+   * Where the step keys start from: the element in focus while its top is on screen. Once the
+   * reader has scrolled it away, the card at the top of the screen.
+   * @param {ReadonlyArray<NavItem>} order
+   * @returns {Element | null}
+   */
+  const here = order => {
+    const focused = focusedEl?.isConnected === true ? focusedEl : null
+    const top = focused === null ? null : drawnTop(focused)
+    // A focused element that is not drawn, such as a point just dismissed, still marks the place.
+    if (focused !== null && (top === null || (top > -FOCUS_GAP && top < window.innerHeight))) {
+      return focused
+    }
+    const byId = (/** @type {NavItem} */ item) => root.querySelector(`#${cssEscape(item.id)}`)
+    const reading = readingItem(
+      order,
+      item => {
+        const el = byId(item)
+        return el === null ? null : drawnTop(el)
+      },
+      stickyTop() + READING_SLACK
+    )
+    return reading === null ? focused : byId(reading)
+  }
+
+  /**
+   * The id of the layer or file card that holds an element, or the element's own id when it is one.
+   * @param {ReadonlyArray<NavItem>} order
+   * @param {Element | null} el
+   */
+  const itemAround = (order, el) => {
+    for (
+      let node = el?.closest('[id]') ?? null;
+      node !== null;
+      node = node.parentElement?.closest('[id]') ?? null
+    ) {
+      const id = node.id
+      if (order.some(i => i.id === id)) {
+        return id
+      }
+    }
+    return null
+  }
+
+  /** @param {NavItem} item */
+  const isCardShown = item => {
+    const el = root.querySelector(`#${cssEscape(item.id)}`)
+    return el !== null && isShown(el)
+  }
+
+  /**
+   * The next or previous attention point in page order, from where the reader is.
+   * @param {ReadonlyArray<NavItem>} order
    * @param {ReadonlyArray<Point>} points
    * @param {1 | -1} direction
    */
-  const stepPoint = (points, direction) => {
-    const at = points.findIndex(p => p.id === focusPointId)
-    const next = at === -1 ? (direction === 1 ? 0 : points.length - 1) : at + direction
-    const point = points[Math.min(Math.max(next, 0), points.length - 1)]
-    if (point === undefined) {
+  const stepPoint = (order, points, direction) => {
+    const from = here(order)
+    /** @param {Point} point */
+    const pointEl = point =>
+      root.querySelector(`#${cssEscape(pointAnchorId(point.id))}`) ??
+      root.querySelector(`[data-point="${cssEscape(point.id)}"]`)
+    const onPage = points
+      .map(point => {
+        // A point of the Other layer has no card, so the ring lands on its row in the diff, which
+        // a closed Other layer has not drawn yet.
+        if (pointEl(point) === null && point.layerId !== undefined) {
+          drawCardOf(root, point.path, point.layerId)
+        }
+        return { point, el: pointEl(point) }
+      })
+      .filter(/** @returns {p is { point: Point, el: Element }} */ p => p.el !== null)
+      .sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+    const found =
+      from === null
+        ? direction === 1
+          ? onPage[0]
+          : onPage.at(-1)
+        : direction === 1
+          ? onPage.find(p => (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)
+          : onPage.findLast(
+              p => (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
+            )
+    if (found === undefined) {
       return
     }
-    focusPointId = point.id
-    // A point of the Other layer has no card, so the ring lands on its row in the diff.
-    focusItem(pointAnchorId(point.id), root.querySelector(`[data-point="${cssEscape(point.id)}"]`))
+    focusPointId = found.point.id
+    // A point inside a collapsed card or the closed Other layer opens, so the ring is seen.
+    revealAround(found.el)
+    focusItem(pointAnchorId(found.point.id), found.el, 'center')
   }
 
   /** @param {Selection | null} next */
@@ -1045,7 +1172,7 @@ export function wireReview(root, session, opts = {}) {
               : decided.action === 'next-file'
                 ? nextFile
                 : prevFile
-        const item = step(order, focusId)
+        const item = step(order, itemAround(order, here(order)), isCardShown)
         if (item !== null) {
           focusPointId = null
           focusItem(item.id)
@@ -1054,25 +1181,22 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'next-point':
       case 'prev-point':
-        stepPoint(points, decided.action === 'next-point' ? 1 : -1)
+        stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
         break
-      case 'toggle': {
-        const card = focusId === null ? null : root.querySelector(`#${cssEscape(focusId)}`)
-        if (card !== null) {
-          setCardCollapsed(card)
+      case 'toggle':
+        // A point in focus stands for the card that holds it, a row of the Other layer included.
+        if (focusedEl?.isConnected === true) {
+          setCardCollapsed(focusedEl)
         }
         break
-      }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        const item = order.find(i => i.id === focusId)
+        // A point in focus stands for the card that holds it.
+        const itemId = focusedEl?.isConnected === true ? itemAround(order, focusedEl) : focusId
+        const item = order.find(i => i.id === itemId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =
-          item?.kind === wanted
-            ? item
-            : wanted === 'layer' && focusId !== null
-              ? layerOf(order, focusId)
-              : null
+          item?.kind === wanted ? item : wanted === 'layer' && itemId !== null ? layerOf(order, itemId) : null
         if (found === null || found === undefined || found.kind === 'overview') {
           break
         }
@@ -1085,8 +1209,13 @@ export function wireReview(root, session, opts = {}) {
         break
       }
       case 'comment': {
+        const point = points.find(p => p.id === focusPointId)
+        const key = point === undefined ? null : keyForPath(point.path)
         if (selection !== null) {
           openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
+        } else if (point !== undefined && key !== null) {
+          // With nothing selected, c comments on the line of the attention point in focus.
+          openLineComposer({ key, path: point.path, side: point.side ?? 'new', line: point.line })
         }
         break
       }

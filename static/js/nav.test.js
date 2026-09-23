@@ -6,7 +6,7 @@ import { emptyState } from '../../src/contract/state.js'
 import { PACKAGE_ROOT } from '../../src/server/context.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderLayers } from './layers.js'
-import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from './nav.js'
+import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer, readingItem } from './nav.js'
 
 const artifact = syntheticArtifact()
 
@@ -146,6 +146,33 @@ describe('next/prev', () => {
     expect(prevFile(order, null)?.id).toBe('file-src_gone_ts')
     expect(nextLayer(order, 'nope')?.id).toBe('layer-run-path')
     expect(prevLayer(order, 'nope')?.id).toBe('layer-other')
+  })
+
+  it('passes over the cards the reader cannot see', () => {
+    // The Other layer's files sit inside its closed details, so n stops at none of them.
+    const shown = (/** @type {import('./nav.js').NavItem} */ item) => !(item.kind === 'file' && item.other)
+    expect(nextFile(order, 'file-src_app_test_ts', shown)).toBeNull()
+    expect(prevFile(order, null, shown)?.id).toBe('file-src_app_test_ts')
+    expect(nextLayer(order, 'file-src_app_test_ts', shown)?.id).toBe('layer-other')
+    expect(prevLayer(order, 'file-src_gone_ts', shown)?.id).toBe('layer-other')
+  })
+
+  it('finds the item at the top of the screen after a scroll', () => {
+    /** @type {Record<string, number>} */
+    const tops = {
+      overview: -1500,
+      'layer-run-path': -900,
+      'file-src_app_ts': -400,
+      'file-src_new_name_ts': 5,
+      'file-src_app_test_ts': 300,
+      'layer-other': 900,
+    }
+    const topOf = (/** @type {import('./nav.js').NavItem} */ item) => tops[item.id] ?? null
+    expect(readingItem(order, topOf, 16)?.id).toBe('file-src_new_name_ts')
+    expect(readingItem(order, topOf, 0)?.id).toBe('file-src_app_ts')
+    // Before the first item reaches the top, and when nothing is drawn, the reader is on nothing.
+    expect(readingItem(order, topOf, -2000)).toBeNull()
+    expect(readingItem(order, () => null, 16)).toBeNull()
   })
 
   it('finds the layer an item belongs to', () => {

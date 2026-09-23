@@ -4,17 +4,20 @@ import { HELP_DIALOG_ID, isTypingTarget, KEY_HELP, keyAction, openHelpDialog } f
 
 /**
  * @param {string} key
- * @param {{ target?: EventTarget | null, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean }} [opts]
+ * @param {{ target?: EventTarget | null, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, altGraph?: boolean }} [opts]
  * @returns {KeyboardEvent}
  */
 function press(key, opts = {}) {
-  return /** @type {KeyboardEvent} */ ({
-    key,
-    target: opts.target ?? null,
-    ctrlKey: opts.ctrlKey ?? false,
-    metaKey: opts.metaKey ?? false,
-    altKey: opts.altKey ?? false,
-  })
+  return /** @type {KeyboardEvent} */ (
+    /** @type {unknown} */ ({
+      key,
+      target: opts.target ?? null,
+      ctrlKey: opts.ctrlKey ?? false,
+      metaKey: opts.metaKey ?? false,
+      altKey: opts.altKey ?? false,
+      getModifierState: (/** @type {string} */ name) => name === 'AltGraph' && opts.altGraph === true,
+    })
+  )
 }
 
 describe('keyAction', () => {
@@ -56,6 +59,18 @@ describe('keyAction', () => {
     expect(keyAction(press('j', { ctrlKey: true })).action).toBeNull()
     expect(keyAction(press('j', { metaKey: true })).action).toBeNull()
     expect(keyAction(press('j', { altKey: true })).action).toBeNull()
+  })
+
+  it('takes the keys a layout types with AltGr, which reports Ctrl and Alt on Windows', () => {
+    const altGr = { ctrlKey: true, altKey: true, altGraph: true }
+    expect(['[', ']', '/', '?'].map(key => keyAction(press(key, altGr)).action)).toEqual([
+      'prev-point',
+      'next-point',
+      'focus-chat',
+      'help',
+    ])
+    // Cmd still belongs to the browser.
+    expect(keyAction(press('[', { ...altGr, metaKey: true })).action).toBeNull()
   })
 
   it('stays quiet while the reader is typing, except for Esc', () => {

@@ -50,7 +50,9 @@ export function isTypingTarget(target) {
  */
 export function keyAction(event, opts = {}) {
   const none = { action: null, pendingG: false }
-  if (event.ctrlKey || event.metaKey || event.altKey) {
+  // AltGr reports Ctrl and Alt on Windows, and it is how many layouts type [ ] / and ?.
+  const altGraph = event.getModifierState?.('AltGraph') === true
+  if (event.metaKey || ((event.ctrlKey || event.altKey) && !altGraph)) {
     return none
   }
   if (event.key === 'Escape') {

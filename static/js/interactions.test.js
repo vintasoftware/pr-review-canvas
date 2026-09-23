@@ -1098,6 +1098,129 @@ describe('keyboard', () => {
     expect(root.querySelector('.is-focused')?.id).toBe('layer-run-path')
   })
 
+  it('steps to the layer after the one that holds the point in focus', () => {
+    const { root } = setup()
+    key(']')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('j')
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+    key(']')
+    key('k')
+    // The ring was on a row of the Other layer's diff, so k lands on that layer.
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+  })
+
+  it('steps to the points around the card in focus, in page order', () => {
+    const { root } = setup({ artifact: { ...artifact, points: [...artifact.points].reverse() } })
+    key(']')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('n')
+    // The layer lists its points above its files, so [ from its first file goes back to them.
+    key('[')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('j')
+    key(']')
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+  })
+
+  it('goes on to the next point after dismissing one, not back to the first', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key(']')
+    key('d')
+    await flush()
+    expect(calls).toEqual([['dismissed', { fingerprint: 'fp-2', dismissed: true }]])
+    key(']')
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-3')
+  })
+
+  it('opens the closed Other layer to show a point in it, and n passes over its hidden files', () => {
+    const { root } = setup()
+    key('n')
+    key('n')
+    key('n')
+    expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_test_ts')
+    key('n')
+    expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_test_ts')
+    // The first point after the last file of the layer is in the Other layer.
+    key(']')
+    expect(root.querySelector('#layer-other details')?.hasAttribute('open')).toBe(true)
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+  })
+
+  it('opens a reviewed layer to show a point in it', () => {
+    const { root } = setup({ state: { ...BASE, reviewed: { 'layer:run-path': true } } })
+    expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(true)
+    key(']')
+    expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(false)
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+  })
+
+  it('marks the layer of the point in focus with R, and comments on its line with c', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key('c')
+    const box = root.querySelector('.composer-box')
+    expect(box?.closest('tr')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
+    key('Escape')
+    key('R')
+    await flush()
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
+  })
+
+  it('steps from the card at the top of the screen once the focused one is scrolled away', () => {
+    const { root } = setup()
+    root.querySelector('#main')?.insertAdjacentHTML('afterbegin', '<div class="stale-bar">outdated</div>')
+    /** Viewport tops by id, as if the reader had scrolled; everything else is not drawn. */
+    /** @type {Record<string, number>} */
+    let tops = {
+      overview: -1500,
+      'layer-run-path': -900,
+      'file-src_app_ts': 30,
+      'file-src_new_name_ts': 400,
+      'file-src_app_test_ts': 600,
+      'layer-other': 900,
+    }
+    /** @this {Element} */
+    function fakeRect() {
+      const bar = this.classList.contains('stale-bar')
+      const top = bar ? 0 : tops[this.id]
+      return top === undefined ? new DOMRect() : new DOMRect(0, top, 100, bar ? 40 : 100)
+    }
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(fakeRect)
+    try {
+      // Nothing has the ring yet: the file just under the outdated bar is where the reader is.
+      key('n')
+      const focused = root.querySelector('.is-focused')
+      expect(focused?.id).toBe('file-src_new_name_ts')
+      // The card scrolls to just under the bar, which would cover its heading otherwise.
+      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('48px')
+      // The focused card is on screen, so p steps from it.
+      key('p')
+      expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_ts')
+      tops = { ...tops, 'file-src_app_ts': -700, 'file-src_new_name_ts': -400, 'file-src_app_test_ts': 20 }
+      key('j')
+      expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+    } finally {
+      rect.mockRestore()
+    }
+  })
+
+  it('comments on the new side of a point that names no side, and o collapses its card', () => {
+    const { root } = setup()
+    key(']')
+    key(']')
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+    key('c')
+    expect(root.querySelector('.composer-box')?.closest('tr')?.previousElementSibling?.id).toBe(
+      'L-src_app_ts-new-13'
+    )
+    key('Escape')
+    // o collapses the Other layer's card that holds the point's row.
+    key('o')
+    expect(root.querySelector('#file-src_app_ts-other .file-body')?.hasAttribute('hidden')).toBe(true)
+  })
+
   it('stops listening once the screen is torn down', () => {
     const { root, wiring } = setup()
     wiring.stop()
