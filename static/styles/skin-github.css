@@ -97,7 +97,8 @@
 [data-skin='github'] .cmd::after {
   content: none;
 }
-[data-skin='github'] .cmd {
+[data-skin='github'] .cmd,
+[data-skin='github'] .fold-toggle {
   font-weight: 500;
 }
 /* The header's commands read as GitHub's toolbar buttons; commands inside the page stay links. */
@@ -202,8 +203,7 @@
 [data-skin='github'] .diagram-h {
   border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0;
 }
-[data-skin='github'] .chev,
-[data-skin='github'] .fold-toggle::before {
+[data-skin='github'] .chev {
   color: var(--fg-muted);
 }
 [data-skin='github'] .summary h3,

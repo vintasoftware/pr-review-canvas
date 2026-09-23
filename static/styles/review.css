@@ -359,7 +359,8 @@ summary::-webkit-details-marker {
 summary h2 {
   display: inline;
 }
-details[open] > summary .chev {
+details[open] > summary .chev,
+[aria-expanded='true'] > .chev {
   transform: rotate(90deg);
 }
 .plain li {

@@ -55,7 +55,7 @@ function toggle(card) {
  * @param {ParentNode} card
  */
 function shownTitles(card) {
-  return Array.from(card.querySelectorAll('.code-fold:not([hidden]) button'), button => button.textContent)
+  return Array.from(card.querySelectorAll('.code-fold:not([hidden]) .fold-title'), title => title.textContent)
 }
 
 afterEach(() => document.body.replaceChildren())
@@ -64,11 +64,10 @@ describe('applyCodeFolds', () => {
   it('shows the title and line count, and expands all rows between the anchors, including deletions', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
-    const count = () => card.querySelector('.code-fold .fold-lines')?.textContent
 
-    expect(toggle(card).textContent).toBe('run()')
+    expect(toggle(card).textContent).toBe('>run() · 5 lines')
+    expect(toggle(card).querySelector('.chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(toggle(card).getAttribute('aria-expanded')).toBe('false')
-    expect(count()).toBe(' · 5 lines hidden')
     expect(Array.from(card.querySelectorAll('tr[hidden]'), row => row.id)).toEqual([
       'L-src_app_ts-new-1',
       'L-src_app_ts-old-2',
@@ -81,11 +80,9 @@ describe('applyCodeFolds', () => {
     toggle(card).click()
     expect(card.querySelector('tr[hidden]')).toBeNull()
     expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
-    expect(count()).toBe(' · 5 lines')
 
     toggle(card).click()
     expect(findRow(card, 'src_app_ts', 'old', 2)?.hidden).toBe(true)
-    expect(count()).toBe(' · 5 lines hidden')
   })
 
   it('opens a fold when a deep link points to one of its lines', () => {
@@ -162,7 +159,7 @@ describe('applyCodeFolds', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
     applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
-    expect(Array.from(card.querySelectorAll('.code-fold button'), button => button.textContent)).toEqual([
+    expect(Array.from(card.querySelectorAll('.code-fold .fold-title'), title => title.textContent)).toEqual([
       'run()',
     ])
   })
@@ -171,7 +168,7 @@ describe('applyCodeFolds', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, title: '<img src=x onerror=alert(1)>' }], 'light', false)
 
-    expect(toggle(card).textContent).toBe('<img src=x onerror=alert(1)>')
+    expect(card.querySelector('.fold-title')?.textContent).toBe('<img src=x onerror=alert(1)>')
     expect(card.querySelector('img')).toBeNull()
   })
 
@@ -268,7 +265,7 @@ describe('applyCodeFolds', () => {
     insertNoteRow(card, 'src_app_ts', annotation)
     applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive', false)
 
-    expect(toggle(card).textContent).toBe('The value is read twice on purpose.')
+    expect(card.querySelector('.fold-title')?.textContent).toBe('The value is read twice on purpose.')
     expect(card.querySelector('[data-decoration="note"]')?.hasAttribute('hidden')).toBe(true)
   })
 

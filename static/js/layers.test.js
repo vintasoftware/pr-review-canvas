@@ -892,7 +892,7 @@ describe('the reading level', () => {
 
     setFoldLevel(document.body, 'moderate')
     expect(getFoldLevel()).toBe('moderate')
-    expect(document.querySelector('#file-src_app_test_ts .code-fold button')?.textContent).toBe('runs')
+    expect(document.querySelector('#file-src_app_test_ts .code-fold .fold-title')?.textContent).toBe('runs')
 
     setFoldLevel(document.body, 'light')
     expect(document.querySelector('#file-src_app_test_ts .code-fold:not([hidden])')).toBeNull()

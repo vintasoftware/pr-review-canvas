@@ -5,6 +5,7 @@
 // reader's level only decides which of them are active, so changing it never rebuilds the table
 // and an open composer or an expanded fold survives. The renderer's own folds hide in every mode.
 import { findRow } from './anchors.js'
+import { esc } from './dom.js'
 import { foldsForLevel } from './fold-levels.js'
 
 /** @typedef {import('./contract-types.js').CodeFold} CodeFold */
@@ -25,7 +26,6 @@ const ANNOTATED = '.ann, [data-decoration="note"]'
  *   summaries: Set<HTMLTableRowElement>,
  *   header: HTMLTableRowElement,
  *   toggle: HTMLButtonElement,
- *   count: HTMLSpanElement,
  *   active: boolean,
  *   expanded: boolean,
  * }} WiredFold
@@ -134,7 +134,7 @@ function foldLabel(rows, fold) {
 }
 
 /**
- * Inserts the fold's title above its first row, with a chevron and a count of the code lines it
+ * Inserts the fold's toggle above its first row: a chevron, the title, and how many code lines it
  * hides, so a folded range reads as hidden code rather than as a stray heading.
  * @param {HTMLTableRowElement} first
  * @param {string} title
@@ -150,17 +150,15 @@ function createToggle(first, title, lines) {
   const toggle = document.createElement('button')
   toggle.className = 'fold-toggle'
   toggle.type = 'button'
-  toggle.textContent = title
+  toggle.innerHTML =
+    `<span class="chev" aria-hidden="true">&gt;</span><span class="fold-title">${esc(title)}</span>` +
+    `<span class="fold-lines"> · ${lines} ${lines === 1 ? 'line' : 'lines'}</span>`
 
-  const count = document.createElement('span')
-  count.className = 'fold-lines'
-  count.dataset['lines'] = `${lines} ${lines === 1 ? 'line' : 'lines'}`
-
-  cell.append(toggle, count)
+  cell.appendChild(toggle)
   header.appendChild(cell)
   first.before(header)
 
-  return { header, toggle, count }
+  return { header, toggle }
 }
 
 /**
@@ -171,7 +169,6 @@ function createToggle(first, title, lines) {
 function paintFold(wired) {
   wired.header.hidden = !wired.active
   wired.toggle.setAttribute('aria-expanded', String(wired.active && wired.expanded))
-  wired.count.textContent = ` · ${wired.count.dataset['lines']}${wired.expanded ? '' : ' hidden'}`
   for (const [index, row] of wired.rows.entries()) {
     if (wired.active) {
       row.hidden = !wired.expanded || wired.summaries.has(row)
@@ -244,15 +241,9 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
     if (first === undefined) {
       continue
     }
-    const lines = rows.filter(row => row.id !== '').length
-    const { header, toggle, count } = createToggle(first, foldLabel(rows, fold), lines)
-    toggle.setAttribute(
-      'aria-controls',
-      rows
-        .map(row => row.id)
-        .filter(Boolean)
-        .join(' ')
-    )
+    const ids = rows.map(row => row.id).filter(Boolean)
+    const { header, toggle } = createToggle(first, foldLabel(rows, fold), ids.length)
+    toggle.setAttribute('aria-controls', ids.join(' '))
     const w = {
       fold,
       rows,
@@ -260,7 +251,6 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
       summaries: new Set(rows.filter(row => coveredFoldSummary(row, rows))),
       header,
       toggle,
-      count,
       active: false,
       expanded: false,
     }
