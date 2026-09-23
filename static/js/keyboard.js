@@ -13,7 +13,7 @@ export const KEY_HELP = [
   { keys: 'j / k', what: 'next / previous layer' },
   { keys: 'n / p', what: 'next / previous file' },
   { keys: '] / [', what: 'next / previous attention point' },
-  { keys: 'o', what: 'open or collapse the card in focus' },
+  { keys: 'o', what: "open or collapse the card in focus, or the point's file card" },
   { keys: 'r', what: 'mark the file in focus reviewed' },
   { keys: 'R', what: 'mark the layer in focus reviewed and move on' },
   { keys: 'c', what: 'comment on the line in focus or on the selection' },

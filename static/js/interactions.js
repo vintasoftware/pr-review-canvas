@@ -8,7 +8,7 @@ import { toggleMarkdownPreview } from './composer.js'
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 /** @typedef {import('./selection.js').Selection} Selection */
-import { cssEscape, drawCardOf, findRow } from './anchors.js'
+import { cssEscape, drawCardOf, fileCardOf, findRow } from './anchors.js'
 import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
@@ -44,10 +44,11 @@ import {
   setCardCollapsed,
   setCardRenderedHook,
   setFoldLevel,
+  wireCardReveal,
   setRenderContext,
   updateRenderState,
 } from './layers.js'
-import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer, readingItem } from './nav.js'
+import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
@@ -70,6 +71,14 @@ const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
 /** Pixels left above a card the keys scroll to, so its focus ring shows. */
 const FOCUS_GAP = 8
+/** The card kind and direction each step key moves by. */
+/** @type {Record<'next-layer' | 'prev-layer' | 'next-file' | 'prev-file', ['layer' | 'file', 1 | -1]>} */
+const STEPS = {
+  'next-layer': ['layer', 1],
+  'prev-layer': ['layer', -1],
+  'next-file': ['file', 1],
+  'prev-file': ['file', -1],
+}
 /** How far below the top of the screen a card's top may sit and still be the one being read. */
 const READING_SLACK = 16
 
@@ -91,20 +100,6 @@ function isShown(el) {
   return (
     el.closest('[hidden]') === null && (el.parentElement?.closest('details:not([open])') ?? null) === null
   )
-}
-
-/**
- * Opens every collapsed card and closed details around an element, so a key can show it.
- * @param {Element} el
- */
-function revealAround(el) {
-  for (let node = el.parentElement; node !== null; node = node.parentElement) {
-    if (node instanceof HTMLDetailsElement && !node.open) {
-      node.open = true
-    } else if (node.hidden && node.matches('.file-body, .layer-body')) {
-      setCardCollapsed(node, false)
-    }
-  }
 }
 
 /**
@@ -206,13 +201,11 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
 /**
  * What the `a` key asks about: the selection if there is one, else the attention point in focus,
  * else the card in focus, else the whole pull request.
- * @param {ParentNode} root
- * @param {string | null} focusId
- * @param {string | null} focusPointId
+ * @param {Element | null} focused the element that holds the focus ring
  * @param {Selection | null} selection
  * @returns {import('./chat-context.js').ChatContext}
  */
-export function askTargetFor(root, focusId, focusPointId, selection) {
+export function askTargetFor(focused, selection) {
   if (selection !== null) {
     return {
       kind: 'lines',
@@ -222,20 +215,9 @@ export function askTargetFor(root, focusId, focusPointId, selection) {
       end: selection.end,
     }
   }
-  if (focusPointId !== null) {
-    const el = root.querySelector(`[data-point="${cssEscape(focusPointId)}"] [data-act="ask"]`)
-    if (el instanceof HTMLElement) {
-      return chatContextFromElement(el)
-    }
-  }
-  if (focusId !== null) {
-    const card = root.querySelector(`#${cssEscape(focusId)}`)
-    const ask = card?.querySelector('[data-act="ask"]')
-    if (ask instanceof HTMLElement) {
-      return chatContextFromElement(ask)
-    }
-  }
-  return WHOLE_PR
+  // A point in focus asks about the point, even when the ring is on its row in the diff.
+  const ask = (focused?.closest('[data-point]') ?? focused)?.querySelector('[data-act="ask"]')
+  return ask instanceof HTMLElement ? chatContextFromElement(ask) : WHOLE_PR
 }
 
 /**
@@ -256,11 +238,7 @@ export function wireReview(root, session, opts = {}) {
   const readReviewBody = opts.fetchReviewBody ?? fetchReviewBody
   /** @type {Selection | null} */
   let selection = null
-  /** @type {string | null} */
-  let focusId = null
-  /** @type {string | null} */
-  let focusPointId = null
-  /** The element that holds the ring, which the step keys measure from. */
+  /** The element that holds the focus ring: a card, an attention point, or a point's row. */
   /** @type {HTMLElement | null} */
   let focusedEl = null
   let pendingG = false
@@ -380,14 +358,14 @@ export function wireReview(root, session, opts = {}) {
     return bar === null ? 0 : bar.getBoundingClientRect().height
   }
 
+  /** @param {string} id */
+  const byId = id => root.querySelector(`#${cssEscape(id)}`)
+
   /**
-   * @param {string} id
-   * @param {Element | null} [element] where to put the ring when the id names nothing on screen
+   * @param {Element | null} el
    * @param {ScrollLogicalPosition} [block] `start` for a card, `center` for a point
    */
-  const focusItem = (id, element, block = 'start') => {
-    focusId = id
-    const el = root.querySelector(`#${cssEscape(id)}`) ?? element
+  const focusItem = (el, block = 'start') => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
       marked.classList.remove('is-focused')
     }
@@ -395,14 +373,27 @@ export function wireReview(root, session, opts = {}) {
     if (el instanceof HTMLElement) {
       focusedEl = el
       el.classList.add('is-focused')
+      el.style.scrollMarginTop = `${stickyTop() + FOCUS_GAP}px`
+      // Scrolls first, which opens a collapsed card or closed details around the element: a
+      // hidden element cannot take the focus.
+      scrollIntoViewSafe(el, block)
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
       el.tabIndex = -1
       el.focus({ preventScroll: true })
-      el.style.scrollMarginTop = `${stickyTop() + FOCUS_GAP}px`
-      scrollIntoViewSafe(el, block)
     }
-    return el
+  }
+
+  /** The element in focus, while it is still on the page. */
+  const focused = () => (focusedEl?.isConnected === true ? focusedEl : null)
+
+  /**
+   * The attention point in focus, whether the ring is on its card or on its row in the diff.
+   * @param {ReadonlyArray<Point>} points
+   */
+  const focusedPoint = points => {
+    const id = focused()?.closest('[data-point]')?.getAttribute('data-point')
+    return points.find(p => p.id === id)
   }
 
   /**
@@ -412,22 +403,21 @@ export function wireReview(root, session, opts = {}) {
    * @returns {Element | null}
    */
   const here = order => {
-    const focused = focusedEl?.isConnected === true ? focusedEl : null
-    const top = focused === null ? null : drawnTop(focused)
+    const el = focused()
+    const top = el === null ? null : drawnTop(el)
     // A focused element that is not drawn, such as a point just dismissed, still marks the place.
-    if (focused !== null && (top === null || (top > -FOCUS_GAP && top < window.innerHeight))) {
-      return focused
+    if (el !== null && (top === null || (top > -FOCUS_GAP && top < window.innerHeight))) {
+      return el
     }
-    const byId = (/** @type {NavItem} */ item) => root.querySelector(`#${cssEscape(item.id)}`)
     const reading = readingItem(
       order,
       item => {
-        const el = byId(item)
-        return el === null ? null : drawnTop(el)
+        const card = byId(item.id)
+        return card === null ? null : drawnTop(card)
       },
       stickyTop() + READING_SLACK
     )
-    return reading === null ? focused : byId(reading)
+    return reading === null ? el : byId(reading.id)
   }
 
   /**
@@ -451,7 +441,7 @@ export function wireReview(root, session, opts = {}) {
 
   /** @param {NavItem} item */
   const isCardShown = item => {
-    const el = root.querySelector(`#${cssEscape(item.id)}`)
+    const el = byId(item.id)
     return el !== null && isShown(el)
   }
 
@@ -463,38 +453,50 @@ export function wireReview(root, session, opts = {}) {
    */
   const stepPoint = (order, points, direction) => {
     const from = here(order)
-    /** @param {Point} point */
-    const pointEl = point =>
-      root.querySelector(`#${cssEscape(pointAnchorId(point.id))}`) ??
-      root.querySelector(`[data-point="${cssEscape(point.id)}"]`)
-    const onPage = points
-      .map(point => {
-        // A point of the Other layer has no card, so the ring lands on its row in the diff, which
-        // a closed Other layer has not drawn yet.
-        if (pointEl(point) === null && point.layerId !== undefined) {
-          drawCardOf(root, point.path, point.layerId)
-        }
-        return { point, el: pointEl(point) }
-      })
-      .filter(/** @returns {p is { point: Point, el: Element }} */ p => p.el !== null)
-      .sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
-    const found =
-      from === null
-        ? direction === 1
-          ? onPage[0]
-          : onPage.at(-1)
-        : direction === 1
-          ? onPage.find(p => (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)
-          : onPage.findLast(
-              p => (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
-            )
-    if (found === undefined) {
-      return
+    /** @type {Set<Element>} */
+    const drawn = new Set()
+    /**
+     * Where a point sits on the page: its card, or for a point of the Other layer, which has no
+     * card, its row in the diff. A diff not drawn yet stands in with its file card.
+     * @param {Point} point
+     * @returns {{ point: Point, el: Element, row: boolean } | null}
+     */
+    const place = point => {
+      const el = byId(pointAnchorId(point.id)) ?? root.querySelector(`[data-point="${cssEscape(point.id)}"]`)
+      if (el !== null) {
+        return { point, el, row: true }
+      }
+      const card = fileCardOf(root, point.path, point.layerId)
+      return card === null || drawn.has(card) ? null : { point, el: card, row: false }
     }
-    focusPointId = found.point.id
-    // A point inside a collapsed card or the closed Other layer opens, so the ring is seen.
-    revealAround(found.el)
-    focusItem(pointAnchorId(found.point.id), found.el, 'center')
+    const pick = () => {
+      const onPage = points
+        .map(place)
+        .filter(p => p !== null)
+        .sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      if (from === null) {
+        return direction === 1 ? onPage[0] : onPage.at(-1)
+      }
+      // A card not drawn yet counts as ahead of itself, so `]` from a file card finds its points.
+      return direction === 1
+        ? onPage.find(
+            p =>
+              (!p.row && p.el === from) ||
+              (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+          )
+        : onPage.findLast(p => (from.compareDocumentPosition(p.el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0)
+    }
+    let found = pick()
+    // Draws only the diff that holds the target, then picks again, since its rows order the
+    // points inside it. Each round draws one more card, so the loop ends.
+    while (found !== undefined && !found.row) {
+      drawn.add(found.el)
+      drawCardOf(root, found.point.path, found.point.layerId)
+      found = pick()
+    }
+    if (found !== undefined) {
+      focusItem(found.el, 'center')
+    }
   }
 
   /** @param {Selection | null} next */
@@ -665,7 +667,7 @@ export function wireReview(root, session, opts = {}) {
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
-            focusItem(next.id)
+            focusItem(next)
           }
         }
       }
@@ -1164,18 +1166,10 @@ export function wireReview(root, session, opts = {}) {
       case 'prev-layer':
       case 'next-file':
       case 'prev-file': {
-        const step =
-          decided.action === 'next-layer'
-            ? nextLayer
-            : decided.action === 'prev-layer'
-              ? prevLayer
-              : decided.action === 'next-file'
-                ? nextFile
-                : prevFile
-        const item = step(order, itemAround(order, here(order)), isCardShown)
+        const [kind, direction] = STEPS[decided.action]
+        const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
-          focusPointId = null
-          focusItem(item.id)
+          focusItem(byId(item.id))
         }
         break
       }
@@ -1183,16 +1177,19 @@ export function wireReview(root, session, opts = {}) {
       case 'prev-point':
         stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
         break
-      case 'toggle':
-        // A point in focus stands for the card that holds it, a row of the Other layer included.
-        if (focusedEl?.isConnected === true) {
-          setCardCollapsed(focusedEl)
+      case 'toggle': {
+        // A point in focus stands for the file card that holds its line, not the layer it is listed in.
+        const point = focusedPoint(points)
+        const el = point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
+        if (el !== null) {
+          setCardCollapsed(el)
         }
         break
+      }
       case 'reviewed-file':
       case 'reviewed-layer': {
         // A point in focus stands for the card that holds it.
-        const itemId = focusedEl?.isConnected === true ? itemAround(order, focusedEl) : focusId
+        const itemId = itemAround(order, focused())
         const item = order.find(i => i.id === itemId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =
@@ -1209,24 +1206,32 @@ export function wireReview(root, session, opts = {}) {
         break
       }
       case 'comment': {
-        const point = points.find(p => p.id === focusPointId)
-        const key = point === undefined ? null : keyForPath(point.path)
         if (selection !== null) {
           openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
-        } else if (point !== undefined && key !== null) {
-          // With nothing selected, c comments on the line of the attention point in focus.
-          openLineComposer({ key, path: point.path, side: point.side ?? 'new', line: point.line })
+          break
+        }
+        // With nothing selected, c comments on the line of the attention point in focus.
+        const point = focusedPoint(points)
+        const key = point === undefined ? null : keyForPath(point.path)
+        if (point !== undefined && key !== null) {
+          const target = { key, path: point.path, side: point.side ?? 'new', line: point.line }
+          // The point's diff may be undrawn, off screen, or in a collapsed card.
+          drawCardOf(root, point.path, point.layerId)
+          const row = findRow(root, key, target.side, target.line)
+          if (row !== null) {
+            scrollIntoViewSafe(row)
+          }
+          openLineComposer(target)
         }
         break
       }
       case 'dismiss': {
-        const point = points.find(p => p.id === focusPointId)
+        const point = focusedPoint(points)
         const button =
           point === undefined
             ? null
             : root.querySelector(`[data-point="${cssEscape(point.id)}"] [data-act="point-dismiss"]`)
         if (button instanceof HTMLElement && point !== undefined) {
-          focusPointId = null
           setDismissed(button, point.fingerprint, true)
         }
         break
@@ -1236,8 +1241,7 @@ export function wireReview(root, session, opts = {}) {
         applyFoldLevel(nextFoldLevel(getFoldLevel()))
         break
       case 'overview':
-        focusPointId = null
-        focusItem('overview')
+        focusItem(byId('overview'))
         break
       case 'help':
         openHelpDialog(root)
@@ -1245,7 +1249,7 @@ export function wireReview(root, session, opts = {}) {
       case 'ask': {
         // `a` asks about whatever is in focus: an attention point, a selection, or the card.
         const chat = opts.chat?.() ?? null
-        const target = askTargetFor(root, focusId, focusPointId, selection)
+        const target = askTargetFor(focused(), selection)
         if (chat === null) {
           toast(root, NO_CHAT_NOTE)
           break
@@ -1271,6 +1275,7 @@ export function wireReview(root, session, opts = {}) {
   doc.addEventListener('pointerup', onPointerUp)
   doc.addEventListener('pointercancel', onPointerUp)
   doc.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+  const stopCardReveal = wireCardReveal(root)
   applyCapabilityGating(root, session.capabilities)
 
   return {
@@ -1344,6 +1349,7 @@ export function wireReview(root, session, opts = {}) {
       doc.removeEventListener('pointerup', onPointerUp)
       doc.removeEventListener('pointercancel', onPointerUp)
       doc.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+      stopCardReveal()
     },
   }
 }

@@ -18,6 +18,7 @@ import { renderHeader } from './header.js'
 import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
 import {
   cardOf,
+  defineLayerElements,
   hydrateAll,
   getRenderContext,
   hydrateFileCard,
@@ -69,7 +70,8 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact }} [opts]
+ * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
   const state = opts.state ?? BASE
@@ -86,6 +88,17 @@ function setup(opts = {}) {
     now: NOW,
   }
   setRenderContext(ctx)
+  if (opts.drawn === false) {
+    // An observer that never sees a card, so each <pr-file> waits for a key or a link to draw it.
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    defineLayerElements()
+  }
   const paths = new Set(files.map(f => f.path))
   document.body.innerHTML =
     `<pr-app id="root">${renderHeader(bundle, { host: 'localhost:3010', theme: 'auto', skin: 'terminal', now: NOW })}` +
@@ -95,7 +108,9 @@ function setup(opts = {}) {
   if (!(root instanceof HTMLElement)) {
     throw new Error('no root')
   }
-  hydrateAll(root, ctx)
+  if (opts.drawn !== false) {
+    hydrateAll(root, ctx)
+  }
   /** @type {Array<[string, unknown]>} */
   const calls = []
   // What the server holds, which the page does not get to write directly.
@@ -1156,13 +1171,17 @@ describe('keyboard', () => {
     expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
   })
 
-  it('marks the layer of the point in focus with R, and comments on its line with c', async () => {
+  it('comments on the line of the point in focus with c, collapses its file card with o, and marks its layer with R', async () => {
     const { root, calls } = setup()
     key(']')
     key('c')
     const box = root.querySelector('.composer-box')
     expect(box?.closest('tr')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
     key('Escape')
+    // o collapses the file card of the point's line, and leaves the layer it is listed in open.
+    key('o')
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
+    expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(false)
     key('R')
     await flush()
     expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
@@ -1219,6 +1238,54 @@ describe('keyboard', () => {
     // o collapses the Other layer's card that holds the point's row.
     key('o')
     expect(root.querySelector('#file-src_app_ts-other .file-body')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('leaves the point alone once R moves the ring to the next layer', async () => {
+    const [runPath, ...rest] = artifact.layers
+    if (runPath === undefined) {
+      throw new Error('fixture changed')
+    }
+    const second = { ...runPath, id: 'second', key: 'second', title: 'Second' }
+    const { root, calls } = setup({ artifact: { ...artifact, layers: [runPath, second, ...rest] } })
+    key(']')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('R')
+    await flush()
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-second')
+    key('c')
+    key('d')
+    await flush()
+    expect(root.querySelector('.composer-box')).toBeNull()
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
+  })
+
+  it('opens the collapsed card of a point to comment on its line with c', () => {
+    const { root } = setup({ state: { ...BASE, reviewed: { 'layer:run-path/file:src_app_ts': true } } })
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
+    key(']')
+    key('c')
+    const box = root.querySelector('.composer-box')
+    expect(box?.closest('tr')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
+    expect(box?.closest('[hidden]')).toBeNull()
+  })
+
+  it('draws the diff of a point that is waiting to be seen, to comment on its line with c', () => {
+    const { root } = setup({ drawn: false })
+    try {
+      expect(root.querySelector('#file-src_app_ts .loading')).not.toBeNull()
+      key(']')
+      key('c')
+      expect(root.querySelector('.composer-box')?.closest('tr')?.previousElementSibling?.id).toBe(
+        'L-src_app_ts-new-4'
+      )
+      key('Escape')
+      // ] draws only the diff that holds the next point, so the other Other file still waits.
+      key(']')
+      expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+      expect(root.querySelector('#file-src_gone_ts .loading')).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('stops listening once the screen is torn down', () => {
@@ -1708,7 +1775,8 @@ describe('askTargetFor', () => {
       end: 4,
       dragging: false,
     })
-    expect(askTargetFor(root, 'layer-run-path', 'p-1', selection)).toEqual({
+    const layer = root.querySelector('#layer-run-path')
+    expect(askTargetFor(layer, selection)).toEqual({
       kind: 'lines',
       path: 'src/app.ts',
       side: 'new',
@@ -1719,18 +1787,13 @@ describe('askTargetFor', () => {
     if (point === undefined) {
       throw new Error('fixture changed')
     }
-    expect(askTargetFor(root, 'layer-run-path', point.id, null)).toEqual({
+    expect(askTargetFor(root.querySelector(`[data-point="${point.id}"]`), null)).toEqual({
       kind: 'point',
       fingerprint: point.fingerprint,
     })
-    expect(askTargetFor(root, 'layer-run-path', null, null)).toEqual({ kind: 'layer', layerId: 'run-path' })
-    expect(askTargetFor(root, null, null, null)).toEqual({ kind: 'pr' })
-    // A point or a card the page does not show falls through to the next choice.
-    expect(askTargetFor(root, 'layer-run-path', 'p-nope', null)).toEqual({
-      kind: 'layer',
-      layerId: 'run-path',
-    })
-    expect(askTargetFor(root, 'overview', null, null)).toEqual({ kind: 'pr' })
+    expect(askTargetFor(layer, null)).toEqual({ kind: 'layer', layerId: 'run-path' })
+    expect(askTargetFor(null, null)).toEqual({ kind: 'pr' })
+    expect(askTargetFor(root.querySelector('#overview'), null)).toEqual({ kind: 'pr' })
     setChatEnabled(false)
   })
 })

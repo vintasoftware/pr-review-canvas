@@ -64,7 +64,7 @@ export function buildNavOrder(artifact) {
  * @param {(item: NavItem) => boolean} shown false for a card the reader cannot see, which is no stop
  * @returns {NavItem | null}
  */
-function step(order, currentId, kind, direction, shown) {
+export function step(order, currentId, kind, direction, shown) {
   const from =
     currentId === null ? (direction === 1 ? -1 : order.length) : order.findIndex(i => i.id === currentId)
   const start = from === -1 && currentId !== null ? (direction === 1 ? -1 : order.length) : from
@@ -75,41 +75,6 @@ function step(order, currentId, kind, direction, shown) {
     }
   }
   return null
-}
-
-/** @param {NavItem} _item */
-const always = _item => true
-
-/**
- * @param {ReadonlyArray<NavItem>} order @param {string | null} currentId
- * @param {(item: NavItem) => boolean} [shown]
- */
-export function nextLayer(order, currentId, shown = always) {
-  return step(order, currentId, 'layer', 1, shown)
-}
-
-/**
- * @param {ReadonlyArray<NavItem>} order @param {string | null} currentId
- * @param {(item: NavItem) => boolean} [shown]
- */
-export function prevLayer(order, currentId, shown = always) {
-  return step(order, currentId, 'layer', -1, shown)
-}
-
-/**
- * @param {ReadonlyArray<NavItem>} order @param {string | null} currentId
- * @param {(item: NavItem) => boolean} [shown]
- */
-export function nextFile(order, currentId, shown = always) {
-  return step(order, currentId, 'file', 1, shown)
-}
-
-/**
- * @param {ReadonlyArray<NavItem>} order @param {string | null} currentId
- * @param {(item: NavItem) => boolean} [shown]
- */
-export function prevFile(order, currentId, shown = always) {
-  return step(order, currentId, 'file', -1, shown)
 }
 
 /**

@@ -378,6 +378,31 @@ export function setCardCollapsed(el, collapsed) {
 }
 
 /**
+ * Opens the collapsed cards and closed details around whatever `scrollIntoViewSafe` scrolls to,
+ * so a key or a link never lands on something hidden. Returns the function that stops it.
+ * @param {HTMLElement} root
+ */
+export function wireCardReveal(root) {
+  /** @param {Event} event */
+  const reveal = event => {
+    const target = event.target
+    for (
+      let node = target instanceof Element ? target.parentElement : null;
+      node !== null;
+      node = node.parentElement
+    ) {
+      if (node instanceof HTMLDetailsElement) {
+        node.open = true
+      } else if (node instanceof HTMLElement && node.hidden && node.matches('.file-body, .layer-body')) {
+        setCardCollapsed(node, false)
+      }
+    }
+  }
+  root.addEventListener('reveal-code', reveal)
+  return () => root.removeEventListener('reveal-code', reveal)
+}
+
+/**
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
