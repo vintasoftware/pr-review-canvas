@@ -680,10 +680,14 @@ written with the scene kit's layout classes, tones, arrows, CSS motion, and Luci
 consequence and its scene; a side without one shows its consequence alone.
 
 Each scene is served at `/deck-scene/<review>/<card>/<side>` with its icons inlined, under a
-policy of a bare `sandbox` (no script, same origin, forms, popups, or navigation),
-`default-src 'none'`, and only the kit's stylesheet and inline styles; the iframe carries an
-empty `sandbox` attribute as well, and the deck page adds `frame-src 'self'`. Scenes take no
-pointer input. Picking a side sets `#picked` on its frame, which the kit's CSS answers.
+policy of `sandbox allow-same-origin` (no script, forms, popups, or navigation),
+`default-src 'none'`, and only the kit's stylesheet and inline styles; the iframe carries the same
+`sandbox="allow-same-origin"`, and the deck page adds `frame-src 'self'`. Keeping the origin is
+what lets the deck page measure a scene; with no script allowed, nothing inside the frame can use
+it. On a desktop card a scene that would overflow its frame is shrunk to fit, down to 55%; past
+that it keeps its top in view and the page warns in the console. Where the sides stack, the frame
+takes the scene's own height. Scenes take no pointer input. Picking a side marks its scene's root
+`picked`, which the kit's CSS answers.
 
 `deck validate` refuses (`SCENE_INVALID`) a scene with elements the frame would drop (`script`,
 `img`, `style`, forms, frames, and the like), event handler attributes, `url(...)`, `@import`,

@@ -420,11 +420,11 @@ describe('a deck from prepare to the fix list', () => {
     expect(frame.status).toBe(200)
     const html = await frame.text()
     expect(html).toContain(`data-side="${side}" data-theme="dark"`)
-    expect(html).toContain('<main id="picked" class="scene-root"><div class="scene"><svg class="icon lg"')
+    expect(html).toContain('<main class="scene-root"><div class="scene"><svg class="icon lg"')
     expect(html).toContain(' 3 rows</div></main>')
     expect(html).not.toContain('data-icon')
     expect(frame.headers.get('content-security-policy')).toBe(
-      "sandbox; default-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; object-src 'none'"
+      "sandbox allow-same-origin; default-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; object-src 'none'"
     )
     // Any other theme is the system's.
     expect(

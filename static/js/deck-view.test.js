@@ -73,8 +73,8 @@ describe('cardHtml', () => {
     expect(frames).toHaveLength(1)
     const frame = /** @type {HTMLIFrameElement} */ (frames[0])
     expect(frame.closest('.deck-side-b')).not.toBeNull()
-    // An empty sandbox: no script, same origin, forms, popups, or navigation.
-    expect(frame.getAttribute('sandbox')).toBe('')
+    // No script, forms, popups, or navigation; only the origin, so the page can fit the scene.
+    expect(frame.getAttribute('sandbox')).toBe('allow-same-origin')
     expect(frame.getAttribute('src')).toBe('/deck-scene/42/a%2Fb/b?theme=dark')
     expect(root.querySelector('.deck-side-b .deck-gist')?.textContent?.trim()).toBe('Nothing is dropped.')
     // The scene's HTML reaches the page only through the frame.

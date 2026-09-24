@@ -153,16 +153,72 @@ function showStamp(card, side, strength) {
   card.dataset['lean'] = side ?? ''
 }
 
+/** The smallest a scene is shrunk to fit its frame; below it, text would be too small to read. */
+const SCENE_MIN_ZOOM = 0.55
+
+/** Where the card's sides stack and the page scrolls, as deck.css has it. */
+const STACKED = '(max-width: 900px), (max-height: 700px)'
+
 /**
- * Plays the picked side's payoff: its scene's `on-pick` parts come in (a scene runs no script, so
- * the `#picked` fragment is what its CSS listens for) while the other side dims. Resolves once
- * there was something to watch, so the card flies off after it.
+ * Fits a scene to its frame. On a desktop card, where the frame's room is fixed, a scene that does
+ * not fit is shrunk, so nothing is cut off; where the sides stack, the frame takes the scene's own
+ * height instead. The frame runs no script, but it shares this page's origin, which is what lets
+ * the page measure it.
+ * @param {HTMLIFrameElement} frame
+ */
+function fitScene(frame) {
+  const doc = frame.contentDocument
+  const root = /** @type {HTMLElement | null | undefined} */ (doc?.querySelector('.scene-root'))
+  const scene = /** @type {HTMLElement | null | undefined} */ (root?.firstElementChild)
+  if (
+    doc === null ||
+    doc === undefined ||
+    root === null ||
+    root === undefined ||
+    scene === null ||
+    scene === undefined
+  )
+    return
+  scene.style.zoom = ''
+  root.style.alignContent = ''
+  const style = doc.defaultView?.getComputedStyle(root)
+  const padY = Number.parseFloat(style?.paddingTop ?? '0') + Number.parseFloat(style?.paddingBottom ?? '0')
+  if (window.matchMedia?.(STACKED).matches === true) {
+    // Only a changed height is written, so the resize this causes settles on the next call.
+    const height = `${Math.ceil(scene.scrollHeight + padY)}px`
+    if (frame.style.getPropertyValue('--scene-height') !== height)
+      frame.style.setProperty('--scene-height', height)
+    frame.dataset['zoom'] = '1'
+    return
+  }
+  frame.style.removeProperty('--scene-height')
+  const padX = Number.parseFloat(style?.paddingLeft ?? '0') + Number.parseFloat(style?.paddingRight ?? '0')
+  // Two pixels of slack, so rounding never shrinks a scene that fits.
+  const fit = Math.min(
+    1,
+    (root.clientHeight - padY + 2) / Math.max(1, scene.scrollHeight),
+    (root.clientWidth - padX + 2) / Math.max(1, scene.scrollWidth)
+  )
+  const zoom = fit < 1 ? Math.max(SCENE_MIN_ZOOM, fit * 0.97) : 1
+  if (zoom < 1) scene.style.zoom = String(zoom)
+  frame.dataset['zoom'] = String(Math.round(zoom * 100) / 100)
+  // Too big to fit even shrunk: keep its start in view, and say so for whoever wrote it.
+  const cut = fit * 0.97 < SCENE_MIN_ZOOM
+  root.style.alignContent = cut ? 'start' : ''
+  if (cut) console.warn(`scene ${frame.getAttribute('title') ?? ''} is too big for its frame; it is cut off`)
+}
+
+/**
+ * Plays the picked side's payoff: its scene's `on-pick` parts come in (the scene's CSS answers the
+ * `picked` mark on its root) while the other side dims. Resolves once there was something to
+ * watch, so the card flies off after it.
  * @param {HTMLElement} card
  * @param {'a' | 'b'} side
  */
 async function payoff(card, side) {
   const scene = /** @type {HTMLIFrameElement | null} */ (card.querySelector(`iframe[data-scene="${side}"]`))
-  if (scene !== null) scene.src = `${scene.src.split('#')[0]}#picked`
+  // A frame still loading has no root yet; its payoff is then simply skipped.
+  scene?.contentDocument?.documentElement?.classList.add('picked')
   card.dataset['picked'] = side
   if (scene === null || reducedMotion() || card.classList.contains('deck-flipped')) return
   await new Promise(resolve => setTimeout(resolve, PAYOFF_MS))
@@ -232,6 +288,9 @@ export async function bootDeck() {
   let busy = false
   /** @type {'card' | 'note' | 'edit'} */
   let mode = 'card'
+  /** Watches the top card's scene frames, to fit them again when their size changes. */
+  /** @type {ResizeObserver | null} */
+  let sceneSizes = null
   /** How each card left on this page, so an undo brings it back the same way. */
   /** @type {Map<string, PickChoice>} */
   const leftBy = new Map()
@@ -312,6 +371,22 @@ ${deckHelpHtml()}`
     table.innerHTML = `<div class="deck-hand">${stackHtml(state.peek())}${cardHtml(top, { index, total: deck.cards.length }, { ...view, excerpt: excerpts[top.key] })}</div>`
     const card = /** @type {HTMLElement} */ (topCard())
     wireDrag(card)
+    // A frame's width settles after the card is dealt, and text wraps with it: fit on load and
+    // whenever the frame's size changes.
+    sceneSizes?.disconnect()
+    sceneSizes =
+      typeof ResizeObserver === 'function'
+        ? new ResizeObserver(entries => {
+            for (const entry of entries) fitScene(/** @type {HTMLIFrameElement} */ (entry.target))
+          })
+        : null
+    for (const frame of card.querySelectorAll('iframe[data-scene]')) {
+      const scene = /** @type {HTMLIFrameElement} */ (frame)
+      scene.addEventListener('load', () => {
+        fitScene(scene)
+        sceneSizes?.observe(scene)
+      })
+    }
     card.focus({ preventScroll: true })
     await flyIn(card, from)
   }

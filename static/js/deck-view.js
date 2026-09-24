@@ -63,7 +63,7 @@ function sideFrontHtml(card, side, view) {
   const scene =
     content.scene === undefined
       ? ''
-      : `<div class="deck-visual" data-visual="${side}"><iframe class="deck-scene" data-scene="${side}" sandbox="" src="${esc(src)}" title="Scene of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe></div>`
+      : `<div class="deck-visual" data-visual="${side}"><iframe class="deck-scene" data-scene="${side}" sandbox="allow-same-origin" src="${esc(src)}" title="Scene of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe></div>`
   return `<section class="deck-side deck-side-${side}" data-side="${side}"${content.scene === undefined ? ' data-plain' : ''} aria-label="Side ${letter}: ${esc(content.label)}">
 <header class="deck-side-h"><span class="deck-letter" aria-hidden="true">${letter}</span><h3>${esc(content.label)}</h3>${now}</header>
 <div class="deck-gist">${inline(content.consequence)}</div>

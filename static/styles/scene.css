@@ -316,10 +316,10 @@ body {
   opacity: 0;
   transform: scale(0.6);
 }
-#picked:target .on-pick {
+html.picked .on-pick {
   animation: pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
 }
-#picked:target .off-pick {
+html.picked .off-pick {
   transition: opacity 0.3s;
   opacity: 0.25;
 }
@@ -388,7 +388,7 @@ body {
   .on-pick {
     opacity: 0;
   }
-  #picked:target .on-pick {
+  html.picked .on-pick {
     opacity: 1;
     transform: none;
   }

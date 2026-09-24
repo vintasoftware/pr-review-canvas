@@ -43,12 +43,15 @@ function card(key: string, title: string, current: 'a' | 'b' | null): DecisionCa
 const SCENE =
   '<div class="scene"><div class="row"><div class="box bad"><i data-icon="circle-x" class="lg"></i><span class="big">3</span></div><span class="arrow"></span><div class="banner bad">rows lost</div></div></div>'
 
+/** A scene with far more rows than any frame holds, to be shrunk until it fits. */
+const TALL = `<div class="scene">${Array.from({ length: 8 }, (_, i) => `<div class="box">row ${i + 1}</div>`).join('')}<div class="banner bad">last row</div></div>`
+
 const CARDS = [
   { ...card('one', 'First', 'a'), scenes: true },
   card('two', 'Second', 'a'),
   card('three', 'Third', 'b'),
 ].map(({ scenes, ...c }: DecisionCard & { scenes?: boolean }) =>
-  scenes === true ? { ...c, a: { ...c.a, scene: SCENE }, b: { ...c.b, scene: SCENE } } : c
+  scenes === true ? { ...c, a: { ...c.a, scene: SCENE }, b: { ...c.b, scene: TALL } } : c
 )
 
 const test = base.extend<{ deckUrl: string }>({
@@ -188,6 +191,16 @@ test('fits a phone: no sideways scroll, and every action has a button', async ({
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth
   )
   expect(overflow).toBe(0)
+  // Stacked, a scene's frame takes its scene's height instead of a fixed box.
+  await expect(page.locator('iframe[data-scene="a"]')).toHaveAttribute('style', /--scene-height: \d+px/)
+  // The back, with its long lines of code, stays within the screen: the code scrolls in its box.
+  await page.locator('.deck-card-more [data-act="details"]').click()
+  await expect(page.locator('.deck-back')).toBeVisible()
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  ).toBe(0)
+  await page.locator('.deck-card-more [data-act="details"]').click()
+  await expect(page.locator('.deck-back')).toBeHidden()
   await page.locator('[data-act="drawer"]').click()
   await expect(page.locator('.deck-drawer')).toBeVisible()
   await page.locator('.deck-drawer-close').click()
@@ -205,12 +218,11 @@ test('shows each side’s scene in a locked frame, and turns the card over with 
   deckUrl,
 }) => {
   await page.goto(deckUrl)
-  for (const side of ['a', 'b']) {
-    const scene = page.frameLocator(`iframe[data-scene="${side}"]`)
-    await expect(scene.locator('.banner')).toHaveText('rows lost')
-    // The icon was inlined by the server: the frame loads nothing for it.
-    await expect(scene.locator('svg.icon.lg')).toHaveCount(1)
-  }
+  const scene = page.frameLocator('iframe[data-scene="a"]')
+  await expect(scene.locator('.banner')).toHaveText('rows lost')
+  // The icon was inlined by the server: the frame loads nothing for it.
+  await expect(scene.locator('svg.icon.lg')).toHaveCount(1)
+  await expect(page.frameLocator('iframe[data-scene="b"]').locator('.banner')).toHaveText('last row')
   await expect(page.locator('.deck-front .deck-side-a .deck-gist')).toHaveText('Old exports import cleanly.')
   await expect(page.locator('.deck-back')).toBeHidden()
   await expect(page.locator('.deck-corner')).toContainText('reasons and code on the back')
@@ -240,6 +252,31 @@ test('shows each side’s scene in a locked frame, and turns the card over with 
   // A card without scenes shows its consequences alone, and frames nothing.
   await expect(page.locator('iframe')).toHaveCount(0)
   await expect(page.locator('.deck-side[data-plain]')).toHaveCount(2)
+})
+
+test('fits a scene that would overflow its frame, so all of it shows', async ({ page, deckUrl }) => {
+  await page.goto(deckUrl)
+  const tall = page.locator('iframe[data-scene="b"]')
+  // A desktop card shrinks the scene into its fixed room; stacked sides give it its full height.
+  const stacked = await page.evaluate(() => matchMedia('(max-width: 900px), (max-height: 700px)').matches)
+  if (stacked) {
+    await expect(tall).toHaveAttribute('data-zoom', '1')
+    await expect(tall).toHaveAttribute('style', /--scene-height: \d+px/)
+  } else {
+    await expect(tall).toHaveAttribute('data-zoom', /^0\.\d+$/)
+    expect(Number(await tall.getAttribute('data-zoom'))).toBeGreaterThanOrEqual(0.55)
+  }
+  const last = page.frameLocator('iframe[data-scene="b"]').locator('.banner')
+  const frameBox = await tall.boundingBox()
+  const lastBox = await last.boundingBox()
+  expect(frameBox).not.toBeNull()
+  expect(lastBox).not.toBeNull()
+  // The last row sits inside the frame, not cut off below it.
+  expect((lastBox?.y ?? 0) + (lastBox?.height ?? 0)).toBeLessThanOrEqual(
+    (frameBox?.y ?? 0) + (frameBox?.height ?? 0) + 1
+  )
+  // A scene that fits is left at its size.
+  await expect(page.locator('iframe[data-scene="a"]')).toHaveAttribute('data-zoom', '1')
 })
 
 test('a scene runs no script, even one that slips past validation', async ({ page, deckUrl }) => {

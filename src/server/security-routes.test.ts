@@ -149,10 +149,11 @@ describe('content security policy', () => {
     )
   })
 
-  it('locks a scene frame down completely: no script, forms, popups, navigation, or network', () => {
+  it('locks a scene frame down: no script, forms, popups, navigation, or network', () => {
     const policy = sceneFramePolicy().split('; ')
-    // A bare `sandbox` grants nothing, not even scripts or the same origin.
-    expect(policy[0]).toBe('sandbox')
+    // Only the origin is kept, so the deck page can measure the scene; with no script allowed,
+    // nothing inside can use it.
+    expect(policy[0]).toBe('sandbox allow-same-origin')
     expect(policy).toContain("default-src 'none'")
     expect(policy).toContain("form-action 'none'")
     expect(policy).toContain("frame-ancestors 'self'")

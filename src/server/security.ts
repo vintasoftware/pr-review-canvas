@@ -80,13 +80,14 @@ export function contentSecurityPolicy(nonce: string, opts: { frames?: boolean } 
 export const SCENE_FRAME_PREFIX = '/deck-scene/'
 
 /**
- * A scene frame's policy. A scene is generated HTML, so its frame is sandboxed with no
- * permission at all (no script, forms, popups, or navigation of the deck page), may load
- * nothing but the kit's stylesheet from this server, and may be framed only here.
+ * A scene frame's policy. A scene is generated HTML, so its frame is sandboxed: no script, forms,
+ * popups, or navigation of the deck page. It keeps its origin, which is what lets the deck page
+ * measure a scene and shrink one that would overflow; without script, nothing in the frame can
+ * use that origin. It may load nothing but the kit's stylesheet, and be framed only here.
  */
 export function sceneFramePolicy(): string {
   return [
-    'sandbox',
+    'sandbox allow-same-origin',
     "default-src 'none'",
     "style-src 'self' 'unsafe-inline'",
     'img-src data:',

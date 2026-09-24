@@ -772,6 +772,8 @@
 }
 .deck-card {
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* One column that never grows past the card: a wide line of code scrolls in its own box. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas: 'head' 'face' 'foot';
   height: min(800px, 100%);
 }
@@ -900,6 +902,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   border: 2px solid var(--line);
   background: var(--panel);
 }
@@ -913,6 +916,7 @@
 .deck-back-code-scroll {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
 }
 .deck-back-code .deck-diff {
@@ -986,12 +990,22 @@
   .deck-ghost {
     height: auto;
   }
+  /* Stacked, a scene's frame takes its scene's height (deck.js measures it) instead of the
+     room a desktop card shares out. */
   .deck-visual {
     flex: none;
-    aspect-ratio: 16 / 10;
+    min-height: 140px;
   }
+  .deck-scene {
+    height: var(--scene-height, 260px);
+  }
+  /* The code keeps to a screenful, so the card's actions stay near. */
+  .deck-back-code-scroll {
+    max-height: 60vh;
+  }
+  /* Room for the folded corner, which keeps its fold but drops its words. */
   .deck-card-h {
-    padding-right: 0;
+    padding-right: 36px;
   }
   .deck-corner-front,
   .deck-corner-back {
