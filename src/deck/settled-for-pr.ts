@@ -49,7 +49,8 @@ async function decksFor(
   const local = (await Promise.all(LOCAL_KEYS.map(key => ctx.decks.readDeck(key)))).filter(
     (deck): deck is Deck => deck !== null && deck.headRef === pr.headRef
   )
-  local.sort((a, b) => (a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0))
+  // ISO timestamps sort as text: newest first.
+  local.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
   const decks = own === null ? local : [own, ...local]
   return Promise.all(
     decks.map(async deck => ({ deck, picks: (await ctx.decks.readPicks(deck.review)).picks }))
@@ -74,26 +75,36 @@ export async function decisionsForPr(ctx: AppContext, pr: Pr & { number: number 
   return { settled: [...settled.values()], open: [...open.values()] }
 }
 
-/** Where a settled decision's justification goes, as the author left it or as its side says. */
-export function recordOf(card: SettledCard): RecordTarget {
-  if (card.pick.record !== undefined) return card.pick.record
-  return card.pick.choice === 'a' || card.pick.choice === 'b' ? card[card.pick.choice].record : 'none'
+/**
+ * Where a pick's justification goes: where the author moved it, else where the picked side says.
+ * Neither side and a skip say nowhere.
+ */
+export function recordFor(card: DecisionCard, pick: Pick): RecordTarget {
+  if (pick.record !== undefined) return pick.record
+  return pick.choice === 'a' || pick.choice === 'b' ? card[pick.choice].record : 'none'
 }
 
 /** The side the author picked, in words a reviewer reads. */
-export function pickedLabel(card: SettledCard): string {
-  const { pick } = card
+export function pickedLabelFor(card: DecisionCard, pick: Pick): string {
   if (pick.choice === 'neither') return `neither side: ${pick.note ?? ''}`.trim()
   if (pick.choice === 'skip') return 'skipped'
   return `${pick.choice.toUpperCase()}, ${card[pick.choice].label}`
 }
 
-/** The justification the author accepted or wrote. */
-export function whyOf(card: SettledCard): string {
-  const { pick } = card
+/** The justification the author wrote, else the one the picked side offered. */
+export function whyFor(card: DecisionCard, pick: Pick): string {
   if (pick.why !== undefined) return pick.why
   return pick.choice === 'a' || pick.choice === 'b' ? card[pick.choice].why : ''
 }
+
+/** Ends `text` with one full stop, whatever the author typed. */
+export function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`
+}
+
+export const recordOf = (card: SettledCard): RecordTarget => recordFor(card, card.pick)
+export const pickedLabel = (card: SettledCard): string => pickedLabelFor(card, card.pick)
+export const whyOf = (card: SettledCard): string => whyFor(card, card.pick)
 
 /**
  * Where a card's anchor sits on the pull request's head: the same line when the card was dealt for

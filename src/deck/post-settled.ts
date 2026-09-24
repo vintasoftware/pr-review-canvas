@@ -6,7 +6,7 @@ import type { SettledCard } from '../contract/deck.js'
 import type { PendingComment } from '../contract/pending.js'
 import type { Pr } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
-import { anchorOnHead, decisionsForPr, pickedLabel, recordOf, whyOf } from './settled-for-pr.js'
+import { anchorOnHead, decisionsForPr, pickedLabel, recordOf, sentence, whyOf } from './settled-for-pr.js'
 
 export type SelfReviewSharing =
   /** No settled decision is waiting to be posted. */
@@ -20,20 +20,18 @@ function marker(card: SettledCard): string {
   return `<!-- pr-review:self-review card=${card.key} -->`
 }
 
-function commentBody(card: SettledCard): string {
+/** `Picked A, Keep it. Because …`: the side, then the author's reason when there is one. */
+function pickedSentence(card: SettledCard): string {
   const why = whyOf(card)
-  return [
-    `**Self-review: ${card.title}**`,
-    '',
-    `Picked ${pickedLabel(card)}.${why === '' ? '' : ` ${why}`}`,
-    '',
-    marker(card),
-  ].join('\n')
+  return `${sentence(pickedLabel(card))}${why === '' ? '' : ` ${why}`}`
+}
+
+function commentBody(card: SettledCard): string {
+  return [`**Self-review: ${card.title}**`, '', `Picked ${pickedSentence(card)}`, '', marker(card)].join('\n')
 }
 
 function listedLine(card: SettledCard): string {
-  const why = whyOf(card)
-  return `- **${card.title}** (\`${card.path}\`): picked ${pickedLabel(card)}.${why === '' ? '' : ` ${why}`}`
+  return `- **${card.title}** (\`${card.path}\`): picked ${pickedSentence(card)}`
 }
 
 export async function postSettledComments(

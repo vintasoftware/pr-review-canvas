@@ -14,7 +14,7 @@ import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createApp } from '../server/app.js'
 import type { DeckResponse } from '../server/routes/deck-routes.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
-import { makeTestContext, type TestContext } from '../testing/fakes.js'
+import { makeTempDir, makeTestContext, type TestContext } from '../testing/fakes.js'
 import { BASE_SHA, ghFor42, gitFor42, gitForLocal, HEAD_SHA } from '../testing/synthetic.js'
 import { renderFixList, summarizePicks } from './fix-list.js'
 import { prepareDeck } from './prepare-deck.js'
@@ -147,6 +147,11 @@ describe('validateDeckModel', () => {
     expect(validateDeckModel({ cards: [card({ title })] }, { files, maxCards: 1 }).ok).toBe(true)
   })
 
+  it('names the root when the model is not an object at all', () => {
+    const result = validateDeckModel(null, { files, maxCards: 1 })
+    expect(result.ok ? [] : result.problems.map(p => [p.code, p.where])).toEqual([['DECK_SCHEMA', '(root)']])
+  })
+
   it('reports schema problems by path', () => {
     const result = validateDeckModel({ cards: [{ ...card(), current: 'c' }] }, { files, maxCards: 1 })
     expect(result.ok ? [] : result.problems.map(p => p.code)).toEqual(['DECK_SCHEMA'])
@@ -196,6 +201,44 @@ describe('the fix list', () => {
     expect(md).toContain(
       '## Left for reviewers\n\n- Left over (`src/app.ts:2`)\n- Not answered (`src/app.ts:2`)'
     )
+  })
+
+  it('gives the agent what it needs for each fix: where, what the code does now, and the target code', () => {
+    const md = renderFixList(
+      deckOf([
+        card({
+          key: 'old',
+          title: 'Deleted guard',
+          side: 'old',
+          line: 7,
+          current: null,
+          b: { ...card().b, snippet: { lang: 'ts', code: 'if (!row) throw new Error(row)\nreturn row' } },
+        }),
+      ]),
+      { old: pick('b') }
+    )
+    expect(md).toContain('- Where: `src/app.ts:7 (old side)`')
+    expect(md).toContain('- Now: the code does neither side')
+    expect(md).toContain('  ```ts\n  if (!row) throw new Error(row)\n  return row\n  ```')
+    expect(md).toContain('- Why: Never drop data.')
+  })
+
+  it('files a kept side under the code when the author moved its reason there', () => {
+    const md = renderFixList(deckOf([card()]), {
+      'empty-rows': pick('a', { record: 'code', why: 'Old tool pads.' }),
+    })
+    expect(md).toContain('_No pick asks the code to change._')
+    expect(md).toContain('## Reasons to write into the code\n\n### 1. What happens to empty rows?')
+    expect(md).toContain('- Write down: Old tool pads.')
+    expect(md).not.toContain('## Queued as pull request comments')
+  })
+
+  it('asks for what the author wrote when neither side fits, and omits a reason they did not give', () => {
+    const md = renderFixList(deckOf([card()]), {
+      'empty-rows': pick('neither', { note: 'Warn, then skip.' }),
+    })
+    expect(md).toContain('- Wanted: neither side. Warn, then skip.')
+    expect(md).not.toContain('- Why:')
   })
 
   it('says so when no pick asks the code to change', () => {
@@ -430,5 +473,204 @@ describe('a deck for a pull request', () => {
       headers: WRITE,
     })
     expect(((await done.json()) as { markdown: string }).markdown).toContain('pull request #42')
+  })
+})
+
+describe('the deck API refuses what it cannot apply', () => {
+  let t: TestContext
+  afterEach(async () => {
+    await t?.cleanup()
+  })
+
+  async function published() {
+    t = await makeTestContext({ git: gitForLocal() })
+    const prepared = await prepareDeck(t.ctx, { review: 'uncommitted', force: false }, quiet)
+    await writeTextAtomic(prepared.modelPath, JSON.stringify({ cards: [card()] }))
+    await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
+    return createApp(t.ctx)
+  }
+
+  const put = (app: ReturnType<typeof createApp>, cardKey: string, body: string) =>
+    app.request(`/api/deck/uncommitted/picks/${cardKey}`, { method: 'PUT', headers: WRITE, body })
+
+  it('answers each bad pick with the status that says why, and saves nothing', async () => {
+    const app = await published()
+    const cases: Array<[string, string, number]> = [
+      ['empty-rows', 'not json', 400],
+      ['empty-rows', JSON.stringify({ headSha: HEAD_SHA, choice: 'maybe' }), 400],
+      ['empty-rows', JSON.stringify({ choice: 'a' }), 400],
+      ['no-such-card', JSON.stringify({ headSha: HEAD_SHA, choice: 'a' }), 404],
+      ['empty-rows', JSON.stringify({ headSha: HEAD_SHA, choice: 'neither', note: '   ' }), 400],
+    ]
+    for (const [cardKey, body, status] of cases) {
+      expect((await put(app, cardKey, body)).status, body).toBe(status)
+    }
+    expect((await t.ctx.decks.readPicks('uncommitted')).picks).toEqual({})
+    expect((await app.request('/api/deck/not-a-review', { headers: LOCAL })).status).toBe(400)
+  })
+
+  it('refuses an undo or a finish made on a deck that was regenerated since', async () => {
+    const app = await published()
+    await t.ctx.decks.setPick('uncommitted', 'empty-rows', pick('b'))
+    const stale = await app.request(`/api/deck/uncommitted/picks/empty-rows?headSha=${BASE_SHA}`, {
+      method: 'DELETE',
+      headers: WRITE,
+    })
+    expect(stale.status).toBe(409)
+    expect(((await stale.json()) as { error: { code: string } }).error.code).toBe('DECK_STALE')
+    expect((await t.ctx.decks.readPicks('uncommitted')).picks['empty-rows']?.choice).toBe('b')
+    const finish = await app.request('/api/deck/uncommitted/finish', { method: 'POST', headers: WRITE })
+    expect(finish.status).toBe(409)
+    expect(await t.ctx.decks.readFixes('uncommitted')).toBeNull()
+  })
+
+  it('still serves a deck whose diff this clone can no longer rebuild, just without excerpts', async () => {
+    const app = await published()
+    const deck = await t.ctx.decks.readDeck('uncommitted')
+    if (deck === null) throw new Error('no deck')
+    await t.ctx.decks.writeDeck('uncommitted', { ...deck, headSha: 'e'.repeat(40) })
+    const res = await app.request('/api/deck/uncommitted', { headers: LOCAL })
+    expect(res.status).toBe(200)
+    const got = (await res.json()) as DeckResponse
+    expect(got.deck.cards).toHaveLength(1)
+    expect(got.excerpts).toEqual({})
+  })
+
+  it('serves a card whose file left the diff without an excerpt, and the fix list once written', async () => {
+    const app = await published()
+    const deck = await t.ctx.decks.readDeck('uncommitted')
+    if (deck === null) throw new Error('no deck')
+    await t.ctx.decks.writeDeck('uncommitted', {
+      ...deck,
+      cards: [...deck.cards, card({ key: 'gone', path: 'src/gone.ts' })],
+    })
+    await t.ctx.decks.writeFixes('uncommitted', '# Self-review fix list\n')
+    const got = (await (
+      await app.request('/api/deck/uncommitted', { headers: LOCAL })
+    ).json()) as DeckResponse
+    expect(Object.keys(got.excerpts)).toEqual(['empty-rows'])
+    expect(got.fixes).toEqual({
+      path: t.ctx.decks.fixesPath('uncommitted'),
+      markdown: '# Self-review fix list\n',
+    })
+  })
+})
+
+describe('a pick keeps what the author edited', () => {
+  let t: TestContext
+  afterEach(async () => {
+    await t?.cleanup()
+  })
+
+  it('saves an edited reason, a moved record, and a note, and the fix list uses them', async () => {
+    // The branch review reads the branch tip, here the commit the synthetic diff leads to.
+    t = await makeTestContext({ git: gitForLocal({ head: HEAD_SHA }) })
+    const prepared = await prepareDeck(t.ctx, { review: 'branch', force: false }, quiet)
+    expect(await readFile(prepared.promptPath, 'utf8')).toContain('# Self-review deck for a branch')
+    await writeTextAtomic(prepared.modelPath, JSON.stringify({ cards: [card()] }))
+    await publishDeck(t.ctx, 'branch', { agent: 'claude', allowStale: false })
+    const app = createApp(t.ctx)
+    const res = await app.request('/api/deck/branch/picks/empty-rows', {
+      method: 'PUT',
+      headers: WRITE,
+      body: JSON.stringify({
+        headSha: HEAD_SHA,
+        choice: 'b',
+        why: 'Loud beats lossy.',
+        record: 'code',
+        note: 'n/a',
+      }),
+    })
+    expect(res.status).toBe(200)
+    expect((await t.ctx.decks.readPicks('branch')).picks['empty-rows']).toMatchObject({
+      choice: 'b',
+      why: 'Loud beats lossy.',
+      record: 'code',
+      note: 'n/a',
+    })
+    const fixes = await app.request(`/api/deck/branch/finish?headSha=${HEAD_SHA}`, {
+      method: 'POST',
+      headers: WRITE,
+    })
+    const { markdown } = (await fixes.json()) as { markdown: string }
+    expect(markdown).toContain('- Why: Loud beats lossy.')
+    expect(markdown).toContain('- Also record the reason next to the code, as a comment or a doc line.')
+    expect(markdown).toContain('branch `feat/b`')
+  })
+})
+
+describe('deck prepare and publish report what is missing', () => {
+  let t: TestContext
+  afterEach(async () => {
+    await t?.cleanup()
+  })
+
+  it('names the prepare command for the review when nothing was prepared', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    await expect(publishDeck(t.ctx, 42, { agent: 'claude', allowStale: false })).rejects.toMatchObject({
+      code: 'DECK_NOT_FOUND',
+      hint: 'run `pr-review deck prepare --pr 42` first',
+    })
+    await expect(publishDeck(t.ctx, 'branch', { agent: 'claude', allowStale: false })).rejects.toMatchObject({
+      hint: 'run `pr-review deck prepare --branch` first',
+    })
+  })
+
+  it('tells a missing model from a broken one', async () => {
+    t = await makeTestContext({ git: gitForLocal() })
+    const prepared = await prepareDeck(t.ctx, { review: 'uncommitted', force: false }, quiet)
+    await expect(
+      publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
+    ).rejects.toMatchObject({
+      code: 'DECK_NOT_FOUND',
+    })
+    await writeTextAtomic(prepared.modelPath, '{ "cards": [')
+    const broken = await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false }).catch(
+      e => e
+    )
+    expect(broken).toBeInstanceOf(DeckInvalidError)
+    expect((broken as DeckInvalidError).problems.map(p => p.code)).toEqual(['DECK_SCHEMA'])
+    expect((broken as DeckInvalidError).problems[0]?.message).toMatch(/^not valid JSON/)
+    expect((broken as DeckInvalidError).message).toBe('deck-model.json has 1 problem')
+    await writeTextAtomic(
+      prepared.modelPath,
+      JSON.stringify({ cards: [card({ line: 90 }), card({ line: 91 })] })
+    )
+    const two = await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false }).catch(e => e)
+    expect((two as DeckInvalidError).message).toBe('deck-model.json has 4 problems')
+    expect(await t.ctx.decks.readDeck('uncommitted')).toBeNull()
+  })
+
+  it('points a large diff at the patch files, and embeds the project rulebook', async () => {
+    const repoRoot = await makeTempDir()
+    await writeTextAtomic(`${repoRoot}/docs/REVIEW.md`, '# Standards\n\nPrefer plain loops.\n')
+    const config = {
+      ...DEFAULT_PROJECT_CONFIG,
+      rulebook: 'docs/REVIEW.md',
+      generation: { ...DEFAULT_PROJECT_CONFIG.generation, inlineDiffMaxLines: 1 },
+    }
+    t = await makeTestContext({ git: gitForLocal(), projectConfig: { config, warnings: [], source: null } })
+    t.ctx.config.repoRoot = repoRoot
+    const prepared = await prepareDeck(t.ctx, { review: 'uncommitted', force: false }, quiet)
+    const prompt = await readFile(prepared.promptPath, 'utf8')
+    expect(prompt).toContain('above the 1-line inline limit, so it is not inlined')
+    expect(prompt).not.toContain('### hunk src_app_ts#1')
+    expect(prompt).toContain('### Project rulebook')
+    expect(prompt).toContain('Prefer plain loops.')
+  })
+
+  it('tells the generator what the author wrote when neither side fit', async () => {
+    t = await makeTestContext({ git: gitForLocal() })
+    const prepared = await prepareDeck(t.ctx, { review: 'uncommitted', force: false }, quiet)
+    await writeTextAtomic(prepared.modelPath, JSON.stringify({ cards: [card()] }))
+    await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
+    await t.ctx.decks.setPick('uncommitted', 'empty-rows', pick('neither', { note: 'Log and keep going.' }))
+    const again = await prepareDeck(t.ctx, { review: 'uncommitted', force: true }, quiet)
+    const settledLine = (await readFile(again.promptPath, 'utf8'))
+      .split('\n')
+      .find(l => l.startsWith('- `empty-rows`'))
+    expect(settledLine).toBe(
+      '- `empty-rows` **What happens to empty rows?**: the author picked neither side: Log and keep going.'
+    )
   })
 })

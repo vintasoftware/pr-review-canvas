@@ -276,4 +276,73 @@ describe('the decisions a pull request inherits from its decks', () => {
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(prepared.contextPath, 'utf8')))
     expect(context.selfReview?.settled[0]).toMatchObject({ key: 'kept', line: 6 })
   })
+
+  it('posts a neither pick in the author’s words, and lists one it cannot place on the new head', async () => {
+    const posts: Array<{ body: string; comments: Array<{ body: string; line: number }> }> = []
+    const gh = ghFor42({
+      postRoutes: {
+        'repos/acme/widgets/pulls/42/reviews': ghPost(body => {
+          posts.push(body as (typeof posts)[number])
+          return {
+            id: 9002,
+            state: 'COMMENTED',
+            html_url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-9002',
+          }
+        }),
+      },
+      routes: { 'repos/acme/widgets/pulls/42/reviews/9002/comments': ghJson([]) },
+    })
+    t = await makeTestContext({ git: gitFor42(), gh })
+    await deal(t, 42, [card('own-words')], {
+      'own-words': {
+        choice: 'neither',
+        note: 'Log the row and keep going.',
+        record: 'pr-comment',
+        pickedAt: 'x',
+      },
+    })
+    // A deck dealt for a head this machine never saw: its line cannot be proven to still hold.
+    await deal(t, 'branch', [card('unseen')], { unseen: pick('a') }, { headSha: 'd'.repeat(40) })
+    const prepared = await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
+    await writeTextAtomic(
+      `${prepared.canvasDir}/model.json`,
+      JSON.stringify(artifactToModelOutput(syntheticArtifact()))
+    )
+    const result = await publish(t.ctx, prepared.canvasDir, OPTS)
+    expect(result.selfReview).toMatchObject({ status: 'posted', comments: 1, listed: 1 })
+    const review = posts[0]
+    expect(review?.comments.map(c => c.body.split('\n')[2])).toEqual([
+      'Picked neither side: Log the row and keep going.',
+    ])
+    expect(review?.body).toContain('- **Title unseen** (`src/app.ts`): picked A, Keep. why unseen A')
+    expect(Object.keys((await t.ctx.decks.readPosted(42)).posted).sort()).toEqual(['own-words', 'unseen'])
+  })
+
+  it('prefers the newer local deck when two settled the same decision differently', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    await deal(t, 'branch', [card('same')], { same: pick('a') }, { generatedAt: '2026-09-01T00:00:00.000Z' })
+    await deal(
+      t,
+      'uncommitted',
+      [card('same')],
+      { same: pick('b') },
+      { generatedAt: '2026-09-05T00:00:00.000Z' }
+    )
+    await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
+    const pr = await t.ctx.prs.readPr(42)
+    if (pr === null) throw new Error('prepare wrote no pr.json')
+    const { settled } = await decisionsForPr(t.ctx, { ...pr, number: 42 })
+    expect(settled.map(c => [c.key, c.pick.choice])).toEqual([['same', 'b']])
+  })
+
+  it('does not guess a line for a decision whose line is outside the diff of its own head', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    await deal(t, 42, [card('far', { line: 40 })], { far: pick('a') })
+    const prepared = await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(prepared.contextPath, 'utf8')))
+    expect(context.selfReview?.settled[0]).not.toHaveProperty('line')
+    expect(await readFile(prepared.promptPath, 'utf8')).toContain(
+      '- **Title far** at `src/app.ts` (its code changed since).'
+    )
+  })
 })

@@ -66,6 +66,23 @@ describe('deckKeyAction', () => {
     expect(press('Escape', {}, area)).toBe('escape')
     expect(press('b', { ctrlKey: true })).toBeNull()
     expect(press('b', { metaKey: true })).toBeNull()
+    const select = document.createElement('select')
+    expect(press('a', {}, select)).toBeNull()
+    const editable = document.createElement('div')
+    editable.setAttribute('contenteditable', 'true')
+    const inside = document.createElement('span')
+    editable.append(inside)
+    expect(press('b', {}, inside)).toBeNull()
+    expect(press('x')).toBeNull()
+    // A key pressed with nothing focused lands on the document, which is not a text field.
+    expect(press('a', {}, document)).toBe('pick-a')
+  })
+
+  it('still picks when AltGr is what reported Ctrl and Alt', () => {
+    const event = new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, altKey: true })
+    Object.defineProperty(event, 'getModifierState', { value: (/** @type {string} */ k) => k === 'AltGraph' })
+    Object.defineProperty(event, 'target', { value: document.body })
+    expect(deckKeyAction(event)).toBe('pick-a')
   })
 })
 
@@ -87,9 +104,14 @@ describe('createDeckState', () => {
     expect(openCards(cards, state.picks()).map(c => c.key)).toEqual(['one', 'three'])
   })
 
-  it('reopens one card from the finish screen', () => {
-    const state = createDeckState([card('one')], { one: { choice: 'a', pickedAt: 'x' } })
+  it('reopens one card from the finish screen, and an undo then skips it', () => {
+    const state = createDeckState([card('one'), card('two')], { one: { choice: 'a', pickedAt: 'x' } })
+    state.record('two', { choice: 'b', pickedAt: 'x' })
     expect(state.top()).toBeNull()
+    state.reopen('two')
+    expect(state.top()?.key).toBe('two')
+    // The reopened pick is no longer this page's to undo, and the earlier visit's never was.
+    expect(state.canUndo()).toBe(false)
     state.reopen('one')
     expect(state.top()?.key).toBe('one')
   })

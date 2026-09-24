@@ -2,6 +2,7 @@
 // and `/pr-self-review-fix` reads. It is written from the deck and the picks alone, so the same
 // answers always give the same file.
 import { type Deck, type DecisionCard, type Pick, pickNeedsFix } from '../contract/deck.js'
+import { recordFor, whyFor } from './settled-for-pr.js'
 
 export interface FixListSummary {
   /** Cards whose pick asks the code to change. */
@@ -22,20 +23,6 @@ function anchor(card: DecisionCard): string {
 
 function sideLabel(card: DecisionCard, choice: 'a' | 'b'): string {
   return `${choice.toUpperCase()}: ${card[choice].label}`
-}
-
-function why(card: DecisionCard, pick: Pick): string {
-  if (pick.choice === 'neither') {
-    return pick.why ?? ''
-  }
-  return pick.why ?? (pick.choice === 'skip' ? '' : card[pick.choice].why)
-}
-
-function recordOf(card: DecisionCard, pick: Pick): Pick['record'] {
-  if (pick.record !== undefined) {
-    return pick.record
-  }
-  return pick.choice === 'a' || pick.choice === 'b' ? card[pick.choice].record : 'none'
 }
 
 function fixEntry(card: DecisionCard, pick: Pick, n: number): string {
@@ -59,11 +46,11 @@ function fixEntry(card: DecisionCard, pick: Pick, n: number): string {
       )
     }
   }
-  const reason = why(card, pick)
+  const reason = whyFor(card, pick)
   if (reason !== '') {
     lines.push(`- Why: ${reason}`)
   }
-  const record = recordOf(card, pick)
+  const record = recordFor(card, pick)
   if (record === 'code') {
     lines.push('- Also record the reason next to the code, as a comment or a doc line.')
   }
@@ -76,7 +63,7 @@ function recordEntry(card: DecisionCard, pick: Pick, n: number): string {
     `### ${n}. ${card.title}`,
     '',
     `- Where: \`${anchor(card)}\``,
-    `- Write down: ${why(card, pick)}`,
+    `- Write down: ${whyFor(card, pick)}`,
   ].join('\n')
 }
 
@@ -90,10 +77,10 @@ export function summarizePicks(deck: Deck, picks: Readonly<Record<string, Pick>>
       summary.skipped++
     } else if (pickNeedsFix(card, pick)) {
       summary.fixes++
-    } else if (recordOf(card, pick) === 'code') {
+    } else if (recordFor(card, pick) === 'code') {
       summary.records++
     }
-    if (pick !== undefined && pick.choice !== 'skip' && recordOf(card, pick) === 'pr-comment') {
+    if (pick !== undefined && pick.choice !== 'skip' && recordFor(card, pick) === 'pr-comment') {
       summary.comments++
     }
   }
@@ -112,14 +99,14 @@ export function renderFixList(deck: Deck, picks: Readonly<Record<string, Pick>>)
       skipped.push(`- ${card.title} (\`${anchor(card)}\`)`)
       continue
     }
-    const record = recordOf(card, pick)
+    const record = recordFor(card, pick)
     if (pickNeedsFix(card, pick)) {
       fixes.push(fixEntry(card, pick, fixes.length + 1))
     } else if (record === 'code') {
       records.push(recordEntry(card, pick, records.length + 1))
     }
     if (record === 'pr-comment') {
-      comments.push(`- ${card.title} (\`${anchor(card)}\`): ${why(card, pick)}`)
+      comments.push(`- ${card.title} (\`${anchor(card)}\`): ${whyFor(card, pick)}`)
     }
   }
   const target =

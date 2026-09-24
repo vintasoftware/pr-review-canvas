@@ -182,10 +182,6 @@ export function createDeckState(cards, picks) {
     canUndo() {
       return history.length > 0
     },
-    /** @param {string} key */
-    lastChoiceOf(key) {
-      return answered[key]?.choice ?? null
-    },
   }
 }
 

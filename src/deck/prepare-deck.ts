@@ -15,7 +15,7 @@ import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/l
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile } from '../prompt-files.js'
 import { resolvePr } from '../review/prepare.js'
-import { settledFrom } from './settled-for-pr.js'
+import { pickedLabel, sentence, settledFrom } from './settled-for-pr.js'
 import { embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
@@ -41,14 +41,9 @@ function settledMarkdown(settled: readonly SettledCard[]): string {
   if (settled.length === 0) {
     return ''
   }
-  const rows = settled.map(card => {
-    const { pick } = card
-    const picked =
-      pick.choice === 'neither'
-        ? `neither side: ${pick.note ?? ''}`
-        : `${pick.choice.toUpperCase()}, ${card[pick.choice as 'a' | 'b'].label}`
-    return `- \`${card.key}\` **${card.title}**: the author picked ${picked}.`
-  })
+  const rows = settled.map(
+    card => `- \`${card.key}\` **${card.title}**: the author picked ${sentence(pickedLabel(card))}`
+  )
   return [
     '## Already settled',
     '',
@@ -85,9 +80,12 @@ function diffsMarkdown(
       `Read one file at a time from \`${dir}/<key>.diff\`; the keys are in the manifest.`
     )
   }
+  // A binary or unchanged-content file has no patch text to show.
   return files
-    .filter(f => (patches[f.key] ?? '') !== '')
-    .map(f => `#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patches[f.key] ?? '')}\n\`\`\`\``)
+    .flatMap(f => {
+      const patch = patches[f.key]
+      return patch ? [`#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patch)}\n\`\`\`\``] : []
+    })
     .join('\n\n')
 }
 

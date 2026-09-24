@@ -17,6 +17,7 @@ import {
   UsageError,
 } from './commands.js'
 import { ConfigError } from './config.js'
+import { writeTextAtomic } from './store/atomic-json.js'
 import { GitError } from './git/git.js'
 import { HostCliError } from './host/client.js'
 import { PrNotFoundError } from './host/pr.js'
@@ -562,5 +563,65 @@ describe('deck through the CLI layer', () => {
     expect(lastJson(io)).toEqual({ review: 42, path: t.ctx.decks.fixesPath(42), exists: false })
     expect(await runDeck(t.ctx, ['prepare', '--pr', '42'], io)).toBe(EXIT.ok)
     expect(lastJson(io)).toMatchObject({ status: 'prepared', review: 42, headSha: HEAD_SHA })
+  })
+})
+
+describe('deck validate and publish through the CLI layer', () => {
+  const cardJson = (over: Record<string, unknown> = {}) => ({
+    key: 'rows',
+    bucket: 'trade-off',
+    topic: 'Rare case vs simplify',
+    title: 'Empty rows?',
+    context: 'c',
+    path: 'src/app.ts',
+    line: 2,
+    current: 'a',
+    a: { label: 'Skip', consequence: 'c', why: 'w', record: 'none' },
+    b: { label: 'Fail', consequence: 'c', why: 'w', record: 'none' },
+    ...over,
+  })
+
+  it('says ok for a human, prints JSON for a tool, and one line per problem with exit 5', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const io = fakeIo()
+    expect(await runDeck(t.ctx, ['prepare', '--pr', '42'], io)).toBe(EXIT.ok)
+    const { modelPath } = lastJson(io) as { modelPath: string }
+
+    await writeTextAtomic(modelPath, JSON.stringify({ cards: [cardJson()] }))
+    const human = fakeIo()
+    expect(await runDeck(t.ctx, ['validate', '--pr', '42', '--human'], human)).toBe(EXIT.ok)
+    expect(human.out).toEqual(['ok: deck-model.json has 1 of at most 1 cards'])
+    const tool = fakeIo()
+    expect(await runDeck(t.ctx, ['validate', '--pr', '42'], tool)).toBe(EXIT.ok)
+    expect(lastJson(tool)).toEqual({ ok: true, cards: 1, maxCards: 1 })
+
+    await writeTextAtomic(modelPath, JSON.stringify({ cards: [cardJson({ line: 99 })] }))
+    const bad = fakeIo()
+    const code = await runDeck(t.ctx, ['validate', '--pr', '42'], bad).catch(err => reportFailure(bad, err))
+    expect(code).toBe(EXIT.invalid)
+    expect(bad.out[0]).toMatch(/^CARD_OUTSIDE_DIFF card:rows: src\/app\.ts:99 \(new\) is not in the diff/)
+    expect(lastJson(bad)).toMatchObject({ error: { code: 'DECK_INVALID' } })
+  })
+
+  it('publishes only with an agent id, and prints where the deck is', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const io = fakeIo()
+    await runDeck(t.ctx, ['prepare', '--pr', '42'], io)
+    const { modelPath } = lastJson(io) as { modelPath: string }
+    await writeTextAtomic(modelPath, JSON.stringify({ cards: [cardJson()] }))
+    await expect(runDeck(t.ctx, ['publish', '--pr', '42'], io)).rejects.toThrow(
+      'deck publish needs --agent <id>'
+    )
+    expect(await t.ctx.decks.readDeck(42)).toBeNull()
+    expect(await runDeck(t.ctx, ['publish', '--pr', '42', '--agent', 'claude', '--model', 'm'], io)).toBe(
+      EXIT.ok
+    )
+    expect(lastJson(io)).toMatchObject({
+      status: 'published',
+      review: 42,
+      cards: 1,
+      deckUrl: 'http://localhost:3010/deck/42',
+    })
+    expect((await t.ctx.decks.readDeck(42))?.generator).toEqual({ agent: 'claude', model: 'm' })
   })
 })
