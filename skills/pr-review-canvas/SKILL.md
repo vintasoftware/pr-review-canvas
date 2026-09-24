@@ -201,6 +201,15 @@ stamps its number for manual upload, or rerun this skill for the PR number with 
 automatically. A canvas of a working-tree snapshot cannot be carried to a pull request this way:
 its commit is on no branch, so generate a fresh one for the PR.
 
+### 7. Hand over the self-review
+
+The canvas is ready for its author before it is ready for reviewers. End your report of a PR/MR or
+local run by asking the user to self-review before requesting review: start `pr-review serve`,
+open `reviewUrl`, and settle each attention point they can answer now (the ones marked **yours**
+first) with a one-line reason. Settling updates the canvas comment for a PR/MR run, so reviewers
+see only what is left. Say how many points you marked for the author and how many for the
+reviewer. Do not settle points yourself: the reason is the author's to give.
+
 ## Rules the validator enforces (and models tend to break)
 
 - Every hunk id from the manifest appears in exactly one layer. Check the manifest against your
@@ -215,6 +224,8 @@ its commit is on no branch, so generate a fresh one for the PR.
 - Every text is within its cap, measured on the text a reader sees (link targets and backticks do
   not count). Rationales, notes, and annotations are one or two short sentences.
 - At most 12 attention points, counting one per `missing` test entry.
+- Every attention point names its `audience`: `author` when the author can answer it alone,
+  `reviewer` when it needs someone else's judgment. When in doubt, `reviewer`.
 - `covered` test entries name a `testPath` that exists at the PR head (changed or not).
 - Annotations and attention points sit on lines inside a hunk, on the side you name.
 - Links use only the four forms `#layer:`, `#file:`, `#hunk:`, `#line:` and must resolve.

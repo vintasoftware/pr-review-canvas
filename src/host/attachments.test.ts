@@ -543,7 +543,13 @@ describe('embedded canvas discovery', () => {
       })
       try {
         const body = buildCanvasComment(
-          { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+          {
+            name: NAME_FOR_HEAD,
+            bytes: Uint8Array.from(canvasBytes()),
+            headSha: HEAD_SHA,
+            prNumber: 42,
+            artifact: syntheticArtifact(),
+          },
           65_536
         )
         const outcome = await discoverSharedCanvas(t.ctx, pr(), comments({ issueComments: [issue(7, body)] }))
@@ -560,11 +566,23 @@ describe('embedded canvas discovery', () => {
     const t = await makeTestContext()
     try {
       const body = buildCanvasComment(
-        { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+        {
+          name: NAME_FOR_HEAD,
+          bytes: Uint8Array.from(canvasBytes()),
+          headSha: HEAD_SHA,
+          prNumber: 42,
+          artifact: syntheticArtifact(),
+        },
         65_536
       )
       const corrupt = buildCanvasComment(
-        { name: NAME_FOR_HEAD, bytes: Uint8Array.from([1, 2, 3]), headSha: HEAD_SHA, prNumber: 42 },
+        {
+          name: NAME_FOR_HEAD,
+          bytes: Uint8Array.from([1, 2, 3]),
+          headSha: HEAD_SHA,
+          prNumber: 42,
+          artifact: syntheticArtifact(),
+        },
         65_536
       )
       const outcome = await discoverSharedCanvas(

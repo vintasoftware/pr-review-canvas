@@ -22,7 +22,7 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { artifactToModelOutput, normalize } from './normalize.js'
+import { artifactToModelOutput, fingerprint, normalize } from './normalize.js'
 import { prepare } from './prepare.js'
 import {
   attemptsSincePrepare,
@@ -284,6 +284,76 @@ describe('publish', () => {
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     await publish(t.ctx, canvasDir, OPTS)
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.basisCanvasSha).toBe(basis)
+  })
+
+  it('keeps the author’s settlements when the same commit is generated again, for the points still there', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    await publish(t.ctx, canvasDir, OPTS)
+    const first = await t.ctx.canvases.readArtifact(HEAD_SHA)
+    const kept = fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' })
+    const settlement = { reason: 'The spec says sum.', at: '2026-09-10T12:00:00.000Z' }
+    await t.ctx.canvases.revise(HEAD_SHA, {
+      ...first!,
+      settled: { [kept]: settlement, gone: settlement },
+      revisedAt: settlement.at,
+    })
+    await publish(t.ctx, canvasDir, OPTS)
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({ [kept]: settlement })
+  })
+
+  it('regenerates over a canvas of a format it no longer reads, keeping no settlement from it', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    await publish(t.ctx, canvasDir, OPTS)
+    await writeFile(path.join(t.ctx.canvases.canvasDir(HEAD_SHA), 'review.json'), '{"version":0}')
+    await publish(t.ctx, canvasDir, OPTS)
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toBeUndefined()
+  })
+
+  it('carries the basis canvas’s settlements only for the points the basis split carried', async () => {
+    const canvasDir = await prepared()
+    const basisSha = 'e'.repeat(40)
+    const carried = { kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' } as const
+    const reJudged = { kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' } as const
+    const settlement = { reason: 'Agreed with the team.', at: '2026-09-09T12:00:00.000Z' }
+    await t.ctx.canvases.write(
+      basisSha,
+      {
+        ...syntheticArtifact(),
+        settled: { [fingerprint(carried)]: settlement, [fingerprint(reJudged)]: settlement },
+      },
+      {
+        formatVersion: 1,
+        tool: { name: 'pr-review', version: '0' },
+        repo: { owner: 'acme', name: 'widgets' },
+        headSha: basisSha,
+        mergeBaseSha: BASE_SHA,
+        baseRef: 'main',
+        headRef: 'feat/b',
+        generatedAt: '2026-09-09T11:00:00.000Z',
+        generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
+      },
+      42
+    )
+    const contextPath = path.join(canvasDir, 'context.json')
+    const context = JSON.parse(await readFile(contextPath, 'utf8')) as Record<string, unknown>
+    context['basis'] = {
+      canvasSha: basisSha,
+      reviewJsonPath: path.join(canvasDir, 'review.json'),
+      files: { unchanged: ['src/app.ts'], changed: ['src/gone.ts'], added: [], removed: [] },
+      layers: [],
+      points: [
+        { ...carried, status: 'carried' },
+        { ...reJudged, status: 're-judged' },
+      ],
+    }
+    await writeFile(contextPath, JSON.stringify(context))
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    await publish(t.ctx, canvasDir, OPTS)
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({
+      [fingerprint(carried)]: settlement,
+    })
   })
 
   it('publishes for a head that moved on with the identical diff', async () => {

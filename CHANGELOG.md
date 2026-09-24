@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Self-review
+
+- Every attention point names its audience: **author** (shown as **yours** to the author) or
+  **reviewer**. The generation prompt asks for it; a canvas from an earlier version reads every
+  point as the reviewer's.
+- The author can **settle** a point with a reason. The settlement is written into the canvas, the
+  canvas comment is shared again, and the point leaves every reviewer's list with the reason
+  listed under the overview. The reason can also post as a comment on the point's line.
+  **reopen** takes it back. Only the pull request's author can settle (`NOT_AUTHOR` otherwise).
+- The canvas comment counts the points left for the reviewer by level, the points the author
+  settled, and the ones the author has not settled yet.
+- Settlements survive regenerating the same commit, and follow carried points into an incremental
+  canvas. **Refresh** imports a canvas the author revised at the same commit.
+- The skill ends by handing the author the self-review.
+
 ### Review interface
 
 - A **Show layers** field in **settings**, saved as `layerView` in `.pr-review/settings.yml`. At

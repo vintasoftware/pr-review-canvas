@@ -1,6 +1,7 @@
 // One import path for the three ways a canvas arrives: the drop zone, `pr-review import`, and a
 // zip discovered on the pull request. Everything is checked here, so no caller can skip a step.
 import type { CanvasRelation, ImportResult } from '../contract/api.js'
+import { canvasRevision } from '../contract/canvas-manifest.js'
 import { type DiffedCommit, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
@@ -78,7 +79,7 @@ async function relateToHead(
 
 /**
  * Validates the zip, stores it under its head sha, and says how it relates to the PR head. A
- * canvas already on disk is kept unless the incoming one was generated later.
+ * canvas already on disk is kept unless the incoming one was generated or revised later.
  */
 export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promise<ImportResult> {
   let contents: CanvasZipContents
@@ -119,7 +120,9 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   const currentHeadSha = opts.currentHead?.headSha ?? headSha
   const index = await ctx.canvases.readIndex()
   const stored = index.canvases[headSha]
-  const keepStored = stored !== undefined && stored.generatedAt >= artifact.generatedAt
+  // The author revises a shared canvas by settling points, which keeps its generation time, so a
+  // copy is newer when it was generated or revised later.
+  const keepStored = stored !== undefined && canvasRevision(stored) >= canvasRevision(artifact)
   if (!keepStored) {
     const importedAt = ctx.now().toISOString()
     await ctx.canvases.write(headSha, { ...artifact, source: 'import', importedAt }, manifest, opts.prNumber)

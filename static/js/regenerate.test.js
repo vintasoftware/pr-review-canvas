@@ -34,6 +34,7 @@ function bundle(status, over = {}) {
     capabilities: UNKNOWN_CAPABILITIES,
     chat: { enabled: true, acpx: true },
     largePr: false,
+    selfReview: false,
     warnings: [],
   }
   if (status === 'ready') {

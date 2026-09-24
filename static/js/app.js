@@ -44,6 +44,7 @@ import { wireQuickQuestions } from './quick-questions.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
+import { setSelfReview } from './self-review.js'
 import { openSettingsDialog } from './settings.js'
 import { applySkin, DEFAULT_SKIN, nextSkin, readSkin, skinLabel } from './skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
@@ -233,6 +234,8 @@ export class PrAppElement extends HTMLElement {
     const showsCanvas = bundle.artifact !== undefined && (bundle.status === 'ready' || this.viewStale)
     if (bundle.artifact && showsCanvas) {
       const { artifact } = bundle
+      // Only the author settles, and only on the canvas of the current head.
+      setSelfReview(bundle.selfReview && bundle.status === 'ready', artifact.settled)
       // A stale canvas describes its own commit, so its files and diffs come from that sha.
       const staleSha = bundle.status === 'stale' ? bundle.stale?.canvasHeadSha : undefined
       const files = staleSha === undefined ? bundle.files : artifact.files

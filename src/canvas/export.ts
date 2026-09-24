@@ -3,6 +3,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
+import type { ReviewArtifact } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { buildCanvasZipName } from './name.js'
@@ -11,6 +12,8 @@ import { buildCanvasZip } from './zip.js'
 export interface CanvasZip {
   name: string
   bytes: Uint8Array<ArrayBuffer>
+  /** The canvas the bytes hold, so the comment that carries them can say what it leaves open. */
+  artifact: ReviewArtifact
   headSha: string
   prNumber?: number
 }
@@ -44,6 +47,7 @@ export async function buildCanvasZipFor(
       generatedAt: manifest.generatedAt,
     }),
     bytes: buildCanvasZip(manifest, artifact),
+    artifact,
     headSha,
   }
   if (number !== undefined) {

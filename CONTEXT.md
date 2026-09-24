@@ -23,6 +23,18 @@ _Avoid_: Excluded code, deleted context
 A concern anchored to changed code that asks the reviewer to decide, check, or take note.
 _Avoid_: Proven bug, automatic finding
 
+**Audience**:
+Who an attention point is for. An author point asks something the author can answer alone; a reviewer point needs someone else's judgment.
+_Avoid_: Severity, priority
+
+**Self-review**:
+The author's pass over their own canvas before asking for review, settling the attention points they can answer.
+_Avoid_: Self-approval, pre-review
+
+**Settled point**:
+An attention point the author answered with a reason in the canvas itself. It leaves every reader's list and stays readable with its reason; a dismissal, by contrast, is one reader's local mark.
+_Avoid_: Resolved, dismissed, closed
+
 **Review progress**:
 The reviewer's record of which changes they have examined, kept against the canvas they examined them on rather than against a commit. Progress survives every later commit that canvas keeps applying to.
 _Avoid_: Test coverage, approval

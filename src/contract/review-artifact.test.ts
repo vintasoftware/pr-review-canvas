@@ -23,10 +23,11 @@ async function loadFixture(): Promise<unknown> {
 }
 
 describe('ReviewArtifactSchema', () => {
-  it('reads the PR #278 fixture, written before levels, with each collapsed file at light', async () => {
+  it('reads the PR #278 fixture, written before levels and audiences: collapsed at light, points for the reviewer', async () => {
     const raw = await loadFixture()
     const parsed = ReviewArtifactSchema.parse(raw)
     const levelled = JSON.parse(JSON.stringify(raw).replaceAll('"collapsed":true', '"collapsed":"light"'))
+    levelled.points = levelled.points.map((p: object) => ({ ...p, audience: 'reviewer' }))
     expect(parsed).toEqual(levelled)
     // Stored again and read back, the canvas stays as the first read left it.
     expect(ReviewArtifactSchema.parse(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed)
@@ -127,7 +128,15 @@ describe('ModelOutputSchema', () => {
   })
 
   it('drops layerId from model points: publish assigns it', () => {
-    const point = { kind: 'risk', level: 'check', title: 't', path: 'src/app.ts', line: 1, body: 'b' }
+    const point = {
+      kind: 'risk',
+      level: 'check',
+      audience: 'reviewer',
+      title: 't',
+      path: 'src/app.ts',
+      line: 1,
+      body: 'b',
+    }
     const parsed = ModelOutputSchema.parse({
       summary: 'x',
       layers: [layer],
@@ -163,6 +172,7 @@ describe('ModelOutputSchema', () => {
         {
           kind: 'risk',
           level: 'check',
+          audience: 'reviewer',
           title: 'p'.repeat(over(TEXT_CAPS.pointTitle)),
           path: 'src/app.ts',
           line: 1,

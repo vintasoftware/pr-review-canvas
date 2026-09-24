@@ -28,6 +28,7 @@ function point(line: number, endLine?: number, side: 'new' | 'old' = 'new'): Mod
   return {
     kind: 'decision',
     level: 'decide',
+    audience: 'reviewer',
     title: `Point at ${line}`,
     path: 'src/app.ts',
     side,

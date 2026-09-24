@@ -9,6 +9,14 @@ import { pendingForPoint } from './pending.js'
 import { postToLabel } from './host.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
+import {
+  audiencePillHtml,
+  isSelfReview,
+  selfReviewNoteHtml,
+  settleButtonHtml,
+  settledListHtml,
+  settlementOf,
+} from './self-review.js'
 
 export const LEVELS = /** @type {const} */ (['decide', 'check', 'fyi'])
 
@@ -23,6 +31,24 @@ export function pointsByLevel(points) {
     out[p.level].push(p)
   }
   return out
+}
+
+/**
+ * Whether the point is off the reader's list: they dismissed it, or the author settled it.
+ * @param {Point} p
+ * @param {PrState | undefined} state
+ */
+export function isSetAside(p, state) {
+  return state?.dismissed[p.fingerprint] !== undefined || settlementOf(p) !== undefined
+}
+
+/**
+ * The points still on the reader's list.
+ * @param {ReadonlyArray<Point>} points
+ * @param {PrState} state
+ */
+export function openPoints(points, state) {
+  return points.filter(p => !isSetAside(p, state))
 }
 
 /**
@@ -89,8 +115,8 @@ function pointSendHtml(p, opts) {
 
 /**
  * The commands every point carries. `copy` puts the markdown on the clipboard, `post to github`
- * opens nothing and posts it at the anchor, `add to review` holds it as a draft instead, and
- * `dismiss` takes the point off the page.
+ * opens nothing and posts it at the anchor, `add to review` holds it as a draft instead, `settle`
+ * lets the author answer it for every reviewer, and `dismiss` takes it off this reader's page.
  * @param {Point} p
  * @param {{ dismissed?: boolean, postedUrl?: string | undefined, queued?: boolean }} [opts]
  * @returns {string}
@@ -100,11 +126,13 @@ export function pointCommandsHtml(p, opts = {}) {
   const toggle = opts.dismissed
     ? `<button class="cmd" type="button" data-act="point-restore" data-fingerprint="${fp}">restore</button>`
     : `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`
+  const settle = settleButtonHtml(p)
   return (
-    `<span class="tbtns" data-queued="${opts.queued === true ? '1' : '0'}">` +
+    `<span class="tbtns" data-queued="${opts.queued === true ? '1' : '0'}" data-settleable="${settle === '' ? '0' : '1'}">` +
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}">copy</button>` +
     pointSendHtml(p, opts) +
     askButtonHtml(pointContext(p)) +
+    settle +
     toggle +
     '</span>'
   )
@@ -153,11 +181,10 @@ export function postedUrls(state, comments) {
  * @param {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string> }} ctx
  */
 export function pointCardHtml(p, ctx) {
-  const dismissed = ctx.state?.dismissed[p.fingerprint] !== undefined
   const posted = postedFor(p, ctx)
   return (
-    `<li class="finding" id="${esc(pointAnchorId(p.id))}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}>${squareHtml(p)}<div>` +
-    `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>` +
+    `<li class="finding" id="${esc(pointAnchorId(p.id))}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${isSetAside(p, ctx.state) ? ' hidden' : ''}>${squareHtml(p)}<div>` +
+    `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}` +
     `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
     `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</div></li>`
@@ -172,7 +199,10 @@ export function pointCardHtml(p, ctx) {
  * @param {boolean} [expanded]
  */
 export function dismissedListHtml(points, state, ctx, expanded = false) {
-  const dismissed = points.filter(p => state.dismissed[p.fingerprint] !== undefined)
+  // A point the author settled is listed with its reason instead.
+  const dismissed = points.filter(
+    p => state.dismissed[p.fingerprint] !== undefined && settlementOf(p) === undefined
+  )
   if (dismissed.length === 0) {
     return '<div class="dismissed-list" hidden></div>'
   }
@@ -181,7 +211,7 @@ export function dismissedListHtml(points, state, ctx, expanded = false) {
       const posted = postedFor(p, ctx)
       return (
         `<li class="finding" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}">${squareHtml(p)}<div>` +
-        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>` +
+        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}` +
         `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
         `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
         `${pointCommandsHtml(p, { dismissed: true, postedUrl: posted, queued: queuedFor(p, { state }) })}</div></li>`
@@ -196,57 +226,67 @@ export function dismissedListHtml(points, state, ctx, expanded = false) {
 }
 
 /**
- * Shows the points that are active and hides the ones the reader dismissed, wherever they are
- * on the page, and rebuilds the dismissed list. Calling it again with the same state changes
- * nothing.
+ * Shows the points still on the reader's list and hides the ones they dismissed or the author
+ * settled, wherever they are on the page, and rebuilds the counts and the two lists of set-aside
+ * points. Calling it again with the same state changes nothing.
  * @param {ParentNode} root
  * @param {ReadonlyArray<Point>} points
  * @param {PrState} state
  * @param {{ paths: ReadonlySet<string>, layers?: ReadonlyArray<Layer>, posted?: ReadonlyMap<string, string> }} ctx
  */
-export function applyDismissed(root, points, state, ctx) {
+export function applyPointStates(root, points, state, ctx) {
   const byId = new Map(points.map(p => [p.id, p]))
   for (const el of Array.from(root.querySelectorAll('[data-point]'))) {
     const point = byId.get(el.getAttribute('data-point') ?? '')
     if (point === undefined || el.closest('.dismissed-list') !== null) {
       continue
     }
-    const dismissed = state.dismissed[point.fingerprint] !== undefined
-    el.toggleAttribute('hidden', dismissed)
-    refreshPointCommands(el, point, { dismissed, state, ...ctx })
+    el.toggleAttribute('hidden', isSetAside(point, state))
+    refreshPointCommands(el, point, {
+      dismissed: state.dismissed[point.fingerprint] !== undefined,
+      state,
+      ...ctx,
+    })
   }
+  const open = openPoints(points, state)
   for (const counter of Array.from(root.querySelectorAll('.point-count'))) {
     const layerId = counter.closest('[data-layer]')?.getAttribute('data-layer')
-    const own = points.filter(p => p.layerId === layerId && state.dismissed[p.fingerprint] === undefined)
-    counter.textContent = String(own.length)
+    counter.textContent = String(open.filter(p => p.layerId === layerId).length)
   }
-  const host = root.querySelector('.dismissed-list')
-  if (host !== null) {
-    const expanded =
-      host.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded') === 'true'
-    const template = document.createElement('template')
-    template.innerHTML = dismissedListHtml(points, state, ctx, expanded)
-    const next = template.content.firstElementChild
-    if (next !== null) {
-      host.replaceWith(next)
-    }
+  const expandedIn = /** @param {Element} host @param {string} act */ (host, act) =>
+    host.querySelector(`[data-act="${act}"]`)?.getAttribute('aria-expanded') === 'true'
+  replaceWithHtml(root.querySelector('.dismissed-list'), host =>
+    dismissedListHtml(points, state, ctx, expandedIn(host, 'show-dismissed'))
+  )
+  replaceWithHtml(root.querySelector('.settled-list'), host =>
+    settledListHtml(points, ctx, expandedIn(host, 'show-settled'))
+  )
+  replaceWithHtml(root.querySelector('.sevsum'), () => sevsumHtml(open, ctx.layers ?? []))
+  replaceWithHtml(root.querySelector('.self-review-note'), () => selfReviewNoteHtml(open))
+}
+
+/**
+ * Replaces `host` with the element `html` builds from it; nothing happens when the page has no host.
+ * @param {Element | null} host
+ * @param {(host: Element) => string} html
+ */
+function replaceWithHtml(host, html) {
+  if (host === null) {
+    return
   }
-  const sevsum = root.querySelector('.sevsum')
-  if (sevsum !== null) {
-    const active = points.filter(p => state.dismissed[p.fingerprint] === undefined)
-    const template = document.createElement('template')
-    template.innerHTML = sevsumHtml(active, ctx.layers ?? [])
-    const next = template.content.firstElementChild
-    if (next !== null) {
-      sevsum.replaceWith(next)
-    }
+  const template = document.createElement('template')
+  template.innerHTML = html(host)
+  const next = template.content.firstElementChild
+  if (next !== null) {
+    host.replaceWith(next)
   }
 }
 
 /**
- * Draws a point's commands again when it has just joined the review or just left it, wherever the
- * point is on the page. Nothing else is touched: a command that is mid-request keeps its state,
- * because neither posting nor dismissing changes whether the point is waiting in the review.
+ * Draws a point's commands again when it has just joined the review or just left it, or when the
+ * author reopened it and it can be settled again, wherever the point is on the page. Nothing else
+ * is touched: a command that is mid-request keeps its state, because neither posting nor
+ * dismissing changes whether the point is waiting in the review.
  * @param {Element} el the element that carries `data-point`
  * @param {Point} p
  * @param {{ dismissed: boolean, state: PrState, posted?: ReadonlyMap<string, string> }} ctx
@@ -255,7 +295,12 @@ export function applyDismissed(root, points, state, ctx) {
 export function refreshPointCommands(el, p, ctx) {
   const tbtns = el.querySelector('.tbtns')
   const queued = queuedFor(p, ctx)
-  if (tbtns === null || (tbtns.getAttribute('data-queued') === '1') === queued) {
+  const settleable = isSelfReview() && settlementOf(p) === undefined
+  if (
+    tbtns === null ||
+    ((tbtns.getAttribute('data-queued') === '1') === queued &&
+      (tbtns.getAttribute('data-settleable') === '1') === settleable)
+  ) {
     return false
   }
   const template = document.createElement('template')
@@ -278,11 +323,10 @@ export function refreshPointCommands(el, p, ctx) {
  * @param {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string> }} ctx
  */
 export function pointRowHtml(p, ctx) {
-  const dismissed = ctx.state?.dismissed[p.fingerprint] !== undefined
   const posted = postedFor(p, ctx)
   return (
-    `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}><td class="code x" colspan="4">` +
-    `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
+    `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${isSetAside(p, ctx.state) ? ' hidden' : ''}><td class="code x" colspan="4">` +
+    `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}</div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
     `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</td></tr>`
   )

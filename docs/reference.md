@@ -117,10 +117,12 @@ to `generation.inlineDiffMaxLines`.
 
 For PR/MR targets, `publish` saves the validated canvas locally, then posts its compressed ZIP
 as base64 inside a hidden HTML comment on GitHub or GitLab. The visible comment identifies the
-commit and explains how to open the canvas. Publishing again updates the existing canvas comment
-owned by the current CLI account; another author's comment is left alone. The payload contains
-the same `manifest.json` and `review.json` as an export, including the PR/MR description and review
-notes. Hidden markup is not private: anyone who can read the comment can retrieve the payload.
+commit, counts what the canvas leaves open, and explains how to open it. The counts are the
+attention points left for the reviewer by level, how many the author settled, and how many the
+author has not settled yet (see [Self-review](#self-review)). Publishing again updates the
+existing canvas comment owned by the current CLI account; another author's comment is left alone.
+The payload contains the same `manifest.json` and `review.json` as an export, including the PR/MR
+description, review notes, and the author's settlements. Hidden markup is not private: anyone who can read the comment can retrieve the payload.
 No generated files enter Git history and no storage service or CI workflow is required.
 
 Check the `sharing` result even when the process exits successfully:
@@ -519,6 +521,34 @@ refused.
 When automatic download fails, download the archive in GitHub or GitLab and use the page's drop
 zone or `pr-review import <zip> --pr <n>`.
 
+### Self-review
+
+The author reads the canvas before asking for review. Every attention point names its audience:
+
+- **author** (shown as **yours** to the author): a question the author can answer alone, such as
+  whether anything uses an API yet, known debt, or a test gap to fill or explain.
+- **reviewer**: a trade-off to agree on or a risk to verify, which needs someone else's judgment.
+
+When the login that runs `pr-review serve` wrote the pull request, or the review is of local work,
+each point has a **settle** command. Write why the point needs no reviewer decision and click
+**settle**. On a pull request, **also post the reason as a comment on this line** is checked by
+default; the reason then also appears as a review comment on the point's line.
+
+A settlement is written into the canvas itself, so it is not a local mark like **dismiss**:
+
+- The point leaves every reader's list. The overview lists it under **N settled by the author**
+  with its reason and, when posted, a link to the comment.
+- The canvas comment is shared again at once, with the new counts. Reviewers click **refresh** to
+  load it. When sharing fails, the settlement stays in your local canvas and the message says why.
+- **reopen** in that list takes a settlement back and shares the canvas again. A posted comment
+  stays on the forge.
+- Regenerating the canvas for the same commit keeps each settlement whose point comes back with the
+  same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the settlements
+  of the points it carries.
+
+Only the author can settle; the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
+offers no **settle**: regenerate it for the current head first.
+
 ### Comments and sign-off
 
 You can post inline comments, replies, PR-level comments, and attention points. Inline comments
@@ -616,6 +646,8 @@ on the point's side, and the prompt gives the lines the point now sits on.
 
 Everything else is decided again. The summary and risk tags are always rewritten. A carried
 attention point keeps its kind, path, and title, so it keeps its fingerprint and any dismissal.
+The author's settlement of a carried point follows it into the new canvas; a point that is decided
+again comes back unsettled, because its code changed.
 Review marks do not follow a point: they follow files and layers, by the rules below.
 
 The canvas records only which basis it came from. Your server decides which review marks follow,
@@ -680,6 +712,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                        |
 | `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                          |
 | `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                               |
+| `NOT_AUTHOR`                            | Only the pull request's author settles points; sign in with that account, or dismiss the point instead                                                |
 | `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                  |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                              |
 

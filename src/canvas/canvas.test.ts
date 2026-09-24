@@ -395,6 +395,18 @@ describe('importCanvas', () => {
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.summary).toBe('second')
   })
 
+  it('takes the author’s revision of the same generation, and keeps it over the original', async () => {
+    t = await contextWithCommits()
+    const original = buildCanvasZip(manifest(), artifact())
+    await importCanvas(t.ctx, { bytes: original, currentHead: AT_HEAD })
+    const settled = { 'fp-2': { reason: 'Covered by e2e.', at: '2026-09-10T12:00:00.000Z' } }
+    const revised = buildCanvasZip(manifest(), artifact({ settled, revisedAt: '2026-09-10T12:00:00.000Z' }))
+    expect((await importCanvas(t.ctx, { bytes: revised, currentHead: AT_HEAD })).status).toBe('ready')
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual(settled)
+    expect((await importCanvas(t.ctx, { bytes: original, currentHead: AT_HEAD })).status).toBe('exists')
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual(settled)
+  })
+
   it('reports exists for a second import that names no pull request', async () => {
     t = await contextWithCommits()
     const zip = buildCanvasZip(manifest(), artifact())

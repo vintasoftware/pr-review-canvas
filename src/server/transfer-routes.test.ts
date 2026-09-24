@@ -440,6 +440,7 @@ describe('transfer routes', () => {
           headSha: HEAD_SHA,
           prNumber: 42,
           bytes: buildCanvasZip({ ...manifest(HEAD_SHA), generatedAt: updated.generatedAt }, updated),
+          artifact: updated,
         },
         65_536
       )

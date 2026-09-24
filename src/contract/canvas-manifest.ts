@@ -21,6 +21,8 @@ export const CanvasIndexSchema = z.object({
     z.object({
       prNumber: z.number().int().positive().optional(),
       generatedAt: z.string(),
+      /** The artifact's `revisedAt`: an import compares it, so the index answers without the file. */
+      revisedAt: z.string().optional(),
       source: z.enum(['local', 'import']),
       importedAt: z.string().optional(),
       /**
@@ -34,3 +36,8 @@ export const CanvasIndexSchema = z.object({
   ),
 })
 export type CanvasIndex = z.infer<typeof CanvasIndexSchema>
+
+/** How new a copy of a commit's canvas is: the author's last revision, or its generation. */
+export function canvasRevision(entry: { generatedAt: string; revisedAt?: string | undefined }): string {
+  return entry.revisedAt ?? entry.generatedAt
+}

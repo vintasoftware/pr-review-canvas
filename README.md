@@ -3,23 +3,33 @@
 Review a GitHub pull request or GitLab merge request canvas: layers by topic, with grouped diffs,
 attention points, comments, and an optional AI chat. Everything runs locally at **http://localhost:3010**.
 
-## Quick start: author generates, reviewers review
+## Quick start: author generates and self-reviews, reviewers review
 
 ### Author side
 
-Each PR author generates a canvas before requesting review. The skill shares it automatically
-in a comment on the GitHub PR or GitLab MR. After the project setup below, run the installed skill in Claude Code or Codex:
+1. **Generate.** Before requesting review, run the installed skill in Claude Code or Codex:
 
-```text
-/pr-review-canvas 123
-```
+   ```text
+   /pr-review-canvas 123
+   ```
 
-Replace **123** with your PR number. The skill reads the PR, generates and validates the canvas, then publishes a compressed canvas
-comment using your `gh` or `glab` login. It returns a local review URL and the comment link.
+   Replace **123** with your PR number. The skill reads the PR, generates and validates the
+   canvas, then publishes a compressed canvas comment using your `gh` or `glab` login. It returns
+   a local review URL and the comment link.
+
+2. **Self-review.** Run `pr-review serve` and open the review URL. Each attention point says who
+   it is for: **yours** or **reviewer**. Settle every point you can answer now: click **settle**,
+   write why it needs no reviewer decision ("nothing calls this API yet, so breaking it is fine"),
+   and save. The reason can also go out as a comment on the point's line. The canvas comment
+   updates at once, so the point leaves every reviewer's list, with your reason still readable.
+
+3. **Request review.** The canvas comment now says how many points are left for the reviewer and
+   how many you settled.
 
 If automatic sharing fails (including a canvas too large for one comment), the skill warns you
 and gives you a ZIP path. Drag that ZIP into the PR or MR description, wait for the upload, and
-save. This manual upload is only a fallback.
+save. This manual upload is only a fallback. See [Self-review](docs/reference.md#self-review)
+for the details.
 
 ### Before you open the pull request
 
@@ -34,9 +44,12 @@ Start `pr-review serve` and open **http://localhost:3010/review/branch** or
 **/review/uncommitted**. The two are separate reviews, so generating one leaves the other alone.
 
 Nothing is posted anywhere: local work has no pull request, so the comment and sign-off commands
-stay off. Add `--base <ref>` to compare against another branch. Committing after `branch`, or
-editing a file after `uncommitted`, moves the head: the next time you open the page or press
-refresh, the canvas is marked outdated and the page offers to generate it again.
+stay off. You can still settle points. The settlements of a `branch` canvas follow it into the
+pull request's canvas wherever the code under them is unchanged; a snapshot of uncommitted work is
+on no branch, so its settlements stay with it. Add `--base <ref>` to compare against another
+branch. Committing after `branch`, or editing a file after `uncommitted`, moves the head: the next
+time you open the page or press refresh, the canvas is marked outdated and the page offers to
+generate it again.
 
 ### Review side
 

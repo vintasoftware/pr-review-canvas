@@ -5,7 +5,8 @@
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
-import { dismissedListHtml, postedUrls, sevsumHtml } from './points.js'
+import { dismissedListHtml, openPoints, postedUrls, sevsumHtml } from './points.js'
+import { selfReviewNoteHtml, settledListHtml } from './self-review.js'
 import { buildThreads } from './threads.js'
 
 /**
@@ -85,9 +86,7 @@ export function renderOverview(bundle, ctx) {
   const reviews = (bundle.comments.reviews ?? []).filter(
     review => review.state !== 'COMMENTED' || review.body.trim().length > 0
   )
-  const active = artifact
-    ? artifact.points.filter(p => bundle.state.dismissed[p.fingerprint] === undefined)
-    : []
+  const active = artifact ? openPoints(artifact.points, bundle.state) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
   const description = bundle.pr.body.trim()
     ? `<details class="pr-desc">${detailsSummaryHtml('<span>PR description (from GitHub)</span>', 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
@@ -95,7 +94,7 @@ export function renderOverview(bundle, ctx) {
   return (
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
     `<div class="panel-h"><h2 id="ov-h">Overview</h2>${artifact ? sevsumHtml(active, artifact.layers) : ''}</div>` +
-    `<div class="body">${summary}</div>` +
+    `<div class="body">${artifact ? selfReviewNoteHtml(active) : ''}${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
     (reviews.length
@@ -103,7 +102,8 @@ export function renderOverview(bundle, ctx) {
       : '') +
     outdatedCommentsHtml(bundle.comments.reviewComments, ctx.now) +
     (artifact
-      ? dismissedListHtml(artifact.points, bundle.state, {
+      ? settledListHtml(artifact.points, { paths: ctx.paths }) +
+        dismissedListHtml(artifact.points, bundle.state, {
           paths: ctx.paths,
           posted: postedUrls(bundle.state, bundle.comments.reviewComments),
         })

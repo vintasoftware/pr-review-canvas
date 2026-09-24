@@ -19,6 +19,7 @@ import {
   postReview,
   putDismissed,
   putReviewed,
+  putSettled,
   putThreadHidden,
 } from './api.js'
 
@@ -26,6 +27,7 @@ import {
  * @typedef {{
  *   putReviewed: typeof putReviewed,
  *   putDismissed: typeof putDismissed,
+ *   putSettled: typeof putSettled,
  *   putThreadHidden: typeof putThreadHidden,
  *   postComment: typeof postComment,
  *   postReview: typeof postReview,
@@ -55,6 +57,7 @@ function withDefaults(overrides) {
   return {
     putReviewed,
     putDismissed,
+    putSettled,
     putThreadHidden,
     postComment,
     postReview,
@@ -77,6 +80,8 @@ export function createReviewSession(options) {
   let submittedComments = []
   /** @type {Capabilities} */
   let capabilities = options.capabilities
+  /** The canvas's settled points, as the server last answered them. */
+  let settled = options.artifact.settled ?? {}
   const keyToPath = new Map(options.files.map(f => [f.key, f.path]))
 
   /** @type {Array<(state: PrState) => void>} */
@@ -200,6 +205,9 @@ export function createReviewSession(options) {
     get artifact() {
       return options.artifact
     },
+    get settled() {
+      return settled
+    },
     prNumber: options.prNumber,
     /**
      * Runs `fn` after every change of the local state, the optimistic one included.
@@ -256,6 +264,24 @@ export function createReviewSession(options) {
         current => withEntry(current, 'dismissed', fingerprint, before),
         () => api.putDismissed(options.prNumber, fingerprint, dismissed)
       )
+    },
+    /**
+     * Settles a point for every reviewer, or reopens it. The server writes the canvas and shares it
+     * again; the settled points it answers with are taken before the state, so the page that
+     * redraws on the new state already hides the point.
+     * @param {string} fingerprint
+     * @param {import('./contract-types.js').SettleInput} input the page's commit is added here
+     * @returns {Promise<import('./contract-types.js').SettleResponse>}
+     */
+    settle(fingerprint, input) {
+      return run(async () => {
+        const answer = await api.putSettled(options.prNumber, fingerprint, {
+          ...input,
+          headSha: options.headSha,
+        })
+        settled = answer.settled
+        return answer
+      })
     },
     /**
      * @param {number} rootCommentId

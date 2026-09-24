@@ -1,10 +1,15 @@
+import { tallyCanvas, tallyMarkdown } from '../review/self-review.js'
 import type { CanvasZip } from './export.js'
 
 export const CANVAS_COMMENT_MARKER = '<!-- pr-review-canvas:v1\n'
 
-/** The ZIP stays in the raw comment body; the rendered comment gives reviewer instructions. */
+/**
+ * The ZIP stays in the raw comment body; the rendered comment says what the canvas leaves open for
+ * the reviewer, what the author settled, and how to open it.
+ */
 export function buildCanvasComment(zip: CanvasZip, limit: number): string {
-  const body = `PR Review Canvas for commit ${zip.headSha}.\n\nRun \`pr-review serve\` and open #${zip.prNumber}. If already reviewing, click **refresh**.\n\n${CANVAS_COMMENT_MARKER}${zip.name}\n${Buffer.from(zip.bytes).toString('base64')}\n-->`
+  const tally = tallyMarkdown(tallyCanvas(zip.artifact))
+  const body = `PR Review Canvas for commit ${zip.headSha}.\n\n${tally}\n\nRun \`pr-review serve\` and open #${zip.prNumber}. If already reviewing, click **refresh**.\n\n${CANVAS_COMMENT_MARKER}${zip.name}\n${Buffer.from(zip.bytes).toString('base64')}\n-->`
   if (body.length > limit) {
     throw new Error(
       `the compressed canvas comment needs ${body.length} characters; the host limit is ${limit}`

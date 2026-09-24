@@ -243,6 +243,22 @@ An `fyi` point can simply explain useful context. Anchor each on `path` and `lin
 hunk of the diff, on the head side unless you set `side: "old"`; any line inside the hunk works,
 changed or not. Do not nitpick.
 
+Each point also names its `audience`, the person who can close it. The author reads the canvas
+first, in a self-review before asking for review, and settles each point they can answer with a
+reason every reviewer then reads. Sort the points so the reviewer's list holds only what needs a
+second pair of eyes:
+
+- `author`: the author can answer it from what they already know, without anyone else's judgment.
+  A question about intent or context ("does anything call this yet?"), a compatibility or
+  migration concern that depends on who uses the code today, known debt, drift from a convention,
+  and a test gap the author can fill or explain. Write the body so the author can settle it in a
+  sentence: name the fact that would settle it.
+- `reviewer`: it needs an independent judgment, so the author's answer alone should not close it.
+  A design trade-off the team should agree with, a risk to verify by reading or running the code,
+  a security or data-handling concern, and a manual check whose result someone else should see.
+
+When in doubt, choose `reviewer`: a point the author settles leaves every reviewer's list.
+
 - Every decision or trade-off you surface gets a `kind: "decision"` point. Use `level: "fyi"`
   to explain a chosen approach, its benefit and cost; use `level: "decide"` when human agreement
   is needed. Label inferred rationale as an inference. Sound design choices belong here too.

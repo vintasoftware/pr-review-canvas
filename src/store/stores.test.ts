@@ -127,6 +127,22 @@ describe('canvas-store', () => {
     expect(await store.exists(BASE_SHA)).toBe(false)
   })
 
+  it('revises a stored canvas in place, keeping the rest of its index entry, and refuses an unknown one', async () => {
+    const store = createCanvasStore(dir, createFakeGit())
+    await store.write(HEAD_SHA, syntheticArtifact(), manifest(), 42, { worktree: true })
+    const revised = { ...syntheticArtifact(), settled: {}, revisedAt: '2026-09-10T12:00:00.000Z' }
+    await store.revise(HEAD_SHA, revised)
+    expect(await store.readArtifact(HEAD_SHA)).toEqual(revised)
+    expect((await store.readIndex()).canvases[HEAD_SHA]).toEqual({
+      prNumber: 42,
+      generatedAt: '2026-09-10T11:00:00.000Z',
+      revisedAt: '2026-09-10T12:00:00.000Z',
+      source: 'local',
+      worktree: true,
+    })
+    await expect(store.revise(BASE_SHA, revised)).rejects.toThrow(/no canvas/)
+  })
+
   it('takes the PR number argument over the manifest and omits it when neither has one', async () => {
     const store = createCanvasStore(dir, createFakeGit())
     await store.write(HEAD_SHA, syntheticArtifact(), manifest(), 7)

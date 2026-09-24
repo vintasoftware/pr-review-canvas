@@ -17,6 +17,7 @@ import { toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
 import { marksForCanvas } from '../review/carry-marks.js'
 import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
+import { isAuthor } from '../review/self-review.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -350,6 +351,7 @@ async function bundleBase(
     state: marks.state,
     ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
     capabilities,
+    selfReview: isLocalKey(key) || isAuthor(capabilities.login, input.pr),
     chat: {
       enabled: chatEnabled && acpx.installed,
       acpx: acpx.installed,
@@ -446,6 +448,8 @@ export async function resolveBundle(
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
     return {
       ...base,
+      // The fixture artifact is read-only, so nobody settles its points.
+      selfReview: false,
       status: 'ready',
       artifact,
       canvas,

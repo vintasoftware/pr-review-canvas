@@ -27,6 +27,7 @@ export type {
   ChatTurn,
 } from '../../src/contract/chat.js'
 export type { ReviewKey } from '../../src/contract/review-key.js'
+export type { CanvasSharing, SettleInput, SettleResponse } from '../../src/contract/self-review.js'
 export type {
   CommentsPayload,
   IssueComment,
@@ -46,6 +47,7 @@ export type {
   Pr,
   ReviewArtifact,
   RiskTag,
+  Settlement,
   Side,
   TestEntry,
 } from '../../src/contract/review-artifact.js'

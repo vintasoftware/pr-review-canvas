@@ -23,7 +23,7 @@ import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { pendingForPath } from './pending.js'
-import { pointCardHtml, postedUrls } from './points.js'
+import { openPoints, pointCardHtml, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
 import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
@@ -146,7 +146,7 @@ export function railInnerHtml(artifact, state, opts = {}) {
       )
     })
     .join('')
-  const points = artifact.points.filter(p => state.dismissed[p.fingerprint] === undefined).length
+  const points = openPoints(artifact.points, state).length
   const otherItem = other
     ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
     : ''
@@ -250,7 +250,7 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
   if (own.length === 0) {
     return ''
   }
-  const active = own.filter(p => state.dismissed[p.fingerprint] === undefined).length
+  const active = openPoints(own, state).length
   const cards = own.map(p =>
     pointCardHtml(p, posted === undefined ? { paths, state } : { paths, state, posted })
   )

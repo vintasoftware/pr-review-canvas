@@ -297,6 +297,7 @@ export function syntheticArtifact(): ReviewArtifact {
         body: 'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.',
         layerId: 'run-path',
         origin: 'model',
+        audience: 'reviewer',
       },
       {
         id: 'p-2',
@@ -309,6 +310,7 @@ export function syntheticArtifact(): ReviewArtifact {
         body: 'The layer marks "other() returns x" as missing.',
         layerId: 'other',
         origin: 'tests',
+        audience: 'author',
       },
       {
         id: 'p-3',
@@ -322,6 +324,7 @@ export function syntheticArtifact(): ReviewArtifact {
         body: 'Nothing imports it any more.',
         layerId: 'other',
         origin: 'model',
+        audience: 'author',
       },
     ],
     generatedAt: '2026-09-10T11:00:00.000Z',

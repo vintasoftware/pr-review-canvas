@@ -124,7 +124,7 @@ function modelPoint(p: ModelPoint, layers: readonly Layer[], files: readonly Fil
   return point
 }
 
-/** One `tests` point per missing test entry, anchored on the layer's first hunk. */
+/** One `tests` point per missing test entry, anchored on the layer's first hunk, for the author. */
 function testPoints(layer: Layer, files: readonly FileEntry[], titleCap: number): Unassigned[] {
   const out: Unassigned[] = []
   const first = layer.files[0]
@@ -149,6 +149,8 @@ function testPoints(layer: Layer, files: readonly FileEntry[], titleCap: number)
       line,
       side,
       body: `The layer "${layer.title}" lists this behavior without a test.${note}`,
+      // The author either adds the test or says why none is needed.
+      audience: 'author',
       fingerprint: fingerprint({ kind: 'tests', path: first.path, title }),
       origin: 'tests',
       layerId: layer.id,
