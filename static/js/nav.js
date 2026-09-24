@@ -61,39 +61,44 @@ export function buildNavOrder(artifact) {
  * @param {string | null} currentId
  * @param {'layer' | 'file'} kind
  * @param {1 | -1} direction
+ * @param {(item: NavItem) => boolean} shown false for a card the reader cannot see, which is no stop
  * @returns {NavItem | null}
  */
-function step(order, currentId, kind, direction) {
+export function step(order, currentId, kind, direction, shown) {
   const from =
     currentId === null ? (direction === 1 ? -1 : order.length) : order.findIndex(i => i.id === currentId)
   const start = from === -1 && currentId !== null ? (direction === 1 ? -1 : order.length) : from
   for (let i = start + direction; i >= 0 && i < order.length; i += direction) {
     const item = order[i]
-    if (item !== undefined && item.kind === kind) {
+    if (item !== undefined && item.kind === kind && shown(item)) {
       return item
     }
   }
   return null
 }
 
-/** @param {ReadonlyArray<NavItem>} order @param {string | null} currentId */
-export function nextLayer(order, currentId) {
-  return step(order, currentId, 'layer', 1)
-}
-
-/** @param {ReadonlyArray<NavItem>} order @param {string | null} currentId */
-export function prevLayer(order, currentId) {
-  return step(order, currentId, 'layer', -1)
-}
-
-/** @param {ReadonlyArray<NavItem>} order @param {string | null} currentId */
-export function nextFile(order, currentId) {
-  return step(order, currentId, 'file', 1)
-}
-
-/** @param {ReadonlyArray<NavItem>} order @param {string | null} currentId */
-export function prevFile(order, currentId) {
-  return step(order, currentId, 'file', -1)
+/**
+ * The item the reader is on after scrolling: the last one whose top has reached `line`, the top
+ * of the screen. `topOf` gives an item's top in viewport pixels, or null when it is not drawn.
+ * @param {ReadonlyArray<NavItem>} order
+ * @param {(item: NavItem) => number | null} topOf
+ * @param {number} line
+ * @returns {NavItem | null}
+ */
+export function readingItem(order, topOf, line) {
+  /** @type {NavItem | null} */
+  let found = null
+  for (const item of order) {
+    const top = topOf(item)
+    if (top === null) {
+      continue
+    }
+    if (top > line) {
+      break
+    }
+    found = item
+  }
+  return found
 }
 
 /**

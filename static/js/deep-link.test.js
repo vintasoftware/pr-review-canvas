@@ -6,6 +6,7 @@ import { emptyState } from '../../src/contract/state.js'
 import { toPatchMap } from '../../src/git/diff-collector.js'
 import { SYNTHETIC_FILES, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { decodeHash, followLink, initDeepLinks } from './deep-link.js'
+import { wireCardReveal } from './layers.js'
 import { renderMarkdown } from './markdown.js'
 
 const NOW = new Date('2026-09-10T12:00:00.000Z')
@@ -60,6 +61,13 @@ describe('decodeHash', () => {
 
 describe('followLink', () => {
   beforeEach(page)
+  // The page opens a collapsed card on the way to a target; wireReview wires this for the app.
+  /** @type {() => void} */
+  let stopCardReveal = () => {}
+  beforeEach(() => {
+    stopCardReveal = wireCardReveal(document.body)
+  })
+  afterEach(() => stopCardReveal())
 
   it('opens the file body and lands on the row of a line link', () => {
     expect(followLink('#line:src/app.ts:3')).toBe(true)

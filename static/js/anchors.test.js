@@ -1,6 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { cssEscape, findRow, jumpTo, keyFromPath, nearestRow } from './anchors.js'
+import { wireCardReveal } from './layers.js'
 
 function table() {
   document.body.innerHTML = `
@@ -75,6 +76,7 @@ describe('jumpTo', () => {
   })
 
   it('scrolls to and flashes the link target, opening a collapsed card', () => {
+    const stop = wireCardReveal(document.body)
     expect(jumpTo('#line:src/app.ts:3')).toBe(true)
     const row = findRow(document, 'src_app_ts', 'new', 3)
     expect(row?.classList.contains('is-target')).toBe(true)
@@ -82,6 +84,7 @@ describe('jumpTo', () => {
     expect(jumpTo('#layer:auth')).toBe(true)
     expect(jumpTo('#hunk:src/app.ts#1')).toBe(true)
     expect(jumpTo('#file:src/app.ts')).toBe(true)
+    stop()
   })
 
   it('returns false for unknown targets and malformed links', () => {

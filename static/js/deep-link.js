@@ -81,10 +81,6 @@ function jumpToLine(root, link) {
   if (near === null) {
     return false
   }
-  const body = near.row.closest('.file')?.querySelector('.file-body')
-  if (body instanceof HTMLElement && body.hidden) {
-    body.hidden = false
-  }
   if (near.approx) {
     near.row.classList.add('is-approx')
   }
