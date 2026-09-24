@@ -347,6 +347,28 @@ describe('card toggles', () => {
     expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
   })
 
+  it('toggles a file card from its name, but not when the click ends a selection in it', () => {
+    const { root } = setup()
+    const body = root.querySelector('article.file#file-src_app_ts > .file-body')
+    const title = root.querySelector('article.file#file-src_app_ts .file-h .path')
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(false)
+
+    const text = title?.firstChild
+    if (text === null || text === undefined) {
+      throw new Error('file title has no text')
+    }
+    window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    // The chevron is a button, so a selection never stops it.
+    click(root, 'article.file#file-src_app_ts .file-h .chev')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    window.getSelection()?.removeAllRanges()
+  })
+
   it('collapses a layer section from its own chevron', () => {
     const { root } = setup()
     click(root, 'section.layer .layer-h .chev')

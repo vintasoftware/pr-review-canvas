@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process'
 
 /** The platform's own opener, called without a shell so the URL is one argument and nothing more. */
-function opener(url: string): [string, string[]] {
-  if (process.platform === 'darwin') {
+export function opener(url: string, platform: NodeJS.Platform = process.platform): [string, string[]] {
+  if (platform === 'darwin') {
     return ['open', [url]]
   }
-  if (process.platform === 'win32') {
+  if (platform === 'win32') {
     return ['explorer.exe', [url]]
   }
   return ['xdg-open', [url]]
