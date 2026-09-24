@@ -1,6 +1,5 @@
 // @vitest-environment node
 import type { CodeFold, ModelLayer, ModelOutput } from '../contract/review-artifact.js'
-import { TEXT_CAPS } from '../contract/review-artifact.js'
 import { toFileEntry } from '../git/diff-collector.js'
 import { SYNTHETIC_FILES } from '../testing/synthetic.js'
 import { applyFoldFixes, describeFoldFix } from './fix-folds.js'
@@ -52,7 +51,7 @@ describe('applyFoldFixes', () => {
   it('clips a fold that crosses into the next chunk, or runs past the end of its own', () => {
     const output = model([fold(3, 12), fold(12, 20)])
 
-    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+    const fixes = applyFoldFixes(output, files)
 
     expect(fixes.map(describeFoldFix)).toEqual([
       'fold "lines 3-12" new 3-12 -> new 3-5, clipped to the chunk it starts in',
@@ -70,7 +69,7 @@ describe('applyFoldFixes', () => {
     // Line 7 sits between the two hunks; hunk #2 belongs to another layer here.
     const output = model([fold(7, 12), fold(11, 12), fold(1, 2)], ['src_app_ts#1'])
 
-    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+    const fixes = applyFoldFixes(output, files)
 
     expect(fixes.map(describeFoldFix)).toEqual([
       'dropped fold "lines 7-12" at new 7-12: it starts in no chunk assigned to this file in this layer',
@@ -84,7 +83,7 @@ describe('applyFoldFixes', () => {
   it('drops a later fold that repeats an earlier range, including one that only matches once clipped', () => {
     const output = model([fold(3, 5, 'run()'), fold(3, 5, 'run() again'), fold(3, 9, 'run() wide')])
 
-    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+    const fixes = applyFoldFixes(output, files)
 
     expect(fixes.map(describeFoldFix)).toEqual([
       'dropped fold "run() again" at new 3-5: it repeats the range of "run()"',
@@ -97,7 +96,7 @@ describe('applyFoldFixes', () => {
   it('reports a kept fold at its index in the file as written back, after earlier drops', () => {
     const output = model([fold(3, 5), fold(3, 5), fold(12, 20), fold(1, 2)])
 
-    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+    const fixes = applyFoldFixes(output, files)
 
     expect(fixes.map(fix => [fix.where, fix.title])).toEqual([
       ['layers.0.files.0', 'lines 3-5'],
@@ -110,7 +109,7 @@ describe('applyFoldFixes', () => {
     const output = model([fold(1, 5)])
     output.points = [point(4, 5)]
 
-    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+    const fixes = applyFoldFixes(output, files)
 
     expect(fixes.map(describeFoldFix)).toEqual([
       'fold "lines 1-5" new 1-5 -> new 1-3, shrunk to keep the attention point at new 4-5 visible',
@@ -122,7 +121,7 @@ describe('applyFoldFixes', () => {
     const output = model([fold(12, 20)])
     output.points = [point(12)]
 
-    expect(applyFoldFixes(output, files, TEXT_CAPS).map(describeFoldFix)).toEqual([
+    expect(applyFoldFixes(output, files).map(describeFoldFix)).toEqual([
       'fold "lines 12-20" new 12-20 -> new 13-14, clipped to the chunk it starts in, ' +
         'then shrunk to keep the attention point at new 12 visible',
     ])
@@ -136,7 +135,7 @@ describe('applyFoldFixes', () => {
     const output = model([fold(1, 5)])
     output.points = points
 
-    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+    const fixes = applyFoldFixes(output, files)
 
     expect(fixes).toHaveLength(1)
     expect(fixes[0]?.to).toBeNull()
@@ -148,9 +147,9 @@ describe('applyFoldFixes', () => {
     const output = model([fold(3, 12), fold(3, 5), fold(7, 8), fold(12, 20)])
     output.points = [point(13)]
 
-    expect(applyFoldFixes(output, files, TEXT_CAPS)).toHaveLength(4)
+    expect(applyFoldFixes(output, files)).toHaveLength(4)
     const once = JSON.stringify(output)
-    expect(applyFoldFixes(output, files, TEXT_CAPS)).toEqual([])
+    expect(applyFoldFixes(output, files)).toEqual([])
     expect(JSON.stringify(output)).toBe(once)
     expect(invalid(output)).toEqual([])
   })
@@ -159,8 +158,8 @@ describe('applyFoldFixes', () => {
     const output = model([fold(1, 4), fold(3, 5), fold(5, 2)])
     const before = JSON.stringify(output)
 
-    expect(applyFoldFixes(output, files, TEXT_CAPS)).toEqual([])
+    expect(applyFoldFixes(output, files)).toEqual([])
     expect(JSON.stringify(output)).toBe(before)
-    expect(applyFoldFixes({ layers: [{ files: [{ folds: [fold(3, 12)] }] }] }, files, TEXT_CAPS)).toEqual([])
+    expect(applyFoldFixes({ layers: [{ files: [{ folds: [fold(3, 12)] }] }] }, files)).toEqual([])
   })
 })

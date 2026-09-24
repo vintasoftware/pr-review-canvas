@@ -8,8 +8,9 @@
  * the writer, and so is every rule about how much a canvas must hide.
  */
 
-import type { FileEntry, Hunk, ModelOutput, TextCaps } from '../contract/review-artifact.js'
-import { modelOutputSchema } from '../contract/review-artifact.js'
+import { z } from 'zod'
+import type { FileEntry, Hunk } from '../contract/review-artifact.js'
+import { SideSchema, TEST_STATUSES } from '../contract/review-artifact.js'
 import { hunkForLine, hunkSpan } from '../git/patch-lines.js'
 import { pinnedRanges, rangesOverlap, type SourceRange } from './validate-folds.js'
 
@@ -82,16 +83,43 @@ function shrink(fold: SourceRange, pins: readonly SourceRange[]): SourceRange | 
   return piece
 }
 
+const line = z.number().int().positive()
+
 /**
- * Repairs the folds of a parsed model in place and reports every change. Only a model that passes
- * the schema is touched, since the rules read its points, tests, and hunk lists; a reversed range
- * and a fold that partly overlaps another are reported by the validator and left alone.
+ * The parts of a model the fold rules read, and nothing else. Text length has no bearing on where
+ * a fold sits, so an over-cap title elsewhere never keeps a fold from being fixed in the same run.
  */
-export function applyFoldFixes(output: unknown, files: readonly FileEntry[], caps: TextCaps): FoldFix[] {
-  if (!modelOutputSchema(caps).safeParse(output).success) {
+const FoldGeometrySchema = z.object({
+  layers: z.array(
+    z.object({
+      tests: z.array(z.object({ status: z.enum(TEST_STATUSES) })),
+      files: z.array(
+        z.object({
+          path: z.string(),
+          hunks: z.array(z.string()),
+          folds: z
+            .array(z.object({ title: z.string(), side: SideSchema, startLine: line, endLine: line }))
+            .optional(),
+        })
+      ),
+    })
+  ),
+  points: z.array(
+    z.object({ path: z.string(), side: SideSchema.optional(), line, endLine: line.optional() })
+  ),
+})
+
+/**
+ * Repairs the folds of a parsed model in place and reports every change. Only a model whose layers,
+ * files, folds, tests, and points have the shape the rules read is touched; a reversed range and a
+ * fold that partly overlaps another are reported by the validator and left alone.
+ */
+export function applyFoldFixes(output: unknown, files: readonly FileEntry[]): FoldFix[] {
+  if (!FoldGeometrySchema.safeParse(output).success) {
     return []
   }
-  const model = output as ModelOutput
+  // Checked above, and edited in place so the fields the schema does not name are written back.
+  const model = output as z.infer<typeof FoldGeometrySchema>
   const byPath = new Map(files.map(file => [file.path, file.hunks]))
   const fixes: FoldFix[] = []
 
@@ -101,7 +129,7 @@ export function applyFoldFixes(output: unknown, files: readonly FileEntry[], cap
         return
       }
       const hunks = byPath.get(file.path) ?? []
-      const pinned = pinnedRanges(file, layer, model, hunks)
+      const pinned = pinnedRanges(file, layer, model.points, hunks)
       const kept: typeof file.folds = []
 
       for (const fold of file.folds) {

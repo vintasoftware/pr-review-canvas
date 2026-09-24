@@ -301,9 +301,7 @@ async function fixModel(
   }
   // Folds first, so every reported path, a trimmed fold title's included, is one into the file
   // as written back.
-  const folds = ReviewArtifactSchema.safeParse(parsed).success
-    ? []
-    : applyFoldFixes(parsed, context.files, context.caps)
+  const folds = ReviewArtifactSchema.safeParse(parsed).success ? [] : applyFoldFixes(parsed, context.files)
   const trims = applyTitleTrims(parsed, context.caps)
   if (!trims.some(trim => trim.outcome === 'fixed') && folds.length === 0) {
     return { text, trims, folds }

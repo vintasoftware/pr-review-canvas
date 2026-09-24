@@ -143,15 +143,14 @@ function foldRelation(
 
 /** Ranges no fold may ever hide: attention points, and the marker a missing test adds. */
 export function pinnedRanges(
-  file: ModelFile,
-  layer: ModelLayer,
-  output: ModelOutput,
+  file: Pick<ModelFile, 'path' | 'hunks'>,
+  layer: { files: readonly object[]; tests: ReadonlyArray<Pick<ModelLayer['tests'][number], 'status'>> },
+  points: ReadonlyArray<Pick<ModelOutput['points'][number], 'path' | 'side' | 'line' | 'endLine'>>,
   hunks: readonly Hunk[]
 ): SourceRange[] {
   const ranges: SourceRange[] = []
-  const points = output.points.filter(point => point.path === file.path)
 
-  for (const point of points) {
+  for (const point of points.filter(p => p.path === file.path)) {
     const side = point.side ?? 'new'
     const hunk = hunkForLine(hunks, side, point.line)
 
@@ -178,7 +177,7 @@ function fileFolds(
   output: ModelOutput,
   hunks: readonly Hunk[]
 ): FileFolds {
-  const pinned = pinnedRanges(file, layer, output, hunks)
+  const pinned = pinnedRanges(file, layer, output.points, hunks)
   const rows = fileRows(file, hunks)
   return {
     file,

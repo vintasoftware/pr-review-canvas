@@ -141,9 +141,11 @@ describe('prepare, publish, validate through the CLI layer', () => {
     if (file?.path !== 'src/app.ts') {
       throw new Error('fixture changed')
     }
-    // Hunk #2 spans new 11-14.
+    // Hunk #2 spans new 11-14. The first title is past the schema's raw ceiling, which a trim
+    // fixes in the same run: text length never holds a fold repair back to a second run.
+    const long = `other(): ${'x'.repeat(370)}`
     file.folds = [
-      { title: 'other()', side: 'new', startLine: 11, endLine: 20, level: 'moderate' },
+      { title: long, side: 'new', startLine: 11, endLine: 20, level: 'moderate' },
       { title: 'other() again', side: 'new', startLine: 11, endLine: 14, level: 'aggressive' },
     ]
     await writeFile(model, JSON.stringify(output))
@@ -151,8 +153,9 @@ describe('prepare, publish, validate through the CLI layer', () => {
     const human = fakeIo()
     expect(await runValidate(t.ctx, [model, '--canvas', canvasDir, '--human', '--fix'], human)).toBe(EXIT.ok)
     expect(human.out).toEqual([
-      'fixed layers.1.files.0.folds.0: fold "other()" new 11-20 -> new 11-14, clipped to the chunk it starts in',
-      'fixed layers.1.files.0: dropped fold "other() again" at new 11-14: it repeats the range of "other()"',
+      `fixed layers.1.files.0.folds.0: fold "${long}" new 11-20 -> new 11-14, clipped to the chunk it starts in`,
+      `fixed layers.1.files.0: dropped fold "other() again" at new 11-14: it repeats the range of "${long}"`,
+      `fixed layers.1.files.0.folds.0.title: "${long}" -> "other()"`,
       'ok: model.json passes against 7 files',
     ])
     const saved = JSON.parse(await readFile(model, 'utf8')) as typeof output
