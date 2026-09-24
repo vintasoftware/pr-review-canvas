@@ -1,5 +1,7 @@
 /* ---- Commands: the one clickable style ---- */
-.cmd {
+/* A fold toggle is a command without the brackets. */
+.cmd,
+.fold-toggle {
   display: inline-block;
   background: none;
   border: 0;
@@ -19,7 +21,8 @@
 .cmd::after {
   content: ' ]';
 }
-.cmd:hover {
+.cmd:hover,
+.fold-toggle:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 2px;

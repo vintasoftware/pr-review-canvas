@@ -97,7 +97,8 @@
 [data-skin='github'] .cmd::after {
   content: none;
 }
-[data-skin='github'] .cmd {
+[data-skin='github'] .cmd,
+[data-skin='github'] .fold-toggle {
   font-weight: 500;
 }
 /* The header's commands read as GitHub's toolbar buttons; commands inside the page stay links. */
