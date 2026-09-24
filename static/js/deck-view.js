@@ -42,14 +42,35 @@ function inline(text) {
 }
 
 /**
+ * One side on the card's front: its label and its sketch, or its consequence as text when it has
+ * no sketch. The sketch runs in a sandboxed frame; deck.js posts the code in once it loads.
  * @param {DecisionCard} card
  * @param {CardSide} side
  */
-function sideHtml(card, side) {
+function sideFrontHtml(card, side) {
   const content = card[side]
   const letter = side.toUpperCase()
-  const key = side
   const now = card.current === side ? '<span class="deck-now">in code now</span>' : ''
+  const frame =
+    content.sketch === undefined
+      ? ''
+      : `<iframe class="deck-sketch" data-sketch="${side}" sandbox="allow-scripts" src="/deck-sketch" title="Sketch of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe>`
+  return `<section class="deck-side deck-side-${side}" data-side="${side}" aria-label="Side ${letter}: ${esc(content.label)}">
+<header class="deck-side-h"><span class="deck-letter" aria-hidden="true">${letter}</span><h3>${esc(content.label)}</h3>${now}</header>
+<div class="deck-visual" data-visual="${side}"${content.sketch === undefined ? '' : ' data-has-sketch'}>${frame}<div class="deck-visual-text">${inline(content.consequence)}</div></div>
+<button class="deck-pick cmd" type="button" data-pick="${side}"><kbd>${side}</kbd> pick ${letter}</button>
+</section>`
+}
+
+/**
+ * One side on the card's back: the consequence, the snippet, and the justification with its
+ * editor and record target.
+ * @param {DecisionCard} card
+ * @param {CardSide} side
+ */
+function sideBackHtml(card, side) {
+  const content = card[side]
+  const letter = side.toUpperCase()
   const lang = content.snippet?.lang ?? langForPath(card.path)
   const snippet =
     content.snippet === undefined
@@ -59,8 +80,8 @@ function sideHtml(card, side) {
     target =>
       `<option value="${target}"${target === content.record ? ' selected' : ''}>${esc(RECORD_LABELS[target])}</option>`
   ).join('')
-  return `<section class="deck-side deck-side-${side}" data-side="${side}" aria-label="Side ${letter}: ${esc(content.label)}">
-<header class="deck-side-h"><span class="deck-letter" aria-hidden="true">${letter}</span><h3>${esc(content.label)}</h3>${now}</header>
+  return `<section class="deck-detail deck-side-${side}" data-detail="${side}">
+<h4><span class="deck-letter" aria-hidden="true">${letter}</span> ${esc(content.label)}</h4>
 <div class="deck-consequence">${inline(content.consequence)}</div>
 ${snippet}
 <div class="deck-why">
@@ -69,12 +90,12 @@ ${snippet}
 <p class="deck-record"><span class="deck-record-chip" data-record-chip="${side}" data-record="${content.record}">${esc(RECORD_LABELS[content.record])}</span>
 <label class="deck-edit"><span class="sr-only">Record side ${letter}'s justification</span><select data-record-select="${side}">${options}</select></label></p>
 </div>
-<button class="deck-pick cmd" type="button" data-pick="${side}"><kbd>${key}</kbd> pick ${letter}</button>
 </section>`
 }
 
 /**
- * One decision card. `data-card` carries its key; the drag and the keys act on the top one.
+ * One decision card. `data-card` carries its key; the drag and the keys act on the top one. The
+ * front is the headline and the two sides' sketches; `i` turns it over to the words.
  * @param {DecisionCard} card
  * @param {{ index: number, total: number }} position
  */
@@ -87,12 +108,15 @@ export function cardHtml(card, position) {
 <header class="deck-card-h">
 <p class="deck-kicker"><span class="deck-bucket">${esc(bucket)}</span><span class="deck-topic">${esc(card.topic)}</span><span class="deck-count mono">${position.index + 1} / ${position.total}</span></p>
 <h2 id="deck-title-${esc(card.key)}">${esc(card.title)}</h2>
-<div class="deck-context">${inline(card.context)}</div>
 </header>
-<div class="deck-sides">${sideHtml(card, 'a')}<div class="deck-or" aria-hidden="true">or</div>${sideHtml(card, 'b')}</div>
+<div class="deck-front"><div class="deck-sides">${sideFrontHtml(card, 'a')}<div class="deck-or" aria-hidden="true">or</div>${sideFrontHtml(card, 'b')}</div></div>
+<div class="deck-back" aria-label="Details">
+<div class="deck-context">${inline(card.context)}</div>
+<div class="deck-details">${sideBackHtml(card, 'a')}${sideBackHtml(card, 'b')}</div>
+</div>
 <footer class="deck-card-f">
 <button class="deck-anchor mono" type="button" data-act="drawer" aria-expanded="false"><kbd>o</kbd> ${esc(where)}</button>
-<span class="deck-card-more"><button class="cmd" type="button" data-act="edit"><kbd>e</kbd> edit why</button><button class="cmd" type="button" data-act="neither"><kbd>n</kbd> neither</button><button class="cmd" type="button" data-act="skip"><kbd>s</kbd> skip</button></span>
+<span class="deck-card-more"><button class="cmd" type="button" data-act="details" aria-pressed="false"><kbd>i</kbd> details</button><button class="cmd" type="button" data-act="edit"><kbd>e</kbd> edit why</button><button class="cmd" type="button" data-act="neither"><kbd>n</kbd> neither</button><button class="cmd" type="button" data-act="skip"><kbd>s</kbd> skip</button></span>
 </footer>
 <form class="deck-note" data-note hidden>
 <label for="deck-note-${esc(card.key)}">Neither side fits. What do you want instead?</label>

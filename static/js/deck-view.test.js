@@ -61,6 +61,47 @@ describe('cardHtml', () => {
     expect(root.querySelector('.deck-anchor')?.textContent).toContain(`a"${hostile}.ts:12`)
   })
 
+  it('frames a side’s sketch in the sandbox and keeps the code out of the page', () => {
+    const sketch = 'p.draw = () => ui.label("</iframe><img src=x>", 1, 2)'
+    const root = render(cardHtml(card({ b: { ...card().b, sketch } }), { index: 0, total: 1 }))
+    const frames = root.querySelectorAll('iframe')
+    expect(frames).toHaveLength(1)
+    const frame = /** @type {HTMLIFrameElement} */ (frames[0])
+    expect(frame.closest('.deck-side-b')).not.toBeNull()
+    // Scripts only: no same-origin, forms, popups, or top navigation.
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts')
+    expect(frame.getAttribute('src')).toBe('/deck-sketch')
+    expect(frame.dataset['sketch']).toBe('b')
+    // The code is posted to the frame later; the markup never carries it.
+    expect(root.innerHTML).not.toContain('ui.label')
+    expect(root.querySelector('img')).toBeNull()
+    // A side without a sketch shows its consequence where the sketch would be.
+    expect(root.querySelector('[data-visual="a"]')?.hasAttribute('data-has-sketch')).toBe(false)
+    expect(root.querySelector('[data-visual="a"] .deck-visual-text')?.textContent?.trim()).toBe(
+      'Old exports import.'
+    )
+    // The side with one keeps the words for when the sketch fails, and for screen readers.
+    expect(root.querySelector('[data-visual="b"] .deck-visual-text')?.textContent?.trim()).toBe(
+      'Nothing is dropped.'
+    )
+  })
+
+  it('keeps the headline on the front and the words on the back', () => {
+    const root = render(cardHtml(card(), { index: 0, total: 1 }))
+    const front = /** @type {HTMLElement} */ (root.querySelector('.deck-front'))
+    const back = /** @type {HTMLElement} */ (root.querySelector('.deck-back'))
+    expect(front.querySelectorAll('h3')).toHaveLength(2)
+    expect(front.querySelectorAll('[data-pick]')).toHaveLength(2)
+    expect(front.textContent).not.toContain('The importer skips rows')
+    expect(front.querySelector('[data-why]')).toBeNull()
+    expect(back.querySelector('.deck-context')?.textContent?.trim()).toBe(
+      'The importer skips rows with no cells.'
+    )
+    expect(back.querySelector('[data-detail="a"] [data-why-text]')?.textContent).toBe('Only old exports pad.')
+    expect(back.querySelector('[data-detail="b"] [data-record-chip]')?.textContent).toBe('not recorded')
+    expect(root.querySelector('[data-act="details"]')?.getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('marks only the side the code implements now, and neither when it does neither', () => {
     let root = render(cardHtml(card({ current: 'b' }), { index: 0, total: 1 }))
     expect(root.querySelector('.deck-side-a .deck-now')).toBeNull()

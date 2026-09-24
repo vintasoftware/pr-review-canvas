@@ -652,7 +652,8 @@ pr-review deck fixes (--pr <n> | --branch | --uncommitted)
   `status: "exists"` unless `--force` is passed.
 - `validate` checks the model against the prepared diff. Each problem is one line:
   `DECK_SCHEMA`, `TOO_MANY_CARDS`, `DUPLICATE_CARD`, `TEXT_TOO_LONG` (visible characters),
-  `SNIPPET_TOO_LONG` (more than 8 lines), `CARD_OUTSIDE_DIFF`, or `SIDES_ALIKE`.
+  `SNIPPET_TOO_LONG` (more than 8 lines), `CARD_OUTSIDE_DIFF`, `SIDES_ALIKE`, or
+  `SKETCH_INVALID` (see **Sketches**).
 - `publish` validates again, refuses with `DECK_STALE` when the head moved (unless
   `--allow-stale`), and stores `deck.json`. Exit code 5 with `DECK_INVALID` means the model failed.
 - `fixes` prints `{ review, path, exists }` for the fix list.
@@ -661,15 +662,39 @@ pr-review deck fixes (--pr <n> | --branch | --uncommitted)
 
 Each card has a `key`, a `bucket` (`trade-off`, `intent`, `shape`, or `risk`), a `topic`, a
 `title`, a `context`, an anchor (`path`, `line`, optional `side`) inside one chunk of the diff, and
-sides `a` and `b`. Each side has a `label`, a `consequence`, an optional `snippet`, the `why` the
-author accepts by picking it, and `record`: `pr-comment`, `code`, or `none`. `current` names the
-side the code implements now, or is `null`.
+sides `a` and `b`. Each side has a `label`, a `consequence`, an optional `snippet`, an optional
+`sketch`, the `why` the author accepts by picking it, and `record`: `pr-comment`, `code`, or
+`none`. `current` names the side the code implements now, or is `null`.
 
 Visible-character caps: title 60, topic 40, context 240, label 48, consequence 200, why 140.
 
 A deck holds at most `ceil(changedLines / selfReview.linesPerCard)` cards, never more than
 `selfReview.maxCards` (defaults 100 and 10). Zero cards is valid. The prompt is
 `prompts/self-review-deck.md`, and `prompts: { self-review-deck.md: <path> }` replaces it.
+
+### Sketches
+
+A side's `sketch` is a small p5 animation of its consequence: the body of `function (p, ui)`,
+at most 3000 characters, drawing on a 400 × 300 stage with the palette, the animation state, and
+the drawing kit `ui` offers (`static/js/sketch-kit.js`; the prompt documents it). The card's front
+shows the two sketches under the sides' labels; a side without one shows its consequence as text.
+
+The deck page runs each sketch in its own frame, `/deck-sketch`, sandboxed twice: the iframe's
+`sandbox="allow-scripts"` and the frame's own `Content-Security-Policy: sandbox allow-scripts`.
+The frame has an opaque origin (no cookies, storage, or access to the deck page), `connect-src
+'none'`, and scripts from this server only; `'unsafe-eval'`, which turns the sketch into a
+function, is allowed there and nowhere else. The deck page's own policy adds `frame-src 'self'`,
+so a frame that navigates away is blocked too. Sketches take no pointer input; the page posts
+them their state (idle, a lean toward the side, picked, or the other side picked), and a sketch
+that throws falls back to its side's text.
+
+`deck validate` refuses (`SKETCH_INVALID`) a sketch that does not parse, uses a page, network,
+storage, or eval global, calls a p5 function that loads, saves, adds elements, or takes the
+canvas, or never assigns `p.draw`. It then draws the sketch without a browser, against a
+recording stand-in for p5 inside a fresh vm context with a timeout, at seven moments of its
+animation, and refuses one that throws, runs over time, draws nothing, or draws a label smaller
+than 12, off the stage, on another label, under a filled shape drawn after it, or crossed by a
+line or an icon.
 
 ### Picks, the fix list, and the next deck
 
@@ -719,9 +744,13 @@ and the next publish retries.
 
 ### Deck page
 
-`/deck/<n>`, `/deck/branch`, and `/deck/uncommitted` show one card at a time. Keys: `a` side A, `b` side B,
-`n` neither (with a note), `s` skip, `u` undo, `e` edit a justification, `r` change where it is
-recorded, `o` the code drawer, `?` help, `Esc` close. Dragging a card left or right past 140
+`/deck/<n>`, `/deck/branch`, and `/deck/uncommitted` show one card at a time. The front shows the
+title, each side's label, and its sketch; `i` turns the card over to the context, both
+consequences, the snippets, and the justifications. Keys: `a` side A, `b` side B,
+`n` neither (with a note), `s` skip, `u` undo, `e` edit a justification (on the card's back),
+`r` change where it is recorded, `i` details, `o` the code drawer, `?` help, `Esc` close.
+Hovering or dragging toward a side speeds its sketch up; picking it plays the sketch's payoff
+before the card flies off. Dragging a card left or right past 140
 pixels picks that side. Arrow keys never pick. Below 600 pixels wide the sides stack, the code
 drawer and the note become bottom sheets, and undo, edit, and close have buttons for touch. The deck page has its own keys: `a` picks side A here,
 while on the canvas page it asks AI Chat. With reduced motion on, cards cross-fade.

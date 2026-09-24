@@ -395,6 +395,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
       dompurify: '/nonexistent/purify.js',
       hljs: '/nonexistent/hljs.js',
       mermaid: '/nonexistent/mermaid',
+      p5: '/nonexistent/p5.min.js',
     },
     fixtureArtifact: opts.fixtureArtifact ?? null,
   }

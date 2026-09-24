@@ -186,6 +186,32 @@ describe('validateDeckModel', () => {
     ])
   })
 
+  it('names each problem of a side’s sketch, and passes a sketch that only draws', () => {
+    const drawing = 'p.draw = () => ui.box(10, 10, 50, 50)'
+    const result = validateDeckModel(
+      {
+        cards: [
+          card({
+            a: { ...card().a, sketch: drawing },
+            b: { ...card().b, sketch: 'p.draw = () => fetch("/x")' },
+          }),
+        ],
+      },
+      { files, maxCards: 1 }
+    )
+    expect(result.ok ? [] : result.problems.map(p => p.message)).toEqual([
+      'card:empty-rows.b.sketch: uses fetch; a sketch draws with p and ui only',
+    ])
+    const fine = card({ a: { ...card().a, sketch: drawing }, b: { ...card().b, sketch: drawing } })
+    expect(validateDeckModel({ cards: [fine] }, { files, maxCards: 1 }).ok).toBe(true)
+    // Past the character cap, the schema refuses it before any check runs.
+    const huge = card({ a: { ...card().a, sketch: `p.draw = () => {}${' '.repeat(3000)}` } })
+    const refused = validateDeckModel({ cards: [huge] }, { files, maxCards: 1 })
+    expect(refused.ok ? [] : refused.problems.map(p => [p.code, p.where])).toEqual([
+      ['DECK_SCHEMA', 'cards.0.a.sketch'],
+    ])
+  })
+
   it('counts visible text, so backticks and link targets are free', () => {
     const title = `\`${'y'.repeat(60)}\``
     expect(validateDeckModel({ cards: [card({ title })] }, { files, maxCards: 1 }).ok).toBe(true)

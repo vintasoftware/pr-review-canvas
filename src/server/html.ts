@@ -113,6 +113,16 @@ export function deckPage(page: DeckBootstrap, nonce: string, appearance: Appeara
   })
 }
 
+/**
+ * The page a card's sketch runs in. It carries no data: the deck page posts the sketch in once
+ * the frame says it is ready. Its policy (`sketchFramePolicy`) sandboxes it.
+ */
+export function sketchFrame(): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>sketch</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%!important;height:100%!important}</style>
+</head><body><script src="/vendor/p5.js"></script><script type="module" src="/static/js/sketch-host.js"></script></body></html>`
+}
+
 export function homePage(
   data: HomeData & {
     owner: string

@@ -4,7 +4,8 @@ import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
-import { deckPage, homePage, reviewPage } from '../html.js'
+import { deckPage, homePage, reviewPage, sketchFrame } from '../html.js'
+import { SKETCH_FRAME_PATH } from '../security.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
 export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Promise<Appearance> {
@@ -107,6 +108,9 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
       )
     )
   })
+
+  // The frame one side's sketch runs in; the deck page frames it and posts the sketch in.
+  app.get(SKETCH_FRAME_PATH, c => c.html(sketchFrame()))
 
   return app
 }

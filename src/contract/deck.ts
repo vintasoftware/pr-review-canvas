@@ -37,6 +37,12 @@ export const DECK_CAPS = {
 /** Lines of code a side may show; more than that belongs in the diff drawer. */
 export const SNIPPET_MAX_LINES = 8
 
+/**
+ * Characters a side's sketch may have. A sketch is the body of a p5 instance-mode function that
+ * draws one side's consequence; the deck page runs it in a sandboxed frame with no network.
+ */
+export const SKETCH_MAX_CHARS = 3000
+
 /** Card keys name a card across re-decks, so they are short, stable slugs. */
 export const CARD_KEY_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
 
@@ -57,6 +63,12 @@ export const CardSideSchema = z.object({
   label: text(DECK_CAPS.label),
   consequence: text(DECK_CAPS.consequence),
   snippet: SnippetSchema.optional(),
+  /**
+   * p5 code drawing this side's consequence, as the body of `function (p, ui)`. It assigns
+   * `p.setup` and `p.draw`; `ui` gives the 400×300 stage, the palette, the animation state, and a
+   * small drawing kit. Omitted, the side shows its consequence as text instead.
+   */
+  sketch: z.string().min(1).max(SKETCH_MAX_CHARS).optional(),
   /** The one-line justification the author accepts by picking this side, or edits first. */
   why: text(DECK_CAPS.why),
   record: z.enum(RECORD_TARGETS),

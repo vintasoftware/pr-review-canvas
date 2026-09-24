@@ -39,6 +39,9 @@ import { errorCardHtml } from './errors.js'
 /** How far a drag has to travel, in pixels, before letting go picks a side. */
 const DRAG_COMMIT = 140
 
+/** How long the picked side's sketch plays its payoff before the card flies off. */
+const PAYOFF_MS = 650
+
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 
 /** @param {string} message */
@@ -148,6 +151,73 @@ function showStamp(card, side, strength) {
     }
   }
   card.dataset['lean'] = side ?? ''
+  leanSketches(card, side, strength)
+}
+
+/** The palette a sketch draws with, as the page's own colors, for this side. */
+const PALETTE_VARS = /** @type {const} */ ({
+  fg: '--fg',
+  muted: '--fg-muted',
+  paper: '--panel',
+  line: '--line-strong',
+  good: '--ok',
+  bad: '--bad',
+  warn: '--warn',
+})
+
+/**
+ * The page's colors, resolved to plain `rgb()` strings a canvas understands (the tokens use
+ * `light-dark()`).
+ * @param {HTMLElement} within
+ * @param {'a' | 'b'} side
+ */
+function paletteFor(within, side) {
+  const probe = document.createElement('span')
+  probe.hidden = true
+  within.append(probe)
+  /** @param {string} name */
+  const color = name => {
+    probe.style.color = `var(${name})`
+    return getComputedStyle(probe).color
+  }
+  /** @type {Record<string, string>} */
+  const palette = { ink: color(`--deck-ink-${side}`) }
+  for (const [key, name] of Object.entries(PALETTE_VARS)) palette[key] = color(name)
+  probe.remove()
+  return palette
+}
+
+/**
+ * Tells a card's sketches how the author leans: the side leaned toward speeds up.
+ * @param {HTMLElement} card
+ * @param {'a' | 'b' | null} side
+ * @param {number} strength 0..1
+ */
+function leanSketches(card, side, strength) {
+  for (const frame of card.querySelectorAll('iframe')) {
+    const leaning = frame.getAttribute('data-sketch') === side && strength > 0
+    frame.contentWindow?.postMessage(
+      { type: 'state', state: leaning ? 'lean' : 'idle', lean: leaning ? strength : 0 },
+      '*'
+    )
+  }
+}
+
+/**
+ * Plays the picked side's payoff: that sketch runs its consequence while the other one slows.
+ * Resolves once there was something to watch, so the card flies off after it.
+ * @param {HTMLElement} card
+ * @param {'a' | 'b'} side
+ */
+async function payoff(card, side) {
+  const live = card.querySelector(`.deck-visual[data-visual="${side}"][data-live]`)
+  for (const frame of card.querySelectorAll('iframe')) {
+    const state = frame.getAttribute('data-sketch') === side ? 'picked' : 'other'
+    frame.contentWindow?.postMessage({ type: 'state', state }, '*')
+  }
+  card.dataset['picked'] = side
+  if (live === null || reducedMotion() || card.classList.contains('deck-flipped')) return
+  await new Promise(resolve => setTimeout(resolve, PAYOFF_MS))
 }
 
 /** @param {HTMLElement} root */
@@ -276,6 +346,7 @@ ${deckHelpHtml()}`
     table.innerHTML = `<div class="deck-hand">${stackHtml(state.peek())}${cardHtml(top, { index, total: deck.cards.length })}</div>`
     const card = /** @type {HTMLElement} */ (topCard())
     wireDrag(card)
+    wireHover(card)
     card.focus({ preventScroll: true })
     await flyIn(card, from)
   }
@@ -327,7 +398,9 @@ ${deckHelpHtml()}`
       ...edits,
       ...(opts.note === undefined ? {} : { note: opts.note }),
     })
-    await flyOut(el, direction, opts.from ?? (el.style.transform || 'none'))
+    const from = opts.from ?? (el.style.transform || 'none')
+    if (choice === 'a' || choice === 'b') await payoff(el, choice)
+    await flyOut(el, direction, from)
     try {
       const saved = /** @type {{ picks: Record<string, Pick>, summary: Summary }} */ (await saving)
       state.replacePicks(saved.picks)
@@ -380,7 +453,8 @@ ${deckHelpHtml()}`
     const el = topCard()
     if (el === null) return
     mode = 'edit'
-    el.classList.add('deck-editing')
+    el.classList.add('deck-editing', 'deck-flipped')
+    el.querySelector('[data-act="details"]')?.setAttribute('aria-pressed', 'true')
     const target = /** @type {HTMLElement | null} */ (
       el.querySelector(focus === 'why' ? '[data-why="a"]' : '[data-record-select="a"]')
     )
@@ -401,10 +475,36 @@ ${deckHelpHtml()}`
     if (el !== null) {
       const form = /** @type {HTMLFormElement | null} */ (el.querySelector('[data-note]'))
       if (form !== null) form.hidden = true
-      el.classList.remove('deck-editing')
+      if (el.classList.contains('deck-editing')) el.classList.remove('deck-editing')
+      else void flip(false)
       el.focus({ preventScroll: true })
     }
     mode = 'card'
+  }
+
+  /**
+   * Turns the card over to its words, or back to its sketches.
+   * @param {boolean} [show] which face to end on; omitted, the other one
+   */
+  const flip = async show => {
+    const el = topCard()
+    if (el === null) return
+    const flipped = el.classList.contains('deck-flipped')
+    const to = show ?? !flipped
+    if (to === flipped) return
+    const turn = !reducedMotion() && typeof el.animate === 'function'
+    if (turn)
+      await play(el, [{ transform: 'none' }, { transform: 'rotateY(90deg)' }], {
+        duration: 140,
+        easing: 'ease-in',
+      })
+    el.classList.toggle('deck-flipped', to)
+    el.querySelector('[data-act="details"]')?.setAttribute('aria-pressed', String(to))
+    if (turn)
+      await play(el, [{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], {
+        duration: 180,
+        easing: 'ease-out',
+      })
   }
 
   const toggleDrawer = () => {
@@ -441,6 +541,53 @@ ${deckHelpHtml()}`
       toast(err instanceof Error ? err.message : String(err))
     }
   }
+
+  /**
+   * Hovering a side leans toward it a little, so its sketch perks up before any drag.
+   * @param {HTMLElement} card
+   */
+  function wireHover(card) {
+    for (const side of /** @type {const} */ (['a', 'b'])) {
+      const el = card.querySelector(`.deck-side-${side}`)
+      el?.addEventListener('pointerenter', () => {
+        if (!card.classList.contains('deck-dragging')) leanSketches(card, side, 0.5)
+      })
+      el?.addEventListener('pointerleave', () => {
+        if (!card.classList.contains('deck-dragging')) leanSketches(card, null, 0)
+      })
+    }
+  }
+
+  // The sketch frames of the top card: each says when it is ready, and gets its side's code.
+  window.addEventListener('message', event => {
+    const frame = [...table.querySelectorAll('iframe')].find(f => f.contentWindow === event.source)
+    const card = state.top()
+    if (frame === undefined || card === null || event.origin !== 'null') return
+    const side = /** @type {'a' | 'b'} */ (frame.getAttribute('data-sketch'))
+    const visual = /** @type {HTMLElement} */ (frame.closest('.deck-visual'))
+    const message = /** @type {{ type?: unknown, message?: unknown } | null} */ (event.data)
+    const type = message?.type
+    if (type === 'ready') {
+      frame.contentWindow?.postMessage(
+        {
+          type: 'run',
+          code: card[side].sketch,
+          side,
+          still: reducedMotion(),
+          palette: paletteFor(visual, side),
+        },
+        '*'
+      )
+    } else if (type === 'drawn') {
+      visual.dataset['live'] = ''
+    } else if (type === 'error') {
+      // The side keeps its words; the console says why, for whoever wrote the sketch.
+      console.warn(`sketch ${card.key}.${side} failed: ${String(message?.message ?? '')}`)
+      delete visual.dataset['live']
+      visual.dataset['failed'] = ''
+      frame.remove()
+    }
+  })
 
   /** @param {HTMLElement} card */
   function wireDrag(card) {
@@ -575,6 +722,7 @@ ${deckHelpHtml()}`
     else if (act === 'help') help()
     else if (act === 'undo') void undo()
     else if (act === 'edit') openEditor('why')
+    else if (act === 'details') void flip()
     else if (act === 'escape') escape()
   })
 
@@ -612,6 +760,9 @@ ${deckHelpHtml()}`
         break
       case 'drawer':
         toggleDrawer()
+        break
+      case 'details':
+        void flip()
         break
       case 'help':
         help()

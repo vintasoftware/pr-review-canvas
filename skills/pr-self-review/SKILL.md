@@ -64,6 +64,11 @@ A good card is concrete: both sides are real options for this code, each with it
 `why` of each side is a sentence the author could say as their own. Mark `current` truthfully:
 it is what the code does now, and it decides whether a pick becomes a fix.
 
+Give every side a `sketch`, as the prompt's **The sketch** section describes: the card's front
+shows the sketches, not the words, so each one has to show its side's consequence and cost at a
+glance. You cannot see what you draw; validation draws it for you and names what a reader could
+not read.
+
 ## 3. Validate, then publish
 
 ```bash

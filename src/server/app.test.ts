@@ -601,6 +601,7 @@ describe('createApp', () => {
           dompurify: path.join(vendorDir, 'missing.js'),
           hljs: path.join(vendorDir, 'missing.js'),
           mermaid: path.join(vendorDir, 'mermaid'),
+          p5: path.join(vendorDir, 'p5.min.js'),
         },
       })
       const app = createApp(t.ctx)
@@ -653,7 +654,7 @@ describe('createApp', () => {
       expect(await resolveUnder(dir, '../x')).toBeNull()
       expect(await resolveUnder(dir, 'missing')).toBeNull()
       expect(await resolveUnder(dir, '%')).toBeNull()
-      const roots = { diff: dir, marked: 'm', dompurify: 'd', hljs: 'h', mermaid: dir }
+      const roots = { diff: dir, marked: 'm', dompurify: 'd', hljs: 'h', mermaid: dir, p5: 'p' }
       expect(await resolveVendor(roots, 'diff/../x.js')).toBeNull()
       expect(await resolveVendor(roots, 'mermaid/../x.mjs')).toBeNull()
     })

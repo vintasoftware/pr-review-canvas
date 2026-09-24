@@ -93,6 +93,8 @@ a valid deck. When more real decisions remain than fit, drop the ones with the l
   - `snippet` (optional): `{ "code": "...", "lang": "ts" }`, at most {{SNIPPET_MAX_LINES}} lines
     that show this side: the change's own code for the current side, a sketch for the other.
     `lang` is a highlight.js language name; leave it out to use the anchor file's.
+  - `sketch`: a small p5 animation of this side's consequence. See **The sketch** below. Every
+    side gets one; a side without it shows its consequence as plain text instead.
   - `why`: the one-line justification the author accepts by picking this side. Write it in the
     author's voice ("Empty rows are exports from the old tool; skipping them is expected.").
   - `record`: where that justification belongs once picked. Ask who needs the reason, and when:
@@ -103,6 +105,106 @@ a valid deck. When more real decisions remain than fit, drop the ones with the l
       little once merged: why this scope, why this order of work, why not the alternative now.
     - `none` when the code itself will show it, which is usually the side that changes the code.
 - `current`: `"a"` or `"b"` for the side the code implements now, or `null` when it does neither.
+
+## The sketch
+
+The front of a card shows only the title, each side's label, and each side's sketch. The words
+(context, consequences, snippets, justifications) are one key away, on the card's back, and most
+authors will not turn it over. So the sketch carries the side: at a glance, it shows **what
+happens if the author picks it**, to whom, and what it costs.
+
+- **One idea per sketch.** Two to five things on the stage: actors as boxes or icons, and what
+  moves between them. A reader should get it in two seconds.
+- **Fill the stage.** The scene spans most of the 400 × 300 stage, with actors big enough to read
+  from across the room (boxes 80 to 140 wide, icons 40 to 64). A small scene in the middle of an
+  empty stage reads as a thumbnail.
+- **Same scene, different outcome.** Draw both sides of a card with the same actors in the same
+  places, so the eye goes straight to what differs: the row that is dropped on one side and
+  stopped with an error on the other; the request that waits on one and fails fast on the other.
+- **Show the cost, not only the benefit.** The side's price belongs in the picture: a pile-up, a
+  red cross, a lock left open, a clock running, a second box to maintain.
+- **Loop gently, then pay off.** While the card is up, the scene loops (`ui.loop`, `ui.pulse`,
+  `ui.t`); leaning toward a side speeds its clock up on its own, and the side the author did not
+  pick slows down and dims on its own. When the author picks the side, `ui.beat` runs from 0 to 1
+  over 0.7 seconds: land the consequence then, good or bad (a check pops, the pile falls, the red
+  cross stamps down).
+- **The still frame must read alone.** With reduced motion the sketch is drawn once, at
+  `ui.t = 1.2` with `ui.beat = 0`. Keep the cost visible all the time rather than only at some
+  moment of the loop; a cost that comes later in a sequence (a retry, a second post) can sit on
+  the stage throughout, faded, as the end state. Avoid thresholds that land exactly on 1.2
+  (`ui.loop(2.4)` is 0.5 there).
+- **Few words.** At most five texts on the stage, box labels included, each at most three
+  words, at size 12 or more. The label above the sketch already names the side; do not repeat it.
+- **Same scene on both sides.** Each sketch is its own code, so write the shared scene twice with
+  the same coordinates; only the outcome differs.
+- No secrets, credentials, or protected health information, even as sample data.
+
+A sketch is the **body** of `function (p, ui) { ... }`, a complete function body in p5 2.x
+instance mode, at most 3000 characters. It assigns `p.draw` (required) and `p.setup` (optional);
+the frame creates the canvas, clears it before every frame (leave the background alone), wraps
+each frame in `push`/`pop` so style never leaks from one frame to the next, and scales the stage
+to fit.
+
+- The stage is `ui.w` × `ui.h` = 400 × 300, origin at the top left. Keep a margin of 12. Use
+  `ui.w` and `ui.h`, never `p.width`, which is the canvas in pixels.
+- Colors: `ui.ink` (this side's color), `ui.fg`, `ui.muted`, `ui.paper`, `ui.line`, `ui.good`,
+  `ui.bad`, `ui.warn`. Use them rather than your own, so the sketch fits both themes.
+- State: `ui.t` (seconds on this side's clock), `ui.beat` (the payoff, 0..1), `ui.state`
+  (`idle`, `lean`, `picked`, or `other` when the author picked the other side), `ui.side`.
+- Motion helpers: `ui.loop(period = 2)` 0..1 repeating, `ui.pulse(period = 1.6)` 0..1..0,
+  `ui.ease(f)`, `ui.along(points, f)` for the `[x, y]` a fraction of the way along a polyline.
+- Drawing kit. Every position is a center unless it says otherwise.
+  - `ui.box(x, y, w, h, label?, { fill, stroke, color, weight, dash, at })`: a rounded box with
+    its top-left corner at `x, y`, filled with `ui.paper` and stroked with `ui.fg` by default. The
+    label sits in the middle at size 14; `at: 'top'` or `at: 'bottom'` moves it to that edge at
+    size 13, which leaves the middle free for what the box holds. `dash: true` dashes the border.
+  - `ui.label(text, x, y, { size = 14, color = ui.fg, align = 'center', bold })`: text centered
+    on `x, y` (with `align: 'left'` or `'right'`, `x` is that edge).
+  - `ui.arrow(x1, y1, x2, y2, { color = ui.fg, weight = 2, dash, head = true })`: head at `x2, y2`.
+  - `ui.dot(x, y, r = 6, color = ui.ink)`: a filled circle of radius `r`.
+  - `ui.icon(name, x, y, size = 32, color = ui.fg)`: a stroked icon centered on `x, y` in a
+    `size` × `size` square. Icons: `user`, `users`, `server`, `db`, `file`, `lock`, `unlock`,
+    `key`, `clock`, `check`, `cross`, `warn`, `bug`, `gear`, `cloud`, `bolt`, `eye`, `trash`,
+    `shield`, `list`, `package`, `branch`, `chat`, `flag`, `hourglass`.
+- Any p5 drawing call on `p` works: shapes, color, transforms, `p.lerp`, `p.noise`,
+  `p.drawingContext.setLineDash([4, 4])` for a dashed shape, and so on. Call `p.randomSeed(1)` in
+  `p.setup` if you use `p.random`, so the sketch is the same every time.
+- A sketch draws and nothing else. It may not use `window`, `document`, `fetch`, `eval`, or any
+  other page, network, or storage global, and may not call `p.createCanvas`, `p.load*`,
+  `p.save*`, `p.select*`, `p.create*` elements, or `p.http*`. It runs in a sandbox without them.
+
+You cannot see the sketch, so validation looks for you. It draws each sketch without a browser
+at seven moments (the loop, a lean, the still frame, the payoff, the other side picked) and
+refuses one that: does not parse, names what the sandbox withholds, never assigns `p.draw`,
+throws or runs for more than a second, draws nothing, or draws a label smaller than 12, off the
+stage, on top of another label, under a filled shape drawn after it, or crossed by a line or an
+icon. It estimates a label as 0.56 × its size wide per character (about 8 per character at size
+14) and 1.2 × its size tall, so give labels that much room. Draw containers first and what they
+hold after, and labels last: `ui.box` is filled, so a box drawn late hides what is under it. To
+fade something, draw it in `ui.line` or `ui.muted`, or set `p.drawingContext.globalAlpha`
+inside `p.push()` / `p.pop()`. What validation cannot judge is whether the picture tells the
+consequence: that part is yours.
+
+For the example card below, side A (skip empty rows):
+
+```js
+const rows = [0, 1, 2, 3, 4]
+p.draw = () => {
+  ui.box(20, 110, 90, 80, 'export')
+  ui.box(290, 110, 90, 80, 'imported')
+  const f = ui.loop(2.5)
+  rows.forEach(i => {
+    const x = p.lerp(110, 290, (f + i / 5) % 1)
+    const empty = i === 2
+    if (empty && x > 190) return
+    p.noStroke()
+    p.fill(empty ? ui.line : ui.ink)
+    p.rect(x - 10, 142, 20, 16, 3)
+  })
+  ui.label('blank row gone', 200, 225, { size: 12, color: ui.muted })
+  if (ui.beat > 0) ui.icon('check', 335, 80, 36 * ui.ease(ui.beat), ui.good)
+}
+```
 
 ## Length caps
 
@@ -130,12 +232,14 @@ Write `{{MODEL_PATH}}` as JSON only, no prose and no fence:
         "label": "Skip them silently",
         "consequence": "Old exports import cleanly; an accidental blank row in the middle goes unnoticed.",
         "snippet": { "code": "if (row.every(cell => cell === '')) continue" },
+        "sketch": "const rows = [0, 1, 2, 3, 4]\np.draw = () => { ... }",
         "why": "Empty rows only come from the old export tool, which pads its files.",
         "record": "pr-comment"
       },
       "b": {
         "label": "Fail with the row number",
         "consequence": "Nothing is ever dropped quietly, but every old export needs cleaning first.",
+        "sketch": "p.draw = () => { ... }",
         "why": "An import should never drop data without saying so.",
         "record": "none"
       }

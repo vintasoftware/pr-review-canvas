@@ -7,7 +7,7 @@
 /** @typedef {'pr-comment' | 'code' | 'none'} RecordTarget */
 /**
  * @typedef {{ label: string, consequence: string, snippet?: { lang?: string, code: string },
- *   why: string, record: RecordTarget }} SideContent
+ *   sketch?: string, why: string, record: RecordTarget }} SideContent
  */
 /**
  * @typedef {{ key: string, bucket: string, topic: string, title: string, context: string,
@@ -17,7 +17,7 @@
 /** @typedef {{ choice: PickChoice, why?: string, note?: string, record?: RecordTarget, pickedAt: string }} Pick */
 /**
  * @typedef {'pick-a' | 'pick-b' | 'neither' | 'skip' | 'undo' | 'edit' | 'record' | 'drawer'
- *   | 'help' | 'escape'} DeckAction
+ *   | 'details' | 'help' | 'escape'} DeckAction
  */
 
 /** Rows of the help dialog, in the order a first-time reader needs them. */
@@ -29,9 +29,10 @@ export const DECK_KEY_HELP = [
   { keys: 'u', what: 'undo the last pick' },
   { keys: 'e', what: 'edit the justification of either side before picking' },
   { keys: 'r', what: 'change where a justification is recorded' },
+  { keys: 'i', what: 'turn the card over: the context, both consequences, and the justifications' },
   { keys: 'o', what: 'open or close the code the card is about' },
   { keys: '?', what: 'this help' },
-  { keys: 'Esc', what: 'close the note, the editor, the code, or this help' },
+  { keys: 'Esc', what: 'close the note, the editor, the details, the code, or this help' },
 ]
 
 /** Where a record target sends a justification, as the card says it. */
@@ -79,6 +80,7 @@ const KEYS = {
   e: 'edit',
   r: 'record',
   o: 'drawer',
+  i: 'details',
   '?': 'help',
 }
 

@@ -39,7 +39,16 @@ function card(key: string, title: string, current: 'a' | 'b' | null): DecisionCa
   }
 }
 
-const CARDS = [card('one', 'First', 'a'), card('two', 'Second', 'a'), card('three', 'Third', 'b')]
+/** A sketch that draws, so a side shows it instead of its words. */
+const DRAWS = "p.draw = () => { ui.box(20, 100, 120, 80, 'rows'); ui.dot(200 + 60 * ui.pulse(), 140) }"
+
+const CARDS = [
+  { ...card('one', 'First', 'a'), sketches: true },
+  card('two', 'Second', 'a'),
+  card('three', 'Third', 'b'),
+].map(({ sketches, ...c }: DecisionCard & { sketches?: boolean }) =>
+  sketches === true ? { ...c, a: { ...c.a, sketch: DRAWS }, b: { ...c.b, sketch: DRAWS } } : c
+)
 
 const test = base.extend<{ deckUrl: string }>({
   deckUrl: async ({ page }, use) => {
@@ -188,4 +197,90 @@ test('fits a phone: no sideways scroll, and every action has a button', async ({
   await expect(page.locator('.deck-card h2')).toHaveText('First')
   await page.locator('.deck-card-more [data-act="edit"]').click()
   await expect(page.locator('[data-why="a"]')).toBeFocused()
+})
+
+test('draws each side in a sandboxed frame, and turns the card over with i', async ({ page, deckUrl }) => {
+  await page.goto(deckUrl)
+  for (const side of ['a', 'b']) {
+    await expect(page.locator(`.deck-visual[data-visual="${side}"]`)).toHaveAttribute('data-live', '')
+    await expect(page.frameLocator(`iframe[data-sketch="${side}"]`).locator('canvas')).toBeVisible()
+  }
+  // The words step aside for the sketch, but stay for screen readers.
+  await expect(page.locator('[data-visual="a"] .deck-visual-text')).toHaveText('Old exports import cleanly.')
+  expect(
+    await page.locator('[data-visual="a"] .deck-visual-text').evaluate(el => el.getBoundingClientRect().width)
+  ).toBe(1)
+  await expect(page.locator('.deck-back')).toBeHidden()
+
+  await page.keyboard.press('i')
+  await expect(page.locator('.deck-back')).toBeVisible()
+  await expect(page.locator('.deck-back .deck-context')).toHaveText('The importer skips rows with no cells.')
+  await expect(page.locator('[data-act="details"]')).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.deck-back')).toBeHidden()
+  await expect(page.locator('[data-act="details"]')).toHaveAttribute('aria-pressed', 'false')
+
+  // Editing turns the card over, since the justifications live on the back.
+  await page.keyboard.press('e')
+  await expect(page.locator('[data-why="a"]')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.deck-back')).toBeHidden()
+
+  await page.keyboard.press('a')
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
+  // A card without sketches shows its consequences as words, and frames nothing.
+  await expect(page.locator('iframe')).toHaveCount(0)
+  // (Publish shuffled this card's sides, so the words are checked as a pair.)
+  await expect(page.locator('.deck-visual-text')).toHaveText([
+    /Nothing is dropped quietly\.|Old exports import cleanly\./,
+    /Nothing is dropped quietly\.|Old exports import cleanly\./,
+  ])
+  await expect(page.locator('.deck-visual[data-live]')).toHaveCount(0)
+})
+
+test('a sketch reaches neither the page nor the network, and a failed one falls back to words', async ({
+  page,
+  deckUrl,
+}) => {
+  // Skip the validator, as a hand-edited deck.json would: the sandbox has to hold on its own.
+  const hostile = {
+    a: "p.draw = () => { parent.document.title = 'owned' }",
+    b:
+      "p.setup = () => { try { localStorage.setItem('x', '1') } catch (e) { ui.storage = String(e.name) } }\n" +
+      "p.draw = () => { if (!ui.sent) { ui.sent = true; fetch(new URL('/api/health?leak=1', location.href)).catch(() => {}) } ui.box(10, 10, 50, 50) }",
+  }
+  await page.route('**/api/deck/uncommitted', async route => {
+    const res = await route.fetch()
+    const body = await res.json()
+    const first = body.deck.cards[0]
+    first.a.sketch = hostile.a
+    first.b.sketch = hostile.b
+    await route.fulfill({ response: res, json: body })
+  })
+  const leaks: string[] = []
+  page.on('request', req => {
+    if (req.url().includes('leak=1')) leaks.push(req.url())
+  })
+  const warnings: string[] = []
+  page.on('console', msg => {
+    if (msg.type() === 'warning' && msg.text().startsWith('sketch ')) warnings.push(msg.text())
+  })
+  await page.goto(deckUrl)
+  const title = await page.title()
+
+  // Side A threw on touching the deck page: its frame is gone and its words are back.
+  await expect(page.locator('.deck-visual[data-visual="a"]')).toHaveAttribute('data-failed', '')
+  await expect(page.locator('iframe[data-sketch="a"]')).toHaveCount(0)
+  await expect(page.locator('[data-visual="a"] .deck-visual-text')).toBeVisible()
+  expect(await page.title()).toBe(title)
+  expect(warnings.join('\n')).toMatch(/^sketch one\.a failed: /)
+
+  // Side B drew, but its request never left the frame.
+  await expect(page.locator('.deck-visual[data-visual="b"]')).toHaveAttribute('data-live', '')
+  await page.waitForTimeout(300)
+  expect(leaks).toEqual([])
+  // And the card still works around a broken side.
+  await page.keyboard.press('b')
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
 })

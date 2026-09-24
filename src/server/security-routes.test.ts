@@ -10,7 +10,7 @@ import { createFakeGh, makeTempDir, makeTestContext, type TestContext } from '..
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { createApp } from './app.js'
 import { PACKAGE_ROOT } from './context.js'
-import { contentSecurityPolicy, createNonce } from './security.js'
+import { contentSecurityPolicy, createNonce, sketchFramePolicy } from './security.js'
 
 const LOCAL = { host: 'localhost:3010' }
 
@@ -19,6 +19,10 @@ const ROUTES: Array<{ method: string; path: string; body?: unknown }> = [
   { method: 'GET', path: '/' },
   { method: 'GET', path: '/review/42' },
   { method: 'GET', path: '/review?n=42' },
+  { method: 'GET', path: '/deck/42' },
+  { method: 'GET', path: '/deck-sketch' },
+  { method: 'GET', path: '/static/js/sketch-host.js' },
+  { method: 'GET', path: '/vendor/p5.js' },
   { method: 'GET', path: '/static/styles.css' },
   { method: 'GET', path: '/vendor/marked.js' },
   { method: 'GET', path: '/api/health' },
@@ -107,9 +111,12 @@ describe('every route', () => {
         expect(res.headers.get('cache-control')).toBe('no-store')
       }
       const html = (res.headers.get('content-type') ?? '').startsWith('text/html')
-      expect(res.headers.get('content-security-policy')).toBe(
-        html ? contentSecurityPolicy(nonceOf(await res.clone().text())) : null
-      )
+      const policy = !html
+        ? null
+        : r.path === '/deck-sketch'
+          ? sketchFramePolicy()
+          : contentSecurityPolicy(nonceOf(await res.clone().text()), { frames: r.path.startsWith('/deck/') })
+      expect(res.headers.get('content-security-policy')).toBe(policy)
     }
   )
 })
@@ -134,6 +141,43 @@ describe('content security policy', () => {
         "img-src 'self' data: https:; font-src 'self'; connect-src 'self'; form-action 'self'; " +
         "base-uri 'none'; frame-ancestors 'none'; object-src 'none'"
     )
+  })
+
+  it('lets only the deck page frame anything, and only from this server', () => {
+    expect(contentSecurityPolicy('abc')).not.toContain('frame-src')
+    expect(contentSecurityPolicy('abc', { frames: true })).toContain(
+      "connect-src 'self'; frame-src 'self'; form-action"
+    )
+  })
+
+  it('sandboxes the sketch frame by its own header and cuts it off from the network', () => {
+    const policy = sketchFramePolicy().split('; ')
+    // Scripts, and nothing a sandbox would otherwise have to grant: no same origin, no forms,
+    // no popups, no top navigation.
+    expect(policy[0]).toBe('sandbox allow-scripts')
+    expect(policy).toContain("connect-src 'none'")
+    expect(policy).toContain("default-src 'none'")
+    expect(policy).toContain("form-action 'none'")
+    expect(policy).toContain("frame-ancestors 'self'")
+    // Scripts come from this server only; eval is what runs a sketch, and only here.
+    expect(policy).toContain("script-src 'self' 'unsafe-eval'")
+    expect(contentSecurityPolicy('abc')).not.toContain('unsafe-eval')
+  })
+
+  it('serves the sketch frame with no data in it, and lets it load only its own two modules', async () => {
+    const app = createApp(t.ctx)
+    const frame = await app.request('/deck-sketch', { headers: LOCAL })
+    const body = await frame.text()
+    expect(body).toContain('<script src="/vendor/p5.js"></script>')
+    expect(body).toContain('<script type="module" src="/static/js/sketch-host.js"></script>')
+    expect(body).not.toContain('nonce')
+    for (const file of ['sketch-host.js', 'sketch-kit.js']) {
+      const res = await app.request(`/static/js/${file}`, { headers: LOCAL })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    }
+    const other = await app.request('/static/js/deck.js', { headers: LOCAL })
+    expect(other.headers.get('access-control-allow-origin')).toBeNull()
   })
 
   it('gives each page a fresh nonce and puts it on every inline script', async () => {

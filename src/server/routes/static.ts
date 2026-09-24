@@ -68,6 +68,7 @@ export async function resolveVendor(roots: VendorRoots, rel: string): Promise<st
     'marked.js': roots.marked,
     'purify.js': roots.dompurify,
     'highlight.js': roots.hljs,
+    'p5.js': roots.p5,
   }
   const hit = exact[rel]
   if (hit !== undefined) {
@@ -82,13 +83,16 @@ export async function resolveVendor(roots: VendorRoots, rel: string): Promise<st
   return null
 }
 
+/** The scripts the sandboxed sketch frame loads as modules. */
+const SKETCH_MODULES = new Set(['js/sketch-host.js', 'js/sketch-kit.js'])
+
 export function staticRoutes(ctx: AppContext): Hono {
   const app = new Hono()
 
-  async function send(file: string, cache: string): Promise<Response> {
+  async function send(file: string, cache: string, headers: Record<string, string> = {}): Promise<Response> {
     const body = await readFile(file)
     return new Response(new Uint8Array(body), {
-      headers: { 'content-type': contentTypeFor(file), 'cache-control': cache },
+      headers: { 'content-type': contentTypeFor(file), 'cache-control': cache, ...headers },
     })
   }
 
@@ -98,7 +102,9 @@ export function staticRoutes(ctx: AppContext): Hono {
     if (file === null) {
       throw new AppError('NOT_FOUND', `no static file ${rel}`, 404)
     }
-    return send(file, 'no-cache')
+    // The sketch frame's sandbox gives it an opaque origin, so its module scripts load as
+    // cross-origin requests. Only these two public files answer them.
+    return send(file, 'no-cache', SKETCH_MODULES.has(rel) ? { 'access-control-allow-origin': '*' } : {})
   })
 
   app.get('/vendor/*', async c => {

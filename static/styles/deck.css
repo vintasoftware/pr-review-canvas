@@ -130,7 +130,7 @@
 }
 .deck-table {
   position: relative;
-  width: min(1180px, 100%);
+  width: min(1440px, 100%);
   height: 100%;
   display: grid;
   place-items: center;
@@ -164,11 +164,16 @@
   text-overflow: ellipsis;
   opacity: 0.6;
 }
+/* The cards waiting underneath show as two edges above the top card, as a pile does; a tilt that
+   reads on a small card turns into a skewed hairline across a wide one, so they stay level. */
+.deck-ghost {
+  background: var(--panel-2);
+}
 .deck-ghost-1 {
-  transform: translateY(-18px) scale(0.965) rotate(-0.6deg);
+  transform: translateY(-14px) scaleX(0.975);
 }
 .deck-ghost-2 {
-  transform: translateY(-34px) scale(0.93) rotate(0.8deg);
+  transform: translateY(-27px) scaleX(0.95);
 }
 
 .deck-card {
@@ -187,9 +192,10 @@
   outline: none;
   will-change: transform;
 }
+/* The card takes focus only so the deck's keys land on the page; it is never tabbed to, and a ring
+   around the whole screen's content marks nothing. Its buttons keep their own focus rings. */
 .deck-card:focus-visible {
-  outline: 2px dashed var(--focus);
-  outline-offset: 4px;
+  outline: none;
 }
 .deck-card.deck-dragging {
   cursor: grabbing;
@@ -745,12 +751,172 @@
   font-size: 13px;
 }
 
+/* The card's two faces. The front is the headline and a sketch per side, filling the screen's
+   height; `i` turns the card over to the words: the context, both consequences, the snippets, and
+   the justifications. Both faces share the card's middle row. */
+.deck-hand {
+  height: 100%;
+  align-items: center;
+  perspective: 1800px;
+}
+.deck-card {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'head' 'face' 'foot';
+  height: min(800px, 100%);
+}
+.deck-ghost {
+  height: min(800px, 100%);
+}
+.deck-card-h {
+  grid-area: head;
+}
+.deck-card-f {
+  grid-area: foot;
+}
+.deck-front,
+.deck-back {
+  grid-area: face;
+  min-height: 0;
+}
+.deck-front .deck-sides {
+  height: 100%;
+}
+.deck-back {
+  display: none;
+  overflow: auto;
+  cursor: auto;
+  user-select: text;
+}
+.deck-card.deck-flipped .deck-back {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.deck-card.deck-flipped .deck-front {
+  visibility: hidden;
+}
+.deck-card.deck-flipped .deck-context {
+  margin: 0;
+  font-size: 16px;
+  color: var(--fg);
+}
+.deck-side {
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.25s cubic-bezier(0.2, 1.4, 0.4, 1),
+    opacity 0.25s;
+}
+.deck-side-h h3 {
+  font-size: 19px;
+}
+.deck-visual {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: var(--panel);
+  overflow: hidden;
+}
+.deck-visual:not([data-has-sketch]),
+.deck-visual[data-failed] {
+  border-style: dashed;
+}
+.deck-sketch {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  /* Sketches take no input: drags, hovers, and keys stay the card's. */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+.deck-visual[data-live] .deck-sketch {
+  opacity: 1;
+}
+.deck-visual-text {
+  max-width: 44ch;
+  padding: 16px 20px;
+  font-size: 17px;
+  line-height: 1.45;
+  text-align: center;
+}
+.deck-visual-text p {
+  margin: 0;
+}
+/* A drawn sketch speaks for its side; the words stay for screen readers and the card's back. */
+.deck-visual[data-live] .deck-visual-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.deck-card[data-picked='a'] .deck-side-a,
+.deck-card[data-picked='b'] .deck-side-b {
+  transform: scale(1.025);
+  border-color: currentColor;
+}
+.deck-card[data-picked='a'] .deck-side-b,
+.deck-card[data-picked='b'] .deck-side-a {
+  opacity: 0.45;
+}
+.deck-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.deck-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 2px solid var(--line);
+}
+.deck-detail > * {
+  color: var(--fg);
+}
+.deck-detail h4 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 16px;
+}
+.deck-detail .deck-letter {
+  width: 26px;
+  height: 26px;
+}
+.deck-detail .deck-consequence {
+  font-size: 15px;
+}
+.deck-card-f [aria-pressed='true'] {
+  background: var(--panel-2);
+}
+
 /* Small screens stack the sides and let the page scroll; the no-scroll promise is for desktops. */
 @media (max-width: 900px), (max-height: 700px) {
   .deck-page {
     height: auto;
     min-height: 100dvh;
     overflow: visible;
+  }
+  .deck-card,
+  .deck-ghost {
+    height: auto;
+  }
+  .deck-visual {
+    flex: none;
+    aspect-ratio: 16 / 10;
+  }
+  .deck-details {
+    grid-template-columns: 1fr;
   }
   .deck-sides {
     grid-template-columns: 1fr;

@@ -12,6 +12,7 @@ import {
 import type { FileEntry } from '../contract/review-artifact.js'
 import { hunkForLine, hunkLineRanges } from '../git/patch-lines.js'
 import { visibleLength } from '../review/text-length.js'
+import { sketchProblems } from './validate-sketch.js'
 
 export type DeckProblemCode =
   | 'DECK_SCHEMA'
@@ -21,6 +22,7 @@ export type DeckProblemCode =
   | 'SNIPPET_TOO_LONG'
   | 'CARD_OUTSIDE_DIFF'
   | 'SIDES_ALIKE'
+  | 'SKETCH_INVALID'
 
 export interface DeckProblem {
   code: DeckProblemCode
@@ -78,6 +80,13 @@ function checkText(card: DecisionCard, problems: DeckProblem[]): void {
         where,
         message: `${where}: ${lines} lines, cap ${SNIPPET_MAX_LINES}; the diff drawer shows the rest`,
       })
+    }
+  }
+  for (const side of CARD_SIDES) {
+    const sketch = card[side].sketch
+    for (const message of sketch === undefined ? [] : sketchProblems(sketch)) {
+      const where = `card:${card.key}.${side}.sketch`
+      problems.push({ code: 'SKETCH_INVALID', where, message: `${where}: ${message}` })
     }
   }
   if (card.a.label.trim().toLowerCase() === card.b.label.trim().toLowerCase()) {
