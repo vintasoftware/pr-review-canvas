@@ -61,6 +61,22 @@ _Avoid_: Invalidated, rejected, expired
 A canvas of another commit of the pull request that the head's diff no longer matches, shown with the diff of its own commit and a bar saying so. Review marks made on it stay with it and never count for a later canvas.
 _Avoid_: Stale review, expired canvas
 
+**Self-review deck**:
+A short sequence of decision cards the author works through on their own change before reviewers see it. It exists to close decisions, so the canvas reviewers read later leaves few of them open.
+_Avoid_: Swipe review, approval flow
+
+**Decision card**:
+One choice in a self-review deck that a reasonable engineer could make either way, shown as two sides, A and B. At most one side is marked as what the code does now.
+_Avoid_: Review item, approval, rejection
+
+**Settled decision**:
+The side the author picked on a decision card, with its short justification. It stays in the local review state until the pull request's canvas is published, and then, when its side calls for one, it is posted as the author's own comment on the code it concerns.
+_Avoid_: Approved decision, resolved attention point
+
+**Fix list**:
+The settled decisions whose picked side differs from what the code does now, written out as instructions for a coding agent to apply. The author reads it at the end of the deck and hands it to the fix skill.
+_Avoid_: Rejections, fix prompt
+
 **Illustrative sample**:
 An attributed walkthrough of selected changes from a public pull request, with editorial layer groupings and scripted chat examples. It demonstrates concepts without claiming to be a complete generated canvas.
 _Avoid_: Live review, live AI chat
