@@ -167,11 +167,11 @@ async function resolveBasis(
   }
   const files = fileDelta(basis, head)
   const lineCarried = await carriedPointLines(
+    ctx.derived,
     artifact.points,
     files,
     { sha, derived: basis },
-    { sha: pr.headSha, derived: head },
-    (commit, side, filePath) => ctx.derived.readLines(commit, side, filePath, 1, Number.MAX_SAFE_INTEGER)
+    { sha: pr.headSha, derived: head }
   )
   return {
     canvasSha: sha,

@@ -301,7 +301,7 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
     .map(p => `- ${p.kind} on \`${p.path}\` — "${p.title}"`)
   return [
     `**Layers** — the head touched at least one of their files, so decide the grouping, the prose, and the anchors again:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
-    `**Attention points** — the code under them moved; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    `**Attention points** — the code under them changed, or could not be compared; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
     '**The summary and the pull-request-wide risk** are always written again: they describe the whole change set, which the new commits changed.',
   ].join('\n\n')
 }

@@ -152,7 +152,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
     expect(await runValidate(t.ctx, [model, '--canvas', canvasDir, '--human', '--fix'], human)).toBe(EXIT.ok)
     expect(human.out).toEqual([
       'fixed layers.1.files.0.folds.0: fold "other()" new 11-20 -> new 11-14, clipped to the chunk it starts in',
-      'fixed layers.1.files.0.folds.1: dropped fold "other() again" at new 11-14: it repeats the range of "other()"',
+      'fixed layers.1.files.0: dropped fold "other() again" at new 11-14: it repeats the range of "other()"',
       'ok: model.json passes against 7 files',
     ])
     const saved = JSON.parse(await readFile(model, 'utf8')) as typeof output

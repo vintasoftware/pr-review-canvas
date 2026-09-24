@@ -257,8 +257,11 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     values.fix === true ? await fixModel(path.resolve(file), text, context) : { text, trims: [], folds: [] }
   const report = await validateFile(ctx, parseModelText(fixed.text, path.basename(file)), context)
   if (values.human !== true) {
-    printJson(io, values.fix === true ? { ...report, fixed: [...fixed.trims, ...fixed.folds] } : report)
+    printJson(io, values.fix === true ? { ...report, fixed: [...fixed.folds, ...fixed.trims] } : report)
     return report.ok ? EXIT.ok : EXIT.invalid
+  }
+  for (const fold of fixed.folds) {
+    io.stdout(`fixed ${fold.where}: ${describeFoldFix(fold)}`)
   }
   for (const trim of fixed.trims) {
     if (trim.outcome === 'fixed') {
@@ -268,9 +271,6 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
         `unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`
       )
     }
-  }
-  for (const fold of fixed.folds) {
-    io.stdout(`fixed ${fold.where}: ${describeFoldFix(fold)}`)
   }
   if (report.ok) {
     io.stdout(`ok: ${path.basename(file)} passes against ${context.files.length} files`)
@@ -299,10 +299,12 @@ async function fixModel(
     // An unparseable file has nothing to fix; the validator reports the syntax error.
     return { text, trims: [], folds: [] }
   }
-  const trims = applyTitleTrims(parsed, context.caps)
+  // Folds first, so every reported path, a trimmed fold title's included, is one into the file
+  // as written back.
   const folds = ReviewArtifactSchema.safeParse(parsed).success
     ? []
     : applyFoldFixes(parsed, context.files, context.caps)
+  const trims = applyTitleTrims(parsed, context.caps)
   if (!trims.some(trim => trim.outcome === 'fixed') && folds.length === 0) {
     return { text, trims, folds }
   }

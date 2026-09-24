@@ -8,12 +8,16 @@
  * the writer, and so is every rule about how much a canvas must hide.
  */
 
-import type { FileEntry, Hunk, ModelOutput, Side, TextCaps } from '../contract/review-artifact.js'
+import type { FileEntry, Hunk, ModelOutput, TextCaps } from '../contract/review-artifact.js'
 import { modelOutputSchema } from '../contract/review-artifact.js'
-import { hunkForLine } from '../git/patch-lines.js'
+import { hunkForLine, hunkSpan } from '../git/patch-lines.js'
 import { pinnedRanges, rangesOverlap, type SourceRange } from './validate-folds.js'
 
-/** A fold this pass clipped, shrank, or dropped. `to` is null when the fold is gone. */
+/**
+ * A fold this pass clipped, shrank, or dropped. `where` is a path into the file as written back: a
+ * kept fold's own path, or the file a dropped fold was in, since it has no index any more. `to` is
+ * null when the fold is gone.
+ */
 export interface FoldFix {
   outcome: 'fixed'
   where: string
@@ -24,13 +28,6 @@ export interface FoldFix {
 }
 
 type Fold = SourceRange & { title: string }
-
-/** The lines a hunk spans on one side, with the same zero-length anchor rule as `hunkForLine`. */
-function hunkSpan(hunk: Hunk, side: Side): { start: number; end: number } {
-  const start = side === 'new' ? hunk.newStart : hunk.oldStart
-  const count = side === 'new' ? hunk.newLines : hunk.oldLines
-  return { start, end: start + Math.max(count, 1) - 1 }
-}
 
 function sameRange(a: SourceRange, b: SourceRange): boolean {
   return a.side === b.side && a.startLine === b.startLine && a.endLine === b.endLine
@@ -107,56 +104,65 @@ export function applyFoldFixes(output: unknown, files: readonly FileEntry[], cap
       const pinned = pinnedRanges(file, layer, model, hunks)
       const kept: typeof file.folds = []
 
-      file.folds.forEach((fold, k) => {
-        const fix = (to: SourceRange | null, reason: string): void => {
+      for (const fold of file.folds) {
+        const from = { side: fold.side, startLine: fold.startLine, endLine: fold.endLine }
+        const drop = (reason: string): void => {
           fixes.push({
             outcome: 'fixed',
-            where: `layers.${i}.files.${j}.folds.${k}`,
+            where: `layers.${i}.files.${j}`,
             title: fold.title,
-            from: { side: fold.side, startLine: fold.startLine, endLine: fold.endLine },
-            to,
+            from,
+            to: null,
             reason,
           })
         }
         if (fold.endLine < fold.startLine) {
           kept.push(fold)
-          return
+          continue
         }
 
         const clipped = clip(fold, file.hunks, hunks)
         if (typeof clipped === 'string') {
-          fix(null, clipped)
-          return
+          drop(clipped)
+          continue
         }
         let range = clipped
-        let reason = sameRange(range, fold) ? null : 'clipped to the chunk it starts in'
+        const steps = sameRange(range, fold) ? [] : ['clipped to the chunk it starts in']
 
         const pins = pinned.filter(pin => rangesOverlap(range, pin, hunks))
         if (pins.length > 0) {
           const piece = shrink(range, pins)
           const at = pins.map(formatRange).join(', ')
           if (piece === null) {
-            fix(null, `no single range around the attention point at ${at} keeps a line`)
-            return
+            drop(`no single range around the attention point at ${at} keeps a line`)
+            continue
           }
           range = piece
-          const shrunk = `shrunk to keep the attention point at ${at} visible`
-          reason = reason === null ? shrunk : `${reason}, then ${shrunk}`
+          steps.push(`shrunk to keep the attention point at ${at} visible`)
         }
 
-        const twin = kept.findIndex(earlier => sameRange(earlier, range))
-        if (twin !== -1) {
-          fix(null, `it repeats the range of "${kept[twin]?.title}"`)
-          return
+        const twin = kept.find(earlier => sameRange(earlier, range))
+        if (twin !== undefined) {
+          const once = steps.length === 0 ? '' : `once ${steps.join(' and ')} (${formatRange(range)}), `
+          drop(`${once}it repeats the range of "${twin.title}"`)
+          continue
         }
 
-        if (reason !== null) {
-          fix(range, reason)
+        if (steps.length > 0) {
+          const where = `layers.${i}.files.${j}.folds.${kept.length}`
+          fixes.push({
+            outcome: 'fixed',
+            where,
+            title: fold.title,
+            from,
+            to: range,
+            reason: steps.join(', then '),
+          })
           fold.startLine = range.startLine
           fold.endLine = range.endLine
         }
         kept.push(fold)
-      })
+      }
 
       file.folds.splice(0, file.folds.length, ...kept)
     })

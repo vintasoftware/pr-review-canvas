@@ -2,14 +2,16 @@
 // The identical-diff rule and line-level point carry against a real repository. The fake git
 // answers whatever a test hands it, so it can agree with a rule that is wrong about git; here the
 // heads are built with the real binary and the diffs are whatever git actually produces for them.
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createGit, execGit, GitError } from '../git/git.js'
 import { makeTempDir, makeTestContext, type TestContext } from '../testing/fakes.js'
+import { GenerationContextSchema } from '../contract/generation-context.js'
 import type { Point, ReviewArtifact } from '../contract/review-artifact.js'
+import { syntheticArtifact } from '../testing/synthetic.js'
 import { standsForHead } from './carry-over.js'
-import { fileDelta, splitBasis } from './incremental.js'
-import { carriedPointLines } from './point-carry.js'
+import { fingerprint } from './normalize.js'
+import { prepare } from './prepare.js'
 
 /** Every git command here runs through the adapter's own runner, so the setup cannot drift. */
 async function g(cwd: string, ...args: string[]): Promise<string> {
@@ -135,8 +137,9 @@ describe('the identical-diff rule against a real repository', () => {
   })
 })
 
-// Line-level carry of attention points against real diffs: the basis canvas's commit rewrites one
-// line and deletes another, and each later head is one commit on top of it.
+// Line-level carry of attention points against real diffs, through `prepare` as a run meets it:
+// the basis canvas's commit rewrites one line and deletes another, and each later head is one
+// commit on top of it.
 describe('carrying attention points by their lines against a real repository', () => {
   const BASE_APP = 'a\nb\nc\nd\ne\nf\ng\nh\n'
   // New side: a b d e F! g h, so F! is new line 5; the deleted c is old line 3.
@@ -162,6 +165,7 @@ describe('carrying attention points by their lines against a real repository', (
     await g(dir, 'add', '.')
     await g(dir, 'commit', '-q', '-m', 'base')
     base = await g(dir, 'rev-parse', 'HEAD')
+    await g(dir, 'checkout', '-q', '-b', 'feature')
     await write(dir, 'src/app.ts', CANVAS_APP)
     await write(dir, 'src/other.ts', 'export const other = 2\n')
     await g(dir, 'commit', '-q', '-am', 'the pull request')
@@ -180,32 +184,70 @@ describe('carrying attention points by their lines against a real repository', (
   afterAll(async () => rm(dir, { recursive: true, force: true }))
   beforeEach(async () => {
     t = await makeTestContext({ git: createGit(dir) })
+    await writeBasisCanvas()
   })
   afterEach(() => t.cleanup())
 
-  const point = (title: string, side: 'new' | 'old', line: number): Point =>
-    ({ kind: 'risk', level: 'check', title, path: 'src/app.ts', side, line, body: '' }) as Point
-  const changedLine = point('The rewritten line', 'new', 5)
-  const deletedLine = point('The deleted line', 'old', 3)
+  const point = (id: string, title: string, side: 'new' | 'old', line: number): Point => ({
+    id,
+    fingerprint: fingerprint({ kind: 'risk', path: 'src/app.ts', title }),
+    origin: 'model',
+    kind: 'risk',
+    level: 'check',
+    title,
+    path: 'src/app.ts',
+    side,
+    line,
+    body: 'Check it.',
+  })
+
+  /** A canvas of the basis commit, the one a later head's prepare builds on. */
+  async function writeBasisCanvas(): Promise<void> {
+    const derived = await t.ctx.derived.ensure(canvas, base)
+    const template = syntheticArtifact()
+    const layer = template.layers[0]
+    if (layer === undefined) {
+      throw new Error('fixture changed')
+    }
+    const artifact: ReviewArtifact = {
+      ...template,
+      pr: { ...template.pr, headSha: canvas, mergeBaseSha: base },
+      files: derived.files,
+      layers: [
+        {
+          ...layer,
+          files: derived.files.map(f => ({
+            path: f.path,
+            hunks: f.hunks.map(h => h.id),
+            isTest: false,
+            annotations: [],
+          })),
+        },
+      ],
+      points: [point('p-1', 'The rewritten line', 'new', 5), point('p-2', 'The deleted line', 'old', 3)],
+    }
+    await t.ctx.canvases.write(canvas, artifact, {
+      formatVersion: 1,
+      tool: { name: 'pr-review', version: '0.5.0' },
+      repo: template.pr.repo,
+      headSha: canvas,
+      mergeBaseSha: base,
+      baseRef: 'main',
+      headRef: 'feature',
+      generatedAt: '2026-09-10T11:00:00.000Z',
+      generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
+    })
+  }
 
   async function split(head: string) {
-    const [before, after] = await Promise.all([
-      t.ctx.derived.readOrBuild(canvas, base),
-      t.ctx.derived.readOrBuild(head, base),
-    ])
-    if (before === null || after === null) {
-      throw new Error('diff not built')
-    }
-    const artifact = { layers: [], points: [changedLine, deletedLine] } as unknown as ReviewArtifact
-    const delta = fileDelta(before, after)
-    const lines = await carriedPointLines(
-      artifact.points,
-      delta,
-      { sha: canvas, derived: before },
-      { sha: head, derived: after },
-      (sha, side, filePath) => t.ctx.derived.readLines(sha, side, filePath, 1, Number.MAX_SAFE_INTEGER)
+    const result = await prepare(
+      t.ctx,
+      { kind: 'refs', base: 'main', head },
+      { force: false, log: () => undefined }
     )
-    return splitBasis(artifact, delta, lines).points.map(p => [p.title, p.status, p.headLines])
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
+    expect(context.basis?.canvasSha).toBe(canvas)
+    return context.basis?.points.map(p => [p.title, p.status, p.headLines])
   }
 
   it('carries both points past lines added above them, at their new lines', async () => {
@@ -223,13 +265,70 @@ describe('carrying attention points by their lines against a real repository', (
   })
 
   it('re-judges the point whose line the head deleted', async () => {
-    expect((await split(heads.deleted))[0]).toEqual(['The rewritten line', 're-judged', undefined])
+    expect((await split(heads.deleted))?.[0]).toEqual(['The rewritten line', 're-judged', undefined])
   })
 
   it('carries both points by the file rule when the head leaves their file alone', async () => {
     expect(await split(heads.elsewhere)).toEqual([
       ['The rewritten line', 'carried', undefined],
       ['The deleted line', 'carried', undefined],
+    ])
+  })
+
+  it('carries a point along a second update, from the canvas of the first', async () => {
+    // Publish stands in: the shifted head gets a canvas with the point at its new line.
+    const first = await split(heads.shifted)
+    expect(first?.[0]).toEqual(['The rewritten line', 'carried', { side: 'new', line: 7, endLine: 7 }])
+    const shiftedDerived = await t.ctx.derived.ensure(heads.shifted, base)
+    const stored = await t.ctx.canvases.readArtifact(canvas)
+    if (stored === null) {
+      throw new Error('basis canvas missing')
+    }
+    await t.ctx.canvases.write(
+      heads.shifted,
+      {
+        ...stored,
+        pr: { ...stored.pr, headSha: heads.shifted },
+        files: shiftedDerived.files,
+        layers: stored.layers.map(l => ({
+          ...l,
+          files: shiftedDerived.files.map(f => ({
+            path: f.path,
+            hunks: f.hunks.map(h => h.id),
+            isTest: false,
+            annotations: [],
+          })),
+        })),
+        points: [point('p-1', 'The rewritten line', 'new', 7), point('p-2', 'The deleted line', 'old', 3)],
+        generatedAt: '2026-09-10T12:00:00.000Z',
+        basisCanvasSha: canvas,
+      },
+      {
+        formatVersion: 1,
+        tool: { name: 'pr-review', version: '0.5.0' },
+        repo: stored.pr.repo,
+        headSha: heads.shifted,
+        mergeBaseSha: base,
+        baseRef: 'main',
+        headRef: 'shifted',
+        generatedAt: '2026-09-10T12:00:00.000Z',
+        generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
+      }
+    )
+    await g(dir, 'checkout', '-q', '-b', 'shifted-again', heads.shifted)
+    await write(dir, 'src/app.ts', `// one more\n// header\n// more\n${CANVAS_APP}`)
+    await g(dir, 'commit', '-q', '-am', 'shifted again')
+    const again = await g(dir, 'rev-parse', 'HEAD')
+    const result = await prepare(
+      t.ctx,
+      { kind: 'refs', base: 'main', head: again },
+      { force: false, log: () => undefined }
+    )
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
+    expect(context.basis?.canvasSha).toBe(heads.shifted)
+    expect(context.basis?.points.map(p => [p.title, p.headLines])).toEqual([
+      ['The rewritten line', { side: 'new', line: 8, endLine: 8 }],
+      ['The deleted line', { side: 'old', line: 3, endLine: 3 }],
     ])
   })
 })

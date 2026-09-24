@@ -62,7 +62,7 @@ export function fileDelta(basis: Derived, head: Derived): FileDelta {
 export function splitBasis(
   artifact: ReviewArtifact,
   delta: FileDelta,
-  lineCarried: ReadonlyMap<Point, BasisPointLines> = new Map()
+  lineCarried: ReadonlyMap<Point, BasisPointLines>
 ): Omit<BasisSplit, 'canvasSha' | 'reviewJsonPath' | 'files'> {
   const unchanged = new Set(delta.unchanged)
   const layers: BasisSplitLayer[] = artifact.layers.map(layer => {
@@ -77,14 +77,13 @@ export function splitBasis(
     }
   })
   const points: BasisSplitPoint[] = artifact.points.map(point => {
-    const split: BasisSplitPoint = {
-      kind: point.kind,
-      path: point.path,
-      title: point.title,
-      status: unchanged.has(point.path) ? 'carried' : 're-judged',
-    }
-    const headLines = unchanged.has(point.path) ? undefined : lineCarried.get(point)
-    return headLines === undefined ? split : { ...split, status: 'carried', headLines }
+    const split = { kind: point.kind, path: point.path, title: point.title }
+    const headLines = lineCarried.get(point)
+    return unchanged.has(point.path)
+      ? { ...split, status: 'carried' }
+      : headLines === undefined
+        ? { ...split, status: 're-judged' }
+        : { ...split, status: 'carried', headLines }
   })
   return { layers, points }
 }

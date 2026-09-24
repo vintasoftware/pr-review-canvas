@@ -76,7 +76,8 @@ describe('applyFoldFixes', () => {
       'dropped fold "lines 7-12" at new 7-12: it starts in no chunk assigned to this file in this layer',
       'dropped fold "lines 11-12" at new 11-12: it starts in no chunk assigned to this file in this layer',
     ])
-    expect(fixes.map(fix => fix.where)).toEqual(['layers.0.files.0.folds.0', 'layers.0.files.0.folds.1'])
+    // A dropped fold has no index left, so it is reported on its file.
+    expect(fixes.map(fix => fix.where)).toEqual(['layers.0.files.0', 'layers.0.files.0'])
     expect(foldsOf(output)).toEqual([[1, 2]])
   })
 
@@ -87,9 +88,22 @@ describe('applyFoldFixes', () => {
 
     expect(fixes.map(describeFoldFix)).toEqual([
       'dropped fold "run() again" at new 3-5: it repeats the range of "run()"',
-      'dropped fold "run() wide" at new 3-9: it repeats the range of "run()"',
+      'dropped fold "run() wide" at new 3-9: once clipped to the chunk it starts in (new 3-5), ' +
+        'it repeats the range of "run()"',
     ])
     expect(foldsOf(output)).toEqual([[3, 5]])
+  })
+
+  it('reports a kept fold at its index in the file as written back, after earlier drops', () => {
+    const output = model([fold(3, 5), fold(3, 5), fold(12, 20), fold(1, 2)])
+
+    const fixes = applyFoldFixes(output, files, TEXT_CAPS)
+
+    expect(fixes.map(fix => [fix.where, fix.title])).toEqual([
+      ['layers.0.files.0', 'lines 3-5'],
+      ['layers.0.files.0.folds.1', 'lines 12-20'],
+    ])
+    expect(output.layers[0]?.files[0]?.folds?.[1]).toMatchObject({ startLine: 12, endLine: 14 })
   })
 
   it('shrinks a fold so an attention point at its edge stays visible', () => {
