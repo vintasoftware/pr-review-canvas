@@ -77,7 +77,7 @@ publish again, at most three times.
 Report the number of cards and the `deckUrl` (`http://localhost:<port>/deck/<branch|uncommitted>`),
 and tell the user to start `pr-review serve` if it is not running. On the page:
 
-- `h` picks side A, `l` picks side B, or drag the card left or right;
+- `a` picks side A, `b` picks side B, or drag the card left or right;
 - `n` says neither side fits and takes a note, `s` skips a card and leaves it to reviewers;
 - `u` undoes, `e` edits a justification, `o` shows the code, `?` lists every key.
 

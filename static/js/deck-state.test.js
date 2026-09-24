@@ -44,7 +44,7 @@ function press(key, init = {}, target = document.body) {
 
 describe('deckKeyAction', () => {
   it('maps the deck keys and leaves the arrows alone', () => {
-    expect(['h', 'l', 'n', 's', 'u', 'e', 'r', 'o', '?', 'Escape'].map(k => press(k))).toEqual([
+    expect(['a', 'b', 'n', 's', 'u', 'e', 'r', 'o', '?', 'Escape'].map(k => press(k))).toEqual([
       'pick-a',
       'pick-b',
       'neither',
@@ -62,10 +62,10 @@ describe('deckKeyAction', () => {
 
   it('stays quiet while typing and under modifiers, except for Escape', () => {
     const area = document.createElement('textarea')
-    expect(press('h', {}, area)).toBeNull()
+    expect(press('a', {}, area)).toBeNull()
     expect(press('Escape', {}, area)).toBe('escape')
-    expect(press('l', { ctrlKey: true })).toBeNull()
-    expect(press('l', { metaKey: true })).toBeNull()
+    expect(press('b', { ctrlKey: true })).toBeNull()
+    expect(press('b', { metaKey: true })).toBeNull()
   })
 })
 

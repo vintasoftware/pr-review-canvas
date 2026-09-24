@@ -22,8 +22,8 @@
 
 /** Rows of the help dialog, in the order a first-time reader needs them. */
 export const DECK_KEY_HELP = [
-  { keys: 'h', what: 'pick side A, the left card half' },
-  { keys: 'l', what: 'pick side B, the right card half' },
+  { keys: 'a', what: 'pick side A, the left card half' },
+  { keys: 'b', what: 'pick side B, the right card half' },
   { keys: 'n', what: 'neither side: say what you want instead' },
   { keys: 's', what: 'skip: leave the decision to reviewers' },
   { keys: 'u', what: 'undo the last pick' },
@@ -71,8 +71,8 @@ function isTyping(target) {
 
 /** @type {Record<string, DeckAction>} */
 const KEYS = {
-  h: 'pick-a',
-  l: 'pick-b',
+  a: 'pick-a',
+  b: 'pick-b',
   n: 'neither',
   s: 'skip',
   u: 'undo',

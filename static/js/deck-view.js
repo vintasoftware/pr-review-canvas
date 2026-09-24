@@ -48,7 +48,7 @@ function inline(text) {
 function sideHtml(card, side) {
   const content = card[side]
   const letter = side.toUpperCase()
-  const key = side === 'a' ? 'h' : 'l'
+  const key = side
   const now = card.current === side ? '<span class="deck-now">in code now</span>' : ''
   const lang = content.snippet?.lang ?? langForPath(card.path)
   const snippet =

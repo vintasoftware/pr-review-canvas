@@ -88,14 +88,14 @@ test('deals one card at a time, and a desktop page never scrolls', async ({ page
   }
 })
 
-test('picks with h and l, takes a note with n, skips with s, undoes with u', async ({ page, deckUrl }) => {
+test('picks with a and b, takes a note with n, skips with s, undoes with u', async ({ page, deckUrl }) => {
   await page.goto(deckUrl)
   await expect(page.locator('.deck-card h2')).toHaveText('First')
-  await page.keyboard.press('l')
+  await page.keyboard.press('b')
   await expect(page.locator('.deck-card h2')).toHaveText('Second')
   await page.keyboard.press('u')
   await expect(page.locator('.deck-card h2')).toHaveText('First')
-  await page.keyboard.press('h')
+  await page.keyboard.press('a')
   await expect(page.locator('.deck-card h2')).toHaveText('Second')
 
   await page.keyboard.press('n')
@@ -112,6 +112,11 @@ test('picks with h and l, takes a note with n, skips with s, undoes with u', asy
   await expect(page.locator('.deck-tally-comments .deck-tally-n')).toHaveText('1')
   await expect(page.locator('.deck-tally-skipped .deck-tally-n')).toHaveText('1')
   await expect(page.locator('.deck-fixes-body')).toContainText('neither side. hold on, log and continue')
+  // The finish screen grows with the page; nothing on it scrolls inside a box of its own.
+  for (const selector of ['.deck-finish', '.deck-fixes-body', '.deck-table']) {
+    const inner = await page.locator(selector).evaluate(el => el.scrollHeight - el.clientHeight)
+    expect(inner, selector).toBe(0)
+  }
   await expect(page.locator('.deck-run code')).toHaveText('/pr-self-review-fix uncommitted')
 
   // A pick can be changed from the finish screen.

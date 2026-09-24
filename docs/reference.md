@@ -689,10 +689,11 @@ published, and having PR canvas generation read settled decisions.
 
 ### Deck page
 
-`/deck/branch` and `/deck/uncommitted` show one card at a time. Keys: `h` side A, `l` side B,
+`/deck/branch` and `/deck/uncommitted` show one card at a time. Keys: `a` side A, `b` side B,
 `n` neither (with a note), `s` skip, `u` undo, `e` edit a justification, `r` change where it is
 recorded, `o` the code drawer, `?` help, `Esc` close. Dragging a card left or right past 140
-pixels picks that side. Arrow keys never pick. With reduced motion on, cards cross-fade.
+pixels picks that side. Arrow keys never pick. The deck page has its own keys: `a` picks side A here,
+while on the canvas page it asks AI Chat. With reduced motion on, cards cross-fade.
 
 The API is `GET /api/deck/<review>`, `PUT` and `DELETE /api/deck/<review>/picks/<card>` (the
 `headSha` in the body or query must match the deck's, or the answer is `DECK_STALE`), and

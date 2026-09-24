@@ -55,7 +55,7 @@ time. At 1080p and above, the page never scrolls.
 
 | Key       | Action                                                      |
 | --------- | ----------------------------------------------------------- |
-| `h` / `l` | pick side A (left) or side B (right), or drag the card      |
+| `a` / `b` | pick side A (left) or side B (right), or drag the card      |
 | `n`       | neither side: say what you want instead                     |
 | `s`       | skip: leave the decision to reviewers                       |
 | `u`       | undo the last pick                                          |

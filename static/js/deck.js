@@ -208,7 +208,7 @@ export async function bootDeck() {
 </header>
 <div class="deck-stage"><div class="deck-table"></div>
 <aside class="deck-drawer" aria-label="The code this card is about" hidden></aside></div>
-<footer class="deck-hints" aria-hidden="true"><span><kbd>h</kbd> A</span><span><kbd>l</kbd> B</span><span><kbd>n</kbd> neither</span><span><kbd>s</kbd> skip</span><span><kbd>u</kbd> undo</span><span><kbd>e</kbd> edit why</span><span><kbd>o</kbd> code</span><span><kbd>?</kbd> help</span></footer>
+<footer class="deck-hints" aria-hidden="true"><span><kbd>a</kbd> A</span><span><kbd>b</kbd> B</span><span><kbd>n</kbd> neither</span><span><kbd>s</kbd> skip</span><span><kbd>u</kbd> undo</span><span><kbd>e</kbd> edit why</span><span><kbd>o</kbd> code</span><span><kbd>?</kbd> help</span></footer>
 ${deckHelpHtml()}`
 
   const table = /** @type {HTMLElement} */ (main.querySelector('.deck-table'))
@@ -265,6 +265,7 @@ ${deckHelpHtml()}`
     closeDrawer()
     mode = 'card'
     main.classList.remove('deck-finished')
+    window.scrollTo(0, 0)
     drawPips()
     const top = state.top()
     if (top === null) {
