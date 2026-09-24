@@ -8,6 +8,13 @@
   `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
   `k` step through the layers, and a link into a layer shows that layer. The default, `all`, keeps
   the canvas as one page.
+- Collapse toggles draw a chevron icon in place of the `>` character.
+- Click a file's name to collapse or open its card.
+
+### Server
+
+- `serve` opens the canvas in the default browser once the port is bound. Pass `--no-open` to skip
+  this. The browser also stays closed when `CI` is set.
 
 ## 0.5.0
 

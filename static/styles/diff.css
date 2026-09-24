@@ -159,8 +159,8 @@ tr.more td {
   text-align: left;
 }
 .fold-toggle .chev {
-  display: inline-block;
-  margin-right: 8px;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 .fold-lines {
   color: var(--fg-muted);

@@ -45,7 +45,7 @@ const SUBCOMMANDS = [
 
 const USAGE = `usage: pr-review <command> [flags]
 
-  serve [--port 3010] [--repo <dir>] [--data-dir <dir>] [--fixture-canvas <review.json>]
+  serve [--port 3010] [--repo <dir>] [--data-dir <dir>] [--fixture-canvas <review.json>] [--no-open]
         [--agent claude|codex] [--model <id>]   (chat only; wins over .pr-review/settings.yml)
   prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
           [--base <ref>] [--repo <dir>] [--data-dir <dir>]
@@ -124,6 +124,7 @@ async function serve(argv: string[]): Promise<number> {
       'fixture-canvas': { type: 'string' },
       agent: { type: 'string' },
       model: { type: 'string' },
+      'no-open': { type: 'boolean' },
     },
     strict: true,
   })
@@ -135,7 +136,9 @@ async function serve(argv: string[]): Promise<number> {
   })
   const skill = await checkSkill(ctx.config.repoRoot)
   if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)
-  startServer(ctx, line => process.stderr.write(`${line}\n`))
+  // CI has no browser to open.
+  const open = values['no-open'] !== true && process.env['CI'] === undefined
+  startServer(ctx, line => process.stderr.write(`${line}\n`), { open })
   return EXIT.ok
 }
 

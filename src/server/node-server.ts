@@ -1,14 +1,24 @@
 import { serve } from '@hono/node-server'
 import { createApp } from './app.js'
 import type { AppContext } from './context.js'
+import { openBrowser } from './open-browser.js'
 
-/** Binds 127.0.0.1 only. The Host allowlist in security.ts covers the rest. */
-export function startServer(ctx: AppContext, log: (line: string) => void): { close: () => void } {
+/**
+ * Binds 127.0.0.1 only. The Host allowlist in security.ts covers the rest. With `open`, the
+ * default browser opens the index once the port is bound.
+ */
+export function startServer(
+  ctx: AppContext,
+  log: (line: string) => void,
+  opts: { open?: boolean } = {}
+): { close: () => void } {
   const app = createApp({ ...ctx, log })
   const server = serve({ fetch: app.fetch, port: ctx.config.port, hostname: '127.0.0.1' }, info => {
-    log(
-      `pr-review ${ctx.version} · http://localhost:${info.port}/ · ${ctx.config.repo.owner}/${ctx.config.repo.name}`
-    )
+    const url = `http://localhost:${info.port}/`
+    log(`pr-review ${ctx.version} · ${url} · ${ctx.config.repo.owner}/${ctx.config.repo.name}`)
+    if (opts.open === true) {
+      openBrowser(url, log)
+    }
     log(`data dir ${ctx.config.dataDir}`)
     if (ctx.fixtureArtifact !== null) {
       log(`fixture canvas ${ctx.config.fixtureCanvasPath ?? ''} (dev only): every PR reports ready`)

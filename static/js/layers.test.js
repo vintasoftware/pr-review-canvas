@@ -165,7 +165,7 @@ describe('layer sections', () => {
     expect(section?.querySelector('.layer-h .risks .pill')?.textContent).toBe('schema')
     expect(section?.querySelector('.layer-h summary')).toBeNull()
     const layerChevron = section?.querySelector('.layer-h > .chev')
-    expect(layerChevron?.textContent).toBe('>')
+    expect(layerChevron?.querySelector('svg.chev-icon')).not.toBeNull()
     expect(layerChevron?.getAttribute('aria-expanded')).toBe('true')
     expect(layerChevron?.getAttribute('aria-label')).toBe('Collapse layer')
     expect(layerChevron?.hasAttribute('disabled')).toBe(false)
@@ -207,7 +207,8 @@ describe('layer sections', () => {
     expect(cards[2]?.classList.contains('test')).toBe(true)
     // File header: chevron toggle, then the path, then the right-side controls with no collapse command.
     const fileChevron = cards[0]?.querySelector('.file-h > .chev')
-    expect(fileChevron?.textContent).toBe('>')
+    expect(fileChevron?.querySelector('svg.chev-icon')).not.toBeNull()
+    expect(cards[0]?.querySelector('.file-h > .path')?.getAttribute('data-act')).toBe('toggle-card')
     expect(fileChevron?.getAttribute('aria-expanded')).toBe('true')
     expect(fileChevron?.getAttribute('aria-label')).toBe('Collapse file')
     expect(fileChevron?.hasAttribute('disabled')).toBe(false)
