@@ -37,23 +37,8 @@ export const DECK_CAPS = {
 /** Lines of code a side may show; more than that belongs in the diff drawer. */
 export const SNIPPET_MAX_LINES = 8
 
-/**
- * Characters a side's sketch may have. A sketch is the body of a p5 instance-mode function that
- * draws one side's consequence; the deck page runs it in a sandboxed frame with no network.
- */
-export const SKETCH_MAX_CHARS = 3000
-
 /** Characters a side's scene may have: a small HTML fragment, laid out by the kit's classes. */
 export const SCENE_MAX_CHARS = 4000
-
-/** How a story step reads: the tone colors it. */
-export const STORY_TONES = ['neutral', 'good', 'bad', 'warn'] as const
-
-/** A story is two to four steps of what happens after the side is picked. */
-export const STORY_STEPS = { min: 2, max: 4 } as const
-
-/** Visible characters of a story step. */
-export const STORY_STEP_CAP = 70
 
 /** Card keys name a card across re-decks, so they are short, stable slugs. */
 export const CARD_KEY_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
@@ -76,29 +61,11 @@ export const CardSideSchema = z.object({
   consequence: text(DECK_CAPS.consequence),
   snippet: SnippetSchema.optional(),
   /**
-   * p5 code drawing this side's consequence, as the body of `function (p, ui)`. It assigns
-   * `p.setup` and `p.draw`; `ui` gives the 400×300 stage, the palette, the animation state, and a
-   * small drawing kit. Omitted, the side shows its consequence as text instead.
-   */
-  sketch: z.string().min(1).max(SKETCH_MAX_CHARS).optional(),
-  /**
    * An HTML fragment picturing this side's consequence with the scene kit's classes and icons.
-   * The deck page shows it in a frame that runs no script and reaches no network.
+   * The deck page shows it in a frame that runs no script and reaches no network; without one, the
+   * side shows its consequence alone.
    */
   scene: z.string().min(1).max(SCENE_MAX_CHARS).optional(),
-  /** What happens once this side is picked, as two to four concrete steps; the last is the outcome. */
-  story: z
-    .array(
-      z.object({
-        /** A Lucide icon name, such as `database` or `circle-x`. */
-        icon: z.string().min(1),
-        text: text(STORY_STEP_CAP),
-        tone: z.enum(STORY_TONES).optional(),
-      })
-    )
-    .min(STORY_STEPS.min)
-    .max(STORY_STEPS.max)
-    .optional(),
   /** The one-line justification the author accepts by picking this side, or edits first. */
   why: text(DECK_CAPS.why),
   record: z.enum(RECORD_TARGETS),

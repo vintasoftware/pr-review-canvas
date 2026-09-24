@@ -1,7 +1,10 @@
 // @vitest-environment node
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { PACKAGE_ROOT } from '../paths.js'
 import { iconsFor, iconSvg } from './icons.js'
 import { inlineIcons } from './scene.js'
-import { sceneIcons, sceneProblems, storyProblems } from './validate-scene.js'
+import { sceneIcons, sceneProblems } from './validate-scene.js'
 
 describe('icons', () => {
   it('reads a Lucide icon as bare SVG that takes its color and size from the text', () => {
@@ -47,6 +50,13 @@ describe('sceneProblems', () => {
     expect(sceneIcons(ok)).toEqual(['circle-x'])
   })
 
+  it('passes the example the deck prompt teaches with', async () => {
+    const prompt = await readFile(path.join(PACKAGE_ROOT, 'prompts', 'self-review-deck.md'), 'utf8')
+    const example = /```html\n([\s\S]*?)```/.exec(prompt)?.[1]
+    expect(example).toContain('class="scene"')
+    expect(sceneProblems(example as string)).toEqual([])
+  })
+
   it('names what runs, loads, or leaves the frame', () => {
     expect(
       sceneProblems('<p>x</p><script>1</script><IMG src="a.png"><style>p{}</style><p onclick="go()">y</p>')
@@ -73,14 +83,5 @@ describe('sceneProblems', () => {
     expect(sceneProblems('just words')).toEqual([
       'shows no text; a scene says what happens, with words the reader can take in',
     ])
-  })
-})
-
-describe('storyProblems', () => {
-  it('names each missing icon once', () => {
-    expect(storyProblems([{ icon: 'user' }, { icon: 'nope' }, { icon: 'nope' }])).toEqual([
-      'names icons that do not exist: nope (Lucide names, such as database or circle-x)',
-    ])
-    expect(storyProblems([{ icon: 'user' }, { icon: 'send' }])).toEqual([])
   })
 })

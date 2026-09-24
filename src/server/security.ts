@@ -66,8 +66,8 @@ export function contentSecurityPolicy(nonce: string, opts: { frames?: boolean } 
     "img-src 'self' data: https:",
     "font-src 'self'",
     "connect-src 'self'",
-    // The deck page frames its card sketches from this server; a sketch frame that navigates
-    // anywhere else is blocked by this too.
+    // The deck page frames its cards' scenes from this server; a frame that navigates anywhere
+    // else is blocked by this too.
     ...(opts.frames === true ? ["frame-src 'self'"] : []),
     "form-action 'self'",
     "base-uri 'none'",
@@ -97,30 +97,6 @@ export function sceneFramePolicy(): string {
   ].join('; ')
 }
 
-/** The page a card's sketch runs in. */
-export const SKETCH_FRAME_PATH = '/deck-sketch'
-
-/**
- * The sketch frame's policy. Sketches are generated code, so the frame is sandboxed by its own
- * header as well as by the iframe attribute (an opaque origin: no cookies, storage, or access to
- * the deck page), may reach no network, and may be framed only by this server's pages. Evaluating
- * the sketch needs 'unsafe-eval', which is why the sketch never runs in the deck page itself.
- */
-export function sketchFramePolicy(): string {
-  return [
-    'sandbox allow-scripts',
-    "default-src 'none'",
-    "script-src 'self' 'unsafe-eval'",
-    "style-src 'unsafe-inline'",
-    'img-src data: blob:',
-    "connect-src 'none'",
-    "form-action 'none'",
-    "base-uri 'none'",
-    "frame-ancestors 'self'",
-    "object-src 'none'",
-  ].join('; ')
-}
-
 /** A fresh nonce per HTML response, so the shell's inline scripts run and nothing else does. */
 export function createNonce(): string {
   return randomBytes(16).toString('base64')
@@ -139,11 +115,9 @@ export function applyResponseHeaders(res: Response, path: string, nonce: string)
   if ((res.headers.get('content-type') ?? '').startsWith('text/html')) {
     res.headers.set(
       'content-security-policy',
-      path === SKETCH_FRAME_PATH
-        ? sketchFramePolicy()
-        : path.startsWith(SCENE_FRAME_PREFIX)
-          ? sceneFramePolicy()
-          : contentSecurityPolicy(nonce, { frames: path.startsWith('/deck/') })
+      path.startsWith(SCENE_FRAME_PREFIX)
+        ? sceneFramePolicy()
+        : contentSecurityPolicy(nonce, { frames: path.startsWith('/deck/') })
     )
   }
 }

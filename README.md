@@ -50,8 +50,8 @@ The skill writes a short deck of **decision cards**, at most one per 100 changed
 more than ten. Each card is one choice your change makes that a reasonable engineer could make
 either way, such as handling a rare case or simplifying, or keeping backwards compatibility or
 breaking cleanly. Each card has two sides, A and B, and marks the one the code does now. The
-card shows each side as a small animation of what picking it leads to; `i` turns it over to the
-words. Open
+card shows each side's consequence in a sentence and a small picture of it; `i` turns the card
+over to the reasons and the code. Open
 **http://localhost:3010/deck/branch** (or `/deck/uncommitted`, or `/deck/<pr-number>`) and work through the cards one at a
 time. At 1080p and above, the page never scrolls; on a phone the sides stack and you tap or drag.
 A pull request works too: its head comes from the forge, so fixes reach the next deck once they
@@ -64,7 +64,7 @@ are pushed.
 | `s`       | skip: leave the decision to reviewers                       |
 | `u`       | undo the last pick                                          |
 | `e` / `r` | edit a side's justification, or change where it is recorded |
-| `i`       | turn the card over: context, consequences, justifications   |
+| `i`       | turn the card over: context, justifications, and the code   |
 | `o`       | show the code the card is about                             |
 
 When the deck is cleared, the page writes a **fix list** from every pick that disagrees with the

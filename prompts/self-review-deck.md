@@ -89,13 +89,13 @@ a valid deck. When more real decisions remain than fit, drop the ones with the l
   cost as plainly as its benefit, and each `why` is the best case the author would make for that
   side. Which side is A does not matter; publish shuffles them. Each has:
   - `label`: the choice in a few words.
-  - `consequence`: what follows from picking it, cost included, in one or two sentences.
+  - `consequence`: what follows from picking it, cost included, in one or two sentences. It sits
+    on the card's front, above the scene.
   - `snippet` (optional): `{ "code": "...", "lang": "ts" }`, at most {{SNIPPET_MAX_LINES}} lines
-    that show this side: the change's own code for the current side, a sketch for the other.
-    `lang` is a highlight.js language name; leave it out to use the anchor file's.
-  - `story`: what happens once this side is picked, as two to four steps. See **The story**.
-  - `scene`: the same consequence as a small picture. See **The scene**.
-  - `sketch` (optional): a p5 animation of it instead. See **The sketch**.
+    that show this side: the change's own code for the current side, an outline of the other.
+    `lang` is a highlight.js language name; leave it out to use the anchor file's. Snippets show
+    on the card's back, next to the chunk of the diff the card is anchored to.
+  - `scene`: this side's consequence as a small picture. See **The scene**.
   - `why`: the one-line justification the author accepts by picking this side. Write it in the
     author's voice ("Empty rows are exports from the old tool; skipping them is expected.").
   - `record`: where that justification belongs once picked. Ask who needs the reason, and when:
@@ -107,156 +107,73 @@ a valid deck. When more real decisions remain than fit, drop the ones with the l
     - `none` when the code itself will show it, which is usually the side that changes the code.
 - `current`: `"a"` or `"b"` for the side the code implements now, or `null` when it does neither.
 
-## The story
-
-A side's `story` tells, in two to four steps, **what happens once the author picks it**: a
-concrete little scenario, not a summary. The page draws the steps as a colored timeline under the
-side's label, the last step as the outcome, so most authors decide from the two stories alone.
-
-- **Concrete beats abstract.** Name the real thing: the error code, the file, the command, the
-  count, the person. "Reviewer submits 3 comments; 1 was written on a line that moved" beats
-  "Some drafts may be stale".
-- **Two to four steps, one moment each**, in order: what the reader does or what arrives, what the
-  code does with it, and the outcome. The last step is the consequence the author is choosing,
-  cost included, and the one that decides the card.
-- **Same situation on both sides.** Start both stories from the same moment, so only what the code
-  does differs.
-- Each step: `{ "icon": "<Lucide name>", "text": "…", "tone": "neutral" | "good" | "bad" | "warn" }`,
-  at most 70 visible characters, inline code in backticks allowed. `tone` colors the step: `bad`
-  for a cost, `good` for a benefit, `warn` for a risk, `neutral` (the default) for setup. Icons are
-  [Lucide](https://lucide.dev/icons) names, such as `user`, `users`, `message-square`,
-  `git-pull-request`, `git-commit-horizontal`, `file-code`, `database`, `server`, `cloud`,
-  `hard-drive`, `lock`, `lock-open`, `key-round`, `shield-check`, `shield-alert`, `clock`,
-  `timer`, `hourglass`, `triangle-alert`, `circle-x`, `circle-check`, `ban`, `refresh-cw`,
-  `repeat`, `copy`, `trash-2`, `eye`, `eye-off`, `send`, `inbox`, `list-checks`, `bug`, `zap`,
-  `package`, `settings`, `terminal`, `history`, `undo-2`, `split`, `merge`, `layers`, `link`.
-  Validation refuses a name that does not exist.
-
 ## The scene
 
-A side's `scene` is a small HTML fragment that pictures the same consequence as the story, laid
-out by the kit's classes: the browser lines everything up, so write structure, not coordinates.
-It shows under the side's label and its one-line `consequence`, in a frame about 600 × 460 pixels
-on a desktop that runs no script and loads nothing. Make it vivid and quick to grasp: a few big
-things, strong color for the outcome, real names and numbers.
+The front of a card shows the title and, per side, its label, its one-line `consequence`, and its
+`scene`: a small HTML fragment that pictures what happens when the author picks that side. The
+reasons and the code are one key away, on the card's back, and most authors decide from the front
+alone. So the scene carries the side: at a glance, it shows **what happens, to whom, and what it
+costs**.
 
-- Layout: `scene` (the root column), `row` (items side by side; `row spread` pushes them apart),
-  `col`, `grid` (`style="--cols: 3"`), `stack` (items tight on top of each other).
-- Things: `box` (a rounded panel; `box ghost` dashed and empty, `box solid` filled), `chip` (a
-  small pill), `banner` (a full-width bar: the outcome), `big` (a large number or word), `label`
-  (a small caps caption), `small`, `code` (inline code), `strike`, `fade`.
-- Tones, on any element: `ink` (this side's color), `good`, `bad`, `warn`, `muted`. A toned
-  `box`, `chip`, `banner`, or `big` colors itself.
-- Icons: `<i data-icon="database" class="lg"></i>` with a Lucide name as above; sizes `lg`, `xl`.
+- **Concrete beats abstract.** Name the real thing: the error code, the file, the command, the
+  count, the person. `3 drafts → CANVAS_STALE, nothing posted` beats "some drafts may be stale".
+- **Same scene on both sides.** Draw both sides of a card with the same actors in the same order,
+  so the eye goes straight to what differs: the count, the color, the banner.
+- **One outcome.** End with a `banner` that states the side's consequence, cost included, in a few
+  words, toned `good`, `bad`, or `warn`.
+- **Few things, big.** Two or three boxes and an arrow or two, a big number where a count matters.
+  The frame is about 600 × 440 pixels on a desktop; a scene that needs more reads as clutter.
+- **Complementary to the consequence line**, which sits right above the scene: the line says it in
+  a sentence, the scene shows the end state with the numbers. Do not repeat the sentence.
+
+A scene is written with the kit's classes, and the browser lays it out: write structure, never
+coordinates. The frame wraps your fragment in its root, so start with `<div class="scene">`.
+
+- Layout: `scene` (the column everything sits in), `row` (items side by side; `row spread` pushes
+  them apart), `col`, `grid` (`style="--cols: 3"`), `stack` (items tight on top of each other).
+- Things: `box` (a rounded panel; a `label` inside it is its caption; `box ghost` dashed and
+  empty, `box solid` filled), `chip` (a small pill), `banner` (a full-width bar: the outcome),
+  `big` (a large number or word), `label` (small caps), `small`, `code` (inline code), `strike`,
+  `fade`.
+- Tones, on any element: `ink` (this side's color), `good`, `bad`, `warn`, `muted`. A toned `box`,
+  `chip`, `banner`, `big`, `label`, or `small` colors itself; inside a filled `chip`, `banner`, or
+  `box solid`, text and icons turn to the paper color on their own.
+- Icons: `<i data-icon="database" class="lg"></i>`, by [Lucide](https://lucide.dev/icons) name:
+  `user`, `users`, `message-square`, `git-pull-request`, `git-commit-horizontal`, `file-code`,
+  `database`, `server`, `cloud`, `hard-drive`, `lock`, `lock-open`, `key-round`, `shield-check`,
+  `shield-alert`, `clock`, `timer`, `hourglass`, `triangle-alert`, `circle-x`, `circle-check`,
+  `ban`, `refresh-cw`, `repeat`, `copy`, `trash-2`, `eye`, `eye-off`, `send`, `inbox`,
+  `list-checks`, `bug`, `zap`, `package`, `settings`, `terminal`, `history`, `undo-2`, `split`,
+  `merge`, `layers`, `link`, and any other Lucide name. Sizes: none (text size), `lg`, `xl`; leave
+  the size off inside a `chip`.
 - Arrows: `<span class="arrow"></span>` points right, `arrow down` points down, `style="--len:
   4rem"` sets its length, `data-say="retry"` writes a word on it, `arrow flow` animates things
   moving along it, `arrow blocked` crosses it out.
-- Motion: `pulse`, `bob`, `shake` (for a failure), `blink`, `spin` loop; `enter` on a parent
-  deals its children in one by one. `on-pick` shows an element only once the author picks this
-  side (the payoff: a stamp, a check, the final count); `off-pick` fades one then.
-- Inline `<svg>` is allowed for a shape the kit lacks, and `style` attributes for sizes and
-  colors (use the tones' variables: `var(--good)`, `var(--bad)`, `var(--warn)`, `var(--ink)`).
+- Motion: `pulse`, `bob`, `shake` (a failure), `blink`, `spin` loop; `enter` on a parent deals its
+  children in one by one. `on-pick` shows an element only once the author picks this side (a stamp,
+  a check); keep it for decoration, since the scene must read before the pick. `off-pick` fades an
+  element then.
+- Inline `<svg>` is allowed for a shape the kit lacks, and `style` attributes for sizes and colors
+  (use the tones' variables: `var(--good)`, `var(--bad)`, `var(--warn)`, `var(--ink)`).
 - Not allowed, and refused by validation: `<script>`, `<img>`, `<style>`, forms and inputs,
-  frames, event handler attributes, `url(...)`, and links anywhere. At most 4000 characters.
-
-## The sketch
-
-The front of a card shows only the title, each side's label, and each side's sketch. The words
-(context, consequences, snippets, justifications) are one key away, on the card's back, and most
-authors will not turn it over. So the sketch carries the side: at a glance, it shows **what
-happens if the author picks it**, to whom, and what it costs.
-
-- **One idea per sketch.** Two to five things on the stage: actors as boxes or icons, and what
-  moves between them. A reader should get it in two seconds.
-- **Fill the stage.** The scene spans most of the 400 × 300 stage, with actors big enough to read
-  from across the room (boxes 80 to 140 wide, icons 40 to 64). A small scene in the middle of an
-  empty stage reads as a thumbnail.
-- **Same scene, different outcome.** Draw both sides of a card with the same actors in the same
-  places, so the eye goes straight to what differs: the row that is dropped on one side and
-  stopped with an error on the other; the request that waits on one and fails fast on the other.
-- **Show the cost, not only the benefit.** The side's price belongs in the picture: a pile-up, a
-  red cross, a lock left open, a clock running, a second box to maintain.
-- **Loop gently, then pay off.** While the card is up, the scene loops (`ui.loop`, `ui.pulse`,
-  `ui.t`); leaning toward a side speeds its clock up on its own, and the side the author did not
-  pick slows down and dims on its own. When the author picks the side, `ui.beat` runs from 0 to 1
-  over 0.7 seconds: land the consequence then, good or bad (a check pops, the pile falls, the red
-  cross stamps down).
-- **The still frame must read alone.** With reduced motion the sketch is drawn once, at
-  `ui.t = 1.2` with `ui.beat = 0`. Keep the cost visible all the time rather than only at some
-  moment of the loop; a cost that comes later in a sequence (a retry, a second post) can sit on
-  the stage throughout, faded, as the end state. Avoid thresholds that land exactly on 1.2
-  (`ui.loop(2.4)` is 0.5 there).
-- **Few words.** At most five texts on the stage, box labels included, each at most three
-  words, at size 12 or more. The label above the sketch already names the side; do not repeat it.
-- **Same scene on both sides.** Each sketch is its own code, so write the shared scene twice with
-  the same coordinates; only the outcome differs.
+  frames, event handler attributes, `url(...)`, and links anywhere. At most 4000 characters. The
+  frame runs no script and loads nothing, so anything else would silently not show.
 - No secrets, credentials, or protected health information, even as sample data.
 
-A sketch is the **body** of `function (p, ui) { ... }`, a complete function body in p5 2.x
-instance mode, at most 3000 characters. It assigns `p.draw` (required) and `p.setup` (optional);
-the frame creates the canvas, clears it before every frame (leave the background alone), wraps
-each frame in `push`/`pop` so style never leaks from one frame to the next, and scales the stage
-to fit.
-
-- The stage is `ui.w` × `ui.h` = 400 × 300, origin at the top left. Keep a margin of 12. Use
-  `ui.w` and `ui.h`, never `p.width`, which is the canvas in pixels.
-- Colors: `ui.ink` (this side's color), `ui.fg`, `ui.muted`, `ui.paper`, `ui.line`, `ui.good`,
-  `ui.bad`, `ui.warn`. Use them rather than your own, so the sketch fits both themes.
-- State: `ui.t` (seconds on this side's clock), `ui.beat` (the payoff, 0..1), `ui.state`
-  (`idle`, `lean`, `picked`, or `other` when the author picked the other side), `ui.side`.
-- Motion helpers: `ui.loop(period = 2)` 0..1 repeating, `ui.pulse(period = 1.6)` 0..1..0,
-  `ui.ease(f)`, `ui.along(points, f)` for the `[x, y]` a fraction of the way along a polyline.
-- Drawing kit. Every position is a center unless it says otherwise.
-  - `ui.box(x, y, w, h, label?, { fill, stroke, color, weight, dash, at })`: a rounded box with
-    its top-left corner at `x, y`, filled with `ui.paper` and stroked with `ui.fg` by default. The
-    label sits in the middle at size 14; `at: 'top'` or `at: 'bottom'` moves it to that edge at
-    size 13, which leaves the middle free for what the box holds. `dash: true` dashes the border.
-  - `ui.label(text, x, y, { size = 14, color = ui.fg, align = 'center', bold })`: text centered
-    on `x, y` (with `align: 'left'` or `'right'`, `x` is that edge).
-  - `ui.arrow(x1, y1, x2, y2, { color = ui.fg, weight = 2, dash, head = true })`: head at `x2, y2`.
-  - `ui.dot(x, y, r = 6, color = ui.ink)`: a filled circle of radius `r`.
-  - `ui.icon(name, x, y, size = 32, color = ui.fg)`: a stroked icon centered on `x, y` in a
-    `size` × `size` square. Icons: `user`, `users`, `server`, `db`, `file`, `lock`, `unlock`,
-    `key`, `clock`, `check`, `cross`, `warn`, `bug`, `gear`, `cloud`, `bolt`, `eye`, `trash`,
-    `shield`, `list`, `package`, `branch`, `chat`, `flag`, `hourglass`.
-- Any p5 drawing call on `p` works: shapes, color, transforms, `p.lerp`, `p.noise`,
-  `p.drawingContext.setLineDash([4, 4])` for a dashed shape, and so on. Call `p.randomSeed(1)` in
-  `p.setup` if you use `p.random`, so the sketch is the same every time.
-- A sketch draws and nothing else. It may not use `window`, `document`, `fetch`, `eval`, or any
-  other page, network, or storage global, and may not call `p.createCanvas`, `p.load*`,
-  `p.save*`, `p.select*`, `p.create*` elements, or `p.http*`. It runs in a sandbox without them.
-
-You cannot see the sketch, so validation looks for you. It draws each sketch without a browser
-at seven moments (the loop, a lean, the still frame, the payoff, the other side picked) and
-refuses one that: does not parse, names what the sandbox withholds, never assigns `p.draw`,
-throws or runs for more than a second, draws nothing, or draws a label smaller than 12, off the
-stage, on top of another label, under a filled shape drawn after it, or crossed by a line or an
-icon. It estimates a label as 0.56 × its size wide per character (about 8 per character at size
-14) and 1.2 × its size tall, so give labels that much room. Draw containers first and what they
-hold after, and labels last: `ui.box` is filled, so a box drawn late hides what is under it. To
-fade something, draw it in `ui.line` or `ui.muted`, or set `p.drawingContext.globalAlpha`
-inside `p.push()` / `p.pop()`. What validation cannot judge is whether the picture tells the
-consequence: that part is yours.
+Validation checks what a scene may contain and that its icons exist; it cannot see the layout.
+Keep scenes as small as the rules above ask and they fit.
 
 For the example card below, side A (skip empty rows):
 
-```js
-const rows = [0, 1, 2, 3, 4]
-p.draw = () => {
-  ui.box(20, 110, 90, 80, 'export')
-  ui.box(290, 110, 90, 80, 'imported')
-  const f = ui.loop(2.5)
-  rows.forEach(i => {
-    const x = p.lerp(110, 290, (f + i / 5) % 1)
-    const empty = i === 2
-    if (empty && x > 190) return
-    p.noStroke()
-    p.fill(empty ? ui.line : ui.ink)
-    p.rect(x - 10, 142, 20, 16, 3)
-  })
-  ui.label('blank row gone', 200, 225, { size: 12, color: ui.muted })
-  if (ui.beat > 0) ui.icon('check', 335, 80, 36 * ui.ease(ui.beat), ui.good)
-}
+```html
+<div class="scene">
+  <div class="row">
+    <div class="box"><i data-icon="file-code" class="lg"></i><span class="label">export.csv</span><span class="big">120</span><span class="small">rows, 3 blank</span></div>
+    <span class="arrow flow" style="--len: 3rem" data-say="import"></span>
+    <div class="box good"><i data-icon="database" class="lg"></i><span class="label">imported</span><span class="big">117</span></div>
+  </div>
+  <div class="banner warn"><i data-icon="eye-off"></i> A blank row in the middle goes unnoticed</div>
+</div>
 ```
 
 ## Length caps
@@ -285,14 +202,14 @@ Write `{{MODEL_PATH}}` as JSON only, no prose and no fence:
         "label": "Skip them silently",
         "consequence": "Old exports import cleanly; an accidental blank row in the middle goes unnoticed.",
         "snippet": { "code": "if (row.every(cell => cell === '')) continue" },
-        "sketch": "const rows = [0, 1, 2, 3, 4]\np.draw = () => { ... }",
+        "scene": "<div class=\"scene\"><div class=\"row\">…</div><div class=\"banner warn\">…</div></div>",
         "why": "Empty rows only come from the old export tool, which pads its files.",
         "record": "pr-comment"
       },
       "b": {
         "label": "Fail with the row number",
         "consequence": "Nothing is ever dropped quietly, but every old export needs cleaning first.",
-        "sketch": "p.draw = () => { ... }",
+        "scene": "<div class=\"scene\"><div class=\"row\">…</div><div class=\"banner bad\">…</div></div>",
         "why": "An import should never drop data without saying so.",
         "record": "none"
       }

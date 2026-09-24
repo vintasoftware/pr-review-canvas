@@ -8,13 +8,11 @@ import {
   DeckModelSchema,
   type DecisionCard,
   SNIPPET_MAX_LINES,
-  STORY_STEP_CAP,
 } from '../contract/deck.js'
 import type { FileEntry } from '../contract/review-artifact.js'
 import { hunkForLine, hunkLineRanges } from '../git/patch-lines.js'
 import { visibleLength } from '../review/text-length.js'
-import { sceneProblems, storyProblems } from './validate-scene.js'
-import { sketchProblems } from './validate-sketch.js'
+import { sceneProblems } from './validate-scene.js'
 
 export type DeckProblemCode =
   | 'DECK_SCHEMA'
@@ -24,7 +22,7 @@ export type DeckProblemCode =
   | 'SNIPPET_TOO_LONG'
   | 'CARD_OUTSIDE_DIFF'
   | 'SIDES_ALIKE'
-  | 'SKETCH_INVALID'
+  | 'SCENE_INVALID'
 
 export interface DeckProblem {
   code: DeckProblemCode
@@ -85,28 +83,10 @@ function checkText(card: DecisionCard, problems: DeckProblem[]): void {
     }
   }
   for (const side of CARD_SIDES) {
-    const { sketch, scene, story } = card[side]
-    const found: Array<[string, string[]]> = [
-      ['sketch', sketch === undefined ? [] : sketchProblems(sketch)],
-      ['scene', scene === undefined ? [] : sceneProblems(scene)],
-      ['story', story === undefined ? [] : storyProblems(story)],
-    ]
-    for (const [field, messages] of found) {
-      for (const message of messages) {
-        const where = `card:${card.key}.${side}.${field}`
-        problems.push({ code: 'SKETCH_INVALID', where, message: `${where}: ${message}` })
-      }
-    }
-    for (const [i, step] of (story ?? []).entries()) {
-      const n = visibleLength(step.text)
-      if (n > STORY_STEP_CAP) {
-        const where = `card:${card.key}.${side}.story.${i}`
-        problems.push({
-          code: 'TEXT_TOO_LONG',
-          where,
-          message: `${where}: ${n} visible chars, cap ${STORY_STEP_CAP}`,
-        })
-      }
+    const scene = card[side].scene
+    for (const message of scene === undefined ? [] : sceneProblems(scene)) {
+      const where = `card:${card.key}.${side}.scene`
+      problems.push({ code: 'SCENE_INVALID', where, message: `${where}: ${message}` })
     }
   }
   if (card.a.label.trim().toLowerCase() === card.b.label.trim().toLowerCase()) {

@@ -33,13 +33,13 @@ import { errorCardHtml } from './errors.js'
  * @typedef {{ deck: { review: import('./contract-types.js').ReviewKey, headSha: string, headRef: string, baseRef: string,
  *   cards: DecisionCard[], settled: unknown[] }, picks: Record<string, Pick>,
  *   excerpts: Record<string, CardExcerpt>, summary: Summary,
- *   fixes: { path: string, markdown: string } | null, icons?: Record<string, string> }} DeckResponse
+ *   fixes: { path: string, markdown: string } | null }} DeckResponse
  */
 
 /** How far a drag has to travel, in pixels, before letting go picks a side. */
 const DRAG_COMMIT = 140
 
-/** How long the picked side's sketch plays its payoff before the card flies off. */
+/** How long the picked side's scene plays its payoff before the card flies off. */
 const PAYOFF_MS = 650
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
@@ -151,79 +151,37 @@ function showStamp(card, side, strength) {
     }
   }
   card.dataset['lean'] = side ?? ''
-  leanSketches(card, side, strength)
-}
-
-/** The palette a sketch draws with, as the page's own colors, for this side. */
-const PALETTE_VARS = /** @type {const} */ ({
-  fg: '--fg',
-  muted: '--fg-muted',
-  paper: '--panel',
-  line: '--line-strong',
-  good: '--ok',
-  bad: '--bad',
-  warn: '--warn',
-})
-
-/**
- * The page's colors, resolved to plain `rgb()` strings a canvas understands (the tokens use
- * `light-dark()`).
- * @param {HTMLElement} within
- * @param {'a' | 'b'} side
- */
-function paletteFor(within, side) {
-  const probe = document.createElement('span')
-  probe.hidden = true
-  within.append(probe)
-  /** @param {string} name */
-  const color = name => {
-    probe.style.color = `var(${name})`
-    return getComputedStyle(probe).color
-  }
-  /** @type {Record<string, string>} */
-  const palette = { ink: color(`--deck-ink-${side}`) }
-  for (const [key, name] of Object.entries(PALETTE_VARS)) palette[key] = color(name)
-  probe.remove()
-  return palette
 }
 
 /**
- * Tells a card's sketches how the author leans: the side leaned toward speeds up.
- * @param {HTMLElement} card
- * @param {'a' | 'b' | null} side
- * @param {number} strength 0..1
- */
-function leanSketches(card, side, strength) {
-  for (const frame of card.querySelectorAll('iframe')) {
-    const leaning = frame.getAttribute('data-sketch') === side && strength > 0
-    frame.contentWindow?.postMessage(
-      { type: 'state', state: leaning ? 'lean' : 'idle', lean: leaning ? strength : 0 },
-      '*'
-    )
-  }
-}
-
-/**
- * Plays the picked side's payoff: that sketch runs its consequence while the other one slows.
- * Resolves once there was something to watch, so the card flies off after it.
+ * Plays the picked side's payoff: its scene's `on-pick` parts come in (a scene runs no script, so
+ * the `#picked` fragment is what its CSS listens for) while the other side dims. Resolves once
+ * there was something to watch, so the card flies off after it.
  * @param {HTMLElement} card
  * @param {'a' | 'b'} side
  */
 async function payoff(card, side) {
-  const live = card.querySelector(`.deck-visual[data-visual="${side}"][data-live]`)
-  for (const frame of card.querySelectorAll('iframe')) {
-    if (!frame.hasAttribute('data-sketch')) continue
-    const state = frame.getAttribute('data-sketch') === side ? 'picked' : 'other'
-    frame.contentWindow?.postMessage({ type: 'state', state }, '*')
-  }
-  // A scene cannot be told anything, having no script; the fragment is what its CSS listens for.
   const scene = /** @type {HTMLIFrameElement | null} */ (card.querySelector(`iframe[data-scene="${side}"]`))
   if (scene !== null) scene.src = `${scene.src.split('#')[0]}#picked`
   card.dataset['picked'] = side
-  const moving =
-    live !== null || scene !== null || card.querySelector(`.deck-side-${side}[data-shows="story"]`) !== null
-  if (!moving || reducedMotion() || card.classList.contains('deck-flipped')) return
+  if (scene === null || reducedMotion() || card.classList.contains('deck-flipped')) return
   await new Promise(resolve => setTimeout(resolve, PAYOFF_MS))
+}
+
+/**
+ * Says which face a card shows on its buttons, and brings the anchor line of the back's code into
+ * view when the back comes up.
+ * @param {HTMLElement} card
+ * @param {boolean} flipped
+ */
+function markFlipped(card, flipped) {
+  for (const button of card.querySelectorAll('[data-act="details"]')) {
+    button.setAttribute('aria-pressed', String(flipped))
+  }
+  if (!flipped) return
+  const scroll = card.querySelector('.deck-back-code-scroll')
+  const here = /** @type {HTMLElement | null} */ (card.querySelector('.deck-back-code .deck-diff-here'))
+  if (scroll !== null && here !== null) scroll.scrollTop = here.offsetTop - scroll.clientHeight / 3
 }
 
 /** @param {HTMLElement} root */
@@ -266,14 +224,8 @@ export async function bootDeck() {
     return
   }
   const { deck, excerpts } = data
-  const asked = new URLSearchParams(location.search).get('visual')
   /** @type {import('./deck-view.js').CardView} */
-  const view = {
-    review: boot.review,
-    theme: document.documentElement.dataset['theme'] ?? 'auto',
-    icons: data.icons ?? {},
-    ...(asked === 'scene' || asked === 'story' || asked === 'sketch' ? { visual: asked } : {}),
-  }
+  const view = { review: boot.review, theme: document.documentElement.dataset['theme'] ?? 'auto' }
   const state = createDeckState(deck.cards, data.picks)
   let summary = data.summary
   let fixes = data.fixes
@@ -357,10 +309,9 @@ ${deckHelpHtml()}`
       return
     }
     const index = deck.cards.findIndex(c => c.key === top.key)
-    table.innerHTML = `<div class="deck-hand">${stackHtml(state.peek())}${cardHtml(top, { index, total: deck.cards.length }, view)}</div>`
+    table.innerHTML = `<div class="deck-hand">${stackHtml(state.peek())}${cardHtml(top, { index, total: deck.cards.length }, { ...view, excerpt: excerpts[top.key] })}</div>`
     const card = /** @type {HTMLElement} */ (topCard())
     wireDrag(card)
-    wireHover(card)
     card.focus({ preventScroll: true })
     await flyIn(card, from)
   }
@@ -468,7 +419,7 @@ ${deckHelpHtml()}`
     if (el === null) return
     mode = 'edit'
     el.classList.add('deck-editing', 'deck-flipped')
-    el.querySelector('[data-act="details"]')?.setAttribute('aria-pressed', 'true')
+    markFlipped(el, true)
     const target = /** @type {HTMLElement | null} */ (
       el.querySelector(focus === 'why' ? '[data-why="a"]' : '[data-record-select="a"]')
     )
@@ -497,7 +448,7 @@ ${deckHelpHtml()}`
   }
 
   /**
-   * Turns the card over to its words, or back to its sketches.
+   * Turns the card over to its reasons and code, or back to its scenes.
    * @param {boolean} [show] which face to end on; omitted, the other one
    */
   const flip = async show => {
@@ -513,7 +464,7 @@ ${deckHelpHtml()}`
         easing: 'ease-in',
       })
     el.classList.toggle('deck-flipped', to)
-    el.querySelector('[data-act="details"]')?.setAttribute('aria-pressed', String(to))
+    markFlipped(el, to)
     if (turn)
       await play(el, [{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], {
         duration: 180,
@@ -555,53 +506,6 @@ ${deckHelpHtml()}`
       toast(err instanceof Error ? err.message : String(err))
     }
   }
-
-  /**
-   * Hovering a side leans toward it a little, so its sketch perks up before any drag.
-   * @param {HTMLElement} card
-   */
-  function wireHover(card) {
-    for (const side of /** @type {const} */ (['a', 'b'])) {
-      const el = card.querySelector(`.deck-side-${side}`)
-      el?.addEventListener('pointerenter', () => {
-        if (!card.classList.contains('deck-dragging')) leanSketches(card, side, 0.5)
-      })
-      el?.addEventListener('pointerleave', () => {
-        if (!card.classList.contains('deck-dragging')) leanSketches(card, null, 0)
-      })
-    }
-  }
-
-  // The sketch frames of the top card: each says when it is ready, and gets its side's code.
-  window.addEventListener('message', event => {
-    const frame = [...table.querySelectorAll('iframe')].find(f => f.contentWindow === event.source)
-    const card = state.top()
-    if (frame === undefined || card === null || event.origin !== 'null') return
-    const side = /** @type {'a' | 'b'} */ (frame.getAttribute('data-sketch'))
-    const visual = /** @type {HTMLElement} */ (frame.closest('.deck-visual'))
-    const message = /** @type {{ type?: unknown, message?: unknown } | null} */ (event.data)
-    const type = message?.type
-    if (type === 'ready') {
-      frame.contentWindow?.postMessage(
-        {
-          type: 'run',
-          code: card[side].sketch,
-          side,
-          still: reducedMotion(),
-          palette: paletteFor(visual, side),
-        },
-        '*'
-      )
-    } else if (type === 'drawn') {
-      visual.dataset['live'] = ''
-    } else if (type === 'error') {
-      // The side keeps its words; the console says why, for whoever wrote the sketch.
-      console.warn(`sketch ${card.key}.${side} failed: ${String(message?.message ?? '')}`)
-      delete visual.dataset['live']
-      visual.dataset['failed'] = ''
-      frame.remove()
-    }
-  })
 
   /** @param {HTMLElement} card */
   function wireDrag(card) {

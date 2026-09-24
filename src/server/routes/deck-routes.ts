@@ -1,7 +1,6 @@
 // The self-review deck's API: the deck with its picks and the code each card is anchored to, one
 // route per pick, and the finish route that writes the fix list.
 import { Hono } from 'hono'
-import { iconsFor } from '../../deck/icons.js'
 import {
   type Deck,
   type DecisionCard,
@@ -144,12 +143,7 @@ export function deckRoutes(ctx: AppContext): Hono {
 
   app.get('/:key', async c => {
     const key = parseKey(c.req.param('key'))
-    const deck = await requireDeck(ctx, key)
-    // The icons the stories name, inlined so the page requests none.
-    const names = deck.cards.flatMap(card =>
-      [card.a, card.b].flatMap(side => (side.story ?? []).map(s => s.icon))
-    )
-    return c.json({ ...(await deckResponse(ctx, key, deck)), icons: iconsFor(names) })
+    return c.json(await deckResponse(ctx, key, await requireDeck(ctx, key)))
   })
 
   app.put('/:key/picks/:card', async c => {

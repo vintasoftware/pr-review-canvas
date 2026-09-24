@@ -30,8 +30,6 @@ export interface VendorRoots {
   dompurify: string
   hljs: string
   mermaid: string
-  /** p5's browser build, loaded only inside the sandboxed sketch frame. */
-  p5: string
 }
 
 /**
@@ -85,7 +83,6 @@ export function resolveVendorRoots(): VendorRoots {
       'highlight.min.js'
     ),
     mermaid: path.dirname(fileURLToPath(import.meta.resolve('mermaid'))),
-    p5: path.join(path.dirname(fileURLToPath(import.meta.resolve('p5'))), '..', 'lib', 'p5.min.js'),
   }
 }
 

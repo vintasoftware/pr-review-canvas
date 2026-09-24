@@ -751,9 +751,20 @@
   font-size: 13px;
 }
 
-/* The card's two faces. The front is the headline and a sketch per side, filling the screen's
-   height; `i` turns the card over to the words: the context, both consequences, the snippets, and
-   the justifications. Both faces share the card's middle row. */
+/* The card's two faces. The front is the headline and, per side, its consequence and its scene,
+   filling the screen's height; `i` turns the card over to the reasons and the code: the context,
+   each side's justification and snippet, and the chunk the card is anchored to. Both faces share
+   the card's middle row. */
+/* The rows are pinned to the room there is, so a tall back scrolls inside the card instead of
+   stretching the table and pushing the card down the screen. */
+.deck-stage,
+.deck-table {
+  grid-template-rows: minmax(0, 1fr);
+}
+.deck-table,
+.deck-hand {
+  min-height: 0;
+}
 .deck-hand {
   height: 100%;
   align-items: center;
@@ -769,6 +780,7 @@
 }
 .deck-card-h {
   grid-area: head;
+  padding-right: 240px;
 }
 .deck-card-f {
   grid-area: foot;
@@ -783,14 +795,13 @@
 }
 .deck-back {
   display: none;
-  overflow: auto;
   cursor: auto;
   user-select: text;
 }
 .deck-card.deck-flipped .deck-back {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
-  align-content: start;
 }
 .deck-card.deck-flipped .deck-front {
   visibility: hidden;
@@ -810,53 +821,39 @@
 .deck-side-h h3 {
   font-size: 19px;
 }
+.deck-gist {
+  font-size: clamp(15px, 1.05vw, 18px);
+  font-weight: 560;
+  line-height: 1.4;
+  color: var(--fg);
+}
+.deck-gist p {
+  margin: 0;
+}
+/* A side without a scene lets its consequence take the room, in larger type. */
+.deck-side[data-plain] .deck-gist {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: clamp(17px, 1.3vw, 22px);
+}
 .deck-visual {
   position: relative;
   flex: 1;
   min-height: 0;
-  display: grid;
-  place-items: center;
   border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
   background: var(--panel);
   overflow: hidden;
 }
-.deck-visual:not([data-has-sketch]),
-.deck-visual[data-failed] {
-  border-style: dashed;
-}
-.deck-sketch {
-  position: absolute;
-  inset: 0;
+.deck-scene {
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
   background: transparent;
-  /* Sketches take no input: drags, hovers, and keys stay the card's. */
+  /* A scene takes no input: drags and keys stay the card's. */
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.35s;
-}
-.deck-visual[data-live] .deck-sketch {
-  opacity: 1;
-}
-.deck-visual-text {
-  max-width: 44ch;
-  padding: 16px 20px;
-  font-size: 17px;
-  line-height: 1.45;
-  text-align: center;
-}
-.deck-visual-text p {
-  margin: 0;
-}
-/* A drawn sketch speaks for its side; the words stay for screen readers and the card's back. */
-.deck-visual[data-live] .deck-visual-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 .deck-card[data-picked='a'] .deck-side-a,
 .deck-card[data-picked='b'] .deck-side-b {
@@ -867,6 +864,8 @@
 .deck-card[data-picked='b'] .deck-side-a {
   opacity: 0.45;
 }
+
+/* The back: the two sides' reasons side by side, then the code, which takes the rest. */
 .deck-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -876,6 +875,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
   padding: 14px 16px;
   border: 2px solid var(--line);
 }
@@ -893,152 +893,86 @@
   width: 26px;
   height: 26px;
 }
-.deck-detail .deck-consequence {
-  font-size: 15px;
+.deck-detail .deck-why {
+  margin-top: 0;
 }
-.deck-card-f [aria-pressed='true'] {
-  background: var(--panel-2);
-}
-
-/* A side's story: two to four steps of what happens once it is picked, the last one the outcome.
-   Each step takes its tone's color; the steps deal in one by one, and the outcome pulses gently
-   until the side is picked, when it stamps down. */
-.deck-story {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  flex: 1;
-  min-height: 0;
+.deck-back-code {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-}
-.deck-step {
-  --tone: var(--deck-ink-side, var(--fg));
-  position: relative;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border: 2px solid color-mix(in srgb, var(--tone) 45%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--tone) 9%, var(--panel));
-  color: var(--fg);
-  font-size: clamp(16px, 1.2vw, 22px);
-  font-weight: 560;
-  line-height: 1.3;
-  animation: deck-step-in 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) both;
-  animation-delay: calc(var(--i, 0) * 0.13s + 0.1s);
-}
-.deck-side-a {
-  --deck-ink-side: var(--deck-ink-a);
-}
-.deck-side-b {
-  --deck-ink-side: var(--deck-ink-b);
-}
-.deck-step[data-tone='good'] {
-  --tone: var(--ok);
-}
-.deck-step[data-tone='bad'] {
-  --tone: var(--bad);
-}
-.deck-step[data-tone='warn'] {
-  --tone: var(--warn);
-}
-/* The line that joins a step to the next one. */
-.deck-step:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: 39px;
-  bottom: -16px;
-  width: 3px;
-  height: 16px;
-  background: color-mix(in srgb, var(--tone) 55%, transparent);
-}
-.deck-step-icon {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--tone);
-  color: var(--panel);
-}
-.deck-step-icon .icon {
-  width: 26px;
-  height: 26px;
-}
-.deck-step-text p {
-  margin: 0;
-}
-.deck-step-text code {
-  font-size: 0.88em;
-}
-.deck-step-outcome {
-  background: var(--tone);
-  border-color: var(--tone);
-  color: var(--panel);
-  font-size: clamp(18px, 1.35vw, 25px);
-  font-weight: 750;
-  padding-block: 18px;
-}
-.deck-step-outcome .deck-step-icon {
+  min-height: 0;
+  border: 2px solid var(--line);
   background: var(--panel);
-  color: var(--tone);
-  animation: deck-glow 2.2s ease-in-out 1.2s infinite;
 }
-.deck-step-outcome .deck-step-text code {
-  background: color-mix(in srgb, var(--panel) 25%, transparent);
-  color: inherit;
+.deck-back-code-h {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
 }
-.deck-card[data-lean='a'] .deck-side-a .deck-step,
-.deck-card[data-lean='b'] .deck-side-b .deck-step {
-  transform: translateX(4px);
-  transition: transform 0.2s;
+.deck-back-code-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
-.deck-card[data-picked='a'] .deck-side-a .deck-step-outcome,
-.deck-card[data-picked='b'] .deck-side-b .deck-step-outcome {
-  animation: deck-step-stamp 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
-}
-@keyframes deck-step-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.96);
-  }
-}
-@keyframes deck-glow {
-  50% {
-    transform: scale(1.12);
-  }
-}
-@keyframes deck-step-stamp {
-  40% {
-    transform: scale(1.06) rotate(-0.6deg);
-  }
+.deck-back-code .deck-diff {
+  width: 100%;
 }
 
-/* A side's scene: its consequence in one line, then the scene in its frame. */
-.deck-gist {
-  margin: 0;
-  font-size: clamp(15px, 1.05vw, 18px);
-  font-weight: 560;
+/* The folded corner: a quiet sign that the card has a back, and the key that turns it. */
+.deck-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 10px 44px 0 12px;
+  height: 42px;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+/* The dog-ear itself: the corner folded toward the reader, its underside in the page's color. */
+.deck-corner::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(
+    225deg,
+    var(--bg) 0 50%,
+    color-mix(in srgb, var(--fg) 12%, var(--panel-2)) 50% 100%
+  );
+  box-shadow: -2px 2px 3px color-mix(in srgb, var(--fg) 14%, transparent);
+  transition:
+    width 0.2s,
+    height 0.2s;
+}
+.deck-corner:hover::after,
+.deck-corner:focus-visible::after {
+  width: 44px;
+  height: 44px;
+}
+.deck-corner:hover,
+.deck-corner:focus-visible {
   color: var(--fg);
 }
-.deck-gist p {
-  margin: 0;
+.deck-corner kbd {
+  margin-right: 6px;
 }
-.deck-visual-scene {
-  place-items: stretch;
-  border-style: solid;
+.deck-corner-back,
+.deck-card.deck-flipped .deck-corner-front {
+  display: none;
 }
-.deck-scene {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  pointer-events: none;
+.deck-card.deck-flipped .deck-corner-back {
+  display: inline;
 }
 
 /* Small screens stack the sides and let the page scroll; the no-scroll promise is for desktops. */
@@ -1055,6 +989,13 @@
   .deck-visual {
     flex: none;
     aspect-ratio: 16 / 10;
+  }
+  .deck-card-h {
+    padding-right: 0;
+  }
+  .deck-corner-front,
+  .deck-corner-back {
+    display: none !important;
   }
   .deck-details {
     grid-template-columns: 1fr;

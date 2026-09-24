@@ -186,45 +186,23 @@ describe('validateDeckModel', () => {
     ])
   })
 
-  it('names each problem of a side’s sketch, and passes a sketch that only draws', () => {
-    const drawing = 'p.draw = () => ui.box(10, 10, 50, 50)'
+  it('names each problem of a side’s scene, and passes a scene of kit classes and icons', () => {
+    const fine =
+      '<div class="scene"><div class="box bad"><i data-icon="circle-x"></i> 3 rows lost</div></div>'
     const result = validateDeckModel(
-      {
-        cards: [
-          card({
-            a: { ...card().a, sketch: drawing },
-            b: { ...card().b, sketch: 'p.draw = () => fetch("/x")' },
-          }),
-        ],
-      },
-      { files, maxCards: 1 }
-    )
-    expect(result.ok ? [] : result.problems.map(p => p.message)).toEqual([
-      'card:empty-rows.b.sketch: uses fetch; a sketch draws with p and ui only',
-    ])
-    const fine = card({ a: { ...card().a, sketch: drawing }, b: { ...card().b, sketch: drawing } })
-    expect(validateDeckModel({ cards: [fine] }, { files, maxCards: 1 }).ok).toBe(true)
-    // Past the character cap, the schema refuses it before any check runs.
-    const huge = card({ a: { ...card().a, sketch: `p.draw = () => {}${' '.repeat(3000)}` } })
-    const refused = validateDeckModel({ cards: [huge] }, { files, maxCards: 1 })
-    expect(refused.ok ? [] : refused.problems.map(p => [p.code, p.where])).toEqual([
-      ['DECK_SCHEMA', 'cards.0.a.sketch'],
-    ])
-  })
-
-  it('refuses stories and scenes that name missing icons or would not show', () => {
-    const story = [
-      { icon: 'user', text: 'x'.repeat(71) },
-      { icon: 'nope', text: 'Import fails' },
-    ]
-    const result = validateDeckModel(
-      { cards: [card({ a: { ...card().a, story, scene: '<script>1</script>' } })] },
+      { cards: [card({ a: { ...card().a, scene: fine }, b: { ...card().b, scene: '<script>1</script>' } })] },
       { files, maxCards: 1 }
     )
     expect(result.ok ? [] : result.problems.map(p => `${p.code} ${p.where}`)).toEqual([
-      'SKETCH_INVALID card:empty-rows.a.scene',
-      'SKETCH_INVALID card:empty-rows.a.story',
-      'TEXT_TOO_LONG card:empty-rows.a.story.0',
+      'SCENE_INVALID card:empty-rows.b.scene',
+    ])
+    const both = card({ a: { ...card().a, scene: fine }, b: { ...card().b, scene: fine } })
+    expect(validateDeckModel({ cards: [both] }, { files, maxCards: 1 }).ok).toBe(true)
+    // Past the character cap, the schema refuses it before any check runs.
+    const huge = card({ a: { ...card().a, scene: `<p>x</p>${' '.repeat(4000)}` } })
+    const refused = validateDeckModel({ cards: [huge] }, { files, maxCards: 1 })
+    expect(refused.ok ? [] : refused.problems.map(p => [p.code, p.where])).toEqual([
+      ['DECK_SCHEMA', 'cards.0.a.scene'],
     ])
   })
 
@@ -426,14 +404,10 @@ describe('a deck from prepare to the fix list', () => {
     )
   })
 
-  it('serves each side’s scene in its own locked frame, and the icons its stories name', async () => {
+  it('serves each side’s scene in its own locked frame', async () => {
     t = await makeTestContext({ git: gitForLocal() })
     const scene = '<div class="scene"><i data-icon="database" class="lg"></i> 3 rows</div>'
-    const story = [
-      { icon: 'user', text: 'Someone exports' },
-      { icon: 'circle-x', text: 'Import fails', tone: 'bad' as const },
-    ]
-    await prepareAndWrite([card({ a: { ...card().a, scene, story }, b: { ...card().b, story } })])
+    await prepareAndWrite([card({ a: { ...card().a, scene } })])
     await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
     const app = createApp(t.ctx)
     const deck = await t.ctx.decks.readDeck('uncommitted')
@@ -469,14 +443,6 @@ describe('a deck from prepare to the fix list', () => {
     ]) {
       expect((await app.request(path, { headers: LOCAL })).status, path).toBe(404)
     }
-
-    const got = (await (
-      await app.request('/api/deck/uncommitted', { headers: LOCAL })
-    ).json()) as DeckResponse & {
-      icons: Record<string, string>
-    }
-    expect(Object.keys(got.icons).sort()).toEqual(['circle-x', 'user'])
-    expect(got.icons['user']).toMatch(/^<svg class="icon"/)
   })
 
   it('serves the deck with its excerpts, saves picks, undoes them, and writes the fix list', async () => {

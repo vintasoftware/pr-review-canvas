@@ -22,11 +22,11 @@
   keeps them off.
 - New commands `pr-review deck prepare|validate|publish|fixes`. `install-skill`, `doctor`, and
   `upgrade` now handle the two new skills alongside `pr-review-canvas`.
-- Cards are drawn, not read. The front of a card is its title, each side's label, and a small p5
-  animation of what picking that side leads to, written by the generator; `i` turns the card
-  over to the words. Sketches loop gently, speed up as you lean toward a side, and play a payoff
-  when you pick it. They run in a sandboxed frame with no network and no access to the page, and
-  `deck validate` draws each one headlessly to refuse errors and unreadable labels.
+- Each side of a card shows its consequence in a sentence and a **scene**: a small, colorful
+  picture of what happens if you pick it (the counts, the error, the outcome in a banner), written
+  by the generator in HTML with a kit of layout classes and Lucide icons. Scenes run in a frame
+  that allows no script and loads nothing. A folded corner marks the card's back, which `i` turns
+  to: the context, each side's justification and snippet, and the code the card is anchored to.
 - `/pr-review-canvas` and `/pr-self-review` now default to Opus instead of Sonnet, for every
   change rather than only ones touching authentication, access policy, or PHI.
   `/pr-self-review-fix` stays on Sonnet and deals its next deck through `/pr-self-review`.

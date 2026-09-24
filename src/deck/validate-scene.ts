@@ -1,4 +1,4 @@
-// Checks a side's scene and story before they are published. A scene runs in a frame that allows
+// Checks a side's scene before it is published. A scene runs in a frame that allows
 // no script and no network (sceneFramePolicy), and that is the boundary; these checks name what
 // the frame would silently drop, so the generator fixes it instead of the author seeing a gap.
 import { iconSvg } from './icons.js'
@@ -43,12 +43,4 @@ export function sceneProblems(html: string): string[] {
     problems.push('shows no text; a scene says what happens, with words the reader can take in')
   }
   return problems
-}
-
-/** What is wrong with a story's icons; the schema has already checked its length and caps. */
-export function storyProblems(steps: ReadonlyArray<{ icon: string }>): string[] {
-  const unknown = [...new Set(steps.map(s => s.icon).filter(name => iconSvg(name) === null))]
-  return unknown.length === 0
-    ? []
-    : [`names icons that do not exist: ${unknown.join(', ')} (Lucide names, such as database or circle-x)`]
 }

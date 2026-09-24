@@ -7,8 +7,7 @@
 /** @typedef {'pr-comment' | 'code' | 'none'} RecordTarget */
 /**
  * @typedef {{ label: string, consequence: string, snippet?: { lang?: string, code: string },
- *   sketch?: string, scene?: string, story?: Array<{ icon: string, text: string,
- *   tone?: 'neutral' | 'good' | 'bad' | 'warn' }>, why: string, record: RecordTarget }} SideContent
+ *   scene?: string, why: string, record: RecordTarget }} SideContent
  */
 /**
  * @typedef {{ key: string, bucket: string, topic: string, title: string, context: string,
@@ -30,7 +29,7 @@ export const DECK_KEY_HELP = [
   { keys: 'u', what: 'undo the last pick' },
   { keys: 'e', what: 'edit the justification of either side before picking' },
   { keys: 'r', what: 'change where a justification is recorded' },
-  { keys: 'i', what: 'turn the card over: the context, both consequences, and the justifications' },
+  { keys: 'i', what: 'turn the card over: the context, the justifications, and the code' },
   { keys: 'o', what: 'open or close the code the card is about' },
   { keys: '?', what: 'this help' },
   { keys: 'Esc', what: 'close the note, the editor, the details, the code, or this help' },

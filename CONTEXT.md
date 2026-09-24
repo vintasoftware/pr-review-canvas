@@ -69,9 +69,9 @@ _Avoid_: Swipe review, approval flow
 One choice in a self-review deck that a reasonable engineer could make either way, shown as two sides, A and B. At most one side is marked as what the code does now.
 _Avoid_: Review item, approval, rejection
 
-**Sketch**:
-A small animation of what picking one side of a decision card leads to, written by the deck generator and shown on the card's front in place of words. It runs sandboxed, and the side's consequence text stands in when it fails.
-_Avoid_: Diagram, illustration, preview
+**Scene**:
+A small picture of what picking one side of a decision card leads to, written by the deck generator and shown on the card's front under the side's consequence. It is drawn from a kit of layout classes and icons, never run as code.
+_Avoid_: Diagram, sketch, illustration
 
 **Settled decision**:
 The side the author picked on a decision card, with its short justification. It stays in the local review state until the pull request's canvas is published, and then, when its side calls for one, it is posted as the author's own comment on the code it concerns.

@@ -1,16 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { DECK_KEY_HELP } from './deck-state.js'
-import {
-  cardHtml,
-  deckHelpHtml,
-  drawerHtml,
-  finishHtml,
-  pipsHtml,
-  stackHtml,
-  storyHtml,
-  visualOf,
-} from './deck-view.js'
+import { cardHtml, deckHelpHtml, drawerHtml, finishHtml, pipsHtml, stackHtml } from './deck-view.js'
 
 /** @typedef {import('./deck-state.js').DecisionCard} DecisionCard */
 /** @typedef {import('./deck-state.js').Pick} Pick */
@@ -70,104 +61,81 @@ describe('cardHtml', () => {
     expect(root.querySelector('.deck-anchor')?.textContent).toContain(`a"${hostile}.ts:12`)
   })
 
-  it('frames a side’s sketch in the sandbox and keeps the code out of the page', () => {
-    const sketch = 'p.draw = () => ui.label("</iframe><img src=x>", 1, 2)'
-    const root = render(cardHtml(card({ b: { ...card().b, sketch } }), { index: 0, total: 1 }))
-    const frames = root.querySelectorAll('iframe')
-    expect(frames).toHaveLength(1)
-    const frame = /** @type {HTMLIFrameElement} */ (frames[0])
-    expect(frame.closest('.deck-side-b')).not.toBeNull()
-    // Scripts only: no same-origin, forms, popups, or top navigation.
-    expect(frame.getAttribute('sandbox')).toBe('allow-scripts')
-    expect(frame.getAttribute('src')).toBe('/deck-sketch')
-    expect(frame.dataset['sketch']).toBe('b')
-    // The code is posted to the frame later; the markup never carries it.
-    expect(root.innerHTML).not.toContain('ui.label')
-    expect(root.querySelector('img')).toBeNull()
-    // A side without a sketch shows its consequence where the sketch would be.
-    expect(root.querySelector('[data-visual="a"]')?.hasAttribute('data-has-sketch')).toBe(false)
-    expect(root.querySelector('[data-visual="a"] .deck-visual-text')?.textContent?.trim()).toBe(
-      'Old exports import.'
-    )
-    // The side with one keeps the words for when the sketch fails, and for screen readers.
-    expect(root.querySelector('[data-visual="b"] .deck-visual-text')?.textContent?.trim()).toBe(
-      'Nothing is dropped.'
-    )
-  })
-
-  it('draws a side’s story as its steps, the last one the outcome, and escapes their text', () => {
-    const story = /** @type {const} */ ([
-      { icon: 'user', text: 'Reviewer drafts `3` comments' },
-      { icon: 'nope', text: '<b>push</b>', tone: 'warn' },
-      { icon: 'circle-x', text: 'Nothing posts', tone: 'bad' },
-    ])
-    const root = render(
-      cardHtml(
-        card({ a: { ...card().a, story: [...story] } }),
-        { index: 0, total: 1 },
-        { icons: { user: '<svg class="icon"></svg>' } }
-      )
-    )
-    const steps = root.querySelectorAll('.deck-side-a .deck-step')
-    expect([...steps].map(s => s.getAttribute('data-tone'))).toEqual(['neutral', 'warn', 'bad'])
-    expect(steps[0]?.querySelector('code')?.textContent).toBe('3')
-    expect(steps[0]?.querySelector('svg')).not.toBeNull()
-    // An icon the page was not given draws nothing; markup in a step stays text.
-    expect(steps[1]?.querySelector('.deck-step-icon')?.innerHTML).toBe('')
-    expect(steps[1]?.querySelector('b')).toBeNull()
-    expect(steps[2]?.classList.contains('deck-step-outcome')).toBe(true)
-    expect(root.querySelector('.deck-side-a')?.getAttribute('data-shows')).toBe('story')
-    // The side without a story keeps its consequence as text.
-    expect(root.querySelector('.deck-side-b')?.getAttribute('data-shows')).toBe('text')
-    expect(storyHtml([], {})).toBe('<ol class="deck-story"></ol>')
-  })
-
   it('frames a side’s scene with no permission at all, under its one-line consequence', () => {
     const root = render(
       cardHtml(
-        card({ key: 'a/b', b: { ...card().b, scene: '<p>x</p>' } }),
+        card({ key: 'a/b', b: { ...card().b, scene: '<p>x</p><img src=x onerror=alert(1)>' } }),
         { index: 0, total: 1 },
         { review: '42', theme: 'dark' }
       )
     )
-    const frame = /** @type {HTMLIFrameElement} */ (root.querySelector('.deck-side-b iframe'))
+    const frames = root.querySelectorAll('iframe')
+    expect(frames).toHaveLength(1)
+    const frame = /** @type {HTMLIFrameElement} */ (frames[0])
+    expect(frame.closest('.deck-side-b')).not.toBeNull()
+    // An empty sandbox: no script, same origin, forms, popups, or navigation.
     expect(frame.getAttribute('sandbox')).toBe('')
     expect(frame.getAttribute('src')).toBe('/deck-scene/42/a%2Fb/b?theme=dark')
     expect(root.querySelector('.deck-side-b .deck-gist')?.textContent?.trim()).toBe('Nothing is dropped.')
     // The scene's HTML reaches the page only through the frame.
     expect(root.innerHTML).not.toContain('<p>x</p>')
+    expect(root.querySelector('img')).toBeNull()
+    // A side without a scene shows its consequence alone.
+    expect(root.querySelector('.deck-side-a')?.hasAttribute('data-plain')).toBe(true)
+    expect(root.querySelector('.deck-side-a .deck-gist')?.textContent?.trim()).toBe('Old exports import.')
   })
 
-  it('shows the visual asked for when the side has it, and otherwise the best one it has', () => {
-    const side = card().a
-    const all = {
-      ...side,
-      story: [{ icon: 'user', text: 'x' }],
-      scene: '<p>x</p>',
-      sketch: 'p.draw = () => 0',
+  it('keeps the headline and consequences on the front, and the reasons and code on the back', () => {
+    const excerpt = {
+      path: 'src/import.ts',
+      header: '@@ -10,2 +10,3 @@',
+      oldStart: 10,
+      newStart: 10,
+      lines: [' const rows = read()', '+if (empty(row)) continue', '+drop(rows)'],
     }
-    expect(visualOf(all, {})).toBe('story')
-    expect(visualOf(all, { visual: 'scene' })).toBe('scene')
-    expect(visualOf(all, { visual: 'sketch' })).toBe('sketch')
-    expect(visualOf({ ...side, scene: '<p>x</p>' }, { visual: 'story' })).toBe('scene')
-    expect(visualOf({ ...side, sketch: 'x', story: [] }, {})).toBe('sketch')
-    expect(visualOf(side, { visual: 'scene' })).toBe('text')
-  })
-
-  it('keeps the headline on the front and the words on the back', () => {
-    const root = render(cardHtml(card(), { index: 0, total: 1 }))
+    const root = render(
+      cardHtml(
+        card({ line: 11, a: { ...card().a, snippet: { code: 'skip()' } } }),
+        { index: 0, total: 1 },
+        { excerpt }
+      )
+    )
     const front = /** @type {HTMLElement} */ (root.querySelector('.deck-front'))
     const back = /** @type {HTMLElement} */ (root.querySelector('.deck-back'))
     expect(front.querySelectorAll('h3')).toHaveLength(2)
     expect(front.querySelectorAll('[data-pick]')).toHaveLength(2)
     expect(front.textContent).not.toContain('The importer skips rows')
-    expect(front.querySelector('[data-why]')).toBeNull()
+    expect(front.querySelector('[data-why], .deck-snippet, .deck-diff')).toBeNull()
     expect(back.querySelector('.deck-context')?.textContent?.trim()).toBe(
       'The importer skips rows with no cells.'
     )
     expect(back.querySelector('[data-detail="a"] [data-why-text]')?.textContent).toBe('Only old exports pad.')
     expect(back.querySelector('[data-detail="b"] [data-record-chip]')?.textContent).toBe('not recorded')
-    expect(root.querySelector('[data-act="details"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect(back.querySelector('[data-detail="a"] .deck-snippet')?.textContent).toBe('skip()')
+    // The consequences are on the front only.
+    expect(back.textContent).not.toContain('Old exports import.')
+    // The anchored chunk, its anchor line marked.
+    expect(back.querySelector('.deck-back-code-h')?.textContent).toBe('src/import.ts:11 @@ -10,2 +10,3 @@')
+    expect(back.querySelector('.deck-diff-here')?.textContent).toContain('if (empty(row)) continue')
+    // Every way to the back says it is off, until the card turns.
+    expect(
+      [...root.querySelectorAll('[data-act="details"]')].map(b => b.getAttribute('aria-pressed'))
+    ).toEqual(['false', 'false'])
+  })
+
+  it('points to the back from a folded corner that names its key', () => {
+    const root = render(cardHtml(card(), { index: 0, total: 1 }))
+    const corner = /** @type {HTMLElement} */ (root.querySelector('.deck-corner'))
+    expect(corner.getAttribute('data-act')).toBe('details')
+    expect(corner.querySelector('.deck-corner-front')?.textContent).toBe('i reasons and code on the back')
+    expect(corner.querySelector('.deck-corner-back')?.textContent).toBe('i back to the front')
+  })
+
+  it('says so when the anchored chunk has left the diff', () => {
+    const root = render(cardHtml(card({ side: 'old' }), { index: 0, total: 1 }))
+    expect(root.querySelector('.deck-back-code')?.textContent).toBe(
+      "src/import.ts:12 (old)This chunk is not in this clone's diff anymore."
+    )
   })
 
   it('marks only the side the code implements now, and neither when it does neither', () => {

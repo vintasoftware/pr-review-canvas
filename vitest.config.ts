@@ -15,7 +15,7 @@ export default defineConfig({
     name: 'pr-review',
     globals: true,
     environment: 'node',
-    // A card's sketch frame points at the server; the view tests check the markup, not the load.
+    // A card's scene frame points at the server; the view tests check the markup, not the load.
     environmentOptions: { happyDOM: { settings: { disableIframePageLoading: true } } },
     include: ['src/**/*.test.ts', 'static/js/**/*.test.js'],
     setupFiles: ['./vitest.setup.ts'],
@@ -29,8 +29,6 @@ export default defineConfig({
         // The two page boots: each fetches, wires the DOM, and animates; the browser specs cover them.
         'static/js/app.js',
         'static/js/deck.js',
-        // The sketch frame's boot runs only inside the sandboxed frame; the deck spec covers it.
-        'static/js/sketch-host.js',
         'static/vendor/**',
         'src/**/*.test.ts',
         'static/js/**/*.test.js',

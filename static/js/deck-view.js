@@ -11,7 +11,6 @@ import { DECK_KEY_HELP, pickNeedsFix, RECORD_LABELS, RECORD_ORDER } from './deck
 /** @typedef {import('./deck-state.js').DecisionCard} DecisionCard */
 /** @typedef {import('./deck-state.js').Pick} Pick */
 /** @typedef {import('./deck-state.js').CardSide} CardSide */
-/** @typedef {import('./deck-state.js').SideContent} CardSideContent */
 /**
  * @typedef {{ path: string, header: string, lines: string[], oldStart: number, newStart: number,
  *   lang?: string }} CardExcerpt
@@ -43,44 +42,15 @@ function inline(text) {
 }
 
 /**
- * How a card's sides are shown: as generated scenes (HTML in a frame that runs no script), as
- * stories (steps drawn by this page), or as p5 sketches. `icons` holds the SVG the stories name.
- * @typedef {{ visual?: 'scene' | 'story' | 'sketch', review?: string, theme?: string,
- *   icons?: Readonly<Record<string, string>> }} CardView
+ * What the page knows beyond the card itself: the review (for the scene frames' address), the
+ * theme (so a scene matches the page), and the chunk of the diff the card is anchored to.
+ * @typedef {{ review?: string, theme?: string, excerpt?: CardExcerpt | undefined }} CardView
  */
 
 /**
- * The visual a side shows under `view`, falling back to what the side has.
- * @param {CardSideContent} content
- * @param {CardView} view
- */
-export function visualOf(content, view) {
-  const has = {
-    scene: content.scene !== undefined,
-    story: content.story !== undefined && content.story.length > 0,
-    sketch: content.sketch !== undefined,
-  }
-  if (view.visual !== undefined && has[view.visual]) return view.visual
-  return has.story ? 'story' : has.scene ? 'scene' : has.sketch ? 'sketch' : 'text'
-}
-
-/**
- * A side's story: its steps in order, the last one the outcome. Icons are the package's own SVG.
- * @param {NonNullable<CardSideContent['story']>} story
- * @param {Readonly<Record<string, string>>} icons
- */
-export function storyHtml(story, icons) {
-  const steps = story.map((step, i) => {
-    const last = i === story.length - 1
-    const icon = icons[step.icon] ?? ''
-    return `<li class="deck-step${last ? ' deck-step-outcome' : ''}" data-tone="${esc(step.tone ?? 'neutral')}" style="--i:${i}"><span class="deck-step-icon">${icon}</span><span class="deck-step-text">${inline(step.text)}</span></li>`
-  })
-  return `<ol class="deck-story">${steps.join('')}</ol>`
-}
-
-/**
- * One side on the card's front: its label and its visual (a scene, a story, or a sketch), or its
- * consequence as text when it has none.
+ * One side on the card's front: its label, its consequence in a line or two, and its scene. A
+ * scene is generated HTML, so it is shown in a frame that runs no script and loads nothing but
+ * the kit's stylesheet; a side without one shows its consequence alone.
  * @param {DecisionCard} card
  * @param {CardSide} side
  * @param {CardView} view
@@ -89,30 +59,22 @@ function sideFrontHtml(card, side, view) {
   const content = card[side]
   const letter = side.toUpperCase()
   const now = card.current === side ? '<span class="deck-now">in code now</span>' : ''
-  const visual = visualOf(content, view)
-  let body
-  if (visual === 'story') {
-    body = storyHtml(content.story ?? [], view.icons ?? {})
-  } else if (visual === 'scene') {
-    const src = `/deck-scene/${encodeURIComponent(view.review ?? '')}/${encodeURIComponent(card.key)}/${side}?theme=${encodeURIComponent(view.theme ?? 'auto')}`
-    body = `<div class="deck-gist">${inline(content.consequence)}</div><div class="deck-visual deck-visual-scene" data-visual="${side}"><iframe class="deck-scene" data-scene="${side}" sandbox="" src="${esc(src)}" title="Scene of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe></div>`
-  } else {
-    const frame =
-      visual === 'sketch'
-        ? `<iframe class="deck-sketch" data-sketch="${side}" sandbox="allow-scripts" src="/deck-sketch" title="Sketch of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe>`
-        : ''
-    body = `<div class="deck-visual" data-visual="${side}"${visual === 'sketch' ? ' data-has-sketch' : ''}>${frame}<div class="deck-visual-text">${inline(content.consequence)}</div></div>`
-  }
-  return `<section class="deck-side deck-side-${side}" data-side="${side}" data-shows="${visual}" aria-label="Side ${letter}: ${esc(content.label)}">
+  const src = `/deck-scene/${encodeURIComponent(view.review ?? '')}/${encodeURIComponent(card.key)}/${side}?theme=${encodeURIComponent(view.theme ?? 'auto')}`
+  const scene =
+    content.scene === undefined
+      ? ''
+      : `<div class="deck-visual" data-visual="${side}"><iframe class="deck-scene" data-scene="${side}" sandbox="" src="${esc(src)}" title="Scene of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe></div>`
+  return `<section class="deck-side deck-side-${side}" data-side="${side}"${content.scene === undefined ? ' data-plain' : ''} aria-label="Side ${letter}: ${esc(content.label)}">
 <header class="deck-side-h"><span class="deck-letter" aria-hidden="true">${letter}</span><h3>${esc(content.label)}</h3>${now}</header>
-${body}
+<div class="deck-gist">${inline(content.consequence)}</div>
+${scene}
 <button class="deck-pick cmd" type="button" data-pick="${side}"><kbd>${side}</kbd> pick ${letter}</button>
 </section>`
 }
 
 /**
- * One side on the card's back: the consequence, the snippet, and the justification with its
- * editor and record target.
+ * One side on the card's back: the justification the author accepts by picking it, where it is
+ * recorded, both editable, and the code the side proposes when it has a snippet.
  * @param {DecisionCard} card
  * @param {CardSide} side
  */
@@ -130,20 +92,58 @@ function sideBackHtml(card, side) {
   ).join('')
   return `<section class="deck-detail deck-side-${side}" data-detail="${side}">
 <h4><span class="deck-letter" aria-hidden="true">${letter}</span> ${esc(content.label)}</h4>
-<div class="deck-consequence">${inline(content.consequence)}</div>
-${snippet}
 <div class="deck-why">
 <p class="deck-why-text"><span class="deck-why-label">why</span> <span data-why-text>${esc(content.why)}</span></p>
 <label class="deck-edit"><span class="sr-only">Justification for side ${letter}</span><textarea data-why="${side}" rows="2" maxlength="560">${esc(content.why)}</textarea></label>
 <p class="deck-record"><span class="deck-record-chip" data-record-chip="${side}" data-record="${content.record}">${esc(RECORD_LABELS[content.record])}</span>
 <label class="deck-edit"><span class="sr-only">Record side ${letter}'s justification</span><select data-record-select="${side}">${options}</select></label></p>
 </div>
+${snippet}
 </section>`
 }
 
 /**
+ * The chunk of the diff a card is anchored to, as table rows, the anchor line marked.
+ * @param {DecisionCard} card
+ * @param {CardExcerpt} excerpt
+ */
+function diffRowsHtml(card, excerpt) {
+  const lang = excerpt.lang ?? langForPath(excerpt.path)
+  let oldLine = excerpt.oldStart
+  let newLine = excerpt.newStart
+  const anchorSide = card.side ?? 'new'
+  return excerpt.lines
+    .map(line => {
+      const mark = line[0] ?? ' '
+      const code = line.slice(1)
+      const kind = mark === '+' ? 'add' : mark === '-' ? 'del' : 'ctx'
+      const o = kind === 'add' ? '' : String(oldLine++)
+      const n = kind === 'del' ? '' : String(newLine++)
+      const here =
+        (anchorSide === 'new' && n === String(card.line)) || (anchorSide === 'old' && o === String(card.line))
+      return `<tr class="deck-diff-${kind}${here ? ' deck-diff-here' : ''}"><td class="ln">${o}</td><td class="ln">${n}</td><td class="mk">${esc(mark)}</td><td class="deck-diff-src"><code>${highlight(code, lang) || ' '}</code></td></tr>`
+    })
+    .join('')
+}
+
+/**
+ * The code a card is about, on its back: the anchored chunk, scrolled to the anchor line.
+ * @param {DecisionCard} card
+ * @param {CardExcerpt | undefined} excerpt
+ */
+function backCodeHtml(card, excerpt) {
+  const where = `${card.path}:${card.line}${card.side === 'old' ? ' (old)' : ''}`
+  if (excerpt === undefined) {
+    return `<section class="deck-back-code"><p class="deck-back-code-h mono">${esc(where)}</p><p class="muted">This chunk is not in this clone's diff anymore.</p></section>`
+  }
+  return `<section class="deck-back-code" aria-label="The code this card is about"><p class="deck-back-code-h mono">${esc(where)} <span class="muted">${esc(excerpt.header)}</span></p>
+<div class="deck-back-code-scroll"><table class="deck-diff deck-code"><tbody>${diffRowsHtml(card, excerpt)}</tbody></table></div></section>`
+}
+
+/**
  * One decision card. `data-card` carries its key; the drag and the keys act on the top one. The
- * front is the headline and the two sides' sketches; `i` turns it over to the words.
+ * front is the headline, each side's consequence, and its scene; `i` turns it over to the reasons
+ * and the code. A folded corner says so.
  * @param {DecisionCard} card
  * @param {{ index: number, total: number }} position
  * @param {CardView} [view]
@@ -154,18 +154,20 @@ export function cardHtml(card, position, view = {}) {
   return `<article class="deck-card" data-card="${esc(card.key)}" data-bucket="${esc(card.bucket)}" tabindex="-1" aria-labelledby="deck-title-${esc(card.key)}">
 <div class="deck-stamp deck-stamp-a" aria-hidden="true">A</div>
 <div class="deck-stamp deck-stamp-b" aria-hidden="true">B</div>
+<button class="deck-corner" type="button" data-act="details" aria-pressed="false"><span class="deck-corner-front"><kbd>i</kbd> reasons and code on the back</span><span class="deck-corner-back"><kbd>i</kbd> back to the front</span></button>
 <header class="deck-card-h">
 <p class="deck-kicker"><span class="deck-bucket">${esc(bucket)}</span><span class="deck-topic">${esc(card.topic)}</span><span class="deck-count mono">${position.index + 1} / ${position.total}</span></p>
 <h2 id="deck-title-${esc(card.key)}">${esc(card.title)}</h2>
 </header>
 <div class="deck-front"><div class="deck-sides">${sideFrontHtml(card, 'a', view)}<div class="deck-or" aria-hidden="true">or</div>${sideFrontHtml(card, 'b', view)}</div></div>
-<div class="deck-back" aria-label="Details">
+<div class="deck-back" aria-label="The reasons and the code">
 <div class="deck-context">${inline(card.context)}</div>
 <div class="deck-details">${sideBackHtml(card, 'a')}${sideBackHtml(card, 'b')}</div>
+${backCodeHtml(card, view.excerpt)}
 </div>
 <footer class="deck-card-f">
 <button class="deck-anchor mono" type="button" data-act="drawer" aria-expanded="false"><kbd>o</kbd> ${esc(where)}</button>
-<span class="deck-card-more"><button class="cmd" type="button" data-act="details" aria-pressed="false"><kbd>i</kbd> details</button><button class="cmd" type="button" data-act="edit"><kbd>e</kbd> edit why</button><button class="cmd" type="button" data-act="neither"><kbd>n</kbd> neither</button><button class="cmd" type="button" data-act="skip"><kbd>s</kbd> skip</button></span>
+<span class="deck-card-more"><button class="cmd" type="button" data-act="details" aria-pressed="false"><kbd>i</kbd> back</button><button class="cmd" type="button" data-act="edit"><kbd>e</kbd> edit why</button><button class="cmd" type="button" data-act="neither"><kbd>n</kbd> neither</button><button class="cmd" type="button" data-act="skip"><kbd>s</kbd> skip</button></span>
 </footer>
 <form class="deck-note" data-note hidden>
 <label for="deck-note-${esc(card.key)}">Neither side fits. What do you want instead?</label>
@@ -219,22 +221,8 @@ export function drawerHtml(card, excerpt) {
   if (excerpt === undefined) {
     return `<div class="deck-drawer-body"><p class="deck-drawer-h">${closeHtml}</p><p class="muted">The chunk for <code>${esc(card.path)}:${card.line}</code> is not in this clone's diff anymore.</p></div>`
   }
-  const lang = excerpt.lang ?? langForPath(excerpt.path)
-  let oldLine = excerpt.oldStart
-  let newLine = excerpt.newStart
-  const anchorSide = card.side ?? 'new'
-  const rows = excerpt.lines.map(line => {
-    const mark = line[0] ?? ' '
-    const code = line.slice(1)
-    const kind = mark === '+' ? 'add' : mark === '-' ? 'del' : 'ctx'
-    const o = kind === 'add' ? '' : String(oldLine++)
-    const n = kind === 'del' ? '' : String(newLine++)
-    const here =
-      (anchorSide === 'new' && n === String(card.line)) || (anchorSide === 'old' && o === String(card.line))
-    return `<tr class="deck-diff-${kind}${here ? ' deck-diff-here' : ''}"><td class="ln">${o}</td><td class="ln">${n}</td><td class="mk">${esc(mark)}</td><td class="deck-diff-src"><code>${highlight(code, lang) || ' '}</code></td></tr>`
-  })
   return `<div class="deck-drawer-body"><p class="deck-drawer-h mono">${esc(excerpt.path)} <span class="muted">${esc(excerpt.header)}</span>${closeHtml}</p>
-<div class="deck-drawer-scroll"><table class="deck-diff deck-code"><tbody>${rows.join('')}</tbody></table></div></div>`
+<div class="deck-drawer-scroll"><table class="deck-diff deck-code"><tbody>${diffRowsHtml(card, excerpt)}</tbody></table></div></div>`
 }
 
 /**
