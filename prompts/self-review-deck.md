@@ -93,8 +93,9 @@ a valid deck. When more real decisions remain than fit, drop the ones with the l
   - `snippet` (optional): `{ "code": "...", "lang": "ts" }`, at most {{SNIPPET_MAX_LINES}} lines
     that show this side: the change's own code for the current side, a sketch for the other.
     `lang` is a highlight.js language name; leave it out to use the anchor file's.
-  - `sketch`: a small p5 animation of this side's consequence. See **The sketch** below. Every
-    side gets one; a side without it shows its consequence as plain text instead.
+  - `story`: what happens once this side is picked, as two to four steps. See **The story**.
+  - `scene`: the same consequence as a small picture. See **The scene**.
+  - `sketch` (optional): a p5 animation of it instead. See **The sketch**.
   - `why`: the one-line justification the author accepts by picking this side. Write it in the
     author's voice ("Empty rows are exports from the old tool; skipping them is expected.").
   - `record`: where that justification belongs once picked. Ask who needs the reason, and when:
@@ -105,6 +106,58 @@ a valid deck. When more real decisions remain than fit, drop the ones with the l
       little once merged: why this scope, why this order of work, why not the alternative now.
     - `none` when the code itself will show it, which is usually the side that changes the code.
 - `current`: `"a"` or `"b"` for the side the code implements now, or `null` when it does neither.
+
+## The story
+
+A side's `story` tells, in two to four steps, **what happens once the author picks it**: a
+concrete little scenario, not a summary. The page draws the steps as a colored timeline under the
+side's label, the last step as the outcome, so most authors decide from the two stories alone.
+
+- **Concrete beats abstract.** Name the real thing: the error code, the file, the command, the
+  count, the person. "Reviewer submits 3 comments; 1 was written on a line that moved" beats
+  "Some drafts may be stale".
+- **Two to four steps, one moment each**, in order: what the reader does or what arrives, what the
+  code does with it, and the outcome. The last step is the consequence the author is choosing,
+  cost included, and the one that decides the card.
+- **Same situation on both sides.** Start both stories from the same moment, so only what the code
+  does differs.
+- Each step: `{ "icon": "<Lucide name>", "text": "…", "tone": "neutral" | "good" | "bad" | "warn" }`,
+  at most 70 visible characters, inline code in backticks allowed. `tone` colors the step: `bad`
+  for a cost, `good` for a benefit, `warn` for a risk, `neutral` (the default) for setup. Icons are
+  [Lucide](https://lucide.dev/icons) names, such as `user`, `users`, `message-square`,
+  `git-pull-request`, `git-commit-horizontal`, `file-code`, `database`, `server`, `cloud`,
+  `hard-drive`, `lock`, `lock-open`, `key-round`, `shield-check`, `shield-alert`, `clock`,
+  `timer`, `hourglass`, `triangle-alert`, `circle-x`, `circle-check`, `ban`, `refresh-cw`,
+  `repeat`, `copy`, `trash-2`, `eye`, `eye-off`, `send`, `inbox`, `list-checks`, `bug`, `zap`,
+  `package`, `settings`, `terminal`, `history`, `undo-2`, `split`, `merge`, `layers`, `link`.
+  Validation refuses a name that does not exist.
+
+## The scene
+
+A side's `scene` is a small HTML fragment that pictures the same consequence as the story, laid
+out by the kit's classes: the browser lines everything up, so write structure, not coordinates.
+It shows under the side's label and its one-line `consequence`, in a frame about 600 × 460 pixels
+on a desktop that runs no script and loads nothing. Make it vivid and quick to grasp: a few big
+things, strong color for the outcome, real names and numbers.
+
+- Layout: `scene` (the root column), `row` (items side by side; `row spread` pushes them apart),
+  `col`, `grid` (`style="--cols: 3"`), `stack` (items tight on top of each other).
+- Things: `box` (a rounded panel; `box ghost` dashed and empty, `box solid` filled), `chip` (a
+  small pill), `banner` (a full-width bar: the outcome), `big` (a large number or word), `label`
+  (a small caps caption), `small`, `code` (inline code), `strike`, `fade`.
+- Tones, on any element: `ink` (this side's color), `good`, `bad`, `warn`, `muted`. A toned
+  `box`, `chip`, `banner`, or `big` colors itself.
+- Icons: `<i data-icon="database" class="lg"></i>` with a Lucide name as above; sizes `lg`, `xl`.
+- Arrows: `<span class="arrow"></span>` points right, `arrow down` points down, `style="--len:
+  4rem"` sets its length, `data-say="retry"` writes a word on it, `arrow flow` animates things
+  moving along it, `arrow blocked` crosses it out.
+- Motion: `pulse`, `bob`, `shake` (for a failure), `blink`, `spin` loop; `enter` on a parent
+  deals its children in one by one. `on-pick` shows an element only once the author picks this
+  side (the payoff: a stamp, a check, the final count); `off-pick` fades one then.
+- Inline `<svg>` is allowed for a shape the kit lacks, and `style` attributes for sizes and
+  colors (use the tones' variables: `var(--good)`, `var(--bad)`, `var(--warn)`, `var(--ink)`).
+- Not allowed, and refused by validation: `<script>`, `<img>`, `<style>`, forms and inputs,
+  frames, event handler attributes, `url(...)`, and links anywhere. At most 4000 characters.
 
 ## The sketch
 

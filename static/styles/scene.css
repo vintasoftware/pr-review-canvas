@@ -1,0 +1,395 @@
+/* The scene kit: what a card side's scene is built with. A scene is a small HTML fragment the deck
+   generator writes; these classes lay it out (the browser does the aligning), color it, and move it.
+   It runs in a frame that allows no script, so all motion here is CSS. Everything is sized in rem,
+   and the root size follows the frame, so a scene scales with the card. */
+
+:root {
+  color-scheme: light dark;
+  --ink-a: light-dark(#364fc7, #91a7ff);
+  --ink-b: light-dark(#c2255c, #faa2c1);
+  --ink: var(--ink-a);
+  --fg: light-dark(#1f2328, #e6edf3);
+  --muted: light-dark(#59636e, #9198a1);
+  --paper: light-dark(#ffffff, #151b23);
+  --line: light-dark(#d1d9e0, #3d444d);
+  --good: light-dark(#1a7f37, #3fb950);
+  --bad: light-dark(#cf222e, #f85149);
+  --warn: light-dark(#9a6700, #d29922);
+  --tint: color-mix(in srgb, var(--c, var(--ink)) 14%, var(--paper));
+  font-size: clamp(11px, min(3.1vw, 4.4vh), 22px);
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-side='b'] {
+  --ink: var(--ink-b);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.25;
+}
+.scene-root {
+  height: 100%;
+  padding: 0.8rem;
+  display: grid;
+  place-items: center;
+}
+
+/* Layout. */
+.scene,
+.col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.scene {
+  width: 100%;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.row.spread {
+  justify-content: space-between;
+  width: 100%;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* Tones: any element takes one, and boxes, chips, and banners color themselves by it. */
+.ink {
+  --c: var(--ink);
+}
+.good {
+  --c: var(--good);
+}
+.bad {
+  --c: var(--bad);
+}
+.warn {
+  --c: var(--warn);
+}
+.muted {
+  --c: var(--muted);
+  color: var(--muted);
+}
+
+/* Things. */
+.box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0.14rem solid var(--c, var(--fg));
+  border-radius: 0.6rem;
+  background: var(--tint);
+  font-weight: 650;
+  text-align: center;
+  min-width: 4.5rem;
+}
+.box.ghost {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+}
+.box.solid {
+  background: var(--c, var(--fg));
+  color: var(--paper);
+  border-color: var(--c, var(--fg));
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--c, var(--muted));
+  color: var(--paper);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.5rem;
+  background: var(--c, var(--ink));
+  color: var(--paper);
+  font-weight: 750;
+  font-size: 1.05rem;
+  text-align: center;
+}
+/* On a filled thing, what sits inside takes the paper color, whatever tone it carries. */
+.chip .icon,
+.banner .icon,
+.box.solid .icon {
+  color: var(--paper);
+}
+.banner .big,
+.box.solid .big,
+.chip .big {
+  color: inherit;
+}
+.chip .icon {
+  width: 1em;
+  height: 1em;
+}
+.big {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--c, var(--fg));
+}
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--c, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.small {
+  font-size: 0.8rem;
+  color: var(--c, var(--muted));
+}
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--fg) 8%, var(--paper));
+  color: var(--c, var(--fg));
+}
+.strike {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.14rem;
+  text-decoration-color: var(--bad);
+  opacity: 0.7;
+}
+.fade {
+  opacity: 0.4;
+}
+.icon {
+  width: 1.3em;
+  height: 1.3em;
+  flex: none;
+  color: var(--c, currentColor);
+}
+.icon.lg {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+.icon.xl {
+  width: 3.4rem;
+  height: 3.4rem;
+}
+
+/* Arrows: a line that points right (or down), optionally with a word on it. */
+.arrow {
+  position: relative;
+  flex: 0 0 var(--len, 2.4rem);
+  height: 0.16rem;
+  background: var(--c, var(--muted));
+  border-radius: 1rem;
+}
+.arrow::after {
+  content: '';
+  position: absolute;
+  right: -0.1rem;
+  top: 50%;
+  border: 0.32rem solid transparent;
+  border-left: 0.5rem solid var(--c, var(--muted));
+  border-right: 0;
+  transform: translateY(-50%);
+}
+.arrow.down {
+  flex-basis: auto;
+  width: 0.16rem;
+  height: var(--len, 1.4rem);
+}
+.arrow.down::after {
+  right: auto;
+  top: auto;
+  left: 50%;
+  bottom: -0.1rem;
+  border: 0.32rem solid transparent;
+  border-top: 0.5rem solid var(--c, var(--muted));
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+.arrow[data-say]::before {
+  content: attr(data-say);
+  position: absolute;
+  left: 50%;
+  bottom: 0.4rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--c, var(--muted));
+}
+.arrow.blocked {
+  --c: var(--bad);
+}
+.arrow.blocked::before {
+  content: '✕';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -52%);
+  font-weight: 900;
+  font-size: 1rem;
+  color: var(--bad);
+  background: var(--paper);
+  padding: 0 0.15rem;
+}
+/* Things moving along the arrow. */
+.arrow.flow {
+  background: repeating-linear-gradient(90deg, var(--c, var(--ink)) 0 0.4rem, transparent 0.4rem 0.7rem);
+  background-size: 0.7rem 100%;
+  animation: flow 0.6s linear infinite;
+}
+
+/* Motion. Loops are gentle; `on-pick` things wait until the author picks this side. */
+.pulse {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.shake {
+  animation: shake 2.4s ease-in-out infinite;
+}
+.blink {
+  animation: blink 1.2s steps(2, jump-none) infinite;
+}
+.bob {
+  animation: bob 2s ease-in-out infinite;
+}
+.spin {
+  animation: spin 3s linear infinite;
+}
+.enter > * {
+  animation: enter 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.enter > :nth-child(2) {
+  animation-delay: 0.15s;
+}
+.enter > :nth-child(3) {
+  animation-delay: 0.3s;
+}
+.enter > :nth-child(4) {
+  animation-delay: 0.45s;
+}
+.enter > :nth-child(5) {
+  animation-delay: 0.6s;
+}
+.enter > :nth-child(n + 6) {
+  animation-delay: 0.75s;
+}
+.on-pick {
+  opacity: 0;
+  transform: scale(0.6);
+}
+#picked:target .on-pick {
+  animation: pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+#picked:target .off-pick {
+  transition: opacity 0.3s;
+  opacity: 0.25;
+}
+
+@keyframes flow {
+  to {
+    background-position: 0.7rem 0;
+  }
+}
+@keyframes pulse {
+  50% {
+    transform: scale(1.08);
+  }
+}
+@keyframes shake {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  84% {
+    transform: translateX(-0.2rem);
+  }
+  88% {
+    transform: translateX(0.2rem);
+  }
+  92% {
+    transform: translateX(-0.15rem);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes bob {
+  50% {
+    transform: translateY(-0.25rem);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem) scale(0.9);
+  }
+}
+@keyframes pop {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .on-pick {
+    opacity: 0;
+  }
+  #picked:target .on-pick {
+    opacity: 1;
+    transform: none;
+  }
+}

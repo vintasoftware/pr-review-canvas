@@ -33,7 +33,7 @@ import { errorCardHtml } from './errors.js'
  * @typedef {{ deck: { review: import('./contract-types.js').ReviewKey, headSha: string, headRef: string, baseRef: string,
  *   cards: DecisionCard[], settled: unknown[] }, picks: Record<string, Pick>,
  *   excerpts: Record<string, CardExcerpt>, summary: Summary,
- *   fixes: { path: string, markdown: string } | null }} DeckResponse
+ *   fixes: { path: string, markdown: string } | null, icons?: Record<string, string> }} DeckResponse
  */
 
 /** How far a drag has to travel, in pixels, before letting go picks a side. */
@@ -212,11 +212,17 @@ function leanSketches(card, side, strength) {
 async function payoff(card, side) {
   const live = card.querySelector(`.deck-visual[data-visual="${side}"][data-live]`)
   for (const frame of card.querySelectorAll('iframe')) {
+    if (!frame.hasAttribute('data-sketch')) continue
     const state = frame.getAttribute('data-sketch') === side ? 'picked' : 'other'
     frame.contentWindow?.postMessage({ type: 'state', state }, '*')
   }
+  // A scene cannot be told anything, having no script; the fragment is what its CSS listens for.
+  const scene = /** @type {HTMLIFrameElement | null} */ (card.querySelector(`iframe[data-scene="${side}"]`))
+  if (scene !== null) scene.src = `${scene.src.split('#')[0]}#picked`
   card.dataset['picked'] = side
-  if (live === null || reducedMotion() || card.classList.contains('deck-flipped')) return
+  const moving =
+    live !== null || scene !== null || card.querySelector(`.deck-side-${side}[data-shows="story"]`) !== null
+  if (!moving || reducedMotion() || card.classList.contains('deck-flipped')) return
   await new Promise(resolve => setTimeout(resolve, PAYOFF_MS))
 }
 
@@ -260,6 +266,14 @@ export async function bootDeck() {
     return
   }
   const { deck, excerpts } = data
+  const asked = new URLSearchParams(location.search).get('visual')
+  /** @type {import('./deck-view.js').CardView} */
+  const view = {
+    review: boot.review,
+    theme: document.documentElement.dataset['theme'] ?? 'auto',
+    icons: data.icons ?? {},
+    ...(asked === 'scene' || asked === 'story' || asked === 'sketch' ? { visual: asked } : {}),
+  }
   const state = createDeckState(deck.cards, data.picks)
   let summary = data.summary
   let fixes = data.fixes
@@ -343,7 +357,7 @@ ${deckHelpHtml()}`
       return
     }
     const index = deck.cards.findIndex(c => c.key === top.key)
-    table.innerHTML = `<div class="deck-hand">${stackHtml(state.peek())}${cardHtml(top, { index, total: deck.cards.length })}</div>`
+    table.innerHTML = `<div class="deck-hand">${stackHtml(state.peek())}${cardHtml(top, { index, total: deck.cards.length }, view)}</div>`
     const card = /** @type {HTMLElement} */ (topCard())
     wireDrag(card)
     wireHover(card)

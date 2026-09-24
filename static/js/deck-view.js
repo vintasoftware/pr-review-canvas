@@ -11,6 +11,7 @@ import { DECK_KEY_HELP, pickNeedsFix, RECORD_LABELS, RECORD_ORDER } from './deck
 /** @typedef {import('./deck-state.js').DecisionCard} DecisionCard */
 /** @typedef {import('./deck-state.js').Pick} Pick */
 /** @typedef {import('./deck-state.js').CardSide} CardSide */
+/** @typedef {import('./deck-state.js').SideContent} CardSideContent */
 /**
  * @typedef {{ path: string, header: string, lines: string[], oldStart: number, newStart: number,
  *   lang?: string }} CardExcerpt
@@ -42,22 +43,69 @@ function inline(text) {
 }
 
 /**
- * One side on the card's front: its label and its sketch, or its consequence as text when it has
- * no sketch. The sketch runs in a sandboxed frame; deck.js posts the code in once it loads.
+ * How a card's sides are shown: as generated scenes (HTML in a frame that runs no script), as
+ * stories (steps drawn by this page), or as p5 sketches. `icons` holds the SVG the stories name.
+ * @typedef {{ visual?: 'scene' | 'story' | 'sketch', review?: string, theme?: string,
+ *   icons?: Readonly<Record<string, string>> }} CardView
+ */
+
+/**
+ * The visual a side shows under `view`, falling back to what the side has.
+ * @param {CardSideContent} content
+ * @param {CardView} view
+ */
+export function visualOf(content, view) {
+  const has = {
+    scene: content.scene !== undefined,
+    story: content.story !== undefined && content.story.length > 0,
+    sketch: content.sketch !== undefined,
+  }
+  if (view.visual !== undefined && has[view.visual]) return view.visual
+  return has.story ? 'story' : has.scene ? 'scene' : has.sketch ? 'sketch' : 'text'
+}
+
+/**
+ * A side's story: its steps in order, the last one the outcome. Icons are the package's own SVG.
+ * @param {NonNullable<CardSideContent['story']>} story
+ * @param {Readonly<Record<string, string>>} icons
+ */
+export function storyHtml(story, icons) {
+  const steps = story.map((step, i) => {
+    const last = i === story.length - 1
+    const icon = icons[step.icon] ?? ''
+    return `<li class="deck-step${last ? ' deck-step-outcome' : ''}" data-tone="${esc(step.tone ?? 'neutral')}" style="--i:${i}"><span class="deck-step-icon">${icon}</span><span class="deck-step-text">${inline(step.text)}</span></li>`
+  })
+  return `<ol class="deck-story">${steps.join('')}</ol>`
+}
+
+/**
+ * One side on the card's front: its label and its visual (a scene, a story, or a sketch), or its
+ * consequence as text when it has none.
  * @param {DecisionCard} card
  * @param {CardSide} side
+ * @param {CardView} view
  */
-function sideFrontHtml(card, side) {
+function sideFrontHtml(card, side, view) {
   const content = card[side]
   const letter = side.toUpperCase()
   const now = card.current === side ? '<span class="deck-now">in code now</span>' : ''
-  const frame =
-    content.sketch === undefined
-      ? ''
-      : `<iframe class="deck-sketch" data-sketch="${side}" sandbox="allow-scripts" src="/deck-sketch" title="Sketch of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe>`
-  return `<section class="deck-side deck-side-${side}" data-side="${side}" aria-label="Side ${letter}: ${esc(content.label)}">
+  const visual = visualOf(content, view)
+  let body
+  if (visual === 'story') {
+    body = storyHtml(content.story ?? [], view.icons ?? {})
+  } else if (visual === 'scene') {
+    const src = `/deck-scene/${encodeURIComponent(view.review ?? '')}/${encodeURIComponent(card.key)}/${side}?theme=${encodeURIComponent(view.theme ?? 'auto')}`
+    body = `<div class="deck-gist">${inline(content.consequence)}</div><div class="deck-visual deck-visual-scene" data-visual="${side}"><iframe class="deck-scene" data-scene="${side}" sandbox="" src="${esc(src)}" title="Scene of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe></div>`
+  } else {
+    const frame =
+      visual === 'sketch'
+        ? `<iframe class="deck-sketch" data-sketch="${side}" sandbox="allow-scripts" src="/deck-sketch" title="Sketch of side ${letter}" referrerpolicy="no-referrer" tabindex="-1" aria-hidden="true"></iframe>`
+        : ''
+    body = `<div class="deck-visual" data-visual="${side}"${visual === 'sketch' ? ' data-has-sketch' : ''}>${frame}<div class="deck-visual-text">${inline(content.consequence)}</div></div>`
+  }
+  return `<section class="deck-side deck-side-${side}" data-side="${side}" data-shows="${visual}" aria-label="Side ${letter}: ${esc(content.label)}">
 <header class="deck-side-h"><span class="deck-letter" aria-hidden="true">${letter}</span><h3>${esc(content.label)}</h3>${now}</header>
-<div class="deck-visual" data-visual="${side}"${content.sketch === undefined ? '' : ' data-has-sketch'}>${frame}<div class="deck-visual-text">${inline(content.consequence)}</div></div>
+${body}
 <button class="deck-pick cmd" type="button" data-pick="${side}"><kbd>${side}</kbd> pick ${letter}</button>
 </section>`
 }
@@ -98,8 +146,9 @@ ${snippet}
  * front is the headline and the two sides' sketches; `i` turns it over to the words.
  * @param {DecisionCard} card
  * @param {{ index: number, total: number }} position
+ * @param {CardView} [view]
  */
-export function cardHtml(card, position) {
+export function cardHtml(card, position, view = {}) {
   const bucket = BUCKET_LABELS[card.bucket] ?? card.bucket
   const where = `${card.path}:${card.line}${card.side === 'old' ? ' (old)' : ''}`
   return `<article class="deck-card" data-card="${esc(card.key)}" data-bucket="${esc(card.bucket)}" tabindex="-1" aria-labelledby="deck-title-${esc(card.key)}">
@@ -109,7 +158,7 @@ export function cardHtml(card, position) {
 <p class="deck-kicker"><span class="deck-bucket">${esc(bucket)}</span><span class="deck-topic">${esc(card.topic)}</span><span class="deck-count mono">${position.index + 1} / ${position.total}</span></p>
 <h2 id="deck-title-${esc(card.key)}">${esc(card.title)}</h2>
 </header>
-<div class="deck-front"><div class="deck-sides">${sideFrontHtml(card, 'a')}<div class="deck-or" aria-hidden="true">or</div>${sideFrontHtml(card, 'b')}</div></div>
+<div class="deck-front"><div class="deck-sides">${sideFrontHtml(card, 'a', view)}<div class="deck-or" aria-hidden="true">or</div>${sideFrontHtml(card, 'b', view)}</div></div>
 <div class="deck-back" aria-label="Details">
 <div class="deck-context">${inline(card.context)}</div>
 <div class="deck-details">${sideBackHtml(card, 'a')}${sideBackHtml(card, 'b')}</div>

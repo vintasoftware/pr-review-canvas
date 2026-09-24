@@ -7,7 +7,8 @@
 /** @typedef {'pr-comment' | 'code' | 'none'} RecordTarget */
 /**
  * @typedef {{ label: string, consequence: string, snippet?: { lang?: string, code: string },
- *   sketch?: string, why: string, record: RecordTarget }} SideContent
+ *   sketch?: string, scene?: string, story?: Array<{ icon: string, text: string,
+ *   tone?: 'neutral' | 'good' | 'bad' | 'warn' }>, why: string, record: RecordTarget }} SideContent
  */
 /**
  * @typedef {{ key: string, bucket: string, topic: string, title: string, context: string,

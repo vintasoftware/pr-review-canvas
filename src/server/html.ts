@@ -123,6 +123,21 @@ export function sketchFrame(): string {
 </head><body><script src="/vendor/p5.js"></script><script type="module" src="/static/js/sketch-host.js"></script></body></html>`
 }
 
+/**
+ * The page one side's scene is drawn in. The scene is generated HTML, placed as written with its
+ * icons inlined; the page's policy (`sceneFramePolicy`) lets none of it run or load anything. The
+ * root's id is what a `#picked` fragment targets, which is how the deck page plays the payoff.
+ */
+export function sceneFrame(opts: {
+  scene: string
+  side: 'a' | 'b'
+  theme: 'light' | 'dark' | 'auto'
+}): string {
+  return `<!doctype html><html lang="en" data-side="${opts.side}" data-theme="${opts.theme}"><head><meta charset="utf-8"><title>scene</title>
+<link rel="stylesheet" href="/static/styles/scene.css"></head>
+<body><main id="picked" class="scene-root">${opts.scene}</main></body></html>`
+}
+
 export function homePage(
   data: HomeData & {
     owner: string

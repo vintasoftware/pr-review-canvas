@@ -4,8 +4,9 @@ import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
-import { deckPage, homePage, reviewPage, sketchFrame } from '../html.js'
-import { SKETCH_FRAME_PATH } from '../security.js'
+import { deckPage, homePage, reviewPage, sceneFrame, sketchFrame } from '../html.js'
+import { SCENE_FRAME_PREFIX, SKETCH_FRAME_PATH } from '../security.js'
+import { inlineIcons } from '../../deck/scene.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
 export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Promise<Appearance> {
@@ -111,6 +112,23 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
 
   // The frame one side's sketch runs in; the deck page frames it and posts the sketch in.
   app.get(SKETCH_FRAME_PATH, c => c.html(sketchFrame()))
+
+  // One side's scene, in the frame the deck page shows it in.
+  app.get(`${SCENE_FRAME_PREFIX}:key/:card/:side`, async c => {
+    const review = parseReviewKey(c.req.param('key'))
+    const side = c.req.param('side')
+    const deck = review === null ? null : await ctx.decks.readDeck(review)
+    const scene =
+      side === 'a' || side === 'b'
+        ? deck?.cards.find(card => card.key === c.req.param('card'))?.[side].scene
+        : undefined
+    if (scene === undefined || (side !== 'a' && side !== 'b')) {
+      throw new AppError('NOT_FOUND', 'no such scene', 404)
+    }
+    const raw = c.req.query('theme')
+    const theme = raw === 'dark' || raw === 'light' ? raw : 'auto'
+    return c.html(sceneFrame({ scene: inlineIcons(scene), side, theme }))
+  })
 
   return app
 }

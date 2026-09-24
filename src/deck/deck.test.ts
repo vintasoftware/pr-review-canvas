@@ -212,6 +212,22 @@ describe('validateDeckModel', () => {
     ])
   })
 
+  it('refuses stories and scenes that name missing icons or would not show', () => {
+    const story = [
+      { icon: 'user', text: 'x'.repeat(71) },
+      { icon: 'nope', text: 'Import fails' },
+    ]
+    const result = validateDeckModel(
+      { cards: [card({ a: { ...card().a, story, scene: '<script>1</script>' } })] },
+      { files, maxCards: 1 }
+    )
+    expect(result.ok ? [] : result.problems.map(p => `${p.code} ${p.where}`)).toEqual([
+      'SKETCH_INVALID card:empty-rows.a.scene',
+      'SKETCH_INVALID card:empty-rows.a.story',
+      'TEXT_TOO_LONG card:empty-rows.a.story.0',
+    ])
+  })
+
   it('counts visible text, so backticks and link targets are free', () => {
     const title = `\`${'y'.repeat(60)}\``
     expect(validateDeckModel({ cards: [card({ title })] }, { files, maxCards: 1 }).ok).toBe(true)
@@ -408,6 +424,59 @@ describe('a deck from prepare to the fix list', () => {
     expect((await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: true })).headSha).toBe(
       HEAD_SHA
     )
+  })
+
+  it('serves each side’s scene in its own locked frame, and the icons its stories name', async () => {
+    t = await makeTestContext({ git: gitForLocal() })
+    const scene = '<div class="scene"><i data-icon="database" class="lg"></i> 3 rows</div>'
+    const story = [
+      { icon: 'user', text: 'Someone exports' },
+      { icon: 'circle-x', text: 'Import fails', tone: 'bad' as const },
+    ]
+    await prepareAndWrite([card({ a: { ...card().a, scene, story }, b: { ...card().b, story } })])
+    await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
+    const app = createApp(t.ctx)
+    const deck = await t.ctx.decks.readDeck('uncommitted')
+    // Publish may have swapped the sides; find the one that has the scene.
+    const side = deck?.cards[0]?.a.scene === undefined ? 'b' : 'a'
+
+    const frame = await app.request(`/deck-scene/uncommitted/empty-rows/${side}?theme=dark`, {
+      headers: LOCAL,
+    })
+    expect(frame.status).toBe(200)
+    const html = await frame.text()
+    expect(html).toContain(`data-side="${side}" data-theme="dark"`)
+    expect(html).toContain('<main id="picked" class="scene-root"><div class="scene"><svg class="icon lg"')
+    expect(html).toContain(' 3 rows</div></main>')
+    expect(html).not.toContain('data-icon')
+    expect(frame.headers.get('content-security-policy')).toBe(
+      "sandbox; default-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; object-src 'none'"
+    )
+    // Any other theme is the system's.
+    expect(
+      await (
+        await app.request(`/deck-scene/uncommitted/empty-rows/${side}?theme=x`, { headers: LOCAL })
+      ).text()
+    ).toContain('data-theme="auto"')
+
+    const other = side === 'a' ? 'b' : 'a'
+    for (const path of [
+      `/deck-scene/uncommitted/empty-rows/${other}`,
+      '/deck-scene/uncommitted/nope/a',
+      '/deck-scene/uncommitted/empty-rows/c',
+      '/deck-scene/branch/empty-rows/a',
+      '/deck-scene/not-a-review/empty-rows/a',
+    ]) {
+      expect((await app.request(path, { headers: LOCAL })).status, path).toBe(404)
+    }
+
+    const got = (await (
+      await app.request('/api/deck/uncommitted', { headers: LOCAL })
+    ).json()) as DeckResponse & {
+      icons: Record<string, string>
+    }
+    expect(Object.keys(got.icons).sort()).toEqual(['circle-x', 'user'])
+    expect(got.icons['user']).toMatch(/^<svg class="icon"/)
   })
 
   it('serves the deck with its excerpts, saves picks, undoes them, and writes the fix list', async () => {

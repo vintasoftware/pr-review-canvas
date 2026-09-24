@@ -1,7 +1,16 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { DECK_KEY_HELP } from './deck-state.js'
-import { cardHtml, deckHelpHtml, drawerHtml, finishHtml, pipsHtml, stackHtml } from './deck-view.js'
+import {
+  cardHtml,
+  deckHelpHtml,
+  drawerHtml,
+  finishHtml,
+  pipsHtml,
+  stackHtml,
+  storyHtml,
+  visualOf,
+} from './deck-view.js'
 
 /** @typedef {import('./deck-state.js').DecisionCard} DecisionCard */
 /** @typedef {import('./deck-state.js').Pick} Pick */
@@ -84,6 +93,65 @@ describe('cardHtml', () => {
     expect(root.querySelector('[data-visual="b"] .deck-visual-text')?.textContent?.trim()).toBe(
       'Nothing is dropped.'
     )
+  })
+
+  it('draws a side’s story as its steps, the last one the outcome, and escapes their text', () => {
+    const story = /** @type {const} */ ([
+      { icon: 'user', text: 'Reviewer drafts `3` comments' },
+      { icon: 'nope', text: '<b>push</b>', tone: 'warn' },
+      { icon: 'circle-x', text: 'Nothing posts', tone: 'bad' },
+    ])
+    const root = render(
+      cardHtml(
+        card({ a: { ...card().a, story: [...story] } }),
+        { index: 0, total: 1 },
+        { icons: { user: '<svg class="icon"></svg>' } }
+      )
+    )
+    const steps = root.querySelectorAll('.deck-side-a .deck-step')
+    expect([...steps].map(s => s.getAttribute('data-tone'))).toEqual(['neutral', 'warn', 'bad'])
+    expect(steps[0]?.querySelector('code')?.textContent).toBe('3')
+    expect(steps[0]?.querySelector('svg')).not.toBeNull()
+    // An icon the page was not given draws nothing; markup in a step stays text.
+    expect(steps[1]?.querySelector('.deck-step-icon')?.innerHTML).toBe('')
+    expect(steps[1]?.querySelector('b')).toBeNull()
+    expect(steps[2]?.classList.contains('deck-step-outcome')).toBe(true)
+    expect(root.querySelector('.deck-side-a')?.getAttribute('data-shows')).toBe('story')
+    // The side without a story keeps its consequence as text.
+    expect(root.querySelector('.deck-side-b')?.getAttribute('data-shows')).toBe('text')
+    expect(storyHtml([], {})).toBe('<ol class="deck-story"></ol>')
+  })
+
+  it('frames a side’s scene with no permission at all, under its one-line consequence', () => {
+    const root = render(
+      cardHtml(
+        card({ key: 'a/b', b: { ...card().b, scene: '<p>x</p>' } }),
+        { index: 0, total: 1 },
+        { review: '42', theme: 'dark' }
+      )
+    )
+    const frame = /** @type {HTMLIFrameElement} */ (root.querySelector('.deck-side-b iframe'))
+    expect(frame.getAttribute('sandbox')).toBe('')
+    expect(frame.getAttribute('src')).toBe('/deck-scene/42/a%2Fb/b?theme=dark')
+    expect(root.querySelector('.deck-side-b .deck-gist')?.textContent?.trim()).toBe('Nothing is dropped.')
+    // The scene's HTML reaches the page only through the frame.
+    expect(root.innerHTML).not.toContain('<p>x</p>')
+  })
+
+  it('shows the visual asked for when the side has it, and otherwise the best one it has', () => {
+    const side = card().a
+    const all = {
+      ...side,
+      story: [{ icon: 'user', text: 'x' }],
+      scene: '<p>x</p>',
+      sketch: 'p.draw = () => 0',
+    }
+    expect(visualOf(all, {})).toBe('story')
+    expect(visualOf(all, { visual: 'scene' })).toBe('scene')
+    expect(visualOf(all, { visual: 'sketch' })).toBe('sketch')
+    expect(visualOf({ ...side, scene: '<p>x</p>' }, { visual: 'story' })).toBe('scene')
+    expect(visualOf({ ...side, sketch: 'x', story: [] }, {})).toBe('sketch')
+    expect(visualOf(side, { visual: 'scene' })).toBe('text')
   })
 
   it('keeps the headline on the front and the words on the back', () => {
