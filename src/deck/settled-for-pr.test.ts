@@ -7,7 +7,7 @@ import { GenerationContextSchema } from '../contract/generation-context.js'
 import type { ReviewKey } from '../contract/review-key.js'
 import { artifactToModelOutput } from '../review/normalize.js'
 import { prepare } from '../review/prepare.js'
-import { publish } from '../review/publish.js'
+import { ModelInvalidError, publish } from '../review/publish.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
 import {
   BASE_SHA,
@@ -38,8 +38,9 @@ function card(key: string, over: Partial<DecisionCard> = {}): DecisionCard {
     topic: 'Rare case vs simplify',
     title: `Title ${key}`,
     context: 'c',
+    // The synthetic diff's second chunk of src/app.ts, away from the canvas's own decide point.
     path: 'src/app.ts',
-    line: 2,
+    line: 12,
     current: 'a',
     a: { label: 'Keep', consequence: 'c', why: `why ${key} A`, record: 'pr-comment' },
     b: { label: 'Change', consequence: 'c', why: `why ${key} B`, record: 'none' },
@@ -113,20 +114,22 @@ describe('the decisions a pull request inherits from its decks', () => {
           key: 'kept',
           title: 'Title kept',
           path: 'src/app.ts',
-          line: 2,
+          line: 12,
           side: 'new',
           picked: 'A, Keep',
           why: 'why kept A',
         },
       ],
-      open: [{ key: 'asked', title: 'Title asked', path: 'src/app.ts', line: 2, side: 'new' }],
+      open: [{ key: 'asked', title: 'Title asked', path: 'src/app.ts', line: 12, side: 'new' }],
     })
     const prompt = await readFile(prepared.promptPath, 'utf8')
     expect(prompt).toContain('## Decisions from the author’s self-review')
     expect(prompt).toContain('Do not raise any of them as a `decide` point')
-    expect(prompt).toContain('- **Title kept** at `src/app.ts:2`. Picked A, Keep. Why: why kept A')
+    expect(prompt).toContain('- `kept` **Title kept** at `src/app.ts:12`. Picked A, Keep. Why: why kept A')
     expect(prompt).toContain('The author left these for reviewers.')
-    expect(prompt).toContain('- **Title asked** at `src/app.ts:2`.')
+    expect(prompt).toContain('- `asked` **Title asked** at `src/app.ts:12`.')
+    expect(prompt).toContain('with `"asks": "<key>"`')
+    expect(prompt).toContain('with `"reopens": "<key>"`')
   })
 
   it('leaves the prompt alone when no deck speaks for the pull request', async () => {
@@ -188,7 +191,7 @@ describe('the decisions a pull request inherits from its decks', () => {
     expect(review.comments).toEqual([
       expect.objectContaining({
         path: 'src/app.ts',
-        line: 2,
+        line: 12,
         side: 'RIGHT',
         body: expect.stringContaining('**Self-review: Title kept**\n\nPicked A, Keep. why kept A'),
       }),
@@ -342,7 +345,28 @@ describe('the decisions a pull request inherits from its decks', () => {
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(prepared.contextPath, 'utf8')))
     expect(context.selfReview?.settled[0]).not.toHaveProperty('line')
     expect(await readFile(prepared.promptPath, 'utf8')).toContain(
-      '- **Title far** at `src/app.ts` (its code changed since).'
+      '- `far` **Title far** at `src/app.ts` (its code changed since).'
     )
+  })
+
+  it('refuses a canvas that reopens a settled decision without saying so, and keeps a declared reopen', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    // Settled on the chunk where the synthetic canvas has its own decide point (src/app.ts:4).
+    await deal(t, 42, [card('sum', { line: 3 })], { sum: pick('a') })
+    const prepared = await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
+    const model = artifactToModelOutput(syntheticArtifact())
+    await writeTextAtomic(`${prepared.canvasDir}/model.json`, JSON.stringify(model))
+    const refused = await publish(t.ctx, prepared.canvasDir, OPTS).catch(e => e)
+    expect(refused).toBeInstanceOf(ModelInvalidError)
+    expect((refused as ModelInvalidError).report.errors.map(e => e.code)).toEqual(['SETTLED_REOPENED'])
+
+    const declared = {
+      ...model,
+      points: model.points.map(p => (p.level === 'decide' && p.line === 4 ? { ...p, reopens: 'sum' } : p)),
+    }
+    await writeTextAtomic(`${prepared.canvasDir}/model.json`, JSON.stringify(declared))
+    const result = await publish(t.ctx, prepared.canvasDir, OPTS)
+    const stored = await t.ctx.canvases.readArtifact(result.headSha)
+    expect(stored?.points.find(p => p.line === 4)?.reopens).toBe('sum')
   })
 })

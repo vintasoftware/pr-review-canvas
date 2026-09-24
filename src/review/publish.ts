@@ -174,6 +174,7 @@ export async function validationInput(
     highRisk: context.highRisk,
     headPaths,
     testPatterns: context.tests.patterns,
+    selfReview: context.selfReview,
   }
 }
 

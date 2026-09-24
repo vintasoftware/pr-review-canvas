@@ -1,7 +1,8 @@
 // `pr-review deck validate` and `pr-review deck publish`: check the generated deck-model.json
 // against the context `deck prepare` wrote, and publish it as the review's deck.
+import { createHash } from 'node:crypto'
 import path from 'node:path'
-import { type Deck, type DeckContext, DeckContextSchema } from '../contract/deck.js'
+import { type Deck, type DeckContext, DeckContextSchema, type DecisionCard } from '../contract/deck.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../contract/review-key.js'
 import { resolveLocalHead } from '../git/local-target.js'
 import type { AppContext } from '../server/context.js'
@@ -60,6 +61,19 @@ export async function checkDeckModel(
   return result.ok ? { ok: true, cards: result.model.cards } : result
 }
 
+/**
+ * Swaps sides A and B on about half the cards, chosen by the card's key. Generators put the code
+ * as it is on side A almost every time, which would make "keep it" always the left swipe; the
+ * author should read both sides, not learn a direction. The key decides, so a card asked again
+ * keeps its layout.
+ */
+export function shuffleSides(card: DecisionCard): DecisionCard {
+  const swap = (createHash('sha256').update(card.key).digest()[0] ?? 0) % 2 === 1
+  if (!swap) return card
+  const current = card.current === null ? null : card.current === 'a' ? 'b' : 'a'
+  return { ...card, a: card.b, b: card.a, current }
+}
+
 /** Where the target's head is now: the forge's answer for a pull request, the clone's otherwise. */
 async function currentHead(ctx: AppContext, review: ReviewKey): Promise<string> {
   if (isLocalKey(review)) {
@@ -107,7 +121,7 @@ export async function publishDeck(
     headRef: context.headRef,
     generatedAt: ctx.now().toISOString(),
     generator: opts.model === undefined ? { agent: opts.agent } : { agent: opts.agent, model: opts.model },
-    cards: checked.cards,
+    cards: checked.cards.map(shuffleSides),
     settled: context.settled.filter(c => !asked.has(c.key)),
   }
   await ctx.decks.writeDeck(review, deck)

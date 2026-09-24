@@ -51,9 +51,25 @@ Look for these, and use the bucket named in brackets:
   Never log or display protected health information or secrets in a card.
 - **Shortcut now, follow-up later** [risk]. Fix a known debt in this change, or record it and move on.
 
-Rank the candidates by consequence, and put security and privacy cards and unrequested behavior
-changes first. Write at most **{{MAX_CARDS}}** cards for this change ({{CHANGED_LINES}} changed
-lines). Fewer is better when fewer decisions are real, and zero cards is a valid deck.
+The bucket is a label for the reader, not a rule: when a decision fits two, pick the one that
+names what the author must weigh. Validation never checks it.
+
+Rank by consequence: what it costs to get the decision wrong once the change is merged. Among
+decisions of similar consequence, security and privacy come first, then unrequested behavior
+changes. Write at most **{{MAX_CARDS}}** cards for this change ({{CHANGED_LINES}} changed lines).
+The number is a ceiling, not a target: stop at the last decision that is real, and zero cards is
+a valid deck. When more real decisions remain than fit, drop the ones with the least consequence.
+
+## Where the code is
+
+- Every file this change touches, as it is at the head: `{{HEAD_DIR}}/<path>`; at the base:
+  `{{BASE_DIR}}/<path>`.
+- The patch of each file, labeled with its chunk ids: `{{PATCH_DIR}}/<file key>.diff`. A chunk id
+  is `<file key>#<n>`, so the file key is the part before the `#`.
+- Any other file of the repository, to check a convention or the glossary against the rest of the
+  codebase: `git show {{HEAD_SHA}}:<path>` from the repository root. Change nothing in the clone.
+- A chunk header `@@ -a,b +c,d @@` starts the head side at line `c` and the base side at line `a`;
+  count down from there, or read the line number from the head file.
 
 {{SETTLED}}
 
@@ -65,19 +81,27 @@ lines). Fewer is better when fewer decisions are real, and zero cards is a valid
   simplify").
 - `title`: the decision in plain words, as a question or a noun phrase.
 - `context`: one or two sentences on what the code does and why the choice matters now.
-- `path`, `line`, `side`: an anchor inside one chunk of the diff, on the head side unless you set
-  `side: "old"`. It is where the author reads the code and where a justification is posted.
-- `a`, `b`: the two sides. Present them neutrally; neither is the recommended one. Each has:
+- `path`, `line`, `side`: an anchor inside one chunk of the diff. `side` is `"new"` (the head, the
+  default when omitted) or `"old"` (the base, for code the change deletes). `line` is any line of a
+  chunk on that side, changed or context; pick the one the decision is about. It is where the
+  author reads the code and where a justification is posted.
+- `a`, `b`: the two sides. The card itself recommends neither: each `consequence` states that side's
+  cost as plainly as its benefit, and each `why` is the best case the author would make for that
+  side. Which side is A does not matter; publish shuffles them. Each has:
   - `label`: the choice in a few words.
   - `consequence`: what follows from picking it, cost included, in one or two sentences.
-  - `snippet` (optional): at most {{SNIPPET_MAX_LINES}} lines of code that show this side, the
-    change's own code for the current side, a sketch for the other.
+  - `snippet` (optional): `{ "code": "...", "lang": "ts" }`, at most {{SNIPPET_MAX_LINES}} lines
+    that show this side: the change's own code for the current side, a sketch for the other.
+    `lang` is a highlight.js language name; leave it out to use the anchor file's.
   - `why`: the one-line justification the author accepts by picking this side. Write it in the
     author's voice ("Empty rows are exports from the old tool; skipping them is expected.").
-  - `record`: where that justification belongs once picked. Use `pr-comment` when a reviewer
-    would otherwise ask about it (keeping a surprising choice, leaving a case out of scope);
-    `code` when the next maintainer needs it next to the code (a comment or a doc line the fix
-    skill writes); `none` when the code itself shows it (usually the side that changes the code).
+  - `record`: where that justification belongs once picked. Ask who needs the reason, and when:
+    - `code` when it stays true after the change merges and the next maintainer needs it where
+      they read the code: an invariant, a case deliberately left out, why the obvious simpler
+      version is wrong. The fix skill writes it as a comment or a doc line.
+    - `pr-comment` when it answers a question a reviewer of this change would ask and matters
+      little once merged: why this scope, why this order of work, why not the alternative now.
+    - `none` when the code itself will show it, which is usually the side that changes the code.
 - `current`: `"a"` or `"b"` for the side the code implements now, or `null` when it does neither.
 
 ## Length caps
@@ -120,7 +144,7 @@ Write `{{MODEL_PATH}}` as JSON only, no prose and no fence:
 }
 ```
 
-Then run `pr-review deck validate {{REVIEW_FLAG}}` and fix every problem it names.
+Then run `pr-review deck validate {{REVIEW_FLAG}} --human` and fix every problem it names.
 
 ## The change
 

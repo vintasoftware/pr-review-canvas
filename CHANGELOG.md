@@ -15,7 +15,9 @@
 - Clearing the deck writes a fix list. `/pr-self-review-fix` asks about unclear entries, applies
   them, and deals the next deck, which never asks a settled decision again.
 - A pull request's canvas takes the decisions its decks settled: it does not ask them again unless
-  the code contradicts the pick, and it raises the skipped cards for reviewers. Publishing it posts
+  the code contradicts the pick, and it raises the skipped cards for reviewers. Validation holds it
+  to that: a point that asks a settled decision again says `reopens`, a skipped card is raised by a
+  point that says `asks`, and the canvas page marks both. Publishing it posts
   the **PR comment** justifications as the author's own review, once; `--skip-self-review-comments`
   keeps them off.
 - New commands `pr-review deck prepare|validate|publish|fixes`. `install-skill`, `doctor`, and

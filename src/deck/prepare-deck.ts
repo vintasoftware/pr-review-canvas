@@ -77,7 +77,7 @@ function diffsMarkdown(
   if (lines > maxLines) {
     return (
       `The diff has ${lines} lines, above the ${maxLines}-line inline limit, so it is not inlined. ` +
-      `Read one file at a time from \`${dir}/<key>.diff\`; the keys are in the manifest.`
+      `Read one file at a time from \`${dir}/<file key>.diff\`, the file keys being the part before the \`#\` in the chunk ids listed under **Files and chunks**.`
     )
   }
   // A binary or unchanged-content file has no patch text to show.
@@ -186,6 +186,10 @@ export async function prepareDeck(
         : result.uncommitted
           ? 'uncommitted work'
           : 'a branch',
+    HEAD_DIR: path.join(ctx.derived.derivedDir(pr.headSha), 'head'),
+    BASE_DIR: path.join(ctx.derived.derivedDir(pr.headSha), 'base'),
+    PATCH_DIR: path.join(ctx.derived.derivedDir(pr.headSha), 'patches'),
+    HEAD_SHA: pr.headSha,
     REVIEW_FLAG: isLocalKey(input.review) ? `--${input.review}` : `--pr ${keyToString(input.review)}`,
     MODEL_PATH: modelPath,
     MAX_CARDS: String(maxCards),

@@ -13,6 +13,7 @@ import {
   type Side,
   type TextCaps,
 } from '../contract/review-artifact.js'
+import type { GenerationContext } from '../contract/generation-context.js'
 import type { ValidationCode, ValidationError, ValidationReport } from '../contract/validation.js'
 import { hunkForLine, hunkLineRanges } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
@@ -22,6 +23,7 @@ import { coveredStem, DEFAULT_TEST_PATTERNS, isTestPath, sourceStem } from './te
 import { visibleLength } from './text-length.js'
 import { visiblePrefix } from './trim-caps.js'
 import { validateFolds } from './validate-folds.js'
+import { validateSelfReview } from './validate-self-review.js'
 
 export interface ValidationInput {
   files: readonly FileEntry[]
@@ -38,6 +40,8 @@ export interface ValidationInput {
    * ranges no fold may cover. A fresh `model.json` is held to the full shape.
    */
   storedArtifact?: boolean | undefined
+  /** What the author's self-review decks settled and left open, from `context.json`. */
+  selfReview?: GenerationContext['selfReview']
 }
 
 export type ValidationResult = ValidationReport & { output: ModelOutput | null }
@@ -573,6 +577,9 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
     report.add(error.code, error.where ?? 'folds', error.message)
   }
   checkPoints(output, index, input.limits, report)
+  for (const error of validateSelfReview(output, input.files, input.selfReview)) {
+    report.add(error.code, error.where ?? 'points', error.message)
+  }
   checkLinks(output, input.files, report)
   checkDiagramLinks(output, input.files, input.limits, report)
   return report.errors.length === 0

@@ -19,7 +19,7 @@ import { BASE_SHA, ghFor42, gitFor42, gitForLocal, HEAD_SHA } from '../testing/s
 import { renderFixList, summarizePicks } from './fix-list.js'
 import { prepareDeck } from './prepare-deck.js'
 import { settledFrom } from './settled-for-pr.js'
-import { DeckInvalidError, publishDeck } from './publish-deck.js'
+import { DeckInvalidError, publishDeck, shuffleSides } from './publish-deck.js'
 import { validateDeckModel } from './validate-deck.js'
 
 const LOCAL = { host: 'localhost:3010' }
@@ -90,6 +90,50 @@ describe('which picks ask for a fix', () => {
     expect(pickNeedsFix(card(), pick('neither', { note: 'x' }))).toBe(true)
     expect(pickNeedsFix(card(), pick('skip'))).toBe(false)
     expect(pickNeedsFix(card({ current: null }), pick('a'))).toBe(true)
+  })
+})
+
+describe('shuffleSides', () => {
+  // Keys a generator actually wrote for two of this repository's pull requests.
+  const keys = [
+    'marks-trust-boundary',
+    'positional-marks-upgrade',
+    'incremental-prompt-overrides',
+    'incremental-default',
+    'carry-by-generator',
+    'carry-granularity',
+    'basis-choice',
+    'file-mark-layer-move',
+    'marks-silent-drop',
+    'version-bump-scope',
+    'inline-post-hidden-while-pending',
+    'gitlab-approve-after-publish',
+    'stale-drafts-block-submit',
+    'point-draft-receipt-matching',
+    'include-pending-flag',
+    'unrelated-docs-and-fixes',
+  ]
+
+  it('keeps each side with its content, so the code-now side is still the one the code implements', () => {
+    for (const key of keys) {
+      const shuffled = shuffleSides(card({ key, current: 'a' }))
+      const now = shuffled.current === null ? null : shuffled[shuffled.current]
+      expect(now?.label, key).toBe('Skip them')
+      expect([shuffled.a.label, shuffled.b.label].sort(), key).toEqual(['Fail loudly', 'Skip them'])
+    }
+  })
+
+  it('puts the code as it is on each side for some cards, the same way every time', () => {
+    const sides = keys.map(key => shuffleSides(card({ key, current: 'a' })).current)
+    expect(sides).toContain('a')
+    expect(sides).toContain('b')
+    expect(keys.map(key => shuffleSides(card({ key, current: 'a' })).current)).toEqual(sides)
+  })
+
+  it('leaves a card that matches neither side with no current side', () => {
+    for (const key of keys) {
+      expect(shuffleSides(card({ key, current: null })).current).toBeNull()
+    }
   })
 })
 

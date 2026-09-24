@@ -237,6 +237,10 @@ its commit is on no branch, so generate a fresh one for the PR.
 - `diagram.links` maps a node id of the source to a canvas link, at most 12 per diagram. Spell the
   node id the way the source spells it (`store`, not the label in its brackets; `App`, not the
   name after `as`), and link only nodes that stand for a layer, a file, or a hunk of this canvas.
+- When the prompt ends with **Decisions from the author's self-review**, a `decide` point on a
+  settled decision's chunk carries `"reopens": "<key>"` and sits on that chunk, and every card
+  listed with a line gets a `decide` point with `"asks": "<key>"`. Any other `decide` point there
+  fails as `SETTLED_REOPENED`; lower it or anchor it on the code it is about.
 - Markdown is allowed; headings are not. No prose outside the JSON file.
 
 ## Updating a shared canvas

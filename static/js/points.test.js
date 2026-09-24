@@ -279,3 +279,31 @@ function draftFor(p) {
     updatedAt: '2026-09-10T12:00:00.000Z',
   })
 }
+
+describe('the self-review pill', () => {
+  const base = syntheticArtifact().points[0]
+  if (base === undefined) throw new Error('synthetic canvas has no point')
+  const paths = new Set(['src/app.ts'])
+
+  it('marks a point that reopens a settled decision, and one the author left for reviewers, in every view', () => {
+    for (const [over, text, key] of /** @type {const} */ ([
+      [{ reopens: 'rows' }, 'reopens a settled decision', 'rows'],
+      [{ asks: 'retry' }, 'left for reviewers', 'retry'],
+    ])) {
+      const p = { ...base, ...over }
+      for (const html of [pointCardHtml(p, { paths }), pointRowHtml(p, { paths })]) {
+        document.body.innerHTML = html
+        const pill = document.querySelector('.pill.self-review')
+        expect(pill?.textContent).toBe(text)
+        expect(pill?.getAttribute('title')).toContain(`"${key}"`)
+      }
+    }
+  })
+
+  it('shows nothing on a point the self-review has no part in, and escapes a hostile key', () => {
+    document.body.innerHTML = pointCardHtml(base, { paths })
+    expect(document.querySelector('.pill.self-review')).toBeNull()
+    document.body.innerHTML = pointCardHtml({ ...base, reopens: '"><img src=x>' }, { paths })
+    expect(document.querySelector('img')).toBeNull()
+  })
+})

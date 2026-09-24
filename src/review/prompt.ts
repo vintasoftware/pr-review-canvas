@@ -309,9 +309,9 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
 
 function decisionLine(d: SelfReviewDecision): string {
   const where = d.line === undefined ? `\`${d.path}\` (its code changed since)` : `\`${d.path}:${d.line}\``
-  const picked = d.picked === undefined ? '' : ` Picked ${d.picked}.`
+  const picked = d.picked === undefined ? '' : ` Picked ${d.picked.replace(/[.!?]$/, '')}.`
   const why = d.why === undefined || d.why === '' ? '' : ` Why: ${d.why}`
-  return `- **${d.title}** at ${where}.${picked}${why}`
+  return `- \`${d.key}\` **${d.title}** at ${where}.${picked}${why}`
 }
 
 /**
@@ -328,15 +328,18 @@ export function selfReviewMarkdown(selfReview: GenerationContext['selfReview']):
       'The author settled these in a self-review deck before asking for review. Do not raise any of ' +
         'them as a `decide` point, and do not argue for the side they did not pick. You may explain one ' +
         'as a `decision` point at `level: "fyi"` when that helps the reviewer. One exception: when the ' +
-        'code at this head contradicts the side the author picked, write one `decide` point on it that ' +
-        'names the settled decision and what contradicts it.',
+        'code at this head contradicts the side the author picked, write one `decision` point at ' +
+        '`level: "decide"` on the decision\'s own line, with `"reopens": "<key>"`, that says what ' +
+        'contradicts it. The validator refuses any other `decide` point in the chunk of a settled ' +
+        'decision: lower it to `check` or `fyi`, or anchor it on the code it is really about.',
       selfReview.settled.map(decisionLine).join('\n')
     )
   }
   if (selfReview.open.length > 0) {
     parts.push(
-      'The author left these for reviewers. Raise each that still applies as a `decision` point at ' +
-        '`level: "decide"`, anchored inside the diff, within the point budget.',
+      'The author left these for reviewers. Raise each as a `decision` point at `level: "decide"` ' +
+        'with `"asks": "<key>"`, anchored inside the diff; the validator requires one for every card ' +
+        'shown with a line. One whose code changed since may no longer apply: raise it only if it does.',
       selfReview.open.map(decisionLine).join('\n')
     )
   }

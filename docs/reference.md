@@ -698,6 +698,14 @@ records them as `selfReview: { settled, open }`, and the prompt ends with a sect
 generator not to raise a settled decision as `decide` unless the code contradicts the picked side,
 and to raise each skipped card as a `decide` point.
 
+Whether the code really contradicts a pick is a judgment, so the validator checks declarations
+instead. A point that asks a settled decision again carries `"reopens": "<card key>"`; one that
+raises a skipped card carries `"asks": "<card key>"`. Validation then refuses a `decide` point in the
+chunk of a settled decision that does not declare the reopen, a reopen anchored away from the
+decision's chunk, a key that names nothing, a reopen that is not a `decision` / `decide` point, and a
+skipped card that no point asks. A skipped card whose code changed since is left to the generator.
+The canvas page marks such points **reopens a settled decision** or **left for reviewers**.
+
 `pr-review publish` for a pull request then posts every settled decision whose justification is
 recorded as `pr-comment` as one `COMMENT` review under your login, each comment inline on its
 anchor. A decision whose code changed since is listed in the review body instead of on a line.
@@ -789,3 +797,6 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `FOLD_MISSING`                                                  | A file over 20 unannotated lines hides something; an open file over 60 folds half; a layer over 100 hides more at aggressive |
 | `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                                      |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                           |
+| `SELF_REVIEW_KEY`, `SELF_REVIEW_LEVEL`                          | `reopens` names a settled decision and `asks` a skipped card, each on a `decide` point                                       |
+| `REOPEN_ELSEWHERE`, `SETTLED_REOPENED`                          | A reopen sits on the decision's own chunk; no other `decide` point sits on a settled decision's code                         |
+| `OPEN_UNASKED`                                                  | Every skipped card still on a line of the diff is raised by a point with `asks`                                              |
