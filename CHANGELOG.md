@@ -8,6 +8,10 @@
   `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
   `k` step through the layers, and a link into a layer shows that layer. The default, `all`, keeps
   the canvas as one page.
+- The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
+  warning stays pinned to the top.
+- The bars above the overview span the full reading column, so they no longer stop short when AI
+  Chat is minimized.
 
 ## 0.5.0
 
