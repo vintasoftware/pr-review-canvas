@@ -130,6 +130,44 @@ describe('prepare, publish, validate through the CLI layer', () => {
     expect(lastJson(again)).toMatchObject({ ok: true, fixed: [] })
   })
 
+  it('--fix clips and drops folds with one right answer, reports each, and is idempotent', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const io = fakeIo()
+    await runPrepare(t.ctx, ['--base', 'main', '--head', 'feat/b'], io)
+    const { canvasDir } = lastJson(io) as { canvasDir: string }
+    const model = path.join(canvasDir, 'model.json')
+    const output = artifactToModelOutput(syntheticArtifact())
+    const file = output.layers[1]?.files[0]
+    if (file?.path !== 'src/app.ts') {
+      throw new Error('fixture changed')
+    }
+    // Hunk #2 spans new 11-14. The first title is past the schema's raw ceiling, which a trim
+    // fixes in the same run: text length never holds a fold repair back to a second run.
+    const long = `other(): ${'x'.repeat(370)}`
+    file.folds = [
+      { title: long, side: 'new', startLine: 11, endLine: 20, level: 'moderate' },
+      { title: 'other() again', side: 'new', startLine: 11, endLine: 14, level: 'aggressive' },
+    ]
+    await writeFile(model, JSON.stringify(output))
+
+    const human = fakeIo()
+    expect(await runValidate(t.ctx, [model, '--canvas', canvasDir, '--human', '--fix'], human)).toBe(EXIT.ok)
+    expect(human.out).toEqual([
+      `fixed layers.1.files.0.folds.0: fold "${long}" new 11-20 -> new 11-14, clipped to the chunk it starts in`,
+      `fixed layers.1.files.0: dropped fold "other() again" at new 11-14: it repeats the range of "${long}"`,
+      `fixed layers.1.files.0.folds.0.title: "${long}" -> "other()"`,
+      'ok: model.json passes against 7 files',
+    ])
+    const saved = JSON.parse(await readFile(model, 'utf8')) as typeof output
+    expect(saved.layers[1]?.files[0]?.folds).toEqual([
+      { title: 'other()', side: 'new', startLine: 11, endLine: 14, level: 'moderate' },
+    ])
+
+    const again = fakeIo()
+    expect(await runValidate(t.ctx, [model, '--canvas', canvasDir, '--fix'], again)).toBe(EXIT.ok)
+    expect(lastJson(again)).toMatchObject({ ok: true, fixed: [] })
+  })
+
   it('--fix reports an unfixable title in human and JSON output without rewriting the file', async () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const prepare = fakeIo()

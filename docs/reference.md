@@ -96,7 +96,12 @@ pr-review prepare --base origin/main --head HEAD
 correctness only. The folding rules (`FOLD_MISSING`, a test file collapsed at `light`) apply only
 to a `model.json`, because older canvases predate them. `--fix` edits overlong titles by removing
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
-limit and overlong prose require rewriting.
+limit and overlong prose require rewriting. On a `model.json`, `--fix` also repairs three
+`FOLD_INVALID` errors and reports each change: a fold that crosses or runs past its chunk is clipped
+to the assigned chunk its first line is in (or dropped when that line is in no assigned chunk), a
+fold that repeats an earlier fold's range is dropped, and a fold that would hide an attention point
+is shrunk around it (or dropped when that leaves no single range). Partly overlapping folds,
+reversed ranges, and `FOLD_MISSING` still need the author.
 
 `publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl`
 for PR and local runs.
@@ -594,8 +599,14 @@ byte-identical is untouched. The prompt tells the generator to copy, word for wo
 - whole layers whose files are all untouched;
 - in other layers, the notes, folds, annotations, and attention points of untouched files.
 
+An attention point in a changed file is carried too when its own lines are unchanged: the same
+text, shown by the head diff with the same `+`, `-`, or context marker as before, as one block that
+only moved up or down. `prepare` finds the block by a line-by-line match of the file's two versions
+on the point's side, and the prompt gives the lines the point now sits on.
+
 Everything else is decided again. The summary and risk tags are always rewritten. A carried
 attention point keeps its kind, path, and title, so it keeps its fingerprint and any dismissal.
+Review marks do not follow a point: they follow files and layers, by the rules below.
 
 The canvas records only which basis it came from. Your server decides which review marks follow,
 using the two canvases and your clone:

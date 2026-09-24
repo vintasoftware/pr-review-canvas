@@ -25,6 +25,19 @@ export function parseHunkHeader(line) {
 }
 
 /**
+ * The first and last line a hunk spans on `side`. A zero-length range (pure deletion or pure
+ * addition) still anchors on its start line.
+ * @param {HunkRange} hunk
+ * @param {Side} side
+ * @returns {{ start: number, end: number }}
+ */
+export function hunkSpan(hunk, side) {
+  const start = side === 'new' ? hunk.newStart : hunk.oldStart
+  const count = side === 'new' ? hunk.newLines : hunk.oldLines
+  return { start, end: start + Math.max(count, 1) - 1 }
+}
+
+/**
  * The hunk that covers `line` on `side`, or null when the line is outside the diff.
  * @template {HunkRange} H
  * @param {ReadonlyArray<H>} hunks
@@ -34,10 +47,7 @@ export function parseHunkHeader(line) {
  */
 export function hunkForLine(hunks, side, line) {
   for (const h of hunks) {
-    const start = side === 'new' ? h.newStart : h.oldStart
-    const count = side === 'new' ? h.newLines : h.oldLines
-    // A zero-length range (pure deletion or pure addition) still anchors on its start line.
-    const end = start + Math.max(count, 1) - 1
+    const { start, end } = hunkSpan(h, side)
     if (line >= start && line <= end) {
       return h
     }
@@ -53,9 +63,7 @@ export function hunkForLine(hunks, side, line) {
  */
 export function hunkLineRanges(hunks, side) {
   const ranges = hunks.map(h => {
-    const start = side === 'new' ? h.newStart : h.oldStart
-    const count = side === 'new' ? h.newLines : h.oldLines
-    const end = start + Math.max(count, 1) - 1
+    const { start, end } = hunkSpan(h, side)
     return start === end ? `${start}` : `${start}-${end}`
   })
   return `${side}-side lines ${ranges.length ? ranges.join(', ') : 'none'}`

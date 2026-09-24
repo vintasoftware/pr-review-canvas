@@ -50,7 +50,7 @@ The earlier canvas an incremental canvas is built from: the newest one generated
 _Avoid_: Parent canvas, carried-over canvas
 
 **Carried**:
-Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched.
+Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched. An attention point whose own lines are unchanged is carried even when they moved; only its line numbers follow them.
 _Avoid_: Cached, approved, still valid
 
 **Re-judged**:
