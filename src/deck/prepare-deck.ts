@@ -11,10 +11,12 @@ import {
   SNIPPET_MAX_LINES,
 } from '../contract/deck.js'
 import type { FileEntry } from '../contract/review-artifact.js'
-import type { LocalKey } from '../contract/review-key.js'
+import type { Pr } from '../contract/review-artifact.js'
+import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/local-target.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile } from '../prompt-files.js'
+import { resolvePr } from '../review/prepare.js'
 import { embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
@@ -24,7 +26,7 @@ export const DECK_PROMPT_FILE = 'self-review-deck.md'
 
 export interface PrepareDeckResult {
   status: 'prepared' | 'exists'
-  review: LocalKey
+  review: ReviewKey
   headSha: string
   base: string
   headRef: string
@@ -119,19 +121,30 @@ async function rulebookMarkdown(ctx: AppContext): Promise<string> {
   return `### Project rulebook\n\nThe project's own standards, as reference for the choices it already settles.\n\n${embedMarkdown(text)}`
 }
 
-export async function prepareDeck(
+/**
+ * The change the deck is about, in the shape the canvas reads a pull request in: a pull request
+ * fetched from the forge, or the branch or working tree of this clone.
+ */
+async function resolveDeckTarget(
   ctx: AppContext,
-  input: { review: LocalKey; base?: string | undefined; force: boolean },
+  input: { review: ReviewKey; base?: string | undefined },
   log: (phase: string) => void
-): Promise<PrepareDeckResult> {
+): Promise<Pr> {
+  if (!isLocalKey(input.review)) {
+    return resolvePr(ctx, input.review, log)
+  }
   log('snapshot')
   const base = await resolveLocalBase(ctx.git, input.base)
-  const pr = await describeLocalWork(ctx.git, {
-    base,
-    source: input.review,
-    repo: ctx.config.repo,
-    now: ctx.now,
-  })
+  return describeLocalWork(ctx.git, { base, source: input.review, repo: ctx.config.repo, now: ctx.now })
+}
+
+export async function prepareDeck(
+  ctx: AppContext,
+  input: { review: ReviewKey; base?: string | undefined; force: boolean },
+  log: (phase: string) => void
+): Promise<PrepareDeckResult> {
+  const pr = await resolveDeckTarget(ctx, input, log)
+  const base = pr.baseRef
   const workDir = ctx.decks.workDir(input.review)
   const promptPath = path.join(workDir, 'prompt.md')
   const modelPath = path.join(workDir, DECK_MODEL_FILE)
@@ -177,15 +190,26 @@ export async function prepareDeck(
     overrides: ctx.projectConfig.config.prompts,
   })
   const additions = derived.files.reduce((n, f) => n + f.additions, 0)
+  const what =
+    pr.number !== null
+      ? `Pull request #${pr.number}: ${pr.title}`
+      : result.uncommitted
+        ? 'Uncommitted work'
+        : 'Branch'
   const meta = [
     `- Repository: ${ctx.config.repo.owner}/${ctx.config.repo.name}`,
-    `- ${result.uncommitted ? 'Uncommitted work' : 'Branch'}: \`${pr.headRef}\` → \`${base}\``,
+    `- ${what} · \`${pr.headRef}\` → \`${base}\``,
     `- Head: \`${pr.headSha}\` · merge base: \`${pr.mergeBaseSha}\``,
     `- Size: ${derived.files.length} files, +${additions} −${changedLines - additions}`,
   ].join('\n')
   const tokens: Record<string, string> = {
-    TARGET_WORD: result.uncommitted ? 'uncommitted work' : 'a branch',
-    REVIEW: input.review,
+    TARGET_WORD:
+      pr.number !== null
+        ? `pull request #${pr.number}`
+        : result.uncommitted
+          ? 'uncommitted work'
+          : 'a branch',
+    REVIEW_FLAG: isLocalKey(input.review) ? `--${input.review}` : `--pr ${keyToString(input.review)}`,
     MODEL_PATH: modelPath,
     MAX_CARDS: String(maxCards),
     CHANGED_LINES: String(changedLines),

@@ -15,7 +15,7 @@ import { createApp } from '../server/app.js'
 import type { DeckResponse } from '../server/routes/deck-routes.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
 import { makeTestContext, type TestContext } from '../testing/fakes.js'
-import { BASE_SHA, gitForLocal, HEAD_SHA } from '../testing/synthetic.js'
+import { BASE_SHA, ghFor42, gitFor42, gitForLocal, HEAD_SHA } from '../testing/synthetic.js'
 import { renderFixList, summarizePicks } from './fix-list.js'
 import { prepareDeck, settledFrom } from './prepare-deck.js'
 import { DeckInvalidError, publishDeck } from './publish-deck.js'
@@ -305,7 +305,7 @@ describe('a deck from prepare to the fix list', () => {
     const page = await app.request('/deck/uncommitted', { headers: LOCAL })
     expect(page.status).toBe(200)
     expect(await page.text()).toContain('/static/js/deck.js')
-    expect((await app.request('/deck/42', { headers: LOCAL })).status).toBe(400)
+    expect((await app.request('/deck/nope', { headers: LOCAL })).status).toBe(400)
 
     const got = (await (
       await app.request('/api/deck/uncommitted', { headers: LOCAL })
@@ -393,5 +393,41 @@ describe('a deck from prepare to the fix list', () => {
     await prepareAndWrite([card()])
     const reopened = await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
     expect(reopened).toMatchObject({ cards: 1, settled: 0 })
+  })
+})
+
+describe('a deck for a pull request', () => {
+  let t: TestContext
+  afterEach(async () => {
+    await t?.cleanup()
+  })
+
+  it('reads the pull request from the forge, and files its deck under its number', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const phases: string[] = []
+    const prepared = await prepareDeck(t.ctx, { review: 42, force: false }, p => phases.push(p))
+    expect(phases).toEqual(['fetch-pr', 'fetch-refs', 'collect-diffs', 'prompt'])
+    expect(prepared).toMatchObject({ status: 'prepared', review: 42, headSha: HEAD_SHA, uncommitted: false })
+    const prompt = await readFile(prepared.promptPath, 'utf8')
+    expect(prompt).toContain('# Self-review deck for pull request #42')
+    expect(prompt).toContain('- Pull request #42: feat: add b')
+    expect(prompt).toContain('pr-review deck validate --pr 42')
+
+    await writeTextAtomic(prepared.modelPath, JSON.stringify({ cards: [card()] }))
+    const published = await publishDeck(t.ctx, 42, { agent: 'claude', allowStale: false })
+    expect(published).toMatchObject({ review: 42, cards: 1, deckUrl: 'http://localhost:3010/deck/42' })
+    expect(t.ctx.decks.deckDir(42)).toMatch(/decks\/42$/)
+    expect(await t.ctx.decks.readDeck('branch')).toBeNull()
+
+    const app = createApp(t.ctx)
+    expect((await app.request('/deck/42', { headers: LOCAL })).status).toBe(200)
+    const got = (await (await app.request('/api/deck/42', { headers: LOCAL })).json()) as DeckResponse
+    expect(got.deck.review).toBe(42)
+    await t.ctx.decks.setPick(42, 'empty-rows', pick('b'))
+    const done = await app.request(`/api/deck/42/finish?headSha=${HEAD_SHA}`, {
+      method: 'POST',
+      headers: WRITE,
+    })
+    expect(((await done.json()) as { markdown: string }).markdown).toContain('pull request #42')
   })
 })

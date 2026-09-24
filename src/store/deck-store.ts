@@ -1,11 +1,11 @@
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
 import { type Deck, DeckSchema, type Pick, type Picks, PicksSchema } from '../contract/deck.js'
-import type { LocalKey } from '../contract/review-key.js'
+import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { readJson, readJsonOrDefault, readText, writeJsonAtomic, writeTextAtomic } from './atomic-json.js'
 
 /**
- * The self-review deck of each local review, under `decks/<branch|uncommitted>/`:
+ * The self-review deck of each review target, under `decks/<branch|uncommitted|number>/`:
  *
  * - `deck.json`, the published deck;
  * - `picks.json`, the author's answers to its cards;
@@ -13,31 +13,31 @@ import { readJson, readJsonOrDefault, readText, writeJsonAtomic, writeTextAtomic
  * - `work/`, where `deck prepare` leaves the prompt and the generator writes `deck-model.json`.
  */
 export interface DeckStore {
-  deckDir(key: LocalKey): string
-  workDir(key: LocalKey): string
-  fixesPath(key: LocalKey): string
-  readDeck(key: LocalKey): Promise<Deck | null>
+  deckDir(key: ReviewKey): string
+  workDir(key: ReviewKey): string
+  fixesPath(key: ReviewKey): string
+  readDeck(key: ReviewKey): Promise<Deck | null>
   /**
    * Publishes a deck and starts its picks afresh. The decisions settled in the deck it replaces
    * travel inside it, as `settled`; a card asked again is a new question.
    */
-  writeDeck(key: LocalKey, deck: Deck): Promise<void>
-  readPicks(key: LocalKey): Promise<Picks>
-  setPick(key: LocalKey, card: string, pick: Pick): Promise<Picks>
-  clearPick(key: LocalKey, card: string): Promise<Picks>
-  writeFixes(key: LocalKey, markdown: string): Promise<string>
-  readFixes(key: LocalKey): Promise<string | null>
+  writeDeck(key: ReviewKey, deck: Deck): Promise<void>
+  readPicks(key: ReviewKey): Promise<Picks>
+  setPick(key: ReviewKey, card: string, pick: Pick): Promise<Picks>
+  clearPick(key: ReviewKey, card: string): Promise<Picks>
+  writeFixes(key: ReviewKey, markdown: string): Promise<string>
+  readFixes(key: ReviewKey): Promise<string | null>
   /** Empties `work/` for a fresh generation. */
-  clearWork(key: LocalKey): Promise<void>
+  clearWork(key: ReviewKey): Promise<void>
 }
 
 export function createDeckStore(repoRoot: string): DeckStore {
-  const deckDir = (key: LocalKey): string => path.join(repoRoot, 'decks', key)
-  const picksFile = (key: LocalKey): string => path.join(deckDir(key), 'picks.json')
-  const fixesPath = (key: LocalKey): string => path.join(deckDir(key), 'fixes.md')
-  const readPicks = (key: LocalKey): Promise<Picks> =>
+  const deckDir = (key: ReviewKey): string => path.join(repoRoot, 'decks', keyToString(key))
+  const picksFile = (key: ReviewKey): string => path.join(deckDir(key), 'picks.json')
+  const fixesPath = (key: ReviewKey): string => path.join(deckDir(key), 'fixes.md')
+  const readPicks = (key: ReviewKey): Promise<Picks> =>
     readJsonOrDefault(picksFile(key), PicksSchema, () => ({ picks: {} }))
-  const writePicks = async (key: LocalKey, picks: Picks): Promise<Picks> => {
+  const writePicks = async (key: ReviewKey, picks: Picks): Promise<Picks> => {
     await writeJsonAtomic(picksFile(key), picks)
     return picks
   }

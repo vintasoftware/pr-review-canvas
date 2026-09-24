@@ -634,18 +634,20 @@ machine lacks that canvas or cannot rebuild either diff, no marks follow.
 ## Self-review deck
 
 The deck is a separate artifact from the canvas ([ADR 0004](adr/0004-self-review-deck-is-its-own-pass.md)).
-It exists only for the two local reviews, `branch` and `uncommitted`. The `/pr-self-review` skill
+It works for a pull request (`--pr <n>`, `/deck/<n>`) and for the two local reviews, `branch` and
+`uncommitted`. A pull request's head and base come from the forge, as for its canvas, so `--pr`
+takes no `--base`. The `/pr-self-review` skill
 runs these commands; `/pr-self-review-fix` reads the fix list afterwards.
 
 ```text
-pr-review deck prepare (--branch | --uncommitted) [--base <ref>] [--force]
-pr-review deck validate (--branch | --uncommitted) [--human]
-pr-review deck publish (--branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]
-pr-review deck fixes (--branch | --uncommitted)
+pr-review deck prepare (--pr <n> | --branch | --uncommitted) [--base <ref>] [--force]
+pr-review deck validate (--pr <n> | --branch | --uncommitted) [--human]
+pr-review deck publish (--pr <n> | --branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]
+pr-review deck fixes (--pr <n> | --branch | --uncommitted)
 ```
 
 - `prepare` resolves the head the same way the local canvas does and writes `prompt.md` and
-  `context.json` to `.pr-review/repos/<owner>__<repo>/decks/<review>/work/`. The generator writes
+  `context.json` to `.pr-review/repos/<owner>__<repo>/decks/<n|branch|uncommitted>/work/`. The generator writes
   `deck-model.json` there. When the published deck already stands for this head, prepare answers
   `status: "exists"` unless `--force` is passed.
 - `validate` checks the model against the prepared diff. Each problem is one line:
@@ -682,17 +684,19 @@ still contradicts the picked side; then it reuses the card's `key`, and the new 
 settled one. Skipped cards are not settled. Publishing a deck starts its picks afresh. The fix list
 covers only the current deck's cards.
 
-The `branch` review sees fixes once they are committed; the `uncommitted` review sees them at once.
+The `uncommitted` review sees fixes at once, the `branch` review once they are committed, and a
+pull request once they are pushed.
 
 Not built yet: posting `pr-comment` justifications on the pull request when its canvas is
 published, and having PR canvas generation read settled decisions.
 
 ### Deck page
 
-`/deck/branch` and `/deck/uncommitted` show one card at a time. Keys: `a` side A, `b` side B,
+`/deck/<n>`, `/deck/branch`, and `/deck/uncommitted` show one card at a time. Keys: `a` side A, `b` side B,
 `n` neither (with a note), `s` skip, `u` undo, `e` edit a justification, `r` change where it is
 recorded, `o` the code drawer, `?` help, `Esc` close. Dragging a card left or right past 140
-pixels picks that side. Arrow keys never pick. The deck page has its own keys: `a` picks side A here,
+pixels picks that side. Arrow keys never pick. Below 600 pixels wide the sides stack, the code
+drawer and the note become bottom sheets, and undo, edit, and close have buttons for touch. The deck page has its own keys: `a` picks side A here,
 while on the canvas page it asks AI Chat. With reduced motion on, cards cross-fade.
 
 The API is `GET /api/deck/<review>`, `PUT` and `DELETE /api/deck/<review>/picks/<card>` (the

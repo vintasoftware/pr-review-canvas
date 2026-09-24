@@ -1,7 +1,7 @@
 ---
 name: pr-self-review
 model: sonnet
-description: Deal a self-review deck for the work in this clone before a pull request exists, with the pr-review tool. Runs `pr-review deck prepare`, writes the deck-model.json of decision cards the prompt asks for (trade-offs and choices a reasonable engineer could make either way, each with sides A and B), validates and publishes it, and points the author to the swipe page. Use when the user runs `/pr-self-review branch`, `/pr-self-review uncommitted`, or asks to self-review, settle decisions, or "swipe through" their change before opening a PR.
+description: Deal a self-review deck for a GitHub pull request or GitLab merge request, or for the work in this clone before one exists, with the pr-review tool. Runs `pr-review deck prepare`, writes the deck-model.json of decision cards the prompt asks for (trade-offs and choices a reasonable engineer could make either way, each with sides A and B), validates and publishes it, and points the author to the swipe page. Use when the user runs `/pr-self-review <pr-number>`, `/pr-self-review branch`, `/pr-self-review uncommitted`, or asks to self-review, settle decisions, or "swipe through" their change before it is reviewed.
 ---
 
 # pr-self-review
@@ -15,10 +15,12 @@ justifications that reviewers read instead of asking again.
 The deck is not the review canvas. It holds no layers, folds, or attention points, and plain
 defects do not belong in it: `/pr-review-canvas` reports those.
 
-Arguments: `branch [--base <ref>] [--force]` or `uncommitted [--base <ref>] [--force]`. `branch`
-is the tip of the current branch; `uncommitted` adds the working tree's edits and new files on
-top. When the user only says "review my work", ask which, unless the words decide it ("before I
-commit" is `uncommitted`). Run every `pr-review` command from the repository root. Nothing here
+Arguments: `<pr-number> [--force]`, `branch [--base <ref>] [--force]`, or
+`uncommitted [--base <ref>] [--force]`. A number is a pull request (or merge request): its head
+and base come from the forge, fetched into this clone, so any checkout works. `branch` is the tip
+of the current branch; `uncommitted` adds the working tree's edits and new files on top. When the
+user only says "review my work", ask which, unless the words decide it ("before I commit" is
+`uncommitted`, "my PR" with a number is the number). Run every `pr-review` command from the repository root. Nothing here
 checks out a branch or writes outside the deck's work directory.
 
 ## Model choice
@@ -30,9 +32,12 @@ when available. Never copy PHI, secrets, or credentials into a card, even as an 
 ## 1. Prepare
 
 ```bash
+pr-review deck prepare --pr <n> [--force]
 pr-review deck prepare --branch [--base <ref>] [--force]
 pr-review deck prepare --uncommitted [--base <ref>] [--force]
 ```
+
+A pull request is compared against its own base branch, so `--pr` takes no `--base`.
 
 The last stdout line is JSON with `promptPath`, `modelPath`, `maxCards`, `settled`, `base`,
 `headRef`, `uncommitted`, and `status`.
@@ -43,7 +48,8 @@ The last stdout line is JSON with `promptPath`, `modelPath`, `maxCards`, `settle
   do not ask them again unless the code still contradicts the side the author picked.
 - An `{ "error": … }` line means prepare failed: report the code, message, and hint verbatim.
 
-Tell the user which base was compared and whether uncommitted work was included.
+Tell the user which base was compared and, for a local review, whether uncommitted work was
+included.
 
 ## 2. Write the deck
 
@@ -58,23 +64,23 @@ it is what the code does now, and it decides whether a pick becomes a fix.
 ## 3. Validate, then publish
 
 ```bash
-pr-review deck validate --<branch|uncommitted> --human
+pr-review deck validate (--pr <n> | --branch | --uncommitted) --human
 ```
 
 Fix every line it prints and run it again until it says `ok`. Caps are measured on visible text,
 so shorten wording rather than dropping a side's cost. Then:
 
 ```bash
-pr-review deck publish --<branch|uncommitted> --agent <your agent id> [--model <model id>]
+pr-review deck publish (--pr <n> | --branch | --uncommitted) --agent <your agent id> [--model <model id>]
 ```
 
-`DECK_STALE` means the branch or the working tree changed while you worked: offer to prepare
+`DECK_STALE` means the pull request, the branch, or the working tree changed while you worked: offer to prepare
 again rather than passing `--allow-stale`. `DECK_INVALID` prints one line per problem; fix them and
 publish again, at most three times.
 
 ## 4. Hand over
 
-Report the number of cards and the `deckUrl` (`http://localhost:<port>/deck/<branch|uncommitted>`),
+Report the number of cards and the `deckUrl` (`http://localhost:<port>/deck/<n|branch|uncommitted>`),
 and tell the user to start `pr-review serve` if it is not running. On the page:
 
 - `a` picks side A, `b` picks side B, or drag the card left or right;

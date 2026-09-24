@@ -30,7 +30,7 @@ import { errorCardHtml } from './errors.js'
 /** @typedef {import('./deck-view.js').CardExcerpt} CardExcerpt */
 /** @typedef {import('./deck-view.js').Summary} Summary */
 /**
- * @typedef {{ deck: { review: 'branch' | 'uncommitted', headSha: string, headRef: string, baseRef: string,
+ * @typedef {{ deck: { review: import('./contract-types.js').ReviewKey, headSha: string, headRef: string, baseRef: string,
  *   cards: DecisionCard[], settled: unknown[] }, picks: Record<string, Pick>,
  *   excerpts: Record<string, CardExcerpt>, summary: Summary,
  *   fixes: { path: string, markdown: string } | null }} DeckResponse
@@ -154,7 +154,7 @@ function showStamp(card, side, strength) {
 function readBootstrap(root) {
   const el = document.getElementById('bootstrap')
   const data = el?.textContent ? JSON.parse(el.textContent) : {}
-  return /** @type {{ review: 'branch' | 'uncommitted', owner: string, repo: string, version: string }} */ ({
+  return /** @type {{ review: string, owner: string, repo: string, version: string }} */ ({
     review: root.dataset['review'] ?? data.review,
     owner: data.owner ?? '',
     repo: data.repo ?? '',
@@ -180,7 +180,7 @@ export async function bootDeck() {
     return
   }
   const boot = readBootstrap(main)
-  const api = `/api/deck/${boot.review}`
+  const api = `/api/deck/${encodeURIComponent(boot.review)}`
   /** @type {DeckResponse} */
   let data
   try {

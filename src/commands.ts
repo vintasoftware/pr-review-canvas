@@ -8,7 +8,7 @@ import { importCanvas } from './canvas/import.js'
 import { CANVAS_ZIP_MAX_BYTES } from './canvas/zip.js'
 import type { ErrorCode } from './contract/api.js'
 import type { GenerationContext, PrepareTargetInput } from './contract/generation-context.js'
-import type { LocalKey } from './contract/review-key.js'
+import { isLocalKey, type LocalKey, type ReviewKey } from './contract/review-key.js'
 import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
 import { prepareDeck } from './deck/prepare-deck.js'
@@ -367,17 +367,23 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
 
 const DECK_VERBS = ['prepare', 'validate', 'publish', 'fixes'] as const
 
-function deckReview(values: { branch?: boolean | undefined; uncommitted?: boolean | undefined }): LocalKey {
-  if (values.branch === true && values.uncommitted === true) {
-    throw new UsageError('--branch and --uncommitted are two reviews; ask for one of them')
+function deckReview(values: {
+  pr?: string | undefined
+  branch?: boolean | undefined
+  uncommitted?: boolean | undefined
+}): ReviewKey {
+  const named = [values.pr !== undefined, values.branch === true, values.uncommitted === true]
+  if (named.filter(Boolean).length > 1) {
+    throw new UsageError('--pr, --branch, and --uncommitted are separate reviews; ask for one of them')
   }
+  if (values.pr !== undefined) return parsePrNumber(values.pr)
   if (values.branch === true) return 'branch'
   if (values.uncommitted === true) return 'uncommitted'
-  throw new UsageError('deck needs --branch or --uncommitted')
+  throw new UsageError('deck needs --pr <n>, --branch, or --uncommitted')
 }
 
 /**
- * `deck prepare|validate|publish|fixes`: the self-review deck of a local review. Prepare writes
+ * `deck prepare|validate|publish|fixes`: the self-review deck of a pull request or a local review. Prepare writes
  * the prompt, validate checks the generated deck-model.json, publish stores it for the deck page,
  * and fixes names the fix list the page wrote when the author cleared the deck.
  */
@@ -389,6 +395,7 @@ export async function runDeck(ctx: AppContext, argv: string[], io: CliIo): Promi
   const { values } = parseArgs({
     args: rest,
     options: {
+      pr: { type: 'string' },
       branch: { type: 'boolean' },
       uncommitted: { type: 'boolean' },
       base: { type: 'string' },
@@ -401,6 +408,9 @@ export async function runDeck(ctx: AppContext, argv: string[], io: CliIo): Promi
     strict: true,
   })
   const review = deckReview(values)
+  if (values.base !== undefined && !isLocalKey(review)) {
+    throw new UsageError('a pull request is compared against its own base branch, so --pr takes no --base')
+  }
   if (verb === 'prepare') {
     const result = await prepareDeck(
       ctx,

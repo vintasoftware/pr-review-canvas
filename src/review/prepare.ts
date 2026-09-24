@@ -41,7 +41,7 @@ export interface PrepareResult {
 }
 
 /** The PR meta, live from GitHub, with the head and base refs fetched into the local clone. */
-async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['log']): Promise<Pr> {
+export async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['log']): Promise<Pr> {
   log('fetch-pr')
   const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
   log('fetch-refs')

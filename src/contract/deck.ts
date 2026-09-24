@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { FileEntrySchema, SideSchema } from './review-artifact.js'
+import { ReviewKeySchema } from './review-key.js'
 
 /**
  * The self-review deck: decision cards the author picks a side of before reviewers see the change.
@@ -112,10 +113,10 @@ export const SettledCardSchema = DecisionCardSchema.extend({
 })
 export type SettledCard = z.infer<typeof SettledCardSchema>
 
-/** `deck.json`: the published deck of one local review. */
+/** `deck.json`: the published deck of one review: a pull request, or a local review. */
 export const DeckSchema = z.object({
   version: z.literal(1),
-  review: z.enum(['branch', 'uncommitted']),
+  review: ReviewKeySchema,
   headSha: z.string().regex(/^[0-9a-f]{40}$/),
   mergeBaseSha: z.string().regex(/^[0-9a-f]{40}$/),
   baseRef: z.string(),
@@ -154,7 +155,7 @@ export type PickBody = z.infer<typeof PickBodySchema>
  */
 export const DeckContextSchema = z.object({
   version: z.literal(1),
-  review: z.enum(['branch', 'uncommitted']),
+  review: ReviewKeySchema,
   base: z.string().min(1),
   headRef: z.string(),
   headSha: z.string().regex(/^[0-9a-f]{40}$/),

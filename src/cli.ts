@@ -58,12 +58,12 @@ const USAGE = `usage: pr-review <command> [flags]
   validate <model.json|review.json> --canvas <dir> [--human] [--fix] [--repo <dir>] [--data-dir <dir>]
                    (--fix trims over-cap titles in place and reports each one)
   publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
-  deck prepare (--branch | --uncommitted) [--base <ref>] [--force]
-  deck validate (--branch | --uncommitted) [--human]
-  deck publish (--branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]
-  deck fixes (--branch | --uncommitted)   (where the fix list is, and whether it exists)
-                   (the self-review deck: decision cards the author settles before the PR;
-                    shown at /deck/branch and /deck/uncommitted)
+  deck prepare (--pr <n> | --branch | --uncommitted) [--base <ref>] [--force]
+  deck validate (--pr <n> | --branch | --uncommitted) [--human]
+  deck publish (--pr <n> | --branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]
+  deck fixes (--pr <n> | --branch | --uncommitted)   (where the fix list is, and whether it exists)
+                   (the self-review deck: decision cards the author settles before review;
+                    shown at /deck/<n>, /deck/branch, and /deck/uncommitted)
   install-skill [--claude-dir .claude/skills] [--codex-dir .agents/skills] [--force] [--repo <dir>]
   export (--pr <n> | --head <ref|sha>) [--out <file|dir>] [--repo <dir>] [--data-dir <dir>]
                    (both flags: the named commit is exported and the number stamps the zip)

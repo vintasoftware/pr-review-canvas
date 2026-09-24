@@ -9,6 +9,7 @@ import {
   runExport,
   runImport,
   runInstallSkill,
+  runDeck,
   runPrepare,
   runPublish,
   runValidate,
@@ -537,5 +538,28 @@ describe('export and import through the CLI layer', () => {
     } finally {
       await fresh.cleanup()
     }
+  })
+})
+
+describe('deck through the CLI layer', () => {
+  it('names one review, and a pull request brings its own base', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const io = fakeIo()
+    await expect(runDeck(t.ctx, ['shuffle', '--branch'], io)).rejects.toThrow(
+      'deck takes one of prepare, validate, publish, fixes'
+    )
+    await expect(runDeck(t.ctx, ['prepare'], io)).rejects.toThrow(
+      'deck needs --pr <n>, --branch, or --uncommitted'
+    )
+    await expect(runDeck(t.ctx, ['prepare', '--pr', '42', '--branch'], io)).rejects.toThrow(
+      /separate reviews/
+    )
+    await expect(runDeck(t.ctx, ['prepare', '--pr', '42', '--base', 'main'], io)).rejects.toThrow(
+      /--pr takes no --base/
+    )
+    expect(await runDeck(t.ctx, ['fixes', '--pr', '42'], io)).toBe(EXIT.ok)
+    expect(lastJson(io)).toEqual({ review: 42, path: t.ctx.decks.fixesPath(42), exists: false })
+    expect(await runDeck(t.ctx, ['prepare', '--pr', '42'], io)).toBe(EXIT.ok)
+    expect(lastJson(io)).toMatchObject({ status: 'prepared', review: 42, headSha: HEAD_SHA })
   })
 })

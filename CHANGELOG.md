@@ -4,11 +4,12 @@
 
 ### Self-review deck
 
-- `/pr-self-review branch|uncommitted` deals a short deck of **decision cards** before a pull
-  request exists. Each card is a choice the change makes that could go either way, with sides A
+- `/pr-self-review <pr-number>|branch|uncommitted` deals a short deck of **decision cards** before
+  reviewers weigh in. Each card is a choice the change makes that could go either way, with sides A
   and B, and one side marked as what the code does now. At most one card per 100 changed lines and
   never more than ten; `selfReview.maxCards` and `selfReview.linesPerCard` change that.
-- `/deck/branch` and `/deck/uncommitted` show one card per screen with no scroll at 1080p. Pick with
+- `/deck/<n>`, `/deck/branch`, and `/deck/uncommitted` show one card per screen with no scroll at
+  1080p, and stack the sides for touch on phones. Pick with
   `a` / `b` or a drag, `n` for neither, `s` to skip, `u` to undo, `e` / `r` to edit a
   justification, `o` for the code.
 - Clearing the deck writes a fix list. `/pr-self-review-fix` asks about unclear entries, applies

@@ -1,7 +1,7 @@
 # Self-review deck for {{TARGET_WORD}}
 
-The author of this change is about to open it for review. Before anyone else reads it, they want
-to settle the decisions that are theirs to make. Write a short deck of **decision cards**. Each
+The author of this change wants to settle the decisions that are theirs to make before reviewers
+weigh in, whether the pull request is not opened yet or has just been. Write a short deck of **decision cards**. Each
 card offers two sides, A and B, of one choice the change makes. The author picks one side per
 card, one card per screen, without scrolling. Picks that disagree with the code become a fix list
 for a coding agent. Picks the author keeps become short justifications that reviewers read
@@ -120,7 +120,7 @@ Write `{{MODEL_PATH}}` as JSON only, no prose and no fence:
 }
 ```
 
-Then run `pr-review deck validate --{{REVIEW}}` and fix every problem it names.
+Then run `pr-review deck validate {{REVIEW_FLAG}}` and fix every problem it names.
 
 ## The change
 

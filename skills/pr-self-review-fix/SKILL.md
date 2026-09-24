@@ -1,7 +1,7 @@
 ---
 name: pr-self-review-fix
 model: sonnet
-description: Apply the fix list the self-review deck wrote after the author picked sides of its decision cards. Reads `fixes.md`, interviews the author about any entry that is unclear, changes the code, writes the justifications marked for the code, and then deals a fresh deck for whatever the fixes changed. Use when the user runs `/pr-self-review-fix branch`, `/pr-self-review-fix uncommitted`, or asks to apply their self-review picks or fix list.
+description: Apply the fix list the self-review deck wrote after the author picked sides of its decision cards. Reads `fixes.md`, interviews the author about any entry that is unclear, changes the code, writes the justifications marked for the code, and then deals a fresh deck for whatever the fixes changed. Use when the user runs `/pr-self-review-fix <pr-number>`, `/pr-self-review-fix branch`, `/pr-self-review-fix uncommitted`, or asks to apply their self-review picks or fix list.
 ---
 
 # pr-self-review-fix
@@ -10,13 +10,13 @@ The author settled the decisions of a self-review deck (`/pr-self-review`). Pick
 with the code became a fix list. You apply it: the decisions are made, so your job is to carry
 them out faithfully, not to reopen them.
 
-Arguments: `branch` or `uncommitted`, the review whose deck was cleared. When the user names
-neither, use the one whose fix list exists; ask when both do.
+Arguments: a pull request number, `branch`, or `uncommitted`: the review whose deck was cleared.
+When the user names none, use the one whose fix list exists; ask when more than one does.
 
 ## 1. Find the fix list
 
 ```bash
-pr-review deck fixes --<branch|uncommitted>
+pr-review deck fixes (--pr <n> | --branch | --uncommitted)
 ```
 
 It prints `{ "review", "path", "exists" }`. Read `path` in full. When `exists` is false, the
@@ -31,6 +31,10 @@ It has up to four sections:
 - **Queued as pull request comments**: the author's answers to questions a reviewer would ask. They
   stay with the deck for the pull request. Do not write these into the code.
 - **Left for reviewers**: skipped cards. Do nothing with them.
+
+For a pull request, the fixes go on its branch: the fix list names it in its first line. If this
+clone is on another branch, or behind the pull request's head, stop and tell the author which
+branch to check out and pull. Never switch branches for them.
 
 ## 2. Interview before changing anything unclear
 
@@ -56,11 +60,13 @@ rather than widening the change.
 Fixes change code, and changed code can raise new decisions. Deal a fresh deck for the same review
 by following `/pr-self-review <review>` without `--force`: prepare carries every decision the
 author already settled, so only new questions appear. If the new deck has no cards, tell the
-author the change is ready for a pull request; otherwise give them the deck URL again.
+author the change is ready for review; otherwise give them the deck URL again.
 
 The `uncommitted` review sees your edits at once. The `branch` review compares the branch tip, so
-it sees them only once they are committed: ask the author whether to commit the fixes, and deal the
-next deck after they do. If they would rather not commit yet, stop after step 3 and say so.
+it sees them only once they are committed. A pull request's deck reads the head from the forge, so
+it sees them only once they are committed and pushed. Ask the author whether to commit (and, for a
+pull request, push) the fixes, and deal the next deck after they do. If they would rather not yet,
+stop after step 3 and say so.
 
-Do not commit unless the author asks. Summarize what changed per fix-list entry, the reasons you
+Do not commit or push unless the author asks. Summarize what changed per fix-list entry, the reasons you
 wrote into the code, and anything you asked about.

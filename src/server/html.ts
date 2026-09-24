@@ -1,7 +1,7 @@
 import { html, raw } from 'hono/html'
 import type { HtmlEscapedString } from 'hono/utils/html'
 import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.js'
-import { keyLabel, keyToString, type LocalKey } from '../contract/review-key.js'
+import { keyLabel, keyToString, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 
@@ -94,7 +94,7 @@ export function reviewPage(
 
 /** What the deck page boots with. The deck itself is fetched, so a regenerated one is never stale. */
 export interface DeckBootstrap {
-  review: LocalKey
+  review: ReviewKey
   owner: string
   repo: string
   version: string
@@ -109,7 +109,7 @@ export function deckPage(page: DeckBootstrap, nonce: string, appearance: Appeara
     app: true,
     entry: '/static/js/deck.js',
     body: html`<a class="skip" href="#main">Skip to content</a>
-<main id="main" class="deck-page" data-review="${page.review}"><div class="loading">Shuffling the deck…</div></main>`,
+<main id="main" class="deck-page" data-review="${keyToString(page.review)}"><div class="loading">Shuffling the deck…</div></main>`,
   })
 }
 

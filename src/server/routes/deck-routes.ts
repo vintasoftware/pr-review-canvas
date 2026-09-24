@@ -8,7 +8,7 @@ import {
   type PickBody,
   PickBodySchema,
 } from '../../contract/deck.js'
-import { LocalKeySchema, type LocalKey } from '../../contract/review-key.js'
+import { keyLabel, parseReviewKey, type ReviewKey } from '../../contract/review-key.js'
 import { renderFixList, summarizePicks, type FixListSummary } from '../../deck/fix-list.js'
 import { hunkForLine, splitHunks } from '../../git/patch-lines.js'
 import type { Derived } from '../../store/derived-store.js'
@@ -35,20 +35,25 @@ export interface DeckResponse {
   fixes: { path: string; markdown: string } | null
 }
 
-function parseLocal(raw: string): LocalKey {
-  const parsed = LocalKeySchema.safeParse(raw)
-  if (!parsed.success) {
-    throw new AppError('BAD_REQUEST', `"${raw}" is not a local review`, 400, 'use branch or uncommitted')
+function parseKey(raw: string): ReviewKey {
+  const key = parseReviewKey(raw)
+  if (key === null) {
+    throw new AppError(
+      'BAD_REQUEST',
+      `"${raw}" is not a review target`,
+      400,
+      'use a PR number, branch, or uncommitted'
+    )
   }
-  return parsed.data
+  return key
 }
 
-async function requireDeck(ctx: AppContext, key: LocalKey): Promise<Deck> {
+async function requireDeck(ctx: AppContext, key: ReviewKey): Promise<Deck> {
   const deck = await ctx.decks.readDeck(key)
   if (deck === null) {
     throw new AppError(
       'DECK_NOT_FOUND',
-      `the ${key} review has no self-review deck`,
+      `${keyLabel(key)} has no self-review deck`,
       404,
       `run /pr-self-review ${key} to generate one`
     )
@@ -80,7 +85,7 @@ function excerptFor(card: DecisionCard, derived: Derived | null): CardExcerpt | 
   return excerpt
 }
 
-async function deckResponse(ctx: AppContext, key: LocalKey, deck: Deck): Promise<DeckResponse> {
+async function deckResponse(ctx: AppContext, key: ReviewKey, deck: Deck): Promise<DeckResponse> {
   const [{ picks }, derived, fixesText] = await Promise.all([
     ctx.decks.readPicks(key),
     ctx.derived.readOrBuild(deck.headSha, deck.mergeBaseSha),
@@ -137,12 +142,12 @@ export function deckRoutes(ctx: AppContext): Hono {
   const app = new Hono()
 
   app.get('/:key', async c => {
-    const key = parseLocal(c.req.param('key'))
+    const key = parseKey(c.req.param('key'))
     return c.json(await deckResponse(ctx, key, await requireDeck(ctx, key)))
   })
 
   app.put('/:key/picks/:card', async c => {
-    const key = parseLocal(c.req.param('key'))
+    const key = parseKey(c.req.param('key'))
     const deck = await requireDeck(ctx, key)
     const body = await readPickBody(c.req.raw)
     requireSameDeck(deck, body.headSha)
@@ -162,7 +167,7 @@ export function deckRoutes(ctx: AppContext): Hono {
   })
 
   app.delete('/:key/picks/:card', async c => {
-    const key = parseLocal(c.req.param('key'))
+    const key = parseKey(c.req.param('key'))
     const deck = await requireDeck(ctx, key)
     requireSameDeck(deck, c.req.query('headSha'))
     const { picks } = await ctx.decks.clearPick(key, c.req.param('card'))
@@ -170,7 +175,7 @@ export function deckRoutes(ctx: AppContext): Hono {
   })
 
   app.post('/:key/finish', async c => {
-    const key = parseLocal(c.req.param('key'))
+    const key = parseKey(c.req.param('key'))
     const deck = await requireDeck(ctx, key)
     requireSameDeck(deck, c.req.query('headSha'))
     const { picks } = await ctx.decks.readPicks(key)

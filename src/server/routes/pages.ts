@@ -3,7 +3,7 @@ import { type Appearance, type AppearanceQuery, appearanceForRequest } from '../
 import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
-import { LOCAL_KEYS, LocalKeySchema, parseReviewKey } from '../../contract/review-key.js'
+import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
 import { deckPage, homePage, reviewPage } from '../html.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
@@ -85,19 +85,19 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
 
   app.get('/deck/:key', async c => {
     const raw = c.req.param('key')
-    const review = LocalKeySchema.safeParse(raw)
-    if (!review.success) {
+    const review = parseReviewKey(raw)
+    if (review === null) {
       throw new AppError(
         'BAD_REQUEST',
-        `"${raw}" is not a local review`,
+        `"${raw}" is not a review target`,
         400,
-        'the self-review deck is at /deck/branch or /deck/uncommitted'
+        'the self-review deck is at /deck/<number>, /deck/branch, or /deck/uncommitted'
       )
     }
     return c.html(
       deckPage(
         {
-          review: review.data,
+          review,
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
           version: ctx.version,

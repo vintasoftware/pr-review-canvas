@@ -2,7 +2,7 @@
 // against the context `deck prepare` wrote, and publish it as the review's deck.
 import path from 'node:path'
 import { type Deck, type DeckContext, DeckContextSchema } from '../contract/deck.js'
-import type { LocalKey } from '../contract/review-key.js'
+import { isLocalKey, keyLabel, type ReviewKey } from '../contract/review-key.js'
 import { resolveLocalHead } from '../git/local-target.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
@@ -19,15 +19,15 @@ export class DeckInvalidError extends Error {
   }
 }
 
-export async function readDeckContext(ctx: AppContext, review: LocalKey): Promise<DeckContext> {
+export async function readDeckContext(ctx: AppContext, review: ReviewKey): Promise<DeckContext> {
   const file = path.join(ctx.decks.workDir(review), 'context.json')
   const context = await readJson(file, DeckContextSchema)
   if (context === null) {
     throw new AppError(
       'DECK_NOT_FOUND',
-      `no prepared deck for the ${review} review`,
+      `no prepared deck for ${keyLabel(review)}`,
       404,
-      `run \`pr-review deck prepare --${review}\` first`
+      `run \`pr-review deck prepare ${isLocalKey(review) ? `--${review}` : `--pr ${review}`}\` first`
     )
   }
   return context
@@ -60,9 +60,17 @@ export async function checkDeckModel(
   return result.ok ? { ok: true, cards: result.model.cards } : result
 }
 
+/** Where the target's head is now: the forge's answer for a pull request, the clone's otherwise. */
+async function currentHead(ctx: AppContext, review: ReviewKey): Promise<string> {
+  if (isLocalKey(review)) {
+    return (await resolveLocalHead(ctx.git, review)).headSha
+  }
+  return (await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, review)).headSha
+}
+
 export interface PublishDeckResult {
   status: 'published'
-  review: LocalKey
+  review: ReviewKey
   headSha: string
   cards: number
   settled: number
@@ -71,7 +79,7 @@ export interface PublishDeckResult {
 
 export async function publishDeck(
   ctx: AppContext,
-  review: LocalKey,
+  review: ReviewKey,
   opts: { agent: string; model?: string | undefined; allowStale: boolean }
 ): Promise<PublishDeckResult> {
   const context = await readDeckContext(ctx, review)
@@ -79,11 +87,11 @@ export async function publishDeck(
   if (!checked.ok) {
     throw new DeckInvalidError(checked.problems)
   }
-  const head = await resolveLocalHead(ctx.git, review)
-  if (head.headSha !== context.headSha && !opts.allowStale) {
+  const headSha = await currentHead(ctx, review)
+  if (headSha !== context.headSha && !opts.allowStale) {
     throw new AppError(
       'DECK_STALE',
-      `the ${review} head moved to ${head.headSha.slice(0, 12)} while the deck was written for ${context.headSha.slice(0, 12)}`,
+      `the head of ${keyLabel(review)} moved to ${headSha.slice(0, 12)} while the deck was written for ${context.headSha.slice(0, 12)}`,
       409,
       'prepare the deck again, or pass --allow-stale to publish it for the old head'
     )

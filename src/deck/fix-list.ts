@@ -122,7 +122,12 @@ export function renderFixList(deck: Deck, picks: Readonly<Record<string, Pick>>)
       comments.push(`- ${card.title} (\`${anchor(card)}\`): ${why(card, pick)}`)
     }
   }
-  const target = deck.review === 'uncommitted' ? 'the working tree' : `branch \`${deck.headRef}\``
+  const target =
+    typeof deck.review === 'number'
+      ? `pull request #${deck.review} (\`${deck.headRef}\`)`
+      : deck.review === 'uncommitted'
+        ? 'the working tree'
+        : `branch \`${deck.headRef}\``
   const out = [
     '# Self-review fix list',
     '',
