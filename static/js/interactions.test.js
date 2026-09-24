@@ -15,6 +15,7 @@ import { setChatEnabled } from './ask.js'
 import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
+import { carriedOverBarHtml } from './empty-state.js'
 import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
 import {
   cardOf,
@@ -1189,7 +1190,9 @@ describe('keyboard', () => {
 
   it('steps from the card at the top of the screen once the focused one is scrolled away', () => {
     const { root } = setup()
-    root.querySelector('#main')?.insertAdjacentHTML('afterbegin', '<div class="stale-bar">outdated</div>')
+    root
+      .querySelector('#main')
+      ?.insertAdjacentHTML('afterbegin', '<div class="stale-bar outdated-bar">outdated</div>')
     /** Viewport tops by id, as if the reader had scrolled; everything else is not drawn. */
     /** @type {Record<string, number>} */
     let tops = {
@@ -1202,7 +1205,7 @@ describe('keyboard', () => {
     }
     /** @this {Element} */
     function fakeRect() {
-      const bar = this.classList.contains('stale-bar')
+      const bar = this.classList.contains('outdated-bar')
       const top = bar ? 0 : tops[this.id]
       return top === undefined ? new DOMRect() : new DOMRect(0, top, 100, bar ? 40 : 100)
     }
@@ -1220,6 +1223,39 @@ describe('keyboard', () => {
       tops = { ...tops, 'file-src_app_ts': -700, 'file-src_new_name_ts': -400, 'file-src_app_test_ts': 20 }
       key('j')
       expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+    } finally {
+      rect.mockRestore()
+    }
+  })
+
+  it('scrolls a card to the top of the screen under a note, which does not stick', () => {
+    const { root } = setup()
+    root
+      .querySelector('#main')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        carriedOverBarHtml({ canvasHeadSha: 'c'.repeat(40), currentHeadSha: 'a'.repeat(40) })
+      )
+    /** @type {Record<string, number>} */
+    const tops = {
+      overview: -1500,
+      'layer-run-path': -900,
+      'file-src_app_ts': 30,
+      'file-src_new_name_ts': 400,
+    }
+    /** @this {Element} */
+    function fakeRect() {
+      const bar = this.classList.contains('stale-bar')
+      const top = bar ? 0 : tops[this.id]
+      return top === undefined ? new DOMRect() : new DOMRect(0, top, 100, bar ? 40 : 100)
+    }
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(fakeRect)
+    try {
+      // The file 30px down is the next card: the note covers nothing, so it takes no room.
+      key('n')
+      const focused = root.querySelector('.is-focused')
+      expect(focused?.id).toBe('file-src_app_ts')
+      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('8px')
     } finally {
       rect.mockRestore()
     }

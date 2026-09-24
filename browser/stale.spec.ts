@@ -40,11 +40,11 @@ test('warns above an outdated canvas and clears the warning after refresh', asyn
   await page.goto(reviewUrl)
   await expect(page.locator('#es-h')).toHaveText('Canvas is outdated')
   await page.locator('#view-stale').click()
-  const warning = page.locator('#main > .stale-bar')
+  const warning = page.locator('#main > .outdated-bar')
   await expect(warning).toBeVisible()
   await expect(warning).toContainText('Canvas is outdated.')
   await expect(warning).toContainText('1 commit behind')
-  await expect(page.locator('#main > :first-child')).toHaveClass('stale-bar')
+  await expect(page.locator('#main > :first-child')).toHaveClass('stale-bar outdated-bar')
   await expect(warning).toHaveCSS('position', 'sticky')
   outdated = false
   await page.locator('#refresh').click()
