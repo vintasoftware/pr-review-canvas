@@ -31,10 +31,6 @@ export function setSettled(points) {
   settled = points
 }
 
-export function isSelfReview() {
-  return selfReview
-}
-
 /** @param {Pick<Point, 'fingerprint'>} p */
 export function settlementOf(p) {
   return settled[p.fingerprint]
@@ -52,11 +48,12 @@ export function audiencePillHtml(p) {
 }
 
 /**
- * The settle command, for the author and for a point nobody settled yet.
+ * The settle command: for the author, on a point marked for the author that is not settled yet. A
+ * reviewer point needs someone else's judgment, so the author's answer does not close it.
  * @param {Point} p
  */
 export function settleButtonHtml(p) {
-  return selfReview && settlementOf(p) === undefined
+  return selfReview && p.audience === 'author' && settlementOf(p) === undefined
     ? `<button class="cmd" type="button" data-act="point-settle" data-fingerprint="${esc(p.fingerprint)}">settle</button>`
     : ''
 }

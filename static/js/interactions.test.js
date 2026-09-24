@@ -38,6 +38,13 @@ const patches = toPatchMap(SYNTHETIC_FILES)
 const comments = GH_REVIEW_COMMENTS.map(c => mapReviewComment(c, new Set([1001, 1002])))
 const issueComments = GH_ISSUE_COMMENTS.map(mapIssueComment)
 const BASE = emptyState(NOW.toISOString())
+/** The synthetic canvas with its drawn point, fp-1, marked for the author, who may settle it. */
+const authored = {
+  ...artifact,
+  points: artifact.points.map(p =>
+    p.fingerprint === 'fp-1' ? { ...p, audience: /** @type {const} */ ('author') } : p
+  ),
+}
 const HEAD = artifact.pr.headSha
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
@@ -519,8 +526,8 @@ describe('attention points', () => {
   })
 
   it('lets the author settle a point with a reason, and hides it with the reason listed', async () => {
-    const { root, calls } = setup({ selfReview: true })
-    expect(root.querySelector('.self-review-note')?.textContent).toContain('2 points are marked yours')
+    const { root, calls } = setup({ selfReview: true, artifact: authored })
+    expect(root.querySelector('.self-review-note')?.textContent).toContain('3 points are marked yours')
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
     const box = root.querySelector('.findings .settle-box')
     expect(box?.querySelector('input[name="settle-comment"]')).not.toBeNull()
@@ -556,13 +563,13 @@ describe('attention points', () => {
       '1 settled by the author'
     )
     expect(root.querySelector('.settled-reason')?.textContent).toContain('Covered by the e2e suite.')
-    expect(root.querySelector('.self-review-note')?.textContent).toContain('0 points go to the reviewer')
+    expect(root.querySelector('.self-review-note')?.textContent).toContain('2 points are marked yours')
     expect(root.querySelector('.toast')?.textContent).toContain('canvas comment is updated')
   })
 
   it('reopens a settled point for the author, and offers settle on it again', async () => {
     const settled = { 'fp-1': { reason: 'Covered.', at: NOW.toISOString() } }
-    const { root, calls } = setup({ selfReview: true, artifact: { ...artifact, settled } })
+    const { root, calls } = setup({ selfReview: true, artifact: { ...authored, settled } })
     expect(
       root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
     ).toBe(true)
@@ -587,18 +594,18 @@ describe('attention points', () => {
         commentUrl: 'https://github.com/acme/widgets/pull/42#discussion_r1',
       },
     }
-    const { root } = setup({ artifact: { ...artifact, settled } })
+    const { root } = setup({ artifact: { ...authored, settled } })
     expect(root.querySelector('[data-act="point-settle"]')).toBeNull()
     expect(root.querySelector('[data-act="point-unsettle"]')).toBeNull()
     expect(root.querySelector('.self-review-note')?.hasAttribute('hidden')).toBe(true)
     expect(root.querySelector('.settled-list a')?.getAttribute('href')).toBe(settled['fp-1'].commentUrl)
     expect(root.querySelector('.findings [data-fingerprint="fp-1"] .pill.audience')?.textContent).toBe(
-      'reviewer'
+      'author'
     )
   })
 
   it('closes the reason box on cancel', () => {
-    const { root } = setup({ selfReview: true })
+    const { root } = setup({ selfReview: true, artifact: authored })
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
     click(root, '.settle-box [data-act="settle-cancel"]')
     expect(root.querySelector('.settle-box')).toBeNull()

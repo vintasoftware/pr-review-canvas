@@ -22,6 +22,7 @@ import type { Derived } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
+import { oneAtATime } from '../one-at-a-time.js'
 import { parseTargetKey, requirePrNumber } from './api.js'
 
 const ReviewedBodySchema = z.object({
@@ -441,20 +442,14 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
 }
 
 /** One append at a time per PR, so two posts that land together do not overwrite each other. */
-const appendChains = new Map<number, Promise<unknown>>()
+const appendInTurn = oneAtATime<number>()
 
 function appendComments(
   ctx: AppContext,
   number: number,
   posted: ReadonlyArray<PostCommentResult>
 ): Promise<void> {
-  const run = () => writeAppendedComments(ctx, number, posted)
-  const chained = (appendChains.get(number) ?? Promise.resolve()).then(run, run)
-  appendChains.set(
-    number,
-    chained.catch(() => undefined)
-  )
-  return chained
+  return appendInTurn(number, () => writeAppendedComments(ctx, number, posted))
 }
 
 /**

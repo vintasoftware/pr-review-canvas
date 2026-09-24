@@ -286,16 +286,18 @@ describe('publish', () => {
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.basisCanvasSha).toBe(basis)
   })
 
-  it('keeps the author’s settlements when the same commit is generated again, for the points still there', async () => {
+  it('keeps the author’s settlements when the same commit is generated again, for the author points still there', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     await publish(t.ctx, canvasDir, OPTS)
     const first = await t.ctx.canvases.readArtifact(HEAD_SHA)
-    const kept = fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' })
-    const settlement = { reason: 'The spec says sum.', at: '2026-09-10T12:00:00.000Z' }
+    const kept = fingerprint({ kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' })
+    // A reviewer point takes no settlement, whatever a stored canvas says.
+    const reviewer = fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' })
+    const settlement = { reason: 'Nothing imports it.', at: '2026-09-10T12:00:00.000Z' }
     await t.ctx.canvases.revise(HEAD_SHA, {
       ...first!,
-      settled: { [kept]: settlement, gone: settlement },
+      settled: { [kept]: settlement, [reviewer]: settlement, gone: settlement },
       revisedAt: settlement.at,
     })
     await publish(t.ctx, canvasDir, OPTS)
@@ -314,8 +316,8 @@ describe('publish', () => {
   it('carries the basis canvas’s settlements only for the points the basis split carried', async () => {
     const canvasDir = await prepared()
     const basisSha = 'e'.repeat(40)
-    const carried = { kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' } as const
-    const reJudged = { kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' } as const
+    const carried = { kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' } as const
+    const reJudged = { kind: 'tests', path: 'src/app.ts', title: 'other() returns x' } as const
     const settlement = { reason: 'Agreed with the team.', at: '2026-09-09T12:00:00.000Z' }
     await t.ctx.canvases.write(
       basisSha,
@@ -341,7 +343,7 @@ describe('publish', () => {
     context['basis'] = {
       canvasSha: basisSha,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
-      files: { unchanged: ['src/app.ts'], changed: ['src/gone.ts'], added: [], removed: [] },
+      files: { unchanged: ['src/gone.ts'], changed: ['src/app.ts'], added: [], removed: [] },
       layers: [],
       points: [
         { ...carried, status: 'carried' },

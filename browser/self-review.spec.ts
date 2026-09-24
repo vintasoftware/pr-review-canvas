@@ -5,9 +5,9 @@ test('the author settles a point with a reason, reads it after a reload, and reo
   selfReviewUrl,
 }) => {
   await page.goto(selfReviewUrl)
-  await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
+  await expect(page.locator('.self-review-note')).toContainText('3 points are marked yours')
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
-  await expect(card.locator('.pill.audience')).toHaveText('reviewer')
+  await expect(card.locator('.pill.audience')).toHaveText('yours')
   await card.locator('[data-act="point-settle"]').click()
   const box = card.locator('.settle-box')
   await expect(box.locator('textarea')).toBeFocused()

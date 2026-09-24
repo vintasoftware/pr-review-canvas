@@ -18,7 +18,7 @@ attention points, comments, and an optional AI chat. Everything runs locally at 
    a local review URL and the comment link.
 
 2. **Self-review.** Run `pr-review serve` and open the review URL. Each attention point says who
-   it is for: **yours** or **reviewer**. Settle every point you can answer now: click **settle**,
+   it is for: **yours** or **reviewer**. Settle each point marked yours: click **settle**,
    write why it needs no reviewer decision ("nothing calls this API yet, so breaking it is fine"),
    and save. The reason can also go out as a comment on the point's line. The canvas comment
    updates at once, so the point leaves every reviewer's list, with your reason still readable.

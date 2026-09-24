@@ -11,7 +11,6 @@ import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import {
   audiencePillHtml,
-  isSelfReview,
   selfReviewNoteHtml,
   settleButtonHtml,
   settledListHtml,
@@ -295,7 +294,7 @@ function replaceWithHtml(host, html) {
 export function refreshPointCommands(el, p, ctx) {
   const tbtns = el.querySelector('.tbtns')
   const queued = queuedFor(p, ctx)
-  const settleable = isSelfReview() && settlementOf(p) === undefined
+  const settleable = settleButtonHtml(p) !== ''
   if (
     tbtns === null ||
     ((tbtns.getAttribute('data-queued') === '1') === queued &&

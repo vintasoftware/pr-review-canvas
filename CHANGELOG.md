@@ -7,7 +7,8 @@
 - Every attention point names its audience: **author** (shown as **yours** to the author) or
   **reviewer**. The generation prompt asks for it; a canvas from an earlier version reads every
   point as the reviewer's.
-- The author can **settle** a point with a reason. The settlement is written into the canvas, the
+- The author can **settle** an author point with a reason; reviewer points stay on the
+  reviewer's list. The settlement is written into the canvas, the
   canvas comment is shared again, and the point leaves every reviewer's list with the reason
   listed under the overview. The reason can also post as a comment on the point's line.
   **reopen** takes it back. Only the pull request's author can settle (`NOT_AUTHOR` otherwise).

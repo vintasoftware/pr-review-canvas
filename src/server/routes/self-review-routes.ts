@@ -10,6 +10,7 @@ import { isAuthor, settlementCommentBody, withSettlement } from '../../review/se
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
+import { oneAtATime } from '../one-at-a-time.js'
 import { parseTargetKey, requirePrNumber } from './api.js'
 import { postOnPr, readBody, requireSameHead } from './review-routes.js'
 
@@ -43,16 +44,7 @@ async function currentCanvasSha(ctx: AppContext, key: ReviewKey, pr: Pr): Promis
 }
 
 /** One revision of a canvas at a time, so the comment shared last holds every settlement. */
-const revisions = new Map<string, Promise<unknown>>()
-
-function oneAtATime<T>(canvasSha: string, run: () => Promise<T>): Promise<T> {
-  const chained = (revisions.get(canvasSha) ?? Promise.resolve()).then(run, run)
-  revisions.set(
-    canvasSha,
-    chained.catch(() => undefined)
-  )
-  return chained
-}
+const reviseInTurn = oneAtATime<string>()
 
 export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
@@ -71,7 +63,7 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     const canvasSha = await currentCanvasSha(ctx, key, pr)
     // Each revision of this canvas runs in turn, reading the review.json the one before it wrote.
-    const answer = await oneAtATime(canvasSha, async (): Promise<SettleResponse> => {
+    const answer = await reviseInTurn(canvasSha, async (): Promise<SettleResponse> => {
       const artifact = await ctx.canvases.readArtifact(canvasSha)
       const point = artifact?.points.find(p => p.fingerprint === fingerprint)
       if (artifact === null || point === undefined) {
@@ -80,6 +72,14 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
           `no attention point ${fingerprint} on this canvas`,
           404,
           'reload the page'
+        )
+      }
+      if (point.audience !== 'author') {
+        throw new AppError(
+          'BAD_REQUEST',
+          `"${point.title}" is for the reviewer to judge, so the author does not settle it`,
+          400,
+          'answer it in a comment instead'
         )
       }
       let state = await ctx.state.read(key)

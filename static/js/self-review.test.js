@@ -38,7 +38,8 @@ describe('what a reader sees', () => {
     expect(settleButtonHtml(tests)).toBe('')
     setSelfReview(true, { [tests.fingerprint]: settlement })
     expect(settleButtonHtml(tests)).toBe('')
-    expect(settleButtonHtml(decide)).toContain('data-act="point-settle"')
+    expect(settleButtonHtml(debt)).toContain('data-act="point-settle"')
+    expect(settleButtonHtml(decide)).toBe('')
   })
 
   it('sets settled points aside with dismissed ones, and lists each once', () => {

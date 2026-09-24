@@ -86,8 +86,8 @@ export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean 
 
 /**
  * The settlements a newly generated canvas keeps. A settlement answers the code under its point, so
- * it survives only where that code survives: in a regeneration of the same commit, under a point
- * with the same fingerprint; in an incremental run, under a point the basis split carried.
+ * it survives only where that code survives: in a regeneration of the same commit, under an author
+ * point with the same fingerprint; in an incremental run, under one the basis split carried.
  */
 export function carriedSettlements(
   artifact: Pick<ReviewArtifact, 'points'>,
@@ -99,7 +99,8 @@ export function carriedSettlements(
     } | null
   }
 ): Record<string, Settlement> {
-  const present = new Set(artifact.points.map(p => p.fingerprint))
+  // Only an author point takes a settlement: a point regenerated for the reviewer loses its answer.
+  const present = new Set(artifact.points.filter(p => p.audience === 'author').map(p => p.fingerprint))
   const carriedByBasis = new Set(
     (sources.basis?.split.points ?? []).filter(p => p.status === 'carried').map(p => fingerprint(p))
   )

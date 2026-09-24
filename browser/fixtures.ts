@@ -105,7 +105,14 @@ export const test = base.extend<{ reviewUrl: string; selfReviewUrl: string }>({
       }),
       vendorRoots: resolveVendorRoots(),
     })
-    const artifact = syntheticArtifact()
+    // The drawn point, fp-1, is marked for the author so it can be settled.
+    const synthetic = syntheticArtifact()
+    const artifact = {
+      ...synthetic,
+      points: synthetic.points.map(p =>
+        p.fingerprint === 'fp-1' ? { ...p, audience: 'author' as const } : p
+      ),
+    }
     await t.ctx.canvases.write(artifact.pr.headSha, artifact, {
       formatVersion: 1,
       tool: { name: 'pr-review', version: '0.0.0-test' },

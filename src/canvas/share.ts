@@ -3,7 +3,8 @@
 import type { CanvasSharing } from '../contract/self-review.js'
 import type { AppContext } from '../server/context.js'
 import { buildCanvasComment } from './comment.js'
-import { buildCanvasZipFor, exportCanvas } from './export.js'
+import { tallyCanvas } from '../review/self-review.js'
+import { exportCanvas, zipStoredCanvas } from './export.js'
 
 /**
  * Creates or updates the canvas comment. A failure is returned, not thrown: the canvas is stored
@@ -15,8 +16,8 @@ export async function shareCanvasOnPr(
   number: number
 ): Promise<CanvasSharing> {
   try {
-    const zip = await buildCanvasZipFor(ctx, headSha, number)
-    const body = buildCanvasComment(zip, ctx.config.host.canvasCommentLimit)
+    const { zip, artifact } = await zipStoredCanvas(ctx, headSha, number)
+    const body = buildCanvasComment(zip, tallyCanvas(artifact), ctx.config.host.canvasCommentLimit)
     const url = await ctx.config.host.shareCanvas(ctx.gh, ctx.config.repo, number, body)
     return { status: 'shared', url }
   } catch (err) {

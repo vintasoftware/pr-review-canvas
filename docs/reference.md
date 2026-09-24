@@ -530,7 +530,9 @@ The author reads the canvas before asking for review. Every attention point name
 - **reviewer**: a trade-off to agree on or a risk to verify, which needs someone else's judgment.
 
 When the login that runs `pr-review serve` wrote the pull request, or the review is of local work,
-each point has a **settle** command. Write why the point needs no reviewer decision and click
+each author point has a **settle** command. A reviewer point has none: the author's answer does not
+close a question that needs someone else's judgment, so it stays on the reviewer's list and the
+author can answer it in a comment instead. Write why the point needs no reviewer decision and click
 **settle**. On a pull request, **also post the reason as a comment on this line** is checked by
 default; the reason then also appears as a review comment on the point's line.
 
@@ -543,11 +545,13 @@ A settlement is written into the canvas itself, so it is not a local mark like *
 - **reopen** in that list takes a settlement back and shares the canvas again. A posted comment
   stays on the forge.
 - Regenerating the canvas for the same commit keeps each settlement whose point comes back with the
-  same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the settlements
-  of the points it carries.
+  same kind, path, and title and is still an author point. An
+  [incremental canvas](#incremental-canvases) keeps the settlements of the author points it
+  carries.
 
-Only the author can settle; the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
-offers no **settle**: regenerate it for the current head first.
+Only the author can settle, and only author points: the server refuses anyone else with
+`NOT_AUTHOR`, and a reviewer point with `BAD_REQUEST`. An outdated canvas offers no **settle**:
+regenerate it for the current head first.
 
 ### Comments and sign-off
 

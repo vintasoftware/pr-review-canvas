@@ -12,8 +12,6 @@ import { buildCanvasZip } from './zip.js'
 export interface CanvasZip {
   name: string
   bytes: Uint8Array<ArrayBuffer>
-  /** The canvas the bytes hold, so the comment that carries them can say what it leaves open. */
-  artifact: ReviewArtifact
   headSha: string
   prNumber?: number
 }
@@ -27,6 +25,15 @@ export async function buildCanvasZipFor(
   headSha: string,
   prNumber?: number | undefined
 ): Promise<CanvasZip> {
+  return (await zipStoredCanvas(ctx, headSha, prNumber)).zip
+}
+
+/** The zip for one stored canvas, with the canvas it was built from. */
+export async function zipStoredCanvas(
+  ctx: AppContext,
+  headSha: string,
+  prNumber?: number | undefined
+): Promise<{ zip: CanvasZip; artifact: ReviewArtifact }> {
   const artifact = await ctx.canvases.readArtifact(headSha)
   const stored = await ctx.canvases.readManifest(headSha)
   if (artifact === null || stored === null) {
@@ -47,13 +54,12 @@ export async function buildCanvasZipFor(
       generatedAt: manifest.generatedAt,
     }),
     bytes: buildCanvasZip(manifest, artifact),
-    artifact,
     headSha,
   }
   if (number !== undefined) {
     zip.prNumber = number
   }
-  return zip
+  return { zip, artifact }
 }
 
 export interface ExportResult {

@@ -174,9 +174,10 @@ describe('settling an attention point', () => {
 
   it('keeps every settlement when two arrive together', async () => {
     t = await withCanvas()
+    // Both requests start before either is answered, so their revisions overlap without the queue.
     await Promise.all([
-      answer(await settle(t, '42', 'fp-2', { settled: true, reason: 'one' })),
-      answer(await settle(t, '42', 'fp-3', { settled: true, reason: 'two' })),
+      settle(t, '42', 'fp-2', { settled: true, reason: 'one' }).then(answer),
+      settle(t, '42', 'fp-3', { settled: true, reason: 'two' }).then(answer),
     ])
     expect(Object.keys((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled ?? {}).sort()).toEqual([
       'fp-2',
@@ -203,6 +204,13 @@ describe('settling an attention point', () => {
     )
     const res = await settle(t, '42', 'fp-2', { settled: true, reason: 'Covered.', comment: true })
     expect(res.status).toBeGreaterThanOrEqual(400)
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toBeUndefined()
+  })
+
+  it('refuses a point marked for the reviewer: its judgment is not the author’s to give', async () => {
+    t = await withCanvas()
+    const res = await settle(t, '42', 'fp-1', { settled: true, reason: 'The spec says sum.' })
+    expect(res.status).toBe(400)
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toBeUndefined()
   })
 
@@ -257,6 +265,12 @@ describe('settling an attention point', () => {
   })
 })
 
+/** The fingerprint of the first point marked for the author on the stored canvas. */
+async function authorPoint(t: TestContext): Promise<string> {
+  const points = (await t.ctx.canvases.readArtifact(HEAD_SHA))?.points ?? []
+  return points.find(p => p.audience === 'author')?.fingerprint ?? ''
+}
+
 describe('settling on a local review', () => {
   let t: TestContext
   afterEach(async () => {
@@ -279,7 +293,7 @@ describe('settling on a local review', () => {
       JSON.stringify(artifactToModelOutput(syntheticArtifact()))
     )
     await publish(t.ctx, prepared.canvasDir, { agent: 'claude', harness: 'claude-code', allowStale: false })
-    const fingerprint = (await t.ctx.canvases.readArtifact(HEAD_SHA))?.points[0]?.fingerprint ?? ''
+    const fingerprint = await authorPoint(t)
     const body = await answer(
       await settle(t, 'uncommitted', fingerprint, { settled: true, reason: 'Known.' })
     )
@@ -303,7 +317,7 @@ describe('settling on a local review', () => {
       JSON.stringify(artifactToModelOutput(syntheticArtifact()))
     )
     await publish(t.ctx, prepared.canvasDir, { agent: 'claude', harness: 'claude-code', allowStale: false })
-    const fingerprint = (await t.ctx.canvases.readArtifact(HEAD_SHA))?.points[0]?.fingerprint ?? ''
+    const fingerprint = await authorPoint(t)
     const res = await settle(t, 'uncommitted', fingerprint, {
       settled: true,
       reason: 'Known.',
