@@ -6,8 +6,8 @@
 
 - A **Show layers** field in **settings**, saved as `layerView` in `.pr-review/settings.yml`. At
   `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
-  `k` step through the layers, and a link into a layer shows that layer. The default, `all`, keeps
-  the canvas as one page.
+  `k` step through the layers, and a link into a layer shows that layer. A review mark does not
+  move on to the next layer. The default, `all`, keeps the canvas as one page.
 
 ## 0.5.0
 

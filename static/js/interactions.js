@@ -671,7 +671,9 @@ export function wireReview(root, session, opts = {}) {
         parts.card.classList.toggle('is-reviewed', reviewed)
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
-          if (next instanceof HTMLElement) {
+          // One layer at a time, a mark moves on only inside the layer on screen: the reader
+          // leaves a layer by the rail or the keys, never by finishing it.
+          if (next instanceof HTMLElement && !inHiddenSection(next)) {
             focusItem(next)
           }
         }

@@ -500,7 +500,7 @@ By default the canvas is one page: the overview, then every layer in order. Set 
 to **one at a time** in the settings dialog to see the overview or a single layer at once. The rail
 moves between them and marks the one that shows, `j` and `k` step through the layers, and any
 link into a layer, from the overview, a diagram, another layer, or the AI Chat, shows that layer
-first. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
+first. Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
 
 ### Finding shared canvases
