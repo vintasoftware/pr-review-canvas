@@ -22,6 +22,9 @@
   keeps them off.
 - New commands `pr-review deck prepare|validate|publish|fixes`. `install-skill`, `doctor`, and
   `upgrade` now handle the two new skills alongside `pr-review-canvas`.
+- `/pr-review-canvas` and `/pr-self-review` now default to Opus instead of Sonnet, for every
+  change rather than only ones touching authentication, access policy, or PHI.
+  `/pr-self-review-fix` stays on Sonnet and deals its next deck through `/pr-self-review`.
 
 ### Review interface
 

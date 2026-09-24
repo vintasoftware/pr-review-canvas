@@ -1,6 +1,6 @@
 ---
 name: pr-review-canvas
-model: sonnet
+model: opus
 description: Generate a review canvas for a GitHub pull request or GitLab merge request, for the work in this clone before a pull request exists, or for two refs, with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` to validate and automatically share it as a compressed PR/MR comment. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas branch`, `/pr-review-canvas uncommitted`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR, for their branch, or for what they have not committed.
 ---
 
@@ -27,11 +27,9 @@ it), so you start a fresh `model.json`. Run every `pr-review` command from the r
 
 ### Model choice
 
-Use a mid-tier model, such as Sonnet, by default. If the prepared diff changes authentication,
-access policy, or protected health information (PHI) handling, use a more capable model, such as
-Opus, for the generation and validation steps when available. When delegating to another agent,
-pass it the prepared prompt and context paths; it writes the same model file. Honor an explicit
-user model choice. If the host cannot select models, keep its selected model.
+Use the most capable model, such as Opus, for the generation and validation steps. When
+delegating to another agent, pass it the prepared prompt and context paths; it writes the same
+model file. Honor an explicit user model choice. If the host cannot select models, keep its selected model.
 Record the model that actually generated the canvas when publishing.
 
 ### 1. Prepare

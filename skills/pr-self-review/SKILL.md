@@ -1,6 +1,6 @@
 ---
 name: pr-self-review
-model: sonnet
+model: opus
 description: Deal a self-review deck for a GitHub pull request or GitLab merge request, or for the work in this clone before one exists, with the pr-review tool. Runs `pr-review deck prepare`, writes the deck-model.json of decision cards the prompt asks for (trade-offs and choices a reasonable engineer could make either way, each with sides A and B), validates and publishes it, and points the author to the swipe page. Use when the user runs `/pr-self-review <pr-number>`, `/pr-self-review branch`, `/pr-self-review uncommitted`, or asks to self-review, settle decisions, or "swipe through" their change before it is reviewed.
 ---
 
@@ -25,9 +25,12 @@ checks out a branch or writes outside the deck's work directory.
 
 ## Model choice
 
-Use a mid-tier model, such as Sonnet, by default. If the change touches authentication, access
-policy, or protected health information (PHI) handling, use a more capable model, such as Opus,
-when available. Never copy PHI, secrets, or credentials into a card, even as an example.
+Use the most capable model, such as Opus, to write the deck. The deck is at most ten cards, and
+each one has to be a real trade-off, anchored on the right line, with both sides argued fairly;
+a weaker model tends to deal checklist items or strawman one side. When delegating to another
+agent, pass it the prepared prompt path and have it run on that model. Honor an explicit user
+model choice. If the host cannot select models, keep its selected model. Never copy PHI,
+secrets, or credentials into a card, even as an example.
 
 ## 1. Prepare
 

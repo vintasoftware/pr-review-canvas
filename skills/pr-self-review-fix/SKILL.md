@@ -59,8 +59,9 @@ rather than widening the change.
 ## 4. Deal the next deck
 
 Fixes change code, and changed code can raise new decisions. Deal a fresh deck for the same review
-by following `/pr-self-review <review>` without `--force`: prepare carries every decision the
-author already settled, so only new questions appear. If the new deck has no cards, tell the
+by running `/pr-self-review <review>` without `--force`, as its own skill or an agent on the model
+it names, not inline on this skill's model: prepare carries every decision the author already
+settled, so only new questions appear. If the new deck has no cards, tell the
 author the change is ready for review; otherwise give them the deck URL again.
 
 The `uncommitted` review sees your edits at once. The `branch` review compares the branch tip, so
