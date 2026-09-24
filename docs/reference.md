@@ -96,7 +96,12 @@ pr-review prepare --base origin/main --head HEAD
 correctness only. The folding rules (`FOLD_MISSING`, a test file collapsed at `light`) apply only
 to a `model.json`, because older canvases predate them. `--fix` edits overlong titles by removing
 the explanation after the first `:` or `—` and reports the changes. Titles that still exceed the
-limit and overlong prose require rewriting.
+limit and overlong prose require rewriting. On a `model.json`, `--fix` also repairs three
+`FOLD_INVALID` errors and reports each change: a fold that crosses or runs past its chunk is clipped
+to the assigned chunk its first line is in (or dropped when that line is in no assigned chunk), a
+fold that repeats an earlier fold's range is dropped, and a fold that would hide an attention point
+is shrunk around it (or dropped when that leaves no single range). Partly overlapping folds,
+reversed ranges, and `FOLD_MISSING` still need the author.
 
 `publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl`
 for PR and local runs.

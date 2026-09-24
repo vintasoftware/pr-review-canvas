@@ -118,6 +118,20 @@ A title with nothing to drop is left alone for you to rewrite. Prose is never cu
 over-cap rationale, note, or body reports where the cap falls in your own words
 (`what fits ends at "..."`), and the rewrite is yours.
 
+`--fix` also repairs three fold errors that have one right answer, and reports each as
+`fixed <where>: fold "<title>" <before> -> <after>, <why>` or
+`fixed <where>: dropped fold "<title>" at <range>: <why>`:
+
+- a fold that runs past its chunk is cut back to the assigned chunk its first line is in; one that
+  starts in no chunk assigned to that file in that layer is dropped, never moved;
+- a fold that repeats an earlier fold's exact range is dropped;
+- a fold over an attention point is shrunk so the point stays outside it, or dropped when no single
+  range around the point is left.
+
+Read these lines: a dropped fold may have been hiding a range you still want hidden, and the
+coverage errors (`FOLD_MISSING`) that follow are yours to answer. Folds that partly overlap, a
+reversed range, and every rule about how much to hide are left for you to fix.
+
 Run this before every publish, including after a repair. A publish round-trip costs more than this
 command, and length caps are the usual reason a publish is rejected: they are measured on the text
 a reader sees, which you cannot count reliably while writing.

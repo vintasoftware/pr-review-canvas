@@ -51,7 +51,7 @@ export const LIGHT_FOLD_MAX_ROWS = 40
 export const CORE_FILE_ROWS = 60
 export const AGGRESSIVE_MIN_HIDDEN = 0.5
 
-type SourceRange = Pick<CodeFold, 'side' | 'startLine' | 'endLine'>
+export type SourceRange = Pick<CodeFold, 'side' | 'startLine' | 'endLine'>
 type LeveledRange = SourceRange & { level: FoldLevel }
 type ModelFile = ModelLayer['files'][number]
 
@@ -97,7 +97,7 @@ function covers(outer: SourceRange, inner: SourceRange): boolean {
 }
 
 /** Different coordinate sides in one hunk need the full patch to prove they are separate. */
-function rangesOverlap(left: SourceRange, right: SourceRange, hunks: readonly Hunk[]): boolean {
+export function rangesOverlap(left: SourceRange, right: SourceRange, hunks: readonly Hunk[]): boolean {
   const leftHunk = hunkForLine(hunks, left.side, left.startLine)
   const rightHunk = hunkForLine(hunks, right.side, right.startLine)
 
@@ -142,7 +142,7 @@ function foldRelation(
 }
 
 /** Ranges no fold may ever hide: attention points, and the marker a missing test adds. */
-function pinnedRanges(
+export function pinnedRanges(
   file: ModelFile,
   layer: ModelLayer,
   output: ModelOutput,
