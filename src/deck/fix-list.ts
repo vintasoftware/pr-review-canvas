@@ -146,7 +146,7 @@ export function renderFixList(deck: Deck, picks: Readonly<Record<string, Pick>>)
       '',
       '## Queued as pull request comments',
       '',
-      'Kept with the deck as the author’s own comments for the pull request. Do not write these into the code.',
+      'Posted as the author’s own review when the pull request’s canvas is published. Do not write these into the code.',
       '',
       ...comments
     )

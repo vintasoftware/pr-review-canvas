@@ -133,6 +133,15 @@ export type Deck = z.infer<typeof DeckSchema>
 export const PicksSchema = z.object({ picks: z.record(z.string(), PickSchema) })
 export type Picks = z.infer<typeof PicksSchema>
 
+/**
+ * `posted.json`: the settled decisions already posted as the author's comments on a pull request,
+ * by card key, so publishing the canvas again never posts one twice. A pick changed since posts anew.
+ */
+export const PostedSchema = z.object({
+  posted: z.record(z.string(), z.object({ pickedAt: z.string(), url: z.string() })),
+})
+export type Posted = z.infer<typeof PostedSchema>
+
 /** The body of `PUT /api/deck/:key/picks/:card`. */
 export const PickBodySchema = z.object({
   headSha: z.string().regex(/^[0-9a-f]{40}$/),

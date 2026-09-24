@@ -28,8 +28,9 @@ It has up to four sections:
   wants, and why. `Wanted: neither side` carries the author's own words instead.
 - **Reasons to write into the code**: kept decisions whose justification belongs next to the code
   as a comment or a doc line. Write them briefly, in the codebase's own comment style.
-- **Queued as pull request comments**: the author's answers to questions a reviewer would ask. They
-  stay with the deck for the pull request. Do not write these into the code.
+- **Queued as pull request comments**: the author's answers to questions a reviewer would ask.
+  `pr-review publish` posts them on the pull request with its canvas. Do not write these into the
+  code.
 - **Left for reviewers**: skipped cards. Do nothing with them.
 
 For a pull request, the fixes go on its branch: the fix list names it in its first line. If this

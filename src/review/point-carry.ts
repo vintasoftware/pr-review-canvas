@@ -99,13 +99,13 @@ export function pointLinesInHead(
   return { side, line: to, endLine: toEnd }
 }
 
-interface DiffOf {
+export interface DiffOf {
   sha: string
   derived: Derived
 }
 
 /** One side of one file of a commit's diff, as the derived store materialized it. */
-async function sideText(
+export async function sideText(
   store: Pick<DerivedStore, 'readLines'>,
   diff: DiffOf,
   path: string,
@@ -164,4 +164,26 @@ export async function carriedPointLines(
     }
   }
   return carried
+}
+
+/**
+ * Where one line of `basis` sits in `head`, by the same proof points are carried by: the line is
+ * stable between the two versions of its file and lands inside a hunk of the head diff. Null when
+ * the code under it changed, or either side of the file is not materialized.
+ */
+export async function lineInHead(
+  store: Pick<DerivedStore, 'readLines'>,
+  at: { path: string; side: Side; line: number },
+  basis: DiffOf,
+  head: DiffOf
+): Promise<number | null> {
+  const [before, after] = await Promise.all([
+    sideText(store, basis, at.path, at.side),
+    sideText(store, head, at.path, at.side),
+  ])
+  const stable = before === null || after === null ? null : stableLines(before, after, at.side)
+  if (stable === null || after === null) {
+    return null
+  }
+  return pointLinesInHead({ line: at.line }, at.side, stable, after.patch)?.line ?? null
 }

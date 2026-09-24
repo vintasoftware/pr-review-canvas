@@ -58,6 +58,7 @@ const USAGE = `usage: pr-review <command> [flags]
   validate <model.json|review.json> --canvas <dir> [--human] [--fix] [--repo <dir>] [--data-dir <dir>]
                    (--fix trims over-cap titles in place and reports each one)
   publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
+          [--skip-self-review-comments]
   deck prepare (--pr <n> | --branch | --uncommitted) [--base <ref>] [--force]
   deck validate (--pr <n> | --branch | --uncommitted) [--human]
   deck publish (--pr <n> | --branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]

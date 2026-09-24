@@ -184,6 +184,18 @@ For a PR/MR run, report the local `reviewUrl` (start it with `pr-review serve`) 
   attachment link. Include these instructions in your final response; the local canvas is ready,
   but reviewers still need the upload. Do not regenerate the model to repair a sharing failure.
 
+For a PR/MR run, also report `selfReview`, the justifications the author settled in a
+self-review deck (`/pr-self-review`):
+
+- `status: "posted"`: say that `comments` of them were posted inline and `listed` in the review
+  body, and link `url`.
+- `status: "failed"`: quote `warning`; publishing again retries them. Do not regenerate the model
+  for it.
+- `status: "none"` or `"skipped"`: say nothing about it.
+
+When the prompt ends with **Decisions from the author's self-review**, follow it: those decisions
+are the author's, already made.
+
 For a local run, `sharing.status` is `"local"` and there is nothing to share. Give the user
 `reviewUrl` (`http://localhost:<port>/review/branch` or `.../review/uncommitted`) and tell them to
 start `pr-review serve` if it is not running. Say which base was compared and whether uncommitted

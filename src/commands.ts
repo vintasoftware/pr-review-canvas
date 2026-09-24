@@ -340,6 +340,7 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
       model: { type: 'string' },
       harness: { type: 'string' },
       'allow-stale': { type: 'boolean' },
+      'skip-self-review-comments': { type: 'boolean' },
     },
     allowPositionals: true,
     strict: true,
@@ -358,9 +359,11 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
     model: values.model,
     harness: parseHarness(values.harness),
     allowStale: values['allow-stale'] === true,
+    selfReviewComments: values['skip-self-review-comments'] !== true,
   })
   if (result.sharing.status === 'failed')
     io.stderr(`${result.sharing.warning} ZIP: ${result.sharing.zipPath}`)
+  if (result.selfReview?.status === 'failed') io.stderr(result.selfReview.warning)
   printJson(io, result)
   return EXIT.ok
 }

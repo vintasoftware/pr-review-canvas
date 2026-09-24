@@ -5,6 +5,7 @@ import {
   type BasisSplit,
   type BasisSplitPoint,
   type GenerationContext,
+  type SelfReviewDecision,
   LARGE_PR,
 } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
@@ -306,6 +307,42 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
   ].join('\n\n')
 }
 
+function decisionLine(d: SelfReviewDecision): string {
+  const where = d.line === undefined ? `\`${d.path}\` (its code changed since)` : `\`${d.path}:${d.line}\``
+  const picked = d.picked === undefined ? '' : ` Picked ${d.picked}.`
+  const why = d.why === undefined || d.why === '' ? '' : ` Why: ${d.why}`
+  return `- **${d.title}** at ${where}.${picked}${why}`
+}
+
+/**
+ * The author's self-review decisions, appended after the task whatever template is in use: a
+ * project that overrides the templates still gets them, and the rule has one wording.
+ */
+export function selfReviewMarkdown(selfReview: GenerationContext['selfReview']): string {
+  if (selfReview === undefined || (selfReview.settled.length === 0 && selfReview.open.length === 0)) {
+    return ''
+  }
+  const parts = ['## Decisions from the author’s self-review']
+  if (selfReview.settled.length > 0) {
+    parts.push(
+      'The author settled these in a self-review deck before asking for review. Do not raise any of ' +
+        'them as a `decide` point, and do not argue for the side they did not pick. You may explain one ' +
+        'as a `decision` point at `level: "fyi"` when that helps the reviewer. One exception: when the ' +
+        'code at this head contradicts the side the author picked, write one `decide` point on it that ' +
+        'names the settled decision and what contradicts it.',
+      selfReview.settled.map(decisionLine).join('\n')
+    )
+  }
+  if (selfReview.open.length > 0) {
+    parts.push(
+      'The author left these for reviewers. Raise each that still applies as a `decision` point at ' +
+        '`level: "decide"`, anchored inside the diff, within the point budget.',
+      selfReview.open.map(decisionLine).join('\n')
+    )
+  }
+  return parts.join('\n\n')
+}
+
 /** Selects one task and fills its data and format placeholders before the generator sees it. */
 export function renderPrompt(
   ctx: GenerationContext,
@@ -348,7 +385,7 @@ export function renderPrompt(
   const template = task[ctx.generation.mode]
     .replace('{{JUDGING}}', () => sources.judging[ctx.generation.mode])
     .replace('{{FORMAT}}', () => sources.format)
-  return template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {
+  const rendered = template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {
     const value = tokens[name]
     if (value === undefined) {
       const suffix = ctx.basis === undefined ? '' : '-incremental'
@@ -356,4 +393,6 @@ export function renderPrompt(
     }
     return value
   })
+  const decisions = selfReviewMarkdown(ctx.selfReview)
+  return decisions === '' ? rendered : `${rendered.trimEnd()}\n\n${decisions}\n`
 }

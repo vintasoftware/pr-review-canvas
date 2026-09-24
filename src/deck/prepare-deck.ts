@@ -4,19 +4,18 @@
 import path from 'node:path'
 import {
   DECK_CAPS,
-  type Deck,
   type DeckContext,
   deckCardCap,
   type SettledCard,
   SNIPPET_MAX_LINES,
 } from '../contract/deck.js'
-import type { FileEntry } from '../contract/review-artifact.js'
-import type { Pr } from '../contract/review-artifact.js'
+import type { FileEntry, Pr } from '../contract/review-artifact.js'
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/local-target.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile } from '../prompt-files.js'
 import { resolvePr } from '../review/prepare.js'
+import { settledFrom } from './settled-for-pr.js'
 import { embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
@@ -36,26 +35,6 @@ export interface PrepareDeckResult {
   maxCards: number
   /** Decisions carried from the previous deck, which the generator must not ask again. */
   settled: number
-}
-
-/**
- * The decisions a new deck carries: those settled before the previous deck, and the previous
- * deck's cards the author answered with a side or with a note. A skipped card is not settled; the
- * generator may ask it again.
- */
-export function settledFrom(
-  previous: Deck | null,
-  picks: Readonly<Record<string, SettledCard['pick']>>
-): SettledCard[] {
-  if (previous === null) {
-    return []
-  }
-  const answered = previous.cards.flatMap(card => {
-    const pick = picks[card.key]
-    return pick === undefined || pick.choice === 'skip' ? [] : [{ ...card, pick, headSha: previous.headSha }]
-  })
-  const keys = new Set(answered.map(c => c.key))
-  return [...previous.settled.filter(c => !keys.has(c.key)), ...answered]
 }
 
 function settledMarkdown(settled: readonly SettledCard[]): string {

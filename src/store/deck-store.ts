@@ -1,6 +1,14 @@
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
-import { type Deck, DeckSchema, type Pick, type Picks, PicksSchema } from '../contract/deck.js'
+import {
+  type Deck,
+  DeckSchema,
+  type Pick,
+  type Picks,
+  PicksSchema,
+  type Posted,
+  PostedSchema,
+} from '../contract/deck.js'
 import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { readJson, readJsonOrDefault, readText, writeJsonAtomic, writeTextAtomic } from './atomic-json.js'
 
@@ -10,7 +18,8 @@ import { readJson, readJsonOrDefault, readText, writeJsonAtomic, writeTextAtomic
  * - `deck.json`, the published deck;
  * - `picks.json`, the author's answers to its cards;
  * - `fixes.md`, the fix list written when the author finishes the deck;
- * - `work/`, where `deck prepare` leaves the prompt and the generator writes `deck-model.json`.
+ * - `work/`, where `deck prepare` leaves the prompt and the generator writes `deck-model.json`;
+ * - `posted.json`, for a pull request, the settled decisions already posted on it.
  */
 export interface DeckStore {
   deckDir(key: ReviewKey): string
@@ -29,6 +38,9 @@ export interface DeckStore {
   readFixes(key: ReviewKey): Promise<string | null>
   /** Empties `work/` for a fresh generation. */
   clearWork(key: ReviewKey): Promise<void>
+  /** The settled decisions already posted on pull request `number`. */
+  readPosted(number: number): Promise<Posted>
+  writePosted(number: number, posted: Posted): Promise<void>
 }
 
 export function createDeckStore(repoRoot: string): DeckStore {
@@ -66,5 +78,8 @@ export function createDeckStore(repoRoot: string): DeckStore {
     },
     readFixes: key => readText(fixesPath(key)),
     clearWork: key => rm(path.join(deckDir(key), 'work'), { recursive: true, force: true }),
+    readPosted: number =>
+      readJsonOrDefault(path.join(deckDir(number), 'posted.json'), PostedSchema, () => ({ posted: {} })),
+    writePosted: (number, posted) => writeJsonAtomic(path.join(deckDir(number), 'posted.json'), posted),
   }
 }

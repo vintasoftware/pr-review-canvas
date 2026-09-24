@@ -1,5 +1,6 @@
 // `pr-review publish`: validate model.json against context.json, normalize, and store the
 // canvas, then share it on the PR/MR. Invalid models are never stored or shared.
+import { postSettledComments, type SelfReviewSharing } from '../deck/post-settled.js'
 import { buildCanvasComment } from '../canvas/comment.js'
 import { buildCanvasZipFor, exportCanvas } from '../canvas/export.js'
 import { appendFile } from 'node:fs/promises'
@@ -21,6 +22,8 @@ export interface PublishOptions {
   model?: string | undefined
   harness: Generator['harness']
   allowStale: boolean
+  /** False keeps the self-review justifications off the pull request. Posted by default. */
+  selfReviewComments?: boolean
 }
 
 export interface PublishResult {
@@ -34,6 +37,8 @@ export interface PublishResult {
     | { status: 'local' }
   /** Where the canvas shows once the server runs; absent only for a `--base/--head` change set. */
   reviewUrl?: string
+  /** Pull requests only: the author's self-review justifications, posted as their own review. */
+  selfReview?: SelfReviewSharing
 }
 
 /** The report of a failed publish. The CLI prints one line per error and exits 5. */
@@ -268,6 +273,10 @@ export async function publish(
         zipPath: exported.path,
       }
     }
+    published.selfReview =
+      opts.selfReviewComments === false
+        ? { status: 'skipped' }
+        : await postSettledComments(ctx, { ...context.pr, number: context.target.number })
   }
   return published
 }

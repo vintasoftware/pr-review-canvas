@@ -75,9 +75,11 @@ It asks you about anything unclear, applies the fixes, writes the justifications
 the code, then deals a fresh deck. Decisions you already settled are carried over and never asked
 again, so the next deck shows only the questions the fixes raised.
 
-Picks you keep with a **PR comment** justification are saved with the deck. Posting them on the
-pull request automatically, and having the PR canvas skip the decisions you already settled, is
-the next step and not built yet.
+When you then generate the pull request's canvas (`/pr-review-canvas <n>`), it takes what the
+decks for that pull request, or for its branch, settled. The canvas does not ask a settled decision
+again unless the code contradicts your pick, and it raises the cards you skipped for reviewers.
+Publishing it also posts every **PR comment** justification as your own review, one comment on the
+code each concerns. Pass `--skip-self-review-comments` to `pr-review publish` to keep them off.
 
 ### Review side
 

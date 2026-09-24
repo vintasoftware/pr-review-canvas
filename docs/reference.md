@@ -687,8 +687,24 @@ covers only the current deck's cards.
 The `uncommitted` review sees fixes at once, the `branch` review once they are committed, and a
 pull request once they are pushed.
 
-Not built yet: posting `pr-comment` justifications on the pull request when its canvas is
-published, and having PR canvas generation read settled decisions.
+### Settled decisions on the pull request
+
+`pr-review prepare --pr <n>` collects the decisions that speak for the pull request: its own deck
+(`decks/<n>/`), then the `branch` and `uncommitted` decks whose branch is the pull request's head
+branch, newest first. A decision settled in several decks counts once, the first one found. Each
+is re-anchored on the pull request head: the same line when the card was dealt for that head, else
+the line its unchanged code moved to, by the rule attention points are carried by. `context.json`
+records them as `selfReview: { settled, open }`, and the prompt ends with a section that tells the
+generator not to raise a settled decision as `decide` unless the code contradicts the picked side,
+and to raise each skipped card as a `decide` point.
+
+`pr-review publish` for a pull request then posts every settled decision whose justification is
+recorded as `pr-comment` as one `COMMENT` review under your login, each comment inline on its
+anchor. A decision whose code changed since is listed in the review body instead of on a line.
+`decks/<n>/posted.json` records what was posted, so publishing again posts only decisions picked
+anew. The result's `selfReview` is `posted` (with the review URL and counts), `none`, `skipped`
+(with `--skip-self-review-comments`), or `failed` with a warning; a failure never fails the publish,
+and the next publish retries.
 
 ### Deck page
 
