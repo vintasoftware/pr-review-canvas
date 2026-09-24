@@ -2,137 +2,76 @@
 
 ## Unreleased
 
+### Review interface
+
+- A **Show layers** field in **settings**, saved as `layerView` in `.pr-review/settings.yml`. At
+  `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
+  `k` step through the layers, and a link into a layer shows that layer. The default, `all`, keeps
+  the canvas as one page.
+
+## 0.5.0
+
+Changes since 0.4.0. Details are in the [reference](docs/reference.md).
+
 ### Pending reviews
 
-- A comment on a diff line can go into a pending review instead of out on its own: **start a
-  review** holds it locally. Once a review is open, **add review comment** is the only way out of
-  the box, because a single comment would publish ahead of the review still being written. The
-  drafts are part of the review state, so they survive a reload, and nothing reaches the forge
-  until the review is submitted.
-- An attention point can join the review too, with **add to review** next to **post to github**.
-  It keeps both while a review is open, because its text is written in advance. Once the review
-  lands, the point shows the comment it became, as it does when posted directly.
-- A bar under the progress line says how many comments are waiting and offers to finish or discard
-  the review; each draft is drawn on its line with a **pending** badge and commands to edit or
-  delete it.
-- Submitting a review sends the drafts with it: on GitHub as the comments of the one call that
-  creates the review, so they land as a single review; on GitLab through native draft-note batch
-  publication. Existing GitLab drafts must be finished first. A refused batch retains local drafts;
-  a separate approval failure after publication is reported without submitting comments again.
+- **start a review** holds diff comments locally until you submit them together as one review.
+  Attention points can join with **add to review**. Drafts survive a reload.
+- On GitHub the drafts post as one review. On GitLab they publish as a batch of draft notes.
+- Sign-off adds a **comment** verdict, next to **approve** and **request changes**.
 
 ### Reading levels
 
-- Three reading levels, with one **Hide code** control beside the review progress, which names what
-  the chosen level hides and how much of the diff that is. The generator gives each fold and each
-  collapsed file the lowest level at which it hides, and the levels nest: `light` is the diff as it
-  always looked — imports, whitespace, moves, and wholly generated files; `moderate` also hides test
-  bodies under their titles, helpers, adapters, and wiring; `aggressive` also hides any block its
-  title explains, so a low-risk change reads as pseudo-code. The page opens at the level saved as
-  `foldLevel` in `.pr-review/settings.yml`, `light` until changed; the **Hide code by default**
-  field of the settings dialog sets it. The control and `f`, which steps through the levels, change
-  the level for one page only. Each layer and the sign-off dialog report how many diff lines are
-  hidden.
-- Attention points, comment threads and pending review drafts stay visible at every level; a file
-  with a thread or a draft folds nothing. An annotation may only be hidden by an aggressive fold
-  that covers it whole and no other annotation; the fold then shows the annotation's text instead of
-  its title. A file with an annotation or an attention point never collapses.
-- The validator holds the generator to the shape of the levels: `collapsed` names a level, nothing
-  in a hand-written test file hides at `light` (snapshots and fixtures may), a `light` fold covers
-  at most 40 lines of generated content, and a file with over 20 lines outside its annotations, no
-  attention point, and nothing hidden fails with `FOLD_MISSING`, as does an open file over 60 lines
-  that folds less than half of its lines outside attention points by `aggressive`. An annotation
-  marks what to read; it does not excuse the rows around it, and annotated rows count towards the
-  half because an aggressive fold may hide them. A stored `review.json` is held to the correctness
-  rules only, because an older canvas predates the rest.
-- A layer of more than 100 changed lines that leaves more than 20 lines open at `moderate` and hides
-  nothing more at `aggressive` fails with `FOLD_MISSING` too. A smaller layer reads whole, and only
-  the file rules apply to it.
-- The built-in test patterns now match test directories (`tests/`, `test/`) and file-name shapes
-  (`*_test.*`, `*_spec.*`, `test_*.py`, `conftest.py`, and `*Test`/`*Tests` in Java, Kotlin, Scala,
-  Groovy, C#, F#, VB, Swift and PHP) across stacks, not only the JavaScript conventions, so a
-  repository without a `pr-review.config.yml` gets its tests labelled, ordered, and kept open at
-  light.
+- A **Hide code** control switches between `light`, `moderate`, and `aggressive`. Higher levels
+  hide tests, helpers, and wiring, down to pseudo-code. Press `f` to step through them. Set the
+  default in **settings**.
+- Attention points, threads, and drafts stay visible at every level.
+- Validation fails with `FOLD_MISSING` when a large file or layer hides too little.
+- Built-in test patterns now cover common Python, Java, Kotlin, C#, Swift, PHP, and other
+  conventions (`tests/`, `*_test.*`, `test_*.py`, `*Test`, and more).
 
-### Sign-off
+### Incremental canvases
 
-- A third verdict, **comment**, posts a review with no approval or rejection, next to the existing
-  **approve** and **request changes**, each of which already carries an editable review body.
-  Only approval still asks that every layer was read.
-
-### Breaking
-
-- A canvas written before the reading levels, with `collapsed: true` and folds without a level,
-  still opens and reads as `light`, so it hides exactly what it hid before. A canvas this version
-  writes names its levels (`collapsed: "moderate"`), which an earlier version cannot read: its zip
-  import fails with `CANVAS_INVALID`, and a stored copy does not load. A team that shares canvases
-  upgrades together.
-- Reviewed marks are keyed by the layer's own key instead of its position in the canvas, so a
-  regenerated canvas that reorders or renames its layers keeps a reviewer's progress pointing at
-  the same concern. Marks in state files written by earlier versions cannot be translated and are
-  dropped on first read: a review in progress starts its ticks again. Dismissed attention points,
-  posted comments, hidden threads, and chat threads are untouched.
-
-### Canvas generation
-
-- Regenerating a canvas for a new head updates the newest canvas of a commit the head was built
-  on, instead of writing one from a blank page. `pr-review prepare` compares that basis canvas's
-  diff with the head's file by file and hands the generator two computed lists: what to carry word
-  for word (whole layers whose files are all byte-identical, and the notes, folds, annotations and
-  attention points of untouched files elsewhere) and what to decide again. A carried attention
-  point keeps its kind, path and title, so it keeps its fingerprint and any dismissal with it. The
-  summary and the risk tags are always written again. A canvas of a line of work the head no longer
-  contains is never a basis.
-- Two prompt templates carry the wording of an incremental run, `generation-strict-incremental.md`
-  and `generation-surfacing-incremental.md`, selected by `prepare` when it finds a basis canvas.
-  Each mode's judging rules, the half of the task that is the same whether a canvas is written or
-  updated, moved into `judging-strict.md` and `judging-surfacing.md`, which both of that mode's
-  task files end with. All of them are overridable through the `prompts` map like the others.
-- `--force` generates from a blank page as before, and the new `canvas.incremental` project setting
-  (default `true`) turns the behavior off.
-- A canvas records the basis it was generated from, and nothing more. Which of a reviewer's marks
-  may follow it is decided on the reviewer's own machine, from the two canvases and their own
-  clone. Marks follow the whole line of descent, not one step of it, so marking nothing on an
-  intermediate canvas does not strand them: a file's mark follows when that file is in both the
-  canvas it was made on and the one on screen under the same layer key with a byte-identical patch,
-  and a layer's mark follows only when the layer holds exactly the same files and none of them
-  changed. When any mark follows, the page names the canvas it was made on.
+- Regenerating for a new head updates the previous canvas instead of starting over. Layers, notes,
+  folds, and attention points of untouched files are kept word for word, and dismissals stay.
+- Review marks on untouched files and layers follow the new canvas.
+- `--force` starts from a blank page. `canvas.incremental: false` turns this off.
+- New prompt templates: `generation-strict-incremental.md`, `generation-surfacing-incremental.md`,
+  `judging-strict.md`, and `judging-surfacing.md`.
 
 ### Upgrades
 
-- `pr-review upgrade` upgrades pr-review and acpx with `npm install -g` when npm has newer
-  versions. It also refreshes the project's skill copies that no longer match the installed
-  pr-review. It lists the changes and asks first, or applies them with `--yes`. When a skill copy
-  changes, it says to commit and push it. `doctor` and `serve` now suggest it for a stale skill.
+- `pr-review upgrade` updates pr-review, acpx, and the project's skill copies after asking.
+  `--yes` skips the question.
 
-### AI chat
+### AI Chat
 
-- A saved model runs as the newest model of its family. A versioned Claude ID such as
-  `claude-opus-4-8[1m]` runs as the `opus[1m]` alias, and a GPT model that the Codex catalog marks
-  as replaced runs as its replacement, even when the new model has a different name
-  (`gpt-5.6-terra` runs as `gpt-6-sol`). With no saved model, a thread still on a replaced model
-  moves to its replacement. `pin:<id>` sends one exact model ID as written, for either agent;
-  Bedrock and Vertex Claude IDs run as written too.
-- Claude chat runs through the `claude` CLI on PATH instead of the older Claude Code bundled with
-  acpx's adapter, so `opus` means the model Claude Code itself uses. Set `CLAUDE_CODE_EXECUTABLE`
-  to choose another binary.
-- The settings dialog suggests family aliases for Claude and the current GPT models for Codex.
+- A saved model runs as the newest model of its family (`claude-opus-4-8` runs as `opus`).
+  Prefix an ID with `pin:` to use that exact model.
+- Claude chat uses the `claude` CLI on PATH when there is one, so it gets new models as soon as
+  Claude Code updates. Set `CLAUDE_CODE_EXECUTABLE` to use another binary.
+- The chat can be minimized at any width, and restoring it keeps the canvas scroll position.
 
 ### Review interface
 
-- AI Chat minimizes at any width. On a wide screen the docked pane drops out of the layout, the
-  canvas takes the width, and the launcher brings the chat back with its draft and transcript.
-  The minimized state is remembered per browser, beside the pane width.
-- Restoring the chat leaves the canvas where the reader left it, instead of scrolling down to the
-  composer it focuses.
-- The minimize command sits at the right edge of the chat header, where it stays when the header
-  wraps.
-- A quick-question menu opened from a command near the window edge stays inside the window, and
-  hangs above a command with no room below it.
-- A **Show layers** field in the settings dialog, saved as `layerView` in `.pr-review/settings.yml`.
-  At `one at a time` the canvas shows the overview or a single layer, so the page scrolls through
-  one layer only; the rail moves between them and marks the one that shows, `j` and `k` step
-  through the layers, and a link into a layer shows that layer first. The save applies to the
-  open page. The default, `all`, is the canvas as one page.
+- GitHub is the default skin. Choose **terminal** under **skin** to switch back.
+- Quick-question menus stay inside the window.
+
+### Breaking changes
+
+- Canvases written by 0.5.0 cannot be read by earlier versions. Older canvases still open.
+- Review marks saved by earlier versions are dropped on first read, so in-progress reviews start
+  their ticks again. Dismissals, posted comments, and chat threads are kept.
+
+### Upgrade from 0.4.0
+
+1. Run `npm install -g @vintasoftware/pr-review-canvas@0.5.0` and restart `pr-review serve`.
+   Later upgrades can use `pr-review upgrade`.
+2. Run `pr-review upgrade` in each project to refresh the skill copies, then commit them.
+3. Upgrade the whole team together, since 0.4.0 cannot open 0.5.0 canvases.
+4. If you override `generation-strict.md` or `generation-surfacing.md`, move judging rules into
+   `judging-strict.md` or `judging-surfacing.md`. Regenerations use the `*-incremental.md`
+   templates, so override those too, or set `canvas.incremental: false`.
 
 ## 0.4.0
 

@@ -104,14 +104,22 @@ export function jumpTo(href, root = document) {
   if (!(el instanceof HTMLElement)) {
     return false
   }
-  const card = el.closest('.file')
-  const body = card?.querySelector('.file-body')
-  if (body instanceof HTMLElement && body.hidden) {
-    body.hidden = false
-  }
   scrollIntoViewSafe(el)
   flash(el)
   return true
+}
+
+/**
+ * A file's card, which is on the page whether or not its diff is drawn yet.
+ * @param {ParentNode} root
+ * @param {string} path
+ * @param {string} [layerId] the layer whose card of the file to find; the file's first card otherwise
+ * @returns {Element | null}
+ */
+export function fileCardOf(root, path, layerId) {
+  return layerId === undefined
+    ? root.querySelector(`#${cssEscape(fileAnchorId(keyFromPath(path)))}`)
+    : root.querySelector(`article.file[data-layer="${cssEscape(layerId)}"][data-path="${cssEscape(path)}"]`)
 }
 
 /**
@@ -119,9 +127,10 @@ export function jumpTo(href, root = document) {
  * on. The card draws itself (`pr-file` in layers.js); this only asks it to do so now.
  * @param {ParentNode} root
  * @param {string} path
+ * @param {string} [layerId] the layer whose card of the file to draw; the file's first card otherwise
  */
-export function drawCardOf(root, path) {
-  const card = root.querySelector(`#${cssEscape(fileAnchorId(keyFromPath(path)))}`)?.closest('pr-file')
+export function drawCardOf(root, path, layerId) {
+  const card = fileCardOf(root, path, layerId)?.closest('pr-file')
   const draw = /** @type {{ renderNow?: (force?: boolean) => boolean }} */ (card)?.renderNow
   if (typeof draw === 'function' && card !== null && card !== undefined) {
     // Force, so a card holding a huge patch behind `[ show diff ]` still has the row to land on.

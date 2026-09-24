@@ -8,6 +8,7 @@ import {
   POINT_KINDS,
   PrSchema,
   RepoSchema,
+  SideSchema,
   type TextCaps,
 } from './review-artifact.js'
 
@@ -72,11 +73,24 @@ export const BasisSplitLayerSchema = z.object({
 })
 export type BasisSplitLayer = z.infer<typeof BasisSplitLayerSchema>
 
+/** Where a point's lines sit in the head, on the side the point is anchored to. */
+export const BasisPointLinesSchema = z.object({
+  side: SideSchema,
+  line: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+})
+export type BasisPointLines = z.infer<typeof BasisPointLinesSchema>
+
 export const BasisSplitPointSchema = z.object({
   kind: z.enum(POINT_KINDS),
   path: z.string().min(1),
   title: z.string(),
   status: z.enum(['carried', 're-judged']),
+  /**
+   * Set on a point carried from a changed file: its own lines are unchanged in text and in the
+   * diff, and sit here in the head. A point of an untouched file keeps its lines and has none.
+   */
+  headLines: BasisPointLinesSchema.optional(),
 })
 export type BasisSplitPoint = z.infer<typeof BasisSplitPointSchema>
 

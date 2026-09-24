@@ -152,6 +152,23 @@ tr.more td {
   background: var(--panel-2);
   border-top: 1px solid var(--line);
 }
+/* A model fold's toggle: the chevron turns like a card's, and the line count says the code is
+   hidden while the fold is closed. */
+.fold-toggle {
+  white-space: normal;
+  text-align: left;
+}
+.fold-toggle .chev {
+  display: inline-block;
+  margin-right: 8px;
+}
+.fold-lines {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.fold-toggle[aria-expanded='false'] .fold-lines::after {
+  content: ' hidden';
+}
 tr.folded {
   display: none;
 }

@@ -18,6 +18,7 @@ import { renderHeader } from './header.js'
 import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
 import {
   cardOf,
+  defineLayerElements,
   hydrateAll,
   getRenderContext,
   hydrateFileCard,
@@ -69,7 +70,8 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact }} [opts]
+ * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
   const state = opts.state ?? BASE
@@ -86,6 +88,17 @@ function setup(opts = {}) {
     now: NOW,
   }
   setRenderContext(ctx)
+  if (opts.drawn === false) {
+    // An observer that never sees a card, so each <pr-file> waits for a key or a link to draw it.
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    defineLayerElements()
+  }
   const paths = new Set(files.map(f => f.path))
   document.body.innerHTML =
     `<pr-app id="root">${renderHeader(bundle, { host: 'localhost:3010', theme: 'auto', skin: 'terminal', now: NOW })}` +
@@ -95,7 +108,9 @@ function setup(opts = {}) {
   if (!(root instanceof HTMLElement)) {
     throw new Error('no root')
   }
-  hydrateAll(root, ctx)
+  if (opts.drawn !== false) {
+    hydrateAll(root, ctx)
+  }
   /** @type {Array<[string, unknown]>} */
   const calls = []
   // What the server holds, which the page does not get to write directly.
@@ -1098,6 +1113,190 @@ describe('keyboard', () => {
     expect(root.querySelector('.is-focused')?.id).toBe('layer-run-path')
   })
 
+  it('steps to the layer after the one that holds the point in focus', () => {
+    const { root } = setup()
+    key(']')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('j')
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+    key(']')
+    key('k')
+    // The ring was on a row of the Other layer's diff, so k lands on that layer.
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+  })
+
+  it('steps to the points around the card in focus, in page order', () => {
+    const { root } = setup({ artifact: { ...artifact, points: [...artifact.points].reverse() } })
+    key(']')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('n')
+    // The layer lists its points above its files, so [ from its first file goes back to them.
+    key('[')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('j')
+    key(']')
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+  })
+
+  it('goes on to the next point after dismissing one, not back to the first', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key(']')
+    key('d')
+    await flush()
+    expect(calls).toEqual([['dismissed', { fingerprint: 'fp-2', dismissed: true }]])
+    key(']')
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-3')
+  })
+
+  it('opens the closed Other layer to show a point in it, and n passes over its hidden files', () => {
+    const { root } = setup()
+    key('n')
+    key('n')
+    key('n')
+    expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_test_ts')
+    key('n')
+    expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_test_ts')
+    // The first point after the last file of the layer is in the Other layer.
+    key(']')
+    expect(root.querySelector('#layer-other details')?.hasAttribute('open')).toBe(true)
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+  })
+
+  it('opens a reviewed layer to show a point in it', () => {
+    const { root } = setup({ state: { ...BASE, reviewed: { 'layer:run-path': true } } })
+    expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(true)
+    key(']')
+    expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(false)
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+  })
+
+  it('comments on the line of the point in focus with c, collapses its file card with o, and marks its layer with R', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key('c')
+    const box = root.querySelector('.composer-box')
+    expect(box?.closest('tr')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
+    key('Escape')
+    // o collapses the file card of the point's line, and leaves the layer it is listed in open.
+    key('o')
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
+    expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(false)
+    key('R')
+    await flush()
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
+  })
+
+  it('steps from the card at the top of the screen once the focused one is scrolled away', () => {
+    const { root } = setup()
+    root.querySelector('#main')?.insertAdjacentHTML('afterbegin', '<div class="stale-bar">outdated</div>')
+    /** Viewport tops by id, as if the reader had scrolled; everything else is not drawn. */
+    /** @type {Record<string, number>} */
+    let tops = {
+      overview: -1500,
+      'layer-run-path': -900,
+      'file-src_app_ts': 30,
+      'file-src_new_name_ts': 400,
+      'file-src_app_test_ts': 600,
+      'layer-other': 900,
+    }
+    /** @this {Element} */
+    function fakeRect() {
+      const bar = this.classList.contains('stale-bar')
+      const top = bar ? 0 : tops[this.id]
+      return top === undefined ? new DOMRect() : new DOMRect(0, top, 100, bar ? 40 : 100)
+    }
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(fakeRect)
+    try {
+      // Nothing has the ring yet: the file just under the outdated bar is where the reader is.
+      key('n')
+      const focused = root.querySelector('.is-focused')
+      expect(focused?.id).toBe('file-src_new_name_ts')
+      // The card scrolls to just under the bar, which would cover its heading otherwise.
+      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('48px')
+      // The focused card is on screen, so p steps from it.
+      key('p')
+      expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_ts')
+      tops = { ...tops, 'file-src_app_ts': -700, 'file-src_new_name_ts': -400, 'file-src_app_test_ts': 20 }
+      key('j')
+      expect(root.querySelector('.is-focused')?.id).toBe('layer-other')
+    } finally {
+      rect.mockRestore()
+    }
+  })
+
+  it('comments on the new side of a point that names no side, and o collapses its card', () => {
+    const { root } = setup()
+    key(']')
+    key(']')
+    expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+    key('c')
+    expect(root.querySelector('.composer-box')?.closest('tr')?.previousElementSibling?.id).toBe(
+      'L-src_app_ts-new-13'
+    )
+    key('Escape')
+    // o collapses the Other layer's card that holds the point's row.
+    key('o')
+    expect(root.querySelector('#file-src_app_ts-other .file-body')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('leaves the point alone once R moves the ring to the next layer', async () => {
+    const [runPath, other] = artifact.layers
+    if (runPath === undefined || other === undefined) {
+      throw new Error('fixture changed')
+    }
+    // A second layer takes a file out of Other, so each chunk still has one layer, as publish checks.
+    const moved = (/** @type {{ path: string }} */ f) => f.path === 'src/new.ts'
+    const second = {
+      ...runPath,
+      id: 'second',
+      key: 'second',
+      title: 'Second',
+      files: other.files.filter(moved),
+    }
+    const rest = { ...other, files: other.files.filter(f => !moved(f)) }
+    const { root, calls } = setup({ artifact: { ...artifact, layers: [runPath, second, rest] } })
+    key(']')
+    expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
+    key('R')
+    await flush()
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-second')
+    key('c')
+    key('d')
+    await flush()
+    expect(root.querySelector('.composer-box')).toBeNull()
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
+  })
+
+  it('opens the collapsed card of a point to comment on its line with c', () => {
+    const { root } = setup({ state: { ...BASE, reviewed: { 'layer:run-path/file:src_app_ts': true } } })
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
+    key(']')
+    key('c')
+    const box = root.querySelector('.composer-box')
+    expect(box?.closest('tr')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
+    expect(box?.closest('[hidden]')).toBeNull()
+  })
+
+  it('draws the diff of a point that is waiting to be seen, to comment on its line with c', () => {
+    const { root } = setup({ drawn: false })
+    try {
+      expect(root.querySelector('#file-src_app_ts .loading')).not.toBeNull()
+      key(']')
+      key('c')
+      expect(root.querySelector('.composer-box')?.closest('tr')?.previousElementSibling?.id).toBe(
+        'L-src_app_ts-new-4'
+      )
+      key('Escape')
+      // ] draws only the diff that holds the next point, so the other Other file still waits.
+      key(']')
+      expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
+      expect(root.querySelector('#file-src_gone_ts .loading')).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('stops listening once the screen is torn down', () => {
     const { root, wiring } = setup()
     wiring.stop()
@@ -1585,7 +1784,8 @@ describe('askTargetFor', () => {
       end: 4,
       dragging: false,
     })
-    expect(askTargetFor(root, 'layer-run-path', 'p-1', selection)).toEqual({
+    const layer = root.querySelector('#layer-run-path')
+    expect(askTargetFor(layer, selection)).toEqual({
       kind: 'lines',
       path: 'src/app.ts',
       side: 'new',
@@ -1596,18 +1796,13 @@ describe('askTargetFor', () => {
     if (point === undefined) {
       throw new Error('fixture changed')
     }
-    expect(askTargetFor(root, 'layer-run-path', point.id, null)).toEqual({
+    expect(askTargetFor(root.querySelector(`[data-point="${point.id}"]`), null)).toEqual({
       kind: 'point',
       fingerprint: point.fingerprint,
     })
-    expect(askTargetFor(root, 'layer-run-path', null, null)).toEqual({ kind: 'layer', layerId: 'run-path' })
-    expect(askTargetFor(root, null, null, null)).toEqual({ kind: 'pr' })
-    // A point or a card the page does not show falls through to the next choice.
-    expect(askTargetFor(root, 'layer-run-path', 'p-nope', null)).toEqual({
-      kind: 'layer',
-      layerId: 'run-path',
-    })
-    expect(askTargetFor(root, 'overview', null, null)).toEqual({ kind: 'pr' })
+    expect(askTargetFor(layer, null)).toEqual({ kind: 'layer', layerId: 'run-path' })
+    expect(askTargetFor(null, null)).toEqual({ kind: 'pr' })
+    expect(askTargetFor(root.querySelector('#overview'), null)).toEqual({ kind: 'pr' })
     setChatEnabled(false)
   })
 })

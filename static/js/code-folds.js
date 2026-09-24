@@ -5,6 +5,7 @@
 // reader's level only decides which of them are active, so changing it never rebuilds the table
 // and an open composer or an expanded fold survives. The renderer's own folds hide in every mode.
 import { findRow } from './anchors.js'
+import { esc } from './dom.js'
 import { foldsForLevel } from './fold-levels.js'
 
 /** @typedef {import('./contract-types.js').CodeFold} CodeFold */
@@ -133,11 +134,13 @@ function foldLabel(rows, fold) {
 }
 
 /**
- * Inserts the fold's title above its first row.
+ * Inserts the fold's toggle above its first row: a chevron, the title, and how many code lines it
+ * hides, so a folded range reads as hidden code rather than as a stray heading.
  * @param {HTMLTableRowElement} first
  * @param {string} title
+ * @param {number} lines code lines under the fold
  */
-function createToggle(first, title) {
+function createToggle(first, title, lines) {
   const header = document.createElement('tr')
   header.className = 'more code-fold'
 
@@ -145,9 +148,11 @@ function createToggle(first, title) {
   cell.colSpan = 4
 
   const toggle = document.createElement('button')
-  toggle.className = 'cmd'
+  toggle.className = 'fold-toggle'
   toggle.type = 'button'
-  toggle.textContent = title
+  toggle.innerHTML =
+    `<span class="chev" aria-hidden="true">&gt;</span><span class="fold-title">${esc(title)}</span>` +
+    `<span class="fold-lines"> · ${lines} ${lines === 1 ? 'line' : 'lines'}</span>`
 
   cell.appendChild(toggle)
   header.appendChild(cell)
@@ -236,14 +241,9 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
     if (first === undefined) {
       continue
     }
-    const { header, toggle } = createToggle(first, foldLabel(rows, fold))
-    toggle.setAttribute(
-      'aria-controls',
-      rows
-        .map(row => row.id)
-        .filter(Boolean)
-        .join(' ')
-    )
+    const ids = rows.map(row => row.id).filter(Boolean)
+    const { header, toggle } = createToggle(first, foldLabel(rows, fold), ids.length)
+    toggle.setAttribute('aria-controls', ids.join(' '))
     const w = {
       fold,
       rows,

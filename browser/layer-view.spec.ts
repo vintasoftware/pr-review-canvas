@@ -45,6 +45,13 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await expect(other).toBeVisible()
   await expect(layer).toBeHidden()
 
+  // After the rail moves away, j steps on from the layer that shows, not the card it left.
+  await page.locator('nav.rail a[href="#overview"]').click()
+  await expect(overview).toBeVisible()
+  await page.keyboard.press('j')
+  await expect(layer).toBeVisible()
+  await expect(other).toBeHidden()
+
   // Back to all at once, and every section returns.
   await page.locator('#settings').click()
   await page.locator('#set-layer-view').selectOption('all')

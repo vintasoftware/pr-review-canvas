@@ -6,7 +6,9 @@ import { emptyState } from '../../src/contract/state.js'
 import { PACKAGE_ROOT } from '../../src/server/context.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderLayers } from './layers.js'
-import { buildNavOrder, layerOf, nextFile, nextLayer, prevFile, prevLayer } from './nav.js'
+import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
+
+const all = () => true
 
 const artifact = syntheticArtifact()
 
@@ -113,7 +115,7 @@ describe('buildNavOrder', () => {
       'file-src_app_test_ts',
     ])
     expect(order.some(i => i.kind !== 'overview' && i.other)).toBe(false)
-    expect(nextLayer(order, 'layer-run-path')).toBeNull()
+    expect(step(order, 'layer-run-path', 'layer', 1, all)).toBeNull()
   })
 
   it('moves Other to the end even when the artifact lists it first', () => {
@@ -130,22 +132,49 @@ describe('next/prev', () => {
   const order = buildNavOrder(artifact)
 
   it('steps between layers and files from the current id, from nothing, and from an unknown id', () => {
-    expect(nextLayer(order, null)?.id).toBe('layer-run-path')
-    expect(nextLayer(order, 'overview')?.id).toBe('layer-run-path')
-    expect(nextLayer(order, 'layer-run-path')?.id).toBe('layer-other')
-    expect(nextLayer(order, 'file-src_app_ts')?.id).toBe('layer-other')
-    expect(nextLayer(order, 'layer-other')).toBeNull()
-    expect(prevLayer(order, null)?.id).toBe('layer-other')
-    expect(prevLayer(order, 'layer-other')?.id).toBe('layer-run-path')
-    expect(prevLayer(order, 'layer-run-path')).toBeNull()
-    expect(nextFile(order, null)?.id).toBe('file-src_app_ts')
-    expect(nextFile(order, 'file-src_app_test_ts')?.id).toBe('file-src_app_ts-other')
-    expect(nextFile(order, 'file-src_gone_ts')).toBeNull()
-    expect(prevFile(order, 'file-src_app_ts-other')?.id).toBe('file-src_app_test_ts')
-    expect(prevFile(order, 'file-src_app_ts')).toBeNull()
-    expect(prevFile(order, null)?.id).toBe('file-src_gone_ts')
-    expect(nextLayer(order, 'nope')?.id).toBe('layer-run-path')
-    expect(prevLayer(order, 'nope')?.id).toBe('layer-other')
+    expect(step(order, null, 'layer', 1, all)?.id).toBe('layer-run-path')
+    expect(step(order, 'overview', 'layer', 1, all)?.id).toBe('layer-run-path')
+    expect(step(order, 'layer-run-path', 'layer', 1, all)?.id).toBe('layer-other')
+    expect(step(order, 'file-src_app_ts', 'layer', 1, all)?.id).toBe('layer-other')
+    expect(step(order, 'layer-other', 'layer', 1, all)).toBeNull()
+    expect(step(order, null, 'layer', -1, all)?.id).toBe('layer-other')
+    expect(step(order, 'layer-other', 'layer', -1, all)?.id).toBe('layer-run-path')
+    expect(step(order, 'layer-run-path', 'layer', -1, all)).toBeNull()
+    expect(step(order, null, 'file', 1, all)?.id).toBe('file-src_app_ts')
+    expect(step(order, 'file-src_app_test_ts', 'file', 1, all)?.id).toBe('file-src_app_ts-other')
+    expect(step(order, 'file-src_gone_ts', 'file', 1, all)).toBeNull()
+    expect(step(order, 'file-src_app_ts-other', 'file', -1, all)?.id).toBe('file-src_app_test_ts')
+    expect(step(order, 'file-src_app_ts', 'file', -1, all)).toBeNull()
+    expect(step(order, null, 'file', -1, all)?.id).toBe('file-src_gone_ts')
+    expect(step(order, 'nope', 'layer', 1, all)?.id).toBe('layer-run-path')
+    expect(step(order, 'nope', 'layer', -1, all)?.id).toBe('layer-other')
+  })
+
+  it('passes over the cards the reader cannot see', () => {
+    // The Other layer's files sit inside its closed details, so n stops at none of them.
+    const shown = (/** @type {import('./nav.js').NavItem} */ item) => !(item.kind === 'file' && item.other)
+    expect(step(order, 'file-src_app_test_ts', 'file', 1, shown)).toBeNull()
+    expect(step(order, null, 'file', -1, shown)?.id).toBe('file-src_app_test_ts')
+    expect(step(order, 'file-src_app_test_ts', 'layer', 1, shown)?.id).toBe('layer-other')
+    expect(step(order, 'file-src_gone_ts', 'layer', -1, shown)?.id).toBe('layer-other')
+  })
+
+  it('finds the item at the top of the screen after a scroll', () => {
+    /** @type {Record<string, number>} */
+    const tops = {
+      overview: -1500,
+      'layer-run-path': -900,
+      'file-src_app_ts': -400,
+      'file-src_new_name_ts': 5,
+      'file-src_app_test_ts': 300,
+      'layer-other': 900,
+    }
+    const topOf = (/** @type {import('./nav.js').NavItem} */ item) => tops[item.id] ?? null
+    expect(readingItem(order, topOf, 16)?.id).toBe('file-src_new_name_ts')
+    expect(readingItem(order, topOf, 0)?.id).toBe('file-src_app_ts')
+    // Before the first item reaches the top, and when nothing is drawn, the reader is on nothing.
+    expect(readingItem(order, topOf, -2000)).toBeNull()
+    expect(readingItem(order, () => null, 16)).toBeNull()
   })
 
   it('finds the layer an item belongs to', () => {

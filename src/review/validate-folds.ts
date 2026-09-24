@@ -51,7 +51,7 @@ export const LIGHT_FOLD_MAX_ROWS = 40
 export const CORE_FILE_ROWS = 60
 export const AGGRESSIVE_MIN_HIDDEN = 0.5
 
-type SourceRange = Pick<CodeFold, 'side' | 'startLine' | 'endLine'>
+export type SourceRange = Pick<CodeFold, 'side' | 'startLine' | 'endLine'>
 type LeveledRange = SourceRange & { level: FoldLevel }
 type ModelFile = ModelLayer['files'][number]
 
@@ -97,7 +97,7 @@ function covers(outer: SourceRange, inner: SourceRange): boolean {
 }
 
 /** Different coordinate sides in one hunk need the full patch to prove they are separate. */
-function rangesOverlap(left: SourceRange, right: SourceRange, hunks: readonly Hunk[]): boolean {
+export function rangesOverlap(left: SourceRange, right: SourceRange, hunks: readonly Hunk[]): boolean {
   const leftHunk = hunkForLine(hunks, left.side, left.startLine)
   const rightHunk = hunkForLine(hunks, right.side, right.startLine)
 
@@ -142,16 +142,15 @@ function foldRelation(
 }
 
 /** Ranges no fold may ever hide: attention points, and the marker a missing test adds. */
-function pinnedRanges(
-  file: ModelFile,
-  layer: ModelLayer,
-  output: ModelOutput,
+export function pinnedRanges(
+  file: Pick<ModelFile, 'path' | 'hunks'>,
+  layer: { files: readonly object[]; tests: ReadonlyArray<Pick<ModelLayer['tests'][number], 'status'>> },
+  points: ReadonlyArray<Pick<ModelOutput['points'][number], 'path' | 'side' | 'line' | 'endLine'>>,
   hunks: readonly Hunk[]
 ): SourceRange[] {
   const ranges: SourceRange[] = []
-  const points = output.points.filter(point => point.path === file.path)
 
-  for (const point of points) {
+  for (const point of points.filter(p => p.path === file.path)) {
     const side = point.side ?? 'new'
     const hunk = hunkForLine(hunks, side, point.line)
 
@@ -178,7 +177,7 @@ function fileFolds(
   output: ModelOutput,
   hunks: readonly Hunk[]
 ): FileFolds {
-  const pinned = pinnedRanges(file, layer, output, hunks)
+  const pinned = pinnedRanges(file, layer, output.points, hunks)
   const rows = fileRows(file, hunks)
   return {
     file,

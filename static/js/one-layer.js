@@ -24,6 +24,15 @@ export function pageSections(root) {
 }
 
 /**
+ * True for the overview or a layer section. One the page is not showing hides nothing for good:
+ * `reveal-code` on anything inside it shows it.
+ * @param {Element} el
+ */
+export function isPageSection(el) {
+  return el.matches(SECTION_SELECTOR)
+}
+
+/**
  * The section that holds an element, itself when it is one, or null for an element outside every
  * section, such as the header or the chat pane.
  * @param {ParentNode} root

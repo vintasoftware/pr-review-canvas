@@ -13,7 +13,7 @@ export const KEY_HELP = [
   { keys: 'j / k', what: 'next / previous layer' },
   { keys: 'n / p', what: 'next / previous file' },
   { keys: '] / [', what: 'next / previous attention point' },
-  { keys: 'o', what: 'open or collapse the card in focus' },
+  { keys: 'o', what: "open or collapse the card in focus, or the point's file card" },
   { keys: 'r', what: 'mark the file in focus reviewed' },
   { keys: 'R', what: 'mark the layer in focus reviewed and move on' },
   { keys: 'c', what: 'comment on the line in focus or on the selection' },
@@ -50,7 +50,9 @@ export function isTypingTarget(target) {
  */
 export function keyAction(event, opts = {}) {
   const none = { action: null, pendingG: false }
-  if (event.ctrlKey || event.metaKey || event.altKey) {
+  // AltGr reports Ctrl and Alt on Windows, and it is how many layouts type [ ] / and ?.
+  const altGraph = event.getModifierState?.('AltGraph') === true
+  if (event.metaKey || ((event.ctrlKey || event.altKey) && !altGraph)) {
     return none
   }
   if (event.key === 'Escape') {

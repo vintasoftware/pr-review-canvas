@@ -314,6 +314,34 @@ describe('renderPrompt', () => {
     expect(renderPrompt(context(), PATCHES, sources)).toContain('At most one layer has `kind: "other"`')
   })
 
+  it('lists a point carried by its lines under carry, with the lines it moved to', () => {
+    const basis: NonNullable<GenerationContext['basis']> = {
+      canvasSha: 'e'.repeat(40),
+      reviewJsonPath: '/data/canvases/e/review.json',
+      files: { unchanged: [], changed: ['src/app.ts'], added: [], removed: [] },
+      layers: [],
+      points: [
+        {
+          kind: 'decision',
+          path: 'src/app.ts',
+          title: 'Sum instead of product',
+          status: 'carried',
+          headLines: { side: 'new', line: 7, endLine: 9 },
+        },
+        { kind: 'risk', path: 'src/app.ts', title: 'Edited under it', status: 're-judged' },
+      ],
+    }
+    const prompt = renderPrompt(context({ basis }), PATCHES, sources)
+    const carry = prompt.slice(prompt.indexOf('### Carry these'), prompt.indexOf('### Decide these'))
+
+    expect(carry).toContain(
+      '- decision on `src/app.ts` — "Sum instead of product"; the file changed around it, and its ' +
+        'lines moved to new-side lines 7-9'
+    )
+    expect(carry).not.toContain('Edited under it')
+    expect(prompt.slice(prompt.indexOf('### Decide these'))).toContain('"Edited under it"')
+  })
+
   it('throws on a template token it does not know', () => {
     const generation = { ...sources.generation, strict: 'hi {{NOPE}}' }
     expect(() => renderPrompt(context(), PATCHES, { ...sources, generation })).toThrow(

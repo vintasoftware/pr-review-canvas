@@ -30,6 +30,7 @@ import {
   readContext,
   validationInput,
 } from './review/publish.js'
+import { applyFoldFixes, describeFoldFix, type FoldFix } from './review/fix-folds.js'
 import { applyTitleTrims, type TitleTrim } from './review/trim-caps.js'
 import { validateModelOutput } from './review/validate.js'
 import type { AppContext } from './server/context.js'
@@ -223,8 +224,9 @@ async function validateFile(
 
 /**
  * `validate <model.json|review.json> --canvas <dir> [--human] [--fix]`: the report as one JSON
- * line, or as lines. `--fix` first trims the titles that are over their cap and writes the file
- * back, so the only problems left to answer are the ones that need judgment.
+ * line, or as lines. `--fix` first trims the titles that are over their cap, clips, shrinks, or
+ * drops the folds that break a rule with one right answer, and writes the file back, so the only
+ * problems left to answer are the ones that need judgment.
  */
 export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
   const { values, positionals } = parseArgs({
@@ -251,11 +253,15 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
       'pass the model.json or review.json to check'
     )
   }
-  const fixed = values.fix === true ? await fixTitles(path.resolve(file), text, context) : { text, trims: [] }
+  const fixed =
+    values.fix === true ? await fixModel(path.resolve(file), text, context) : { text, trims: [], folds: [] }
   const report = await validateFile(ctx, parseModelText(fixed.text, path.basename(file)), context)
   if (values.human !== true) {
-    printJson(io, values.fix === true ? { ...report, fixed: fixed.trims } : report)
+    printJson(io, values.fix === true ? { ...report, fixed: [...fixed.folds, ...fixed.trims] } : report)
     return report.ok ? EXIT.ok : EXIT.invalid
+  }
+  for (const fold of fixed.folds) {
+    io.stdout(`fixed ${fold.where}: ${describeFoldFix(fold)}`)
   }
   for (const trim of fixed.trims) {
     if (trim.outcome === 'fixed') {
@@ -277,28 +283,32 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
 }
 
 /**
- * Trims the over-cap titles of a model file and writes it back. Returns the text to validate,
- * unchanged when nothing needed trimming, so a file that is already fine is never rewritten.
+ * Trims the over-cap titles of a model file, repairs its mechanically broken folds, and writes it
+ * back. Returns the text to validate, unchanged when nothing needed fixing, so a file that is
+ * already fine is never rewritten. A stored review.json keeps the folds it was published with.
  */
-async function fixTitles(
+async function fixModel(
   file: string,
   text: string,
   context: GenerationContext
-): Promise<{ text: string; trims: TitleTrim[] }> {
+): Promise<{ text: string; trims: TitleTrim[]; folds: FoldFix[] }> {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    // An unparseable file has no titles to trim; the validator reports the syntax error.
-    return { text, trims: [] }
+    // An unparseable file has nothing to fix; the validator reports the syntax error.
+    return { text, trims: [], folds: [] }
   }
+  // Folds first, so every reported path, a trimmed fold title's included, is one into the file
+  // as written back.
+  const folds = ReviewArtifactSchema.safeParse(parsed).success ? [] : applyFoldFixes(parsed, context.files)
   const trims = applyTitleTrims(parsed, context.caps)
-  if (!trims.some(trim => trim.outcome === 'fixed')) {
-    return { text, trims }
+  if (!trims.some(trim => trim.outcome === 'fixed') && folds.length === 0) {
+    return { text, trims, folds }
   }
   const next = `${JSON.stringify(parsed, null, 2)}\n`
   await writeTextAtomic(file, next)
-  return { text: next, trims }
+  return { text: next, trims, folds }
 }
 
 function parseHarness(raw: string | undefined): (typeof HARNESSES)[number] {
