@@ -9,9 +9,9 @@ import type { AppContext } from '../server/context.js'
 import { anchorOnHead, decisionsForPr, pickedLabel, recordOf, sentence, whyOf } from './settled-for-pr.js'
 
 export type SelfReviewSharing =
-  /** No settled decision is waiting to be posted. */
-  | { status: 'none' }
-  | { status: 'posted'; url: string; comments: number; listed: number }
+  /** No settled decision is waiting to be posted; `held` counts those the canvas reopened. */
+  | { status: 'none'; held?: number }
+  | { status: 'posted'; url: string; comments: number; listed: number; held?: number }
   | { status: 'failed'; warning: string }
   | { status: 'skipped' }
 
@@ -34,17 +34,25 @@ function listedLine(card: SettledCard): string {
   return `- **${card.title}** (\`${card.path}\`): picked ${pickedSentence(card)}`
 }
 
+/**
+ * Posts what is waiting. A decision the canvas reopens is held back: the author's reason would
+ * stand on code that contradicts it. It posts on a later publish, once the canvas stops reopening
+ * it, and is not recorded as posted until then.
+ */
 export async function postSettledComments(
   ctx: AppContext,
-  pr: Pr & { number: number }
+  pr: Pr & { number: number },
+  opts: { reopened?: ReadonlySet<string> } = {}
 ): Promise<SelfReviewSharing> {
   const { settled } = await decisionsForPr(ctx, pr)
   const { posted } = await ctx.decks.readPosted(pr.number)
-  const waiting = settled.filter(
+  const unposted = settled.filter(
     card => recordOf(card) === 'pr-comment' && posted[card.key]?.pickedAt !== card.pick.pickedAt
   )
+  const waiting = unposted.filter(card => opts.reopened?.has(card.key) !== true)
+  const held = unposted.length - waiting.length
   if (waiting.length === 0) {
-    return { status: 'none' }
+    return held === 0 ? { status: 'none' } : { status: 'none', held }
   }
   try {
     const derived = await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)
@@ -90,7 +98,14 @@ export async function postSettledComments(
       next[card.key] = { pickedAt: card.pick.pickedAt, url: review.url }
     }
     await ctx.decks.writePosted(pr.number, { posted: next })
-    return { status: 'posted', url: review.url, comments: comments.length, listed: listed.length }
+    const result: SelfReviewSharing = {
+      status: 'posted',
+      url: review.url,
+      comments: comments.length,
+      listed: listed.length,
+    }
+    if (held > 0) result.held = held
+    return result
   } catch (err) {
     return {
       status: 'failed',

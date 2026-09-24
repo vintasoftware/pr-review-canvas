@@ -120,6 +120,8 @@ export const SelfReviewDecisionSchema = z.object({
   /** The side the author picked, in words (settled decisions only). */
   picked: z.string().optional(),
   why: z.string().optional(),
+  /** True when the pick asked the code to change, so code still doing the old side is a pending fix. */
+  fix: z.boolean().optional(),
 })
 export type SelfReviewDecision = z.infer<typeof SelfReviewDecisionSchema>
 

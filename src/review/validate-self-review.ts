@@ -1,7 +1,8 @@
 // The rules that keep a pull request's canvas faithful to the author's self-review. Whether the
 // code really contradicts a settled decision is a judgment no check can make; what a check can
-// make sure of is that every reopened decision says so, on the code it concerns, and that every
-// card the author left for reviewers reaches them.
+// make sure of is that every reopened decision says so, and that every card the author left for
+// reviewers reaches them. A reopen may sit wherever the contradiction is: the code that breaks a
+// pick is not always the code the card was dealt on.
 import type { GenerationContext, SelfReviewDecision } from '../contract/generation-context.js'
 import type { FileEntry, ModelOutput, ModelPoint } from '../contract/review-artifact.js'
 import type { ValidationError } from '../contract/validation.js'
@@ -51,8 +52,7 @@ export function validateSelfReview(
     const where = `point:${i + 1}`
     const chunk = chunkOf(byPath, p)
     if (p.reopens !== undefined) {
-      const decision = settled.get(p.reopens)
-      if (decision === undefined) {
+      if (!settled.has(p.reopens)) {
         add(
           'SELF_REVIEW_KEY',
           where,
@@ -64,15 +64,6 @@ export function validateSelfReview(
           where,
           `${label(p, i)} reopens "${p.reopens}" as ${p.kind}/${p.level}; a reopened decision is a decision/decide point`
         )
-      } else {
-        const expected = chunkOf(byPath, decision)
-        if (expected !== null && chunk !== expected) {
-          add(
-            'REOPEN_ELSEWHERE',
-            where,
-            `${label(p, i)} reopens "${p.reopens}" from ${p.path}:${p.line}, but the decision sits at ${decision.path}:${decision.line}; anchor it there`
-          )
-        }
       }
     }
     if (p.asks !== undefined) {

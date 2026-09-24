@@ -124,7 +124,8 @@ describe('the decisions a pull request inherits from its decks', () => {
     })
     const prompt = await readFile(prepared.promptPath, 'utf8')
     expect(prompt).toContain('## Decisions from the author’s self-review')
-    expect(prompt).toContain('Do not raise any of them as a `decide` point')
+    expect(prompt).toContain('Do not raise them again as `decide` points')
+    expect(prompt).toContain('anchored where the contradiction is')
     expect(prompt).toContain('- `kept` **Title kept** at `src/app.ts:12`. Picked A, Keep. Why: why kept A')
     expect(prompt).toContain('The author left these for reviewers.')
     expect(prompt).toContain('- `asked` **Title asked** at `src/app.ts:12`.')
@@ -315,7 +316,7 @@ describe('the decisions a pull request inherits from its decks', () => {
     expect(result.selfReview).toMatchObject({ status: 'posted', comments: 1, listed: 1 })
     const review = posts[0]
     expect(review?.comments.map(c => c.body.split('\n')[2])).toEqual([
-      'Picked neither side: Log the row and keep going.',
+      'Picked neither side; instead: Log the row and keep going.',
     ])
     expect(review?.body).toContain('- **Title unseen** (`src/app.ts`): picked A, Keep. why unseen A')
     expect(Object.keys((await t.ctx.decks.readPosted(42)).posted).sort()).toEqual(['own-words', 'unseen'])
@@ -368,5 +369,69 @@ describe('the decisions a pull request inherits from its decks', () => {
     const result = await publish(t.ctx, prepared.canvasDir, OPTS)
     const stored = await t.ctx.canvases.readArtifact(result.headSha)
     expect(stored?.points.find(p => p.line === 4)?.reopens).toBe('sum')
+  })
+
+  it('tells the generator which picks asked for a change, so unapplied code reads as a pending fix', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    await deal(t, 42, [card('kept'), card('change')], { kept: pick('a'), change: pick('b') })
+    const prepared = await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
+    const context = GenerationContextSchema.parse(JSON.parse(await readFile(prepared.contextPath, 'utf8')))
+    expect(context.selfReview?.settled.map(d => [d.key, d.fix ?? false])).toEqual([
+      ['kept', false],
+      ['change', true],
+    ])
+    const prompt = await readFile(prepared.promptPath, 'utf8')
+    expect(prompt).toContain(
+      '- `change` **Title change** at `src/app.ts:12`. Picked B, Change. The author asked for this change. Why: why change B'
+    )
+    expect(prompt).not.toContain('Picked A, Keep. The author asked for this change.')
+  })
+
+  it('holds back the reason of a decision the canvas reopens, and posts it once the canvas stops', async () => {
+    const posts: Array<{ comments: Array<{ body: string }> }> = []
+    const gh = ghFor42({
+      postRoutes: {
+        'repos/acme/widgets/pulls/42/reviews': ghPost(body => {
+          posts.push(body as (typeof posts)[number])
+          return {
+            id: 9003,
+            state: 'COMMENTED',
+            html_url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-9003',
+          }
+        }),
+      },
+      routes: { 'repos/acme/widgets/pulls/42/reviews/9003/comments': ghJson([]) },
+    })
+    t = await makeTestContext({ git: gitFor42(), gh })
+    await deal(t, 42, [card('kept'), card('contested')], { kept: pick('a'), contested: pick('a') })
+    const prepared = await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
+    const model = artifactToModelOutput(syntheticArtifact())
+    const reopening = {
+      ...model,
+      points: [
+        ...model.points,
+        {
+          kind: 'decision',
+          level: 'decide',
+          title: 'Still skips',
+          path: 'src/app.ts',
+          line: 12,
+          body: 'b',
+          reopens: 'contested',
+        },
+      ],
+    }
+    await writeTextAtomic(`${prepared.canvasDir}/model.json`, JSON.stringify(reopening))
+    const first = await publish(t.ctx, prepared.canvasDir, OPTS)
+    expect(first.selfReview).toMatchObject({ status: 'posted', comments: 1, held: 1 })
+    expect(posts[0]?.comments.map(c => c.body.split('\n')[0])).toEqual(['**Self-review: Title kept**'])
+    expect(Object.keys((await t.ctx.decks.readPosted(42)).posted)).toEqual(['kept'])
+
+    // The next canvas no longer reopens it: now its reason goes out.
+    await prepare(t.ctx, { kind: 'pr', number: 42 }, { force: true, log: () => undefined })
+    await writeTextAtomic(`${prepared.canvasDir}/model.json`, JSON.stringify(model))
+    const second = await publish(t.ctx, prepared.canvasDir, OPTS)
+    expect(second.selfReview).toMatchObject({ status: 'posted', comments: 1 })
+    expect(posts[1]?.comments.map(c => c.body.split('\n')[0])).toEqual(['**Self-review: Title contested**'])
   })
 })

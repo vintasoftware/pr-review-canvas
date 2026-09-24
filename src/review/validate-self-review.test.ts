@@ -82,11 +82,10 @@ describe('validateSelfReview', () => {
     ])
   })
 
-  it('accepts a declared reopen on the decision’s own chunk, and refuses one anchored elsewhere', () => {
+  it('accepts a declared reopen on the decision’s chunk, or wherever the contradiction is', () => {
     expect(check([point(), point({ line: 4, asks: undefined, reopens: 'rows' })])).toEqual([])
-    expect(check([point(), point({ line: 12, asks: undefined, reopens: 'rows' })])).toEqual([
-      'REOPEN_ELSEWHERE',
-    ])
+    // The code that breaks a pick can be elsewhere; a generator testing PR #24 needed this.
+    expect(check([point(), point({ line: 12, asks: undefined, reopens: 'rows' })])).toEqual([])
   })
 
   it('lets a reopen of a decision whose code moved away sit anywhere, since there is no line to hold it to', () => {

@@ -86,7 +86,7 @@ export function recordFor(card: DecisionCard, pick: Pick): RecordTarget {
 
 /** The side the author picked, in words a reviewer reads. */
 export function pickedLabelFor(card: DecisionCard, pick: Pick): string {
-  if (pick.choice === 'neither') return `neither side: ${pick.note ?? ''}`.trim()
+  if (pick.choice === 'neither') return `neither side; instead: ${pick.note ?? ''}`.trim()
   if (pick.choice === 'skip') return 'skipped'
   return `${pick.choice.toUpperCase()}, ${card[pick.choice].label}`
 }

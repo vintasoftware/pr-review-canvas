@@ -277,7 +277,11 @@ export async function publish(
     published.selfReview =
       opts.selfReviewComments === false
         ? { status: 'skipped' }
-        : await postSettledComments(ctx, { ...context.pr, number: context.target.number })
+        : await postSettledComments(
+            ctx,
+            { ...context.pr, number: context.target.number },
+            { reopened: new Set(artifact.points.flatMap(p => (p.reopens === undefined ? [] : [p.reopens]))) }
+          )
   }
   return published
 }

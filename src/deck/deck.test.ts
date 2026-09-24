@@ -714,7 +714,7 @@ describe('deck prepare and publish report what is missing', () => {
       .split('\n')
       .find(l => l.startsWith('- `empty-rows`'))
     expect(settledLine).toBe(
-      '- `empty-rows` **What happens to empty rows?**: the author picked neither side: Log and keep going.'
+      '- `empty-rows` **What happens to empty rows?**: the author picked neither side; instead: Log and keep going.'
     )
   })
 })

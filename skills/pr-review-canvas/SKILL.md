@@ -188,7 +188,8 @@ For a PR/MR run, also report `selfReview`, the justifications the author settled
 self-review deck (`/pr-self-review`):
 
 - `status: "posted"`: say that `comments` of them were posted inline and `listed` in the review
-  body, and link `url`.
+  body, and link `url`. When `held` is set, say that many were held back because this canvas
+  reopens them; they post once a later canvas no longer does.
 - `status: "failed"`: quote `warning`; publishing again retries them. Do not regenerate the model
   for it.
 - `status: "none"` or `"skipped"`: say nothing about it.
@@ -238,7 +239,8 @@ its commit is on no branch, so generate a fresh one for the PR.
   node id the way the source spells it (`store`, not the label in its brackets; `App`, not the
   name after `as`), and link only nodes that stand for a layer, a file, or a hunk of this canvas.
 - When the prompt ends with **Decisions from the author's self-review**, a `decide` point on a
-  settled decision's chunk carries `"reopens": "<key>"` and sits on that chunk, and every card
+  settled decision's chunk carries `"reopens": "<key>"` (a reopen may sit wherever the
+  contradiction is), and every card
   listed with a line gets a `decide` point with `"asks": "<key>"`. Any other `decide` point there
   fails as `SETTLED_REOPENED`; lower it or anchor it on the code it is about.
 - Markdown is allowed; headings are not. No prose outside the JSON file.

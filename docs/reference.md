@@ -699,10 +699,11 @@ generator not to raise a settled decision as `decide` unless the code contradict
 and to raise each skipped card as a `decide` point.
 
 Whether the code really contradicts a pick is a judgment, so the validator checks declarations
-instead. A point that asks a settled decision again carries `"reopens": "<card key>"`; one that
+instead. The prompt marks each settled pick that asked the code to change, so code still doing
+the old side reads as a fix that has not landed rather than a disagreement. A point that asks a
+settled decision again carries `"reopens": "<card key>"`, anchored wherever the contradiction is; one that
 raises a skipped card carries `"asks": "<card key>"`. Validation then refuses a `decide` point in the
-chunk of a settled decision that does not declare the reopen, a reopen anchored away from the
-decision's chunk, a key that names nothing, a reopen that is not a `decision` / `decide` point, and a
+chunk of a settled decision that does not declare the reopen, a key that names nothing, a reopen that is not a `decision` / `decide` point, and a
 skipped card that no point asks. A skipped card whose code changed since is left to the generator.
 The canvas page marks such points **reopens a settled decision** or **left for reviewers**.
 
@@ -710,7 +711,9 @@ The canvas page marks such points **reopens a settled decision** or **left for r
 recorded as `pr-comment` as one `COMMENT` review under your login, each comment inline on its
 anchor. A decision whose code changed since is listed in the review body instead of on a line.
 `decks/<n>/posted.json` records what was posted, so publishing again posts only decisions picked
-anew. The result's `selfReview` is `posted` (with the review URL and counts), `none`, `skipped`
+anew. A decision the canvas reopens is held back, since its reason would stand on code that
+contradicts it; it posts on a later publish, once the canvas stops reopening it. The result's
+`selfReview` is `posted` (with the review URL, counts, and `held`), `none`, `skipped`
 (with `--skip-self-review-comments`), or `failed` with a warning; a failure never fails the publish,
 and the next publish retries.
 
@@ -798,5 +801,5 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                                      |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                           |
 | `SELF_REVIEW_KEY`, `SELF_REVIEW_LEVEL`                          | `reopens` names a settled decision and `asks` a skipped card, each on a `decide` point                                       |
-| `REOPEN_ELSEWHERE`, `SETTLED_REOPENED`                          | A reopen sits on the decision's own chunk; no other `decide` point sits on a settled decision's code                         |
+| `SETTLED_REOPENED`                                              | No `decide` point sits on a settled decision's code without declaring `reopens`                                              |
 | `OPEN_UNASKED`                                                  | Every skipped card still on a line of the diff is raised by a point with `asks`                                              |

@@ -10,6 +10,7 @@ import {
   type PrepareTargetInput,
   type SelfReviewDecision,
 } from '../contract/generation-context.js'
+import { pickNeedsFix } from '../contract/deck.js'
 import { anchorOnHead, decisionsForPr, pickedLabel, whyOf } from '../deck/settled-for-pr.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
 import type { LocalKey } from '../contract/review-key.js'
@@ -212,7 +213,15 @@ async function selfReviewFor(
   }
   return {
     settled: await Promise.all(
-      settled.map(async card => ({ ...(await describe(card)), picked: pickedLabel(card), why: whyOf(card) }))
+      settled.map(async card => {
+        const decision: SelfReviewDecision = {
+          ...(await describe(card)),
+          picked: pickedLabel(card),
+          why: whyOf(card),
+        }
+        if (pickNeedsFix(card, card.pick)) decision.fix = true
+        return decision
+      })
     ),
     open: await Promise.all(open.map(describe)),
   }
