@@ -11,13 +11,16 @@ import type { GenerationContext, PrepareTargetInput } from './contract/generatio
 import type { LocalKey } from './contract/review-key.js'
 import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
+import { prepareDeck } from './deck/prepare-deck.js'
+import { checkDeckModel, DeckInvalidError, publishDeck, readDeckContext } from './deck/publish-deck.js'
+import { formatDeckProblem } from './deck/validate-deck.js'
 import { fetchPrRefs } from './git/pr-refs.js'
 import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
 import {
   CLAUDE_SKILLS_DIR,
   CODEX_SKILLS_DIR,
   ignoreLocalSettings,
-  installSkill,
+  installBundledSkills,
   SkillDirExistsError,
 } from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
@@ -84,6 +87,13 @@ export function reportFailure(io: CliIo, err: unknown): number {
       io.stdout(formatValidationError(e))
     }
     printErrorEnvelope(io, 'MODEL_INVALID', err.message, 'fix model.json and run publish again')
+    return EXIT.invalid
+  }
+  if (err instanceof DeckInvalidError) {
+    for (const p of err.problems) {
+      io.stdout(formatDeckProblem(p))
+    }
+    printErrorEnvelope(io, 'DECK_INVALID', err.message, 'fix deck-model.json and run deck publish again')
     return EXIT.invalid
   }
   if (err instanceof PublishError) {
@@ -355,6 +365,83 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
   return EXIT.ok
 }
 
+const DECK_VERBS = ['prepare', 'validate', 'publish', 'fixes'] as const
+
+function deckReview(values: { branch?: boolean | undefined; uncommitted?: boolean | undefined }): LocalKey {
+  if (values.branch === true && values.uncommitted === true) {
+    throw new UsageError('--branch and --uncommitted are two reviews; ask for one of them')
+  }
+  if (values.branch === true) return 'branch'
+  if (values.uncommitted === true) return 'uncommitted'
+  throw new UsageError('deck needs --branch or --uncommitted')
+}
+
+/**
+ * `deck prepare|validate|publish|fixes`: the self-review deck of a local review. Prepare writes
+ * the prompt, validate checks the generated deck-model.json, publish stores it for the deck page,
+ * and fixes names the fix list the page wrote when the author cleared the deck.
+ */
+export async function runDeck(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
+  const [verb, ...rest] = argv
+  if (!DECK_VERBS.some(v => v === verb)) {
+    throw new UsageError(`deck takes one of ${DECK_VERBS.join(', ')}`)
+  }
+  const { values } = parseArgs({
+    args: rest,
+    options: {
+      branch: { type: 'boolean' },
+      uncommitted: { type: 'boolean' },
+      base: { type: 'string' },
+      force: { type: 'boolean' },
+      human: { type: 'boolean' },
+      agent: { type: 'string' },
+      model: { type: 'string' },
+      'allow-stale': { type: 'boolean' },
+    },
+    strict: true,
+  })
+  const review = deckReview(values)
+  if (verb === 'prepare') {
+    const result = await prepareDeck(
+      ctx,
+      { review, base: values.base, force: values.force === true },
+      phase => io.stderr(phase)
+    )
+    printJson(io, result)
+    return EXIT.ok
+  }
+  if (verb === 'fixes') {
+    const markdown = await ctx.decks.readFixes(review)
+    printJson(io, { review, path: ctx.decks.fixesPath(review), exists: markdown !== null })
+    return EXIT.ok
+  }
+  if (verb === 'validate') {
+    const context = await readDeckContext(ctx, review)
+    const checked = await checkDeckModel(context)
+    if (checked.ok) {
+      if (values.human === true) {
+        io.stdout(`ok: deck-model.json has ${checked.cards.length} of at most ${context.maxCards} cards`)
+      } else {
+        printJson(io, { ok: true, cards: checked.cards.length, maxCards: context.maxCards })
+      }
+      return EXIT.ok
+    }
+    throw new DeckInvalidError(checked.problems)
+  }
+  if (values.agent === undefined || values.agent === '') {
+    throw new UsageError('deck publish needs --agent <id>')
+  }
+  printJson(
+    io,
+    await publishDeck(ctx, review, {
+      agent: values.agent,
+      model: values.model,
+      allowStale: values['allow-stale'] === true,
+    })
+  )
+  return EXIT.ok
+}
+
 /**
  * `doctor`: every check the tool needs, as one JSON line. Exit 1 when one fails, so a script can
  * read the code instead of the JSON.
@@ -384,7 +471,7 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: 
   })
   const resolve = (flag: string | undefined, fallback: string): string =>
     flag === undefined ? path.join(env.repoRoot, fallback) : path.resolve(env.cwd, flag)
-  const result = await installSkill({
+  const result = await installBundledSkills({
     force: values.force === true,
     targets: [
       { kind: 'claude', dir: resolve(values['claude-dir'], CLAUDE_SKILLS_DIR) },

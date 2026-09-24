@@ -1,0 +1,159 @@
+import { once } from 'node:events'
+import { serve } from '@hono/node-server'
+import { test as base, expect } from '@playwright/test'
+import type { DecisionCard } from '../src/contract/deck.js'
+import { prepareDeck } from '../src/deck/prepare-deck.js'
+import { publishDeck } from '../src/deck/publish-deck.js'
+import { DEFAULT_PROJECT_CONFIG } from '../src/project-config.js'
+import { createApp } from '../src/server/app.js'
+import { resolveVendorRoots } from '../src/server/context.js'
+import { writeTextAtomic } from '../src/store/atomic-json.js'
+import { makeTestContext } from '../src/testing/fakes.js'
+import { gitForLocal } from '../src/testing/synthetic.js'
+
+function card(key: string, title: string, current: 'a' | 'b' | null): DecisionCard {
+  return {
+    key,
+    bucket: 'trade-off',
+    topic: 'Rare case vs simplify',
+    title,
+    context: 'The importer skips rows with no cells.',
+    path: 'src/app.ts',
+    line: 2,
+    current,
+    a: {
+      label: `${title}: A`,
+      consequence: 'Old exports import cleanly.',
+      snippet: { code: "import { b } from './b'" },
+      why: 'Only old exports pad.',
+      record: 'pr-comment',
+    },
+    b: {
+      label: `${title}: B`,
+      consequence: 'Nothing is dropped quietly.',
+      why: 'Never drop data.',
+      record: 'none',
+    },
+  }
+}
+
+const CARDS = [card('one', 'First', 'a'), card('two', 'Second', 'a'), card('three', 'Third', 'b')]
+
+const test = base.extend<{ deckUrl: string }>({
+  deckUrl: async ({ page }, use) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    const config = { ...DEFAULT_PROJECT_CONFIG, selfReview: { maxCards: 10, linesPerCard: 1 } }
+    const t = await makeTestContext({
+      git: gitForLocal(),
+      projectConfig: { config, warnings: [], source: null },
+      vendorRoots: resolveVendorRoots(),
+    })
+    const prepared = await prepareDeck(t.ctx, { review: 'uncommitted', force: false }, () => undefined)
+    await writeTextAtomic(prepared.modelPath, JSON.stringify({ cards: CARDS }))
+    await publishDeck(t.ctx, 'uncommitted', { agent: 'claude', allowStale: false })
+    const server = serve({ fetch: createApp(t.ctx).fetch, port: 0, hostname: '127.0.0.1' })
+    try {
+      await once(server, 'listening')
+      const address = server.address()
+      if (address === null || typeof address === 'string') {
+        throw new Error('test server did not bind a port')
+      }
+      await use(`http://127.0.0.1:${address.port}/deck/uncommitted`)
+      expect(errors).toEqual([])
+    } finally {
+      if ('closeAllConnections' in server) {
+        server.closeAllConnections()
+      }
+      await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
+      await t.cleanup()
+    }
+  },
+})
+
+test.use({ contextOptions: { reducedMotion: 'reduce' } })
+
+test('deals one card at a time, and a desktop page never scrolls', async ({ page, deckUrl }, info) => {
+  await page.goto(deckUrl)
+  const top = page.locator('.deck-card')
+  await expect(top).toHaveCount(1)
+  await expect(top.locator('h2')).toHaveText('First')
+  await expect(top.locator('.deck-side-a .deck-now')).toHaveText('in code now')
+  await expect(page.locator('.deck-pip')).toHaveCount(3)
+  if (info.project.name !== 'mobile') {
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollHeight - document.documentElement.clientHeight
+    )
+    expect(overflow).toBe(0)
+  }
+})
+
+test('picks with h and l, takes a note with n, skips with s, undoes with u', async ({ page, deckUrl }) => {
+  await page.goto(deckUrl)
+  await expect(page.locator('.deck-card h2')).toHaveText('First')
+  await page.keyboard.press('l')
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
+  await page.keyboard.press('u')
+  await expect(page.locator('.deck-card h2')).toHaveText('First')
+  await page.keyboard.press('h')
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
+
+  await page.keyboard.press('n')
+  const note = page.locator('.deck-note textarea')
+  await expect(note).toBeFocused()
+  // Deck keys typed into the note are text, not picks.
+  await note.fill('hold on, log and continue')
+  await note.press('Enter')
+  await expect(page.locator('.deck-card h2')).toHaveText('Third')
+
+  await page.keyboard.press('s')
+  await expect(page.locator('.deck-finish h2')).toHaveText('Deck cleared')
+  await expect(page.locator('.deck-tally-fixes .deck-tally-n')).toHaveText('1')
+  await expect(page.locator('.deck-tally-comments .deck-tally-n')).toHaveText('1')
+  await expect(page.locator('.deck-tally-skipped .deck-tally-n')).toHaveText('1')
+  await expect(page.locator('.deck-fixes-body')).toContainText('neither side. hold on, log and continue')
+  await expect(page.locator('.deck-run code')).toHaveText('/pr-self-review-fix uncommitted')
+
+  // A pick can be changed from the finish screen.
+  await page.locator('.deck-picks summary').click()
+  await page.locator('[data-reopen="three"]').click()
+  await expect(page.locator('.deck-card h2')).toHaveText('Third')
+})
+
+test('edits a justification before picking, and shows the code with o', async ({ page, deckUrl }) => {
+  await page.goto(deckUrl)
+  await expect(page.locator('.deck-card h2')).toHaveText('First')
+  await page.keyboard.press('o')
+  const drawer = page.locator('.deck-drawer')
+  await expect(drawer).toBeVisible()
+  await expect(drawer.locator('.deck-diff-here')).toContainText("import { b } from './b'")
+  await page.keyboard.press('Escape')
+  await expect(drawer).toBeHidden()
+
+  await page.keyboard.press('e')
+  const why = page.locator('[data-why="b"]')
+  await why.fill('Because the importer should be loud.')
+  await page.locator('[data-record-select="b"]').selectOption('code')
+  await why.press('Enter')
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
+  const saved = await page.evaluate(async () => (await fetch('/api/deck/uncommitted')).json())
+  expect(saved.picks.one).toMatchObject({
+    choice: 'b',
+    why: 'Because the importer should be loud.',
+    record: 'code',
+  })
+})
+
+test('drags a card right to pick side B', async ({ page, deckUrl }) => {
+  await page.goto(deckUrl)
+  await expect(page.locator('.deck-card h2')).toHaveText('First')
+  const box = await page.locator('.deck-card').boundingBox()
+  if (box === null) throw new Error('no card')
+  await page.mouse.move(box.x + box.width / 2, box.y + 30)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 260, box.y + 40, { steps: 10 })
+  await page.mouse.up()
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
+  const saved = await page.evaluate(async () => (await fetch('/api/deck/uncommitted')).json())
+  expect(saved.picks.one.choice).toBe('b')
+})

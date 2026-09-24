@@ -35,6 +35,10 @@ try {
     'static/styles.css',
     'prompts/chat-seed.md',
     'skills/pr-review-canvas/SKILL.md',
+    'skills/pr-self-review/SKILL.md',
+    'skills/pr-self-review-fix/SKILL.md',
+    'prompts/self-review-deck.md',
+    'static/js/deck.js',
     'docs/reference.md',
     'LICENSE',
   ]) {
@@ -70,6 +74,12 @@ try {
       await readFile(path.join(temp, directory, 'skills/pr-review-canvas/SKILL.md'), 'utf8'),
       /pr-review/
     )
+    for (const companion of ['pr-self-review', 'pr-self-review-fix']) {
+      assert.match(
+        await readFile(path.join(temp, directory, `skills/${companion}/SKILL.md`), 'utf8'),
+        new RegExp(`name: ${companion}`)
+      )
+    }
   }
   await appendFile(path.join(temp, '.agents/skills/pr-review-canvas/SKILL.md'), '\nlocal edit\n')
   const probe = createServer()

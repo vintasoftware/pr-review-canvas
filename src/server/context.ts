@@ -17,6 +17,7 @@ import { PACKAGE_ROOT, STATIC_DIR } from '../paths.js'
 import type { LoadedProjectConfig } from '../project-config.js'
 import { type CanvasStore, createCanvasStore } from '../store/canvas-store.js'
 import { repoDir } from '../store/data-dir.js'
+import { createDeckStore, type DeckStore } from '../store/deck-store.js'
 import { createDerivedStore, type DerivedStore } from '../store/derived-store.js'
 import { createPrStore, type PrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
@@ -48,6 +49,8 @@ export interface AppContext {
   derived: DerivedStore
   prs: PrStore
   state: StateStore
+  /** The self-review deck of each local review, its picks, and its fix list. */
+  decks: DeckStore
   /** What this forge login may post here, probed once and reused for ten minutes. */
   capabilities: CapabilityProbe
   /** Personal chat settings, in `.pr-review/settings.yml`. */
@@ -93,9 +96,10 @@ export interface StoreSet {
   derived: DerivedStore
   prs: PrStore
   state: StateStore
+  decks: DeckStore
 }
 
-/** The four stores over one repo directory. Shared by the real context and by tests. */
+/** The stores over one repo directory. Shared by the real context and by tests. */
 export function createStores(dataDir: string, config: RuntimeConfig, git: Git, now: () => Date): StoreSet {
   const root = repoDir(dataDir, config.repo)
   const canvases = createCanvasStore(root, git)
@@ -105,6 +109,7 @@ export function createStores(dataDir: string, config: RuntimeConfig, git: Git, n
     derived: createDerivedStore(canvases, git, now),
     prs,
     state: createStateStore(prs, now),
+    decks: createDeckStore(root),
   }
 }
 

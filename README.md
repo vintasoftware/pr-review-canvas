@@ -38,6 +38,45 @@ stay off. Add `--base <ref>` to compare against another branch. Committing after
 editing a file after `uncommitted`, moves the head: the next time you open the page or press
 refresh, the canvas is marked outdated and the page offers to generate it again.
 
+### Settle your decisions first: the self-review deck
+
+A canvas explains a change. The self-review deck makes you decide it. Run:
+
+```text
+/pr-self-review branch            # or: /pr-self-review uncommitted
+```
+
+The skill writes a short deck of **decision cards**, at most one per 100 changed lines and never
+more than ten. Each card is one choice your change makes that a reasonable engineer could make
+either way, such as handling a rare case or simplifying, or keeping backwards compatibility or
+breaking cleanly. Each card has two sides, A and B, and marks the one the code does now. Open
+**http://localhost:3010/deck/branch** (or `/deck/uncommitted`) and work through the cards one at a
+time. At 1080p and above, the page never scrolls.
+
+| Key       | Action                                                      |
+| --------- | ----------------------------------------------------------- |
+| `h` / `l` | pick side A (left) or side B (right), or drag the card      |
+| `n`       | neither side: say what you want instead                     |
+| `s`       | skip: leave the decision to reviewers                       |
+| `u`       | undo the last pick                                          |
+| `e` / `r` | edit a side's justification, or change where it is recorded |
+| `o`       | show the code the card is about                             |
+
+When the deck is cleared, the page writes a **fix list** from every pick that disagrees with the
+code, and suggests the next command:
+
+```text
+/pr-self-review-fix branch
+```
+
+It asks you about anything unclear, applies the fixes, writes the justifications you marked for
+the code, then deals a fresh deck. Decisions you already settled are carried over and never asked
+again, so the next deck shows only the questions the fixes raised.
+
+Picks you keep with a **PR comment** justification are saved with the deck. Posting them on the
+pull request automatically, and having the PR canvas skip the decisions you already settled, is
+the next step and not built yet.
+
 ### Review side
 
 Start the canvas server from the project you want to review:

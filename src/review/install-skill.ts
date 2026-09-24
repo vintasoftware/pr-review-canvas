@@ -7,7 +7,17 @@ import { readText } from '../store/atomic-json.js'
 import { stampSkill } from './skill-content.js'
 
 export const SKILL_NAME = 'pr-review-canvas'
-export const SKILL_SOURCE_DIR = path.join(PACKAGE_ROOT, 'skills', SKILL_NAME)
+/**
+ * The skills that ship beside the canvas skill: the self-review deck and its fix step. They are
+ * installed, checked, and refreshed wherever the canvas skill is.
+ */
+export const COMPANION_SKILLS = ['pr-self-review', 'pr-self-review-fix'] as const
+export const BUNDLED_SKILLS = [SKILL_NAME, ...COMPANION_SKILLS] as const
+export const SKILL_SOURCE_DIR = skillSourceDir(SKILL_NAME)
+
+export function skillSourceDir(name: string): string {
+  return path.join(PACKAGE_ROOT, 'skills', name)
+}
 export const CLAUDE_SKILLS_DIR = '.claude/skills'
 /** Codex reads repo skills from `.agents/skills` under the project root (codex-rs/ext/skills). */
 export const CODEX_SKILLS_DIR = '.agents/skills'
@@ -25,8 +35,10 @@ export async function ignoreLocalSettings(repoRoot: string): Promise<void> {
 }
 
 export interface InstallSkillOptions {
-  /** Absolute skills directories to install into; each gets `<dir>/pr-review-canvas`. */
+  /** Absolute skills directories to install into; each gets `<dir>/<name>`. */
   targets: Array<{ kind: 'claude' | 'codex'; dir: string }>
+  /** Which bundled skill; the canvas skill by default. */
+  name?: string
   source?: string
   /** Replace a real directory that already sits at the target. */
   force?: boolean
@@ -66,6 +78,7 @@ async function inspect(target: string): Promise<{ kind: 'none' } | { kind: 'link
 export const COPY_MARKER = '.pr-review-install'
 
 async function installOne(
+  name: string,
   source: string,
   dir: string,
   content: string,
@@ -73,7 +86,7 @@ async function installOne(
 ): Promise<{ path: string; status: InstallStatus }> {
   await mkdir(dir, { recursive: true })
   const realDir = await realpath(dir)
-  const target = path.join(realDir, SKILL_NAME)
+  const target = path.join(realDir, name)
   const current = await inspect(target)
   if (current.kind === 'other' && !force && (await inspect(path.join(target, COPY_MARKER))).kind === 'none') {
     throw new SkillDirExistsError(target)
@@ -92,12 +105,25 @@ async function installOne(
 }
 
 export async function installSkill(opts: InstallSkillOptions): Promise<InstallSkillResult> {
-  const source = await realpath(opts.source ?? SKILL_SOURCE_DIR)
+  const name = opts.name ?? SKILL_NAME
+  const source = await realpath(opts.source ?? skillSourceDir(name))
   const content = stampSkill(await readFile(path.join(source, 'SKILL.md'), 'utf8'))
   const targets: InstallSkillResult['targets'] = []
   for (const t of opts.targets) {
-    const done = await installOne(source, t.dir, content, opts.force === true)
+    const done = await installOne(name, source, t.dir, content, opts.force === true)
     targets.push({ kind: t.kind, ...done })
   }
-  return { skill: SKILL_NAME, targets }
+  return { skill: name, targets }
+}
+
+/** Installs every bundled skill into the same directories, the canvas skill first. */
+export async function installBundledSkills(
+  opts: Omit<InstallSkillOptions, 'name' | 'source'>
+): Promise<InstallSkillResult & { companions: InstallSkillResult[] }> {
+  const main = await installSkill(opts)
+  const companions: InstallSkillResult[] = []
+  for (const name of COMPANION_SKILLS) {
+    companions.push(await installSkill({ ...opts, name }))
+  }
+  return { ...main, companions }
 }

@@ -3,8 +3,8 @@ import { type Appearance, type AppearanceQuery, appearanceForRequest } from '../
 import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
-import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
-import { homePage, reviewPage } from '../html.js'
+import { LOCAL_KEYS, LocalKeySchema, parseReviewKey } from '../../contract/review-key.js'
+import { deckPage, homePage, reviewPage } from '../html.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
 export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Promise<Appearance> {
@@ -26,11 +26,13 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
       ctx.prs.listRecent(10),
       ...LOCAL_KEYS.map(key => ctx.prs.readPr(key)),
     ])
+    const decks = await Promise.all(LOCAL_KEYS.map(key => ctx.decks.readDeck(key)))
     return c.html(
       homePage(
         {
           recentPrs,
           localReviews: LOCAL_KEYS.filter((_, i) => localPrs[i] !== null && localPrs[i] !== undefined),
+          localDecks: LOCAL_KEYS.filter((_, i) => decks[i] !== null),
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
           version: ctx.version,
@@ -77,6 +79,31 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
         },
         c.get('cspNonce'),
         appearanceForRequest(settings, appearanceQuery(c))
+      )
+    )
+  })
+
+  app.get('/deck/:key', async c => {
+    const raw = c.req.param('key')
+    const review = LocalKeySchema.safeParse(raw)
+    if (!review.success) {
+      throw new AppError(
+        'BAD_REQUEST',
+        `"${raw}" is not a local review`,
+        400,
+        'the self-review deck is at /deck/branch or /deck/uncommitted'
+      )
+    }
+    return c.html(
+      deckPage(
+        {
+          review: review.data,
+          owner: ctx.config.repo.owner,
+          repo: ctx.config.repo.name,
+          version: ctx.version,
+        },
+        c.get('cspNonce'),
+        await appearanceFor(ctx, appearanceQuery(c))
       )
     )
   })

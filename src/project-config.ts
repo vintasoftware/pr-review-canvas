@@ -48,6 +48,7 @@ export const PromptOverridesSchema = z
     'quality-standards.md': z.string().min(1).optional(),
     'layering-guidance.md': z.string().min(1).optional(),
     'chat-seed.md': z.string().min(1).optional(),
+    'self-review-deck.md': z.string().min(1).optional(),
   })
   .strict()
 export type PromptOverrides = z.infer<typeof PromptOverridesSchema>
@@ -82,6 +83,13 @@ export const ProjectConfigSchema = z.object({
      */
     incremental: z.boolean(),
   }),
+  /** How many decision cards a self-review deck may hold (`/pr-self-review`). */
+  selfReview: z.object({
+    /** Never more cards than this, however large the change. */
+    maxCards: z.number().int().positive(),
+    /** One card per this many changed lines, rounded up. */
+    linesPerCard: z.number().int().positive(),
+  }),
 })
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
 
@@ -106,6 +114,12 @@ const PartialProjectConfigSchema = z.object({
   canvas: z
     .object({ keepForIdenticalDiff: z.boolean().optional(), incremental: z.boolean().optional() })
     .optional(),
+  selfReview: z
+    .object({
+      maxCards: z.number().int().positive().optional(),
+      linesPerCard: z.number().int().positive().optional(),
+    })
+    .optional(),
 })
 
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
@@ -116,6 +130,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
   canvas: { keepForIdenticalDiff: true, incremental: true },
+  selfReview: { maxCards: 10, linesPerCard: 100 },
 }
 
 export interface LoadedProjectConfig {
@@ -160,6 +175,10 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
       keepForIdenticalDiff:
         user.canvas?.keepForIdenticalDiff ?? DEFAULT_PROJECT_CONFIG.canvas.keepForIdenticalDiff,
       incremental: user.canvas?.incremental ?? DEFAULT_PROJECT_CONFIG.canvas.incremental,
+    },
+    selfReview: {
+      maxCards: user.selfReview?.maxCards ?? DEFAULT_PROJECT_CONFIG.selfReview.maxCards,
+      linesPerCard: user.selfReview?.linesPerCard ?? DEFAULT_PROJECT_CONFIG.selfReview.linesPerCard,
     },
   }
   if (user.rulebook !== undefined) {

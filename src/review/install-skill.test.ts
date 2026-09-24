@@ -4,7 +4,14 @@ import path from 'node:path'
 import { makeTempDir } from '../testing/fakes.js'
 import { checkSkill } from './doctor.js'
 import { skillContent } from './skill-content.js'
-import { COPY_MARKER, installSkill, SKILL_SOURCE_DIR, SkillDirExistsError } from './install-skill.js'
+import {
+  BUNDLED_SKILLS,
+  COPY_MARKER,
+  installBundledSkills,
+  installSkill,
+  SKILL_SOURCE_DIR,
+  SkillDirExistsError,
+} from './install-skill.js'
 
 let dir: string
 beforeEach(async () => {
@@ -96,11 +103,19 @@ describe('installSkill', () => {
     ]
     await installSkill({ targets })
     expect((await lstat(path.join(shared, 'pr-review-canvas'))).isDirectory()).toBe(true)
+    // The companion skills go wherever the canvas skill is; without them the install is incomplete.
+    expect((await checkSkill(dir)).detail).toContain('pr-self-review')
+    await installBundledSkills({ targets })
+    for (const name of BUNDLED_SKILLS) {
+      expect((await lstat(path.join(shared, name))).isDirectory()).toBe(true)
+    }
     expect((await checkSkill(dir)).ok).toBe(true)
     await writeFile(path.join(shared, 'pr-review-canvas', 'SKILL.md'), 'old skill')
     expect((await checkSkill(dir)).ok).toBe(false)
     await installSkill({ targets })
     expect((await checkSkill(dir)).ok).toBe(true)
+    await writeFile(path.join(shared, 'pr-self-review', 'SKILL.md'), 'old skill')
+    expect((await checkSkill(dir)).detail).toContain(path.join('.claude/skills', 'pr-self-review'))
   })
 
   it('accepts another source directory', async () => {

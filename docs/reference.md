@@ -188,7 +188,9 @@ Relative custom paths resolve from the command's working directory. For example:
 pr-review install-skill --codex-dir ~/.codex/skills
 ```
 
-Installation copies the bundled skill on every platform. The copies and their `.pr-review-install`
+Installation copies the bundled skills on every platform: `pr-review-canvas`, plus the
+self-review deck's `pr-self-review` and `pr-self-review-fix`, into the same directories. `doctor`
+and `upgrade` treat a missing companion next to an installed `pr-review-canvas` as outdated. The copies and their `.pr-review-install`
 marker files can be committed to Git. Re-running the command refreshes managed copies and replaces
 legacy symlinks. An unmanaged directory requires `--force` to replace it.
 
@@ -628,6 +630,73 @@ using the two canvases and your clone:
 The canvas you marked is compared directly with the one on screen, so marks survive any number of
 regenerations in between. When a mark follows, the page names the canvas you made it on. If your
 machine lacks that canvas or cannot rebuild either diff, no marks follow.
+
+## Self-review deck
+
+The deck is a separate artifact from the canvas ([ADR 0004](adr/0004-self-review-deck-is-its-own-pass.md)).
+It exists only for the two local reviews, `branch` and `uncommitted`. The `/pr-self-review` skill
+runs these commands; `/pr-self-review-fix` reads the fix list afterwards.
+
+```text
+pr-review deck prepare (--branch | --uncommitted) [--base <ref>] [--force]
+pr-review deck validate (--branch | --uncommitted) [--human]
+pr-review deck publish (--branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]
+pr-review deck fixes (--branch | --uncommitted)
+```
+
+- `prepare` resolves the head the same way the local canvas does and writes `prompt.md` and
+  `context.json` to `.pr-review/repos/<owner>__<repo>/decks/<review>/work/`. The generator writes
+  `deck-model.json` there. When the published deck already stands for this head, prepare answers
+  `status: "exists"` unless `--force` is passed.
+- `validate` checks the model against the prepared diff. Each problem is one line:
+  `DECK_SCHEMA`, `TOO_MANY_CARDS`, `DUPLICATE_CARD`, `TEXT_TOO_LONG` (visible characters),
+  `SNIPPET_TOO_LONG` (more than 8 lines), `CARD_OUTSIDE_DIFF`, or `SIDES_ALIKE`.
+- `publish` validates again, refuses with `DECK_STALE` when the head moved (unless
+  `--allow-stale`), and stores `deck.json`. Exit code 5 with `DECK_INVALID` means the model failed.
+- `fixes` prints `{ review, path, exists }` for the fix list.
+
+### Cards and the cap
+
+Each card has a `key`, a `bucket` (`trade-off`, `intent`, `shape`, or `risk`), a `topic`, a
+`title`, a `context`, an anchor (`path`, `line`, optional `side`) inside one chunk of the diff, and
+sides `a` and `b`. Each side has a `label`, a `consequence`, an optional `snippet`, the `why` the
+author accepts by picking it, and `record`: `pr-comment`, `code`, or `none`. `current` names the
+side the code implements now, or is `null`.
+
+Visible-character caps: title 60, topic 40, context 240, label 48, consequence 200, why 140.
+
+A deck holds at most `ceil(changedLines / selfReview.linesPerCard)` cards, never more than
+`selfReview.maxCards` (defaults 100 and 10). Zero cards is valid. The prompt is
+`prompts/self-review-deck.md`, and `prompts: { self-review-deck.md: <path> }` replaces it.
+
+### Picks, the fix list, and the next deck
+
+The page saves each pick to `picks.json` next to `deck.json`. `skip` leaves a card for reviewers.
+`neither` needs a note. A pick asks for a fix when it names the side the code does not implement,
+or neither side. Clearing the deck writes `fixes.md`, with these sections: fixes, reasons to write
+into the code, justifications queued as pull request comments, and cards left for reviewers.
+
+Preparing the next deck of the same review carries every answered card as a **settled
+decision**. The prompt lists them, and the generator does not ask them again unless the code
+still contradicts the picked side; then it reuses the card's `key`, and the new card replaces the
+settled one. Skipped cards are not settled. Publishing a deck starts its picks afresh. The fix list
+covers only the current deck's cards.
+
+The `branch` review sees fixes once they are committed; the `uncommitted` review sees them at once.
+
+Not built yet: posting `pr-comment` justifications on the pull request when its canvas is
+published, and having PR canvas generation read settled decisions.
+
+### Deck page
+
+`/deck/branch` and `/deck/uncommitted` show one card at a time. Keys: `h` side A, `l` side B,
+`n` neither (with a note), `s` skip, `u` undo, `e` edit a justification, `r` change where it is
+recorded, `o` the code drawer, `?` help, `Esc` close. Dragging a card left or right past 140
+pixels picks that side. Arrow keys never pick. With reduced motion on, cards cross-fade.
+
+The API is `GET /api/deck/<review>`, `PUT` and `DELETE /api/deck/<review>/picks/<card>` (the
+`headSha` in the body or query must match the deck's, or the answer is `DECK_STALE`), and
+`POST /api/deck/<review>/finish?headSha=<sha>`, which writes the fix list.
 
 ## AI Chat
 

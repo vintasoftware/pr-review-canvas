@@ -4,7 +4,12 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type CliIo, splitCommonFlags } from './commands.js'
 import { findSkillCopies } from './review/doctor.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill } from './review/install-skill.js'
+import {
+  BUNDLED_SKILLS,
+  CLAUDE_SKILLS_DIR,
+  CODEX_SKILLS_DIR,
+  installBundledSkills,
+} from './review/install-skill.js'
 import { makeTempDir } from './testing/fakes.js'
 import { type CommandResult, isNewer, planUpgrade, runUpgrade, type UpgradeDeps } from './upgrade.js'
 
@@ -108,7 +113,7 @@ function capture(): { io: CliIo; out: string[]; err: string[] } {
 }
 
 async function installCopies(): Promise<void> {
-  await installSkill({
+  await installBundledSkills({
     targets: [
       { kind: 'claude', dir: path.join(repo, CLAUDE_SKILLS_DIR) },
       { kind: 'codex', dir: path.join(repo, CODEX_SKILLS_DIR) },
@@ -141,7 +146,9 @@ describe('planUpgrade', () => {
       { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1' },
       {
         kind: 'skill',
-        paths: [`${CLAUDE_SKILLS_DIR}/pr-review-canvas`, `${CODEX_SKILLS_DIR}/pr-review-canvas`],
+        paths: [CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR].flatMap(dir =>
+          BUNDLED_SKILLS.map(name => `${dir}/${name}`)
+        ),
       },
     ])
   })
@@ -299,15 +306,16 @@ describe('runUpgrade', () => {
     const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.13.2' } })
     const { io, out, err } = capture()
     expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
+    // The companion skills are the installer's own, so they are written beside the hand-made one.
     expect(JSON.parse(out[0] ?? '').steps).toEqual([
       {
         kind: 'skill',
-        paths: [],
+        paths: [`${CLAUDE_SKILLS_DIR}/pr-self-review`, `${CLAUDE_SKILLS_DIR}/pr-self-review-fix`],
         status: 'failed',
         detail: `not a managed copy, left alone: ${CLAUDE_SKILLS_DIR}/pr-review-canvas; run \`pr-review install-skill --force\` to replace it`,
       },
     ])
-    expect(err.some(line => line.startsWith('The project skill changed.'))).toBe(false)
+    expect(err.some(line => line.startsWith('The project skill changed.'))).toBe(true)
   })
 
   it('hands off without --repo outside a repository', async () => {
