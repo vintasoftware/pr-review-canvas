@@ -20,6 +20,10 @@ theme: auto
 # control on the page changes it for that page only.
 foldLevel: light
 
+# How a review shows its layers: all on one page, or one at a time with the rail to move between
+# them.
+layerView: all
+
 # Which agent answers in the AI Chat pane: claude or codex.
 agent: claude
 
@@ -126,6 +130,7 @@ export function applySettings(text: string, input: SettingsInput): { text: strin
   doc.set('skin', settings.skin)
   doc.set('theme', settings.theme)
   doc.set('foldLevel', settings.foldLevel)
+  doc.set('layerView', settings.layerView)
   doc.set('agent', settings.agent)
   doc.set('model', settings.model)
   doc.set('chatTimeoutSec', settings.chatTimeoutSec)
@@ -143,6 +148,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.foldLevel !== undefined) {
     out.foldLevel = input.foldLevel
+  }
+  if (input.layerView !== undefined) {
+    out.layerView = input.layerView
   }
   if (input.agent !== undefined) {
     out.agent = input.agent

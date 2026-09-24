@@ -4,6 +4,7 @@ import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js
 import type { SharedCanvasInfoSchema } from './discovery.js'
 import type { FileEntry, FoldLevel, Pr, ReviewArtifact } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
+import type { LayerView } from './settings.js'
 import type { PrState } from './state.js'
 
 export const ERROR_CODES = [
@@ -243,4 +244,6 @@ export interface ReviewBootstrap {
   host: PublicHost
   /** The reading level the canvas opens at, from the settings file. */
   foldLevel: FoldLevel
+  /** Whether the canvas shows every layer, or one at a time, from the settings file. */
+  layerView: LayerView
 }

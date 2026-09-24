@@ -150,12 +150,14 @@ every commit as a new head.
 
 ### User-local preferences
 
-Your appearance, reading level, and AI Chat preferences are saved in `.pr-review/settings.yml`
-in your local project directory. This file is ignored by Git, so each teammate can use their own
-settings.
+Your appearance, reading level, layer view, and AI Chat preferences are saved in
+`.pr-review/settings.yml` in your local project directory. This file is ignored by Git, so each
+teammate can use their own settings.
 
 Use **skin** and **theme** in the header to change the appearance, and **Hide code by default**
-in the settings dialog to choose how much code a review hides when it opens.
+in the settings dialog to choose how much code a review hides when it opens. Set **Show layers**
+to **one at a time** in the same dialog to read the overview or a single layer at once, moving
+between layers with the rail or the `j` and `k` keys.
 
 For AI Chat, open **settings**, choose Claude Code or Codex, and optionally enter a model ID.
 Leave the model blank to use the agent's default. A model ID runs as the newest model of its family

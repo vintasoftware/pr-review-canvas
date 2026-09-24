@@ -94,7 +94,7 @@ function jumpToLine(root, link) {
  * browser for a new tab or window.
  * @param {MouseEvent} event
  */
-function plainClick(event) {
+export function plainClick(event) {
   return (
     !event.defaultPrevented &&
     (event.button === undefined || event.button === 0) &&

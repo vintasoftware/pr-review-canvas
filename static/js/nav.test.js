@@ -172,8 +172,9 @@ describe('next/prev', () => {
     const topOf = (/** @type {import('./nav.js').NavItem} */ item) => tops[item.id] ?? null
     expect(readingItem(order, topOf, 16)?.id).toBe('file-src_new_name_ts')
     expect(readingItem(order, topOf, 0)?.id).toBe('file-src_app_ts')
-    // Before the first item reaches the top, and when nothing is drawn, the reader is on nothing.
-    expect(readingItem(order, topOf, -2000)).toBeNull()
+    // Before the first item reaches the top, the reader is on it; when nothing is drawn, on nothing.
+    expect(readingItem(order, topOf, -2000)?.id).toBe('overview')
+    expect(readingItem(order, id => (id.id === 'layer-other' ? 900 : null), 16)?.id).toBe('layer-other')
     expect(readingItem(order, () => null, 16)).toBeNull()
   })
 

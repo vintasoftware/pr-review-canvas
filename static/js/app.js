@@ -39,6 +39,7 @@ import {
   setRenderContext,
 } from './layers.js'
 import { renderOverview } from './overview.js'
+import { initOneLayer } from './one-layer.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
@@ -129,6 +130,13 @@ export class PrAppElement extends HTMLElement {
   deepLinks = null
   /** @type {{ stop: () => void } | null} */
   scrollSpy = null
+  /**
+   * Whether the canvas shows every layer or one at a time. Made once per boot, from the setting
+   * the page came with, and kept across renders: it redraws with each one, and a save in the
+   * settings dialog changes its view without a reload.
+   * @type {ReturnType<typeof initOneLayer> | null}
+   */
+  layerView = null
   /** @type {{ stop: () => void } | null} */
   interactions = null
   /** @type {ReturnType<typeof wireChat>} */
@@ -152,6 +160,8 @@ export class PrAppElement extends HTMLElement {
     this.deepLinks = null
     this.scrollSpy?.stop()
     this.scrollSpy = null
+    this.layerView?.stop()
+    this.layerView = null
     this.interactions?.stop()
     this.interactions = null
     this.stopChat()
@@ -176,6 +186,8 @@ export class PrAppElement extends HTMLElement {
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
+    this.layerView?.stop()
+    this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
       () => null
@@ -283,7 +295,10 @@ export class PrAppElement extends HTMLElement {
       })
       const interactions = wireReview(this, session, {
         chat: () => this.chat,
-        openSettings: el => void openSettingsDialog(this, el),
+        openSettings: el =>
+          void openSettingsDialog(this, el, {
+            onSaved: data => this.layerView?.setView(data.settings.layerView),
+          }),
       })
       this.interactions = interactions
       if (chatEnabled) {
@@ -318,6 +333,9 @@ export class PrAppElement extends HTMLElement {
     }
     // Mermaid is fetched only when this screen holds a diagram, and again on a theme flip.
     this.diagrams = initDiagrams(this)
+    // One layer at a time hides the rest before the URL is followed, so a link into a layer lands
+    // on a layer that is showing.
+    this.layerView?.redraw()
     // The cards are in the page now, so a link in the URL has something to land on.
     this.deepLinks = initDeepLinks(this)
     this.scrollSpy = initScrollSpy(this)

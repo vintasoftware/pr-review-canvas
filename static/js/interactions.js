@@ -49,6 +49,7 @@ import {
   updateRenderState,
 } from './layers.js'
 import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
+import { inHiddenSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
@@ -94,11 +95,13 @@ function drawnTop(el) {
 
 /**
  * False for an element inside a collapsed card or a closed details, which a key should not stop at.
+ * A layer the page is not showing does not count: the key shows it.
  * @param {Element} el
  */
 function isShown(el) {
   return (
-    el.closest('[hidden]') === null && (el.parentElement?.closest('details:not([open])') ?? null) === null
+    (el.closest('[hidden]') === null || inHiddenSection(el)) &&
+    (el.parentElement?.closest('details:not([open])') ?? null) === null
   )
 }
 
@@ -374,8 +377,8 @@ export function wireReview(root, session, opts = {}) {
       focusedEl = el
       el.classList.add('is-focused')
       el.style.scrollMarginTop = `${stickyTop() + FOCUS_GAP}px`
-      // Scrolls first, which opens a collapsed card or closed details around the element: a
-      // hidden element cannot take the focus.
+      // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around the
+      // element: a hidden element cannot take the focus.
       scrollIntoViewSafe(el, block)
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
@@ -403,7 +406,9 @@ export function wireReview(root, session, opts = {}) {
    * @returns {Element | null}
    */
   const here = order => {
-    const el = focused()
+    // Focus left in a layer the page stopped showing marks no place: the reader moved away from it.
+    const kept = focused()
+    const el = kept !== null && inHiddenSection(kept) ? null : kept
     const top = el === null ? null : drawnTop(el)
     // A focused element that is not drawn, such as a point just dismissed, still marks the place.
     if (el !== null && (top === null || (top > -FOCUS_GAP && top < window.innerHeight))) {

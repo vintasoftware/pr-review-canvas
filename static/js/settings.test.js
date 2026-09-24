@@ -17,6 +17,7 @@ const SETTINGS = {
     skin: 'terminal',
     theme: 'auto',
     foldLevel: 'light',
+    layerView: 'all',
     agent: 'claude',
     model: null,
     chatTimeoutSec: 600,
@@ -156,6 +157,12 @@ describe('settingsDialogHtml', () => {
     expect(html).toContain('--agent codex --model x')
   })
 
+  it('offers both layer views with the saved one selected', () => {
+    const html = settingsDialogHtml(SETTINGS, AGENTS)
+    expect(html).toContain('<option value="all" selected>all at once</option>')
+    expect(html).toContain('<option value="one">one at a time</option>')
+  })
+
   it('says that a missing acpx turns the pane off', () => {
     const html = settingsDialogHtml(SETTINGS, { acpx: { installed: false, version: null }, agents: [] })
     expect(html).toContain('acpx is not on PATH')
@@ -175,6 +182,7 @@ describe('readSettingsForm', () => {
     holder.innerHTML = settingsDialogHtml(SETTINGS, AGENTS)
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
+      layerView: 'all',
       agent: 'claude',
       model: null,
       chatTimeoutSec: 600,
@@ -191,6 +199,16 @@ describe('readSettingsForm', () => {
     }
     select.value = 'aggressive'
     expect(readSettingsForm(holder).foldLevel).toBe('aggressive')
+  })
+
+  it('reads the layer view the reader picked', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(
+      { ...SETTINGS, settings: { ...SETTINGS.settings, layerView: 'one' } },
+      AGENTS
+    )
+    expect(holder.querySelector('#set-layer-view option[selected]')?.textContent).toBe('one at a time')
+    expect(readSettingsForm(holder).layerView).toBe('one')
   })
 })
 
@@ -254,6 +272,7 @@ describe('openSettingsDialog', () => {
     await flush()
     expect(saved[0]).toEqual({
       foldLevel: 'light',
+      layerView: 'all',
       agent: 'codex',
       model: null,
       chatTimeoutSec: 600,
@@ -328,6 +347,7 @@ describe('the dialog with parts missing', () => {
     )
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
+      layerView: 'all',
       agent: 'claude',
       model: 'gpt-5.2',
       chatTimeoutSec: 120,

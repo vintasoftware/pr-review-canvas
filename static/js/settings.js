@@ -1,16 +1,28 @@
 // @ts-check
 // The settings dialog: the personal settings this browser can change, the reading level a review
-// opens at and the chat settings, and a read-only look at the project config, which is committed
-// and belongs to the repository.
+// opens at, how layers show, and the chat settings, and a read-only look at the project config,
+// which is committed and belongs to the repository.
 /** @typedef {import('./contract-types.js').AgentsResponse} AgentsResponse */
 /** @typedef {import('./contract-types.js').SettingsResponse} SettingsResponse */
 import { fetchAgents, fetchSettings, probeAgent, saveSettings } from './api.js'
 import { runCommand } from './commands.js'
 import { esc, qs } from './dom.js'
 import { isFoldLevel } from './fold-levels.js'
+import { isLayerView, LAYER_VIEW_LABELS, LAYER_VIEWS } from './layer-views.js'
 import { foldLevelOptionsHtml } from './reading-level.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
+
+/**
+ * The layer views as options, with one selected.
+ * @param {import('./layer-views.js').LayerView} view
+ * @returns {string}
+ */
+function layerViewOptionsHtml(view) {
+  return LAYER_VIEWS.map(
+    v => `<option value="${esc(v)}"${v === view ? ' selected' : ''}>${esc(LAYER_VIEW_LABELS[v])}</option>`
+  ).join('')
+}
 
 /**
  * Model ids the input suggests per agent. Free text is allowed; this is only a shortcut. The
@@ -83,6 +95,9 @@ export function settingsDialogHtml(data, agents) {
     '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
     `<select id="set-fold-level">${foldLevelOptionsHtml(settings.foldLevel)}</select></div>` +
     '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
+    '<div class="field"><label for="set-layer-view">Show layers</label>' +
+    `<select id="set-layer-view">${layerViewOptionsHtml(settings.layerView)}</select></div>` +
+    '<p class="muted small">One at a time shows the overview or a single layer. The rail and the <span class="mono">j</span> and <span class="mono">k</span> keys move between them.</p>' +
     (agents === null ? '' : chatFieldsHtml(settings, agents)) +
     `<p class="muted small mono">${esc(data.file)}</p>` +
     '<div class="panel-ro"><h3>Project config (read-only)</h3>' +
@@ -156,6 +171,7 @@ export async function openSettingsDialog(root, opener, opts = {}) {
 /** The values the dialog holds right now, as the PUT body. */
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const foldLevel = qs('#set-fold-level', dialog)
+  const layerView = qs('#set-layer-view', dialog)
   const agent = qs('#set-agent', dialog)
   const model = qs('#set-model', dialog)
   const timeout = qs('#set-timeout', dialog)
@@ -164,6 +180,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const input = {}
   if (foldLevel instanceof HTMLSelectElement && isFoldLevel(foldLevel.value)) {
     input.foldLevel = foldLevel.value
+  }
+  if (layerView instanceof HTMLSelectElement && isLayerView(layerView.value)) {
+    input.layerView = layerView.value
   }
   if (agent instanceof HTMLSelectElement && agent.value !== '') {
     input.agent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)

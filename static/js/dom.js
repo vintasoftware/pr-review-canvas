@@ -69,8 +69,10 @@ export function flash(el, ms = 2000) {
 }
 
 /**
- * scrollIntoView without throwing in environments that lack it. `start` suits a card, which can be
- * taller than the screen: centering one would hide its heading above the fold.
+ * scrollIntoView without throwing in environments that lack it. `reveal-code` goes up first, so
+ * whatever hides the target, a code fold around it or a layer the page is not showing, opens it
+ * before the scroll. `start` suits a card, which can be taller than the screen: centering one
+ * would hide its heading above the fold.
  * @param {Element} el
  * @param {ScrollLogicalPosition} [block]
  */

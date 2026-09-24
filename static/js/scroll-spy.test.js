@@ -68,6 +68,21 @@ describe('initScrollSpy', () => {
     expect(selected()).toEqual(['#overview'])
   })
 
+  it('never marks a hidden section, so one layer at a time marks the layer that shows', () => {
+    // Nothing reaches the upper third, so the first section that shows is the one marked.
+    for (const id of ['overview', 'layer-auth']) {
+      const hidden = document.getElementById(id)
+      if (hidden !== null) {
+        hidden.hidden = true
+      }
+    }
+    spy = initScrollSpy(document.body)
+    expect(selected()).toEqual(['#layer-storage'])
+    tops = { overview: 0, 'layer-auth': 0, 'layer-storage': -900, 'layer-other': 100 }
+    scroll()
+    expect(selected()).toEqual(['#layer-other'])
+  })
+
   it('reads the initial scroll position without changing the URL or focus', () => {
     tops = { overview: -1200, 'layer-auth': -640, 'layer-storage': 160, 'layer-other': 960 }
     const hash = window.location.hash
