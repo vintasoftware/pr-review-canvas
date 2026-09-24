@@ -19,6 +19,7 @@ import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import type { Derived } from '../store/derived-store.js'
 import { fileDelta, findBasisCanvas, splitBasis } from './incremental.js'
+import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
 
 export interface PrepareOptions {
@@ -165,11 +166,18 @@ async function resolveBasis(
     return null
   }
   const files = fileDelta(basis, head)
+  const lineCarried = await carriedPointLines(
+    artifact.points,
+    files,
+    { sha, derived: basis },
+    { sha: pr.headSha, derived: head },
+    (commit, side, filePath) => ctx.derived.readLines(commit, side, filePath, 1, Number.MAX_SAFE_INTEGER)
+  )
   return {
     canvasSha: sha,
     reviewJsonPath: path.join(ctx.canvases.canvasDir(sha), 'review.json'),
     files,
-    ...splitBasis(artifact, files),
+    ...splitBasis(artifact, files, lineCarried),
   }
 }
 

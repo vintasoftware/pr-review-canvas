@@ -1,7 +1,12 @@
 // Renders prompt.md from the selected generation template and the prepared context. The template carries
 // the prose; this module fills the `{{TOKENS}}` with data so a wording change never touches code.
 import { z } from 'zod'
-import { type BasisSplit, type GenerationContext, LARGE_PR } from '../contract/generation-context.js'
+import {
+  type BasisSplit,
+  type BasisSplitPoint,
+  type GenerationContext,
+  LARGE_PR,
+} from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
@@ -263,14 +268,22 @@ function carriedMarkdown(basis: BasisSplit | undefined): string {
   const files = basis.layers
     .filter(l => l.status === 're-judged')
     .flatMap(l => l.carriedFiles.map(p => `- \`${p}\`, from layer \`${l.key}\``))
-  const points = basis.points
-    .filter(p => p.status === 'carried')
-    .map(p => `- ${p.kind} on \`${p.path}\` — "${p.title}"`)
+  const points = basis.points.filter(p => p.status === 'carried').map(carriedPointLine)
   return [
     `**Whole layers** — copy the layer with its title, rationale, decisions, checkByHand, tests, files, notes, folds, and annotations:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
     `**Single files of a re-judged layer** — the file is untouched, so its note, folds, and annotations still fit wherever you put the file:\n\n${files.length === 0 ? '_none_' : files.join('\n')}`,
-    `**Attention points** — repeat the kind, path, and title exactly, so the point keeps its identity and any dismissal the reviewer made:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    `**Attention points** — repeat the kind, path, and title exactly, so the point keeps its identity and any dismissal the reviewer made. Where a line says the point's lines moved, anchor it on those lines; its code is unchanged, so the level and body still hold:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
   ].join('\n\n')
+}
+
+function carriedPointLine(point: BasisSplitPoint): string {
+  const line = `- ${point.kind} on \`${point.path}\` — "${point.title}"`
+  const at = point.headLines
+  if (at === undefined) {
+    return line
+  }
+  const lines = at.line === at.endLine ? `line ${at.line}` : `lines ${at.line}-${at.endLine}`
+  return `${line}; the file changed around it, and its lines moved to ${at.side}-side ${lines}`
 }
 
 function reJudgedMarkdown(basis: BasisSplit | undefined): string {

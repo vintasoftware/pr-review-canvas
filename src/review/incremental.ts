@@ -3,12 +3,13 @@
 // and content the generator has to decide anew. Everything here is a function of two diffs and one
 // stored canvas, so `prepare` states the split instead of asking the generator to work it out.
 import type {
+  BasisPointLines,
   BasisSplit,
   BasisSplitLayer,
   BasisSplitPoint,
   FileDelta,
 } from '../contract/generation-context.js'
-import type { ReviewArtifact } from '../contract/review-artifact.js'
+import type { Point, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Git } from '../git/git.js'
 import type { CanvasStore } from '../store/canvas-store.js'
 import type { Derived } from '../store/derived-store.js'
@@ -53,12 +54,15 @@ export function fileDelta(basis: Derived, head: Derived): FileDelta {
 /**
  * The basis canvas divided in two. A layer is carried whole when the head touches none of its
  * files; otherwise the layer is re-judged, and only the files the head leaves alone keep their
- * note, folds, and annotations. A point is carried when the file it sits in is untouched, which
- * keeps its title and so its fingerprint, and with it any dismissal the reviewer made.
+ * note, folds, and annotations. A point is carried when the file it sits in is untouched, or when
+ * `lineCarried` holds it: its file changed, but its own lines did not (see `carriedPointLines`).
+ * A carried point keeps its title and so its fingerprint, and with it any dismissal the reviewer
+ * made.
  */
 export function splitBasis(
   artifact: ReviewArtifact,
-  delta: FileDelta
+  delta: FileDelta,
+  lineCarried: ReadonlyMap<Point, BasisPointLines> = new Map()
 ): Omit<BasisSplit, 'canvasSha' | 'reviewJsonPath' | 'files'> {
   const unchanged = new Set(delta.unchanged)
   const layers: BasisSplitLayer[] = artifact.layers.map(layer => {
@@ -72,12 +76,16 @@ export function splitBasis(
       reJudgedFiles,
     }
   })
-  const points: BasisSplitPoint[] = artifact.points.map(point => ({
-    kind: point.kind,
-    path: point.path,
-    title: point.title,
-    status: unchanged.has(point.path) ? 'carried' : 're-judged',
-  }))
+  const points: BasisSplitPoint[] = artifact.points.map(point => {
+    const split: BasisSplitPoint = {
+      kind: point.kind,
+      path: point.path,
+      title: point.title,
+      status: unchanged.has(point.path) ? 'carried' : 're-judged',
+    }
+    const headLines = unchanged.has(point.path) ? undefined : lineCarried.get(point)
+    return headLines === undefined ? split : { ...split, status: 'carried', headLines }
+  })
   return { layers, points }
 }
 

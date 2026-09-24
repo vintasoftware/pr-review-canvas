@@ -599,8 +599,14 @@ byte-identical is untouched. The prompt tells the generator to copy, word for wo
 - whole layers whose files are all untouched;
 - in other layers, the notes, folds, annotations, and attention points of untouched files.
 
+An attention point in a changed file is carried too when its own lines are unchanged: the same
+text, shown by the head diff with the same `+`, `-`, or context marker as before, as one block that
+only moved up or down. `prepare` finds the block by a line-by-line match of the file's two versions
+on the point's side, and the prompt gives the lines the point now sits on.
+
 Everything else is decided again. The summary and risk tags are always rewritten. A carried
 attention point keeps its kind, path, and title, so it keeps its fingerprint and any dismissal.
+Review marks do not follow a point: they follow files and layers, by the rules below.
 
 The canvas records only which basis it came from. Your server decides which review marks follow,
 using the two canvases and your clone:

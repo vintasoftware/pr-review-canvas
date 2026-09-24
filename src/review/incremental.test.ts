@@ -9,6 +9,7 @@ import {
   syntheticArtifact,
 } from '../testing/synthetic.js'
 import { fileDelta, findBasisCanvas, splitBasis } from './incremental.js'
+import { matchLines, pointLinesInHead, type SideText } from './point-carry.js'
 import type { CanvasStore } from '../store/canvas-store.js'
 import type { CanvasIndex } from '../contract/canvas-manifest.js'
 
@@ -115,6 +116,163 @@ describe('splitBasis', () => {
     expect(elsewhere.every(p => p.status === 'carried')).toBe(true)
     // The title travels, so a carried point keeps its fingerprint and any dismissal with it.
     expect(split.points.map(p => p.title)).toEqual(syntheticArtifact().points.map(p => p.title))
+  })
+})
+
+describe('splitBasis with line-level carry', () => {
+  it('carries a point of a changed file at the lines it is given, and keeps its title', () => {
+    const artifact = syntheticArtifact()
+    const onApp = artifact.points.find(p => p.path === 'src/app.ts')
+    if (onApp === undefined) {
+      throw new Error('fixture changed')
+    }
+    const delta = fileDelta(derivedOf(SYNTHETIC_DIFF), derivedOf(TOUCHED_APP))
+    const headLines = { side: 'new', line: 9, endLine: 9 } as const
+    const split = splitBasis(artifact, delta, new Map([[onApp, headLines]]))
+    expect(split.points.find(p => p.title === onApp.title)).toEqual({
+      kind: onApp.kind,
+      path: 'src/app.ts',
+      title: onApp.title,
+      status: 'carried',
+      headLines,
+    })
+    // The layers still follow the file rule: the file changed, so its layer is re-judged.
+    expect(split.layers[0]?.status).toBe('re-judged')
+  })
+
+  it('leaves the file rule alone for an untouched file: carried, with no new lines', () => {
+    const same = derivedOf(SYNTHETIC_DIFF)
+    const artifact = syntheticArtifact()
+    const first = artifact.points[0]
+    if (first === undefined) {
+      throw new Error('fixture changed')
+    }
+    const split = splitBasis(
+      artifact,
+      fileDelta(same, same),
+      new Map([[first, { side: 'new', line: 1, endLine: 1 }]])
+    )
+    expect(split.points.every(p => p.status === 'carried' && p.headLines === undefined)).toBe(true)
+  })
+})
+
+// The merge base holds a..h. The basis canvas's commit rewrites f; later heads edit around it.
+const BASE = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+const BASIS: SideText = {
+  lines: ['a', 'b', 'c', 'd', 'e', 'F!', 'g', 'h'],
+  patch: ['@@ -5,3 +5,3 @@', ' e', '-f', '+F!', ' g'].join('\n'),
+}
+/** A line added at the top: everything below moves down by one. */
+const SHIFTED: SideText = {
+  lines: ['z', ...BASIS.lines],
+  patch: ['@@ -1 +1,2 @@', '+z', ' a', '@@ -5,3 +6,3 @@', ' e', '-f', '+F!', ' g'].join('\n'),
+}
+const old = (text: SideText): SideText => ({ lines: BASE, patch: text.patch })
+
+describe('pointLinesInHead', () => {
+  it('carries a point whose lines an edit above shifted, at its new lines', () => {
+    expect(pointLinesInHead({ side: 'new', line: 6 }, BASIS, SHIFTED)).toEqual({
+      side: 'new',
+      line: 7,
+      endLine: 7,
+    })
+    // A range over a context line and a changed line moves as one block.
+    expect(pointLinesInHead({ side: 'new', line: 5, endLine: 6 }, BASIS, SHIFTED)).toEqual({
+      side: 'new',
+      line: 6,
+      endLine: 7,
+    })
+  })
+
+  it('re-judges a point when one of its anchored lines was edited', () => {
+    const edited: SideText = {
+      lines: ['a', 'b', 'c', 'd', 'e', 'F?', 'g', 'h'],
+      patch: ['@@ -5,3 +5,3 @@', ' e', '-f', '+F?', ' g'].join('\n'),
+    }
+    expect(pointLinesInHead({ side: 'new', line: 6 }, BASIS, edited)).toBeNull()
+  })
+
+  it('re-judges a point when its anchored lines were deleted', () => {
+    const deleted: SideText = {
+      lines: ['A', 'b', 'c', 'd', 'e', 'g', 'h'],
+      patch: ['@@ -1,2 +1,2 @@', '-a', '+A', ' b', '@@ -5,3 +5,2 @@', ' e', '-f', ' g'].join('\n'),
+    }
+    expect(pointLinesInHead({ side: 'new', line: 6 }, BASIS, deleted)).toBeNull()
+  })
+
+  it('re-judges a range that a new line now splits, since it no longer moved as one block', () => {
+    const split: SideText = {
+      lines: ['a', 'b', 'c', 'd', 'e', 'new', 'F!', 'g', 'h'],
+      patch: ['@@ -5,3 +5,4 @@', ' e', '-f', '+new', '+F!', ' g'].join('\n'),
+    }
+    expect(pointLinesInHead({ side: 'new', line: 5, endLine: 7 }, BASIS, split)).toBeNull()
+  })
+
+  it('re-judges a point whose line is the same text but no longer a change in the diff', () => {
+    // The head keeps F! but the base now has it too: the row became context.
+    const merged: SideText = {
+      lines: ['z', ...BASIS.lines],
+      patch: ['@@ -1 +1,2 @@', '+z', ' a'].join('\n'),
+    }
+    expect(pointLinesInHead({ side: 'new', line: 6 }, BASIS, merged)).toBeNull()
+  })
+
+  it('carries an old-side point on a deleted line while it is still deleted', () => {
+    expect(pointLinesInHead({ side: 'old', line: 6 }, old(BASIS), old(SHIFTED))).toEqual({
+      side: 'old',
+      line: 6,
+      endLine: 6,
+    })
+    // The head puts f back, so the old line is context now, not the deletion the point was about.
+    const restored: SideText = {
+      lines: BASE,
+      patch: ['@@ -5,3 +5,4 @@', ' e', ' f', '+F!', ' g'].join('\n'),
+    }
+    expect(pointLinesInHead({ side: 'old', line: 6 }, old(BASIS), restored)).toBeNull()
+  })
+})
+
+describe('matchLines', () => {
+  it('matches the lines a shortest edit keeps, and only those', () => {
+    const matches = matchLines(['a', 'b', 'x', 'c', 'd'], ['a', 'y', 'b', 'c', 'q', 'd'])
+    expect([...(matches ?? new Map()).entries()].sort(([a], [b]) => a - b)).toEqual([
+      [1, 1],
+      [2, 3],
+      [4, 4],
+      [5, 6],
+    ])
+    expect(matchLines([], [])).toEqual(new Map())
+    expect(matchLines(['a'], [])).toEqual(new Map())
+  })
+
+  it('keeps as many lines as a longest common subsequence, in order, on equal text', () => {
+    let seed = 7
+    const next = (): number => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31
+      return seed
+    }
+    const text = (): string[] => Array.from({ length: next() % 30 }, () => 'abcd'.charAt(next() % 4))
+    const lcs = (a: string[], b: string[]): number => {
+      const row = Array.from({ length: b.length + 1 }, () => 0)
+      for (const x of a) {
+        let diagonal = 0
+        for (let j = 1; j <= b.length; j += 1) {
+          const above = row[j] ?? 0
+          row[j] = x === b[j - 1] ? diagonal + 1 : Math.max(above, row[j - 1] ?? 0)
+          diagonal = above
+        }
+      }
+      return row[b.length] ?? 0
+    }
+    for (let round = 0; round < 200; round += 1) {
+      const [a, b] = [text(), text()]
+      const pairs = [...(matchLines(a, b) ?? new Map<number, number>()).entries()].sort(([x], [y]) => x - y)
+      expect(pairs).toHaveLength(lcs(a, b))
+      pairs.forEach(([x, y], i) => {
+        expect(a[x - 1]).toBe(b[y - 1])
+        expect(i === 0 || y > (pairs[i - 1]?.[1] ?? 0)).toBe(true)
+      })
+    }
   })
 })
 
