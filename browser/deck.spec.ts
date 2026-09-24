@@ -162,3 +162,23 @@ test('drags a card right to pick side B', async ({ page, deckUrl }) => {
   const saved = await page.evaluate(async () => (await fetch('/api/deck/uncommitted')).json())
   expect(saved.picks.one.choice).toBe('b')
 })
+
+test('fits a phone: no sideways scroll, and every action has a button', async ({ page, deckUrl }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(deckUrl)
+  await expect(page.locator('.deck-card h2')).toHaveText('First')
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  )
+  expect(overflow).toBe(0)
+  await page.locator('[data-act="drawer"]').click()
+  await expect(page.locator('.deck-drawer')).toBeVisible()
+  await page.locator('.deck-drawer-close').click()
+  await expect(page.locator('.deck-drawer')).toBeHidden()
+  await page.locator('[data-pick="b"]').click()
+  await expect(page.locator('.deck-card h2')).toHaveText('Second')
+  await page.locator('.deck-links [data-act="undo"]').click()
+  await expect(page.locator('.deck-card h2')).toHaveText('First')
+  await page.locator('.deck-card-more [data-act="edit"]').click()
+  await expect(page.locator('[data-why="a"]')).toBeFocused()
+})

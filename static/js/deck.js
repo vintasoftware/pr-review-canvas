@@ -204,7 +204,7 @@ export async function bootDeck() {
 <a class="deck-brand" href="/"><img src="/static/brand.svg" width="22" height="22" alt="">Self-review</a>
 <span class="deck-target mono">${esc(deck.headRef)} → ${esc(deck.baseRef)}</span>
 <div class="deck-pips-slot"></div>
-<nav class="deck-links"><a class="cmd" href="/review/${esc(boot.review)}">canvas</a><button class="cmd" type="button" data-act="help"><kbd>?</kbd> keys</button></nav>
+<nav class="deck-links"><button class="cmd" type="button" data-act="undo"><kbd>u</kbd> undo</button><a class="cmd" href="/review/${esc(boot.review)}">canvas</a><button class="cmd" type="button" data-act="help"><kbd>?</kbd> keys</button></nav>
 </header>
 <div class="deck-stage"><div class="deck-table"></div>
 <aside class="deck-drawer" aria-label="The code this card is about" hidden></aside></div>
@@ -573,6 +573,8 @@ ${deckHelpHtml()}`
     else if (act === 'neither') openNote()
     else if (act === 'skip') void pick('skip')
     else if (act === 'help') help()
+    else if (act === 'undo') void undo()
+    else if (act === 'edit') openEditor('why')
     else if (act === 'escape') escape()
   })
 

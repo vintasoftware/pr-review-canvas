@@ -92,7 +92,7 @@ export function cardHtml(card, position) {
 <div class="deck-sides">${sideHtml(card, 'a')}<div class="deck-or" aria-hidden="true">or</div>${sideHtml(card, 'b')}</div>
 <footer class="deck-card-f">
 <button class="deck-anchor mono" type="button" data-act="drawer" aria-expanded="false"><kbd>o</kbd> ${esc(where)}</button>
-<span class="deck-card-more"><button class="cmd" type="button" data-act="neither"><kbd>n</kbd> neither</button><button class="cmd" type="button" data-act="skip"><kbd>s</kbd> skip</button></span>
+<span class="deck-card-more"><button class="cmd" type="button" data-act="edit"><kbd>e</kbd> edit why</button><button class="cmd" type="button" data-act="neither"><kbd>n</kbd> neither</button><button class="cmd" type="button" data-act="skip"><kbd>s</kbd> skip</button></span>
 </footer>
 <form class="deck-note" data-note hidden>
 <label for="deck-note-${esc(card.key)}">Neither side fits. What do you want instead?</label>
@@ -134,6 +134,9 @@ export function pipsHtml(cards, picks, topKey) {
   return `<ol class="deck-pips" aria-label="Progress">${pips.join('')}</ol>`
 }
 
+const closeHtml =
+  '<button class="cmd deck-drawer-close" type="button" data-act="escape"><kbd>Esc</kbd> close</button>'
+
 /**
  * The code a card is anchored to, as its chunk of the diff.
  * @param {DecisionCard} card
@@ -141,7 +144,7 @@ export function pipsHtml(cards, picks, topKey) {
  */
 export function drawerHtml(card, excerpt) {
   if (excerpt === undefined) {
-    return `<div class="deck-drawer-body"><p class="muted">The chunk for <code>${esc(card.path)}:${card.line}</code> is not in this clone's diff anymore.</p></div>`
+    return `<div class="deck-drawer-body"><p class="deck-drawer-h">${closeHtml}</p><p class="muted">The chunk for <code>${esc(card.path)}:${card.line}</code> is not in this clone's diff anymore.</p></div>`
   }
   const lang = excerpt.lang ?? langForPath(excerpt.path)
   let oldLine = excerpt.oldStart
@@ -157,7 +160,7 @@ export function drawerHtml(card, excerpt) {
       (anchorSide === 'new' && n === String(card.line)) || (anchorSide === 'old' && o === String(card.line))
     return `<tr class="deck-diff-${kind}${here ? ' deck-diff-here' : ''}"><td class="ln">${o}</td><td class="ln">${n}</td><td class="mk">${esc(mark)}</td><td class="deck-diff-src"><code>${highlight(code, lang) || ' '}</code></td></tr>`
   })
-  return `<div class="deck-drawer-body"><p class="deck-drawer-h mono">${esc(excerpt.path)} <span class="muted">${esc(excerpt.header)}</span></p>
+  return `<div class="deck-drawer-body"><p class="deck-drawer-h mono">${esc(excerpt.path)} <span class="muted">${esc(excerpt.header)}</span>${closeHtml}</p>
 <div class="deck-drawer-scroll"><table class="deck-diff deck-code"><tbody>${rows.join('')}</tbody></table></div></div>`
 }
 
