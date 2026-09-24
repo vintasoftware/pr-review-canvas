@@ -79,7 +79,9 @@ export function step(order, currentId, kind, direction, shown) {
 
 /**
  * The item the reader is on after scrolling: the last one whose top has reached `line`, the top
- * of the screen. `topOf` gives an item's top in viewport pixels, or null when it is not drawn.
+ * of the screen, or the first drawn one while none has. A short layer shown on its own cannot
+ * scroll up to the line, and it is still the one being read. `topOf` gives an item's top in
+ * viewport pixels, or null when it is not drawn.
  * @param {ReadonlyArray<NavItem>} order
  * @param {(item: NavItem) => number | null} topOf
  * @param {number} line
@@ -94,6 +96,7 @@ export function readingItem(order, topOf, line) {
       continue
     }
     if (top > line) {
+      found ??= item
       break
     }
     found = item

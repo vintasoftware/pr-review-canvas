@@ -33,6 +33,15 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await expect(overview).toBeHidden()
   await expect(other).toBeHidden()
 
+  // With nothing in focus, j starts from the layer on screen, though it is too short to scroll.
+  await page.keyboard.press('j')
+  await expect(other).toBeVisible()
+  // The URL still names the first layer; a refresh keeps the one the reader moved to.
+  await page.locator('#refresh').click()
+  await expect(page.locator('#refresh')).toBeEnabled()
+  await expect(other).toBeVisible()
+  await expect(layer).toBeHidden()
+
   // The keys move too: g o to the overview, j to the first layer, j again to Other.
   await page.keyboard.press('g')
   await page.keyboard.press('o')
@@ -49,6 +58,14 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await page.locator('nav.rail a[href="#overview"]').click()
   await expect(overview).toBeVisible()
   await page.keyboard.press('j')
+  await expect(layer).toBeVisible()
+  await expect(other).toBeHidden()
+
+  // And k, from a reload onto the last layer.
+  await page.locator('nav.rail a[href="#layer-other"]').click()
+  await page.reload()
+  await expect(other).toBeVisible()
+  await page.keyboard.press('k')
   await expect(layer).toBeVisible()
   await expect(other).toBeHidden()
 

@@ -148,11 +148,11 @@ describe('initOneLayer', () => {
     expect(shownIds()).toEqual(['layer-auth'])
   })
 
-  it('leaves a click the deep links took, and one on no link, alone', () => {
+  it('leaves a modified click, and one on no link, alone', () => {
     oneLayer = initOneLayer(root, { view: 'one' })
-    const taken = new MouseEvent('click', { bubbles: true, cancelable: true })
-    taken.preventDefault()
-    root.querySelector('#overview a[data-link]')?.dispatchEvent(taken)
+    root
+      .querySelector('nav.rail a[href="#layer-storage"]')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }))
     expect(shownIds()).toEqual(['overview'])
     click(root.querySelector('#settings'))
     expect(shownIds()).toEqual(['overview'])
@@ -173,6 +173,8 @@ describe('initOneLayer', () => {
 
   it('switches views on the open page, keeping the section the rail marks as being read', () => {
     oneLayer = initOneLayer(root, { view: 'one' })
+    // The URL still names where the reader was sent, not where they scrolled to since.
+    window.location.hash = '#overview'
     oneLayer.setView('all')
     expect(shownIds()).toHaveLength(4)
     root.querySelector('nav.rail a[aria-current]')?.removeAttribute('aria-current')
@@ -182,19 +184,23 @@ describe('initOneLayer', () => {
     // Setting the view it already has changes nothing.
     oneLayer.setView('one')
     expect(shownIds()).toEqual(['layer-storage'])
+    // With no section marked, the URL names one.
+    oneLayer.setView('all')
+    root.querySelector('nav.rail a[aria-current]')?.removeAttribute('aria-current')
+    oneLayer.setView('one')
+    expect(shownIds()).toEqual(['overview'])
   })
 
-  it('picks a section again after the page is redrawn', () => {
+  it('keeps the section on screen when the page is redrawn, whatever the URL says', () => {
+    window.location.hash = '#layer-storage'
     oneLayer = initOneLayer(root, { view: 'one' })
-    click(root.querySelector('nav.rail a[href="#layer-storage"]'))
+    expect(shownIds()).toEqual(['layer-storage'])
+    // A key moves on to another layer without writing the URL.
+    reveal(root.querySelector('#src_auth_ts-new-4'))
     root.innerHTML = PAGE
     expect(shownIds()).toHaveLength(4)
-    // The click left the layer in the URL, and the URL wins over the rail's mark.
     oneLayer.redraw()
-    expect(shownIds()).toEqual(['layer-storage'])
-    window.location.hash = ''
-    oneLayer.redraw()
-    expect(shownIds()).toEqual(['overview'])
+    expect(shownIds()).toEqual(['layer-auth'])
     // The listeners are on the element, so the new content is served by the same ones.
     reveal(root.querySelector('#src_auth_ts-new-4'))
     expect(shownIds()).toEqual(['layer-auth'])

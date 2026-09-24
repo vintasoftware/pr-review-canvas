@@ -49,7 +49,7 @@ import {
   updateRenderState,
 } from './layers.js'
 import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
-import { isPageSection } from './one-layer.js'
+import { inHiddenSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
 import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
@@ -99,20 +99,10 @@ function drawnTop(el) {
  * @param {Element} el
  */
 function isShown(el) {
-  const hidden = el.closest('[hidden]')
   return (
-    (hidden === null || isPageSection(hidden)) &&
+    (el.closest('[hidden]') === null || inHiddenSection(el)) &&
     (el.parentElement?.closest('details:not([open])') ?? null) === null
   )
-}
-
-/**
- * True for an element in a layer the page is not showing.
- * @param {Element} el
- */
-function inHiddenSection(el) {
-  const hidden = el.closest('[hidden]')
-  return hidden !== null && isPageSection(hidden)
 }
 
 /**

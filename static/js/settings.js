@@ -14,7 +14,6 @@ import { foldLevelOptionsHtml } from './reading-level.js'
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
 
 /**
-/**
  * The layer views as options, with one selected.
  * @param {import('./layer-views.js').LayerView} view
  * @returns {string}
