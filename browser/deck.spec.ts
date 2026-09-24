@@ -24,7 +24,9 @@ function card(key: string, title: string, current: 'a' | 'b' | null): DecisionCa
     a: {
       label: `${title}: A`,
       consequence: 'Old exports import cleanly.',
-      snippet: { code: "import { b } from './b'" },
+      snippet: {
+        code: "import { b } from './b'\nreturn { ...rest, version: 2, reviewed: {}, reviewedCanvasSha: undefined, carriedFrom: null }",
+      },
       why: 'Only old exports pad.',
       record: 'pr-comment',
     },
@@ -86,6 +88,11 @@ test('deals one card at a time, and a desktop page never scrolls', async ({ page
     )
     expect(overflow).toBe(0)
   }
+  // A long snippet line wraps: every character stays on the card, with no scroll box of its own.
+  const clipped = await page
+    .locator('.deck-side-a .deck-snippet')
+    .evaluate(el => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)
+  expect(clipped).toBe(false)
 })
 
 test('picks with a and b, takes a note with n, skips with s, undoes with u', async ({ page, deckUrl }) => {

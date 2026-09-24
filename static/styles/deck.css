@@ -334,9 +334,10 @@
   line-height: 1.45;
   background: var(--panel-2);
   border-left: 3px solid currentColor;
-  overflow: hidden;
-  white-space: pre;
-  max-height: calc(8 * 1.45em + 16px);
+  /* Long lines wrap rather than being cut off: a snippet is at most 8 lines, so every character
+     stays on the card without a scroll box of its own. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .deck-why {
   margin-top: auto;
@@ -793,9 +794,6 @@
   }
   .deck-side {
     padding: 12px;
-  }
-  .deck-snippet {
-    overflow-x: auto;
   }
   .deck-stamp {
     font-size: 30px;
