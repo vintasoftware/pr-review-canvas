@@ -4,7 +4,7 @@ import path from 'node:path'
 import { type CliIo, runDoctor } from '../commands.js'
 import { ORIGIN_HINT } from '../config.js'
 import type { Host } from '../host/host.js'
-import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
+import { createFakeGh, createFakeGit, createFakeTerminal, makeTempDir } from '../testing/fakes.js'
 import { type DoctorDeps, runDoctorChecks } from './doctor.js'
 import {
   BUNDLED_SKILLS,
@@ -89,6 +89,7 @@ describe('runDoctorChecks', () => {
     expect(report).toEqual({
       ok: true,
       version: '0.0.0-test',
+      cli: 'gh',
       checks: {
         git: { ok: true, detail: REPO },
         origin: { ok: true, detail: 'acme/widgets (GitHub)' },
@@ -184,6 +185,7 @@ describe('runDoctorChecks', () => {
       })
     )
     expect(asked.map(h => [h.kind, h.hostname])).toEqual([['gitlab', 'git.company.com']])
+    expect(report.cli).toBe('glab')
     expect(report.checks.origin).toEqual({ ok: true, detail: 'group/sub/app (GitLab)' })
     expect(report.checks.gh).toEqual({
       ok: false,
@@ -258,16 +260,17 @@ describe('runDoctorChecks', () => {
 describe('pr-review doctor', () => {
   const lines: string[] = []
   const io: CliIo = { stdout: l => lines.push(l), stderr: () => undefined }
+  const { output } = createFakeTerminal()
   beforeEach(() => {
     lines.length = 0
   })
 
   it('prints one JSON line and exits 0 when everything is in place', async () => {
     const dataDir = await makeTempDir()
-    const code = await runDoctor(deps({ dataDirOverride: dataDir }), [], io)
+    const code = await runDoctor(deps({ dataDirOverride: dataDir }), ['--json'], io, output)
     expect(code).toBe(0)
     expect(lines).toHaveLength(1)
-    expect(JSON.parse(lines[0] ?? '')).toMatchObject({ ok: true, version: '0.0.0-test' })
+    expect(JSON.parse(lines[0] ?? '')).toMatchObject({ ok: true, version: '0.0.0-test', cli: 'gh' })
   })
 
   it.each([
@@ -287,7 +290,7 @@ describe('pr-review doctor', () => {
       acpxVersion: vi.fn(async () => version),
     })
     const core = await runDoctorChecks(dependencies)
-    const code = await runDoctor(dependencies, ['--all-checks'], io)
+    const code = await runDoctor(dependencies, ['--all-checks', '--json'], io, output)
     expect(code).toBe(exit)
     expect(lines.map(line => JSON.parse(line))).toEqual([
       { ...core, ok: exit === 0, checks: { ...core.checks, acpx: check } },
@@ -303,7 +306,7 @@ describe('pr-review doctor', () => {
       },
     })
     const core = await runDoctorChecks(dependencies)
-    expect(await runDoctor(dependencies, ['--all-checks'], io)).toBe(1)
+    expect(await runDoctor(dependencies, ['--all-checks', '--json'], io, output)).toBe(1)
     expect(lines.map(line => JSON.parse(line))).toEqual([
       {
         ...core,
@@ -323,16 +326,16 @@ describe('pr-review doctor', () => {
   it('keeps core failures when acpx is installed', async () => {
     const dependencies = deps({ dataDirOverride: await makeTempDir(), readSkill: async () => null })
     const core = await runDoctorChecks(dependencies)
-    expect(await runDoctor(dependencies, ['--all-checks'], io)).toBe(1)
+    expect(await runDoctor(dependencies, ['--all-checks', '--json'], io, output)).toBe(1)
     expect(lines.map(line => JSON.parse(line))).toEqual([
       { ...core, ok: false, checks: { ...core.checks, acpx: { ok: true, detail: '0.13.2' } } },
     ])
   })
 
   it('exits 1 when a check fails, and refuses an unknown flag', async () => {
-    const code = await runDoctor(deps({ git: createFakeGit({ remotes: {} }) }), [], io)
+    const code = await runDoctor(deps({ git: createFakeGit({ remotes: {} }) }), ['--json'], io, output)
     expect(code).toBe(1)
     expect(JSON.parse(lines[0] ?? '')).toMatchObject({ ok: false })
-    await expect(runDoctor(deps(), ['--wat'], io)).rejects.toThrow(/wat/)
+    await expect(runDoctor(deps(), ['--wat'], io, output)).rejects.toThrow(/wat/)
   })
 })

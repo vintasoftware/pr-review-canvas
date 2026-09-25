@@ -31,12 +31,35 @@
   change rather than only ones touching authentication, access policy, or PHI.
   `/pr-self-review-fix` stays on Sonnet and deals its next deck through `/pr-self-review`.
 
+### CLI
+
+- `pr-review` and `pr-review --help` list each command in its own block, wrapped to the terminal,
+  so a flag no longer breaks in the middle of a word.
+- `pr-review doctor` prints a checklist, with `ok` or `failed` on each check, for a person or an
+  agent. `--json` prints the same report as one JSON line, now with a `cli` field naming `gh` or
+  `glab`.
+
 ### Review interface
 
 - A **Show layers** field in **settings**, saved as `layerView` in `.pr-review/settings.yml`. At
   `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
-  `k` step through the layers, and a link into a layer shows that layer. The default, `all`, keeps
-  the canvas as one page.
+  `k` step through the layers, and a link into a layer shows that layer. A review mark does not
+  move on to the next layer. The default, `all`, keeps the canvas as one page.
+- Collapse toggles draw a chevron icon in place of the `>` character.
+- Click a file's name to collapse or open its card.
+- The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
+  warning stays pinned to the top.
+- The bars above the overview span the full reading column, so they no longer stop short when AI
+  Chat is minimized.
+
+### Server
+
+- `serve` opens the canvas in the default browser once the port is bound. Pass `--no-open` to skip
+  this. The browser also stays closed when `CI` is set.
+
+### Breaking changes
+
+- `pr-review doctor` prints a checklist instead of a JSON line. Pass `--json` for the JSON line.
 
 ## 0.5.0
 

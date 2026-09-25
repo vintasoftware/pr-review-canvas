@@ -14,8 +14,13 @@ export function esc(value) {
     .replace(/'/g, '&#39;')
 }
 
+/** The chevron every collapse toggle draws. It points right; CSS turns it down while open. */
+export const CHEVRON_ICON =
+  '<svg class="chev-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
+  '<path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+
 /**
- * The `>` chevron before a card title is its collapse toggle. It points right while the card is
+ * The chevron before a card title is its collapse toggle. It points right while the card is
  * closed and turns down while it is open (CSS reads aria-expanded). The delegated click handler
  * in interactions.js reads `data-act` and toggles the card this button belongs to.
  * @param {string} label
@@ -24,7 +29,7 @@ export function esc(value) {
  */
 export function chevronHtml(label, expanded = true, opts = {}) {
   const act = opts.act === undefined ? '' : ` data-act="${esc(opts.act)}"`
-  return `<button class="chev" type="button"${act} aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${esc(label)}">&gt;</button>`
+  return `<button class="chev" type="button"${act} aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${esc(label)}">${CHEVRON_ICON}</button>`
 }
 
 /**
@@ -34,7 +39,7 @@ export function chevronHtml(label, expanded = true, opts = {}) {
  * @param {string} label the summary's accessible name
  */
 export function detailsSummaryHtml(titleHtml, label) {
-  return `<summary aria-label="${esc(label)}"><span class="chev" aria-hidden="true">&gt;</span>${titleHtml}</summary>`
+  return `<summary aria-label="${esc(label)}"><span class="chev" aria-hidden="true">${CHEVRON_ICON}</span>${titleHtml}</summary>`
 }
 
 /**

@@ -267,14 +267,16 @@ test('fits a scene that would overflow its frame, so all of it shows', async ({ 
     expect(Number(await tall.getAttribute('data-zoom'))).toBeGreaterThanOrEqual(0.55)
   }
   const last = page.frameLocator('iframe[data-scene="b"]').locator('.banner')
-  const frameBox = await tall.boundingBox()
-  const lastBox = await last.boundingBox()
-  expect(frameBox).not.toBeNull()
-  expect(lastBox).not.toBeNull()
-  // The last row sits inside the frame, not cut off below it.
-  expect((lastBox?.y ?? 0) + (lastBox?.height ?? 0)).toBeLessThanOrEqual(
-    (frameBox?.y ?? 0) + (frameBox?.height ?? 0) + 1
-  )
+  // The last row sits inside the frame, not cut off below it. The frame refits as its width
+  // settles, so this is measured until the layout does.
+  await expect
+    .poll(async () => {
+      const frameBox = await tall.boundingBox()
+      const lastBox = await last.boundingBox()
+      if (frameBox === null || lastBox === null) return Number.POSITIVE_INFINITY
+      return lastBox.y + lastBox.height - (frameBox.y + frameBox.height)
+    })
+    .toBeLessThanOrEqual(1)
   // A scene that fits is left at its size.
   await expect(page.locator('iframe[data-scene="a"]')).toHaveAttribute('data-zoom', '1')
 })

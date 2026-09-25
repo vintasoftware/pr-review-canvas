@@ -179,7 +179,8 @@ export function cardForReviewedId(root, id) {
 
 /**
  * Where the reader goes after marking something reviewed: the first layer or file that is still
- * open, after the one they just finished.
+ * open, after the one they just finished. One layer at a time, that card must be on screen: the
+ * reader leaves a layer by the rail or the keys, never by finishing it.
  * @param {ParentNode} root
  * @param {ReviewSession} session
  * @param {string} fromId the anchor id of the card that was just marked
@@ -195,7 +196,8 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     }
     const id = item.kind === 'file' ? reviewedId(item.layerKey, item.path) : reviewedId(item.layerKey)
     if (!session.isReviewed(id)) {
-      return root.querySelector(`#${cssEscape(item.id)}`)
+      const card = root.querySelector(`#${cssEscape(item.id)}`)
+      return card !== null && inHiddenSection(card) ? null : card
     }
   }
   return null
@@ -357,7 +359,7 @@ export function wireReview(root, session, opts = {}) {
 
   /** The height of the outdated-canvas bar, which sticks to the top of the screen over the cards. */
   const stickyTop = () => {
-    const bar = root.querySelector('.stale-bar')
+    const bar = root.querySelector('.outdated-bar')
     return bar === null ? 0 : bar.getBoundingClientRect().height
   }
 
@@ -866,6 +868,11 @@ export function wireReview(root, session, opts = {}) {
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
     'toggle-card': el => {
+      // A file's title toggles its card too, but not at the end of a drag that selected its text.
+      const picked = window.getSelection()
+      if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
+        return
+      }
       setCardCollapsed(el)
     },
     'mark-layer': el => {

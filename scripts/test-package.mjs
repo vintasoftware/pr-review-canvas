@@ -87,7 +87,7 @@ try {
   await once(probe, 'listening')
   const port = probe.address().port
   await new Promise((resolve, reject) => probe.close(error => (error ? reject(error) : resolve())))
-  server = spawn(cli, ['serve', '--port', String(port)], {
+  server = spawn(cli, ['serve', '--port', String(port), '--no-open'], {
     cwd: temp,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

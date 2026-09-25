@@ -15,6 +15,7 @@ import { setChatEnabled } from './ask.js'
 import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
+import { carriedOverBarHtml } from './empty-state.js'
 import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
 import {
   cardOf,
@@ -27,6 +28,7 @@ import {
   setCardCollapsed,
   setRenderContext,
 } from './layers.js'
+import { initOneLayer } from './one-layer.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
 
@@ -322,6 +324,27 @@ function click(root, selector) {
   return el
 }
 
+/**
+ * The synthetic canvas with a second semantic layer after Run path. It takes `src/new.ts` out of
+ * Other, so each chunk still has one layer, as publish checks.
+ */
+function withSecondLayer() {
+  const [runPath, other] = artifact.layers
+  if (runPath === undefined || other === undefined) {
+    throw new Error('fixture changed')
+  }
+  const moved = (/** @type {{ path: string }} */ f) => f.path === 'src/new.ts'
+  const second = {
+    ...runPath,
+    id: 'second',
+    key: 'second',
+    title: 'Second',
+    files: other.files.filter(moved),
+  }
+  const rest = { ...other, files: other.files.filter(f => !moved(f)) }
+  return { ...artifact, layers: [runPath, second, rest] }
+}
+
 /** @type {Array<{ stop: () => void }>} */
 const wirings = []
 
@@ -345,6 +368,28 @@ describe('card toggles', () => {
     expect(otherCard?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
     click(root, 'article.file#file-src_app_ts .file-h .chev')
     expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
+  })
+
+  it('toggles a file card from its name, but not when the click ends a selection in it', () => {
+    const { root } = setup()
+    const body = root.querySelector('article.file#file-src_app_ts > .file-body')
+    const title = root.querySelector('article.file#file-src_app_ts .file-h .path')
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(false)
+
+    const text = title?.firstChild
+    if (text === null || text === undefined) {
+      throw new Error('file title has no text')
+    }
+    window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    // A selection in the title does not stop the chevron.
+    click(root, 'article.file#file-src_app_ts .file-h .chev')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    window.getSelection()?.removeAllRanges()
   })
 
   it('collapses a layer section from its own chevron', () => {
@@ -466,6 +511,43 @@ describe('reviewed state', () => {
     expect(nextUnreviewedTarget(root, session, 'overview', 'layer')?.id).toBe('layer-run-path')
     // The Other layer is skipped, and there is nothing after the last semantic layer.
     expect(nextUnreviewedTarget(root, session, 'layer-run-path', 'layer')).toBeNull()
+  })
+
+  describe('the last open file of a layer', () => {
+    const lastOpen = {
+      ...BASE,
+      reviewed: {
+        'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
+        'layer:run-path/file:src_new_name_ts': /** @type {const} */ (true),
+      },
+    }
+    /** @param {HTMLElement} root */
+    const markLast = async root => {
+      const box = root.querySelector('#file-src_app_test_ts input[data-reviewed-id]')
+      if (!(box instanceof HTMLInputElement)) {
+        throw new Error('no checkbox')
+      }
+      box.checked = true
+      box.dispatchEvent(new Event('change', { bubbles: true }))
+      await flush()
+    }
+
+    it('moves on to the next layer when every layer shows', async () => {
+      const { root } = setup({ artifact: withSecondLayer(), state: lastOpen })
+      await markLast(root)
+      expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_ts')
+    })
+
+    it('stays in its layer when one layer shows at a time', async () => {
+      const { root, calls } = setup({ artifact: withSecondLayer(), state: lastOpen })
+      wirings.push(initOneLayer(root, { view: 'one' }))
+      click(root, 'nav.rail a[href="#layer-run-path"]')
+      await markLast(root)
+      expect(calls).toEqual([['reviewed', { id: 'layer:run-path/file:src_app_test_ts', reviewed: true }]])
+      expect(root.querySelector('.is-focused')).toBeNull()
+      expect(root.querySelector('#layer-run-path')?.hasAttribute('hidden')).toBe(false)
+      expect(root.querySelector('#layer-second')?.hasAttribute('hidden')).toBe(true)
+    })
   })
 
   it('unmarks a layer from the command under its files', async () => {
@@ -1189,7 +1271,9 @@ describe('keyboard', () => {
 
   it('steps from the card at the top of the screen once the focused one is scrolled away', () => {
     const { root } = setup()
-    root.querySelector('#main')?.insertAdjacentHTML('afterbegin', '<div class="stale-bar">outdated</div>')
+    root
+      .querySelector('#main')
+      ?.insertAdjacentHTML('afterbegin', '<div class="stale-bar outdated-bar">outdated</div>')
     /** Viewport tops by id, as if the reader had scrolled; everything else is not drawn. */
     /** @type {Record<string, number>} */
     let tops = {
@@ -1202,7 +1286,7 @@ describe('keyboard', () => {
     }
     /** @this {Element} */
     function fakeRect() {
-      const bar = this.classList.contains('stale-bar')
+      const bar = this.classList.contains('outdated-bar')
       const top = bar ? 0 : tops[this.id]
       return top === undefined ? new DOMRect() : new DOMRect(0, top, 100, bar ? 40 : 100)
     }
@@ -1225,6 +1309,39 @@ describe('keyboard', () => {
     }
   })
 
+  it('scrolls a card to the top of the screen under a note, which does not stick', () => {
+    const { root } = setup()
+    root
+      .querySelector('#main')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        carriedOverBarHtml({ canvasHeadSha: 'c'.repeat(40), currentHeadSha: 'a'.repeat(40) })
+      )
+    /** @type {Record<string, number>} */
+    const tops = {
+      overview: -1500,
+      'layer-run-path': -900,
+      'file-src_app_ts': 30,
+      'file-src_new_name_ts': 400,
+    }
+    /** @this {Element} */
+    function fakeRect() {
+      const bar = this.classList.contains('stale-bar')
+      const top = bar ? 0 : tops[this.id]
+      return top === undefined ? new DOMRect() : new DOMRect(0, top, 100, bar ? 40 : 100)
+    }
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(fakeRect)
+    try {
+      // The file 30px down is the next card: the note covers nothing, so it takes no room.
+      key('n')
+      const focused = root.querySelector('.is-focused')
+      expect(focused?.id).toBe('file-src_app_ts')
+      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('8px')
+    } finally {
+      rect.mockRestore()
+    }
+  })
+
   it('comments on the new side of a point that names no side, and o collapses its card', () => {
     const { root } = setup()
     key(']')
@@ -1241,21 +1358,7 @@ describe('keyboard', () => {
   })
 
   it('leaves the point alone once R moves the ring to the next layer', async () => {
-    const [runPath, other] = artifact.layers
-    if (runPath === undefined || other === undefined) {
-      throw new Error('fixture changed')
-    }
-    // A second layer takes a file out of Other, so each chunk still has one layer, as publish checks.
-    const moved = (/** @type {{ path: string }} */ f) => f.path === 'src/new.ts'
-    const second = {
-      ...runPath,
-      id: 'second',
-      key: 'second',
-      title: 'Second',
-      files: other.files.filter(moved),
-    }
-    const rest = { ...other, files: other.files.filter(f => !moved(f)) }
-    const { root, calls } = setup({ artifact: { ...artifact, layers: [runPath, second, rest] } })
+    const { root, calls } = setup({ artifact: withSecondLayer() })
     key(']')
     expect(root.querySelector('.is-focused')?.id).toBe('point-p-1')
     key('R')

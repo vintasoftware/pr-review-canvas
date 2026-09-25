@@ -92,8 +92,9 @@ Start the canvas server from the project you want to review:
 pr-review serve
 ```
 
-Open **http://localhost:3010**, enter a PR number (or follow a link to a local review), and
-leave the terminal running while you review. Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
+The server opens **http://localhost:3010** in your browser (pass `--no-open` to skip this). Enter a
+PR number (or follow a link to a local review), and leave the terminal running while you review.
+Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
 
 ## Install
 
@@ -136,7 +137,8 @@ project's `.gitignore`. Restart your coding agent if the skill does not appear. 
 
 `doctor` checks Git, your GitHub or GitLab remote, the matching CLI (`gh` or `glab`) and its login,
 write access to the local canvas directory, and whether installed skills match the current package.
-It prints a JSON report with a result for each check and suggested fixes for failures.
+It prints a checklist, with `ok` or `failed` on each check and a hint under each failure, so a
+person and an agent read the same report. `--json` prints that report as one JSON line.
 `doctor --all-checks` also checks that `acpx` runs and reports its version. Exit code `0` means all
 checks passed.
 

@@ -2,6 +2,7 @@
 // the stores; `io` carries stdout/stderr. cli.ts parses the command name and builds both.
 import { type FileHandle, open } from 'node:fs/promises'
 import path from 'node:path'
+import type { Writable } from 'node:stream'
 import { parseArgs } from 'node:util'
 import { exportCanvas } from './canvas/export.js'
 import { importCanvas } from './canvas/import.js'
@@ -16,6 +17,7 @@ import { checkDeckModel, DeckInvalidError, publishDeck, readDeckContext } from '
 import { formatDeckProblem } from './deck/validate-deck.js'
 import { fetchPrRefs } from './git/pr-refs.js'
 import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
+import { printDoctorReport } from './review/doctor-view.js'
 import {
   CLAUDE_SKILLS_DIR,
   CODEX_SKILLS_DIR,
@@ -456,13 +458,27 @@ export async function runDeck(ctx: AppContext, argv: string[], io: CliIo): Promi
 }
 
 /**
- * `doctor`: every check the tool needs, as one JSON line. Exit 1 when one fails, so a script can
- * read the code instead of the JSON.
+ * `doctor [--all-checks] [--json]`: every check the tool needs, as a checklist on `output` that a
+ * person or an agent can read. `--json` prints one JSON line on `io` instead. Exit 1 when a check
+ * fails, so a script can read the code instead of the report.
  */
-export async function runDoctor(deps: DoctorDeps, argv: string[], io: CliIo): Promise<number> {
-  const { values } = parseArgs({ args: argv, options: { 'all-checks': { type: 'boolean' } }, strict: true })
+export async function runDoctor(
+  deps: DoctorDeps,
+  argv: string[],
+  io: CliIo,
+  output: Writable
+): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    options: { 'all-checks': { type: 'boolean' }, json: { type: 'boolean' } },
+    strict: true,
+  })
   const report = await runDoctorChecks(deps, { allChecks: values['all-checks'] === true })
-  printJson(io, report)
+  if (values.json === true) {
+    printJson(io, report)
+  } else {
+    printDoctorReport(report, output)
+  }
   return report.ok ? EXIT.ok : EXIT.error
 }
 

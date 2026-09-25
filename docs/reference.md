@@ -20,6 +20,7 @@ For setup and the basic review workflow, see the [README](../README.md).
 | `--repo <dir>`                   | All commands                             | Uses the current directory when omitted; resolves the repository root from there                                 |
 | `--data-dir <dir>`               | All except `install-skill` and `upgrade` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
 | `--port <n>`                     | `serve`                                  | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
+| `--no-open`                      | `serve`                                  | Does not open the canvas in the default browser at startup; the browser also stays closed when `CI` is set       |
 | `--agent claude\|codex`          | `serve`                                  | Overrides the saved chat agent for this run                                                                      |
 | `--model <id>`                   | `serve`                                  | Overrides the saved chat model for this run                                                                      |
 | `--fixture-canvas <review.json>` | `serve`                                  | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
@@ -242,6 +243,12 @@ changes, stderr says to commit and push it.
 One-shot commands normally print a JSON result on stdout. Preparation progress goes to stderr.
 `validate --human` prints text, and a failed `publish` prints validation diagnostics before its
 JSON error. `serve` stays running and writes its startup message to stderr.
+
+`doctor` prints a checklist. Each check is `ok` or `failed`, and a failed check includes its
+hint, so a person and an agent read the same report. It wraps to a terminal; on a pipe each
+detail and hint stays on one line. `doctor --json` prints that report as one
+JSON line: `ok`, `version`, `cli` (`gh` or `glab`, the CLI the `gh` and `ghAuth` checks ran), and
+a `checks` object. The other commands stay one JSON line either way.
 
 Command failures use `{ "error": { "code", "message", "hint" } }`, with `hint` optional.
 Validation failures from `validate` use its report format instead.
@@ -502,7 +509,7 @@ By default the canvas is one page: the overview, then every layer in order. Set 
 to **one at a time** in the settings dialog to see the overview or a single layer at once. The rail
 moves between them and marks the one that shows, `j` and `k` step through the layers, and any
 link into a layer, from the overview, a diagram, another layer, or the AI Chat, shows that layer
-first. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
+first. Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
 
 ### Finding shared canvases

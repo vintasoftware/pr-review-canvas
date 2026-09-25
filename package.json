@@ -7,7 +7,7 @@
     "pr-review": "./bin/pr-review.mjs"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false --ignore '**/.pr-review/**' src/cli.ts serve",
+    "dev": "tsx watch --clear-screen=false --ignore '**/.pr-review/**' src/cli.ts serve --no-open",
     "start": "tsx src/cli.ts serve",
     "test": "vitest run",
     "hooks:install": "git config core.hooksPath \"$(git rev-parse --show-toplevel)/.githooks\"",
@@ -31,6 +31,7 @@
     "site:test": "playwright test --config site/playwright.config.js"
   },
   "dependencies": {
+    "@clack/prompts": "^1.8.1",
     "@highlightjs/cdn-assets": "^11.12.0",
     "@hono/node-server": "^2.1.0",
     "diff": "^9.0.0",

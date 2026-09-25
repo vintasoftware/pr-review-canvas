@@ -1,11 +1,12 @@
-// `pr-review doctor`: one pass over everything the tool needs before it can serve a review, as
-// one JSON line. It reports instead of throwing, so a broken setup still answers.
+// `pr-review doctor`: one pass over everything the tool needs before it can serve a review.
+// It reports instead of throwing, so a broken setup still answers. The CLI prints one checklist
+// a person or an agent can read. `--json` prints the same report as one JSON line.
 import { randomBytes } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ORIGIN_HINT } from '../config.js'
 import type { Git } from '../git/git.js'
-import { CLI_INFO, type HostClient } from '../host/client.js'
+import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
@@ -30,6 +31,8 @@ export interface DoctorCheck {
 export interface DoctorReport {
   ok: boolean
   version: string
+  /** The CLI the `gh` and `ghAuth` checks ran: `glab` for a GitLab origin, `gh` otherwise. */
+  cli: HostCli
   checks: Record<DoctorCheckName, DoctorCheck> & { acpx?: DoctorCheck }
 }
 
@@ -241,5 +244,10 @@ export async function runDoctorChecks(
   if (options.allChecks) {
     checks.acpx = await checkAcpx(deps)
   }
-  return { ok: Object.values(checks).every(check => check.ok), version: deps.version, checks }
+  return {
+    ok: Object.values(checks).every(check => check.ok),
+    version: deps.version,
+    cli: host.cli.cli,
+    checks,
+  }
 }

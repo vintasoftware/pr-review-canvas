@@ -78,9 +78,6 @@
   color: var(--fg-muted);
 }
 .stale-bar {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   margin: 0 0 16px;
   padding: 8px 12px;
   border: 1px solid var(--ink);
@@ -88,8 +85,13 @@
   box-shadow: 2px 2px 0 var(--shadow);
   font-size: 13px;
 }
-/* The same bar for a canvas that still applies: a note, not a warning. */
-.stale-bar.carried-over-bar {
+/* Only the warning sticks; a note scrolls away with the page. */
+.outdated-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+.carried-over-bar {
   background: var(--bg);
 }
 .notice {
