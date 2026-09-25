@@ -34,6 +34,9 @@ generation:
   maxRepairRounds: 3 # publish retries the skill may make after a failed validation
   inlineDiffMaxLines: 1500 # diffs longer than this are read per file instead of inlined in the prompt
   smallPrHunks: 10 # at most this many hunks: one layer unless concerns differ, fewer annotations
+  # models:                # the model each agent generates canvases with, keyed by agent id;
+  #   claude: opus         # an agent with no entry keeps the session's model
+  #   codex: gpt-6-sol
   # caps:                  # override the text caps (characters)
   #   summary: 1800
   #   rationale: 300

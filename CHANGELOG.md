@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Canvas generation
+
+- `generation.models` in `pr-review.config.yml` sets the model each agent generates canvases with,
+  keyed by agent id (`claude: opus`). `prepare` prints it as `models`. An agent with no entry keeps
+  the session's model; the skill no longer pins Sonnet.
+
 ### Review interface
 
 - A **Show layers** field in **settings**, saved as `layerView` in `.pr-review/settings.yml`. At

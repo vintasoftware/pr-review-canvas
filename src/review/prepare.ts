@@ -15,6 +15,7 @@ import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/l
 import { fetchPrRefs } from '../git/pr-refs.js'
 
 import { toPr } from '../host/pr.js'
+import type { GenerationModels } from '../project-config.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import type { Derived } from '../store/derived-store.js'
@@ -36,6 +37,8 @@ export interface PrepareResult {
   promptPath: string
   contextPath: string
   status: 'prepared' | 'exists'
+  /** The project's `generation.models`: which model each agent generates this canvas with. */
+  models: GenerationModels
   /** Local targets only: which review it is, the base resolved for it, and what its head holds. */
   local?: { review: LocalKey; base: string; headRef: string; uncommitted: boolean }
 }
@@ -210,6 +213,7 @@ export async function prepare(
     mergeBaseSha: pr.mergeBaseSha,
     promptPath,
     contextPath,
+    models: ctx.projectConfig.config.generation.models,
   }
   if (target.kind === 'local') {
     result.local = {

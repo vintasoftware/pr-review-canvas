@@ -1,6 +1,5 @@
 ---
 name: pr-review-canvas
-model: sonnet
 description: Generate a review canvas for a GitHub pull request or GitLab merge request, for the work in this clone before a pull request exists, or for two refs, with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` to validate and automatically share it as a compressed PR/MR comment. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas branch`, `/pr-review-canvas uncommitted`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR, for their branch, or for what they have not committed.
 ---
 
@@ -27,12 +26,18 @@ it), so you start a fresh `model.json`. Run every `pr-review` command from the r
 
 ### Model choice
 
-Use a mid-tier model, such as Sonnet, by default. If the prepared diff changes authentication,
-access policy, or protected health information (PHI) handling, use a more capable model, such as
-Opus, for the generation and validation steps when available. When delegating to another agent,
-pass it the prepared prompt and context paths; it writes the same model file. Honor an explicit
-user model choice. If the host cannot select models, keep its selected model.
-Record the model that actually generated the canvas when publishing.
+The project picks the default model. Prepare prints the project's `generation.models` as
+`models`, keyed by agent id (the `--agent` you publish with): `{ "claude": "opus" }`. Generate with
+the model under your own agent id. When `models` has no entry for your agent, keep the model you
+run on. If the prepared diff changes authentication, access policy, or protected health
+information (PHI) handling, use a more capable model, such as Opus, for the generation and
+validation steps when available, unless the project's model is already that capable. Honor an
+explicit user model choice over all of these.
+
+When the model to use is not the one you run on, delegate generation and validation to a subagent
+on that model: pass it the prepared prompt and context paths; it writes the same model file. If the
+host cannot select models, or does not offer the named one, keep its selected model and tell the
+user. Record the model that actually generated the canvas when publishing.
 
 ### 1. Prepare
 
@@ -74,6 +79,7 @@ Progress goes to stderr. The last stdout line is JSON:
     "mergeBaseSha": "...",
     "promptPath": "...",
     "contextPath": "...",
+    "models": { "claude": "opus" },
     "status": "prepared"
 }
 ```

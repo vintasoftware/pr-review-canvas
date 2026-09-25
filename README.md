@@ -176,6 +176,8 @@ whether AI Chat is enabled. The settings dialog displays this configuration; edi
 change it. See the [configuration reference](docs/reference.md#project-config).
 
 Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKILL.md#model-choice).
+Set `generation.models` to pick the model each agent generates with for this project, for example
+`claude: opus`. An agent with no entry keeps the model of the session that runs the skill.
 
 ### Project prompt templates
 
