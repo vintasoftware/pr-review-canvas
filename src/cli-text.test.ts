@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { Writable } from 'node:stream'
-import { contentWidth, streamColumns, visibleText, wrapParagraph } from './cli-text.js'
+import { contentWidth, streamColumns, wrapParagraph } from './cli-text.js'
 
 describe('wrapParagraph', () => {
   it('breaks on spaces and keeps a flag in one piece', () => {
@@ -31,11 +31,11 @@ describe('streamColumns', () => {
     return output
   }
 
-  it('reads a positive column count and falls back otherwise', () => {
+  it('reads a positive column count, and gives a pipe no limit', () => {
     expect(streamColumns(stream(100))).toBe(100)
-    expect(streamColumns(stream())).toBe(80)
-    expect(streamColumns(stream('wide'))).toBe(80)
-    expect(streamColumns(stream(0), 40)).toBe(40)
+    expect(streamColumns(stream())).toBe(Infinity)
+    expect(streamColumns(stream('wide'))).toBe(Infinity)
+    expect(streamColumns(stream(0))).toBe(Infinity)
   })
 })
 
@@ -43,12 +43,5 @@ describe('contentWidth', () => {
   it('reserves the guide and refuses a column too narrow for a flag', () => {
     expect(contentWidth(80)).toBe(77)
     expect(contentWidth(20)).toBe(40)
-  })
-})
-
-describe('visibleText', () => {
-  it('drops color codes and leaves the words', () => {
-    const colored = `${String.fromCharCode(0x1b)}[1mserve${String.fromCharCode(0x1b)}[22m`
-    expect(visibleText(colored)).toBe('serve')
   })
 })

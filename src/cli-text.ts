@@ -6,19 +6,15 @@ import type { Writable } from 'node:stream'
 /** `│  ` is one glyph and two spaces, which is what clack puts in front of a guided line. */
 export const CLACK_GUIDE = 3
 
-const ANSI_COLOR = new RegExp(`${String.fromCharCode(0x1b)}\\[[0-9;]*m`, 'g')
-
-/** Drops the color codes a terminal would not count, so a width is the columns a person sees. */
-export function visibleText(text: string): string {
-  return text.replaceAll(ANSI_COLOR, '')
-}
-
-/** Columns of a stream, or 80 when it is not a terminal and does not say. */
-export function streamColumns(stream: Writable, fallback = 80): number {
+/**
+ * Columns of a terminal. A pipe has none and gets `Infinity`, so each paragraph stays on one line
+ * for the agent or script reading it.
+ */
+export function streamColumns(stream: Writable): number {
   if ('columns' in stream && typeof stream.columns === 'number' && stream.columns > 0) {
     return stream.columns
   }
-  return fallback
+  return Infinity
 }
 
 /** How much text fits once the guide is on the line. Never so narrow that a flag cannot land. */

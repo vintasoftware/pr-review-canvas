@@ -7,7 +7,8 @@
 - `pr-review` and `pr-review --help` list each command in its own block, wrapped to the terminal,
   so a flag no longer breaks in the middle of a word.
 - `pr-review doctor` prints a checklist, with `ok` or `failed` on each check, for a person or an
-  agent. `--json` prints the same report as one JSON line.
+  agent. `--json` prints the same report as one JSON line, now with a `cli` field naming `gh` or
+  `glab`.
 
 ### Review interface
 
@@ -19,6 +20,10 @@
   warning stays pinned to the top.
 - The bars above the overview span the full reading column, so they no longer stop short when AI
   Chat is minimized.
+
+### Breaking changes
+
+- `pr-review doctor` prints a checklist instead of a JSON line. Pass `--json` for the JSON line.
 
 ## 0.5.0
 

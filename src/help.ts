@@ -3,7 +3,7 @@
 import type { Writable } from 'node:stream'
 import { styleText } from 'node:util'
 import { intro, log, outro } from '@clack/prompts'
-import { contentWidth, wrapParagraph } from './cli-text.js'
+import { contentWidth, streamColumns, wrapParagraph } from './cli-text.js'
 import { DEFAULT_PORT } from './config.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR } from './review/install-skill.js'
 
@@ -161,11 +161,11 @@ function renderOutput(width: number, output: Writable): string {
   return [styleText('bold', 'Output', { stream: output }), ...lines].join('\n')
 }
 
-/** Writes the help page to `output`. `columns` is the terminal width, guide included. */
-export function printUsage(output: Writable, columns = 80, version?: string): void {
-  const width = contentWidth(columns)
+/** Writes the help page to `output`, wrapped to its width. */
+export function printUsage(output: Writable, version: string): void {
+  const width = contentWidth(streamColumns(output))
   const guide = { output, withGuide: true } as const
-  intro(version === undefined ? 'pr-review' : `pr-review ${version}`, guide)
+  intro(`pr-review ${version}`, guide)
   log.message('pr-review <command> [flags]', { ...guide, spacing: 1 })
   log.message(renderBlock(SHARED, width, output), { ...guide, spacing: 1 })
   for (const command of COMMANDS) {

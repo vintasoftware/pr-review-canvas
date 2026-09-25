@@ -2,9 +2,8 @@
 // the stores; `io` carries stdout/stderr. cli.ts parses the command name and builds both.
 import { type FileHandle, open } from 'node:fs/promises'
 import path from 'node:path'
-import { Writable } from 'node:stream'
+import type { Writable } from 'node:stream'
 import { parseArgs } from 'node:util'
-import { streamColumns } from './cli-text.js'
 import { exportCanvas } from './canvas/export.js'
 import { importCanvas } from './canvas/import.js'
 import { CANVAS_ZIP_MAX_BYTES } from './canvas/zip.js'
@@ -358,37 +357,16 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
   return EXIT.ok
 }
 
-/** Where the doctor checklist is written. `--json` ignores it and prints the report instead. */
-export interface DoctorView {
-  output: Writable
-  columns?: number
-}
-
-/** A stream whose lines are the command's stdout, for a caller that does not pass its own. */
-function stdoutStream(io: CliIo): Writable {
-  let pending = ''
-  return new Writable({
-    write(chunk, _encoding, callback) {
-      pending += String(chunk)
-      const parts = pending.split('\n')
-      // split always yields at least one piece, so the tail is the unfinished line.
-      pending = parts.pop() as string
-      for (const line of parts) io.stdout(line)
-      callback()
-    },
-  })
-}
-
 /**
- * `doctor [--all-checks] [--json]`: every check the tool needs, as a checklist a person or an
- * agent can read. `--json` prints one JSON line instead. Exit 1 when a check fails, so a script
- * can read the code instead of the report.
+ * `doctor [--all-checks] [--json]`: every check the tool needs, as a checklist on `output` that a
+ * person or an agent can read. `--json` prints one JSON line on `io` instead. Exit 1 when a check
+ * fails, so a script can read the code instead of the report.
  */
 export async function runDoctor(
   deps: DoctorDeps,
   argv: string[],
   io: CliIo,
-  view?: DoctorView
+  output: Writable
 ): Promise<number> {
   const { values } = parseArgs({
     args: argv,
@@ -399,8 +377,7 @@ export async function runDoctor(
   if (values.json === true) {
     printJson(io, report)
   } else {
-    const output = view?.output ?? stdoutStream(io)
-    printDoctorReport(report, output, view?.columns ?? streamColumns(output))
+    printDoctorReport(report, output)
   }
   return report.ok ? EXIT.ok : EXIT.error
 }

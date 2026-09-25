@@ -4,7 +4,6 @@ import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { ACPX_BIN, createAgentRunner, findOnPath } from './acpx/acpx.js'
-import { streamColumns } from './cli-text.js'
 import {
   type CliIo,
   EXIT,
@@ -130,7 +129,7 @@ async function doctorCommand(argv: string[]): Promise<number> {
     },
     rest,
     io,
-    { output: process.stdout }
+    process.stdout
   )
 }
 
@@ -191,7 +190,7 @@ export async function main(argv: string[]): Promise<number> {
   // `pnpm review -- --port 3011` forwards the `--` itself; drop it so parseArgs sees the flags.
   const [command, ...rest] = argv.filter(a => a !== '--')
   if (command === undefined || command === '--help' || command === '-h') {
-    printUsage(process.stderr, streamColumns(process.stderr), readPackageVersion())
+    printUsage(process.stderr, readPackageVersion())
     return command === undefined ? EXIT.usage : EXIT.ok
   }
   if (!(SUBCOMMANDS as readonly string[]).includes(command)) {

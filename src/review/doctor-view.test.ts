@@ -1,27 +1,20 @@
 // @vitest-environment node
-import { Writable } from 'node:stream'
-import { visibleText } from '../cli-text.js'
 import { type CliIo, runDoctor } from '../commands.js'
-import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
+import { createFakeGh, createFakeGit, createFakeTerminal, makeTempDir } from '../testing/fakes.js'
 import type { DoctorDeps, DoctorReport } from './doctor.js'
 import { printDoctorReport } from './doctor-view.js'
 
-function linesOf(write: (output: Writable) => void): string[] {
-  let text = ''
-  const output = new Writable({
-    write(chunk, _encoding, callback) {
-      text += String(chunk)
-      callback()
-    },
-  })
-  write(output)
-  return visibleText(text).split('\n')
+function linesOf(doctorReport: DoctorReport, columns = 80): string[] {
+  const terminal = createFakeTerminal(columns)
+  printDoctorReport(doctorReport, terminal.output)
+  return terminal.text().split('\n')
 }
 
 function report(over: Partial<DoctorReport['checks']> = {}): DoctorReport {
   return {
     ok: true,
     version: '0.5.0',
+    cli: 'gh',
     checks: {
       git: { ok: true, detail: '/repo' },
       origin: { ok: true, detail: 'acme/widgets (GitHub)' },
@@ -36,7 +29,7 @@ function report(over: Partial<DoctorReport['checks']> = {}): DoctorReport {
 
 describe('printDoctorReport', () => {
   it('lists each check and closes when they pass', () => {
-    const lines = linesOf(output => printDoctorReport(report(), output, 80))
+    const lines = linesOf(report())
     const page = lines.join('\n')
     expect(page).toContain('pr-review doctor 0.5.0')
     expect(page).toContain('git')
@@ -49,10 +42,8 @@ describe('printDoctorReport', () => {
     expect(lines.every(line => line.length <= 80)).toBe(true)
   })
 
-  it('names glab when the origin is GitLab', () => {
-    const page = linesOf(output =>
-      printDoctorReport(report({ origin: { ok: true, detail: 'acme/widgets (GitLab)' } }), output, 80)
-    ).join('\n')
+  it('names glab when the report ran glab', () => {
+    const page = linesOf({ ...report(), cli: 'glab' }).join('\n')
     expect(page).toContain('glab login')
     expect(page).not.toContain('gh login')
   })
@@ -66,7 +57,7 @@ describe('printDoctorReport', () => {
       },
     })
     failed.ok = false
-    const lines = linesOf(output => printDoctorReport(failed, output, 60))
+    const lines = linesOf(failed, 60)
     const page = lines.join('\n')
     expect(page).toContain('failed')
     expect(page).toContain('1 check failed')
@@ -81,7 +72,7 @@ describe('printDoctorReport', () => {
       acpx: { ok: false, detail: 'acpx is missing or could not report its version' },
     })
     failed.ok = false
-    const page = linesOf(output => printDoctorReport(failed, output, 80)).join('\n')
+    const page = linesOf(failed).join('\n')
     expect(page).toContain('2 checks failed')
     expect(page).toContain('not logged in')
     expect(page).toContain('acpx is missing')
@@ -89,9 +80,9 @@ describe('printDoctorReport', () => {
 
   it('includes acpx only when the report has it', () => {
     const withAcpx = report({ acpx: { ok: true, detail: '0.13.2' } })
-    const page = linesOf(output => printDoctorReport(withAcpx, output, 80)).join('\n')
+    const page = linesOf(withAcpx).join('\n')
     expect(page).toContain('0.13.2')
-    expect(linesOf(output => printDoctorReport(report(), output, 80)).join('\n')).not.toContain('acpx')
+    expect(linesOf(report()).join('\n')).not.toContain('acpx')
   })
 })
 
@@ -109,25 +100,33 @@ describe('pr-review doctor presentation', () => {
     readSkill: async () => null,
   })
 
-  it('prints a checklist by default, for a person or an agent', async () => {
+  it('prints a checklist by default, one line per detail and hint on a pipe', async () => {
     const dataDir = await makeTempDir()
     const lines: string[] = []
     const io: CliIo = { stdout: line => lines.push(line), stderr: () => undefined }
-    const code = await runDoctor({ ...deps(), dataDirOverride: dataDir }, [], io)
-    const page = lines.join('\n')
+    const terminal = createFakeTerminal()
+    const code = await runDoctor({ ...deps(), dataDirOverride: dataDir }, [], io, terminal.output)
+    const page = terminal.text().split('\n')
     expect(code).toBe(1)
-    expect(page).toContain('ok')
-    expect(page).toContain('failed')
-    expect(page).toContain('pr-review install-skill')
-    expect(page).not.toContain('{"ok"')
+    expect(lines).toEqual([])
+    expect(page.some(line => line.includes('ok'))).toBe(true)
+    expect(
+      page.some(line =>
+        line.includes('failed  pr-review-canvas is in neither .claude/skills nor .agents/skills')
+      )
+    ).toBe(true)
+    expect(page.some(line => line.includes('run `pr-review install-skill`'))).toBe(true)
+    expect(page.join('\n')).not.toContain('{"ok"')
   })
 
   it('keeps the JSON line when --json is set', async () => {
     const dataDir = await makeTempDir()
     const lines: string[] = []
     const io: CliIo = { stdout: line => lines.push(line), stderr: () => undefined }
-    const code = await runDoctor({ ...deps(), dataDirOverride: dataDir }, ['--json'], io)
+    const terminal = createFakeTerminal()
+    const code = await runDoctor({ ...deps(), dataDirOverride: dataDir }, ['--json'], io, terminal.output)
     expect(code).toBe(1)
+    expect(terminal.text()).toBe('')
     expect(lines).toHaveLength(1)
     expect(JSON.parse(lines[0] ?? '')).toMatchObject({ ok: false, version: '0.0.0-test' })
   })

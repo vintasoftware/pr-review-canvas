@@ -6,7 +6,7 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ORIGIN_HINT } from '../config.js'
 import type { Git } from '../git/git.js'
-import { CLI_INFO, type HostClient } from '../host/client.js'
+import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
@@ -25,6 +25,8 @@ export interface DoctorCheck {
 export interface DoctorReport {
   ok: boolean
   version: string
+  /** The CLI the `gh` and `ghAuth` checks ran: `glab` for a GitLab origin, `gh` otherwise. */
+  cli: HostCli
   checks: Record<DoctorCheckName, DoctorCheck> & { acpx?: DoctorCheck }
 }
 
@@ -208,5 +210,10 @@ export async function runDoctorChecks(
   if (options.allChecks) {
     checks.acpx = await checkAcpx(deps)
   }
-  return { ok: Object.values(checks).every(check => check.ok), version: deps.version, checks }
+  return {
+    ok: Object.values(checks).every(check => check.ok),
+    version: deps.version,
+    cli: host.cli.cli,
+    checks,
+  }
 }
