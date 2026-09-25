@@ -868,12 +868,7 @@ export function wireReview(root, session, opts = {}) {
     'toggle-card': el => {
       // A file's title toggles its card too, but not at the end of a drag that selected its text.
       const picked = window.getSelection()
-      if (
-        el.tagName !== 'BUTTON' &&
-        picked !== null &&
-        !picked.isCollapsed &&
-        el.contains(picked.anchorNode)
-      ) {
+      if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
         return
       }
       setCardCollapsed(el)

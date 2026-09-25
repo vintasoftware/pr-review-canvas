@@ -364,7 +364,7 @@ describe('card toggles', () => {
     window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
     click(root, 'article.file#file-src_app_ts .file-h .path')
     expect(body?.hasAttribute('hidden')).toBe(false)
-    // The chevron is a button, so a selection never stops it.
+    // A selection in the title does not stop the chevron.
     click(root, 'article.file#file-src_app_ts .file-h .chev')
     expect(body?.hasAttribute('hidden')).toBe(true)
     window.getSelection()?.removeAllRanges()

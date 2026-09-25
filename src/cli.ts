@@ -82,6 +82,7 @@ async function buildContext(
     fixtureCanvas?: string | undefined
     agent?: string | undefined
     model?: string | undefined
+    noOpen?: boolean | undefined
   } = {}
 ): Promise<AppContext> {
   const cwd = process.cwd()
@@ -94,6 +95,7 @@ async function buildContext(
       fixtureCanvas: extra.fixtureCanvas,
       agent: extra.agent,
       model: extra.model,
+      noOpen: extra.noOpen,
     },
     process.env,
     git,
@@ -133,12 +135,11 @@ async function serve(argv: string[]): Promise<number> {
     fixtureCanvas: values['fixture-canvas'],
     agent: values.agent,
     model: values.model,
+    noOpen: values['no-open'],
   })
   const skill = await checkSkill(ctx.config.repoRoot)
   if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)
-  // CI has no browser to open.
-  const open = values['no-open'] !== true && process.env['CI'] === undefined
-  startServer(ctx, line => process.stderr.write(`${line}\n`), { open })
+  startServer(ctx, line => process.stderr.write(`${line}\n`))
   return EXIT.ok
 }
 
