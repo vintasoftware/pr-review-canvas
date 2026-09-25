@@ -9,13 +9,21 @@
   the session's model; the skill no longer pins Sonnet.
 - The settings dialog lists the project's canvas generation models under **Canvas generation** in
   the read-only project config, and shows the chat fields as **Chat agent** and **Chat model**
-  under an **AI Chat** heading. The header's generator pill reads `canvas by <agent> · <model> ·
-<harness>`.
+  under an **AI Chat** heading. The header's generator pill reads
+  `canvas by <agent> · <model> · <harness>`.
 
 ### AI Chat
 
 - The chat keys in `.pr-review/settings.yml` are now `chatAgent` and `chatModel`. A file with the
   old `agent` and `model` keys still reads the same, and the next save renames them in place.
+
+### CLI
+
+- `pr-review` and `pr-review --help` list each command in its own block, wrapped to the terminal,
+  so a flag no longer breaks in the middle of a word.
+- `pr-review doctor` prints a checklist, with `ok` or `failed` on each check, for a person or an
+  agent. `--json` prints the same report as one JSON line, now with a `cli` field naming `gh` or
+  `glab`.
 - `serve --chat-agent` and `--chat-model` replace `--agent` and `--model`, which still work and
   print a deprecation notice.
 
@@ -23,12 +31,16 @@
 
 - A **Show layers** field in **settings**, saved as `layerView` in `.pr-review/settings.yml`. At
   `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
-  `k` step through the layers, and a link into a layer shows that layer. The default, `all`, keeps
-  the canvas as one page.
+  `k` step through the layers, and a link into a layer shows that layer. A review mark does not
+  move on to the next layer. The default, `all`, keeps the canvas as one page.
 - The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
   warning stays pinned to the top.
 - The bars above the overview span the full reading column, so they no longer stop short when AI
   Chat is minimized.
+
+### Breaking changes
+
+- `pr-review doctor` prints a checklist instead of a JSON line. Pass `--json` for the JSON line.
 
 ## 0.5.0
 

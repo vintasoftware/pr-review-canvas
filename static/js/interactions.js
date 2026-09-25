@@ -179,7 +179,8 @@ export function cardForReviewedId(root, id) {
 
 /**
  * Where the reader goes after marking something reviewed: the first layer or file that is still
- * open, after the one they just finished.
+ * open, after the one they just finished. One layer at a time, that card must be on screen: the
+ * reader leaves a layer by the rail or the keys, never by finishing it.
  * @param {ParentNode} root
  * @param {ReviewSession} session
  * @param {string} fromId the anchor id of the card that was just marked
@@ -195,7 +196,8 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     }
     const id = item.kind === 'file' ? reviewedId(item.layerKey, item.path) : reviewedId(item.layerKey)
     if (!session.isReviewed(id)) {
-      return root.querySelector(`#${cssEscape(item.id)}`)
+      const card = root.querySelector(`#${cssEscape(item.id)}`)
+      return card !== null && inHiddenSection(card) ? null : card
     }
   }
   return null

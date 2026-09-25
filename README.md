@@ -90,7 +90,8 @@ project's `.gitignore`. Restart your coding agent if the skill does not appear. 
 
 `doctor` checks Git, your GitHub or GitLab remote, the matching CLI (`gh` or `glab`) and its login,
 write access to the local canvas directory, and whether installed skills match the current package.
-It prints a JSON report with a result for each check and suggested fixes for failures.
+It prints a checklist, with `ok` or `failed` on each check and a hint under each failure, so a
+person and an agent read the same report. `--json` prints that report as one JSON line.
 `doctor --all-checks` also checks that `acpx` runs and reports its version. Exit code `0` means all
 checks passed.
 
