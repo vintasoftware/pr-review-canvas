@@ -18,7 +18,7 @@ const PAGE = `
       <li><a href="#layer-other">Other</a></li>
     </ul></nav>
     <main id="main">
-      <div class="stale-bar">outdated</div>
+      <div class="stale-bar outdated-bar">outdated</div>
       <section class="panel" id="overview"><a href="#line:src/auth.ts:4" data-link="#line:src/auth.ts:4">line 4</a></section>
       <pr-layer><section class="layer" id="layer-auth"><article class="file" id="file-src_auth_ts"><table><tr id="src_auth_ts-new-4"><td>row</td></tr></table></article></section></pr-layer>
       <pr-layer><section class="layer" id="layer-storage"><div class="more-hunks"><a href="#layer-auth">2 more chunks in layer 1</a></div></section></pr-layer>

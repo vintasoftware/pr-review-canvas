@@ -10,6 +10,10 @@
   the canvas as one page.
 - Collapse toggles draw a chevron icon in place of the `>` character.
 - Click a file's name to collapse or open its card.
+- The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
+  warning stays pinned to the top.
+- The bars above the overview span the full reading column, so they no longer stop short when AI
+  Chat is minimized.
 
 ### Server
 
