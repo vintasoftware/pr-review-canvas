@@ -56,6 +56,7 @@ function settingsResponse(ctx: AppContext, settings: SettingsResponse['settings'
       maxRepairRounds: project.generation.maxRepairRounds,
       inlineDiffMaxLines: project.generation.inlineDiffMaxLines,
       smallPrHunks: project.generation.smallPrHunks,
+      generationModels: project.generation.models,
       keepForIdenticalDiff: project.canvas.keepForIdenticalDiff,
       layers: project.layers.length,
       highRisk: project.highRisk.length,

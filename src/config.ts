@@ -14,8 +14,8 @@ export interface ServeFlags {
   dataDir?: string | undefined
   fixtureCanvas?: string | undefined
   /** Wins over `.pr-review/settings.yml` for this run; the settings dialog reports it. */
-  agent?: string | undefined
-  model?: string | undefined
+  chatAgent?: string | undefined
+  chatModel?: string | undefined
 }
 
 export interface RuntimeConfig {
@@ -80,21 +80,21 @@ export async function resolveOrigin(git: Git, env: NodeJS.ProcessEnv = {}): Prom
   return parsed
 }
 
-/** `--agent` names one of the agents the chat knows; anything else is a usage error. */
+/** `--chat-agent` names one of the agents the chat knows; anything else is a usage error. */
 export function parseChatOverrides(flags: ServeFlags): SettingsOverrides {
   const overrides: SettingsOverrides = {}
-  if (flags.agent !== undefined) {
-    if (!isChatAgent(flags.agent)) {
+  if (flags.chatAgent !== undefined) {
+    if (!isChatAgent(flags.chatAgent)) {
       throw new ConfigError(
         'BAD_REQUEST',
-        `unknown chat agent: ${flags.agent}`,
-        'use --agent claude or --agent codex'
+        `unknown chat agent: ${flags.chatAgent}`,
+        'use --chat-agent claude or --chat-agent codex'
       )
     }
-    overrides.agent = flags.agent
+    overrides.chatAgent = flags.chatAgent
   }
-  if (flags.model !== undefined && flags.model !== '') {
-    overrides.model = flags.model
+  if (flags.chatModel !== undefined && flags.chatModel !== '') {
+    overrides.chatModel = flags.chatModel
   }
   return overrides
 }

@@ -1,7 +1,8 @@
 // @ts-check
 // The settings dialog: the personal settings this browser can change, the reading level a review
-// opens at, how layers show, and the chat settings, and a read-only look at the project config,
-// which is committed and belongs to the repository.
+// opens at, how layers show, and the AI Chat settings, and a read-only look at the project config,
+// which is committed and belongs to the repository. The chat agent and model are personal and run
+// AI Chat only; the canvas generation models come from the project config.
 /** @typedef {import('./contract-types.js').AgentsResponse} AgentsResponse */
 /** @typedef {import('./contract-types.js').SettingsResponse} SettingsResponse */
 import { fetchAgents, fetchSettings, probeAgent, saveSettings } from './api.js'
@@ -25,7 +26,7 @@ function layerViewOptionsHtml(view) {
 }
 
 /**
- * Model ids the input suggests per agent. Free text is allowed; this is only a shortcut. The
+ * Chat model ids the input suggests per chat agent. Free text is allowed; this is only a shortcut. The
  * server runs the newest model of whichever family is saved, so these do not go stale.
  */
 export const MODEL_SUGGESTIONS = {
@@ -40,7 +41,7 @@ export function modelOptionsHtml(agent) {
 }
 
 /**
- * The chat agent's fields, with the notice about acpx when it is missing.
+ * The AI Chat fields, with the notice about acpx when it is missing.
  * @param {SettingsResponse['settings']} settings
  * @param {AgentsResponse} agents
  * @returns {string}
@@ -49,24 +50,40 @@ function chatFieldsHtml(settings, agents) {
   const options = agents.agents
     .map(a => {
       const reason = a.available ? '' : ` (${a.reason ?? 'not available'})`
-      return `<option value="${esc(a.id)}"${a.id === settings.agent ? ' selected' : ''}${a.available ? '' : ' disabled'}>${esc(a.id)}${esc(reason)}</option>`
+      return `<option value="${esc(a.id)}"${a.id === settings.chatAgent ? ' selected' : ''}${a.available ? '' : ' disabled'}>${esc(a.id)}${esc(reason)}</option>`
     })
     .join('')
   return (
     (agents.acpx.installed
       ? ''
       : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
-    '<div class="field"><label for="set-agent">Agent</label>' +
-    `<select id="set-agent">${options}</select></div>` +
-    '<div class="field"><label for="set-model">Model</label>' +
-    `<input id="set-model" list="model-list" value="${esc(settings.model ?? '')}" placeholder="the agent's default">` +
-    `<datalist id="model-list">${modelOptionsHtml(settings.agent)}</datalist></div>` +
+    '<h3 id="settings-chat-h">AI Chat</h3>' +
+    '<p class="muted small">The agent and model that answer in the chat pane. They do not change which model generates canvases.</p>' +
+    '<div class="field"><label for="set-chat-agent">Chat agent</label>' +
+    `<select id="set-chat-agent">${options}</select></div>` +
+    '<div class="field"><label for="set-chat-model">Chat model</label>' +
+    `<input id="set-chat-model" list="chat-model-list" value="${esc(settings.chatModel ?? '')}" placeholder="the chat agent's default">` +
+    `<datalist id="chat-model-list">${modelOptionsHtml(settings.chatAgent)}</datalist></div>` +
     '<div class="field"><label for="set-timeout">Chat timeout (seconds)</label>' +
     `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
     '<div class="field"><label for="set-turns">Max turns</label>' +
     `<input id="set-turns" type="number" min="1" max="100" value="${esc(settings.maxTurns ?? '')}" placeholder="the agent's default"></div>` +
-    '<p class="muted small">Changing the agent starts a new chat thread; the old ones stay in the list.</p>'
+    '<p class="muted small">Changing the chat agent starts a new chat thread; the old ones stay in the list.</p>'
   )
+}
+
+/**
+ * The project's `generation.models`, one `agent → model` per entry. With none, the skill keeps the
+ * model of the session that runs it.
+ * @param {SettingsResponse['project']['generationModels']} models
+ * @returns {string}
+ */
+function generationModelsHtml(models) {
+  const entries = Object.entries(models)
+  if (entries.length === 0) {
+    return "none set (each agent keeps the session's model)"
+  }
+  return entries.map(([agent, model]) => `<span class="mono">${esc(agent)} → ${esc(model)}</span>`).join(', ')
 }
 
 /**
@@ -78,12 +95,12 @@ function chatFieldsHtml(settings, agents) {
 export function settingsDialogHtml(data, agents) {
   const { settings, overrides, project } = data
   const overrideNote =
-    overrides.agent === undefined && overrides.model === undefined
+    overrides.chatAgent === undefined && overrides.chatModel === undefined
       ? ''
-      : `<p class="notice" role="status">A serve flag wins over this file for now: ${esc(
+      : `<p class="notice" role="status">A serve flag overrides the AI Chat settings in this file for now: ${esc(
           [
-            overrides.agent === undefined ? '' : `--agent ${overrides.agent}`,
-            overrides.model === undefined ? '' : `--model ${overrides.model}`,
+            overrides.chatAgent === undefined ? '' : `--chat-agent ${overrides.chatAgent}`,
+            overrides.chatModel === undefined ? '' : `--chat-model ${overrides.chatModel}`,
           ]
             .filter(Boolean)
             .join(' ')
@@ -105,7 +122,9 @@ export function settingsDialogHtml(data, agents) {
     `<li>canvas kept for an identical diff: ${project.keepForIdenticalDiff ? 'yes' : 'no'}</li>` +
     `<li>rulebook: ${esc(project.rulebook ?? 'none')}</li>` +
     `<li>configured layer suggestions: ${project.layers}</li>` +
-    `<li>high-risk patterns: ${project.highRisk}</li>` +
+    `<li>high-risk patterns: ${project.highRisk}</li></ul>` +
+    '<h4>Canvas generation</h4>' +
+    `<ul class="plain"><li>canvas generation models: ${generationModelsHtml(project.generationModels)}</li>` +
     `<li>max repair rounds: ${project.maxRepairRounds}</li>` +
     `<li>inline diff max lines: ${project.inlineDiffMaxLines}</li>` +
     `<li>small change set: ${project.smallPrHunks} chunks</li></ul>` +
@@ -172,8 +191,8 @@ export async function openSettingsDialog(root, opener, opts = {}) {
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const foldLevel = qs('#set-fold-level', dialog)
   const layerView = qs('#set-layer-view', dialog)
-  const agent = qs('#set-agent', dialog)
-  const model = qs('#set-model', dialog)
+  const agent = qs('#set-chat-agent', dialog)
+  const model = qs('#set-chat-model', dialog)
   const timeout = qs('#set-timeout', dialog)
   const turns = qs('#set-turns', dialog)
   /** @type {import('./contract-types.js').SettingsInput} */
@@ -185,10 +204,10 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
     input.layerView = layerView.value
   }
   if (agent instanceof HTMLSelectElement && agent.value !== '') {
-    input.agent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)
+    input.chatAgent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)
   }
   if (model instanceof HTMLInputElement) {
-    input.model = model.value.trim() === '' ? null : model.value.trim()
+    input.chatModel = model.value.trim() === '' ? null : model.value.trim()
   }
   if (timeout instanceof HTMLInputElement && timeout.value !== '') {
     input.chatTimeoutSec = Number(timeout.value)
@@ -206,8 +225,8 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
  */
 export function wireSettingsDialog(dialog, api, onSaved) {
   dialog.addEventListener('change', event => {
-    if (event.target instanceof HTMLSelectElement && event.target.id === 'set-agent') {
-      const list = dialog.querySelector('#model-list')
+    if (event.target instanceof HTMLSelectElement && event.target.id === 'set-chat-agent') {
+      const list = dialog.querySelector('#chat-model-list')
       if (list !== null) {
         list.innerHTML = modelOptionsHtml(event.target.value)
       }

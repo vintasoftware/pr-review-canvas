@@ -140,6 +140,13 @@ dialog.settings .panel-ro {
 dialog.settings .panel-ro h3 {
   margin-bottom: 6px;
 }
+dialog.settings #settings-chat-h {
+  margin: 14px 0 4px;
+}
+dialog.settings .panel-ro h4 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
 dialog.settings .probe-result:empty {
   display: none;
 }

@@ -74,7 +74,7 @@ export function renderHeader(bundle, opts) {
   // A stale canvas can be exported and regenerated too, so both commands stay live for it.
   const hasCanvas = artifact !== undefined && (bundle.status === 'ready' || bundle.status === 'stale')
   const agent = ready
-    ? `<span class="pill agent">${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''} · ${esc(artifact.generator.harness)}</span><span>generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`
+    ? `<span class="pill agent" title="The agent, model, and harness that generated this canvas">canvas by ${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''} · ${esc(artifact.generator.harness)}</span><span>generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`
     : ''
   const number = pr.number === null ? '' : `<span class="mono num">#${pr.number}</span>`
   // Work that is not pushed has no page on the forge, and nothing to refresh from it either.
@@ -111,7 +111,7 @@ export function renderHeader(bundle, opts) {
     `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
     `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
     `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
-    '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI chat agent, model, and limits">settings</button>' +
+    '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +
     '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
     `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal and GitHub styling">${esc(skinLabel(opts.skin))}</button>` +
     `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +

@@ -46,7 +46,9 @@ const SUBCOMMANDS = [
 const USAGE = `usage: pr-review <command> [flags]
 
   serve [--port 3010] [--repo <dir>] [--data-dir <dir>] [--fixture-canvas <review.json>]
-        [--agent claude|codex] [--model <id>]   (chat only; wins over .pr-review/settings.yml)
+        [--chat-agent claude|codex] [--chat-model <id>]
+                   (AI Chat only, not canvas generation; wins over .pr-review/settings.yml.
+                    --agent and --model are deprecated aliases)
   prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
           [--base <ref>] [--repo <dir>] [--data-dir <dir>]
                    (--branch reviews the current branch against the default branch, and
@@ -56,6 +58,8 @@ const USAGE = `usage: pr-review <command> [flags]
   validate <model.json|review.json> --canvas <dir> [--human] [--fix] [--repo <dir>] [--data-dir <dir>]
                    (--fix trims over-cap titles in place and reports each one)
   publish <canvasDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
+                   (records which agent and model generated the canvas; generation.models in
+                    pr-review.config.yml picks the model)
   install-skill [--claude-dir .claude/skills] [--codex-dir .agents/skills] [--force] [--repo <dir>]
   export (--pr <n> | --head <ref|sha>) [--out <file|dir>] [--repo <dir>] [--data-dir <dir>]
                    (both flags: the named commit is exported and the number stamps the zip)
@@ -80,8 +84,8 @@ async function buildContext(
   extra: {
     port?: string | undefined
     fixtureCanvas?: string | undefined
-    agent?: string | undefined
-    model?: string | undefined
+    chatAgent?: string | undefined
+    chatModel?: string | undefined
   } = {}
 ): Promise<AppContext> {
   const cwd = process.cwd()
@@ -92,8 +96,8 @@ async function buildContext(
       port: extra.port === undefined ? undefined : parsePort(extra.port, 0),
       dataDir,
       fixtureCanvas: extra.fixtureCanvas,
-      agent: extra.agent,
-      model: extra.model,
+      chatAgent: extra.chatAgent,
+      chatModel: extra.chatModel,
     },
     process.env,
     git,
@@ -122,16 +126,22 @@ async function serve(argv: string[]): Promise<number> {
       repo: { type: 'string' },
       'data-dir': { type: 'string' },
       'fixture-canvas': { type: 'string' },
+      'chat-agent': { type: 'string' },
+      'chat-model': { type: 'string' },
+      // Deprecated spellings of --chat-agent and --chat-model.
       agent: { type: 'string' },
       model: { type: 'string' },
     },
     strict: true,
   })
+  if (values.agent !== undefined || values.model !== undefined) {
+    io.stderr('pr-review serve: --agent and --model are deprecated; use --chat-agent and --chat-model')
+  }
   const ctx = await buildContext(values.repo, values['data-dir'], {
     port: values.port,
     fixtureCanvas: values['fixture-canvas'],
-    agent: values.agent,
-    model: values.model,
+    chatAgent: values['chat-agent'] ?? values.agent,
+    chatModel: values['chat-model'] ?? values.model,
   })
   const skill = await checkSkill(ctx.config.repoRoot)
   if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)

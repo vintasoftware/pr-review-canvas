@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { GenerationModels } from '../project-config.js'
 import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 import { DEFAULT_SKIN, isSkin, SKINS, type Skin } from '../../static/js/skin.js'
@@ -32,8 +33,10 @@ export const SettingsSchema = z.object({
   foldLevel: z.enum(FOLD_LEVELS),
   /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
   layerView: z.enum(LAYER_VIEWS),
-  agent: z.enum(CHAT_AGENTS),
-  model: z.string().min(1).nullable(),
+  /** The agent that answers in AI Chat. Canvas generation does not read it. */
+  chatAgent: z.enum(CHAT_AGENTS),
+  /** The model AI Chat runs, or null for the agent's default. Canvas generation does not read it. */
+  chatModel: z.string().min(1).nullable(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC),
   maxTurns: z.number().int().positive().max(100).nullable(),
 })
@@ -45,8 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   foldLevel: DEFAULT_FOLD_LEVEL,
   layerView: DEFAULT_LAYER_VIEW,
-  agent: 'claude',
-  model: null,
+  chatAgent: 'claude',
+  chatModel: null,
   chatTimeoutSec: 600,
   maxTurns: null,
 }
@@ -57,8 +60,8 @@ export const SettingsInputSchema = z.object({
   theme: z.enum(THEMES).optional(),
   foldLevel: z.enum(FOLD_LEVELS).optional(),
   layerView: z.enum(LAYER_VIEWS).optional(),
-  agent: z.enum(CHAT_AGENTS).optional(),
-  model: z.string().max(200).nullable().optional(),
+  chatAgent: z.enum(CHAT_AGENTS).optional(),
+  chatModel: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),
   maxTurns: z.number().int().positive().max(100).nullable().optional(),
 })
@@ -99,10 +102,10 @@ export type AppearanceInput = z.infer<typeof AppearanceInputSchema>
 /** How the page is painted right now, as the server has it saved. */
 export type AppearanceResponse = Appearance
 
-/** A `serve --agent/--model` flag wins over the file, and the dialog says so. */
+/** A `serve --chat-agent/--chat-model` flag wins over the file, and the dialog says so. */
 export interface SettingsOverrides {
-  agent?: ChatAgent
-  model?: string
+  chatAgent?: ChatAgent
+  chatModel?: string
 }
 
 export interface SettingsResponse {
@@ -119,6 +122,8 @@ export interface SettingsResponse {
     maxRepairRounds: number
     inlineDiffMaxLines: number
     smallPrHunks: number
+    /** `generation.models`: the model each agent generates canvases with. AI Chat does not read it. */
+    generationModels: GenerationModels
     /** Whether a canvas still stands for a later head with an identical diff. */
     keepForIdenticalDiff: boolean
     layers: number

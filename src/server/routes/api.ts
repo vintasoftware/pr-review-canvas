@@ -158,7 +158,7 @@ export function apiRoutes(ctx: AppContext): Hono {
       chatEnabled ? ctx.agents.list() : Promise.resolve(null),
     ])
     const settings = chatEnabled ? await ctx.chat.effectiveSettings() : null
-    const active = settings === null ? null : (agents?.agents.find(a => a.id === settings.agent) ?? null)
+    const active = settings === null ? null : (agents?.agents.find(a => a.id === settings.chatAgent) ?? null)
     const body: HealthResponse = {
       ok: gitCheck.ok && ghStatus.installed && ghStatus.authenticated,
       version: ctx.version,
@@ -186,7 +186,7 @@ export function apiRoutes(ctx: AppContext): Hono {
       chat: {
         enabled: chatEnabled,
         acpx: acpx.installed,
-        ...(settings === null ? {} : { agent: settings.agent, model: settings.model }),
+        ...(settings === null ? {} : { agent: settings.chatAgent, model: settings.chatModel }),
       },
     }
     return c.json(body)

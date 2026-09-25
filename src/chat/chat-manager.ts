@@ -34,7 +34,7 @@ export interface ChatManagerDeps {
   transcripts: TranscriptStore
   repo: Repo
   repoRoot: string
-  /** `serve --agent/--model`, which win over the settings file. */
+  /** `serve --chat-agent/--chat-model`, which win over the settings file. */
   overrides: SettingsOverrides
   loadSeedTemplate: () => Promise<string>
   now: () => Date
@@ -87,15 +87,15 @@ async function modelForTurn(
   session: string,
   cwd: string
 ): Promise<string | undefined> {
-  const upgrades = await runner.modelUpgrades(settings.agent)
-  if (settings.model !== null) {
-    return latestModel(settings.agent, settings.model, upgrades)
+  const upgrades = await runner.modelUpgrades(settings.chatAgent)
+  if (settings.chatModel !== null) {
+    return latestModel(settings.chatAgent, settings.chatModel, upgrades)
   }
-  const current = await runner.sessionModel({ agent: settings.agent, session, cwd })
+  const current = await runner.sessionModel({ agent: settings.chatAgent, session, cwd })
   if (current === null) {
     return undefined
   }
-  const latest = latestModel(settings.agent, current, upgrades)
+  const latest = latestModel(settings.chatAgent, current, upgrades)
   return latest === current ? undefined : latest
 }
 
@@ -106,8 +106,8 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     const saved = await deps.settings.read()
     return {
       ...saved,
-      ...(deps.overrides.agent === undefined ? {} : { agent: deps.overrides.agent }),
-      ...(deps.overrides.model === undefined ? {} : { model: deps.overrides.model }),
+      ...(deps.overrides.chatAgent === undefined ? {} : { chatAgent: deps.overrides.chatAgent }),
+      ...(deps.overrides.chatModel === undefined ? {} : { chatModel: deps.overrides.chatModel }),
     }
   }
 
@@ -225,7 +225,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     slot: RunningTurn
   ): AsyncIterable<ChatEvent> {
     const settings = await effectiveSettings()
-    const thread = await resolveThread(target.key, settings.agent, input.thread)
+    const thread = await resolveThread(target.key, settings.chatAgent, input.thread)
     const seeded = thread.seededHeadSha !== target.headSha
     const at = deps.now().toISOString()
     const contextBlock = await renderChatContext(input.context, {
@@ -242,7 +242,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     // A thread that has never been seeded has no acpx session behind it either.
     if (thread.seededHeadSha === '') {
       await deps.runner.ensureSession({
-        agent: settings.agent,
+        agent: settings.chatAgent,
         session: thread.name,
         cwd: deps.repoRoot,
         timeoutSec: settings.chatTimeoutSec,
@@ -270,13 +270,13 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         // The seed never went anywhere, so the thread stays where it was.
         false
       )
-      yield { event: 'turn', thread: thread.name, agent: settings.agent, seeded }
+      yield { event: 'turn', thread: thread.name, agent: settings.chatAgent, seeded }
       yield { event: 'cancelled' }
       return
     }
 
     const run = deps.runner.run({
-      agent: settings.agent,
+      agent: settings.chatAgent,
       session: thread.name,
       prompt,
       cwd: deps.repoRoot,
@@ -298,7 +298,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     let incomplete: string | undefined
     let ended = false
     try {
-      yield { event: 'turn', thread: thread.name, agent: settings.agent, seeded }
+      yield { event: 'turn', thread: thread.name, agent: settings.chatAgent, seeded }
       for await (const event of run.events) {
         switch (event.type) {
           case 'chunk':
@@ -374,12 +374,12 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
           createdAt: t.createdAt,
         })),
         activeThread: state.chat.activeThread ?? null,
-        agent: settings.agent,
+        agent: settings.chatAgent,
       }
     },
     async createThread(key) {
       const settings = await effectiveSettings()
-      return newThread(key, settings.agent)
+      return newThread(key, settings.chatAgent)
     },
     async selectThread(key, name) {
       const state = await deps.state.read(key)
