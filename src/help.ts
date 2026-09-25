@@ -68,7 +68,7 @@ const COMMANDS: CommandHelp[] = [
       { form: '--allow-stale', detail: 'the prepared commit, after the head has moved' },
     ],
     notes: [
-      '--agent and --model record who generated the canvas. generation.models in pr-review.config.yml picks the model.',
+      '--agent and --model record who generated the canvas. generation.models in pr-review.config.yml sets the default generation model for the project.',
     ],
   },
   {
