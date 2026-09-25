@@ -2,8 +2,9 @@
 // One layer at a time. With `layerView: one` the page shows the overview or a single layer
 // section and hides the rest, so the rail is how the reader moves between layers and the page
 // scrolls through one layer only. Whatever brings something on screen (a rail link, the j/k and
-// n/p keys, a canvas link, a mark that moves on to the next card) shows the section that holds
-// it first, so nothing the reader is sent to stays hidden. With `all` this module does nothing.
+// n/p keys, a canvas link) shows the section that holds it first, so nothing the reader is sent
+// to stays hidden. A review mark is the exception: it moves on to the next card only inside the
+// layer on screen. With `all` this module does nothing.
 import { cssEscape } from './anchors.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
