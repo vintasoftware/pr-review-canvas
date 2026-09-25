@@ -33,18 +33,19 @@ export function contentWidth(columns: number): number {
 export function wrapParagraph(text: string, width: number): string[] {
   const trimmed = text.trim()
   if (trimmed === '') return []
-  const words = trimmed.match(/`[^`]*`|\S+/g) ?? []
+  // trim leaves a non-space character, so the pattern matches at least once.
+  const words = [...trimmed.matchAll(/`[^`]*`|\S+/g)].map(match => match[0])
+  let line = words[0] as string
   const lines: string[] = []
-  let line = ''
-  for (const word of words) {
-    const next = line === '' ? word : `${line} ${word}`
-    if (line !== '' && next.length > width) {
+  for (const word of words.slice(1)) {
+    const next = `${line} ${word}`
+    if (next.length > width) {
       lines.push(line)
       line = word
     } else {
       line = next
     }
   }
-  if (line !== '') lines.push(line)
+  lines.push(line)
   return lines
 }

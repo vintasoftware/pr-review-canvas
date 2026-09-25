@@ -371,7 +371,8 @@ function stdoutStream(io: CliIo): Writable {
     write(chunk, _encoding, callback) {
       pending += String(chunk)
       const parts = pending.split('\n')
-      pending = parts.pop() ?? ''
+      // split always yields at least one piece, so the tail is the unfinished line.
+      pending = parts.pop() as string
       for (const line of parts) io.stdout(line)
       callback()
     },

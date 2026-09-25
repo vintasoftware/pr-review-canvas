@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { contentWidth, visibleText, wrapParagraph } from './cli-text.js'
+import { Writable } from 'node:stream'
+import { contentWidth, streamColumns, visibleText, wrapParagraph } from './cli-text.js'
 
 describe('wrapParagraph', () => {
   it('breaks on spaces and keeps a flag in one piece', () => {
@@ -16,6 +17,25 @@ describe('wrapParagraph', () => {
 
   it('returns nothing for blank text', () => {
     expect(wrapParagraph('   ', 40)).toEqual([])
+  })
+})
+
+describe('streamColumns', () => {
+  function stream(columns?: unknown): Writable {
+    const output = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+    if (columns !== undefined) Object.defineProperty(output, 'columns', { value: columns })
+    return output
+  }
+
+  it('reads a positive column count and falls back otherwise', () => {
+    expect(streamColumns(stream(100))).toBe(100)
+    expect(streamColumns(stream())).toBe(80)
+    expect(streamColumns(stream('wide'))).toBe(80)
+    expect(streamColumns(stream(0), 40)).toBe(40)
   })
 })
 

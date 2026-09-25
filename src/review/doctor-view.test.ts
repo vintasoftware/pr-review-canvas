@@ -74,6 +74,19 @@ describe('printDoctorReport', () => {
     expect(lines.every(line => line.length <= 60)).toBe(true)
   })
 
+  it('counts several failures, including a blank detail and a failed acpx', () => {
+    const failed = report({
+      git: { ok: true, detail: '   ' },
+      ghAuth: { ok: false, detail: 'not logged in', hint: 'run `gh auth login`' },
+      acpx: { ok: false, detail: 'acpx is missing or could not report its version' },
+    })
+    failed.ok = false
+    const page = linesOf(output => printDoctorReport(failed, output, 80)).join('\n')
+    expect(page).toContain('2 checks failed')
+    expect(page).toContain('not logged in')
+    expect(page).toContain('acpx is missing')
+  })
+
   it('includes acpx only when the report has it', () => {
     const withAcpx = report({ acpx: { ok: true, detail: '0.13.2' } })
     const page = linesOf(output => printDoctorReport(withAcpx, output, 80)).join('\n')

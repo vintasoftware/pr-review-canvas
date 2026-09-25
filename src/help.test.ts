@@ -28,6 +28,20 @@ const WHOLE = [
 ]
 
 describe('pr-review --help', () => {
+  it('names the command without a version when none is passed', () => {
+    let text = ''
+    const output = new Writable({
+      write(chunk, _encoding, callback) {
+        text += String(chunk)
+        callback()
+      },
+    })
+    printUsage(output, 80)
+    const page = visibleText(text)
+    expect(page).toContain('pr-review')
+    expect(page).not.toContain('0.5.0')
+  })
+
   it.each([80, 48, 100])('keeps every flag whole at %i columns', columns => {
     const lines = render(columns)
     expect(lines.every(line => line.length <= columns)).toBe(true)
