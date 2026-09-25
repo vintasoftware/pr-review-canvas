@@ -241,6 +241,12 @@ One-shot commands normally print a JSON result on stdout. Preparation progress g
 `validate --human` prints text, and a failed `publish` prints validation diagnostics before its
 JSON error. `serve` stays running and writes its startup message to stderr.
 
+`doctor` prints a checklist. Each check is `ok` or `failed`, and a failed check includes its
+hint, so a person and an agent read the same report. It wraps to a terminal; on a pipe each
+detail and hint stays on one line. `doctor --json` prints that report as one
+JSON line: `ok`, `version`, `cli` (`gh` or `glab`, the CLI the `gh` and `ghAuth` checks ran), and
+a `checks` object. The other commands stay one JSON line either way.
+
 Command failures use `{ "error": { "code", "message", "hint" } }`, with `hint` optional.
 Validation failures from `validate` use its report format instead.
 
