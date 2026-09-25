@@ -183,7 +183,7 @@ export function staleSummary(stale, local) {
  */
 export function staleBarHtml(stale, local) {
   return (
-    `<div class="stale-bar" role="status"><strong>Canvas is outdated.</strong> You are reading an older commit. ${esc(staleSummary(stale, local))} ` +
+    `<div class="stale-bar outdated-bar" role="status"><strong>Canvas is outdated.</strong> You are reading an older commit. ${esc(staleSummary(stale, local))} ` +
     '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button></div>'
   )
 }

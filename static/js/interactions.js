@@ -359,7 +359,7 @@ export function wireReview(root, session, opts = {}) {
 
   /** The height of the outdated-canvas bar, which sticks to the top of the screen over the cards. */
   const stickyTop = () => {
-    const bar = root.querySelector('.stale-bar')
+    const bar = root.querySelector('.outdated-bar')
     return bar === null ? 0 : bar.getBoundingClientRect().height
   }
 

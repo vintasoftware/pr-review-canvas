@@ -96,13 +96,10 @@ main {
   min-width: 0;
   padding: var(--main-pad);
 }
-main > * {
+#empty-state {
   max-width: 1100px;
   margin-left: auto;
   margin-right: auto;
-}
-#overview {
-  max-width: none;
 }
 main.home {
   padding: var(--main-pad);
@@ -110,6 +107,8 @@ main.home {
 }
 main.home > * {
   max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .home-form {
   display: flex;
