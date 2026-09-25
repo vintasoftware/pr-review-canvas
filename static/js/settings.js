@@ -13,6 +13,10 @@ import { isLayerView, LAYER_VIEW_LABELS, LAYER_VIEWS } from './layer-views.js'
 import { foldLevelOptionsHtml } from './reading-level.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
+/** The AI Chat fields, named once so the markup, the form reader, and the probe agree. */
+const CHAT_AGENT_ID = 'set-chat-agent'
+const CHAT_MODEL_ID = 'set-chat-model'
+const CHAT_MODEL_LIST_ID = 'chat-model-list'
 
 /**
  * The layer views as options, with one selected.
@@ -59,11 +63,11 @@ function chatFieldsHtml(settings, agents) {
       : '<p class="notice" role="status">acpx is not on PATH, so AI Chat is off. Install acpx and reload.</p>') +
     '<h3 id="settings-chat-h">AI Chat</h3>' +
     '<p class="muted small">The agent and model that answer in the chat pane. They do not change which model generates canvases.</p>' +
-    '<div class="field"><label for="set-chat-agent">Chat agent</label>' +
-    `<select id="set-chat-agent">${options}</select></div>` +
-    '<div class="field"><label for="set-chat-model">Chat model</label>' +
-    `<input id="set-chat-model" list="chat-model-list" value="${esc(settings.chatModel ?? '')}" placeholder="the chat agent's default">` +
-    `<datalist id="chat-model-list">${modelOptionsHtml(settings.chatAgent)}</datalist></div>` +
+    `<div class="field"><label for="${CHAT_AGENT_ID}">Chat agent</label>` +
+    `<select id="${CHAT_AGENT_ID}">${options}</select></div>` +
+    `<div class="field"><label for="${CHAT_MODEL_ID}">Chat model</label>` +
+    `<input id="${CHAT_MODEL_ID}" list="${CHAT_MODEL_LIST_ID}" value="${esc(settings.chatModel ?? '')}" placeholder="the chat agent's default">` +
+    `<datalist id="${CHAT_MODEL_LIST_ID}">${modelOptionsHtml(settings.chatAgent)}</datalist></div>` +
     '<div class="field"><label for="set-timeout">Chat timeout (seconds)</label>' +
     `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
     '<div class="field"><label for="set-turns">Max turns</label>' +
@@ -97,14 +101,13 @@ export function settingsDialogHtml(data, agents) {
   const overrideNote =
     overrides.chatAgent === undefined && overrides.chatModel === undefined
       ? ''
-      : `<p class="notice" role="status">A serve flag overrides the AI Chat settings in this file for now: ${esc(
-          [
-            overrides.chatAgent === undefined ? '' : `--chat-agent ${overrides.chatAgent}`,
-            overrides.chatModel === undefined ? '' : `--chat-model ${overrides.chatModel}`,
-          ]
-            .filter(Boolean)
-            .join(' ')
-        )}</p>`
+      : `<p class="notice" role="status">A serve flag overrides the AI Chat settings in this file for now: ${[
+          overrides.chatAgent === undefined ? '' : `--chat-agent ${overrides.chatAgent}`,
+          overrides.chatModel === undefined ? '' : `--chat-model ${overrides.chatModel}`,
+        ]
+          .filter(Boolean)
+          .map(flag => `<code class="flag">${esc(flag)}</code>`)
+          .join(' ')}</p>`
   return (
     `<dialog id="${SETTINGS_DIALOG_ID}" class="settings" aria-labelledby="settings-h">` +
     '<h2 id="settings-h">Settings</h2>' +
@@ -191,8 +194,8 @@ export async function openSettingsDialog(root, opener, opts = {}) {
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const foldLevel = qs('#set-fold-level', dialog)
   const layerView = qs('#set-layer-view', dialog)
-  const agent = qs('#set-chat-agent', dialog)
-  const model = qs('#set-chat-model', dialog)
+  const agent = qs(`#${CHAT_AGENT_ID}`, dialog)
+  const model = qs(`#${CHAT_MODEL_ID}`, dialog)
   const timeout = qs('#set-timeout', dialog)
   const turns = qs('#set-turns', dialog)
   /** @type {import('./contract-types.js').SettingsInput} */
@@ -225,8 +228,8 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
  */
 export function wireSettingsDialog(dialog, api, onSaved) {
   dialog.addEventListener('change', event => {
-    if (event.target instanceof HTMLSelectElement && event.target.id === 'set-chat-agent') {
-      const list = dialog.querySelector('#chat-model-list')
+    if (event.target instanceof HTMLSelectElement && event.target.id === CHAT_AGENT_ID) {
+      const list = dialog.querySelector(`#${CHAT_MODEL_LIST_ID}`)
       if (list !== null) {
         list.innerHTML = modelOptionsHtml(event.target.value)
       }
@@ -255,7 +258,7 @@ export function wireSettingsDialog(dialog, api, onSaved) {
       return
     }
     if (act === 'settings-probe') {
-      const agent = qs('#set-agent', dialog)
+      const agent = qs(`#${CHAT_AGENT_ID}`, dialog)
       const id = agent instanceof HTMLSelectElement ? agent.value : ''
       void runCommand(
         el,

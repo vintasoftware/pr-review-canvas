@@ -69,7 +69,14 @@ async function open(api = {}, onSaved = () => undefined) {
       fetchSettings: async () => SETTINGS,
       fetchAgents: async () => AGENTS,
       saveSettings: async () => SETTINGS,
-      probeAgent: async () => ({ id: 'claude', ok: true, ms: 1250, reply: 'OK', at: '', cached: false }),
+      probeAgent: async id => ({
+        id: asChatAgent(id),
+        ok: true,
+        ms: 1250,
+        reply: 'OK',
+        at: '',
+        cached: false,
+      }),
       ...api,
     },
     onSaved,
@@ -88,6 +95,9 @@ function el(where, selector) {
   }
   return found
 }
+
+/** The id the dialog asked about, as the probe route would echo it. */
+const asChatAgent = (/** @type {string} */ id) => /** @type {import('./contract-types.js').ChatAgent} */ (id)
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -177,7 +187,7 @@ describe('settingsDialogHtml', () => {
       AGENTS
     )
     expect(html).toContain(
-      'overrides the AI Chat settings in this file for now: --chat-agent codex --chat-model x'
+      'overrides the AI Chat settings in this file for now: <code class="flag">--chat-agent codex</code> <code class="flag">--chat-model x</code>'
     )
   })
 
@@ -326,8 +336,8 @@ describe('openSettingsDialog', () => {
 
   it('reports a probe that failed', async () => {
     const dialog = await open({
-      probeAgent: async () => ({
-        id: 'codex',
+      probeAgent: async id => ({
+        id: asChatAgent(id),
         ok: false,
         ms: 10,
         reply: '',
@@ -337,6 +347,11 @@ describe('openSettingsDialog', () => {
         cached: false,
       }),
     })
+    const agent = el(dialog, '#set-chat-agent')
+    if (!(agent instanceof HTMLSelectElement)) {
+      throw new Error('no chat agent select')
+    }
+    agent.value = 'codex'
     el(dialog, '[data-act="settings-probe"]').click()
     await flush()
     expect(dialog.querySelector('.probe-result')?.textContent).toBe('codex failed: not logged in')

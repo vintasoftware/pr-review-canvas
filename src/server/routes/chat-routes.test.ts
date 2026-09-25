@@ -277,6 +277,19 @@ describe('the settings routes', () => {
     expect(res.status).toBe(400)
   })
 
+  it('refuses the old agent and model keys instead of saving nothing, and names the new ones', async () => {
+    const app = createApp(t.ctx)
+    const res = await app.request('/api/settings', {
+      method: 'PUT',
+      headers: POST,
+      body: JSON.stringify({ agent: 'codex' }),
+    })
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(await res.json())).toContain('chatAgent')
+    const again = await app.request('/api/settings', { headers: LOCAL })
+    expect((await json<SettingsResponse>(again)).settings.chatAgent).toBe('claude')
+  })
+
   it('lists the agents with whether each can run', async () => {
     const res = await createApp(t.ctx).request('/api/settings/agents', { headers: LOCAL })
     expect(await json<AgentsResponse>(res)).toEqual({

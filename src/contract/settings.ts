@@ -54,8 +54,11 @@ export const DEFAULT_SETTINGS: Settings = {
   maxTurns: null,
 }
 
-/** What `PUT /api/settings` accepts: every field optional, the rest stays as it was. */
-export const SettingsInputSchema = z.object({
+/**
+ * What `PUT /api/settings` accepts: every field optional, the rest stays as it was. Unknown keys
+ * are refused, so a body with the old `agent` or `model` fails instead of saving nothing.
+ */
+export const SettingsInputSchema = z.strictObject({
   skin: z.enum(SKINS).optional(),
   theme: z.enum(THEMES).optional(),
   foldLevel: z.enum(FOLD_LEVELS).optional(),
