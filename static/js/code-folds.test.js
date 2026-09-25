@@ -65,7 +65,7 @@ describe('applyCodeFolds', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
 
-    expect(toggle(card).textContent).toBe('>run() · 5 lines')
+    expect(toggle(card).textContent).toBe('run() · 5 lines')
     expect(toggle(card).querySelector('.chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(toggle(card).getAttribute('aria-expanded')).toBe('false')
     expect(Array.from(card.querySelectorAll('tr[hidden]'), row => row.id)).toEqual([

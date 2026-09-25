@@ -27,6 +27,7 @@ const COMMANDS: CommandHelp[] = [
     flags: [
       { form: '--port <n>', detail: `default ${DEFAULT_PORT}` },
       { form: '--fixture-canvas <review.json>', detail: 'preview this canvas for every pull request' },
+      { form: '--no-open', detail: 'leave the browser closed (also when CI is set)' },
       { form: '--agent claude|codex' },
       { form: '--model <id>' },
     ],

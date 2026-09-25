@@ -10,6 +10,7 @@ function render(columns: number): string[] {
 
 const WHOLE = [
   '--fixture-canvas <review.json>',
+  '--no-open',
   '--harness claude-code|codex|other',
   '--base <ref> --head <ref>',
   '--allow-stale',

@@ -46,8 +46,9 @@ Start the canvas server from the project you want to review:
 pr-review serve
 ```
 
-Open **http://localhost:3010**, enter a PR number (or follow a link to a local review), and
-leave the terminal running while you review. Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
+The server opens **http://localhost:3010** in your browser (pass `--no-open` to skip this). Enter a
+PR number (or follow a link to a local review), and leave the terminal running while you review.
+Stop the server with **Ctrl+C**. To use another port, run `pr-review serve --port 3011`.
 
 ## Install
 

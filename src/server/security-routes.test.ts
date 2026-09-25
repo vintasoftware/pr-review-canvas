@@ -304,18 +304,17 @@ async function sourceFiles(dir: string): Promise<string[]> {
 }
 
 /**
- * The acpx adapter streams a running turn, which execFile cannot do, so it uses `spawn`. Both
- * take an argument array and neither starts a shell, so the rule this scan enforces is "no
- * command line", not "one function".
- */
-const SPAWN_ALLOWED = 'src/acpx/acpx.ts'
-
-/**
  * What each file may import from `child_process`. Types are not runtime behaviour, so only the
  * value bindings are listed. Every other file gets `execFile` and nothing else.
+ *
+ * The acpx adapter streams a running turn, which execFile cannot do, so it uses `spawn`. The
+ * browser opener detaches its child, so a browser it starts outlives Ctrl-C on the server. Both
+ * take an argument array and neither starts a shell, so the rule this scan enforces is "no
+ * command line", not "one function". A file that may import `spawn` may call it.
  */
 const ALLOWED_IMPORTS: Readonly<Record<string, readonly string[]>> = {
   'src/acpx/acpx.ts': ['execFile', 'spawn'],
+  'src/server/open-browser.ts': ['spawn'],
 }
 const DEFAULT_ALLOWED_IMPORTS = ['execFile']
 
@@ -331,7 +330,7 @@ function valueBindings(statement: string): string[] {
 }
 
 describe('child processes', () => {
-  it('runs git, gh, and acpx through argument arrays, never through a shell', async () => {
+  it('runs child processes through argument arrays, never through a shell', async () => {
     const offenders: string[] = []
     for (const file of await sourceFiles(path.join(PACKAGE_ROOT, 'src'))) {
       const text = await readFile(file, 'utf8')
@@ -341,7 +340,7 @@ describe('child processes', () => {
       // so the import list below is the real check and these patterns catch the rest.
       const bads = [
         /(?<![.\w])execSync\s*\(/,
-        ...(rel === SPAWN_ALLOWED ? [] : [/(?<![.\w])spawn\s*\(/]),
+        ...(ALLOWED_IMPORTS[rel]?.includes('spawn') === true ? [] : [/(?<![.\w])spawn\s*\(/]),
         /(?<![.\w])spawnSync\s*\(/,
         /shell\s*:\s*true/,
         /require\(['"](?:node:)?child_process['"]\)/,
