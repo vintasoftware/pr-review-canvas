@@ -3,6 +3,8 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { Writable } from 'node:stream'
+import { stripVTControlCharacters } from 'node:util'
 import type { AgentRunner } from '../acpx/acpx.js'
 import type { RuntimeConfig } from '../config.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
@@ -400,4 +402,26 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     fixtureArtifact: opts.fixtureArtifact ?? null,
   }
   return { ctx, dataDir, cleanup: () => rm(dataDir, { recursive: true, force: true }) }
+}
+
+export interface FakeTerminal {
+  output: Writable
+  /** Everything written so far, without color codes: the text a person sees. */
+  text: () => string
+}
+
+/**
+ * A terminal `columns` wide, for the commands that wrap their text to the stream they write to.
+ * Without `columns` it is a pipe.
+ */
+export function createFakeTerminal(columns?: number): FakeTerminal {
+  let written = ''
+  const output = new Writable({
+    write(chunk, _encoding, callback) {
+      written += String(chunk)
+      callback()
+    },
+  })
+  if (columns !== undefined) Object.defineProperty(output, 'columns', { value: columns })
+  return { output, text: () => stripVTControlCharacters(written) }
 }
