@@ -2,7 +2,9 @@
 // the stores; `io` carries stdout/stderr. cli.ts parses the command name and builds both.
 import { type FileHandle, open } from 'node:fs/promises'
 import path from 'node:path'
+import { Writable } from 'node:stream'
 import { parseArgs } from 'node:util'
+import { streamColumns } from './cli-text.js'
 import { exportCanvas } from './canvas/export.js'
 import { importCanvas } from './canvas/import.js'
 import { CANVAS_ZIP_MAX_BYTES } from './canvas/zip.js'
@@ -13,6 +15,7 @@ import { HARNESSES, type ReviewArtifact, ReviewArtifactSchema } from './contract
 import { formatValidationError, type ValidationReport } from './contract/validation.js'
 import { fetchPrRefs } from './git/pr-refs.js'
 import { type DoctorDeps, runDoctorChecks } from './review/doctor.js'
+import { printDoctorReport } from './review/doctor-view.js'
 import {
   CLAUDE_SKILLS_DIR,
   CODEX_SKILLS_DIR,
@@ -355,14 +358,49 @@ export async function runPublish(ctx: AppContext, argv: string[], io: CliIo): Pr
   return EXIT.ok
 }
 
+/** Where the doctor checklist is written. `--json` ignores it and prints the report instead. */
+export interface DoctorView {
+  output: Writable
+  columns?: number
+}
+
+/** A stream whose lines are the command's stdout, for a caller that does not pass its own. */
+function stdoutStream(io: CliIo): Writable {
+  let pending = ''
+  return new Writable({
+    write(chunk, _encoding, callback) {
+      pending += String(chunk)
+      const parts = pending.split('\n')
+      pending = parts.pop() ?? ''
+      for (const line of parts) io.stdout(line)
+      callback()
+    },
+  })
+}
+
 /**
- * `doctor`: every check the tool needs, as one JSON line. Exit 1 when one fails, so a script can
- * read the code instead of the JSON.
+ * `doctor [--all-checks] [--json]`: every check the tool needs, as a checklist a person or an
+ * agent can read. `--json` prints one JSON line instead. Exit 1 when a check fails, so a script
+ * can read the code instead of the report.
  */
-export async function runDoctor(deps: DoctorDeps, argv: string[], io: CliIo): Promise<number> {
-  const { values } = parseArgs({ args: argv, options: { 'all-checks': { type: 'boolean' } }, strict: true })
+export async function runDoctor(
+  deps: DoctorDeps,
+  argv: string[],
+  io: CliIo,
+  view?: DoctorView
+): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    options: { 'all-checks': { type: 'boolean' }, json: { type: 'boolean' } },
+    strict: true,
+  })
   const report = await runDoctorChecks(deps, { allChecks: values['all-checks'] === true })
-  printJson(io, report)
+  if (values.json === true) {
+    printJson(io, report)
+  } else {
+    const output = view?.output ?? stdoutStream(io)
+    printDoctorReport(report, output, view?.columns ?? streamColumns(output))
+  }
   return report.ok ? EXIT.ok : EXIT.error
 }
 

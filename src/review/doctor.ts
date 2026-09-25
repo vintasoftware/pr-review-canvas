@@ -1,5 +1,6 @@
-// `pr-review doctor`: one pass over everything the tool needs before it can serve a review, as
-// one JSON line. It reports instead of throwing, so a broken setup still answers.
+// `pr-review doctor`: one pass over everything the tool needs before it can serve a review.
+// It reports instead of throwing, so a broken setup still answers. The CLI prints one checklist
+// a person or an agent can read. `--json` prints the same report as one JSON line.
 import { randomBytes } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
