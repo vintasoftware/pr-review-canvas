@@ -138,6 +138,22 @@ export function putDismissed(prNumber, fingerprint, dismissed, opts = {}) {
 }
 
 /**
+ * Settles an attention point for every reviewer, or reopens it. Only the author may.
+ * @param {ReviewKey} prNumber
+ * @param {string} fingerprint
+ * @param {import('./contract-types.js').SettleInput} input
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').SettleResponse>}
+ */
+export function putSettled(prNumber, fingerprint, input, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/points/${encodeURIComponent(fingerprint)}/settled`, {
+    method: 'PUT',
+    body: input,
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
  * @param {ReviewKey} prNumber
  * @param {number} rootCommentId
  * @param {boolean} hidden

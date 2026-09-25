@@ -194,6 +194,7 @@ describe('carrying attention points by their lines against a real repository', (
     origin: 'model',
     kind: 'risk',
     level: 'check',
+    audience: 'reviewer',
     title,
     path: 'src/app.ts',
     side,

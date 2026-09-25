@@ -31,6 +31,7 @@ import {
 import { initOneLayer } from './one-layer.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
+import { setSelfReview } from './self-review.js'
 
 const NOW = new Date('2026-09-10T12:00:00.000Z')
 const artifact = syntheticArtifact()
@@ -39,6 +40,13 @@ const patches = toPatchMap(SYNTHETIC_FILES)
 const comments = GH_REVIEW_COMMENTS.map(c => mapReviewComment(c, new Set([1001, 1002])))
 const issueComments = GH_ISSUE_COMMENTS.map(mapIssueComment)
 const BASE = emptyState(NOW.toISOString())
+/** The synthetic canvas with its drawn point, fp-1, marked for the author, who may settle it. */
+const authored = {
+  ...artifact,
+  points: artifact.points.map(p =>
+    p.fingerprint === 'fp-1' ? { ...p, audience: /** @type {const} */ ('author') } : p
+  ),
+}
 const HEAD = artifact.pr.headSha
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
@@ -66,13 +74,14 @@ function bundleFor(state, canvas = artifact) {
     capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
     chat: { enabled: false, acpx: true },
     largePr: false,
+    selfReview: false,
     warnings: [],
   })
 }
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -80,6 +89,7 @@ function setup(opts = {}) {
   const threadComments = opts.comments ?? comments
   const canvas = opts.artifact ?? artifact
   const bundle = bundleFor(state, canvas)
+  setSelfReview(opts.selfReview ?? false, canvas.settled)
   const ctx = {
     artifact: canvas,
     headSha: artifact.pr.headSha,
@@ -117,6 +127,8 @@ function setup(opts = {}) {
   const calls = []
   // What the server holds, which the page does not get to write directly.
   let stored = state
+  /** @type {Record<string, import('./contract-types.js').Settlement>} */
+  let settled = { ...canvas.settled }
   let pendingSeq = 0
   /** @type {import('./review-session.js').SessionApi} */
   const api = {
@@ -135,6 +147,18 @@ function setup(opts = {}) {
       }
       stored = { ...stored, dismissed: next }
       return { prNumber: 42, state: stored }
+    },
+    putSettled: async (_pr, fingerprint, input) => {
+      calls.push(['settled', { fingerprint, ...input }])
+      const { [fingerprint]: _old, ...rest } = settled
+      settled = input.settled
+        ? { ...rest, [fingerprint]: { reason: input.reason ?? '', at: NOW.toISOString() } }
+        : rest
+      return {
+        settled,
+        state: stored,
+        sharing: { status: 'shared', url: 'https://github.com/acme/widgets/pull/42#issuecomment-9' },
+      }
     },
     putThreadHidden: async (_pr, id, hidden) => {
       calls.push(['hidden', { id, hidden }])
@@ -559,6 +583,92 @@ describe('attention points', () => {
     expect(root.querySelector('tr.ifind[data-fingerprint="fp-1"]')?.hasAttribute('hidden')).toBe(true)
     expect(root.querySelector('.point-count')?.textContent).toBe('0')
     expect(root.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
+  })
+
+  it('lets the author settle a point with a reason, and hides it with the reason listed', async () => {
+    const { root, calls } = setup({ selfReview: true, artifact: authored })
+    expect(root.querySelector('.self-review-note')?.textContent).toContain('3 points are marked yours')
+    click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
+    const box = root.querySelector('.findings .settle-box')
+    expect(box?.querySelector('input[name="settle-comment"]')).not.toBeNull()
+    // Opening it again keeps the one box.
+    click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
+    expect(root.querySelectorAll('.findings .settle-box')).toHaveLength(1)
+    click(root, '.settle-box [data-act="settle-save"]')
+    expect(
+      root.querySelector('.settle-box .cmd-error, .settle-box [role="alert"]')?.textContent ?? ''
+    ).toContain('reason')
+    const reason = box?.querySelector('textarea')
+    if (!(reason instanceof HTMLTextAreaElement)) throw new Error('no reason box')
+    reason.value = 'Covered by the e2e suite.'
+    click(root, '.settle-box [data-act="settle-save"]')
+    await flush()
+    expect(calls).toEqual([
+      [
+        'settled',
+        {
+          fingerprint: 'fp-1',
+          settled: true,
+          reason: 'Covered by the e2e suite.',
+          comment: true,
+          headSha: artifact.pr.headSha,
+        },
+      ],
+    ])
+    expect(root.querySelector('.settle-box')).toBeNull()
+    expect(
+      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
+    ).toBe(true)
+    expect(root.querySelector('.settled-list .dismissed-line')?.textContent).toContain(
+      '1 settled by the author'
+    )
+    expect(root.querySelector('.settled-reason')?.textContent).toContain('Covered by the e2e suite.')
+    expect(root.querySelector('.self-review-note')?.textContent).toContain('2 points are marked yours')
+    expect(root.querySelector('.toast')?.textContent).toContain('canvas comment is updated')
+  })
+
+  it('reopens a settled point for the author, and offers settle on it again', async () => {
+    const settled = { 'fp-1': { reason: 'Covered.', at: NOW.toISOString() } }
+    const { root, calls } = setup({ selfReview: true, artifact: { ...authored, settled } })
+    expect(
+      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
+    ).toBe(true)
+    click(root, '[data-act="show-settled"]')
+    expect(root.querySelector('.findings.settled')?.hasAttribute('hidden')).toBe(false)
+    click(root, '[data-act="point-unsettle"]')
+    await flush()
+    expect(calls).toEqual([
+      ['settled', { fingerprint: 'fp-1', settled: false, headSha: artifact.pr.headSha }],
+    ])
+    const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
+    expect(card?.hasAttribute('hidden')).toBe(false)
+    expect(card?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    expect(root.querySelector('.settled-list')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('shows a reviewer what the author settled, with no way to settle or reopen', () => {
+    const settled = {
+      'fp-1': {
+        reason: 'Covered.',
+        at: NOW.toISOString(),
+        commentUrl: 'https://github.com/acme/widgets/pull/42#discussion_r1',
+      },
+    }
+    const { root } = setup({ artifact: { ...authored, settled } })
+    expect(root.querySelector('[data-act="point-settle"]')).toBeNull()
+    expect(root.querySelector('[data-act="point-unsettle"]')).toBeNull()
+    expect(root.querySelector('.self-review-note')?.hasAttribute('hidden')).toBe(true)
+    expect(root.querySelector('.settled-list a')?.getAttribute('href')).toBe(settled['fp-1'].commentUrl)
+    expect(root.querySelector('.findings [data-fingerprint="fp-1"] .pill.audience')?.textContent).toBe(
+      'author'
+    )
+  })
+
+  it('closes the reason box on cancel', () => {
+    const { root } = setup({ selfReview: true, artifact: authored })
+    click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
+    click(root, '.settle-box [data-act="settle-cancel"]')
+    expect(root.querySelector('.settle-box')).toBeNull()
   })
 
   it('closes the dismissed list again on a second click', () => {

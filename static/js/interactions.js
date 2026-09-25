@@ -52,7 +52,8 @@ import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
 import { inHiddenSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
-import { applyDismissed, pointToMarkdown, postedUrls } from './points.js'
+import { applyPointStates, openPoints, pointToMarkdown, postedUrls } from './points.js'
+import { selfReviewActions, setSettled, toggleList } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -313,7 +314,8 @@ export function wireReview(root, session, opts = {}) {
       drawnComments = session.submittedComments
     }
     refreshProgress(root, session.artifact, state)
-    applyDismissed(root, session.artifact.points, state, {
+    setSettled(session.settled)
+    applyPointStates(root, session.artifact.points, state, {
       paths: paths(),
       layers: session.artifact.layers,
       posted: postedUrls(state, getRenderContext()?.comments ?? []),
@@ -876,16 +878,8 @@ export function wireReview(root, session, opts = {}) {
     },
     'point-dismiss': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', true),
     'point-restore': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', false),
-    'show-dismissed': el => {
-      const list = el.closest('.dismissed-list')?.querySelector('ol.findings.dismissed')
-      if (list === null || list === undefined) {
-        return
-      }
-      const open = list.hasAttribute('hidden')
-      list.toggleAttribute('hidden', !open)
-      el.setAttribute('aria-expanded', open ? 'true' : 'false')
-      el.textContent = open ? 'hide' : 'show'
-    },
+    'show-dismissed': el => toggleList(el, '.dismissed-list'),
+    ...selfReviewActions(session, message => toast(root, message)),
     'point-post': el => {
       const point = pointById(el.getAttribute('data-point') ?? '')
       if (point !== undefined) {
@@ -1167,7 +1161,7 @@ export function wireReview(root, session, opts = {}) {
       return
     }
     const order = buildNavOrder(session.artifact)
-    const points = session.artifact.points.filter(p => session.state.dismissed[p.fingerprint] === undefined)
+    const points = openPoints(session.artifact.points, session.state)
     switch (decided.action) {
       case 'next-layer':
       case 'prev-layer':

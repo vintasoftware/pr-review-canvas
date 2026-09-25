@@ -3,6 +3,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
+import type { ReviewArtifact } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { buildCanvasZipName } from './name.js'
@@ -24,6 +25,15 @@ export async function buildCanvasZipFor(
   headSha: string,
   prNumber?: number | undefined
 ): Promise<CanvasZip> {
+  return (await zipStoredCanvas(ctx, headSha, prNumber)).zip
+}
+
+/** The zip for one stored canvas, with the canvas it was built from. */
+export async function zipStoredCanvas(
+  ctx: AppContext,
+  headSha: string,
+  prNumber?: number | undefined
+): Promise<{ zip: CanvasZip; artifact: ReviewArtifact }> {
   const artifact = await ctx.canvases.readArtifact(headSha)
   const stored = await ctx.canvases.readManifest(headSha)
   if (artifact === null || stored === null) {
@@ -49,7 +59,7 @@ export async function buildCanvasZipFor(
   if (number !== undefined) {
     zip.prNumber = number
   }
-  return zip
+  return { zip, artifact }
 }
 
 export interface ExportResult {

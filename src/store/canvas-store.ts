@@ -71,6 +71,11 @@ export interface CanvasStore {
    * to no pull request. A snapshot of uncommitted work counts only for the `uncommitted` review.
    */
   findForLocal(key: LocalKey, currentHeadSha: string): Promise<CanvasLookup>
+  /**
+   * Replaces the review.json of a stored canvas with the author's revision of it, and records the
+   * revision time in the index. The manifest and every other index field stay as they are.
+   */
+  revise(headSha: string, artifact: ReviewArtifact & { revisedAt: string }): Promise<void>
   /** Records the PR number on a canvas that was exported before the pull request existed. */
   attachPrNumber(headSha: string, prNumber: number): Promise<void>
 }
@@ -145,6 +150,9 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
       if (number !== undefined) {
         entry.prNumber = number
       }
+      if (artifact.revisedAt !== undefined) {
+        entry.revisedAt = artifact.revisedAt
+      }
       if (artifact.importedAt !== undefined) {
         entry.importedAt = artifact.importedAt
       }
@@ -159,6 +167,16 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
     },
     findForPr: (prNumber, currentHeadSha) => rank(currentHeadSha, entry => canvasBelongsTo(entry, prNumber)),
     findForLocal: (key, currentHeadSha) => rank(currentHeadSha, entry => canvasBelongsTo(entry, key)),
+    revise: async (headSha, artifact) => {
+      const index = await readIndex()
+      const entry = index.canvases[headSha]
+      if (entry === undefined) {
+        throw new Error(`no canvas for ${headSha} to revise`)
+      }
+      await writeJsonAtomic(path.join(canvasDir(headSha), 'review.json'), artifact)
+      index.canvases[headSha] = { ...entry, revisedAt: artifact.revisedAt }
+      await writeJsonAtomic(indexFile, index)
+    },
     attachPrNumber: async (headSha, prNumber) => {
       const index = await readIndex()
       const entry = index.canvases[headSha]

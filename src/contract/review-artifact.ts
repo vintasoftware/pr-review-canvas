@@ -74,6 +74,11 @@ export const ARTIFACT_MAX_POINTS = LIMITS.maxPoints * HARD_CAP_FACTOR
 export const FILE_STATUSES = ['added', 'modified', 'deleted', 'renamed', 'binary'] as const
 export const POINT_KINDS = ['decision', 'risk', 'drift', 'tests', 'debt', 'question'] as const
 export const POINT_LEVELS = ['decide', 'check', 'fyi'] as const
+/**
+ * Who a point is for. The author can settle an `author` point before asking for review, because it
+ * asks about intent the author already knows. A `reviewer` point needs a second pair of eyes.
+ */
+export const POINT_AUDIENCES = ['author', 'reviewer'] as const
 export const TEST_STATUSES = ['covered', 'missing', 'not-needed'] as const
 export const HARNESSES = ['claude-code', 'codex', 'other'] as const
 
@@ -298,11 +303,14 @@ function pointBase(caps: Caps) {
     endLine: z.number().int().positive().optional(),
     side: SideSchema.optional(),
     body: text(caps, 'pointBody'),
+    audience: z.enum(POINT_AUDIENCES),
   }
 }
 
 export const PointSchema = z.object({
   ...pointBase(ARTIFACT_HARD_CAPS),
+  /** A canvas written before audiences existed asked the reviewer everything. */
+  audience: z.enum(POINT_AUDIENCES).default('reviewer'),
   id: z.string().min(1),
   fingerprint: z.string().min(1),
   origin: z.enum(['model', 'tests']),
@@ -310,6 +318,20 @@ export const PointSchema = z.object({
   layerId: z.string().optional(),
 })
 export type Point = z.infer<typeof PointSchema>
+
+/** The longest reason the author may give for settling a point. */
+export const SETTLEMENT_REASON_MAX = 600
+
+/**
+ * The author's answer to a point, given before review. A settled point leaves the reviewer's list,
+ * and the reason stays readable beside it. `commentUrl` is the comment the reason was posted as.
+ */
+export const SettlementSchema = z.object({
+  reason: z.string().trim().min(1).max(SETTLEMENT_REASON_MAX),
+  at: z.string(),
+  commentUrl: z.string().optional(),
+})
+export type Settlement = z.infer<typeof SettlementSchema>
 
 export const GeneratorSchema = z.object({
   agent: z.string().min(1),
@@ -341,6 +363,13 @@ export const ReviewArtifactSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{40}$/)
     .optional(),
+  /** The points the author settled, by fingerprint. Absent until the author settles one. */
+  settled: z.record(z.string(), SettlementSchema).optional(),
+  /**
+   * When the author last changed the canvas after it was generated. An import keeps whichever copy
+   * of a commit's canvas is newest by this time, or by `generatedAt` when it was never revised.
+   */
+  revisedAt: z.string().optional(),
 })
 export type ReviewArtifact = z.infer<typeof ReviewArtifactSchema>
 

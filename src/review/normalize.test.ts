@@ -80,6 +80,7 @@ describe('normalize', () => {
         fingerprint: fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' }),
         origin: 'model',
         layerId: 'run-path',
+        audience: 'reviewer',
       },
       {
         id: 'p-2',
@@ -93,6 +94,7 @@ describe('normalize', () => {
         fingerprint: fingerprint({ kind: 'tests', path: 'src/app.ts', title: 'other() returns x' }),
         origin: 'tests',
         layerId: 'run-path',
+        audience: 'author',
       },
       {
         id: 'p-3',
@@ -106,6 +108,7 @@ describe('normalize', () => {
         fingerprint: fingerprint({ kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' }),
         origin: 'model',
         layerId: 'other',
+        audience: 'author',
       },
     ]
     expect(artifact).toEqual({
@@ -145,10 +148,43 @@ describe('normalize', () => {
   it('sorts points by level then path then line and keeps model tags a config rule already set once', () => {
     const output = artifactToModelOutput(syntheticArtifact())
     output.points = [
-      { kind: 'risk', level: 'fyi', title: 'b', path: 'src/new.ts', line: 2, body: 'x' },
-      { kind: 'risk', level: 'decide', title: 'a', path: 'src/new.ts', line: 1, body: 'x' },
-      { kind: 'risk', level: 'fyi', title: 'c', path: 'src/gone.ts', line: 1, side: 'old', body: 'x' },
-      { kind: 'risk', level: 'fyi', title: 'd', path: 'src/new.ts', line: 1, body: 'x' },
+      {
+        kind: 'risk',
+        level: 'fyi',
+        audience: 'reviewer',
+        title: 'b',
+        path: 'src/new.ts',
+        line: 2,
+        body: 'x',
+      },
+      {
+        kind: 'risk',
+        level: 'decide',
+        audience: 'reviewer',
+        title: 'a',
+        path: 'src/new.ts',
+        line: 1,
+        body: 'x',
+      },
+      {
+        kind: 'risk',
+        level: 'fyi',
+        audience: 'reviewer',
+        title: 'c',
+        path: 'src/gone.ts',
+        line: 1,
+        side: 'old',
+        body: 'x',
+      },
+      {
+        kind: 'risk',
+        level: 'fyi',
+        audience: 'reviewer',
+        title: 'd',
+        path: 'src/new.ts',
+        line: 1,
+        body: 'x',
+      },
     ]
     const first = output.layers[0]
     if (first) {

@@ -226,6 +226,7 @@ describe('validateFolds', () => {
       {
         kind: 'decision',
         level: 'decide',
+        audience: 'reviewer',
         title: 'Return value',
         path: 'src/app.ts',
         side: 'old',
@@ -246,6 +247,7 @@ describe('validateFolds', () => {
       {
         kind: 'decision',
         level: 'decide',
+        audience: 'reviewer',
         title: 'Return value',
         path: 'src/app.ts',
         side: 'new',
@@ -395,7 +397,15 @@ describe('validateFolds', () => {
     it('may stay open for an attention point', () => {
       const { output } = withBig()
       output.points = [
-        { kind: 'decision', level: 'fyi', title: 'Why', path: 'src/big.ts', line: 3, body: 'Because.' },
+        {
+          kind: 'decision',
+          level: 'fyi',
+          audience: 'reviewer',
+          title: 'Why',
+          path: 'src/big.ts',
+          line: 3,
+          body: 'Because.',
+        },
       ]
       expect(validateFolds(output, [...files, big])).toEqual([])
     })
@@ -589,7 +599,15 @@ describe('validateFolds', () => {
       const { output } = withWide({ folds: [{ ...moderate, endLine: 99 }] })
       expect(validateFolds(output, [...files, wide])).toHaveLength(1)
       output.points = [
-        { kind: 'decision', level: 'fyi', title: 'Why', path: 'src/wide.ts', line: 110, body: 'Because.' },
+        {
+          kind: 'decision',
+          level: 'fyi',
+          audience: 'reviewer',
+          title: 'Why',
+          path: 'src/wide.ts',
+          line: 110,
+          body: 'Because.',
+        },
       ]
       expect(validateFolds(output, [...files, wide])).toEqual([])
     })

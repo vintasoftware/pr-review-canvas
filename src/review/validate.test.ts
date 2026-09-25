@@ -461,7 +461,15 @@ describe('validateModelOutput', () => {
       file.annotations = [{ side: 'new', startLine: 1, endLine: 1, text: 'context line' }]
     }
     output.points = [
-      { kind: 'question', level: 'fyi', title: 'Context', path: 'src/app.ts', line: 5, body: 'b' },
+      {
+        kind: 'question',
+        level: 'fyi',
+        audience: 'reviewer',
+        title: 'Context',
+        path: 'src/app.ts',
+        line: 5,
+        body: 'b',
+      },
     ]
     expect(errorsOf(output)).toEqual([])
   })
@@ -559,10 +567,45 @@ describe('validateModelOutput', () => {
   it('POINT_OUTSIDE_DIFF: unknown path, a line outside every hunk, and a range that leaves its hunk', () => {
     const output = clean()
     output.points = [
-      { kind: 'risk', level: 'check', title: 'Nowhere', path: 'src/nope.ts', line: 1, body: 'b' },
-      { kind: 'risk', level: 'check', title: 'Far', path: 'src/app.ts', line: 99, side: 'old', body: 'b' },
-      { kind: 'risk', level: 'check', title: 'Wide', path: 'src/app.ts', line: 4, endLine: 12, body: 'b' },
-      { kind: 'risk', level: 'check', title: 'Back', path: 'src/app.ts', line: 4, endLine: 3, body: 'b' },
+      {
+        kind: 'risk',
+        level: 'check',
+        audience: 'reviewer',
+        title: 'Nowhere',
+        path: 'src/nope.ts',
+        line: 1,
+        body: 'b',
+      },
+      {
+        kind: 'risk',
+        level: 'check',
+        audience: 'reviewer',
+        title: 'Far',
+        path: 'src/app.ts',
+        line: 99,
+        side: 'old',
+        body: 'b',
+      },
+      {
+        kind: 'risk',
+        level: 'check',
+        audience: 'reviewer',
+        title: 'Wide',
+        path: 'src/app.ts',
+        line: 4,
+        endLine: 12,
+        body: 'b',
+      },
+      {
+        kind: 'risk',
+        level: 'check',
+        audience: 'reviewer',
+        title: 'Back',
+        path: 'src/app.ts',
+        line: 4,
+        endLine: 3,
+        body: 'b',
+      },
     ]
     expect(errorsOf(output).map(formatValidationError)).toEqual([
       'POINT_OUTSIDE_DIFF point 1 "Nowhere": src/nope.ts is not in the diff',

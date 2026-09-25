@@ -107,6 +107,10 @@ export const ERROR_CARDS = {
     title: 'This login cannot post here',
     action: 'Check the account’s repository access and token permissions, then retry.',
   },
+  NOT_AUTHOR: {
+    title: 'Only the author settles points',
+    action: 'Dismiss the point instead: a dismissal stays on your machine.',
+  },
   COMMENT_LINE_NOT_IN_DIFF: {
     title: 'Comments must sit on lines the diff shows',
     action: 'Pick a line inside a chunk of this pull request.',

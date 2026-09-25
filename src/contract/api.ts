@@ -31,6 +31,7 @@ export const ERROR_CODES = [
   'MODEL_INVALID',
   'SKILL_DIR_EXISTS',
   'COMMENT_FORBIDDEN',
+  'NOT_AUTHOR',
   'COMMENT_LINE_NOT_IN_DIFF',
   'SIGNOFF_INCOMPLETE',
   'CHAT_BUSY',
@@ -132,6 +133,11 @@ export interface PrBundle {
   marksCarriedFrom?: string
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
+  /**
+   * True when the reader wrote the change: the login that runs the server is the pull request's
+   * author, or the review is of local work. The page then offers to settle attention points.
+   */
+  selfReview: boolean
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */
   local?: LocalKey
   comments: CommentsPayload

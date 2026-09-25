@@ -272,7 +272,7 @@ function carriedMarkdown(basis: BasisSplit | undefined): string {
   return [
     `**Whole layers** — copy the layer with its title, rationale, decisions, checkByHand, tests, files, notes, folds, and annotations:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
     `**Single files of a re-judged layer** — the file is untouched, so its note, folds, and annotations still fit wherever you put the file:\n\n${files.length === 0 ? '_none_' : files.join('\n')}`,
-    `**Attention points** — repeat the kind, path, and title exactly, so the point keeps its identity and any dismissal the reviewer made. Where a line says the point's lines moved, anchor it on those lines; its code is unchanged, so the level and body still hold:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    `**Attention points** — repeat the kind, path, title, and audience exactly, so the point keeps its identity, any dismissal the reviewer made, and any settlement the author made. Where a line says the point's lines moved, anchor it on those lines; its code is unchanged, so the level and body still hold:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
   ].join('\n\n')
 }
 

@@ -2,7 +2,11 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
-import { PostCommentInputSchema, type PostCommentResult } from '../../contract/comments.js'
+import {
+  type PostCommentInput,
+  PostCommentInputSchema,
+  type PostCommentResult,
+} from '../../contract/comments.js'
 import { AddPendingInputSchema, EditPendingInputSchema, type PendingComment } from '../../contract/pending.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { PrState } from '../../contract/state.js'
@@ -18,6 +22,7 @@ import type { Derived } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
+import { oneAtATime } from '../one-at-a-time.js'
 import { parseTargetKey, requirePrNumber } from './api.js'
 
 const ReviewedBodySchema = z.object({
@@ -43,7 +48,7 @@ const HiddenBodySchema = z.object({ hidden: z.boolean() })
  * The page says which commit it was showing. When the pull request has moved on, the post is
  * refused instead of landing on code the reader never saw.
  */
-function requireSameHead(expected: string | undefined, current: string): void {
+export function requireSameHead(expected: string | undefined, current: string): void {
   if (expected !== undefined && expected !== current) {
     throw new AppError(
       'CANVAS_STALE',
@@ -55,7 +60,7 @@ function requireSameHead(expected: string | undefined, current: string): void {
 }
 
 /** A JSON body the route can read, or a 400 that says what shape it expected. */
-async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: string): Promise<T> {
+export async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: string): Promise<T> {
   let raw: unknown
   try {
     raw = await request.json()
@@ -198,21 +203,48 @@ export function postedFromPending(
   return entries
 }
 
+/** Posting is refused here as well as in the UI, so a stale page cannot post either. */
+async function requirePosting(ctx: AppContext): Promise<void> {
+  const caps = await ctx.capabilities.get()
+  if (caps.canComment === false) {
+    throw new AppError(
+      'COMMENT_FORBIDDEN',
+      caps.reason ?? `this ${ctx.config.host.label} login cannot post on this repository`,
+      403,
+      caps.hint
+    )
+  }
+}
+
+/**
+ * Posts one comment on the pull request's current head, keeps the cached comments in step, and
+ * records it in the state, tied to its attention point when it came from one.
+ */
+export async function postOnPr(
+  ctx: AppContext,
+  loader: PrLoader,
+  number: number,
+  input: PostCommentInput
+): Promise<PostCommentResult & { state: PrState }> {
+  await requirePosting(ctx)
+  const pr = await loader.currentPr(number)
+  requireSameHead(input.headSha, pr.headSha)
+  let diff: Derived = { files: [], patches: {} }
+  if (input.kind === 'inline') {
+    diff = await requireDerived(ctx, pr.headSha)
+    requireInlineTarget(diff, input)
+  }
+  const posted = await ctx.config.host.postComment(ctx.gh, ctx.config.repo, number, pr.headSha, input, diff)
+  await appendComments(ctx, number, [posted])
+  const entry =
+    input.kind === 'inline' && input.pointFingerprint !== undefined
+      ? { commentId: posted.comment.id, pointFingerprint: input.pointFingerprint }
+      : { commentId: posted.comment.id }
+  return { ...posted, state: await ctx.state.addPosted(number, entry) }
+}
+
 export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
-
-  /** Posting is refused here as well as in the UI, so a stale page cannot post either. */
-  const requirePosting = async (): Promise<void> => {
-    const caps = await ctx.capabilities.get()
-    if (caps.canComment === false) {
-      throw new AppError(
-        'COMMENT_FORBIDDEN',
-        caps.reason ?? `this ${ctx.config.host.label} login cannot post on this repository`,
-        403,
-        caps.hint
-      )
-    }
-  }
 
   const stateBody = (key: ReviewKey, state: StateResponse['state']): StateResponse => ({
     prNumber: key,
@@ -283,22 +315,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   api.post('/prs/:n/comments', async c => {
     const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'posting a comment')
     const input = await readBody(c.req.raw, PostCommentInputSchema, 'an inline, reply, or issue comment')
-    await requirePosting()
-    const pr = await loader.currentPr(number)
-    requireSameHead(input.headSha, pr.headSha)
-    let diff: Derived = { files: [], patches: {} }
-    if (input.kind === 'inline') {
-      diff = await requireDerived(ctx, pr.headSha)
-      requireInlineTarget(diff, input)
-    }
-    const posted = await ctx.config.host.postComment(ctx.gh, ctx.config.repo, number, pr.headSha, input, diff)
-    await appendComments(ctx, number, [posted])
-    const entry =
-      input.kind === 'inline' && input.pointFingerprint !== undefined
-        ? { commentId: posted.comment.id, pointFingerprint: input.pointFingerprint }
-        : { commentId: posted.comment.id }
-    const state = await ctx.state.addPosted(number, entry)
-    return c.json({ ...posted, state }, 201)
+    return c.json(await postOnPr(ctx, loader, number, input), 201)
   })
 
   // The pending review: comments the reviewer wrote and has not submitted. They are kept here,
@@ -354,7 +371,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
   api.post('/prs/:n/review', async c => {
     const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'submitting a review')
     const input = await readBody(c.req.raw, PostReviewInputSchema, '{ "event": "APPROVE" }')
-    await requirePosting()
+    await requirePosting(ctx)
     const pr = await loader.currentPr(number)
     requireSameHead(input.headSha, pr.headSha)
     const { artifact, state } = await canvasForSignOff(ctx, number, pr)
@@ -425,20 +442,14 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
 }
 
 /** One append at a time per PR, so two posts that land together do not overwrite each other. */
-const appendChains = new Map<number, Promise<unknown>>()
+const appendInTurn = oneAtATime<number>()
 
 function appendComments(
   ctx: AppContext,
   number: number,
   posted: ReadonlyArray<PostCommentResult>
 ): Promise<void> {
-  const run = () => writeAppendedComments(ctx, number, posted)
-  const chained = (appendChains.get(number) ?? Promise.resolve()).then(run, run)
-  appendChains.set(
-    number,
-    chained.catch(() => undefined)
-  )
-  return chained
+  return appendInTurn(number, () => writeAppendedComments(ctx, number, posted))
 }
 
 /**

@@ -2,6 +2,7 @@
 // The three transfer routes and the two bundle paths they feed: a stale canvas and a canvas
 // discovered on the pull request.
 import { buildCanvasComment } from '../canvas/comment.js'
+import type { CanvasTally } from '../review/self-review.js'
 import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, readCanvasZip } from '../canvas/zip.js'
 import type { ImportResult, PrBundle, SharedCanvasFetchResponse } from '../contract/api.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
@@ -29,6 +30,7 @@ import {
 } from '../testing/synthetic.js'
 import { createApp } from './app.js'
 
+const NO_POINTS: CanvasTally = { reviewer: { decide: 0, check: 0, fyi: 0 }, authorOpen: 0, settled: 0 }
 const LOCAL = { host: 'localhost:3010' }
 const SAME_ORIGIN = { ...LOCAL, origin: 'http://localhost:3010', 'sec-fetch-site': 'same-origin' }
 const OLD_SHA = 'e'.repeat(40)
@@ -441,6 +443,7 @@ describe('transfer routes', () => {
           prNumber: 42,
           bytes: buildCanvasZip({ ...manifest(HEAD_SHA), generatedAt: updated.generatedAt }, updated),
         },
+        NO_POINTS,
         65_536
       )
       t = await contextFor()

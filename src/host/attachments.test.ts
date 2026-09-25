@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { buildCanvasComment } from '../canvas/comment.js'
+import type { CanvasTally } from '../review/self-review.js'
 import { buildCanvasZip } from '../canvas/zip.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { CommentsPayload } from '../contract/comments.js'
@@ -25,6 +26,7 @@ import {
 } from './attachments.js'
 import { gitlabHost } from './host.js'
 
+const NO_POINTS: CanvasTally = { reviewer: { decide: 0, check: 0, fyi: 0 }, authorOpen: 0, settled: 0 }
 const FILE_URL =
   'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip'
 const ASSET_URL = 'https://github.com/user-attachments/assets/6e9d2b7c-1f2a-4c3d-9a8b-0f1e2d3c4b5a'
@@ -544,6 +546,7 @@ describe('embedded canvas discovery', () => {
       try {
         const body = buildCanvasComment(
           { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+          NO_POINTS,
           65_536
         )
         const outcome = await discoverSharedCanvas(t.ctx, pr(), comments({ issueComments: [issue(7, body)] }))
@@ -561,10 +564,12 @@ describe('embedded canvas discovery', () => {
     try {
       const body = buildCanvasComment(
         { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+        NO_POINTS,
         65_536
       )
       const corrupt = buildCanvasComment(
         { name: NAME_FOR_HEAD, bytes: Uint8Array.from([1, 2, 3]), headSha: HEAD_SHA, prNumber: 42 },
+        NO_POINTS,
         65_536
       )
       const outcome = await discoverSharedCanvas(

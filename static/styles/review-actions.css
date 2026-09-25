@@ -123,3 +123,39 @@ table.keys td:first-child {
     transition: none !important;
   }
 }
+/* Self-review: the author's reason box under a point, the settled list, and the author's note. */
+.settle-box {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.settle-box .chk {
+  font-weight: 400;
+}
+.settled-list {
+  padding: 0 20px 16px;
+}
+.findings.settled li {
+  opacity: 0.85;
+}
+.findings.settled .lbl {
+  margin: 4px 0 0;
+}
+.self-review-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel-2);
+  font-size: 13px;
+}
+.pill.audience {
+  font-weight: 500;
+}
+.pill.audience.author {
+  color: var(--accent);
+  border-color: currentColor;
+}
+.pill.audience.reviewer {
+  color: var(--fg-muted);
+  border-color: currentColor;
+}
