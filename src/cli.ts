@@ -55,8 +55,8 @@ async function buildContext(
   extra: {
     port?: string | undefined
     fixtureCanvas?: string | undefined
-    agent?: string | undefined
-    model?: string | undefined
+    chatAgent?: string | undefined
+    chatModel?: string | undefined
     noOpen?: boolean | undefined
   } = {}
 ): Promise<AppContext> {
@@ -68,8 +68,8 @@ async function buildContext(
       port: extra.port === undefined ? undefined : parsePort(extra.port, 0),
       dataDir,
       fixtureCanvas: extra.fixtureCanvas,
-      agent: extra.agent,
-      model: extra.model,
+      chatAgent: extra.chatAgent,
+      chatModel: extra.chatModel,
       noOpen: extra.noOpen,
     },
     process.env,
@@ -99,17 +99,23 @@ async function serve(argv: string[]): Promise<number> {
       repo: { type: 'string' },
       'data-dir': { type: 'string' },
       'fixture-canvas': { type: 'string' },
+      'chat-agent': { type: 'string' },
+      'chat-model': { type: 'string' },
+      // Deprecated spellings of --chat-agent and --chat-model.
       agent: { type: 'string' },
       model: { type: 'string' },
       'no-open': { type: 'boolean' },
     },
     strict: true,
   })
+  if (values.agent !== undefined || values.model !== undefined) {
+    io.stderr('pr-review serve: --agent and --model are deprecated; use --chat-agent and --chat-model')
+  }
   const ctx = await buildContext(values.repo, values['data-dir'], {
     port: values.port,
     fixtureCanvas: values['fixture-canvas'],
-    agent: values.agent,
-    model: values.model,
+    chatAgent: values['chat-agent'] ?? values.agent,
+    chatModel: values['chat-model'] ?? values.model,
     noOpen: values['no-open'],
   })
   const skill = await checkSkill(ctx.config.repoRoot)

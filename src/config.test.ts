@@ -124,17 +124,20 @@ describe('loadRuntimeConfig', () => {
 
 describe('chat command-line overrides', () => {
   it.each(['claude', 'codex'])('selects %s with an explicit model', agent => {
-    expect(parseChatOverrides({ agent, model: 'custom-model' })).toEqual({ agent, model: 'custom-model' })
+    expect(parseChatOverrides({ chatAgent: agent, chatModel: 'custom-model' })).toEqual({
+      chatAgent: agent,
+      chatModel: 'custom-model',
+    })
   })
 
   it('leaves the saved model in effect when the flag is empty', () => {
-    expect(parseChatOverrides({ model: '' })).toEqual({})
-    expect(parseChatOverrides({ model: 'custom-model' })).toEqual({ model: 'custom-model' })
+    expect(parseChatOverrides({ chatModel: '' })).toEqual({})
+    expect(parseChatOverrides({ chatModel: 'custom-model' })).toEqual({ chatModel: 'custom-model' })
   })
 
   it('rejects unsupported agents with a usage hint', () => {
-    expect(() => parseChatOverrides({ agent: 'unknown' })).toThrow(
-      expect.objectContaining({ code: 'BAD_REQUEST', hint: 'use --agent claude or --agent codex' })
+    expect(() => parseChatOverrides({ chatAgent: 'unknown' })).toThrow(
+      expect.objectContaining({ code: 'BAD_REQUEST', hint: 'use --chat-agent claude or --chat-agent codex' })
     )
   })
 })

@@ -17,6 +17,9 @@ export const DefaultLayerSchema = z.object({
 })
 export type DefaultLayer = z.infer<typeof DefaultLayerSchema>
 
+export const GenerationModelsSchema = z.record(z.string().min(1), z.string().min(1))
+export type GenerationModels = z.infer<typeof GenerationModelsSchema>
+
 export const HighRiskRuleSchema = z.object({ pattern: z.string().min(1), label: z.string().min(1) })
 export type HighRiskRule = z.infer<typeof HighRiskRuleSchema>
 
@@ -65,6 +68,11 @@ export const ProjectConfigSchema = z.object({
     /** A change set with at most this many hunks is "small": one layer unless concerns differ. */
     smallPrHunks: z.number().int().positive(),
     caps: z.object(capsShape).optional(),
+    /**
+     * The model each agent generates canvases with, keyed by the agent id publish records
+     * (`claude`, `codex`, ...). An agent with no entry keeps the session's model.
+     */
+    models: GenerationModelsSchema,
   }),
   /** Which paths count as tests, for the layering rules and the `isTest` flag on a file. */
   tests: z.object({ patterns: z.array(z.string().min(1)) }),
@@ -99,6 +107,7 @@ const PartialProjectConfigSchema = z.object({
       inlineDiffMaxLines: z.number().int().positive().optional(),
       smallPrHunks: z.number().int().positive().optional(),
       caps: z.object(capsShape).optional(),
+      models: GenerationModelsSchema.optional(),
     })
     .optional(),
   tests: z.object({ patterns: z.array(z.string().min(1)).optional() }).optional(),
@@ -112,7 +121,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   version: 1,
   layers: [],
   highRisk: [],
-  generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
+  generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10, models: {} },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
   canvas: { keepForIdenticalDiff: true, incremental: true },
@@ -145,6 +154,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     inlineDiffMaxLines:
       user.generation?.inlineDiffMaxLines ?? DEFAULT_PROJECT_CONFIG.generation.inlineDiffMaxLines,
     smallPrHunks: user.generation?.smallPrHunks ?? DEFAULT_PROJECT_CONFIG.generation.smallPrHunks,
+    models: user.generation?.models ?? DEFAULT_PROJECT_CONFIG.generation.models,
   }
   if (user.generation?.caps !== undefined) {
     generation.caps = user.generation.caps

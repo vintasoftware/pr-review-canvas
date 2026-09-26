@@ -110,7 +110,7 @@ pr-review doctor --all-checks
 ```
 
 Install and sign in to either Claude Code or Codex on the same machine. Start (or restart)
-the review server, then choose your agent in **settings**. The chat uses that agent's account.
+the review server, then choose the chat agent in **settings**. The chat uses that agent's account.
 You can review canvases without installing `acpx`.
 
 ## Advanced usage
@@ -161,23 +161,35 @@ in the settings dialog to choose how much code a review hides when it opens. Set
 to **one at a time** in the same dialog to read the overview or a single layer at once, moving
 between layers with the rail or the `j` and `k` keys.
 
-For AI Chat, open **settings**, choose Claude Code or Codex, and optionally enter a model ID.
-Leave the model blank to use the agent's default. A model ID runs as the newest model of its family
-(`claude-opus-4-8` runs as `opus`); write `pin:claude-opus-4-8` to use that exact model. See
+Two separate settings pick models, and neither affects the other:
+
+| What it controls  | Where you set it                                                              | Scope   |
+| ----------------- | ----------------------------------------------------------------------------- | ------- |
+| AI Chat           | **Chat agent** and **Chat model** in **settings** (`.pr-review/settings.yml`) | You     |
+| Canvas generation | `generation.models` in `pr-review.config.yml`                                 | Project |
+
+For AI Chat, open **settings** and, under **AI Chat**, choose Claude Code or Codex as the
+**Chat agent** and optionally enter a **Chat model** ID. Leave the chat model blank to use the
+agent's default. A chat model ID runs as the newest model of its family (`claude-opus-4-8` runs as
+`opus`); write `pin:claude-opus-4-8` to use that exact model. See
 [Model families](docs/reference.md#model-families). You can also adjust the reply timeout and
 maximum turns. Click **Test agent** to check the connection, then **save**.
 
-Switching agents starts a new thread and keeps earlier threads. Server flags `--agent` and
-`--model` override your saved chat preferences for that run.
+Switching chat agents starts a new thread and keeps earlier threads. Server flags `--chat-agent`
+and `--chat-model` override your saved chat preferences for that run.
 
 ### Shared project settings
 
 Edit `pr-review.config.yml` at the repository root and commit it to share settings with your team.
-It controls review rules, layers, generation mode, test file patterns, prompt templates, and
+It controls review rules, layers, generation mode and canvas generation models, test file patterns, prompt templates, and
 whether AI Chat is enabled. The settings dialog displays this configuration; edit the file to
 change it. See the [configuration reference](docs/reference.md#project-config).
 
 Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKILL.md#model-choice).
+Set `generation.models` to pick the model each agent generates canvases with for this project, for
+example `claude: opus`. An agent with no entry keeps the model of the session that runs the skill.
+The skill passes the value to its host as written, so chat model families and `pin:` do not apply,
+and the chat settings do not change it. The settings dialog lists it under **Canvas generation**.
 
 ### Project prompt templates
 

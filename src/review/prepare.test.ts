@@ -55,6 +55,7 @@ describe('prepare', () => {
       mergeBaseSha: BASE_SHA,
       promptPath: path.join(canvasDir, 'prompt.md'),
       contextPath: path.join(canvasDir, 'context.json'),
+      models: {},
       status: 'prepared',
     })
     expect(o.phases).toEqual(['fetch-pr', 'fetch-refs', 'collect-diffs', 'prompt'])
@@ -179,7 +180,7 @@ describe('prepare', () => {
     expect(await t.ctx.prs.readPr(42)).toBeNull()
   })
 
-  it('reads the rulebook and the caps from the project config', async () => {
+  it('reads the rulebook, the caps, and the models from the project config', async () => {
     const dir = await import('../testing/fakes.js').then(m => m.makeTempDir())
     const { rm } = await import('node:fs/promises')
     await writeFile(path.join(dir, 'RULES.md'), '---\nname: x\n---\n# Rules\n\n## Be kind\n')
@@ -197,6 +198,7 @@ describe('prepare', () => {
             inlineDiffMaxLines: 10,
             smallPrHunks: 3,
             caps: { summary: 50 },
+            models: { claude: 'opus', codex: 'gpt-6-sol' },
           },
         },
         warnings: [],
@@ -205,6 +207,7 @@ describe('prepare', () => {
     })
     t.ctx.config.repoRoot = dir
     const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())
+    expect(result.models).toEqual({ claude: 'opus', codex: 'gpt-6-sol' })
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
     expect(context.rulebook).toEqual({ path: 'RULES.md', text: '---\nname: x\n---\n# Rules\n\n## Be kind\n' })
     expect(context.caps).toEqual({ ...TEXT_CAPS, summary: 50 })

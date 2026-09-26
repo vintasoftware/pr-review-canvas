@@ -51,10 +51,16 @@ test('offers the default reading level in the settings dialog and saves it', asy
   // The harness runs with chat off, which turns the settings routes off too, so the dialog's
   // requests are answered here. The store and the routes are covered by the unit tests.
   const response = {
-    settings: { foldLevel: 'moderate', agent: 'claude', model: null, chatTimeoutSec: 600, maxTurns: null },
+    settings: {
+      foldLevel: 'moderate',
+      chatAgent: 'claude',
+      chatModel: null,
+      chatTimeoutSec: 600,
+      maxTurns: null,
+    },
     overrides: {},
     file: '/repo/.pr-review/settings.yml',
-    project: { file: null, chatEnabled: true, rulebook: null, layers: 0, highRisk: 0 },
+    project: { file: null, chatEnabled: true, rulebook: null, layers: 0, highRisk: 0, generationModels: {} },
   }
   await page.route('**/api/prs/42', async route => {
     const fetched = await route.fetch()

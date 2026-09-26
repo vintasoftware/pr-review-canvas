@@ -56,6 +56,7 @@ function settingsResponse(ctx: AppContext, settings: SettingsResponse['settings'
       maxRepairRounds: project.generation.maxRepairRounds,
       inlineDiffMaxLines: project.generation.inlineDiffMaxLines,
       smallPrHunks: project.generation.smallPrHunks,
+      generationModels: project.generation.models,
       keepForIdenticalDiff: project.canvas.keepForIdenticalDiff,
       layers: project.layers.length,
       highRisk: project.highRisk.length,
@@ -162,7 +163,11 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.put('/settings', async c => {
-    const input = await readJsonBody(c.req.raw, SettingsInputSchema, '{ "agent": "claude", "model": null }')
+    const input = await readJsonBody(
+      c.req.raw,
+      SettingsInputSchema,
+      '{ "chatAgent": "claude", "chatModel": null }'
+    )
     return c.json(settingsResponse(ctx, await ctx.settings.write(input)))
   })
 

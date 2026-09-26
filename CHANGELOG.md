@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Canvas generation
+
+- `generation.models` in `pr-review.config.yml` sets the model each agent generates canvases with,
+  keyed by agent id (`claude: opus`). `prepare` prints it as `models`. An agent with no entry keeps
+  the session's model; the skill no longer pins Sonnet.
+- The settings dialog lists the project's canvas generation models under **Canvas generation** in
+  the read-only project config, and shows the chat fields as **Chat agent** and **Chat model**
+  under an **AI Chat** heading. The header's generator pill reads
+  `canvas by <agent> · <model> · <harness>`.
+
+### AI Chat
+
+- The chat keys in `.pr-review/settings.yml` are now `chatAgent` and `chatModel`. A file with the
+  old `agent` and `model` keys still reads the same, and the next save renames them in place.
+
 ### CLI
 
 - `pr-review` and `pr-review --help` list each command in its own block, wrapped to the terminal,
@@ -9,6 +24,8 @@
 - `pr-review doctor` prints a checklist, with `ok` or `failed` on each check, for a person or an
   agent. `--json` prints the same report as one JSON line, now with a `cli` field naming `gh` or
   `glab`.
+- `serve --chat-agent` and `--chat-model` replace `--agent` and `--model`, which still work and
+  print a deprecation notice.
 
 ### Review interface
 

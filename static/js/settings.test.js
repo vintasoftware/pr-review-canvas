@@ -18,8 +18,8 @@ const SETTINGS = {
     theme: 'auto',
     foldLevel: 'light',
     layerView: 'all',
-    agent: 'claude',
-    model: null,
+    chatAgent: 'claude',
+    chatModel: null,
     chatTimeoutSec: 600,
     maxTurns: null,
   },
@@ -32,6 +32,7 @@ const SETTINGS = {
     maxRepairRounds: 3,
     inlineDiffMaxLines: 1500,
     smallPrHunks: 10,
+    generationModels: {},
     keepForIdenticalDiff: true,
     layers: 8,
     highRisk: 2,
@@ -68,7 +69,14 @@ async function open(api = {}, onSaved = () => undefined) {
       fetchSettings: async () => SETTINGS,
       fetchAgents: async () => AGENTS,
       saveSettings: async () => SETTINGS,
-      probeAgent: async () => ({ id: 'claude', ok: true, ms: 1250, reply: 'OK', at: '', cached: false }),
+      probeAgent: async id => ({
+        id: asChatAgent(id),
+        ok: true,
+        ms: 1250,
+        reply: 'OK',
+        at: '',
+        cached: false,
+      }),
       ...api,
     },
     onSaved,
@@ -87,6 +95,9 @@ function el(where, selector) {
   }
   return found
 }
+
+/** The id the dialog asked about, as the probe route would echo it. */
+const asChatAgent = (/** @type {string} */ id) => /** @type {import('./contract-types.js').ChatAgent} */ (id)
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -122,6 +133,24 @@ describe('settingsDialogHtml', () => {
     expect(html).toContain('/repo/.pr-review/settings.yml')
   })
 
+  it('labels the chat fields as AI Chat, apart from the canvas generation models', () => {
+    const html = settingsDialogHtml(SETTINGS, AGENTS)
+    expect(html).toContain('<h3 id="settings-chat-h">AI Chat</h3>')
+    expect(html).toContain('<label for="set-chat-agent">Chat agent</label>')
+    expect(html).toContain('<label for="set-chat-model">Chat model</label>')
+    expect(html).toContain('They do not change which model generates canvases')
+    expect(html).toContain('<h4>Canvas generation</h4>')
+    expect(html).toContain("canvas generation models: none set (each agent keeps the session's model)")
+  })
+
+  it('lists each canvas generation model the project sets, by agent', () => {
+    const project = { ...SETTINGS.project, generationModels: { claude: 'opus', codex: '<gpt>' } }
+    const html = settingsDialogHtml({ ...SETTINGS, project }, AGENTS)
+    expect(html).toContain(
+      'canvas generation models: <span class="mono">claude → opus</span>, <span class="mono">codex → &lt;gpt&gt;</span>'
+    )
+  })
+
   it('says when the defaults are in use because there is no project file', () => {
     const html = settingsDialogHtml(
       { ...SETTINGS, project: { ...SETTINGS.project, file: null, rulebook: null } },
@@ -135,7 +164,7 @@ describe('settingsDialogHtml', () => {
     const html = settingsDialogHtml(
       {
         ...SETTINGS,
-        overrides: { agent: 'codex' },
+        overrides: { chatAgent: 'codex' },
         project: { ...SETTINGS.project, chatEnabled: false },
       },
       AGENTS
@@ -148,13 +177,18 @@ describe('settingsDialogHtml', () => {
         AGENTS
       )
     ).toContain('canvas kept for an identical diff: no')
-    expect(html).toContain('--agent codex')
-    expect(html).not.toContain('--model')
+    expect(html).toContain('--chat-agent codex')
+    expect(html).not.toContain('--chat-model')
   })
 
   it('names the serve flags that win over the file', () => {
-    const html = settingsDialogHtml({ ...SETTINGS, overrides: { agent: 'codex', model: 'x' } }, AGENTS)
-    expect(html).toContain('--agent codex --model x')
+    const html = settingsDialogHtml(
+      { ...SETTINGS, overrides: { chatAgent: 'codex', chatModel: 'x' } },
+      AGENTS
+    )
+    expect(html).toContain(
+      'overrides the AI Chat settings in this file for now: <code class="flag">--chat-agent codex</code> <code class="flag">--chat-model x</code>'
+    )
   })
 
   it('offers both layer views with the saved one selected', () => {
@@ -183,8 +217,8 @@ describe('readSettingsForm', () => {
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
       layerView: 'all',
-      agent: 'claude',
-      model: null,
+      chatAgent: 'claude',
+      chatModel: null,
       chatTimeoutSec: 600,
       maxTurns: null,
     })
@@ -217,7 +251,7 @@ describe('openSettingsDialog', () => {
     const dialog = await open()
     expect(dialog.id).toBe(SETTINGS_DIALOG_ID)
     expect(dialog.hasAttribute('open')).toBe(true)
-    expect(el(dialog, '#set-agent')).toBeTruthy()
+    expect(el(dialog, '#set-chat-agent')).toBeTruthy()
   })
 
   it('holds only the reading level when the project turns chat off, and asks for no agents', async () => {
@@ -231,7 +265,7 @@ describe('openSettingsDialog', () => {
     })
     expect(asked).toBe(false)
     expect(el(dialog, '#set-fold-level')).toBeTruthy()
-    expect(dialog.querySelector('#set-agent')).toBeNull()
+    expect(dialog.querySelector('#set-chat-agent')).toBeNull()
     expect(dialog.querySelector('[data-act="settings-probe"]')).toBeNull()
   })
 
@@ -261,9 +295,9 @@ describe('openSettingsDialog', () => {
           return SETTINGS
         },
       },
-      data => saved.push(data.settings.agent)
+      data => saved.push(data.settings.chatAgent)
     )
-    const agent = el(dialog, '#set-agent')
+    const agent = el(dialog, '#set-chat-agent')
     if (!(agent instanceof HTMLSelectElement)) {
       throw new Error('no select')
     }
@@ -273,8 +307,8 @@ describe('openSettingsDialog', () => {
     expect(saved[0]).toEqual({
       foldLevel: 'light',
       layerView: 'all',
-      agent: 'codex',
-      model: null,
+      chatAgent: 'codex',
+      chatModel: null,
       chatTimeoutSec: 600,
       maxTurns: null,
     })
@@ -284,13 +318,13 @@ describe('openSettingsDialog', () => {
 
   it('swaps the model suggestions when the agent changes', async () => {
     const dialog = await open()
-    const agent = el(dialog, '#set-agent')
+    const agent = el(dialog, '#set-chat-agent')
     if (!(agent instanceof HTMLSelectElement)) {
       throw new Error('no select')
     }
     agent.value = 'codex'
     agent.dispatchEvent(new Event('change', { bubbles: true }))
-    expect(el(dialog, '#model-list').innerHTML).toContain(MODEL_SUGGESTIONS.codex[0] ?? '')
+    expect(el(dialog, '#chat-model-list').innerHTML).toContain(MODEL_SUGGESTIONS.codex[0] ?? '')
   })
 
   it('reports how long the agent took to answer a probe', async () => {
@@ -302,8 +336,8 @@ describe('openSettingsDialog', () => {
 
   it('reports a probe that failed', async () => {
     const dialog = await open({
-      probeAgent: async () => ({
-        id: 'codex',
+      probeAgent: async id => ({
+        id: asChatAgent(id),
         ok: false,
         ms: 10,
         reply: '',
@@ -313,6 +347,11 @@ describe('openSettingsDialog', () => {
         cached: false,
       }),
     })
+    const agent = el(dialog, '#set-chat-agent')
+    if (!(agent instanceof HTMLSelectElement)) {
+      throw new Error('no chat agent select')
+    }
+    agent.value = 'codex'
     el(dialog, '[data-act="settings-probe"]').click()
     await flush()
     expect(dialog.querySelector('.probe-result')?.textContent).toBe('codex failed: not logged in')
@@ -342,14 +381,17 @@ describe('the dialog with parts missing', () => {
   it('reads the values the reader typed', () => {
     const holder = document.createElement('div')
     holder.innerHTML = settingsDialogHtml(
-      { ...SETTINGS, settings: { ...SETTINGS.settings, model: 'gpt-5.2', maxTurns: 6, chatTimeoutSec: 120 } },
+      {
+        ...SETTINGS,
+        settings: { ...SETTINGS.settings, chatModel: 'gpt-5.2', maxTurns: 6, chatTimeoutSec: 120 },
+      },
       AGENTS
     )
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
       layerView: 'all',
-      agent: 'claude',
-      model: 'gpt-5.2',
+      chatAgent: 'claude',
+      chatModel: 'gpt-5.2',
       chatTimeoutSec: 120,
       maxTurns: 6,
     })
@@ -364,14 +406,16 @@ describe('the dialog with parts missing', () => {
   })
 
   it('names a model-only override', () => {
-    expect(settingsDialogHtml({ ...SETTINGS, overrides: { model: 'x' } }, AGENTS)).toContain('--model x')
+    expect(settingsDialogHtml({ ...SETTINGS, overrides: { chatModel: 'x' } }, AGENTS)).toContain(
+      '--chat-model x'
+    )
   })
 
   it('does nothing for a change that is not the agent select', async () => {
     const dialog = await open()
-    const model = el(dialog, '#set-model')
+    const model = el(dialog, '#set-chat-model')
     model.dispatchEvent(new Event('change', { bubbles: true }))
-    expect(el(dialog, '#model-list').innerHTML).toContain(MODEL_SUGGESTIONS.claude[0] ?? '')
+    expect(el(dialog, '#chat-model-list').innerHTML).toContain(MODEL_SUGGESTIONS.claude[0] ?? '')
   })
 
   it('reports a probe failure that carries only a code', async () => {
@@ -443,7 +487,7 @@ describe('the probe with the dialog cut down', () => {
   it('does not fail when the result line is gone', async () => {
     const dialog = await open()
     dialog.querySelector('.probe-result')?.remove()
-    dialog.querySelector('#set-agent')?.remove()
+    dialog.querySelector('#set-chat-agent')?.remove()
     el(dialog, '[data-act="settings-probe"]').click()
     await flush()
     expect(dialog.querySelector('.cmd-err')).toBeNull()
