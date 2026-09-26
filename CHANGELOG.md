@@ -35,7 +35,8 @@
   `k` step through the layers, and a link into a layer shows that layer. A review mark does not
   move on to the next layer. The default, `all`, keeps the canvas as one page.
 - Collapse toggles draw a chevron icon in place of the `>` character.
-- Click a file's name to collapse or open its card.
+- Click a file's name to collapse or open its card. A double or triple click that selects the name
+  leaves the card as it was.
 - The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
   warning stays pinned to the top.
 - The bars above the overview span the full reading column, so they no longer stop short when AI

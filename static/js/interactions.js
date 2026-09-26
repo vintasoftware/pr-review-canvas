@@ -247,6 +247,9 @@ export function wireReview(root, session, opts = {}) {
   /** @type {HTMLElement | null} */
   let focusedEl = null
   let pendingG = false
+  /** The card toggle the last single click flipped, so the second click of a double-click can undo it. */
+  /** @type {HTMLElement | null} */
+  let toggledByClick = null
   let composerSeq = 0
   let signoffOpening = 0
 
@@ -867,13 +870,24 @@ export function wireReview(root, session, opts = {}) {
 
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
-    'toggle-card': el => {
+    'toggle-card': (el, event) => {
+      // A double or triple click selects the file name. Its first click already flipped the card,
+      // so the second one flips it back and the third does nothing.
+      if (event.detail > 1) {
+        if (event.detail === 2 && toggledByClick === el) {
+          setCardCollapsed(el)
+        }
+        toggledByClick = null
+        return
+      }
       // A file's title toggles its card too, but not at the end of a drag that selected its text.
       const picked = window.getSelection()
       if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
+        toggledByClick = null
         return
       }
       setCardCollapsed(el)
+      toggledByClick = el
     },
     'mark-layer': el => {
       const id = el.getAttribute('data-reviewed-id') ?? ''

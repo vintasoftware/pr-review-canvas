@@ -81,6 +81,14 @@ test('collapses and reopens file and layer bodies', async ({ page, reviewUrl }) 
   await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
   await fileTitle.click()
   await expect(fileBody).toBeVisible()
+  // Double and triple clicks select the name to copy it, and leave the card open.
+  const onName = { position: { x: 4, y: 4 } }
+  await fileTitle.dblclick(onName)
+  expect(await page.evaluate(() => window.getSelection()?.toString())).not.toBe('')
+  await expect(fileBody).toBeVisible()
+  await fileTitle.click({ ...onName, clickCount: 3 })
+  await expect(fileBody).toBeVisible()
+  await expect(fileToggle).toHaveAttribute('aria-expanded', 'true')
 
   const layerBody = layer.locator(':scope > .layer-body')
   const layerToggle = layer.locator(':scope > .layer-h > .chev')

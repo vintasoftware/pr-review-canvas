@@ -392,6 +392,41 @@ describe('card toggles', () => {
     window.getSelection()?.removeAllRanges()
   })
 
+  it('leaves the card as it was after a double or triple click selects the file name', () => {
+    const { root } = setup()
+    const body = root.querySelector('article.file#file-src_app_ts > .file-body')
+    const title = root.querySelector('article.file#file-src_app_ts .file-h .path')
+    if (!(title instanceof HTMLElement) || title.firstChild === null) {
+      throw new Error('file title has no text')
+    }
+    const text = title.firstChild
+    /** The clicks a browser sends for one press sequence; from the second on, the name is selected. */
+    const clicks = (/** @type {number} */ count) => {
+      for (let detail = 1; detail <= count; detail++) {
+        if (detail === 2) {
+          window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
+        }
+        title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }))
+      }
+      window.getSelection()?.removeAllRanges()
+    }
+    clicks(2)
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    clicks(3)
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    clicks(1)
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    clicks(2)
+    expect(body?.hasAttribute('hidden')).toBe(true)
+
+    // A click that ended a drag flipped nothing, so a second click right after it undoes nothing.
+    window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }))
+    window.getSelection()?.removeAllRanges()
+    expect(body?.hasAttribute('hidden')).toBe(true)
+  })
+
   it('collapses a layer section from its own chevron', () => {
     const { root } = setup()
     click(root, 'section.layer .layer-h .chev')
