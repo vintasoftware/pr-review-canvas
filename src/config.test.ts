@@ -77,7 +77,14 @@ describe('loadRuntimeConfig', () => {
       host: GITHUB_HOST,
       fixtureCanvasPath: null,
       chatOverrides: {},
+      openBrowser: true,
     })
+  })
+
+  it('opens the browser unless --no-open is passed or CI is set', async () => {
+    expect(await loadRuntimeConfig({ noOpen: true }, {}, git(), '/cwd')).toMatchObject({ openBrowser: false })
+    expect(await loadRuntimeConfig({}, { CI: 'true' }, git(), '/cwd')).toMatchObject({ openBrowser: false })
+    expect(await loadRuntimeConfig({}, { CI: '' }, git(), '/cwd')).toMatchObject({ openBrowser: false })
   })
 
   it('classifies a GitLab origin', async () => {

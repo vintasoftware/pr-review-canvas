@@ -33,10 +33,17 @@
   `one at a time` the canvas shows the overview or one layer. The rail moves between them, `j` and
   `k` step through the layers, and a link into a layer shows that layer. A review mark does not
   move on to the next layer. The default, `all`, keeps the canvas as one page.
+- Collapse toggles draw a chevron icon in place of the `>` character.
+- Click a file's name to collapse or open its card.
 - The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
   warning stays pinned to the top.
 - The bars above the overview span the full reading column, so they no longer stop short when AI
   Chat is minimized.
+
+### Server
+
+- `serve` opens the canvas in the default browser once the port is bound. Pass `--no-open` to skip
+  this. The browser also stays closed when `CI` is set.
 
 ### Breaking changes
 

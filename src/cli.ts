@@ -57,6 +57,7 @@ async function buildContext(
     fixtureCanvas?: string | undefined
     chatAgent?: string | undefined
     chatModel?: string | undefined
+    noOpen?: boolean | undefined
   } = {}
 ): Promise<AppContext> {
   const cwd = process.cwd()
@@ -69,6 +70,7 @@ async function buildContext(
       fixtureCanvas: extra.fixtureCanvas,
       chatAgent: extra.chatAgent,
       chatModel: extra.chatModel,
+      noOpen: extra.noOpen,
     },
     process.env,
     git,
@@ -102,6 +104,7 @@ async function serve(argv: string[]): Promise<number> {
       // Deprecated spellings of --chat-agent and --chat-model.
       agent: { type: 'string' },
       model: { type: 'string' },
+      'no-open': { type: 'boolean' },
     },
     strict: true,
   })
@@ -113,6 +116,7 @@ async function serve(argv: string[]): Promise<number> {
     fixtureCanvas: values['fixture-canvas'],
     chatAgent: values['chat-agent'] ?? values.agent,
     chatModel: values['chat-model'] ?? values.model,
+    noOpen: values['no-open'],
   })
   const skill = await checkSkill(ctx.config.repoRoot)
   if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)

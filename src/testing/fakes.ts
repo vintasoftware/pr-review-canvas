@@ -366,6 +366,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     host: opts.host ?? GITHUB_HOST,
     fixtureCanvasPath: null,
     chatOverrides: opts.chatOverrides ?? {},
+    openBrowser: false,
   }
   const git = opts.git ?? createFakeGit()
   const now = opts.now ?? (() => new Date('2026-09-10T12:00:00.000Z'))

@@ -868,6 +868,11 @@ export function wireReview(root, session, opts = {}) {
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
     'toggle-card': el => {
+      // A file's title toggles its card too, but not at the end of a drag that selected its text.
+      const picked = window.getSelection()
+      if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
+        return
+      }
       setCardCollapsed(el)
     },
     'mark-layer': el => {

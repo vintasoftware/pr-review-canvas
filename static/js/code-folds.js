@@ -5,7 +5,7 @@
 // reader's level only decides which of them are active, so changing it never rebuilds the table
 // and an open composer or an expanded fold survives. The renderer's own folds hide in every mode.
 import { findRow } from './anchors.js'
-import { esc } from './dom.js'
+import { CHEVRON_ICON, esc } from './dom.js'
 import { foldsForLevel } from './fold-levels.js'
 
 /** @typedef {import('./contract-types.js').CodeFold} CodeFold */
@@ -151,7 +151,7 @@ function createToggle(first, title, lines) {
   toggle.className = 'fold-toggle'
   toggle.type = 'button'
   toggle.innerHTML =
-    `<span class="chev" aria-hidden="true">&gt;</span><span class="fold-title">${esc(title)}</span>` +
+    `<span class="chev" aria-hidden="true">${CHEVRON_ICON}</span><span class="fold-title">${esc(title)}</span>` +
     `<span class="fold-lines"> · ${lines} ${lines === 1 ? 'line' : 'lines'}</span>`
 
   cell.appendChild(toggle)

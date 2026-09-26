@@ -2,6 +2,7 @@
 // @vitest-environment happy-dom
 import {
   avatarHtml,
+  CHEVRON_ICON,
   chevronHtml,
   copyToClipboard,
   detailsSummaryHtml,
@@ -32,16 +33,16 @@ describe('fragment', () => {
 describe('chevronHtml and detailsSummaryHtml', () => {
   it('renders the chevron button with its expanded state and escaped label', () => {
     expect(chevronHtml('Collapse file')).toBe(
-      '<button class="chev" type="button" aria-expanded="true" aria-label="Collapse file">&gt;</button>'
+      `<button class="chev" type="button" aria-expanded="true" aria-label="Collapse file">${CHEVRON_ICON}</button>`
     )
     expect(chevronHtml('a "b"', false)).toBe(
-      '<button class="chev" type="button" aria-expanded="false" aria-label="a &quot;b&quot;">&gt;</button>'
+      `<button class="chev" type="button" aria-expanded="false" aria-label="a &quot;b&quot;">${CHEVRON_ICON}</button>`
     )
   })
 
   it('uses a decorative chevron so the summary handles clicks', () => {
     expect(detailsSummaryHtml('<span>T</span>', 'Toggle T')).toBe(
-      '<summary aria-label="Toggle T"><span class="chev" aria-hidden="true">&gt;</span><span>T</span></summary>'
+      `<summary aria-label="Toggle T"><span class="chev" aria-hidden="true">${CHEVRON_ICON}</span><span>T</span></summary>`
     )
     document.body.innerHTML = `<details open>${detailsSummaryHtml('<span>T</span>', 'Toggle "T"')}</details>`
     expect(document.querySelector('summary')?.getAttribute('aria-label')).toBe('Toggle "T"')

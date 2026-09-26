@@ -16,6 +16,7 @@ export interface ServeFlags {
   /** Wins over `.pr-review/settings.yml` for this run; the settings dialog reports it. */
   chatAgent?: string | undefined
   chatModel?: string | undefined
+  noOpen?: boolean | undefined
 }
 
 export interface RuntimeConfig {
@@ -30,6 +31,8 @@ export interface RuntimeConfig {
   fixtureCanvasPath: string | null
   /** Chat agent and model the flags force for this run, if any. */
   chatOverrides: SettingsOverrides
+  /** Open the index in the default browser once the port is bound. Off with `--no-open` or in CI. */
+  openBrowser: boolean
 }
 
 export type ConfigErrorCode = 'NOT_A_REPO' | 'NO_ORIGIN' | 'BAD_REQUEST'
@@ -138,5 +141,6 @@ export async function loadRuntimeConfig(
     host,
     fixtureCanvasPath: flags.fixtureCanvas === undefined ? null : path.resolve(cwd, flags.fixtureCanvas),
     chatOverrides: parseChatOverrides(flags),
+    openBrowser: flags.noOpen !== true && readEnv(env, 'CI') === undefined,
   }
 }

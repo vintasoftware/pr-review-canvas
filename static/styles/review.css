@@ -37,20 +37,25 @@
   gap: 6px 14px;
   align-items: center;
 }
-/* The `>` chevron before a layer or file title is its collapse toggle. It points right when the card
+/* The chevron before a layer or file title is its collapse toggle. It points right when the card
    is closed and turns down while it is open; the reduced-motion rule below removes the turn. */
 .chev {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 0;
-  padding: 0 2px;
+  padding: 2px;
   margin: 0;
   color: var(--ink);
   font: inherit;
-  font-weight: 700;
   line-height: 1;
   cursor: pointer;
   transition: transform 0.12s ease-out;
+}
+.chev-icon {
+  display: block;
 }
 .chev[aria-expanded='true'] {
   transform: rotate(90deg);
@@ -437,6 +442,7 @@ details[open] > summary .chev,
   border-bottom: 1px solid var(--line);
 }
 .file-h .path {
+  cursor: pointer;
   font-size: 12px;
   font-weight: 700;
   flex: 1 1 220px;

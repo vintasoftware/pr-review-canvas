@@ -20,6 +20,7 @@ For setup and the basic review workflow, see the [README](../README.md).
 | `--repo <dir>`                   | All commands                             | Uses the current directory when omitted; resolves the repository root from there                                 |
 | `--data-dir <dir>`               | All except `install-skill` and `upgrade` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
 | `--port <n>`                     | `serve`                                  | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
+| `--no-open`                      | `serve`                                  | Does not open the canvas in the default browser at startup; the browser also stays closed when `CI` is set       |
 | `--chat-agent claude\|codex`     | `serve`                                  | Overrides the saved AI Chat agent for this run; not canvas generation. `--agent` is a deprecated alias           |
 | `--chat-model <id>`              | `serve`                                  | Overrides the saved AI Chat model for this run; not canvas generation. `--model` is a deprecated alias           |
 | `--fixture-canvas <review.json>` | `serve`                                  | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
