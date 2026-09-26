@@ -77,17 +77,16 @@ function chatFieldsHtml(settings, agents) {
 }
 
 /**
- * The project's `generation.models`, one `agent → model` per entry. With none, the skill keeps the
- * model of the session that runs it.
+ * The project's `generation.models`, one `agent → model` per entry. An agent it does not name keeps
+ * the model of the session that runs the skill.
  * @param {SettingsResponse['project']['generationModels']} models
  * @returns {string}
  */
 function generationModelsHtml(models) {
-  const entries = Object.entries(models)
-  if (entries.length === 0) {
-    return "none set (each agent keeps the session's model)"
-  }
-  return entries.map(([agent, model]) => `<span class="mono">${esc(agent)} → ${esc(model)}</span>`).join(', ')
+  const entries = Object.entries(models).map(
+    ([agent, model]) => `<span class="mono">${esc(agent)} → ${esc(model)}</span>`
+  )
+  return [...entries, "any other agent keeps the session's model"].join(', ')
 }
 
 /**

@@ -30,7 +30,7 @@ describe('mergeProjectConfig', () => {
       rulebook: 'docs/REVIEW.md',
       layers: [{ id: 'one', title: 'One', description: 'd', paths: ['a/**'] }],
       highRisk: [{ pattern: '**/x', label: 'x' }],
-      generation: { maxRepairRounds: 5, caps: { rationale: 500 }, models: { claude: 'opus' } },
+      generation: { maxRepairRounds: 5, caps: { rationale: 500 }, models: { codex: 'gpt-6-sol' } },
       chat: { enabled: false },
     })
     expect(warnings).toEqual([])
@@ -44,7 +44,7 @@ describe('mergeProjectConfig', () => {
         maxRepairRounds: 5,
         inlineDiffMaxLines: 1500,
         smallPrHunks: 10,
-        models: { claude: 'opus' },
+        models: { claude: 'opus', codex: 'gpt-6-sol' },
         caps: { rationale: 500 },
       },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
@@ -68,7 +68,12 @@ describe('mergeProjectConfig', () => {
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
       smallPrHunks: 10,
-      models: {},
+      models: { claude: 'opus' },
+    })
+    expect(
+      mergeProjectConfig({ generation: { models: { claude: 'sonnet' } } }).config.generation.models
+    ).toEqual({
+      claude: 'sonnet',
     })
     expect(mergeProjectConfig({ generation: { models: { claude: '' } } }).warnings[0]).toContain('invalid')
     expect(mergeProjectConfig({ generation: { smallPrHunks: 25 } }).config.generation.smallPrHunks).toBe(25)

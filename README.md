@@ -186,8 +186,9 @@ whether AI Chat is enabled. The settings dialog displays this configuration; edi
 change it. See the [configuration reference](docs/reference.md#project-config).
 
 Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKILL.md#model-choice).
-Set `generation.models` to pick the model each agent generates canvases with for this project, for
-example `claude: opus`. An agent with no entry keeps the model of the session that runs the skill.
+Claude generates canvases with Opus by default. Set `generation.models` to pick another model for an
+agent in this project, for example `claude: sonnet` or `codex: gpt-6-sol`. Any other agent with no
+entry keeps the model of the session that runs the skill.
 The skill passes the value to its host as written, so chat model families and `pin:` do not apply,
 and the chat settings do not change it. The settings dialog lists it under **Canvas generation**.
 

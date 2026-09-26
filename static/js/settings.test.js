@@ -32,7 +32,7 @@ const SETTINGS = {
     maxRepairRounds: 3,
     inlineDiffMaxLines: 1500,
     smallPrHunks: 10,
-    generationModels: {},
+    generationModels: { claude: 'opus' },
     keepForIdenticalDiff: true,
     layers: 8,
     highRisk: 2,
@@ -140,14 +140,17 @@ describe('settingsDialogHtml', () => {
     expect(html).toContain('<label for="set-chat-model">Chat model</label>')
     expect(html).toContain('They do not change which model generates canvases')
     expect(html).toContain('<h4>Canvas generation</h4>')
-    expect(html).toContain("canvas generation models: none set (each agent keeps the session's model)")
+    expect(html).toContain(
+      'canvas generation models: <span class="mono">claude → opus</span>, any other agent keeps the session\'s model'
+    )
   })
 
   it('lists each canvas generation model the project sets, by agent', () => {
     const project = { ...SETTINGS.project, generationModels: { claude: 'opus', codex: '<gpt>' } }
     const html = settingsDialogHtml({ ...SETTINGS, project }, AGENTS)
     expect(html).toContain(
-      'canvas generation models: <span class="mono">claude → opus</span>, <span class="mono">codex → &lt;gpt&gt;</span>'
+      'canvas generation models: <span class="mono">claude → opus</span>, <span class="mono">codex → &lt;gpt&gt;</span>, ' +
+        "any other agent keeps the session's model"
     )
   })
 

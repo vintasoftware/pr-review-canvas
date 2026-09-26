@@ -5,8 +5,9 @@
 ### Canvas generation
 
 - `generation.models` in `pr-review.config.yml` sets the model each agent generates canvases with,
-  keyed by agent id (`claude: opus`). `prepare` prints it as `models`. An agent with no entry keeps
-  the session's model; the skill no longer pins Sonnet.
+  keyed by agent id (`claude: opus`). `prepare` prints it as `models`. Claude generates with Opus
+  unless the project names another model; any other agent with no entry keeps the session's model.
+  The skill no longer pins Sonnet.
 - The settings dialog lists the project's canvas generation models under **Canvas generation** in
   the read-only project config, and shows the chat fields as **Chat agent** and **Chat model**
   under an **AI Chat** heading. The header's generator pill reads
