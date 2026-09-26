@@ -27,10 +27,18 @@ it), so you start a fresh `model.json`. Run every `pr-review` command from the r
 
 ### Model choice
 
-Use the most capable model, such as Opus, for the generation and validation steps. When
-delegating to another agent, pass it the prepared prompt and context paths; it writes the same
-model file. Honor an explicit user model choice. If the host cannot select models, keep its selected model.
-Record the model that actually generated the canvas when publishing.
+The project picks the default model. The AI Chat settings (`chatAgent`, `chatModel`, and
+`serve --chat-agent/--chat-model`) are for the chat pane and never pick your model. Prepare prints
+the project's `generation.models` as
+`models`, keyed by agent id (the `--agent` you publish with): `{ "claude": "opus" }`. Generate with
+the model under your own agent id. When `models` has no entry for your agent, use the most capable
+model, such as Opus, for the generation and validation steps. Honor an explicit user model choice
+over all of these.
+
+When the model to use is not the one you run on, delegate generation and validation to a subagent
+on that model: pass it the prepared prompt and context paths; it writes the same model file. If the
+host cannot select models, or does not offer the named one, keep its selected model and tell the
+user. Record the model that actually generated the canvas when publishing.
 
 ### 1. Prepare
 
@@ -72,6 +80,7 @@ Progress goes to stderr. The last stdout line is JSON:
     "mergeBaseSha": "...",
     "promptPath": "...",
     "contextPath": "...",
+    "models": { "claude": "opus" },
     "status": "prepared"
 }
 ```

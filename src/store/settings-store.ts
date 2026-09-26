@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { isMap, parseDocument } from 'yaml'
+import { type Document, isMap, isScalar, parseDocument } from 'yaml'
 import { DEFAULT_SETTINGS, type Settings, type SettingsInput, SettingsSchema } from '../contract/settings.js'
 import { readText, writeTextAtomic } from './atomic-json.js'
 
@@ -7,7 +7,8 @@ export const SETTINGS_FILE = 'settings.yml'
 
 /** Written once, the first time the file is needed, so the user can edit it by hand too. */
 export const SETTINGS_TEMPLATE = `# Personal pr-review settings. Gitignored: this file is yours, not the project's.
-# Project-wide settings (layers, caps, chat.enabled) live in pr-review.config.yml at the repo root.
+# Project-wide settings (layers, caps, canvas generation models, chat.enabled) live in
+# pr-review.config.yml at the repo root.
 version: 1
 
 # The look of the page: terminal or github.
@@ -24,11 +25,13 @@ foldLevel: light
 # them.
 layerView: all
 
-# Which agent answers in the AI Chat pane: claude or codex.
-agent: claude
+# Which agent answers in the AI Chat pane: claude or codex. Canvas generation does not read
+# this; generation.models in pr-review.config.yml sets the canvas generation models.
+chatAgent: claude
 
-# Model id for that agent, or null for the agent's own default.
-model: null
+# The model AI Chat runs, or null for the chat agent's own default. Canvas generation does not
+# read this either.
+chatModel: null
 
 # How long one chat turn may take, in seconds.
 chatTimeoutSec: 600
@@ -110,9 +113,51 @@ export function parseSettings(text: string): Settings {
   if (typeof raw !== 'object' || raw === null) {
     return DEFAULT_SETTINGS
   }
-  const merged = { ...DEFAULT_SETTINGS, ...raw, version: 1 }
+  const merged = { ...DEFAULT_SETTINGS, ...withChatKeys(raw), version: 1 }
   const parsed = SettingsSchema.safeParse(merged)
   return parsed.success ? parsed.data : DEFAULT_SETTINGS
+}
+
+/**
+ * The chat keys of files written before they were named for the chat: `agent` became `chatAgent`
+ * and `model` became `chatModel`. A file that has both spellings keeps the new one.
+ */
+const LEGACY_KEYS = { agent: 'chatAgent', model: 'chatModel' } as const
+
+function withChatKeys(raw: object): object {
+  const out: Record<string, unknown> = { ...raw }
+  for (const [legacy, key] of Object.entries(LEGACY_KEYS)) {
+    if (legacy in out && !(key in out)) {
+      out[key] = out[legacy]
+    }
+    delete out[legacy]
+  }
+  return out
+}
+
+/**
+ * Renames a legacy chat key where it stands, so its position survives, and gives it the template's
+ * comment, which says the key is for the chat only. A legacy key next to its new spelling goes.
+ */
+function renameLegacyKeys(doc: Document): void {
+  if (!isMap(doc.contents)) {
+    return
+  }
+  const templateKeys = parseDocument(SETTINGS_TEMPLATE).contents
+  for (const [legacy, key] of Object.entries(LEGACY_KEYS)) {
+    if (doc.has(key)) {
+      doc.delete(legacy)
+      continue
+    }
+    const found = doc.contents.items.find(p => isScalar(p.key) && p.key.value === legacy)?.key
+    if (isScalar(found)) {
+      found.value = key
+      const template = isMap(templateKeys)
+        ? templateKeys.items.find(p => isScalar(p.key) && p.key.value === key)?.key
+        : undefined
+      found.commentBefore = isScalar(template) ? (template.commentBefore ?? null) : null
+    }
+  }
 }
 
 /** The new file text and the settings it holds, given the old text and the changed fields. */
@@ -126,13 +171,14 @@ export function applySettings(text: string, input: SettingsInput): { text: strin
   if (doc.errors.length > 0 || !isMap(doc.contents)) {
     doc = parseDocument(SETTINGS_TEMPLATE)
   }
+  renameLegacyKeys(doc)
   doc.set('version', 1)
   doc.set('skin', settings.skin)
   doc.set('theme', settings.theme)
   doc.set('foldLevel', settings.foldLevel)
   doc.set('layerView', settings.layerView)
-  doc.set('agent', settings.agent)
-  doc.set('model', settings.model)
+  doc.set('chatAgent', settings.chatAgent)
+  doc.set('chatModel', settings.chatModel)
   doc.set('chatTimeoutSec', settings.chatTimeoutSec)
   doc.set('maxTurns', settings.maxTurns)
   return { text: String(doc), settings }
@@ -152,11 +198,11 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   if (input.layerView !== undefined) {
     out.layerView = input.layerView
   }
-  if (input.agent !== undefined) {
-    out.agent = input.agent
+  if (input.chatAgent !== undefined) {
+    out.chatAgent = input.chatAgent
   }
-  if (input.model !== undefined) {
-    out.model = input.model === '' ? null : input.model
+  if (input.chatModel !== undefined) {
+    out.chatModel = input.chatModel === '' ? null : input.chatModel
   }
   if (input.chatTimeoutSec !== undefined) {
     out.chatTimeoutSec = input.chatTimeoutSec

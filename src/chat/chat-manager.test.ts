@@ -40,7 +40,7 @@ function target(): ChatTarget {
 }
 
 function build(
-  opts: { runner?: FakeRunner; overrides?: { agent?: 'claude' | 'codex'; model?: string } } = {}
+  opts: { runner?: FakeRunner; overrides?: { chatAgent?: 'claude' | 'codex'; chatModel?: string } } = {}
 ) {
   runner = opts.runner ?? createFakeRunner()
   const prs = createPrStore(dataDir)
@@ -242,7 +242,7 @@ describe('createChatManager() threads and settings', () => {
 
   it('starts a new thread when the agent changes', async () => {
     await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
-    await settings.write({ agent: 'codex' })
+    await settings.write({ chatAgent: 'codex' })
     await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
     const { threads } = await manager.threads(42)
     expect(threads.map(t => t.agent)).toEqual(['claude', 'codex'])
@@ -266,16 +266,16 @@ describe('createChatManager() threads and settings', () => {
   })
 
   it('lets the serve flags win over the settings file', async () => {
-    await settings.write({ agent: 'claude', model: 'from-file' })
-    build({ overrides: { agent: 'codex', model: 'from-flag' } })
-    expect(await manager.effectiveSettings()).toMatchObject({ agent: 'codex', model: 'from-flag' })
+    await settings.write({ chatAgent: 'claude', chatModel: 'from-file' })
+    build({ overrides: { chatAgent: 'codex', chatModel: 'from-flag' } })
+    expect(await manager.effectiveSettings()).toMatchObject({ chatAgent: 'codex', chatModel: 'from-flag' })
     await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
     expect(runner.runs[0]?.model).toBe('from-flag')
     expect(runner.runs[0]?.agent).toBe('codex')
   })
 
   it('runs the newest model of the saved family', async () => {
-    await settings.write({ agent: 'codex', model: 'gpt-5.6-terra[high]' })
+    await settings.write({ chatAgent: 'codex', chatModel: 'gpt-5.6-terra[high]' })
     build({ runner: createFakeRunner({ modelUpgrades: { codex: { 'gpt-5.6-terra': 'gpt-6-sol' } } }) })
     await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
     expect(runner.runs[0]?.model).toBe('gpt-6-sol[high]')
@@ -288,7 +288,7 @@ describe('createChatManager() threads and settings', () => {
   })
 
   it('moves a Codex thread with no saved model off a model the catalog replaced', async () => {
-    await settings.write({ agent: 'codex' })
+    await settings.write({ chatAgent: 'codex' })
     build({
       runner: createFakeRunner({
         sessionModel: 'gpt-5.6-terra',
@@ -335,8 +335,11 @@ describe('the hints on an agent failure', () => {
   })
 
   it('takes a model override on its own, leaving the agent to the file', async () => {
-    build({ overrides: { model: 'only-the-model' } })
-    expect(await manager.effectiveSettings()).toMatchObject({ agent: 'claude', model: 'only-the-model' })
+    build({ overrides: { chatModel: 'only-the-model' } })
+    expect(await manager.effectiveSettings()).toMatchObject({
+      chatAgent: 'claude',
+      chatModel: 'only-the-model',
+    })
   })
 })
 

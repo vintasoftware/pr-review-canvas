@@ -210,7 +210,7 @@ describe('the chat thread routes', () => {
 describe('the settings routes', () => {
   it('returns the personal settings, the flags that win over them, and the project config', async () => {
     t = await context()
-    t.ctx.config.chatOverrides.agent = 'codex'
+    t.ctx.config.chatOverrides.chatAgent = 'codex'
     const res = await createApp(t.ctx).request('/api/settings', { headers: LOCAL })
     const body = await json<SettingsResponse>(res)
     expect(body.settings).toEqual({
@@ -219,12 +219,12 @@ describe('the settings routes', () => {
       theme: 'auto',
       foldLevel: 'light',
       layerView: 'all',
-      agent: 'claude',
-      model: null,
+      chatAgent: 'claude',
+      chatModel: null,
       chatTimeoutSec: 600,
       maxTurns: null,
     })
-    expect(body.overrides).toEqual({ agent: 'codex' })
+    expect(body.overrides).toEqual({ chatAgent: 'codex' })
     expect(body.file).toContain('settings.yml')
     expect(body.project).toEqual({
       file: '/repo/pr-review.config.yml',
@@ -233,6 +233,7 @@ describe('the settings routes', () => {
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
       smallPrHunks: 10,
+      generationModels: {},
       keepForIdenticalDiff: true,
       layers: 0,
       highRisk: 0,
@@ -246,8 +247,8 @@ describe('the settings routes', () => {
       headers: POST,
       body: JSON.stringify({
         foldLevel: 'aggressive',
-        agent: 'codex',
-        model: 'gpt-5.2',
+        chatAgent: 'codex',
+        chatModel: 'gpt-5.2',
         chatTimeoutSec: 300,
         maxTurns: 4,
       }),
@@ -258,13 +259,13 @@ describe('the settings routes', () => {
       theme: 'auto',
       foldLevel: 'aggressive',
       layerView: 'all',
-      agent: 'codex',
-      model: 'gpt-5.2',
+      chatAgent: 'codex',
+      chatModel: 'gpt-5.2',
       chatTimeoutSec: 300,
       maxTurns: 4,
     })
     const again = await app.request('/api/settings', { headers: LOCAL })
-    expect((await json<SettingsResponse>(again)).settings.agent).toBe('codex')
+    expect((await json<SettingsResponse>(again)).settings.chatAgent).toBe('codex')
   })
 
   it('rejects a setting outside its range', async () => {
@@ -274,6 +275,19 @@ describe('the settings routes', () => {
       body: JSON.stringify({ chatTimeoutSec: 1 }),
     })
     expect(res.status).toBe(400)
+  })
+
+  it('refuses the old agent and model keys instead of saving nothing, and names the new ones', async () => {
+    const app = createApp(t.ctx)
+    const res = await app.request('/api/settings', {
+      method: 'PUT',
+      headers: POST,
+      body: JSON.stringify({ agent: 'codex' }),
+    })
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(await res.json())).toContain('chatAgent')
+    const again = await app.request('/api/settings', { headers: LOCAL })
+    expect((await json<SettingsResponse>(again)).settings.chatAgent).toBe('claude')
   })
 
   it('lists the agents with whether each can run', async () => {

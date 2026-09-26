@@ -28,10 +28,12 @@ const COMMANDS: CommandHelp[] = [
       { form: '--port <n>', detail: `default ${DEFAULT_PORT}` },
       { form: '--fixture-canvas <review.json>', detail: 'preview this canvas for every pull request' },
       { form: '--no-open', detail: 'leave the browser closed (also when CI is set)' },
-      { form: '--agent claude|codex' },
-      { form: '--model <id>' },
+      { form: '--chat-agent claude|codex', detail: 'the AI Chat agent for this run' },
+      { form: '--chat-model <id>', detail: 'the AI Chat model for this run' },
     ],
-    notes: ['--agent and --model are the chat for this run, and they win over .pr-review/settings.yml.'],
+    notes: [
+      '--chat-agent and --chat-model win over .pr-review/settings.yml. They set AI Chat only, not canvas generation. --agent and --model are deprecated aliases.',
+    ],
   },
   {
     name: 'prepare',
@@ -61,11 +63,14 @@ const COMMANDS: CommandHelp[] = [
     name: 'publish <canvasDir>',
     summary: 'Validate a canvas and share it.',
     flags: [
-      { form: '--agent <id>' },
-      { form: '--model <id>' },
+      { form: '--agent <id>', detail: 'the agent that generated the canvas' },
+      { form: '--model <id>', detail: 'the model that generated it' },
       { form: '--harness claude-code|codex|other' },
       { form: '--allow-stale', detail: 'the prepared commit, after the head has moved' },
       { form: '--skip-self-review-comments', detail: 'leave the self-review justifications unposted' },
+    ],
+    notes: [
+      '--agent and --model record who generated the canvas. generation.models in pr-review.config.yml sets the default generation model for the project.',
     ],
   },
   {

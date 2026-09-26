@@ -312,7 +312,7 @@ describe('the AI Chat routes', () => {
     await fetchThreadHistory(42, 'pr-review-a-b-42-claude-t1', { fetchImpl: f.impl })
     await cancelChat(42, { fetchImpl: f.impl })
     await fetchSettings({ fetchImpl: f.impl })
-    await saveSettings({ agent: 'codex' }, { fetchImpl: f.impl })
+    await saveSettings({ chatAgent: 'codex' }, { fetchImpl: f.impl })
     await fetchAgents({ fetchImpl: f.impl })
     await probeAgent('claude', { fetchImpl: f.impl })
     expect(f.calls.map(c => `${c.init?.method ?? 'GET'} ${c.url}`)).toEqual([

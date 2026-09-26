@@ -179,7 +179,9 @@ describe('header', () => {
     )
     expect(hdr?.querySelector('.meta .pill.open')?.textContent).toBe('open')
     expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5')
-    expect(hdr?.querySelector('.pill.agent')?.textContent).toBe('claude · claude-opus-4-1 · claude-code')
+    expect(hdr?.querySelector('.pill.agent')?.textContent).toBe(
+      'canvas by claude · claude-opus-4-1 · claude-code'
+    )
     expect(hdr?.querySelector('.touches')?.textContent).toBe('touches:schema')
     expect(hdr?.querySelector('.ptext')?.textContent).toBe('0 of 1 layers reviewed')
     expect(hdr?.querySelector('.pline span')?.getAttribute('style')).toBe('width:0%')
@@ -262,7 +264,7 @@ describe('header', () => {
       skin: 'terminal',
       now: NOW,
     })
-    expect(document.querySelector('.pill.agent')?.textContent).toBe('codex · codex')
+    expect(document.querySelector('.pill.agent')?.textContent).toBe('canvas by codex · codex')
   })
 
   it('redraws the line, its text, and the approve gate from the state', () => {

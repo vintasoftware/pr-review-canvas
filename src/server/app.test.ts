@@ -217,7 +217,7 @@ describe('createApp', () => {
       expect(await t.ctx.settings.read()).toMatchObject({
         skin: 'terminal',
         theme: 'dark',
-        agent: 'claude',
+        chatAgent: 'claude',
         chatTimeoutSec: 600,
       })
     })

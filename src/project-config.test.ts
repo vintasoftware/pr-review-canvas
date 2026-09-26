@@ -30,7 +30,7 @@ describe('mergeProjectConfig', () => {
       rulebook: 'docs/REVIEW.md',
       layers: [{ id: 'one', title: 'One', description: 'd', paths: ['a/**'] }],
       highRisk: [{ pattern: '**/x', label: 'x' }],
-      generation: { maxRepairRounds: 5, caps: { rationale: 500 } },
+      generation: { maxRepairRounds: 5, caps: { rationale: 500 }, models: { claude: 'opus' } },
       chat: { enabled: false },
       selfReview: { maxCards: 6 },
     })
@@ -45,6 +45,7 @@ describe('mergeProjectConfig', () => {
         maxRepairRounds: 5,
         inlineDiffMaxLines: 1500,
         smallPrHunks: 10,
+        models: { claude: 'opus' },
         caps: { rationale: 500 },
       },
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
@@ -69,7 +70,9 @@ describe('mergeProjectConfig', () => {
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
       smallPrHunks: 10,
+      models: {},
     })
+    expect(mergeProjectConfig({ generation: { models: { claude: '' } } }).warnings[0]).toContain('invalid')
     expect(mergeProjectConfig({ generation: { smallPrHunks: 25 } }).config.generation.smallPrHunks).toBe(25)
   })
 
