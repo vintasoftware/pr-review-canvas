@@ -249,7 +249,8 @@ changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful fai
 cases rather than lowering thresholds. Each CI job uploads `coverage-node-<version>` with branch
 locations and a summary; locally, these reports are in `coverage/` after `pnpm coverage`.
 
-Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`
+Run `pr-review --help` for CLI commands, or `pr-review <command> --help` for one command's flags.
+Local data goes in the project's `.pr-review/`
 directory; keep it out of Git.
 
 See [Publishing to npm](docs/publishing.md) for release checks and first-publish instructions.

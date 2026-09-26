@@ -33,3 +33,29 @@ describe('pr-review --help', () => {
     }
   })
 })
+
+describe('pr-review <command> --help', () => {
+  function renderFor(command: string): string {
+    const terminal = createFakeTerminal(80)
+    printUsage(terminal.output, '0.5.0', command)
+    return terminal.text()
+  }
+
+  it("prints the command's block with the shared flags, and leaves the other commands out", () => {
+    const text = renderFor('serve')
+    expect(text).toContain('pr-review serve [flags]')
+    expect(text).toContain('--chat-agent claude|codex')
+    expect(text).toContain('--repo <dir>')
+    expect(text).toContain('Exit codes')
+    expect(text).not.toContain('--allow-stale')
+    expect(text).not.toContain('--claude-dir')
+  })
+
+  it('names the positional argument of a command that takes one', () => {
+    expect(renderFor('validate')).toContain('pr-review validate <model.json|review.json> [flags]')
+  })
+
+  it('prints the whole page for a word that names no command', () => {
+    expect(renderFor('nope')).toContain('pr-review <command> [flags]')
+  })
+})

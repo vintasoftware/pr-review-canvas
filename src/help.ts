@@ -1,5 +1,5 @@
-// `pr-review` with no command, and `pr-review --help`. One block per command, wrapped to the
-// terminal, so a flag stays on one line.
+// `pr-review` with no command, `pr-review --help`, and `pr-review <command> --help`. One block per
+// command, wrapped to the terminal, so a flag stays on one line.
 import type { Writable } from 'node:stream'
 import { styleText } from 'node:util'
 import { intro, log, outro } from '@clack/prompts'
@@ -167,15 +167,18 @@ function renderOutput(width: number, output: Writable): string {
   return [styleText('bold', 'Output', { stream: output }), ...lines].join('\n')
 }
 
-/** Writes the help page to `output`, wrapped to its width. */
-export function printUsage(output: Writable, version: string): void {
+/**
+ * Writes the help page to `output`, wrapped to its width. With a command, as for
+ * `pr-review serve --help`, the page holds that command's block and the shared flags.
+ */
+export function printUsage(output: Writable, version: string, command?: string): void {
   const width = contentWidth(streamColumns(output))
   const guide = { output, withGuide: true } as const
+  const one = COMMANDS.find(help => help.name.split(' ')[0] === command)
   intro(`pr-review ${version}`, guide)
-  log.message('pr-review <command> [flags]', { ...guide, spacing: 1 })
-  log.message(renderBlock(SHARED, width, output), { ...guide, spacing: 1 })
-  for (const command of COMMANDS) {
-    log.message(renderBlock(command, width, output), { ...guide, spacing: 1 })
+  log.message(`pr-review ${one === undefined ? '<command>' : one.name} [flags]`, { ...guide, spacing: 1 })
+  for (const block of one === undefined ? [SHARED, ...COMMANDS] : [one, SHARED]) {
+    log.message(renderBlock(block, width, output), { ...guide, spacing: 1 })
   }
   log.message(renderOutput(width, output), { ...guide, spacing: 1 })
   outro('', guide)
