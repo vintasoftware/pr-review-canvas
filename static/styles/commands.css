@@ -155,6 +155,11 @@
   color: var(--fg-muted);
   border-color: var(--line);
 }
+.pill.self-review {
+  color: #1e1f2b;
+  background: var(--v5);
+  border-color: var(--line-strong);
+}
 .pill.test-tag {
   color: #1e1f2b;
   background: var(--s1);

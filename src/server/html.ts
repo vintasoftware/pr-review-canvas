@@ -1,7 +1,7 @@
 import { html, raw } from 'hono/html'
 import type { HtmlEscapedString } from 'hono/utils/html'
 import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.js'
-import { keyLabel, keyToString, type LocalKey } from '../contract/review-key.js'
+import { keyLabel, keyToString, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 
@@ -40,6 +40,8 @@ export interface PageOptions {
   body: Html
   /** Load the app module. Off for the plain pages (home, error). */
   app: boolean
+  /** The module the page boots from, when it is not the review app. */
+  entry?: string
   /** The nonce of this response's Content-Security-Policy; the inline scripts carry it. */
   nonce: string
   /** How this page is painted, from the settings file or this request's `?skin` and `?theme`. */
@@ -47,6 +49,7 @@ export interface PageOptions {
 }
 
 export function pageShell(opts: PageOptions): Html {
+  const entry = opts.entry ?? '/static/js/app.js'
   const preload = Object.entries(IMPORT_MAP.imports)
     .filter(([name]) => !LAZY_IMPORTS.includes(name))
     .map(([, href]) => href)
@@ -59,12 +62,12 @@ export function pageShell(opts: PageOptions): Html {
 <link rel="stylesheet" href="/static/styles.css">
 <script type="importmap" nonce="${opts.nonce}">${raw(jsonForScript(IMPORT_MAP))}</script>
 ${opts.app ? preload.map(href => html`<link rel="modulepreload" href="${href}">`) : ''}
-${opts.app ? html`<link rel="modulepreload" href="/static/js/app.js">` : ''}
+${opts.app ? html`<link rel="modulepreload" href="${entry}">` : ''}
 <script id="bootstrap" type="application/json" nonce="${opts.nonce}">${raw(jsonForScript(opts.bootstrap))}</script>
 </head>
 <body>
 ${opts.body}
-${opts.app ? html`<script type="module" src="/static/js/app.js"></script>` : ''}
+${opts.app ? html`<script type="module" src="${entry}"></script>` : ''}
 </body>
 </html>`
 }
@@ -89,6 +92,42 @@ export function reviewPage(
   })
 }
 
+/** What the deck page boots with. The deck itself is fetched, so a regenerated one is never stale. */
+export interface DeckBootstrap {
+  review: ReviewKey
+  owner: string
+  repo: string
+  version: string
+}
+
+export function deckPage(page: DeckBootstrap, nonce: string, appearance: Appearance): Html {
+  return pageShell({
+    title: `Self-review · ${keyLabel(page.review)} · ${page.owner}/${page.repo}`,
+    bootstrap: page,
+    nonce,
+    appearance,
+    app: true,
+    entry: '/static/js/deck.js',
+    body: html`<a class="skip" href="#main">Skip to content</a>
+<main id="main" class="deck-page" data-review="${keyToString(page.review)}"><div class="loading">Shuffling the deck…</div></main>`,
+  })
+}
+
+/**
+ * The page one side's scene is drawn in. The scene is generated HTML, placed as written with its
+ * icons inlined; the page's policy (`sceneFramePolicy`) lets none of it run or load anything. The
+ * deck page fits the scene to the frame and marks the root `picked` to play the payoff.
+ */
+export function sceneFrame(opts: {
+  scene: string
+  side: 'a' | 'b'
+  theme: 'light' | 'dark' | 'auto'
+}): string {
+  return `<!doctype html><html lang="en" data-side="${opts.side}" data-theme="${opts.theme}"><head><meta charset="utf-8"><title>scene</title>
+<link rel="stylesheet" href="/static/styles/scene.css"></head>
+<body><main class="scene-root">${opts.scene}</main></body></html>`
+}
+
 export function homePage(
   data: HomeData & {
     owner: string
@@ -98,6 +137,8 @@ export function homePage(
     host: Host
     /** The local reviews prepared here, so the home page can link straight to them. */
     localReviews: readonly LocalKey[]
+    /** The local reviews with a self-review deck. */
+    localDecks?: readonly LocalKey[]
   },
   nonce: string,
   appearance: Appearance
@@ -132,6 +173,15 @@ export function homePage(
               html`<li><a href="/review/${key}">${keyLabel(key)}</a> <span class="muted">/review/${key}</span></li>`
           )}</ul>`
     }</div></section>
+${
+  (data.localDecks ?? []).length === 0
+    ? ''
+    : html`<section class="panel"><div class="panel-h"><h2>Self-review decks</h2></div>
+<ul class="plain body">${(data.localDecks ?? []).map(
+        key =>
+          html`<li><a href="/deck/${key}">${keyLabel(key)}</a> <span class="muted">/deck/${key}</span></li>`
+      )}</ul></section>`
+}
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${
   data.recentPrs.length === 0

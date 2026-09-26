@@ -29,6 +29,9 @@ importers:
       hono:
         specifier: ^4.13.1
         version: 4.13.5
+      lucide-static:
+        specifier: ^1.48.0
+        version: 1.48.0
       marked:
         specifier: ^18.0.11
         version: 18.0.11
@@ -1484,6 +1487,9 @@ packages:
   lru-cache@11.2.7:
     resolution: {integrity: sha512-aY/R+aEsRelme17KGQa/1ZSIpLpNYYrhcrepKTZgE+W3WM16YMCaPwOHLHsmopZHELU0Ojin1lPVxKR0MihncA==}
     engines: {node: 20 || >=22}
+
+  lucide-static@1.48.0:
+    resolution: {integrity: sha512-ZUGgZ4rzlLfVbhN2Zi37TMrTaSpXAbWx6Y/xZxKSDLPiqxtTK7Mw2M+oBJa0gjV8p3+CWBHh48u+IC9+jKlUjA==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -3244,6 +3250,8 @@ snapshots:
 
   lru-cache@11.2.7:
     optional: true
+
+  lucide-static@1.48.0: {}
 
   magic-string@0.30.21:
     dependencies:

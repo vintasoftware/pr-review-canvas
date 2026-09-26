@@ -4,6 +4,7 @@ import type { AppEnv } from './env.js'
 import { AppError, logRequestError, toAppError } from './errors.js'
 import { errorPage } from './html.js'
 import { apiRoutes } from './routes/api.js'
+import { deckRoutes } from './routes/deck-routes.js'
 import { appearanceFor, appearanceQuery, pageRoutes } from './routes/pages.js'
 import { staticRoutes } from './routes/static.js'
 import { applyResponseHeaders, createNonce, responseHeaders, securityMiddleware } from './security.js'
@@ -46,6 +47,7 @@ export function createApp(ctx: AppContext): Hono<AppEnv> {
     errorResponse(c, new AppError('NOT_FOUND', `no route for ${c.req.method} ${c.req.path}`, 404))
   )
 
+  app.route('/api/deck', deckRoutes(ctx))
   app.route('/api', apiRoutes(ctx))
   app.route('/', staticRoutes(ctx))
   app.route('/', pageRoutes(ctx))

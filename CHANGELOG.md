@@ -2,11 +2,41 @@
 
 ## Unreleased
 
+### Self-review deck
+
+- `/pr-self-review <pr-number>|branch|uncommitted` deals a short deck of **decision cards** before
+  reviewers weigh in. Each card is a choice the change makes that could go either way, with sides A
+  and B, and one side marked as what the code does now. At most one card per 100 changed lines and
+  never more than ten; `selfReview.maxCards` and `selfReview.linesPerCard` change that.
+- `/deck/<n>`, `/deck/branch`, and `/deck/uncommitted` show one card per screen with no scroll at
+  1080p, and stack the sides for touch on phones. Pick with
+  `a` / `b` or a drag, `n` for neither, `s` to skip, `u` to undo, `e` / `r` to edit a
+  justification, `o` for the code.
+- Clearing the deck writes a fix list. `/pr-self-review-fix` asks about unclear entries, applies
+  them, and deals the next deck, which never asks a settled decision again.
+- A pull request's canvas takes the decisions its decks settled: it does not ask them again unless
+  the code contradicts the pick, and it raises the skipped cards for reviewers. Validation holds it
+  to that: a point that asks a settled decision again says `reopens`, a skipped card is raised by a
+  point that says `asks`, and the canvas page marks both. Publishing it posts
+  the **PR comment** justifications as the author's own review, once; `--skip-self-review-comments`
+  keeps them off.
+- New commands `pr-review deck prepare|validate|publish|fixes`. `install-skill`, `doctor`, and
+  `upgrade` now handle the two new skills alongside `pr-review-canvas`.
+- Each side of a card shows its consequence in a sentence and a **scene**: a small, colorful
+  picture of what happens if you pick it (the counts, the error, the outcome in a banner), written
+  by the generator in HTML with a kit of layout classes and Lucide icons. Scenes run in a frame
+  that allows no script and loads nothing. A folded corner marks the card's back, which `i` turns
+  to: the context, each side's justification and snippet, and the code the card is anchored to.
+- `/pr-review-canvas` and `/pr-self-review` now default to Opus instead of Sonnet, for every
+  change rather than only ones touching authentication, access policy, or PHI. A project's
+  `generation.models` still picks another model for the canvas.
+  `/pr-self-review-fix` stays on Sonnet and deals its next deck through `/pr-self-review`.
+
 ### Canvas generation
 
 - `generation.models` in `pr-review.config.yml` sets the model each agent generates canvases with,
-  keyed by agent id (`claude: opus`). `prepare` prints it as `models`. An agent with no entry keeps
-  the session's model; the skill no longer pins Sonnet.
+  keyed by agent id (`claude: opus`). `prepare` prints it as `models`. An agent with no entry uses the
+  skill's default, Opus.
 - The settings dialog lists the project's canvas generation models under **Canvas generation** in
   the read-only project config, and shows the chat fields as **Chat agent** and **Chat model**
   under an **AI Chat** heading. The header's generator pill reads

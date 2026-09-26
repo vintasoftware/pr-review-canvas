@@ -298,6 +298,13 @@ function pointBase(caps: Caps) {
     endLine: z.number().int().positive().optional(),
     side: SideSchema.optional(),
     body: text(caps, 'pointBody'),
+    /**
+     * The key of a decision the author settled in a self-review deck that this point asks again,
+     * because the code at this head contradicts the side they picked. Only a `decide` point may.
+     */
+    reopens: z.string().min(1).optional(),
+    /** The key of a self-review card the author skipped, which this `decide` point raises for reviewers. */
+    asks: z.string().min(1).optional(),
   }
 }
 

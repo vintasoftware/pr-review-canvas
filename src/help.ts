@@ -67,14 +67,32 @@ const COMMANDS: CommandHelp[] = [
       { form: '--model <id>', detail: 'the model that generated it' },
       { form: '--harness claude-code|codex|other' },
       { form: '--allow-stale', detail: 'the prepared commit, after the head has moved' },
+      { form: '--skip-self-review-comments', detail: 'leave the self-review justifications unposted' },
     ],
     notes: [
       '--agent and --model record who generated the canvas. generation.models in pr-review.config.yml sets the default generation model for the project.',
     ],
   },
   {
+    name: 'deck prepare|validate|publish|fixes',
+    summary: 'The self-review deck: decision cards the author settles before review.',
+    flags: [
+      { form: '--pr <n>' },
+      { form: '--branch' },
+      { form: '--uncommitted' },
+      { form: '--base <ref>', detail: 'prepare, with --branch or --uncommitted' },
+      { form: '--force', detail: 'prepare' },
+      { form: '--human', detail: 'validate, print text instead of JSON' },
+      { form: '--agent <id> --model <id>', detail: 'publish' },
+      { form: '--allow-stale', detail: 'publish' },
+    ],
+    notes: [
+      'Decks show at /deck/<n>, /deck/branch, and /deck/uncommitted. fixes says where the fix list is, and whether it exists.',
+    ],
+  },
+  {
     name: 'install-skill',
-    summary: 'Copy the skill into Claude Code and Codex.',
+    summary: 'Copy the skills into Claude Code and Codex.',
     flags: [
       { form: '--claude-dir <dir>', detail: `default ${CLAUDE_SKILLS_DIR}` },
       { form: '--codex-dir <dir>', detail: `default ${CODEX_SKILLS_DIR}` },

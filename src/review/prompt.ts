@@ -5,6 +5,7 @@ import {
   type BasisSplit,
   type BasisSplitPoint,
   type GenerationContext,
+  type SelfReviewDecision,
   LARGE_PR,
 } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
@@ -306,6 +307,50 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
   ].join('\n\n')
 }
 
+function decisionLine(d: SelfReviewDecision): string {
+  const where = d.line === undefined ? `\`${d.path}\` (its code changed since)` : `\`${d.path}:${d.line}\``
+  const picked = d.picked === undefined ? '' : ` Picked ${d.picked.replace(/[.!?]$/, '')}.`
+  const why = d.why === undefined || d.why === '' ? '' : ` Why: ${d.why}`
+  const fix = d.fix === true ? ' The author asked for this change.' : ''
+  return `- \`${d.key}\` **${d.title}** at ${where}.${picked}${fix}${why}`
+}
+
+/**
+ * The author's self-review decisions, appended after the task whatever template is in use: a
+ * project that overrides the templates still gets them, and the rule has one wording.
+ */
+export function selfReviewMarkdown(selfReview: GenerationContext['selfReview']): string {
+  if (selfReview === undefined || (selfReview.settled.length === 0 && selfReview.open.length === 0)) {
+    return ''
+  }
+  const parts = ['## Decisions from the author’s self-review']
+  if (selfReview.settled.length > 0) {
+    parts.push(
+      'The author settled these in a self-review deck before asking for review. Do not raise them ' +
+        "again as `decide` points, and do not reweigh which side is better: that was the author's " +
+        'call. You may explain one as a `decision` point at `level: "fyi"` when that helps the reviewer. ' +
+        'The exception is code that contradicts a pick. For each settled decision the code at this head ' +
+        'does not carry out, write one `decision` point at `level: "decide"` with ' +
+        '`"reopens": "<key>"`, anchored where the contradiction is, stating what the code does and ' +
+        'which pick it contradicts. A pick marked as a change the author asked for, with the code still ' +
+        'doing the old side, means the fix has not landed yet: say so. When two settled picks ' +
+        'contradict each other, reopen one of them and name the other in its body. The validator ' +
+        'refuses any other `decide` point in the chunk of a settled decision: lower it to `check` or ' +
+        '`fyi`, or anchor it on the code it is really about.',
+      selfReview.settled.map(decisionLine).join('\n')
+    )
+  }
+  if (selfReview.open.length > 0) {
+    parts.push(
+      'The author left these for reviewers. Raise each as a `decision` point at `level: "decide"` ' +
+        'with `"asks": "<key>"`, anchored inside the diff; the validator requires one for every card ' +
+        'shown with a line. One whose code changed since may no longer apply: raise it only if it does.',
+      selfReview.open.map(decisionLine).join('\n')
+    )
+  }
+  return parts.join('\n\n')
+}
+
 /** Selects one task and fills its data and format placeholders before the generator sees it. */
 export function renderPrompt(
   ctx: GenerationContext,
@@ -348,7 +393,7 @@ export function renderPrompt(
   const template = task[ctx.generation.mode]
     .replace('{{JUDGING}}', () => sources.judging[ctx.generation.mode])
     .replace('{{FORMAT}}', () => sources.format)
-  return template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {
+  const rendered = template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {
     const value = tokens[name]
     if (value === undefined) {
       const suffix = ctx.basis === undefined ? '' : '-incremental'
@@ -356,4 +401,6 @@ export function renderPrompt(
     }
     return value
   })
+  const decisions = selfReviewMarkdown(ctx.selfReview)
+  return decisions === '' ? rendered : `${rendered.trimEnd()}\n\n${decisions}\n`
 }

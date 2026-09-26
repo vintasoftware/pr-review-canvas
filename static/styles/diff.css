@@ -219,57 +219,57 @@ tr.move-to .ln {
 }
 
 /* highlight.js tokens, one palette for added, deleted, and context rows */
-.diff .hljs-comment,
-.diff .hljs-quote {
+:is(.diff, .deck-code) .hljs-comment,
+:is(.diff, .deck-code) .hljs-quote {
   color: var(--syn-comment);
   font-style: italic;
 }
-.diff .hljs-keyword,
-.diff .hljs-selector-tag,
-.diff .hljs-literal,
-.diff .hljs-doctag {
+:is(.diff, .deck-code) .hljs-keyword,
+:is(.diff, .deck-code) .hljs-selector-tag,
+:is(.diff, .deck-code) .hljs-literal,
+:is(.diff, .deck-code) .hljs-doctag {
   color: var(--syn-keyword);
 }
-.diff .hljs-string,
-.diff .hljs-regexp,
-.diff .hljs-addition {
+:is(.diff, .deck-code) .hljs-string,
+:is(.diff, .deck-code) .hljs-regexp,
+:is(.diff, .deck-code) .hljs-addition {
   color: var(--syn-string);
 }
-.diff .hljs-number,
-.diff .hljs-built_in,
-.diff .hljs-symbol {
+:is(.diff, .deck-code) .hljs-number,
+:is(.diff, .deck-code) .hljs-built_in,
+:is(.diff, .deck-code) .hljs-symbol {
   color: var(--syn-number);
 }
-.diff .hljs-title,
-.diff .hljs-title.function_,
-.diff .hljs-section {
+:is(.diff, .deck-code) .hljs-title,
+:is(.diff, .deck-code) .hljs-title.function_,
+:is(.diff, .deck-code) .hljs-section {
   color: var(--syn-title);
 }
-.diff .hljs-title.class_,
-.diff .hljs-type,
-.diff .hljs-class {
+:is(.diff, .deck-code) .hljs-title.class_,
+:is(.diff, .deck-code) .hljs-type,
+:is(.diff, .deck-code) .hljs-class {
   color: var(--syn-type);
 }
-.diff .hljs-attr,
-.diff .hljs-attribute,
-.diff .hljs-property,
-.diff .hljs-selector-class,
-.diff .hljs-selector-id {
+:is(.diff, .deck-code) .hljs-attr,
+:is(.diff, .deck-code) .hljs-attribute,
+:is(.diff, .deck-code) .hljs-property,
+:is(.diff, .deck-code) .hljs-selector-class,
+:is(.diff, .deck-code) .hljs-selector-id {
   color: var(--syn-attr);
 }
-.diff .hljs-tag,
-.diff .hljs-name,
-.diff .hljs-deletion {
+:is(.diff, .deck-code) .hljs-tag,
+:is(.diff, .deck-code) .hljs-name,
+:is(.diff, .deck-code) .hljs-deletion {
   color: var(--syn-tag);
 }
-.diff .hljs-meta,
-.diff .hljs-link,
-.diff .hljs-bullet {
+:is(.diff, .deck-code) .hljs-meta,
+:is(.diff, .deck-code) .hljs-link,
+:is(.diff, .deck-code) .hljs-bullet {
   color: var(--syn-meta);
 }
-.diff .hljs-emphasis {
+:is(.diff, .deck-code) .hljs-emphasis {
   font-style: italic;
 }
-.diff .hljs-strong {
+:is(.diff, .deck-code) .hljs-strong {
   font-weight: 600;
 }

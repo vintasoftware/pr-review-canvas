@@ -1,5 +1,6 @@
 ---
 name: pr-review-canvas
+model: opus
 description: Generate a review canvas for a GitHub pull request or GitLab merge request, for the work in this clone before a pull request exists, or for two refs, with the pr-review tool. Runs `pr-review prepare`, writes the layered model.json the prompt asks for, and runs `pr-review publish` to validate and automatically share it as a compressed PR/MR comment. Use when the user runs `/pr-review-canvas <pr-number>`, `/pr-review-canvas branch`, `/pr-review-canvas uncommitted`, `/pr-review-canvas --base <ref> --head <ref>`, or asks for a review canvas for a PR or MR, for their branch, or for what they have not committed.
 ---
 
@@ -30,11 +31,9 @@ The project picks the default model. The AI Chat settings (`chatAgent`, `chatMod
 `serve --chat-agent/--chat-model`) are for the chat pane and never pick your model. Prepare prints
 the project's `generation.models` as
 `models`, keyed by agent id (the `--agent` you publish with): `{ "claude": "opus" }`. Generate with
-the model under your own agent id. When `models` has no entry for your agent, keep the model you
-run on. If the prepared diff changes authentication, access policy, or protected health
-information (PHI) handling, use a more capable model, such as Opus, for the generation and
-validation steps when available, unless the project's model is already that capable. Honor an
-explicit user model choice over all of these.
+the model under your own agent id. When `models` has no entry for your agent, use the most capable
+model, such as Opus, for the generation and validation steps. Honor an explicit user model choice
+over all of these.
 
 When the model to use is not the one you run on, delegate generation and validation to a subagent
 on that model: pass it the prepared prompt and context paths; it writes the same model file. If the
@@ -192,6 +191,19 @@ For a PR/MR run, report the local `reviewUrl` (start it with `pr-review serve`) 
   attachment link. Include these instructions in your final response; the local canvas is ready,
   but reviewers still need the upload. Do not regenerate the model to repair a sharing failure.
 
+For a PR/MR run, also report `selfReview`, the justifications the author settled in a
+self-review deck (`/pr-self-review`):
+
+- `status: "posted"`: say that `comments` of them were posted inline and `listed` in the review
+  body, and link `url`. When `held` is set, say that many were held back because this canvas
+  reopens them; they post once a later canvas no longer does.
+- `status: "failed"`: quote `warning`; publishing again retries them. Do not regenerate the model
+  for it.
+- `status: "none"` or `"skipped"`: say nothing about it.
+
+When the prompt ends with **Decisions from the author's self-review**, follow it: those decisions
+are the author's, already made.
+
 For a local run, `sharing.status` is `"local"` and there is nothing to share. Give the user
 `reviewUrl` (`http://localhost:<port>/review/branch` or `.../review/uncommitted`) and tell them to
 start `pr-review serve` if it is not running. Say which base was compared and whether uncommitted
@@ -233,6 +245,11 @@ its commit is on no branch, so generate a fresh one for the PR.
 - `diagram.links` maps a node id of the source to a canvas link, at most 12 per diagram. Spell the
   node id the way the source spells it (`store`, not the label in its brackets; `App`, not the
   name after `as`), and link only nodes that stand for a layer, a file, or a hunk of this canvas.
+- When the prompt ends with **Decisions from the author's self-review**, a `decide` point on a
+  settled decision's chunk carries `"reopens": "<key>"` (a reopen may sit wherever the
+  contradiction is), and every card
+  listed with a line gets a `decide` point with `"asks": "<key>"`. Any other `decide` point there
+  fails as `SETTLED_REOPENED`; lower it or anchor it on the code it is about.
 - Markdown is allowed; headings are not. No prose outside the JSON file.
 
 ## Updating a shared canvas

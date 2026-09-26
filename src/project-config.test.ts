@@ -32,6 +32,7 @@ describe('mergeProjectConfig', () => {
       highRisk: [{ pattern: '**/x', label: 'x' }],
       generation: { maxRepairRounds: 5, caps: { rationale: 500 }, models: { claude: 'opus' } },
       chat: { enabled: false },
+      selfReview: { maxCards: 6 },
     })
     expect(warnings).toEqual([])
     expect(config).toEqual({
@@ -50,6 +51,7 @@ describe('mergeProjectConfig', () => {
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
       chat: { enabled: false },
       canvas: { keepForIdenticalDiff: true, incremental: true },
+      selfReview: { maxCards: 6, linesPerCard: 100 },
     })
     expect(ProjectConfigSchema.parse(config)).toEqual(config)
     const allCaps = Object.fromEntries(Object.keys(TEXT_CAPS).map(k => [k, 1]))

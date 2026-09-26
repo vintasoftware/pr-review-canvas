@@ -148,6 +148,21 @@ export function postedUrls(state, comments) {
 }
 
 /**
+ * The pill that says a point comes from the author's self-review: it asks again a decision the
+ * author settled, which the code contradicts, or it raises a card the author left for reviewers.
+ * @param {Point} p
+ */
+export function selfReviewPillHtml(p) {
+  if (p.reopens !== undefined) {
+    return `<span class="pill self-review" title="${esc(`The author settled "${p.reopens}" in self-review; the code contradicts their pick.`)}">reopens a settled decision</span>`
+  }
+  if (p.asks !== undefined) {
+    return `<span class="pill self-review" title="${esc(`The author left "${p.asks}" for reviewers in self-review.`)}">left for reviewers</span>`
+  }
+  return ''
+}
+
+/**
  * One attention point card, shown in the layer that owns the point.
  * @param {Point} p
  * @param {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string> }} ctx
@@ -157,7 +172,7 @@ export function pointCardHtml(p, ctx) {
   const posted = postedFor(p, ctx)
   return (
     `<li class="finding" id="${esc(pointAnchorId(p.id))}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}>${squareHtml(p)}<div>` +
-    `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>` +
+    `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${selfReviewPillHtml(p)}` +
     `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
     `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</div></li>`
@@ -181,7 +196,7 @@ export function dismissedListHtml(points, state, ctx, expanded = false) {
       const posted = postedFor(p, ctx)
       return (
         `<li class="finding" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}">${squareHtml(p)}<div>` +
-        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>` +
+        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${selfReviewPillHtml(p)}` +
         `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
         `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
         `${pointCommandsHtml(p, { dismissed: true, postedUrl: posted, queued: queuedFor(p, { state }) })}</div></li>`
@@ -282,7 +297,7 @@ export function pointRowHtml(p, ctx) {
   const posted = postedFor(p, ctx)
   return (
     `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${dismissed ? ' hidden' : ''}><td class="code x" colspan="4">` +
-    `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
+    `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${selfReviewPillHtml(p)}</div>` +
     `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
     `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</td></tr>`
   )

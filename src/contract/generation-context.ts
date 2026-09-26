@@ -109,6 +109,22 @@ export const BasisSplitSchema = z.object({
 })
 export type BasisSplit = z.infer<typeof BasisSplitSchema>
 
+/** One decision from the author's self-review deck, as the canvas generator reads it. */
+export const SelfReviewDecisionSchema = z.object({
+  key: z.string().min(1),
+  title: z.string(),
+  path: z.string().min(1),
+  /** Where the card sits on this head; absent when the code under it changed since it was dealt. */
+  line: z.number().int().positive().optional(),
+  side: SideSchema,
+  /** The side the author picked, in words (settled decisions only). */
+  picked: z.string().optional(),
+  why: z.string().optional(),
+  /** True when the pick asked the code to change, so code still doing the old side is a pending fix. */
+  fix: z.boolean().optional(),
+})
+export type SelfReviewDecision = z.infer<typeof SelfReviewDecisionSchema>
+
 /**
  * `context.json`: everything the agent and `publish` need about one prepared canvas. Written by
  * `prepare` next to `prompt.md`; `publish` validates `model.json` against the hunk index and the
@@ -152,6 +168,13 @@ export const GenerationContextSchema = z.object({
   largePr: z.boolean(),
   /** Absent when this canvas is generated from a blank page: no basis, `--force`, or turned off. */
   basis: BasisSplitSchema.optional(),
+  /**
+   * What the author's self-review decks settled for this pull request, and what they left open for
+   * reviewers. Absent when no deck speaks for it.
+   */
+  selfReview: z
+    .object({ settled: z.array(SelfReviewDecisionSchema), open: z.array(SelfReviewDecisionSchema) })
+    .optional(),
   preparedAt: z.string(),
 })
 export type GenerationContext = z.infer<typeof GenerationContextSchema>

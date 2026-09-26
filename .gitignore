@@ -11,10 +11,14 @@ playwright-report/
 *.tsbuildinfo
 dist-site/
 
-# This repository's own skill, installed into it by `pr-review install-skill` so the slash
-# command works here. The tracked copy is skills/pr-review-canvas.
+# This repository's own skills, installed into it by `pr-review install-skill` so the slash
+# commands work here. The tracked copies are under skills/.
 /.agents/skills/pr-review-canvas
 /.claude/skills/pr-review-canvas
+/.agents/skills/pr-self-review
+/.claude/skills/pr-self-review
+/.agents/skills/pr-self-review-fix
+/.claude/skills/pr-self-review-fix
 
 /.claude/settings.local.json
 .pr-review/settings.yml

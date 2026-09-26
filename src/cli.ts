@@ -9,6 +9,7 @@ import {
   EXIT,
   printErrorEnvelope,
   reportFailure,
+  runDeck,
   runDoctor,
   runExport,
   runImport,
@@ -37,6 +38,7 @@ const SUBCOMMANDS = [
   'prepare',
   'validate',
   'publish',
+  'deck',
   'export',
   'import',
   'install-skill',
@@ -229,6 +231,8 @@ export async function main(argv: string[]): Promise<number> {
             return await runExport(ctx, own, io)
           case 'import':
             return await runImport(ctx, own, io)
+          case 'deck':
+            return await runDeck(ctx, own, io)
           default:
             return await runPublish(ctx, own, io)
         }

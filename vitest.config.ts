@@ -15,6 +15,8 @@ export default defineConfig({
     name: 'pr-review',
     globals: true,
     environment: 'node',
+    // A card's scene frame points at the server; the view tests check the markup, not the load.
+    environmentOptions: { happyDOM: { settings: { disableIframePageLoading: true } } },
     include: ['src/**/*.test.ts', 'static/js/**/*.test.js'],
     setupFiles: ['./vitest.setup.ts'],
     coverage: {
@@ -24,7 +26,9 @@ export default defineConfig({
         'src/cli.ts',
         'src/server/node-server.ts',
         'src/server/html.ts',
+        // The two page boots: each fetches, wires the DOM, and animates; the browser specs cover them.
         'static/js/app.js',
+        'static/js/deck.js',
         'static/vendor/**',
         'src/**/*.test.ts',
         'static/js/**/*.test.js',

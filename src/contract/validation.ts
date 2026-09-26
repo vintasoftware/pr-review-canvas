@@ -22,6 +22,10 @@ export const VALIDATION_CODES = [
   'LINK_UNRESOLVED',
   'DIAGRAM_NODE_UNKNOWN',
   'DIAGRAM_LIMIT',
+  'SELF_REVIEW_KEY',
+  'SELF_REVIEW_LEVEL',
+  'SETTLED_REOPENED',
+  'OPEN_UNASKED',
 ] as const
 export type ValidationCode = (typeof VALIDATION_CODES)[number]
 

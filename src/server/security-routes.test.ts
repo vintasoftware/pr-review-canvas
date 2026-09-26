@@ -10,7 +10,7 @@ import { createFakeGh, makeTempDir, makeTestContext, type TestContext } from '..
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { createApp } from './app.js'
 import { PACKAGE_ROOT } from './context.js'
-import { contentSecurityPolicy, createNonce } from './security.js'
+import { contentSecurityPolicy, createNonce, sceneFramePolicy } from './security.js'
 
 const LOCAL = { host: 'localhost:3010' }
 
@@ -19,6 +19,9 @@ const ROUTES: Array<{ method: string; path: string; body?: unknown }> = [
   { method: 'GET', path: '/' },
   { method: 'GET', path: '/review/42' },
   { method: 'GET', path: '/review?n=42' },
+  { method: 'GET', path: '/deck/42' },
+  { method: 'GET', path: '/deck-scene/42/some-card/a' },
+  { method: 'GET', path: '/vendor/p5.js' },
   { method: 'GET', path: '/static/styles.css' },
   { method: 'GET', path: '/vendor/marked.js' },
   { method: 'GET', path: '/api/health' },
@@ -107,9 +110,12 @@ describe('every route', () => {
         expect(res.headers.get('cache-control')).toBe('no-store')
       }
       const html = (res.headers.get('content-type') ?? '').startsWith('text/html')
-      expect(res.headers.get('content-security-policy')).toBe(
-        html ? contentSecurityPolicy(nonceOf(await res.clone().text())) : null
-      )
+      const policy = !html
+        ? null
+        : r.path.startsWith('/deck-scene/')
+          ? sceneFramePolicy()
+          : contentSecurityPolicy(nonceOf(await res.clone().text()), { frames: r.path.startsWith('/deck/') })
+      expect(res.headers.get('content-security-policy')).toBe(policy)
     }
   )
 })
@@ -134,6 +140,27 @@ describe('content security policy', () => {
         "img-src 'self' data: https:; font-src 'self'; connect-src 'self'; form-action 'self'; " +
         "base-uri 'none'; frame-ancestors 'none'; object-src 'none'"
     )
+  })
+
+  it('lets only the deck page frame anything, and only from this server', () => {
+    expect(contentSecurityPolicy('abc')).not.toContain('frame-src')
+    expect(contentSecurityPolicy('abc', { frames: true })).toContain(
+      "connect-src 'self'; frame-src 'self'; form-action"
+    )
+  })
+
+  it('locks a scene frame down: no script, forms, popups, navigation, or network', () => {
+    const policy = sceneFramePolicy().split('; ')
+    // Only the origin is kept, so the deck page can measure the scene; with no script allowed,
+    // nothing inside can use it.
+    expect(policy[0]).toBe('sandbox allow-same-origin')
+    expect(policy).toContain("default-src 'none'")
+    expect(policy).toContain("form-action 'none'")
+    expect(policy).toContain("frame-ancestors 'self'")
+    // The kit's stylesheet from this server, inline styles, and data images; nothing else.
+    expect(policy).toContain("style-src 'self' 'unsafe-inline'")
+    expect(policy).toContain('img-src data:')
+    expect(policy.some(d => d.startsWith('script-src') || d.startsWith('connect-src'))).toBe(false)
   })
 
   it('gives each page a fresh nonce and puts it on every inline script', async () => {

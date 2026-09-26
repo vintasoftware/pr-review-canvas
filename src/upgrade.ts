@@ -175,7 +175,7 @@ async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipp
   for (const copy of await skillCopies(deps)) {
     if (!copy.stale) continue
     try {
-      await installSkill({ targets: [{ kind: copy.kind, dir: copy.dir }] })
+      await installSkill({ name: copy.skill, targets: [{ kind: copy.kind, dir: copy.dir }] })
       written.push(copy.path)
     } catch (err) {
       if (!(err instanceof SkillDirExistsError)) throw err

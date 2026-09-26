@@ -58,7 +58,7 @@ export const securityMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => 
  * sets dynamic values that way (progress width, layer stripe colors) and mermaid injects a style
  * element per drawing; inline scripts are not, except the two the shell carries under its nonce.
  */
-export function contentSecurityPolicy(nonce: string): string {
+export function contentSecurityPolicy(nonce: string, opts: { frames?: boolean } = {}): string {
   return [
     "default-src 'none'",
     `script-src 'self' 'nonce-${nonce}'`,
@@ -66,9 +66,34 @@ export function contentSecurityPolicy(nonce: string): string {
     "img-src 'self' data: https:",
     "font-src 'self'",
     "connect-src 'self'",
+    // The deck page frames its cards' scenes from this server; a frame that navigates anywhere
+    // else is blocked by this too.
+    ...(opts.frames === true ? ["frame-src 'self'"] : []),
     "form-action 'self'",
     "base-uri 'none'",
     "frame-ancestors 'none'",
+    "object-src 'none'",
+  ].join('; ')
+}
+
+/** Where a card side's scene is served: `/deck-scene/<review>/<card>/<side>`. */
+export const SCENE_FRAME_PREFIX = '/deck-scene/'
+
+/**
+ * A scene frame's policy. A scene is generated HTML, so its frame is sandboxed: no script, forms,
+ * popups, or navigation of the deck page. It keeps its origin, which is what lets the deck page
+ * measure a scene and shrink one that would overflow; without script, nothing in the frame can
+ * use that origin. It may load nothing but the kit's stylesheet, and be framed only here.
+ */
+export function sceneFramePolicy(): string {
+  return [
+    'sandbox allow-same-origin',
+    "default-src 'none'",
+    "style-src 'self' 'unsafe-inline'",
+    'img-src data:',
+    "form-action 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
     "object-src 'none'",
   ].join('; ')
 }
@@ -89,7 +114,12 @@ export function applyResponseHeaders(res: Response, path: string, nonce: string)
     res.headers.set('cache-control', 'no-store')
   }
   if ((res.headers.get('content-type') ?? '').startsWith('text/html')) {
-    res.headers.set('content-security-policy', contentSecurityPolicy(nonce))
+    res.headers.set(
+      'content-security-policy',
+      path.startsWith(SCENE_FRAME_PREFIX)
+        ? sceneFramePolicy()
+        : contentSecurityPolicy(nonce, { frames: path.startsWith('/deck/') })
+    )
   }
 }
 

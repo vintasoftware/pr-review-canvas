@@ -92,3 +92,9 @@ canvas:
   # built on, keeping the layers, folds, notes and attention points its diff leaves untouched.
   # Set false to generate every canvas from a blank page, as `--force` always does.
   incremental: true
+
+selfReview:
+  # The self-review deck (/pr-self-review) holds at most one decision card per `linesPerCard`
+  # changed lines, rounded up, and never more than `maxCards`. Zero cards is a valid deck.
+  maxCards: 10
+  linesPerCard: 100

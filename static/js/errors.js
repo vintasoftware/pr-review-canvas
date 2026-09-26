@@ -99,6 +99,18 @@ export const ERROR_CARDS = {
     title: 'The generated canvas did not pass validation',
     action: 'Run the pr-review-canvas skill again; it prints one line per problem.',
   },
+  DECK_NOT_FOUND: {
+    title: 'No self-review deck yet',
+    action: 'Run /pr-self-review branch or /pr-self-review uncommitted to generate one.',
+  },
+  DECK_INVALID: {
+    title: 'The generated deck did not pass validation',
+    action: 'Run the pr-self-review skill again; it prints one line per problem.',
+  },
+  DECK_STALE: {
+    title: 'The deck is for another head',
+    action: 'Reload the page: the deck was regenerated since this page was drawn.',
+  },
   SKILL_DIR_EXISTS: {
     title: 'The skill directory is already taken',
     action: 'Remove it, or run pr-review install-skill --force.',

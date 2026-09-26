@@ -189,7 +189,9 @@ Relative custom paths resolve from the command's working directory. For example:
 pr-review install-skill --codex-dir ~/.codex/skills
 ```
 
-Installation copies the bundled skill on every platform. The copies and their `.pr-review-install`
+Installation copies the bundled skills on every platform: `pr-review-canvas`, plus the
+self-review deck's `pr-self-review` and `pr-self-review-fix`, into the same directories. `doctor`
+and `upgrade` treat a missing companion next to an installed `pr-review-canvas` as outdated. The copies and their `.pr-review-install`
 marker files can be committed to Git. Re-running the command refreshes managed copies and replaces
 legacy symlinks. An unmanaged directory requires `--force` to replace it.
 
@@ -270,23 +272,23 @@ Lists you supply replace their defaults.
 Path patterns match repository-relative paths. `**` crosses directories; `*` and `?` match
 within one path segment.
 
-| Key                             | Default                                                                     | Details                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `version`                       | `1`                                                                         | The only supported configuration version                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `rulebook`                      | Unset                                                                       | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards                                                                                                                                                                                                                                                                                               |
-| `layers`                        | `[]`                                                                        | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change                                                                                                                                                                                                                 |
-| `highRisk`                      | `[]`                                                                        | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer                                                                                                                                                                                                                                                                                                                           |
-| `generation.mode`               | `strict`                                                                    | See [generation modes](#generation-modes)                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `generation.maxRepairRounds`    | `3`                                                                         | Failed validation rounds allowed by the generation skill                                                                                                                                                                                                                                                                                                                                                                                   |
-| `generation.inlineDiffMaxLines` | `1500`                                                                      | Maximum diff length to include directly in the generation prompt                                                                                                                                                                                                                                                                                                                                                                           |
-| `generation.smallPrHunks`       | `10`                                                                        | At or below this hunk count, the prompt asks for one layer unless concerns differ                                                                                                                                                                                                                                                                                                                                                          |
-| `generation.caps`               | See below                                                                   | Overrides individual text limits                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `generation.models`             | `{}`                                                                        | The model each agent generates canvases with, keyed by the agent id `publish --agent` records (`claude`, `codex`; not the harness name `claude-code`), such as `claude: opus`. The skill passes the value to its host as written: chat model families and `pin:` do not apply. An agent with no entry keeps the session's model; see [the skill's model rules](../skills/pr-review-canvas/SKILL.md#model-choice). AI Chat does not read it |
-| `tests.patterns`                | Test directories and file-name shapes across stacks; see the example config | Paths treated as tests for review ordering, labels, and the light reading level                                                                                                                                                                                                                                                                                                                                                            |
-| `chat.enabled`                  | `true`                                                                      | Set to `false` to disable AI Chat                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `canvas.keepForIdenticalDiff`   | `true`                                                                      | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                                                                                                                                                                                                                                          |
-| `canvas.incremental`            | `true`                                                                      | Regenerate a canvas for a new head by updating the newest canvas of a commit the head was built on; see [incremental canvases](#incremental-canvases). Set to `false` to generate every canvas from a blank page                                                                                                                                                                                                                           |
-| `prompts`                       | Bundled templates                                                           | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                                                                                                                                                                                                                                  |
+| Key                             | Default                                                                     | Details                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                       | `1`                                                                         | The only supported configuration version                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `rulebook`                      | Unset                                                                       | Path to a Markdown file of project code standards, resolved from the repository root; these standards take precedence over bundled standards                                                                                                                                                                                                                                                                                                              |
+| `layers`                        | `[]`                                                                        | Optional review guidance; each entry has `id`, `title`, `description`, and optional `paths` patterns. The agent may combine, split, or reorder groups. When omitted or empty, it chooses semantic sections from the change                                                                                                                                                                                                                                |
+| `highRisk`                      | `[]`                                                                        | Entries with a `pattern` glob and `label`; matching changes receive risk labels and cannot go in the Other layer                                                                                                                                                                                                                                                                                                                                          |
+| `generation.mode`               | `strict`                                                                    | See [generation modes](#generation-modes)                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `generation.maxRepairRounds`    | `3`                                                                         | Failed validation rounds allowed by the generation skill                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `generation.inlineDiffMaxLines` | `1500`                                                                      | Maximum diff length to include directly in the generation prompt                                                                                                                                                                                                                                                                                                                                                                                          |
+| `generation.smallPrHunks`       | `10`                                                                        | At or below this hunk count, the prompt asks for one layer unless concerns differ                                                                                                                                                                                                                                                                                                                                                                         |
+| `generation.caps`               | See below                                                                   | Overrides individual text limits                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `generation.models`             | `{}`                                                                        | The model each agent generates canvases with, keyed by the agent id `publish --agent` records (`claude`, `codex`; not the harness name `claude-code`), such as `claude: opus`. The skill passes the value to its host as written: chat model families and `pin:` do not apply. An agent with no entry generates with the skill's default, Opus; see [the skill's model rules](../skills/pr-review-canvas/SKILL.md#model-choice). AI Chat does not read it |
+| `tests.patterns`                | Test directories and file-name shapes across stacks; see the example config | Paths treated as tests for review ordering, labels, and the light reading level                                                                                                                                                                                                                                                                                                                                                                           |
+| `chat.enabled`                  | `true`                                                                      | Set to `false` to disable AI Chat                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `canvas.keepForIdenticalDiff`   | `true`                                                                      | Keep the canvas current for a later head whose diff is identical to the canvas's; see [outdated canvases](#outdated-canvases). Set to `false` to mark it outdated on every commit                                                                                                                                                                                                                                                                         |
+| `canvas.incremental`            | `true`                                                                      | Regenerate a canvas for a new head by updating the newest canvas of a commit the head was built on; see [incremental canvases](#incremental-canvases). Set to `false` to generate every canvas from a blank page                                                                                                                                                                                                                                          |
+| `prompts`                       | Bundled templates                                                           | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                                                                                                                                                                                                                                                 |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list
 provides no suggested groups; an empty `tests.patterns` list recognizes no files as tests.
@@ -641,6 +643,131 @@ The canvas you marked is compared directly with the one on screen, so marks surv
 regenerations in between. When a mark follows, the page names the canvas you made it on. If your
 machine lacks that canvas or cannot rebuild either diff, no marks follow.
 
+## Self-review deck
+
+The deck is a separate artifact from the canvas ([ADR 0004](adr/0004-self-review-deck-is-its-own-pass.md)).
+It works for a pull request (`--pr <n>`, `/deck/<n>`) and for the two local reviews, `branch` and
+`uncommitted`. A pull request's head and base come from the forge, as for its canvas, so `--pr`
+takes no `--base`. The `/pr-self-review` skill
+runs these commands; `/pr-self-review-fix` reads the fix list afterwards.
+
+```text
+pr-review deck prepare (--pr <n> | --branch | --uncommitted) [--base <ref>] [--force]
+pr-review deck validate (--pr <n> | --branch | --uncommitted) [--human]
+pr-review deck publish (--pr <n> | --branch | --uncommitted) --agent <id> [--model <id>] [--allow-stale]
+pr-review deck fixes (--pr <n> | --branch | --uncommitted)
+```
+
+- `prepare` resolves the head the same way the local canvas does and writes `prompt.md` and
+  `context.json` to `.pr-review/repos/<owner>__<repo>/decks/<n|branch|uncommitted>/work/`. The generator writes
+  `deck-model.json` there. When the published deck already stands for this head, prepare answers
+  `status: "exists"` unless `--force` is passed.
+- `validate` checks the model against the prepared diff. Each problem is one line:
+  `DECK_SCHEMA`, `TOO_MANY_CARDS`, `DUPLICATE_CARD`, `TEXT_TOO_LONG` (visible characters),
+  `SNIPPET_TOO_LONG` (more than 8 lines), `CARD_OUTSIDE_DIFF`, `SIDES_ALIKE`, or
+  `SCENE_INVALID` (see **Scenes**).
+- `publish` validates again, refuses with `DECK_STALE` when the head moved (unless
+  `--allow-stale`), and stores `deck.json`. Exit code 5 with `DECK_INVALID` means the model failed.
+- `fixes` prints `{ review, path, exists }` for the fix list.
+
+### Cards and the cap
+
+Each card has a `key`, a `bucket` (`trade-off`, `intent`, `shape`, or `risk`), a `topic`, a
+`title`, a `context`, an anchor (`path`, `line`, optional `side`) inside one chunk of the diff, and
+sides `a` and `b`. Each side has a `label`, a `consequence`, an optional `snippet`, an optional
+`scene`, the `why` the author accepts by picking it, and `record`: `pr-comment`, `code`, or
+`none`. `current` names the side the code implements now, or is `null`.
+
+Visible-character caps: title 60, topic 40, context 240, label 48, consequence 200, why 140.
+
+A deck holds at most `ceil(changedLines / selfReview.linesPerCard)` cards, never more than
+`selfReview.maxCards` (defaults 100 and 10). Zero cards is valid. The prompt is
+`prompts/self-review-deck.md`, and `prompts: { self-review-deck.md: <path> }` replaces it.
+
+### Scenes
+
+A side's `scene` is a small HTML fragment picturing its consequence, at most 4000 characters,
+written with the scene kit's layout classes, tones, arrows, CSS motion, and Lucide icons
+(`static/styles/scene.css`; the prompt documents it). The card's front shows each side's
+consequence and its scene; a side without one shows its consequence alone.
+
+Each scene is served at `/deck-scene/<review>/<card>/<side>` with its icons inlined, under a
+policy of `sandbox allow-same-origin` (no script, forms, popups, or navigation),
+`default-src 'none'`, and only the kit's stylesheet and inline styles; the iframe carries the same
+`sandbox="allow-same-origin"`, and the deck page adds `frame-src 'self'`. Keeping the origin is
+what lets the deck page measure a scene; with no script allowed, nothing inside the frame can use
+it. On a desktop card a scene that would overflow its frame is shrunk to fit, down to 55%; past
+that it keeps its top in view and the page warns in the console. Where the sides stack, the frame
+takes the scene's own height. Scenes take no pointer input. Picking a side marks its scene's root
+`picked`, which the kit's CSS answers.
+
+`deck validate` refuses (`SCENE_INVALID`) a scene with elements the frame would drop (`script`,
+`img`, `style`, forms, frames, and the like), event handler attributes, `url(...)`, `@import`,
+links, icons that do not exist, or no text at all.
+
+### Picks, the fix list, and the next deck
+
+The page saves each pick to `picks.json` next to `deck.json`. `skip` leaves a card for reviewers.
+`neither` needs a note. A pick asks for a fix when it names the side the code does not implement,
+or neither side. Clearing the deck writes `fixes.md`, with these sections: fixes, reasons to write
+into the code, justifications queued as pull request comments, and cards left for reviewers.
+
+Preparing the next deck of the same review carries every answered card as a **settled
+decision**. The prompt lists them, and the generator does not ask them again unless the code
+still contradicts the picked side; then it reuses the card's `key`, and the new card replaces the
+settled one. Skipped cards are not settled. Publishing a deck starts its picks afresh. The fix list
+covers only the current deck's cards.
+
+The `uncommitted` review sees fixes at once, the `branch` review once they are committed, and a
+pull request once they are pushed.
+
+### Settled decisions on the pull request
+
+`pr-review prepare --pr <n>` collects the decisions that speak for the pull request: its own deck
+(`decks/<n>/`), then the `branch` and `uncommitted` decks whose branch is the pull request's head
+branch, newest first. A decision settled in several decks counts once, the first one found. Each
+is re-anchored on the pull request head: the same line when the card was dealt for that head, else
+the line its unchanged code moved to, by the rule attention points are carried by. `context.json`
+records them as `selfReview: { settled, open }`, and the prompt ends with a section that tells the
+generator not to raise a settled decision as `decide` unless the code contradicts the picked side,
+and to raise each skipped card as a `decide` point.
+
+Whether the code really contradicts a pick is a judgment, so the validator checks declarations
+instead. The prompt marks each settled pick that asked the code to change, so code still doing
+the old side reads as a fix that has not landed rather than a disagreement. A point that asks a
+settled decision again carries `"reopens": "<card key>"`, anchored wherever the contradiction is; one that
+raises a skipped card carries `"asks": "<card key>"`. Validation then refuses a `decide` point in the
+chunk of a settled decision that does not declare the reopen, a key that names nothing, a reopen that is not a `decision` / `decide` point, and a
+skipped card that no point asks. A skipped card whose code changed since is left to the generator.
+The canvas page marks such points **reopens a settled decision** or **left for reviewers**.
+
+`pr-review publish` for a pull request then posts every settled decision whose justification is
+recorded as `pr-comment` as one `COMMENT` review under your login, each comment inline on its
+anchor. A decision whose code changed since is listed in the review body instead of on a line.
+`decks/<n>/posted.json` records what was posted, so publishing again posts only decisions picked
+anew. A decision the canvas reopens is held back, since its reason would stand on code that
+contradicts it; it posts on a later publish, once the canvas stops reopening it. The result's
+`selfReview` is `posted` (with the review URL, counts, and `held`), `none`, `skipped`
+(with `--skip-self-review-comments`), or `failed` with a warning; a failure never fails the publish,
+and the next publish retries.
+
+### Deck page
+
+`/deck/<n>`, `/deck/branch`, and `/deck/uncommitted` show one card at a time. The front shows the
+title and, per side, its label, consequence, and scene. A folded corner marks the back, which
+`i` turns to: the context, each side's justification, record target, and snippet, and the chunk
+of the diff the card is anchored to, scrolled to its line. Keys: `a` side A, `b` side B,
+`n` neither (with a note), `s` skip, `u` undo, `e` edit a justification (on the card's back),
+`r` change where it is recorded, `i` the back, `o` the code drawer, `?` help, `Esc` close.
+Picking a side plays its scene's payoff before the card flies off. Dragging a card left or right past 140
+pixels picks that side. Arrow keys never pick. Below 600 pixels wide the sides stack, the code
+drawer and the note become bottom sheets, and undo, edit, and close have buttons for touch. The deck page has its own keys: `a` picks side A here,
+while on the canvas page it asks AI Chat. With reduced motion on, cards cross-fade.
+
+The API is `GET /api/deck/<review>`, `PUT` and `DELETE /api/deck/<review>/picks/<card>` (the
+`headSha` in the body or query must match the deck's, or the answer is `DECK_STALE`), and
+`POST /api/deck/<review>/finish?headSha=<sha>`, which writes the fix list.
+
 ## AI Chat
 
 **Ask** on a layer, file, attention point, or line selection chooses the context for your message.
@@ -711,3 +838,6 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `FOLD_MISSING`                                                  | A file over 20 unannotated lines hides something; an open file over 60 folds half; a layer over 100 hides more at aggressive |
 | `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                                      |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                           |
+| `SELF_REVIEW_KEY`, `SELF_REVIEW_LEVEL`                          | `reopens` names a settled decision and `asks` a skipped card, each on a `decide` point                                       |
+| `SETTLED_REOPENED`                                              | No `decide` point sits on a settled decision's code without declaring `reopens`                                              |
+| `OPEN_UNASKED`                                                  | Every skipped card still on a line of the diff is raised by a point with `asks`                                              |

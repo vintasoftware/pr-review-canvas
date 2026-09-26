@@ -38,6 +38,52 @@ stay off. Add `--base <ref>` to compare against another branch. Committing after
 editing a file after `uncommitted`, moves the head: the next time you open the page or press
 refresh, the canvas is marked outdated and the page offers to generate it again.
 
+### Settle your decisions first: the self-review deck
+
+A canvas explains a change. The self-review deck makes you decide it. Run:
+
+```text
+/pr-self-review branch            # or: /pr-self-review uncommitted, or /pr-self-review <pr-number>
+```
+
+The skill writes a short deck of **decision cards**, at most one per 100 changed lines and never
+more than ten. Each card is one choice your change makes that a reasonable engineer could make
+either way, such as handling a rare case or simplifying, or keeping backwards compatibility or
+breaking cleanly. Each card has two sides, A and B, and marks the one the code does now. The
+card shows each side's consequence in a sentence and a small picture of it; `i` turns the card
+over to the reasons and the code. Open
+**http://localhost:3010/deck/branch** (or `/deck/uncommitted`, or `/deck/<pr-number>`) and work through the cards one at a
+time. At 1080p and above, the page never scrolls; on a phone the sides stack and you tap or drag.
+A pull request works too: its head comes from the forge, so fixes reach the next deck once they
+are pushed.
+
+| Key       | Action                                                      |
+| --------- | ----------------------------------------------------------- |
+| `a` / `b` | pick side A (left) or side B (right), or drag the card      |
+| `n`       | neither side: say what you want instead                     |
+| `s`       | skip: leave the decision to reviewers                       |
+| `u`       | undo the last pick                                          |
+| `e` / `r` | edit a side's justification, or change where it is recorded |
+| `i`       | turn the card over: context, justifications, and the code   |
+| `o`       | show the code the card is about                             |
+
+When the deck is cleared, the page writes a **fix list** from every pick that disagrees with the
+code, and suggests the next command:
+
+```text
+/pr-self-review-fix branch
+```
+
+It asks you about anything unclear, applies the fixes, writes the justifications you marked for
+the code, then deals a fresh deck. Decisions you already settled are carried over and never asked
+again, so the next deck shows only the questions the fixes raised.
+
+When you then generate the pull request's canvas (`/pr-review-canvas <n>`), it takes what the
+decks for that pull request, or for its branch, settled. The canvas does not ask a settled decision
+again unless the code contradicts your pick, and it raises the cards you skipped for reviewers.
+Publishing it also posts every **PR comment** justification as your own review, one comment on the
+code each concerns. Pass `--skip-self-review-comments` to `pr-review publish` to keep them off.
+
 ### Review side
 
 Start the canvas server from the project you want to review:

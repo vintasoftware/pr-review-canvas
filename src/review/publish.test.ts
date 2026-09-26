@@ -84,6 +84,7 @@ describe('publish', () => {
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
       reviewUrl: 'http://localhost:3010/review/42',
+      selfReview: { status: 'none' },
     })
     const context = await readContext(canvasDir)
     const stored = ReviewArtifactSchema.parse(JSON.parse(await readFile(result.reviewJsonPath, 'utf8')))

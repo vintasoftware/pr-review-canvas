@@ -8,7 +8,10 @@ import {
   isLargePr,
   type PrepareTarget,
   type PrepareTargetInput,
+  type SelfReviewDecision,
 } from '../contract/generation-context.js'
+import { pickNeedsFix } from '../contract/deck.js'
+import { anchorOnHead, decisionsForPr, pickedLabel, whyOf } from '../deck/settled-for-pr.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
 import type { LocalKey } from '../contract/review-key.js'
 import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/local-target.js'
@@ -44,7 +47,7 @@ export interface PrepareResult {
 }
 
 /** The PR meta, live from GitHub, with the head and base refs fetched into the local clone. */
-async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['log']): Promise<Pr> {
+export async function resolvePr(ctx: AppContext, number: number, log: PrepareOptions['log']): Promise<Pr> {
   log('fetch-pr')
   const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
   log('fetch-refs')
@@ -184,6 +187,49 @@ async function resolveBasis(
   }
 }
 
+/**
+ * What the author's self-review decks say about this pull request, anchored on its head, or null
+ * when no deck speaks for it. Settled decisions are never raised again unless the code contradicts
+ * them; open ones are the author's questions for reviewers.
+ */
+async function selfReviewFor(
+  ctx: AppContext,
+  pr: Pr & { number: number },
+  head: Derived
+): Promise<NonNullable<GenerationContext['selfReview']> | null> {
+  const { settled, open } = await decisionsForPr(ctx, pr)
+  if (settled.length === 0 && open.length === 0) {
+    return null
+  }
+  const describe = async (
+    card: Parameters<typeof anchorOnHead>[1] & { key: string; title: string }
+  ): Promise<SelfReviewDecision> => {
+    const anchor = await anchorOnHead(ctx, card, { sha: pr.headSha, derived: head })
+    const decision: SelfReviewDecision = {
+      key: card.key,
+      title: card.title,
+      path: card.path,
+      side: card.side ?? 'new',
+    }
+    if (anchor !== null) decision.line = anchor.line
+    return decision
+  }
+  return {
+    settled: await Promise.all(
+      settled.map(async card => {
+        const decision: SelfReviewDecision = {
+          ...(await describe(card)),
+          picked: pickedLabel(card),
+          why: whyOf(card),
+        }
+        if (pickNeedsFix(card, card.pick)) decision.fix = true
+        return decision
+      })
+    ),
+    open: await Promise.all(open.map(describe)),
+  }
+}
+
 /** The target with its base resolved, which is the form `context.json` records. */
 async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promise<PrepareTarget> {
   if (input.kind !== 'local') {
@@ -274,6 +320,12 @@ export async function prepare(
   const basis = opts.force || !config.canvas.incremental ? null : await resolveBasis(ctx, target, pr, derived)
   if (basis !== null) {
     context.basis = basis
+  }
+  if (target.kind === 'pr') {
+    const selfReview = await selfReviewFor(ctx, { ...pr, number: target.number }, derived)
+    if (selfReview !== null) {
+      context.selfReview = selfReview
+    }
   }
   const sources =
     opts.promptSources ??
