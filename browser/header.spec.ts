@@ -60,7 +60,14 @@ test('offers the default reading level in the settings dialog and saves it', asy
     },
     overrides: {},
     file: '/repo/.pr-review/settings.yml',
-    project: { file: null, chatEnabled: true, rulebook: null, layers: 0, highRisk: 0, generationModels: {} },
+    project: {
+      file: null,
+      chatEnabled: true,
+      rulebook: null,
+      layers: 0,
+      highRisk: 0,
+      generationModels: { claude: 'opus' },
+    },
   }
   await page.route('**/api/prs/42', async route => {
     const fetched = await route.fetch()

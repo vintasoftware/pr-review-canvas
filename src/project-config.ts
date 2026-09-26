@@ -70,7 +70,8 @@ export const ProjectConfigSchema = z.object({
     caps: z.object(capsShape).optional(),
     /**
      * The model each agent generates canvases with, keyed by the agent id publish records
-     * (`claude`, `codex`, ...). An agent with no entry keeps the session's model.
+     * (`claude`, `codex`, ...). Claude defaults to Opus; an agent with no entry keeps the
+     * session's model.
      */
     models: GenerationModelsSchema,
   }),
@@ -121,7 +122,13 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   version: 1,
   layers: [],
   highRisk: [],
-  generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10, models: {} },
+  generation: {
+    mode: 'strict',
+    maxRepairRounds: 3,
+    inlineDiffMaxLines: 1500,
+    smallPrHunks: 10,
+    models: { claude: 'opus' },
+  },
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
   canvas: { keepForIdenticalDiff: true, incremental: true },
@@ -154,7 +161,8 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     inlineDiffMaxLines:
       user.generation?.inlineDiffMaxLines ?? DEFAULT_PROJECT_CONFIG.generation.inlineDiffMaxLines,
     smallPrHunks: user.generation?.smallPrHunks ?? DEFAULT_PROJECT_CONFIG.generation.smallPrHunks,
-    models: user.generation?.models ?? DEFAULT_PROJECT_CONFIG.generation.models,
+    // Per agent: a project that names only codex still generates with Opus on Claude.
+    models: { ...DEFAULT_PROJECT_CONFIG.generation.models, ...user.generation?.models },
   }
   if (user.generation?.caps !== undefined) {
     generation.caps = user.generation.caps

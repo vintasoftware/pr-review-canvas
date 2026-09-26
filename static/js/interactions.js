@@ -226,6 +226,31 @@ export function askTargetFor(focused, selection) {
 }
 
 /**
+ * Keeps the page's scroll padding at the height of the sticky outdated bar, which changes as the
+ * bar wraps. Every scroll to a target then stops under the bar: a rail or canvas link the browser
+ * follows on its own, back and forward, and the step keys. Returns the undo.
+ * @param {Document} doc
+ * @param {Element | null} bar
+ * @returns {() => void}
+ */
+export function padUnderStickyBar(doc, bar) {
+  if (bar === null) {
+    return () => {}
+  }
+  const page = doc.documentElement
+  const pad = () => {
+    page.style.scrollPaddingTop = `${bar.getBoundingClientRect().height}px`
+  }
+  const observer = new ResizeObserver(pad)
+  observer.observe(bar)
+  pad()
+  return () => {
+    observer.disconnect()
+    page.style.removeProperty('scroll-padding-top')
+  }
+}
+
+/**
  * Wires the whole review screen. Returns a stop function, so a re-render never leaves two sets
  * of listeners behind.
  * @param {HTMLElement} root
@@ -247,6 +272,9 @@ export function wireReview(root, session, opts = {}) {
   /** @type {HTMLElement | null} */
   let focusedEl = null
   let pendingG = false
+  /** The card toggle the last single click flipped, so the second click of a double-click can undo it. */
+  /** @type {HTMLElement | null} */
+  let toggledByClick = null
   let composerSeq = 0
   let signoffOpening = 0
 
@@ -362,6 +390,7 @@ export function wireReview(root, session, opts = {}) {
     const bar = root.querySelector('.outdated-bar')
     return bar === null ? 0 : bar.getBoundingClientRect().height
   }
+  const stopPaddingUnderBar = padUnderStickyBar(doc, root.querySelector('.outdated-bar'))
 
   /** @param {string} id */
   const byId = id => root.querySelector(`#${cssEscape(id)}`)
@@ -378,7 +407,8 @@ export function wireReview(root, session, opts = {}) {
     if (el instanceof HTMLElement) {
       focusedEl = el
       el.classList.add('is-focused')
-      el.style.scrollMarginTop = `${stickyTop() + FOCUS_GAP}px`
+      // The page's scroll padding already clears the outdated bar; this is the gap under it.
+      el.style.scrollMarginTop = `${FOCUS_GAP}px`
       // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around the
       // element: a hidden element cannot take the focus.
       scrollIntoViewSafe(el, block)
@@ -867,13 +897,24 @@ export function wireReview(root, session, opts = {}) {
 
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
-    'toggle-card': el => {
+    'toggle-card': (el, event) => {
+      // A double or triple click selects the file name. Its first click already flipped the card,
+      // so the second one flips it back and the third does nothing.
+      if (event.detail > 1) {
+        if (event.detail === 2 && toggledByClick === el) {
+          setCardCollapsed(el)
+        }
+        toggledByClick = null
+        return
+      }
       // A file's title toggles its card too, but not at the end of a drag that selected its text.
       const picked = window.getSelection()
       if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
+        toggledByClick = null
         return
       }
       setCardCollapsed(el)
+      toggledByClick = el
     },
     'mark-layer': el => {
       const id = el.getAttribute('data-reviewed-id') ?? ''
@@ -1362,6 +1403,7 @@ export function wireReview(root, session, opts = {}) {
       doc.removeEventListener('pointercancel', onPointerUp)
       doc.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
       stopCardReveal()
+      stopPaddingUnderBar()
     },
   }
 }

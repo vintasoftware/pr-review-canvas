@@ -29,7 +29,8 @@ it), so you start a fresh `model.json`. Run every `pr-review` command from the r
 The project picks the default model. The AI Chat settings (`chatAgent`, `chatModel`, and
 `serve --chat-agent/--chat-model`) are for the chat pane and never pick your model. Prepare prints
 the project's `generation.models` as
-`models`, keyed by agent id (the `--agent` you publish with): `{ "claude": "opus" }`. Generate with
+`models`, keyed by agent id (the `--agent` you publish with): `{ "claude": "opus" }`. That entry is
+the default, so Claude generates with Opus unless the project names another model. Generate with
 the model under your own agent id. When `models` has no entry for your agent, keep the model you
 run on. If the prepared diff changes authentication, access policy, or protected health
 information (PHI) handling, use a more capable model, such as Opus, for the generation and

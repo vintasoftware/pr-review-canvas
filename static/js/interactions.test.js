@@ -16,7 +16,7 @@ import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
 import { carriedOverBarHtml } from './empty-state.js'
-import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
+import { askTargetFor, nextUnreviewedTarget, padUnderStickyBar, toast, wireReview } from './interactions.js'
 import {
   cardOf,
   defineLayerElements,
@@ -390,6 +390,41 @@ describe('card toggles', () => {
     click(root, 'article.file#file-src_app_ts .file-h .chev')
     expect(body?.hasAttribute('hidden')).toBe(true)
     window.getSelection()?.removeAllRanges()
+  })
+
+  it('leaves the card as it was after a double or triple click selects the file name', () => {
+    const { root } = setup()
+    const body = root.querySelector('article.file#file-src_app_ts > .file-body')
+    const title = root.querySelector('article.file#file-src_app_ts .file-h .path')
+    if (!(title instanceof HTMLElement) || title.firstChild === null) {
+      throw new Error('file title has no text')
+    }
+    const text = title.firstChild
+    /** The clicks a browser sends for one press sequence; from the second on, the name is selected. */
+    const clicks = (/** @type {number} */ count) => {
+      for (let detail = 1; detail <= count; detail++) {
+        if (detail === 2) {
+          window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
+        }
+        title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }))
+      }
+      window.getSelection()?.removeAllRanges()
+    }
+    clicks(2)
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    clicks(3)
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    clicks(1)
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    clicks(2)
+    expect(body?.hasAttribute('hidden')).toBe(true)
+
+    // A click that ended a drag flipped nothing, so a second click right after it undoes nothing.
+    window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }))
+    window.getSelection()?.removeAllRanges()
+    expect(body?.hasAttribute('hidden')).toBe(true)
   })
 
   it('collapses a layer section from its own chevron', () => {
@@ -1296,8 +1331,8 @@ describe('keyboard', () => {
       key('n')
       const focused = root.querySelector('.is-focused')
       expect(focused?.id).toBe('file-src_new_name_ts')
-      // The card scrolls to just under the bar, which would cover its heading otherwise.
-      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('48px')
+      // The page's scroll padding clears the bar; the card keeps a small gap under it.
+      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('8px')
       // The focused card is on screen, so p steps from it.
       key('p')
       expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_ts')
@@ -1527,6 +1562,45 @@ describe('capability gating and sign-off', () => {
     click(root, '[data-act="signoff-post"]')
     await flush()
     expect(root.querySelector('#signoff-dialog .cmd-err')?.textContent).toBe('502 github is down')
+  })
+})
+
+describe('padUnderStickyBar', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.documentElement.style.removeProperty('scroll-padding-top')
+  })
+
+  it('keeps the page scroll padding at the bar height as it wraps, and clears it on stop', () => {
+    /** @type {() => void} */
+    let resized = () => {}
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(/** @type {() => void} */ callback) {
+          resized = callback
+        }
+        observe() {}
+        disconnect = disconnect
+      }
+    )
+    let height = 40
+    const bar = document.createElement('div')
+    vi.spyOn(bar, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 100, height))
+    const stop = padUnderStickyBar(document, bar)
+    expect(document.documentElement.style.scrollPaddingTop).toBe('40px')
+    height = 72
+    resized()
+    expect(document.documentElement.style.scrollPaddingTop).toBe('72px')
+    stop()
+    expect(disconnect).toHaveBeenCalledOnce()
+    expect(document.documentElement.style.scrollPaddingTop).toBe('')
+  })
+
+  it('leaves the page alone with no bar', () => {
+    padUnderStickyBar(document, null)()
+    expect(document.documentElement.style.scrollPaddingTop).toBe('')
   })
 })
 

@@ -233,7 +233,7 @@ describe('the settings routes', () => {
       maxRepairRounds: 3,
       inlineDiffMaxLines: 1500,
       smallPrHunks: 10,
-      generationModels: {},
+      generationModels: { claude: 'opus' },
       keepForIdenticalDiff: true,
       layers: 0,
       highRisk: 0,

@@ -55,7 +55,7 @@ describe('prepare', () => {
       mergeBaseSha: BASE_SHA,
       promptPath: path.join(canvasDir, 'prompt.md'),
       contextPath: path.join(canvasDir, 'context.json'),
-      models: {},
+      models: { claude: 'opus' },
       status: 'prepared',
     })
     expect(o.phases).toEqual(['fetch-pr', 'fetch-refs', 'collect-diffs', 'prompt'])

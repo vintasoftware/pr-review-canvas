@@ -186,8 +186,9 @@ whether AI Chat is enabled. The settings dialog displays this configuration; edi
 change it. See the [configuration reference](docs/reference.md#project-config).
 
 Canvas generation follows the [skill's model rules](skills/pr-review-canvas/SKILL.md#model-choice).
-Set `generation.models` to pick the model each agent generates canvases with for this project, for
-example `claude: opus`. An agent with no entry keeps the model of the session that runs the skill.
+Claude generates canvases with Opus by default. Set `generation.models` to pick another model for an
+agent in this project, for example `claude: sonnet` or `codex: gpt-6-sol`. Any other agent with no
+entry keeps the model of the session that runs the skill.
 The skill passes the value to its host as written, so chat model families and `pin:` do not apply,
 and the chat settings do not change it. The settings dialog lists it under **Canvas generation**.
 
@@ -248,7 +249,8 @@ changing behavior, leaving a margin above CI's 95% minimum. Cover meaningful fai
 cases rather than lowering thresholds. Each CI job uploads `coverage-node-<version>` with branch
 locations and a summary; locally, these reports are in `coverage/` after `pnpm coverage`.
 
-Run `pr-review --help` for CLI commands. Local data goes in the project's `.pr-review/`
+Run `pr-review --help` for CLI commands, or `pr-review <command> --help` for one command's flags.
+Local data goes in the project's `.pr-review/`
 directory; keep it out of Git.
 
 See [Publishing to npm](docs/publishing.md) for release checks and first-publish instructions.

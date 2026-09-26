@@ -35,8 +35,8 @@ generation:
   inlineDiffMaxLines: 1500 # diffs longer than this are read per file instead of inlined in the prompt
   smallPrHunks: 10 # at most this many hunks: one layer unless concerns differ, fewer annotations
   # models:                # the model each agent generates canvases with, keyed by agent id;
-  #   claude: opus         # an agent with no entry keeps the session's model; AI Chat ignores it
-  #   codex: gpt-6-sol
+  #   claude: opus         # the default; any other agent with no entry keeps the session's model
+  #   codex: gpt-6-sol     # AI Chat ignores this map
   # caps:                  # override the text caps (characters)
   #   summary: 1800
   #   rationale: 300

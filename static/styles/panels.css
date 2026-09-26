@@ -85,11 +85,13 @@
   box-shadow: 2px 2px 0 var(--shadow);
   font-size: 13px;
 }
-/* Only the warning sticks; a note scrolls away with the page. */
+/* Only the warning sticks; a note scrolls away with the page. The tint sits on the page color, since
+   a dark theme's tint is see-through and the cards scroll under the bar. */
 .outdated-bar {
   position: sticky;
   top: 0;
   z-index: 3;
+  background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--bg);
 }
 .carried-over-bar {
   background: var(--bg);

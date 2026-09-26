@@ -207,6 +207,10 @@ export async function main(argv: string[]): Promise<number> {
     printErrorEnvelope(io, 'BAD_REQUEST', `unknown command: ${command}`, 'run pr-review --help')
     return EXIT.usage
   }
+  if (rest.includes('--help') || rest.includes('-h')) {
+    printUsage(process.stderr, readPackageVersion(), command)
+    return EXIT.ok
+  }
   try {
     switch (command) {
       case 'serve':
