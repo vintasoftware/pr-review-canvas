@@ -16,7 +16,7 @@ import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
 import { carriedOverBarHtml } from './empty-state.js'
-import { askTargetFor, nextUnreviewedTarget, toast, wireReview } from './interactions.js'
+import { askTargetFor, nextUnreviewedTarget, padUnderStickyBar, toast, wireReview } from './interactions.js'
 import {
   cardOf,
   defineLayerElements,
@@ -1331,8 +1331,8 @@ describe('keyboard', () => {
       key('n')
       const focused = root.querySelector('.is-focused')
       expect(focused?.id).toBe('file-src_new_name_ts')
-      // The card scrolls to just under the bar, which would cover its heading otherwise.
-      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('48px')
+      // The page's scroll padding clears the bar; the card keeps a small gap under it.
+      expect(focused instanceof HTMLElement ? focused.style.scrollMarginTop : '').toBe('8px')
       // The focused card is on screen, so p steps from it.
       key('p')
       expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_ts')
@@ -1562,6 +1562,45 @@ describe('capability gating and sign-off', () => {
     click(root, '[data-act="signoff-post"]')
     await flush()
     expect(root.querySelector('#signoff-dialog .cmd-err')?.textContent).toBe('502 github is down')
+  })
+})
+
+describe('padUnderStickyBar', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.documentElement.style.removeProperty('scroll-padding-top')
+  })
+
+  it('keeps the page scroll padding at the bar height as it wraps, and clears it on stop', () => {
+    /** @type {() => void} */
+    let resized = () => {}
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(/** @type {() => void} */ callback) {
+          resized = callback
+        }
+        observe() {}
+        disconnect = disconnect
+      }
+    )
+    let height = 40
+    const bar = document.createElement('div')
+    vi.spyOn(bar, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 100, height))
+    const stop = padUnderStickyBar(document, bar)
+    expect(document.documentElement.style.scrollPaddingTop).toBe('40px')
+    height = 72
+    resized()
+    expect(document.documentElement.style.scrollPaddingTop).toBe('72px')
+    stop()
+    expect(disconnect).toHaveBeenCalledOnce()
+    expect(document.documentElement.style.scrollPaddingTop).toBe('')
+  })
+
+  it('leaves the page alone with no bar', () => {
+    padUnderStickyBar(document, null)()
+    expect(document.documentElement.style.scrollPaddingTop).toBe('')
   })
 })
 

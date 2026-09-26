@@ -38,7 +38,8 @@
 - Click a file's name to collapse or open its card. A double or triple click that selects the name
   leaves the card as it was.
 - The **Canvas still applies** note scrolls away with the page. Only the **Canvas is outdated**
-  warning stays pinned to the top.
+  warning stays pinned to the top. A rail or canvas link stops the layer under it, and what scrolls
+  under it stays hidden in dark themes.
 - The bars above the overview span the full reading column, so they no longer stop short when AI
   Chat is minimized.
 
