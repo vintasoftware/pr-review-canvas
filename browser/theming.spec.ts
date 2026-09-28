@@ -29,6 +29,11 @@ async function readLook(page: Page) {
         const el = at('.hdr-actions .cmd')
         return el === null ? null : getComputedStyle(el, '::after').content
       })(),
+      // The glyph the skin button wears, so a skin that hides its label still shows which it is.
+      skinIcon: (() => {
+        const el = at('#skin-toggle')
+        return el === null ? null : getComputedStyle(el, '::before').maskImage
+      })(),
     }
   })
 }
@@ -55,21 +60,27 @@ test('starts in the github skin, cycles through olive to terminal, and remembers
   const toggle = page.locator('#skin-toggle')
   await expect(root).toHaveAttribute('data-skin', 'github')
   await expect(toggle).toHaveText('skin: github')
-  expect(await readLook(page)).toMatchObject({
+  const github = await readLook(page)
+  expect(github).toMatchObject({
     cardRadius: '6px',
     stripeHeight: '1px',
     commandBracket: 'none',
   })
+  expect(github.skinIcon).not.toBe('none')
 
-  // Olive wears the github layout, so only the palette changes.
+  // Olive wears the github layout, so only the palette changes, and the skin button's glyph: both
+  // skins hide its label, so the glyph is what tells them apart.
   await clickAppearance(page, '#skin-toggle')
   await expect(root).toHaveAttribute('data-skin', 'olive')
   await expect(toggle).toHaveText('skin: olive')
-  expect(await readLook(page)).toMatchObject({
+  const olive = await readLook(page)
+  expect(olive).toMatchObject({
     cardRadius: '6px',
     stripeHeight: '1px',
     commandBracket: 'none',
   })
+  expect(olive.skinIcon).not.toBe('none')
+  expect(olive.skinIcon).not.toBe(github.skinIcon)
 
   await clickAppearance(page, '#skin-toggle')
   await expect(root).toHaveAttribute('data-skin', 'terminal')
@@ -203,6 +214,7 @@ for (const want of COMBINATIONS) {
       cardRadius: want.cardRadius,
       stripeHeight: want.skin === 'terminal' ? '6px' : '1px',
       commandBracket: want.skin === 'terminal' ? '" ]"' : 'none',
+      skinIcon: want.skin === 'terminal' ? 'none' : expect.stringMatching(/^url\("data:image\/svg\+xml/),
     })
   })
 }
