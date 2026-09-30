@@ -99,9 +99,9 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
  * tree is snapshotted again, so an edit made while the agent worked is caught the same way a push
  * is.
  */
-async function currentHead(
+export async function currentHead(
   ctx: AppContext,
-  context: GenerationContext
+  context: Pick<GenerationContext, 'target' | 'headSha' | 'mergeBaseSha'>
 ): Promise<{ headSha: string; moved: boolean }> {
   if (context.target.kind === 'pr') {
     const { host, repo } = ctx.config

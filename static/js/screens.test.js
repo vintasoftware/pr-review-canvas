@@ -148,6 +148,7 @@ describe('header', () => {
     const hdr = document.querySelector('header.hdr')
     expect(hdr?.querySelector('.brand-wordmark')?.textContent).toBe('PR review canvas')
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
+      'tour',
       'regenerate',
       'export zip',
       'refresh',
@@ -156,6 +157,9 @@ describe('header', () => {
       'skin: terminal',
       'theme: auto',
     ])
+    expect(hdr?.querySelector('#tour-link')?.getAttribute('href')).toBe(
+      '/review/42'.replace('review', 'tour')
+    )
     // Every header command works on a ready bundle with acpx installed.
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual(
       []

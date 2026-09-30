@@ -59,9 +59,76 @@ export const PromptOverridesSchema = z
     'quality-standards.md': z.string().min(1).optional(),
     'layering-guidance.md': z.string().min(1).optional(),
     'chat-seed.md': z.string().min(1).optional(),
+    'tour.md': z.string().min(1).optional(),
+    'tour-grill.md': z.string().min(1).optional(),
   })
   .strict()
 export type PromptOverrides = z.infer<typeof PromptOverridesSchema>
+
+export const TOUR_CATEGORIES = ['trade-off', 'architecture', 'product', 'pokayoke', 'nfr', 'spec'] as const
+const OnOff = z.enum(['on', 'off'])
+
+/** The tour's settings, under `tour:`. The defaults are the design's. */
+export const TourConfigSchema = z.object({
+  budget: z.object({
+    /** Ceilings: at most this many landmarks, decisions, and quiz questions. */
+    landmarks: z.number().int().positive(),
+    decisions: z.number().int().positive(),
+    quiz: z.number().int().positive(),
+    /** About one landmark per this many changed lines, on top of the three every tour has. */
+    linesPerLandmark: z.number().int().positive(),
+  }),
+  finalQuiz: z.enum(['on', 'off', 'required']),
+  reverseQuiz: OnOff,
+  grill: z.enum(['change', 'always', 'off']),
+  audio: OnOff,
+  microWorld: OnOff,
+  /** `auto`: on when the guide has a run recipe. */
+  tryIt: z.enum(['on', 'off', 'auto']),
+  categories: z.array(z.enum(TOUR_CATEGORIES)),
+  /** `auto`: the same as canvas sharing. */
+  share: z.enum(['on', 'off', 'auto']),
+  /** The model each agent generates tours with; falls back to `generation.models`. */
+  models: GenerationModelsSchema,
+  /** The committed guide, relative to the repository root. */
+  guide: z.string().min(1),
+})
+export type TourConfig = z.infer<typeof TourConfigSchema>
+
+const PartialTourConfigSchema = z.object({
+  budget: z
+    .object({
+      landmarks: z.number().int().positive().optional(),
+      decisions: z.number().int().positive().optional(),
+      quiz: z.number().int().positive().optional(),
+      linesPerLandmark: z.number().int().positive().optional(),
+    })
+    .optional(),
+  finalQuiz: z.enum(['on', 'off', 'required']).optional(),
+  reverseQuiz: OnOff.optional(),
+  grill: z.enum(['change', 'always', 'off']).optional(),
+  audio: OnOff.optional(),
+  microWorld: OnOff.optional(),
+  tryIt: z.enum(['on', 'off', 'auto']).optional(),
+  categories: z.array(z.enum(TOUR_CATEGORIES)).optional(),
+  share: z.enum(['on', 'off', 'auto']).optional(),
+  models: GenerationModelsSchema.optional(),
+  guide: z.string().min(1).optional(),
+})
+
+export const DEFAULT_TOUR_CONFIG: TourConfig = {
+  budget: { landmarks: 8, decisions: 5, quiz: 5, linesPerLandmark: 150 },
+  finalQuiz: 'on',
+  reverseQuiz: 'on',
+  grill: 'change',
+  audio: 'on',
+  microWorld: 'on',
+  tryIt: 'auto',
+  categories: [...TOUR_CATEGORIES],
+  share: 'auto',
+  models: {},
+  guide: 'docs/pr-tour.md',
+}
 
 export const ProjectConfigSchema = z.object({
   version: z.literal(1),
@@ -101,6 +168,7 @@ export const ProjectConfigSchema = z.object({
   }),
   /** What publish and the review page put on the PR/MR. `.pr-review/settings.yml` can override both. */
   sharing: SharingSchema,
+  tour: TourConfigSchema,
 })
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
 
@@ -129,6 +197,7 @@ const PartialProjectConfigSchema = z.object({
   sharing: z
     .object({ canvasComment: z.boolean().optional(), mentionCanvas: z.boolean().optional() })
     .optional(),
+  tour: PartialTourConfigSchema.optional(),
 })
 
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
@@ -146,6 +215,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   chat: { enabled: true },
   canvas: { keepForIdenticalDiff: true, incremental: true },
   sharing: { canvasComment: true, mentionCanvas: true },
+  tour: DEFAULT_TOUR_CONFIG,
 }
 
 export interface LoadedProjectConfig {
@@ -196,6 +266,24 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     sharing: {
       canvasComment: user.sharing?.canvasComment ?? DEFAULT_PROJECT_CONFIG.sharing.canvasComment,
       mentionCanvas: user.sharing?.mentionCanvas ?? DEFAULT_PROJECT_CONFIG.sharing.mentionCanvas,
+    },
+    tour: {
+      budget: {
+        landmarks: user.tour?.budget?.landmarks ?? DEFAULT_TOUR_CONFIG.budget.landmarks,
+        decisions: user.tour?.budget?.decisions ?? DEFAULT_TOUR_CONFIG.budget.decisions,
+        quiz: user.tour?.budget?.quiz ?? DEFAULT_TOUR_CONFIG.budget.quiz,
+        linesPerLandmark: user.tour?.budget?.linesPerLandmark ?? DEFAULT_TOUR_CONFIG.budget.linesPerLandmark,
+      },
+      finalQuiz: user.tour?.finalQuiz ?? DEFAULT_TOUR_CONFIG.finalQuiz,
+      reverseQuiz: user.tour?.reverseQuiz ?? DEFAULT_TOUR_CONFIG.reverseQuiz,
+      grill: user.tour?.grill ?? DEFAULT_TOUR_CONFIG.grill,
+      audio: user.tour?.audio ?? DEFAULT_TOUR_CONFIG.audio,
+      microWorld: user.tour?.microWorld ?? DEFAULT_TOUR_CONFIG.microWorld,
+      tryIt: user.tour?.tryIt ?? DEFAULT_TOUR_CONFIG.tryIt,
+      categories: user.tour?.categories ?? [...TOUR_CATEGORIES],
+      share: user.tour?.share ?? DEFAULT_TOUR_CONFIG.share,
+      models: { ...user.tour?.models },
+      guide: user.tour?.guide ?? DEFAULT_TOUR_CONFIG.guide,
     },
   }
   if (user.rulebook !== undefined) {

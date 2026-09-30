@@ -1,4 +1,6 @@
 import { once } from 'node:events'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { serve } from '@hono/node-server'
 import { test as base, expect, type Page } from '@playwright/test'
 import { createApp } from '../src/server/app.js'
@@ -14,12 +16,16 @@ import {
   type TestContextOptions,
 } from '../src/testing/fakes.js'
 import {
+  BASE_SHA,
   GH_ISSUE_COMMENTS,
   GH_REVIEW_COMMENTS,
   ghFor42,
   gitFor42,
+  HEAD_SHA,
   syntheticArtifact,
 } from '../src/testing/synthetic.js'
+import { TourArtifactSchema } from '../src/contract/tour.js'
+import { PACKAGE_ROOT } from '../src/server/context.js'
 
 export { expect } from '@playwright/test'
 
@@ -44,9 +50,26 @@ const POSTED_INLINE = ghPost(body => ({
   html_url: 'https://github.com/acme/widgets/pull/42#discussion_r5001',
 }))
 
+/** The real tour of PR 67, filed as the tour of PR #42 at its head. */
+async function fixtureTour() {
+  const raw = JSON.parse(
+    await readFile(path.join(PACKAGE_ROOT, '__fixtures__', 'tour-67', 'tour.json'), 'utf8')
+  )
+  const pr = syntheticArtifact().pr
+  return TourArtifactSchema.parse({
+    ...raw,
+    pr: { ...pr, title: raw.pr.title, body: raw.pr.body },
+    repo: pr.repo,
+    headSha: HEAD_SHA,
+    mergeBaseSha: BASE_SHA,
+    record: { touredBy: [] },
+  })
+}
+
 export const test = base.extend<{
   reviewUrl: string
   selfReviewUrl: string
+  tourUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
   chatServer: async ({ page }, use) => {
@@ -73,6 +96,44 @@ export const test = base.extend<{
     const server = await startServer(page)
     try {
       await use(server.url)
+    } finally {
+      await server.stop()
+    }
+  },
+  /** PR #42 with the tour of PR 67 published for its head, served to its author; sharing works. */
+  tourUrl: async ({ page }, use) => {
+    let shared: Record<string, unknown> | null = null
+    const share = ghPost(body => {
+      shared = {
+        ...GH_ISSUE_COMMENTS[0],
+        ...(body as object),
+        id: 6001,
+        html_url: 'https://github.com/acme/widgets/pull/42#issuecomment-6001',
+      }
+      return shared
+    })
+    const server = await startServer(page, {
+      gh: ghFor42({
+        routes: {
+          'repos/acme/widgets/issues/42/comments': ghHandler(() =>
+            shared === null ? GH_ISSUE_COMMENTS : [...GH_ISSUE_COMMENTS, shared]
+          ),
+        },
+        postRoutes: {
+          'repos/acme/widgets/issues/42/comments': share,
+          'repos/acme/widgets/issues/comments/6001': share,
+        },
+      }),
+      // Chat off: the grilling falls back to the form; `tour-grill.spec.ts` covers the agent.
+      projectConfig: {
+        config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
+        warnings: [],
+        source: null,
+      },
+    })
+    try {
+      await server.t.ctx.tours.write(HEAD_SHA, await fixtureTour())
+      await use(`${new URL(server.url).origin}/tour/42`)
     } finally {
       await server.stop()
     }

@@ -2,7 +2,7 @@
 // It reports instead of throwing, so a broken setup still answers. The CLI prints one checklist
 // a person or an agent can read. `--json` prints the same report as one JSON line.
 import { randomBytes } from 'node:crypto'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ORIGIN_HINT } from '../config.js'
 import type { Git } from '../git/git.js'
@@ -10,7 +10,14 @@ import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
+import {
+  CLAUDE_SKILLS_DIR,
+  CODEX_SKILLS_DIR,
+  listBundledSkills,
+  SKILL_NAME,
+  SKILLS_ROOT,
+  skillSourceDir,
+} from './install-skill.js'
 import { skillContent } from './skill-content.js'
 
 export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill'] as const
@@ -67,45 +74,95 @@ export type ReadSkill = (file: string) => Promise<string | null>
 
 const readSkillFile: ReadSkill = file => readFile(file, 'utf8')
 
-/** One copy of the skill in the repository, next to how it compares with the bundled one. */
+/** One copy of a bundled skill in the repository, next to how it compares with the bundled one. */
 export interface SkillCopy {
+  /** Which bundled skill this is a copy of. */
+  skill: string
   kind: 'claude' | 'codex'
   /** The skills directory the copy sits in, absolute. */
   dir: string
-  /** `<dir>/pr-review-canvas`, relative to the repository. */
+  /** `<dir>/<skill>`, relative to the repository. */
   path: string
-  /** True when the copy's body or recorded hash differs from the bundled skill, or it cannot be read. */
+  /**
+   * True when the copy's body or recorded hash differs from the bundled skill, a file the skill
+   * ships beside its SKILL.md is missing or differs, or the copy cannot be read.
+   */
   stale: boolean
   /** Why the copy could not be read, when it could not. */
   error?: string
 }
 
+interface BundledSkill {
+  hash: string
+  /** The files the skill ships beside its SKILL.md, by path within the skill. */
+  extras: Map<string, string>
+}
+
+async function readBundled(name: string, root: string): Promise<BundledSkill> {
+  const dir = skillSourceDir(name, root)
+  const hash = skillContent(await readFile(path.join(dir, 'SKILL.md'), 'utf8')).hash
+  const extras = new Map<string, string>()
+  for (const entry of await readdir(dir, { recursive: true, withFileTypes: true })) {
+    const rel = path.relative(dir, path.join(entry.parentPath, entry.name))
+    if (entry.isFile() && rel !== 'SKILL.md') extras.set(rel, await readFile(path.join(dir, rel), 'utf8'))
+  }
+  return { hash, extras }
+}
+
+/** True when the copy at `target` has every file of `extras`, unchanged but for line endings. */
+async function extrasMatch(target: string, extras: ReadonlyMap<string, string>, readSkill: ReadSkill) {
+  for (const [rel, text] of extras) {
+    const copy = await readSkill(path.join(target, rel)).catch(() => null)
+    if (copy?.replace(/\r\n/g, '\n') !== text.replace(/\r\n/g, '\n')) return false
+  }
+  return true
+}
+
 /**
- * The copies of the skill in `.claude/skills` and `.agents/skills`. A directory without one is
- * left out. Throws when the bundled skill itself cannot be read.
+ * The copies of the bundled skills in `.claude/skills` and `.agents/skills`. A directory without
+ * the first skill, the canvas skill, is left out. Where that skill is, a missing companion skill
+ * counts as a stale copy, so an upgrade adds it. Throws when a bundled skill itself cannot be read.
  */
 export async function findSkillCopies(
   repoRoot: string,
-  readSkill: ReadSkill = readSkillFile
+  readSkill: ReadSkill = readSkillFile,
+  skillsRoot = SKILLS_ROOT
 ): Promise<SkillCopy[]> {
-  const expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
+  const names = await listBundledSkills(skillsRoot)
+  const anchor = names[0]
+  const bundled = new Map<string, BundledSkill>()
+  for (const name of names) bundled.set(name, await readBundled(name, skillsRoot))
   const copies: SkillCopy[] = []
   for (const [kind, skillsDir] of [
     ['claude', CLAUDE_SKILLS_DIR],
     ['codex', CODEX_SKILLS_DIR],
   ] as const) {
     const dir = path.join(repoRoot, skillsDir)
-    const target = path.join(dir, SKILL_NAME)
-    const rel = path.relative(repoRoot, target)
-    try {
-      const text = await readSkill(path.join(target, 'SKILL.md'))
-      if (text === null) continue
-      const { hash, frontmatter } = skillContent(text)
-      const matches = hash === expected && frontmatter.getIn(['metadata', 'body-sha256']) === expected
-      copies.push({ kind, dir, path: rel, stale: !matches })
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        copies.push({ kind, dir, path: rel, stale: true, error: message(err) })
+    for (const skill of names) {
+      const target = path.join(dir, skill)
+      const rel = path.relative(repoRoot, target)
+      const expected = bundled.get(skill) as BundledSkill
+      try {
+        const text = await readSkill(path.join(target, 'SKILL.md'))
+        if (text === null) {
+          if (skill === anchor) break
+          copies.push({ skill, kind, dir, path: rel, stale: true })
+          continue
+        }
+        const content = skillContent(text)
+        const matches =
+          content.hash === expected.hash &&
+          content.frontmatter.getIn(['metadata', 'body-sha256']) === expected.hash &&
+          (await extrasMatch(target, expected.extras, readSkill))
+        copies.push({ skill, kind, dir, path: rel, stale: !matches })
+      } catch (err) {
+        const missing = (err as NodeJS.ErrnoException).code === 'ENOENT'
+        if (missing && skill === anchor) break
+        copies.push(
+          missing
+            ? { skill, kind, dir, path: rel, stale: true }
+            : { skill, kind, dir, path: rel, stale: true, error: message(err) }
+        )
       }
     }
   }
@@ -136,14 +193,20 @@ export async function checkSkill(
       hint: 'run `pr-review upgrade` or `pr-review install-skill`',
     }
   }
-  if (copies.length === 0) {
+  if (copies.every(copy => copy.skill !== SKILL_NAME)) {
     return {
       ok: false,
       detail: `${SKILL_NAME} is in neither ${CLAUDE_SKILLS_DIR} nor ${CODEX_SKILLS_DIR}`,
       hint: 'run `pr-review install-skill`',
     }
   }
-  return { ok: true, detail: copies.map(copy => copy.path).join(', ') }
+  return {
+    ok: true,
+    detail: copies
+      .filter(copy => copy.skill === SKILL_NAME)
+      .map(copy => copy.path)
+      .join(', '),
+  }
 }
 
 async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {

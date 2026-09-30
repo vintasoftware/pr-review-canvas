@@ -246,7 +246,13 @@ export interface ChatStatus {
 }
 
 export interface HomeData {
-  recentPrs: Array<{ number: number; title: string; updatedAt: string; hasCanvas?: boolean }>
+  recentPrs: Array<{
+    number: number
+    title: string
+    updatedAt: string
+    hasCanvas?: boolean
+    hasTour?: boolean
+  }>
 }
 
 /** The JSON the review page carries in its bootstrap script; the app reads it before any request. */

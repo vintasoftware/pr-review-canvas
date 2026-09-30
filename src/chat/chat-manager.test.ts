@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { freshReaderState } from '../contract/tour-api.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -69,6 +71,7 @@ function build(
     repoRoot: '/repo',
     overrides: opts.overrides ?? {},
     loadSeedTemplate: async () => 'SEED for {{PR_META}}',
+    loadTourSeedTemplate: async () => 'TOUR SEED for {{PR_META}}\n{{DECISIONS}}',
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -664,6 +667,7 @@ describe('the review checkout a turn reads', () => {
       repoRoot: '/repo',
       overrides: {},
       loadSeedTemplate: async () => '{{CODE_LOCATION}}',
+      loadTourSeedTemplate: async () => '{{CODE_LOCATION}}',
       checkouts,
       currentBranch: async () => 'main',
       now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -751,5 +755,57 @@ describe('the review checkout a turn reads', () => {
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[1]?.prompt).toContain('SEED for')
     expect(runner.runs[1]?.cwd).toBe(checkoutDir())
+  })
+})
+
+describe("createChatManager() and the tour's grilling", () => {
+  const T0 = 'pr-review-acme-widgets-42-claude-t0'
+
+  function tourTarget(): ChatTarget {
+    const { artifact: _artifact, ...rest } = target()
+    return { ...rest, tour: { artifact: syntheticTour(), reader: freshReaderState() } }
+  }
+
+  it('runs in the tour thread with the tour seed, which the canvas pane never lists', async () => {
+    const events = await collect(
+      manager.send(tourTarget(), {
+        message: 'I want to change this',
+        context: { kind: 'tour-decision', key: 'sum-over-product' },
+      })
+    )
+    expect(events.find(e => e.event === 'turn')).toEqual({
+      event: 'turn',
+      thread: T0,
+      agent: 'claude',
+      seeded: true,
+    })
+    const prompt = runner.runs[0]?.prompt ?? ''
+    expect(prompt).toContain('TOUR SEED for')
+    expect(prompt).toContain('`sum-over-product` · trade-off')
+    expect(prompt).toContain('## Context: decision `sum-over-product`')
+    expect(prompt).not.toContain('SEED for {{')
+    expect(runner.runs[0]?.session).toBe(T0)
+    expect((await manager.threads(42)).threads).toEqual([])
+    expect((await manager.threads(42)).activeThread).toBeNull()
+    const history = await manager.tourHistory(42)
+    expect(history.name).toBe(T0)
+    expect(history.turns.map(t => t.role)).toEqual(['user', 'assistant'])
+    // The second turn reuses the thread and the session, so the seed is not sent again.
+    await collect(manager.send(tourTarget(), { message: 'more', context: { kind: 'tour-plan' } }))
+    expect(runner.runs[1]?.prompt).not.toContain('TOUR SEED')
+    expect(runner.runs[1]?.prompt).toContain('## Context: the plan')
+    // A canvas thread made afterwards is numbered from one, and the tour thread stays out of the list.
+    const canvas = await manager.createThread(42)
+    expect(canvas.name).toBe(T1)
+    expect((await manager.threads(42)).threads.map(t => t.name)).toEqual([T1])
+    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' }, thread: T0 }))
+    expect(runner.runs[2]?.session).toBe(T1)
+  })
+
+  it('refuses a turn with neither a canvas nor a tour', async () => {
+    const { artifact: _artifact, ...bare } = target()
+    await expect(collect(manager.send(bare, { message: 'x', context: { kind: 'pr' } }))).rejects.toThrow(
+      'a chat turn needs a canvas or a tour'
+    )
   })
 })

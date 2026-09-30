@@ -4,7 +4,32 @@ import path from 'node:path'
 import { makeTempDir } from '../testing/fakes.js'
 import { checkSkill } from './doctor.js'
 import { skillContent } from './skill-content.js'
-import { COPY_MARKER, installSkill, SKILL_SOURCE_DIR, SkillDirExistsError } from './install-skill.js'
+import {
+  COPY_MARKER,
+  installBundledSkills,
+  installSkill,
+  listBundledSkills,
+  SKILL_SOURCE_DIR,
+  SkillDirExistsError,
+} from './install-skill.js'
+import { findSkillCopies } from './doctor.js'
+
+/**
+ * A package that ships two skills, the canvas skill and a companion with a guide beside its
+ * SKILL.md, plus a directory that is not a skill yet.
+ */
+async function fakeSkillsRoot(root: string): Promise<string> {
+  const skills = path.join(root, 'skills')
+  for (const [name, files] of [
+    ['pr-review-canvas', { 'SKILL.md': '---\nname: pr-review-canvas\n---\ncanvas' }],
+    ['pr-tour', { 'SKILL.md': '---\nname: pr-tour\n---\ntour', 'scenes.md': '# scenes\n' }],
+    ['pr-tour-later', { 'notes.md': 'no SKILL.md here' }],
+  ] as const) {
+    await mkdir(path.join(skills, name), { recursive: true })
+    for (const [file, text] of Object.entries(files)) await writeFile(path.join(skills, name, file), text)
+  }
+  return skills
+}
 
 let dir: string
 beforeEach(async () => {
@@ -96,11 +121,45 @@ describe('installSkill', () => {
     ]
     await installSkill({ targets })
     expect((await lstat(path.join(shared, 'pr-review-canvas'))).isDirectory()).toBe(true)
+    // The companion skills go wherever the canvas skill is; without them the install is incomplete.
+    expect((await checkSkill(dir)).ok).toBe(false)
+    await installBundledSkills({ targets })
     expect((await checkSkill(dir)).ok).toBe(true)
     await writeFile(path.join(shared, 'pr-review-canvas', 'SKILL.md'), 'old skill')
     expect((await checkSkill(dir)).ok).toBe(false)
-    await installSkill({ targets })
+    await installBundledSkills({ targets })
     expect((await checkSkill(dir)).ok).toBe(true)
+  })
+
+  it('installs every bundled skill, the canvas skill first, with the files each ships', async () => {
+    const skillsRoot = await fakeSkillsRoot(dir)
+    expect(await listBundledSkills(skillsRoot)).toEqual(['pr-review-canvas', 'pr-tour'])
+    const targets = [{ kind: 'claude' as const, dir: path.join(dir, '.claude', 'skills') }]
+    const result = await installBundledSkills({ targets, skillsRoot })
+    expect(result.skill).toBe('pr-review-canvas')
+    expect(result.companions.map(c => c.skill)).toEqual(['pr-tour'])
+    const tour = path.join(dir, '.claude', 'skills', 'pr-tour')
+    expect(await readFile(path.join(tour, 'scenes.md'), 'utf8')).toBe('# scenes\n')
+    expect(await readFile(path.join(tour, 'SKILL.md'), 'utf8')).toContain('body-sha256')
+    expect(await readFile(path.join(tour, COPY_MARKER), 'utf8')).toContain('managed')
+    // The copies match the bundle, and both are found.
+    const copies = await findSkillCopies(dir, undefined, skillsRoot)
+    expect(copies.map(c => [c.skill, c.kind, c.stale])).toEqual([
+      ['pr-review-canvas', 'claude', false],
+      ['pr-tour', 'claude', false],
+    ])
+    // A companion that goes missing, or whose guide is edited, is a stale copy; where the canvas
+    // skill is absent, nothing is reported for that directory at all.
+    await writeFile(path.join(tour, 'scenes.md'), '# scenes\nold ideas\n')
+    expect((await findSkillCopies(dir, undefined, skillsRoot)).map(c => c.stale)).toEqual([false, true])
+    await rm(tour, { recursive: true })
+    expect((await findSkillCopies(dir, undefined, skillsRoot)).map(c => [c.skill, c.stale])).toEqual([
+      ['pr-review-canvas', false],
+      ['pr-tour', true],
+    ])
+    await rm(path.join(dir, '.claude', 'skills', 'pr-review-canvas'), { recursive: true })
+    expect(await findSkillCopies(dir, undefined, skillsRoot)).toEqual([])
+    await expect(installBundledSkills({ targets, skillsRoot: path.join(dir, 'empty') })).rejects.toThrow()
   })
 
   it('accepts another source directory', async () => {

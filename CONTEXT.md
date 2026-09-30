@@ -89,3 +89,73 @@ _Avoid_: PR checkout, reader's checkout, working tree, materialized head
 **Illustrative sample**:
 An attributed walkthrough of selected changes from a public pull request, with editorial layer groupings and scripted chat examples. It demonstrates concepts without claiming to be a complete generated canvas.
 _Avoid_: Live review, live AI chat
+
+## Tour
+
+**Tour**:
+A guided pass over one change that builds the reader's theory of it: landmarks that explain, decisions the reader keeps or changes, and a quiz. It is generated once per head commit and shared like a canvas, so the author and every reviewer take the same tour; it stands beside the canvas, and either can be used without the other.
+_Avoid_: Self-review, Walkthrough, Deck, Onboarding
+
+**Landmark**:
+One idea of a tour, told in order: first the world before the change and why the change matters, then what the change means to the world, then why each part is the way it is, last what a later change must respect. The code behind a landmark is available but never required.
+_Avoid_: Beat, Semantic layer, Slide, File
+
+**Scene**:
+A picture, drawn for this change, of what a landmark or a decision's side does.
+_Avoid_: Screenshot, Illustration
+
+**Micro-world**:
+A landmark the reader plays with: inputs of the changed behavior go in, outcomes come out. A tour has one only when the change has behavior worth playing with.
+_Avoid_: Demo, Sandbox, Playground
+
+**Decision**:
+A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it or asks to change it; keeping records a reason, changing starts a grilling.
+_Avoid_: Attention point, Card, Finding, Issue
+
+**Pokayoke**:
+A structure in the change that makes a class of mistake impossible, or a place where the change lacks one. A decision category.
+_Avoid_: Validation, Guardrail, Defensive code
+
+**Reason**:
+The author's justification for a kept decision, together with where it belongs: in the code, on the pull request, as a lint rule, or in the tour only.
+_Avoid_: Resolution, Justification comment
+
+**Grilling**:
+The agent's questions after a change pick, asked until it can restate the change.
+_Avoid_: Chat, Interview, Clarification
+
+**Restatement**:
+The agent's own words for a requested change: what changes, where, and what stays the same. The reader approves, edits, or rejects it, and only an approved restatement enters the plan.
+_Avoid_: Summary, Transcript, Spec
+
+**Reverse quiz**:
+The reader's questions to the agent about how it would carry out the plan, asked to catch a wrong understanding before anything runs.
+_Avoid_: Quiz, Dry run
+
+**Plan**:
+The approved restatements of a tour, restated once as a whole at the end and confirmed by the reader. It needs no further review before an agent implements it.
+_Avoid_: Fix list, Prompt, Task list
+
+**Quiz**:
+A few plain questions after the decisions that check the reader read the landmarks: what users would notice, and which decisions were made and why. A wrong answer reopens the landmark, and the result stays with the reader.
+_Avoid_: Test, Score, Assessment
+
+**Try-it**:
+A recipe, verified when the tour was generated, for experiencing the real change: how to run it, which synthetic data to use, and what to look at.
+_Avoid_: Screenshot, Demo, Smoke test
+
+**Guide**:
+The project's committed notes for tours: how to run the app, how to make synthetic test data, which non-functional requirements matter, where specs and designs live, and what the agent may run. Written in setup and edited as the reader steers the skills.
+_Avoid_: Config, Rulebook, Runbook
+
+**State landmark**:
+The landmark a tour gives a change to a schema, a migration, or the shape of stored data: the shape before and after, what happens to existing rows, and how it is undone. Never cut by the budget.
+_Avoid_: Migration landmark, Database landmark
+
+**Blast radius**:
+What a change touches among the areas the project marks as high risk, shown on the cover. It raises the tour's budget and tells a team whether the tour is required.
+_Avoid_: Risk score, Severity
+
+**Not toured**:
+What a tour's budget left out, listed at the end with a link to the code.
+_Avoid_: Excluded, Skipped, Fold

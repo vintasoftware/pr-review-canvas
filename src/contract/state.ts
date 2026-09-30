@@ -13,6 +13,8 @@ export const ChatThreadSchema = z.object({
    * review checkouts ran in the reader's checkout and have none.
    */
   seededCwd: z.string().optional(),
+  /** The tour's own thread: the grilling runs in it, and the canvas's pane never lists it. */
+  tour: z.boolean().optional(),
 })
 
 export type ChatThread = z.infer<typeof ChatThreadSchema>

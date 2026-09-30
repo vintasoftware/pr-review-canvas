@@ -1,3 +1,5 @@
+import { once } from 'node:events'
+import type { AddressInfo } from 'node:net'
 import { serve } from '@hono/node-server'
 import { startCheckoutSweep } from '../chat/checkout-sweep.js'
 import { createApp } from './app.js'
@@ -52,4 +54,26 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
   process.once('SIGINT', onSignal)
   process.once('SIGTERM', onSignal)
   return { close }
+}
+
+/**
+ * A quiet copy of the server on a free port, for `tour preview` to load pages from while it runs.
+ * It sweeps nothing and opens no browser of its own.
+ */
+export async function startQuietServer(
+  ctx: AppContext
+): Promise<{ origin: string; close: () => Promise<void> }> {
+  const server = serve({ fetch: createApp(ctx).fetch, port: 0, hostname: '127.0.0.1' })
+  await once(server, 'listening')
+  const { port } = server.address() as AddressInfo
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
+          server.closeAllConnections()
+        }
+        server.close(err => (err === undefined ? resolve() : reject(err)))
+      }),
+  }
 }

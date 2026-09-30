@@ -30,6 +30,7 @@ const SETTINGS = {
     checkoutSweepMinutes: 60,
     canvasComment: null,
     mentionCanvas: null,
+    tourComment: null,
   },
   overrides: {},
   file: '/repo/.pr-review/settings.yml',

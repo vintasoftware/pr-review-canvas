@@ -6,11 +6,24 @@ import { errorPage } from './html.js'
 import { apiRoutes } from './routes/api.js'
 import { appearanceFor, appearanceQuery, pageRoutes } from './routes/pages.js'
 import { staticRoutes } from './routes/static.js'
-import { applyResponseHeaders, createNonce, responseHeaders, securityMiddleware } from './security.js'
+import { tourPageRoutes } from './routes/tour-pages.js'
+import {
+  applyResponseHeaders,
+  createNonce,
+  responseHeaders,
+  SCENE_FRAME_PREFIX,
+  securityMiddleware,
+} from './security.js'
 
 /** Errors under /api and /vendor answer with the JSON envelope; pages render the error page. */
 function wantsJson(pathname: string): boolean {
-  return pathname.startsWith('/api/') || pathname.startsWith('/vendor/') || pathname.startsWith('/static/')
+  return (
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/vendor/') ||
+    pathname.startsWith('/static/') ||
+    // A scene frame's error is read by the tour page, never by a person looking at the frame.
+    pathname.startsWith(SCENE_FRAME_PREFIX)
+  )
 }
 
 export function createApp(ctx: AppContext): Hono<AppEnv> {
@@ -49,6 +62,7 @@ export function createApp(ctx: AppContext): Hono<AppEnv> {
   app.route('/api', apiRoutes(ctx))
   app.route('/', staticRoutes(ctx))
   app.route('/', pageRoutes(ctx))
+  app.route('/', tourPageRoutes(ctx))
 
   return app
 }

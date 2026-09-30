@@ -96,7 +96,17 @@ export interface Host {
   ): Promise<PostedReview>
   probeCapabilities(client: HostClient, repo: Repo): Promise<Capabilities>
   canvasCommentLimit: number
-  shareCanvas(client: HostClient, repo: Repo, number: number, body: string): Promise<IssueComment>
+  /**
+   * Creates or updates the login's own comment that carries `marker` (the canvas comment by
+   * default; the tour has a marker of its own).
+   */
+  shareCanvas(
+    client: HostClient,
+    repo: Repo,
+    number: number,
+    body: string,
+    marker?: string
+  ): Promise<IssueComment>
   attachments: HostAttachments
 }
 
@@ -144,7 +154,8 @@ export function gitlabHost(hostname: string): Host {
       postGitlabReview(client, repo, number, headSha, input, webBase, diff),
     probeCapabilities: probeGitlabCapabilities,
     canvasCommentLimit: 1_000_000,
-    shareCanvas: (client, repo, number, body) => shareGitlabCanvas(client, repo, number, body, webBase),
+    shareCanvas: (client, repo, number, body, marker) =>
+      shareGitlabCanvas(client, repo, number, body, webBase, marker),
     attachments: gitlabAttachments(hostname, webBase),
   }
 }

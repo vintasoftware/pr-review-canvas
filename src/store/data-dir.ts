@@ -21,11 +21,15 @@ export function resolveDataDir(opts: {
   return holding ?? path.join(path.dirname(path.resolve(opts.commonDir)), '.pr-review')
 }
 
-/** `<dataDir>` for a path shaped `<dataDir>/repos/<repo>/canvases/<sha>`; undefined for any other. */
+/**
+ * `<dataDir>` for a path shaped `<dataDir>/repos/<repo>/canvases/<sha>` or
+ * `<dataDir>/repos/<repo>/tours/<sha>`; undefined for any other.
+ */
 function dataDirOfCanvas(canvasDir: string): string | undefined {
   const canvases = path.dirname(path.resolve(canvasDir))
   const repos = path.dirname(path.dirname(canvases))
-  if (path.basename(canvases) !== 'canvases' || path.basename(repos) !== 'repos') {
+  const kind = path.basename(canvases)
+  if ((kind !== 'canvases' && kind !== 'tours') || path.basename(repos) !== 'repos') {
     return undefined
   }
   return path.dirname(repos)

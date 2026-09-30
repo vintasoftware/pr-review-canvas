@@ -1,0 +1,898 @@
+/* The scene kit: what a landmark's scene or micro-world is built with. A scene is a small HTML
+   fragment the tour generator writes; these classes lay it out (the browser does the aligning),
+   color it, and move it, and its own styles and scripts may go further. The server inlines this
+   sheet into the scene's frame, which is as wide as the tour's stage and as tall as the scene.
+   Everything is sized in rem, and the root size follows the frame's width, so a scene scales
+   between a phone and a desktop. */
+
+:root {
+  color-scheme: light dark;
+  /* The tour's accent, as each skin paints it: the github skin's green, the olive skin's olive. */
+  --ink: light-dark(#1f883d, #57ab5a);
+  --fg: light-dark(#1f2328, #d1d7e0);
+  --muted: light-dark(#59636e, #9198a1);
+  --paper: light-dark(#fff, #212830);
+  --line: light-dark(#d1d9e0, #3d444d);
+  --good: light-dark(#1a7f37, #57ab5a);
+  --bad: light-dark(#d1242f, #e5534b);
+  --warn: light-dark(#9a6700, #c69026);
+  font-size: clamp(12px, 2vw, 15px);
+}
+:root[data-skin='olive'] {
+  --ink: light-dark(#50643f, #b5cf8f);
+  --fg: light-dark(#252821, #e9eae1);
+  --muted: light-dark(#686c62, #a6aa9c);
+  --paper: light-dark(#fffefa, #252821);
+  --line: light-dark(#dcded3, #3a3e33);
+  --good: light-dark(#4a6a2e, #a8c97f);
+  --bad: light-dark(#a8432c, #e98a6f);
+  --warn: light-dark(#86681a, #d4b25a);
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+  /* A pale wash of the element's tone. Declared on every element, so it follows the tone there. */
+  --tint: color-mix(in srgb, var(--c, var(--ink)) 14%, var(--paper));
+}
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.25;
+}
+/* The server's wrapper around the scene: what the runtime measures for the frame's height. */
+.scene-root {
+  padding: 0.8rem;
+  display: grid;
+  place-items: center;
+}
+.scene-fit {
+  width: 100%;
+}
+
+/* Layout. */
+.scene,
+.col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.scene {
+  width: 100%;
+  position: relative;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.row.spread {
+  justify-content: space-between;
+  width: 100%;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* Tones: any element takes one, and boxes, chips, and banners color themselves by it. */
+.ink {
+  --c: var(--ink);
+}
+.good {
+  --c: var(--good);
+}
+.bad {
+  --c: var(--bad);
+}
+.warn {
+  --c: var(--warn);
+}
+.muted {
+  --c: var(--muted);
+  color: var(--muted);
+}
+/* Toned words: a toned span, strong, em, list item, or cell takes its tone's color. Zero
+   specificity, so the things below that color themselves keep their own rule. */
+:where(span, b, strong, em, li, td, th):where(.ink, .good, .bad, .warn) {
+  color: var(--c);
+}
+
+/* Things. */
+.box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0.14rem solid var(--c, var(--fg));
+  border-radius: 0.6rem;
+  background: var(--tint);
+  font-weight: 650;
+  text-align: center;
+  min-width: 4.5rem;
+}
+.box.ghost {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+}
+.box.solid {
+  background: var(--c, var(--fg));
+  color: var(--paper);
+  border-color: var(--c, var(--fg));
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--c, var(--muted));
+  color: var(--paper);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.5rem;
+  background: var(--c, var(--ink));
+  color: var(--paper);
+  font-weight: 750;
+  font-size: 1.05rem;
+  text-align: center;
+}
+/* On a filled thing, what sits inside takes the paper color, whatever tone it carries. */
+.chip .icon,
+.banner .icon,
+.box.solid .icon {
+  color: var(--paper);
+}
+.banner .big,
+.box.solid .big,
+.chip .big {
+  color: inherit;
+}
+.chip .icon {
+  width: 1em;
+  height: 1em;
+}
+.big {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--c, var(--fg));
+}
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--c, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.small {
+  font-size: 0.8rem;
+  color: var(--c, var(--muted));
+}
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--fg) 8%, var(--paper));
+  color: var(--c, var(--fg));
+}
+/* What cannot happen: a hatched fill, for a cell, a box, or a slot. */
+.hatch {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--c, var(--muted)) 22%, transparent) 0 0.25rem,
+    transparent 0.25rem 0.6rem
+  );
+}
+.strike {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.14rem;
+  text-decoration-color: var(--bad);
+  opacity: 0.7;
+}
+.fade {
+  opacity: 0.4;
+}
+.icon {
+  width: 1.3em;
+  height: 1.3em;
+  flex: none;
+  color: var(--c, currentColor);
+}
+.icon.lg {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+.icon.xl {
+  width: 3.4rem;
+  height: 3.4rem;
+}
+
+/* Arrows: a line that points right (or down), optionally with a word on it. */
+.arrow {
+  position: relative;
+  flex: 0 0 var(--len, 2.4rem);
+  height: 0.16rem;
+  background: var(--c, var(--muted));
+  border-radius: 1rem;
+}
+.arrow::after {
+  content: '';
+  position: absolute;
+  right: -0.1rem;
+  top: 50%;
+  border: 0.32rem solid transparent;
+  border-left: 0.5rem solid var(--c, var(--muted));
+  border-right: 0;
+  transform: translateY(-50%);
+}
+.arrow.down {
+  flex-basis: auto;
+  width: 0.16rem;
+  height: var(--len, 1.4rem);
+}
+.arrow.down::after {
+  inset: auto auto -0.1rem 50%;
+  border: 0.32rem solid transparent;
+  border-top: 0.5rem solid var(--c, var(--muted));
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+.arrow[data-say]::before {
+  content: attr(data-say);
+  position: absolute;
+  left: 50%;
+  bottom: 0.4rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--c, var(--muted));
+}
+.arrow.down[data-say]::before {
+  left: 0.5rem;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+.arrow.blocked {
+  --c: var(--bad);
+}
+.arrow.blocked::before {
+  content: '✕';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -52%);
+  font-weight: 900;
+  font-size: 1rem;
+  color: var(--bad);
+  background: var(--paper);
+  padding: 0 0.15rem;
+}
+/* Things moving along the arrow. */
+.arrow.flow {
+  background: repeating-linear-gradient(90deg, var(--c, var(--ink)) 0 0.4rem, transparent 0.4rem 0.7rem);
+  background-size: 0.7rem 100%;
+  animation: flow 0.6s linear infinite;
+}
+.arrow.down.flow {
+  background: repeating-linear-gradient(180deg, var(--c, var(--ink)) 0 0.4rem, transparent 0.4rem 0.7rem);
+  background-size: 100% 0.7rem;
+  animation-name: flow-down;
+}
+
+/* Artifacts: the things a change shows up in, each drawn so the reader knows it at a glance (a
+   screen, a terminal, a file, a table, a chart, a timeline, a thread, a checklist). Fill them with
+   the real content; a scene's own styles can restyle any of them. */
+
+/* A screen someone sees: an app or browser window, titled by `data-title`. */
+.window {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 26rem;
+  padding: 0 0.7rem 0.7rem;
+  border: 0.1rem solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--paper);
+  box-shadow: 0 0.3rem 1rem color-mix(in srgb, var(--fg) 12%, transparent);
+  overflow: hidden;
+  text-align: left;
+}
+.window::before {
+  content: attr(data-title);
+  min-height: 1.5rem;
+  margin: 0 -0.7rem;
+  padding: 0.3rem 0.6rem 0.3rem 3rem;
+  border-bottom: 0.1rem solid var(--line);
+  background:
+    radial-gradient(circle at 0.8rem 50%, #ff5f57 0.22rem, transparent 0.26rem),
+    radial-gradient(circle at 1.45rem 50%, #febc2e 0.22rem, transparent 0.26rem),
+    radial-gradient(circle at 2.1rem 50%, #28c840 0.22rem, transparent 0.26rem),
+    color-mix(in srgb, var(--fg) 6%, var(--paper));
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* What sits on a screen: buttons, fields, a toast, placeholder lines, links, and keys. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.75rem;
+  border: 0.1rem solid var(--c, var(--line));
+  border-radius: 0.4rem;
+  background: var(--paper);
+  color: var(--c, var(--fg));
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.btn.solid {
+  border-color: var(--c, var(--ink));
+  background: var(--c, var(--ink));
+  color: var(--paper);
+}
+.btn.off {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+.btn.sm {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.72rem;
+}
+.field {
+  display: block;
+  min-height: 1.7rem;
+  padding: 0.3rem 0.5rem;
+  border: 0.1rem solid var(--c, var(--line));
+  border-radius: 0.35rem;
+  background: var(--paper);
+  color: var(--fg);
+  font-size: 0.85rem;
+  text-align: left;
+  white-space: pre-wrap;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.5rem;
+  background: var(--c, var(--fg));
+  color: var(--paper);
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 0.25rem 0.8rem color-mix(in srgb, var(--fg) 25%, transparent);
+}
+.toast .icon,
+.btn.solid .icon,
+.msg.me .icon {
+  color: var(--paper);
+}
+.skel {
+  display: block;
+  width: var(--w, 100%);
+  height: 0.55rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--fg) 10%, var(--paper));
+}
+.link {
+  color: var(--c, var(--ink));
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+kbd {
+  padding: 0.05rem 0.35rem;
+  border: 0.1rem solid var(--line);
+  border-bottom-width: 0.2rem;
+  border-radius: 0.3rem;
+  background: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+/* A micro-world's controls: real inputs the reader works, grouped in fieldsets with a legend.
+   They take the accent, and a `controls` row keeps them side by side and wrapping. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  width: 100%;
+  justify-content: center;
+}
+fieldset {
+  margin: 0;
+  padding: 0.3rem 0.6rem 0.45rem;
+  border: 0.1rem solid var(--line);
+  border-radius: 0.5rem;
+  min-width: 0;
+}
+legend {
+  padding: 0 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+input,
+select,
+button {
+  font: inherit;
+  color: inherit;
+  accent-color: var(--ink);
+}
+select,
+button,
+input:is([type='text'], [type='number']) {
+  padding: 0.2rem 0.5rem;
+  border: 0.1rem solid var(--line);
+  border-radius: 0.35rem;
+  background: var(--paper);
+}
+button {
+  cursor: pointer;
+}
+
+/* A terminal, a log, or CI output: always dark, one line per child, `cmd` lines prompted. */
+.term {
+  color-scheme: dark;
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.55rem 0.75rem;
+  border: 0.06rem solid #3d444d;
+  border-radius: 0.55rem;
+  background: #0d1117;
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: left;
+  box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 25%);
+}
+.term[data-title]::before {
+  content: attr(data-title);
+  display: block;
+  margin-bottom: 0.3rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 0.06rem solid #30363d;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.term > * {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.term > .cmd::before {
+  content: '$ ';
+  color: var(--good);
+}
+
+/* A file as someone reads it: code, a config, a stored row. `add`, `del`, and `hl` mark lines. */
+.file {
+  width: 100%;
+  max-width: 28rem;
+  border: 0.1rem solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+  overflow: hidden;
+}
+.file[data-title]::before {
+  content: attr(data-title);
+  display: block;
+  padding: 0.25rem 0.6rem;
+  border-bottom: 0.1rem solid var(--line);
+  background: color-mix(in srgb, var(--fg) 5%, var(--paper));
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.file > * {
+  position: relative;
+  display: block;
+  padding: 0 0.6rem 0 1.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.file > .add {
+  background: color-mix(in srgb, var(--good) 14%, var(--paper));
+}
+.file > .del {
+  background: color-mix(in srgb, var(--bad) 12%, var(--paper));
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--bad) 60%, transparent);
+}
+.file > .add::before,
+.file > .del::before {
+  position: absolute;
+  left: 0.5rem;
+  font-weight: 700;
+}
+.file > .add::before {
+  content: '+';
+  color: var(--good);
+}
+.file > .del::before {
+  content: '−';
+  color: var(--bad);
+}
+.file > .hl {
+  background: color-mix(in srgb, var(--c, var(--ink)) 16%, var(--paper));
+  box-shadow: inset 0.18rem 0 var(--c, var(--ink));
+}
+
+/* Rows and cases: a plain <table>. A toned row or cell is tinted. */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 0.1rem solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--paper);
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+th,
+td {
+  padding: 0.25rem 0.55rem;
+  border-bottom: 0.07rem solid var(--line);
+  text-align: left;
+}
+th {
+  background: color-mix(in srgb, var(--fg) 5%, var(--paper));
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+tr:last-child > td {
+  border-bottom: 0;
+}
+tr:where(.ink, .good, .bad, .warn),
+td:where(.ink, .good, .bad, .warn) {
+  background: var(--tint);
+  font-weight: 650;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quantities side by side: rows of a label, a `bar` filled to `--v`, and a value. Draw before and
+   after on one scale. A `bar` alone is a meter. */
+.bars {
+  display: grid;
+  grid-template-columns: max-content minmax(5rem, 1fr) max-content;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  width: 100%;
+  max-width: 28rem;
+  font-size: 0.8rem;
+}
+.bars > :nth-child(3n) {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.bar {
+  position: relative;
+  display: block;
+  min-width: 4rem;
+  height: 0.9rem;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--fg) 8%, var(--paper));
+  overflow: hidden;
+}
+.bar::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--v, 50%);
+  border-radius: inherit;
+  background: var(--c, var(--ink));
+  transform-origin: left;
+  animation: grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Things in time order: a list whose items carry their time in `data-t`. */
+.timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  text-align: left;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 4.45rem;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  width: 0.12rem;
+  background: var(--line);
+}
+.timeline > li {
+  position: relative;
+  min-height: 1.2rem;
+  padding-left: 5.2rem;
+}
+.timeline > li::before {
+  content: attr(data-t);
+  position: absolute;
+  left: 0;
+  top: 0.12rem;
+  width: 3.8rem;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.timeline > li::after {
+  content: '';
+  position: absolute;
+  left: 4.2rem;
+  top: 0.3rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--c, var(--muted));
+  box-shadow: 0 0 0 0.18rem var(--paper);
+}
+.timeline > li:where(.ink, .good, .bad, .warn) {
+  font-weight: 650;
+}
+
+/* A conversation: review comments or chat. `msg me` is the author's side, `who` names the speaker. */
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 26rem;
+  text-align: left;
+}
+.msg {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 0.4rem 0.65rem;
+  border: 0.08rem solid color-mix(in srgb, var(--c, var(--fg)) 18%, var(--paper));
+  border-radius: 0.7rem 0.7rem 0.7rem 0.2rem;
+  background: color-mix(in srgb, var(--c, var(--fg)) 8%, var(--paper));
+  font-size: 0.85rem;
+}
+.msg.me {
+  align-self: flex-end;
+  border-color: transparent;
+  border-radius: 0.7rem 0.7rem 0.2rem;
+  background: var(--c, var(--ink));
+  color: var(--paper);
+}
+.msg .who {
+  display: block;
+  margin-bottom: 0.1rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--c, var(--muted));
+}
+.msg.me .who {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* What is covered: a list marked done, failing, at risk, or open by its items' tones. */
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+  text-align: left;
+}
+.checks > li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.checks > li:where(.ink, .good, .bad, .warn) {
+  color: var(--fg);
+}
+.checks > li::before {
+  content: '';
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 0.12rem solid var(--c, var(--muted));
+  border-radius: 50%;
+  background: var(--c, transparent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  color: var(--paper);
+}
+.checks > li.good::before {
+  content: '✓';
+}
+.checks > li.bad::before {
+  content: '✕';
+}
+.checks > li.warn::before {
+  content: '!';
+}
+.checks > li.ink::before {
+  content: '•';
+}
+
+/* A rubber stamp over the scene's corner: a verdict, toned. */
+.stamp {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  rotate: -10deg;
+  padding: 0.15rem 0.6rem;
+  border: 0.2rem solid var(--c, var(--ink));
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+  color: var(--c, var(--ink));
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Motion. Loops are gentle, and every scene reads at rest. */
+.pulse {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.shake {
+  animation: shake 2.4s ease-in-out infinite;
+}
+.blink {
+  animation: blink 1.2s steps(2, jump-none) infinite;
+}
+.bob {
+  animation: bob 2s ease-in-out infinite;
+}
+.spin {
+  animation: spin 3s linear infinite;
+}
+.enter > * {
+  animation: enter 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.enter > :nth-child(2) {
+  animation-delay: 0.15s;
+}
+.enter > :nth-child(3) {
+  animation-delay: 0.3s;
+}
+.enter > :nth-child(4) {
+  animation-delay: 0.45s;
+}
+.enter > :nth-child(5) {
+  animation-delay: 0.6s;
+}
+.enter > :nth-child(n + 6) {
+  animation-delay: 0.75s;
+}
+
+@keyframes flow {
+  to {
+    background-position: 0.7rem 0;
+  }
+}
+@keyframes flow-down {
+  to {
+    background-position: 0 0.7rem;
+  }
+}
+@keyframes pulse {
+  50% {
+    transform: scale(1.08);
+  }
+}
+@keyframes shake {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  84% {
+    transform: translateX(-0.2rem);
+  }
+  88% {
+    transform: translateX(0.2rem);
+  }
+  92% {
+    transform: translateX(-0.15rem);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes bob {
+  50% {
+    transform: translateY(-0.25rem);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem) scale(0.9);
+  }
+}
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

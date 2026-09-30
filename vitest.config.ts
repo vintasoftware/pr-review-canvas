@@ -25,6 +25,8 @@ export default defineConfig({
         'src/server/node-server.ts',
         'src/server/html.ts',
         'static/js/app.js',
+        // The scene frame's runtime runs inside a sandboxed frame; the browser specs cover it.
+        'static/js/scene-runtime.js',
         'static/vendor/**',
         'src/**/*.test.ts',
         'static/js/**/*.test.js',

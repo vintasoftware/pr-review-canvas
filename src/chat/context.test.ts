@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatContext } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
+import { freshReaderState } from '../contract/tour-api.js'
 import { SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import {
   ChatContextError,
   type ContextSources,
@@ -157,5 +159,121 @@ describe('enclosingHunk', () => {
     expect(enclosingHunk(entry, 'new', 12)?.id).toBe('src_app_ts#2')
     expect(enclosingHunk(entry, 'old', 1)?.id).toBe('src_app_ts#1')
     expect(enclosingHunk(entry, 'new', 900)).toBeUndefined()
+  })
+})
+
+describe('renderChatContext for a tour', () => {
+  const tour = syntheticTour()
+
+  it('gives a decision both sides, the tour reason, and where the reader stands', async () => {
+    const reader = freshReaderState()
+    const fresh = await renderChatContext(
+      { kind: 'tour-decision', key: 'sum-over-product' },
+      sources({ artifact: undefined, tour: { artifact: tour, reader } })
+    )
+    expect(fresh).toContain('## Context: decision `sum-over-product` — Sum over product?')
+    expect(fresh).toContain('trade-off · from the landmark "Sum, not product" · `src/app.ts:4`')
+    expect(fresh).toContain('- keep: Sum. What the spec says')
+    expect(fresh).toContain('- the tour recommended: keep; its reason to keep: Sum is what the spec says.')
+    expect(fresh).toContain('The reader has not answered yet.')
+    reader.notes['sum'] = 'hm'
+    reader.picks['sum-over-product'] = { pick: 'keep', approved: false }
+    const keeping = await renderChatContext(
+      { kind: 'tour-decision', key: 'sum-over-product' },
+      sources({ tour: { artifact: tour, reader } })
+    )
+    expect(keeping).toContain('The reader keeps it so far.')
+    expect(keeping).toContain("The reader's note on that landmark: hm")
+    reader.picks['sum-over-product'] = { pick: 'keep', approved: true }
+    expect(
+      await renderChatContext(
+        { kind: 'tour-decision', key: 'sum-over-product' },
+        sources({ tour: { artifact: tour, reader } })
+      )
+    ).toContain('The reader keeps it.')
+    reader.picks['sum-over-product'] = { pick: 'change', approved: false }
+    expect(
+      await renderChatContext(
+        { kind: 'tour-decision', key: 'sum-over-product' },
+        sources({ tour: { artifact: tour, reader } })
+      )
+    ).toContain('wants it changed and has not said how yet')
+    reader.picks['sum-over-product'] = {
+      pick: 'change',
+      approved: true,
+      restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
+    }
+    expect(
+      await renderChatContext(
+        { kind: 'tour-decision', key: 'sum-over-product' },
+        sources({ tour: { artifact: tour, reader } })
+      )
+    ).toContain('the restatement so far: Multiply. (where: src/app.ts; unchanged: Callers.)')
+    const [decision] = tour.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    expect(
+      await renderChatContext(
+        { kind: 'tour-decision', key: 'sum-over-product' },
+        sources({ tour: { artifact: { ...tour, decisions: [{ ...decision, landmark: 'nope' }] }, reader } })
+      )
+    ).not.toContain('from the landmark')
+  })
+
+  it('lays the plan out as kept, approved, and still open', async () => {
+    const [decision] = tour.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    const three = {
+      ...tour,
+      decisions: [decision, { ...decision, key: 'second', title: 'Second?' }, { ...decision, key: 'third' }],
+    }
+    const reader = freshReaderState()
+    reader.picks['sum-over-product'] = { pick: 'keep', approved: true }
+    reader.picks['second'] = {
+      pick: 'change',
+      approved: true,
+      restatement: { what: 'w', where: ['x'], unchanged: 'u' },
+    }
+    const block = await renderChatContext(
+      { kind: 'tour-plan' },
+      sources({ tour: { artifact: three, reader } })
+    )
+    expect(block).toBe(
+      [
+        '## Context: the plan',
+        '',
+        'Kept:',
+        '- `sum-over-product`: Sum. Sum is what the spec says.',
+        '',
+        'Approved changes:',
+        '- `second`: w (where: x; unchanged: u)',
+        '',
+        'Still open:',
+        '- `third`: Sum over product?',
+      ].join('\n')
+    )
+    expect(
+      await renderChatContext(
+        { kind: 'tour-plan' },
+        sources({ tour: { artifact: tour, reader: freshReaderState() } })
+      )
+    ).toContain('Kept:\n_none_')
+  })
+
+  it('refuses a tour context without a tour, a canvas context without a canvas, and an unknown decision', async () => {
+    await expect(renderChatContext({ kind: 'tour-plan' }, sources())).rejects.toThrow(
+      'this chat has no tour to point at'
+    )
+    await expect(
+      renderChatContext({ kind: 'layer', layerId: 'run-path' }, sources({ artifact: undefined }))
+    ).rejects.toThrow('this chat has no canvas to point at')
+    await expect(
+      renderChatContext({ kind: 'point', fingerprint: 'fp-1' }, sources({ artifact: undefined }))
+    ).rejects.toThrow('this chat has no canvas to point at')
+    await expect(
+      renderChatContext(
+        { kind: 'tour-decision', key: 'nope' },
+        sources({ tour: { artifact: tour, reader: freshReaderState() } })
+      )
+    ).rejects.toThrow('this tour has no decision nope')
   })
 })

@@ -4,6 +4,7 @@ import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
+import { tourBelongsTo } from '../../store/tour-store.js'
 import { homePage, reviewPage } from '../html.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
@@ -27,14 +28,17 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
       ...LOCAL_KEYS.map(key => ctx.prs.readPr(key)),
     ])
     const canvases = Object.values((await ctx.canvases.readIndex()).canvases)
+    const tours = Object.values((await ctx.tours.readIndex()).tours)
     return c.html(
       homePage(
         {
           recentPrs: recentPrs.map(p => ({
             ...p,
             hasCanvas: canvases.some(canvas => canvas.prNumber === p.number),
+            hasTour: tours.some(tour => tourBelongsTo(tour, p.number)),
           })),
           localReviews: LOCAL_KEYS.filter((_, i) => localPrs[i] !== null && localPrs[i] !== undefined),
+          localTours: LOCAL_KEYS.filter(key => tours.some(tour => tourBelongsTo(tour, key))),
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
           version: ctx.version,

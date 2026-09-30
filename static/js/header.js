@@ -108,6 +108,7 @@ export function renderHeader(bundle, opts) {
     '<header class="hdr">' +
     `<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
     '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
+    `<a class="cmd" id="tour-link" href="/tour/${esc(bundle.local ?? String(pr.number))}" title="Take the tour of this change: landmarks, decisions, and a quiz">tour</a>` +
     `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
     `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
     `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +

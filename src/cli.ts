@@ -33,6 +33,8 @@ import { startServer } from './server/node-server.js'
 import { PACKAGE_ROOT } from './paths.js'
 import { readJson } from './store/atomic-json.js'
 import { ensureDataDir } from './store/data-dir.js'
+import { runTour } from './tour/commands.js'
+import { tourStepCreatesDataDir } from './tour/named-dir.js'
 import { type CommandResult, runUpgrade } from './upgrade.js'
 
 const SUBCOMMANDS = [
@@ -40,6 +42,7 @@ const SUBCOMMANDS = [
   'prepare',
   'validate',
   'publish',
+  'tour',
   'export',
   'import',
   'install-skill',
@@ -239,11 +242,16 @@ export async function main(argv: string[]): Promise<number> {
         const { repo, dataDir, rest: own } = splitCommonFlags(rest)
         const ctx = await buildContext(repo, dataDir, {
           canvasDir: namedCanvasDir(command, own),
-          createDataDir: command !== 'validate' && command !== 'publish',
+          createDataDir:
+            command !== 'validate' &&
+            command !== 'publish' &&
+            (command !== 'tour' || tourStepCreatesDataDir(own)),
         })
         switch (command) {
           case 'prepare':
             return await runPrepare(ctx, own, io)
+          case 'tour':
+            return await runTour(ctx, own, io)
           case 'validate':
             return await runValidate(ctx, own, io)
           case 'export':

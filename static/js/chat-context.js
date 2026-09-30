@@ -8,7 +8,9 @@
  *   | { kind: 'layer', layerId: string }
  *   | { kind: 'file', path: string }
  *   | { kind: 'lines', path: string, side: 'new' | 'old', start: number, end: number }
- *   | { kind: 'point', fingerprint: string }} ChatContext
+ *   | { kind: 'point', fingerprint: string }
+ *   | { kind: 'tour-decision', key: string }
+ *   | { kind: 'tour-plan' }} ChatContext
  */
 
 /** @type {ChatContext} */
@@ -38,7 +40,10 @@ export function sameChatContext(a, b) {
   if (a.kind === 'point' && b.kind === 'point') {
     return a.fingerprint === b.fingerprint
   }
-  return false
+  if (a.kind === 'tour-decision' && b.kind === 'tour-decision') {
+    return a.key === b.key
+  }
+  return a.kind === 'tour-plan'
 }
 
 /**
@@ -69,6 +74,10 @@ export function chatContextLabel(context, layerTitle, pointTitle) {
       const title = pointTitle?.(context.fingerprint)
       return title === undefined ? 'attention point' : `point · ${title}`
     }
+    case 'tour-decision':
+      return `decision · ${context.key}`
+    case 'tour-plan':
+      return 'the plan'
   }
 }
 
@@ -119,6 +128,10 @@ export function chatContextAttrs(context) {
       )
     case 'point':
       return ` data-ask-point="${escapeAttr(context.fingerprint)}"`
+    case 'tour-decision':
+    case 'tour-plan':
+      // The tour's contexts come from the tour page, never from an `[ ask ]` element.
+      return ''
   }
 }
 

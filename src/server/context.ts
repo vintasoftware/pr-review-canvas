@@ -13,6 +13,7 @@ import {
 } from '../chat/checkouts.js'
 import type { PromptOverrides } from '../project-config.js'
 import { loadSeedTemplate } from '../chat/seed.js'
+import { loadTourSeedTemplate } from '../chat/tour-seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
@@ -27,6 +28,7 @@ import { createDerivedStore, type DerivedStore } from '../store/derived-store.js
 import { createPrStore, type PrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
 import { createStateStore, type StateStore } from '../store/state-store.js'
+import { createTourStore, type TourStore } from '../store/tour-store.js'
 
 /** Directory roots the `/vendor/*` route may serve from. Exact files are listed in routes/static.ts. */
 export interface VendorRoots {
@@ -54,6 +56,8 @@ export interface AppContext {
   derived: DerivedStore
   prs: PrStore
   state: StateStore
+  /** The tours, beside the canvases. */
+  tours: TourStore
   /** What this forge login may post here, probed once and reused for ten minutes. */
   capabilities: CapabilityProbe
   /** Personal chat settings, in `.pr-review/settings.yml`. */
@@ -101,9 +105,10 @@ export interface StoreSet {
   derived: DerivedStore
   prs: PrStore
   state: StateStore
+  tours: TourStore
 }
 
-/** The four stores over one repo directory. Shared by the real context and by tests. */
+/** The five stores over one repo directory. Shared by the real context and by tests. */
 export function createStores(dataDir: string, config: RuntimeConfig, git: Git, now: () => Date): StoreSet {
   const root = repoDir(dataDir, config.repo)
   const canvases = createCanvasStore(root, git)
@@ -113,6 +118,7 @@ export function createStores(dataDir: string, config: RuntimeConfig, git: Git, n
     derived: createDerivedStore(canvases, git, now),
     prs,
     state: createStateStore(prs, now),
+    tours: createTourStore(root, git),
   }
 }
 
@@ -174,6 +180,8 @@ export function createChatSet(
       repoRoot: config.repoRoot,
       overrides: config.chatOverrides,
       loadSeedTemplate: () => loadSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
+      loadTourSeedTemplate: () =>
+        loadTourSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,

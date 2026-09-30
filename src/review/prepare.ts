@@ -198,18 +198,31 @@ async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promis
   return { kind: 'local', source: input.source, base: await resolveLocalBase(ctx.git, input.base) }
 }
 
+/**
+ * The target as the context records it, and the change it names, fetched or snapshotted. The
+ * canvas and the tour prepare the same way; only what they write afterwards differs.
+ */
+export async function resolveTargetPr(
+  ctx: AppContext,
+  input: PrepareTargetInput,
+  log: PrepareOptions['log']
+): Promise<{ target: PrepareTarget; pr: Pr }> {
+  const target = await resolveTarget(ctx, input)
+  const pr =
+    target.kind === 'pr'
+      ? await resolvePr(ctx, target.number, log)
+      : target.kind === 'local'
+        ? await resolveLocal(ctx, target, log)
+        : await resolveRefs(ctx, target.base, target.head, log)
+  return { target, pr }
+}
+
 export async function prepare(
   ctx: AppContext,
   input: PrepareTargetInput,
   opts: PrepareOptions
 ): Promise<PrepareResult> {
-  const target = await resolveTarget(ctx, input)
-  const pr =
-    target.kind === 'pr'
-      ? await resolvePr(ctx, target.number, opts.log)
-      : target.kind === 'local'
-        ? await resolveLocal(ctx, target, opts.log)
-        : await resolveRefs(ctx, target.base, target.head, opts.log)
+  const { target, pr } = await resolveTargetPr(ctx, input, opts.log)
   const canvasDir = ctx.canvases.canvasDir(pr.headSha)
   const promptPath = path.join(canvasDir, 'prompt.md')
   const contextPath = path.join(canvasDir, 'context.json')

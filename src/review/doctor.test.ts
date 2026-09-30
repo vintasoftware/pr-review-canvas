@@ -9,10 +9,18 @@ import { type DoctorDeps, runDoctorChecks } from './doctor.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
 
 import { stampSkill } from './skill-content.js'
+import { installedSkillReader } from '../testing/skills.js'
 
 const bundled = await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')
 const installed = stampSkill(bundled)
 const REPO = '/repo'
+/** Every bundled skill installed in the Claude directory only. */
+const claudeOnly = await installedSkillReader([path.join(REPO, CLAUDE_SKILLS_DIR)])
+/** Every bundled skill installed in both directories. */
+const both = await installedSkillReader([
+  path.join(REPO, CLAUDE_SKILLS_DIR),
+  path.join(REPO, CODEX_SKILLS_DIR),
+])
 
 function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
   return {
@@ -25,8 +33,7 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     client: () => createFakeGh(),
     version: '0.0.0-test',
     acpxVersion: async () => '0.13.2',
-    readSkill: async file =>
-      file === path.join(REPO, CLAUDE_SKILLS_DIR, SKILL_NAME, 'SKILL.md') ? installed : null,
+    readSkill: claudeOnly,
     ...over,
   }
 }
@@ -41,7 +48,7 @@ describe('runDoctorChecks', () => {
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: await makeTempDir(),
-        readSkill: async file => (file.includes(CLAUDE_SKILLS_DIR) ? installed : stale),
+        readSkill: async file => (file.includes(CLAUDE_SKILLS_DIR) ? claudeOnly(file) : stale),
       })
     )
     expect(report.checks.skill.ok).toBe(false)
@@ -49,11 +56,29 @@ describe('runDoctorChecks', () => {
     expect(report.checks.skill.hint).toBe('run `pr-review upgrade` or `pr-review install-skill`')
   })
 
+  it('reports a companion skill missing beside the canvas skill, or with an edited file', async () => {
+    for (const edit of [null, 'old ideas']) {
+      const report = await runDoctorChecks(
+        deps({
+          dataDirOverride: await makeTempDir(),
+          readSkill: async file =>
+            path.basename(file) === 'scenes.md'
+              ? edit
+              : path.dirname(file).endsWith('pr-tour') && edit === null
+                ? null
+                : claudeOnly(file),
+        })
+      )
+      expect(report.checks.skill.ok).toBe(false)
+      expect(report.checks.skill.detail).toContain(path.join(CLAUDE_SKILLS_DIR, 'pr-tour'))
+    }
+  })
+
   it('accepts copies after Git converts line endings to CRLF', async () => {
     const report = await runDoctorChecks(
       deps({
         dataDirOverride: await makeTempDir(),
-        readSkill: async () => installed.replace(/\n/g, '\r\n'),
+        readSkill: async file => (await both(file))?.replace(/\n/g, '\r\n') ?? null,
       })
     )
     expect(report.checks.skill.ok).toBe(true)
@@ -93,12 +118,7 @@ describe('runDoctorChecks', () => {
 
   it('names both skill directories when the skill is copied into both', async () => {
     const dataDir = await makeTempDir()
-    const report = await runDoctorChecks(
-      deps({
-        dataDirOverride: dataDir,
-        readSkill: async () => installed,
-      })
-    )
+    const report = await runDoctorChecks(deps({ dataDirOverride: dataDir, readSkill: both }))
     expect(report.checks.skill).toEqual({
       ok: true,
       detail: `${path.join(CLAUDE_SKILLS_DIR, SKILL_NAME)}, ${path.join(CODEX_SKILLS_DIR, SKILL_NAME)}`,

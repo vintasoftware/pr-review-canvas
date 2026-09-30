@@ -68,6 +68,8 @@ export const SettingsSchema = z.object({
   canvasComment: z.boolean().nullable(),
   /** Overrides `sharing.mentionCanvas` in pr-review.config.yml; null follows the project. */
   mentionCanvas: z.boolean().nullable(),
+  /** Overrides `tour.share` in pr-review.config.yml; null follows the project. */
+  tourComment: z.boolean().nullable().default(null),
 })
 export type Settings = z.infer<typeof SettingsSchema>
 
@@ -86,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   checkoutSweepMinutes: 60,
   canvasComment: null,
   mentionCanvas: null,
+  tourComment: null,
 }
 
 /** The project's sharing rules with this user's overrides applied: a set personal key wins. */
@@ -94,6 +97,19 @@ export function resolveSharing(project: Sharing, settings: Settings): Sharing {
     canvasComment: settings.canvasComment ?? project.canvasComment,
     mentionCanvas: settings.mentionCanvas ?? project.mentionCanvas,
   }
+}
+
+/**
+ * Whether a tour is shared on its pull request: the personal `tourComment` wins, then the project's
+ * `tour.share`, whose `auto` follows canvas sharing.
+ */
+export function resolveTourSharing(
+  project: { sharing: Sharing; tourShare: 'on' | 'off' | 'auto' },
+  settings: Settings
+): boolean {
+  if (settings.tourComment !== null) return settings.tourComment
+  if (project.tourShare !== 'auto') return project.tourShare === 'on'
+  return resolveSharing(project.sharing, settings).canvasComment
 }
 
 /**

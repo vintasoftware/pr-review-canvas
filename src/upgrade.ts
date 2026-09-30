@@ -34,6 +34,8 @@ export interface UpgradeDeps {
   /** Asks a yes/no question, or returns null when there is no one to ask. */
   confirm: (question: string) => Promise<boolean | null>
   readSkill?: ReadSkill
+  /** Where the bundled skills are read from; the package's own unless a test says otherwise. */
+  skillsRoot?: string
 }
 
 /** What one step upgrades, in the order a plan runs them. */
@@ -110,7 +112,7 @@ function notGlobalNote(name: string, latest: string, installed: string): string 
 }
 
 async function skillCopies(deps: UpgradeDeps): Promise<SkillCopy[]> {
-  return deps.repoRoot === null ? [] : findSkillCopies(deps.repoRoot, deps.readSkill)
+  return deps.repoRoot === null ? [] : findSkillCopies(deps.repoRoot, deps.readSkill, deps.skillsRoot)
 }
 
 export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
@@ -164,7 +166,7 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
 
 export function describeStep(step: UpgradeStep): string {
   if (step.kind === 'skill') {
-    return `refresh the project skill where it differs from pr-review's: ${step.paths.join(', ')}`
+    return `refresh the project skills where they differ from pr-review's: ${step.paths.join(', ')}`
   }
   return `upgrade ${step.name} ${step.from} -> ${step.to} (npm install -g ${step.name}@${step.to})`
 }
@@ -175,7 +177,11 @@ async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipp
   for (const copy of await skillCopies(deps)) {
     if (!copy.stale) continue
     try {
-      await installSkill({ targets: [{ kind: copy.kind, dir: copy.dir }] })
+      await installSkill({
+        name: copy.skill,
+        skillsRoot: deps.skillsRoot,
+        targets: [{ kind: copy.kind, dir: copy.dir }],
+      })
       written.push(copy.path)
     } catch (err) {
       if (!(err instanceof SkillDirExistsError)) throw err

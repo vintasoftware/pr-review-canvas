@@ -1,0 +1,426 @@
+{
+  "version": 1,
+  "pr": {
+    "number": 67,
+    "title": "Print human-readable output for install-skill, export, import, clean, upgrade, and errors",
+    "body": "## Summary\n\nSeveral commands printed a JSON line even to a person at a terminal (`upgrade` ended with a JSON dump, an unknown command printed a JSON envelope, `install-skill` printed JSON). Following what we did for `doctor`, they now print text at a terminal.\n\n- `install-skill`, `export`, `import`, `clean`, and `upgrade` print text when stdout is a terminal.\n- Failures (unknown command, usage errors, any `{ \"error\": … }` envelope) print `error: <message> (<code>)` and `hint: <hint>` on stderr.\n- `--json`, **or a stdout that is a pipe**, keeps the old JSON line, so scripts and agents are unaffected. Each of these commands accepts `--json`.\n- `prepare`, `validate`, and `publish` always print JSON: the skill parses it.\n- `doctor` is unchanged: checklist by default (also when piped), JSON with `--json`.\n- `upgrade` passes `--json` when it hands off to the newly installed version. The child also runs on a pipe, so an older parent still gets JSON from a newer child.\n\nHelp, `docs/reference.md`, and the changelog describe the new rule.\n\n## Example\n\n```\n$ pr-review insall-skill\nerror: unknown command: insall-skill (BAD_REQUEST)\nhint: run pr-review --help\n\n$ pr-review install-skill\nCopied the pr-review-canvas skill to:\n  claude  /…/.claude/skills/pr-review-canvas\n  codex   /…/.agents/skills/pr-review-canvas\n\n$ pr-review clean --dry-run | cat\n{\"removed\":[],\"skipped\":[],\"dryRun\":true}\n```\n\n## Test plan\n\n- [x] `pnpm check`\n- [x] `pnpm coverage` (144 files, 2190 tests pass; thresholds hold)\n- [x] New unit tests for text output from each command, the stderr error format, and the `upgrade` handoff passing `--json`\n- [x] Ran the CLI under `script` (TTY) and on a pipe to confirm each mode\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n",
+    "author": "fjsj",
+    "url": "https://github.com/vintasoftware/pr-review-canvas/pull/67",
+    "state": "merged",
+    "draft": false,
+    "updatedAt": "2026-09-28T17:32:59Z",
+    "baseRef": "main",
+    "headRef": "fjsj/friendly-cmds-outputs",
+    "headSha": "7f7f84e29795878fdc7a02f936785a12194f4778",
+    "mergeBaseSha": "316bd17e8917c71b292590d9340e9b0df47faf5b",
+    "additions": 314,
+    "deletions": 63,
+    "changedFiles": 12,
+    "repo": {
+      "owner": "vintasoftware",
+      "name": "pr-review-canvas"
+    }
+  },
+  "repo": {
+    "owner": "vintasoftware",
+    "name": "pr-review-canvas"
+  },
+  "headSha": "7f7f84e29795878fdc7a02f936785a12194f4778",
+  "mergeBaseSha": "316bd17e8917c71b292590d9340e9b0df47faf5b",
+  "blastRadius": [],
+  "budget": {
+    "landmarks": 6,
+    "decisions": 3,
+    "quiz": 3
+  },
+  "guide": "docs/pr-tour.md",
+  "landmarks": [
+    {
+      "id": "l0",
+      "stage": "background",
+      "title": "A CLI built for an agent, then handed to people",
+      "lead": "pr-review began as commands the skill runs and parses; the commands people run inherited the same JSON.",
+      "body": [
+        "pr-review is a command line tool with two kinds of readers. The skill, an agent, runs `prepare`, `validate`, and `publish` and parses their one JSON line; that is what the CLI was built for. The later commands, `install-skill`, `export`, `import`, `clean`, `upgrade`, and `doctor`, exist for a person at a terminal.",
+        "Every command printed through one path: `printJson` on a shared `CliIo` that has a `stdout` and a `stderr` and nothing else. Nothing in it knew who was reading, so a person got the same `{\"skill\":\"pr-review-canvas\",\"targets\":[…]}` as the skill, and a typo printed an error envelope on stdout with the hint buried inside it.",
+        "Why it matters: the terminal is the first place a person meets the tool, and JSON where a sentence belongs is the kind of rough edge nobody feels until a user does. At the same time scripts, cron jobs, and the upgrade handoff already depend on that JSON line, so it cannot simply go away. Both readers have to be served from the same commands."
+      ],
+      "scene": "<div class=\"scene\">\n<div class=\"sc-l0\">\n  <div class=\"sc-l0-readers\">\n    <div class=\"sc-l0-reader sc-l0-agent\"><b>the skill</b><span>runs prepare, validate, publish; parses the line</span></div>\n    <div class=\"sc-l0-reader\"><b>a script or cron job</b><span>pipes clean or export; parses the line</span></div>\n    <div class=\"sc-l0-reader\"><b>the upgrade parent</b><span>runs the new pr-review; reads its last line</span></div>\n    <div class=\"sc-l0-reader sc-l0-person\"><b>a person at a terminal</b><span>types install-skill, or a typo</span></div>\n  </div>\n  <div class=\"sc-l0-funnel\" aria-hidden=\"true\"></div>\n  <div class=\"sc-l0-out\">\n    <div class=\"sc-l0-path\"><code>printJson(io, result)</code><span>the one way out, before this change</span></div>\n    <pre class=\"sc-l0-stdout\">{\"skill\":\"pr-review-canvas\",\"targets\":[{\"kind\":\"claude\",\"path\":\"…\"}]}\n{\"error\":{\"code\":\"BAD_REQUEST\",\"message\":\"unknown command: insall-skill\",\"hint\":\"run pr-review --help\"}}</pre>\n    <p class=\"sc-l0-note\">Three readers wanted exactly this. One did not, and had no other option.</p>\n  </div>\n</div>\n<style>\n.sc-l0 { max-width: 100%; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--fg); font-size: 0.82rem; }\n.sc-l0-readers { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }\n.sc-l0-reader { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--paper); min-width: 0; }\n.sc-l0-reader b { display: block; font-size: 0.85rem; }\n.sc-l0-reader span { color: var(--muted); font-size: 0.76rem; }\n.sc-l0-agent { border-color: color-mix(in srgb, var(--ink) 50%, var(--line)); }\n.sc-l0-person { border-color: var(--warn); }\n.sc-l0-person b { color: var(--warn); }\n.sc-l0-funnel { height: 18px; margin: 4px auto; width: 2px; background: var(--muted); }\n.sc-l0-out { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--paper); }\n.sc-l0-path { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }\n.sc-l0-path code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: var(--ink); }\n.sc-l0-path span { color: var(--muted); font-size: 0.76rem; }\n.sc-l0-stdout { margin: 6px 0 0; padding: 6px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, var(--fg) 5%, var(--paper)); border-radius: 4px; }\n.sc-l0-note { margin: 6px 0 0; color: var(--muted); font-size: 0.76rem; }\n</style>\n</div>\n",
+      "code": [],
+      "literate": [],
+      "guards": []
+    },
+    {
+      "id": "l1",
+      "stage": "world",
+      "title": "Text for a person, JSON for a program",
+      "lead": "Five commands and every failure now print text at a terminal; a pipe or --json keeps the JSON line that scripts read.",
+      "body": [
+        "Before this change `install-skill` printed a JSON object to whoever ran it, `upgrade` ended with a JSON dump, and a misspelled command printed an error envelope. A person at a terminal read output written for a program.",
+        "Now `install-skill`, `export`, `import`, `clean`, and `upgrade` print sentences when stdout is a terminal. Any failure prints `error: <message> (<code>)` and `hint: <hint>` on stderr. With `--json`, or when stdout is a pipe, the old JSON line comes back unchanged, so scripts and agents notice nothing.",
+        "`prepare`, `validate`, and `publish` always print JSON, because the skill parses it. `doctor` keeps its checklist, on a pipe too, and prints JSON only with `--json`."
+      ],
+      "scene": "<div class=\"scene\">\n<div class=\"sc-l1\">\n  <table class=\"sc-l1-table\">\n    <thead>\n      <tr><th>command</th><th>before</th><th>now, at a terminal</th><th>now, on a pipe or with --json</th></tr>\n    </thead>\n    <tbody>\n      <tr><td>install-skill</td><td class=\"sc-l1-json\">JSON</td><td class=\"sc-l1-text\">text</td><td class=\"sc-l1-json\">JSON</td></tr>\n      <tr><td>export</td><td class=\"sc-l1-json\">JSON</td><td class=\"sc-l1-text\">text</td><td class=\"sc-l1-json\">JSON</td></tr>\n      <tr><td>import</td><td class=\"sc-l1-json\">JSON</td><td class=\"sc-l1-text\">text</td><td class=\"sc-l1-json\">JSON</td></tr>\n      <tr><td>clean</td><td class=\"sc-l1-json\">JSON</td><td class=\"sc-l1-text\">text</td><td class=\"sc-l1-json\">JSON</td></tr>\n      <tr><td>upgrade</td><td class=\"sc-l1-json\">JSON, plan on stderr</td><td class=\"sc-l1-text\">stderr only</td><td class=\"sc-l1-json\">JSON</td></tr>\n      <tr><td>any failure</td><td class=\"sc-l1-json\">{ \"error\": … } on stdout</td><td class=\"sc-l1-text\">error: and hint: on stderr</td><td class=\"sc-l1-json\">{ \"error\": … } on stdout</td></tr>\n      <tr><td>prepare, validate, publish</td><td class=\"sc-l1-json\">JSON</td><td class=\"sc-l1-json\">JSON</td><td class=\"sc-l1-json\">JSON</td></tr>\n      <tr><td>doctor</td><td class=\"sc-l1-text\">checklist</td><td class=\"sc-l1-text\">checklist</td><td class=\"sc-l1-text\">checklist on a pipe, JSON with --json</td></tr>\n    </tbody>\n  </table>\n</div>\n<style>\n.sc-l1 { max-width: 100%; overflow-x: auto; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--fg); }\n.sc-l1-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; line-height: 1.35; }\n.sc-l1-table th, .sc-l1-table td { text-align: left; vertical-align: top; padding: 6px 6px; border-bottom: 1px solid var(--line); }\n.sc-l1-table th { font-weight: 600; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }\n.sc-l1-table td:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }\n.sc-l1-json { color: var(--ink); }\n.sc-l1-text { color: var(--good); }\n</style>\n</div>\n",
+      "code": [
+        {
+          "path": "src/help.ts",
+          "diff": "@@ -134,7 +149,8 @@ const SHARED: CommandHelp = {\n }\n\n const OUTPUT = [\n-  'A command prints one JSON line on success, and `{ \"error\": { code, message, hint } }` on failure.',\n+  'prepare, validate, and publish print one JSON line. The other one-shot commands print text at a terminal, and one JSON line with --json or when stdout is a pipe.',\n+  'A failure prints `{ \"error\": { code, message, hint } }` where the command prints JSON, and an error line on stderr where it prints text.',\n   'doctor prints a checklist, for a person or an agent. Pass --json for that same report as one JSON line.',\n   'Exit codes: 0 ok, 1 error, 2 usage, 4 gh or glab missing or not logged in, 5 invalid model output.',\n ]"
+        },
+        {
+          "path": "docs/reference.md",
+          "diff": "@@ -276,24 +276,32 @@ showed. If the install fails, the current version runs the remaining steps itsel\n ### Output and exit codes\n\n Help prints to stdout, so `pr-review --help | less` works.\n-One-shot commands normally print a JSON result on stdout. Preparation progress goes to stderr.\n-`validate --human` prints text, and a failed `publish` prints validation diagnostics before its\n-JSON error. `serve` stays running and writes its startup message to stderr.\n+`prepare`, `validate`, and `publish` print a JSON result on stdout: the skill reads it.\n+Preparation progress goes to stderr. `validate --human` prints text, and a failed `publish` prints\n+validation diagnostics before its JSON error. `serve` stays running and writes its startup message\n+to stderr.\n+\n+`install-skill`, `export`, `import`, `clean`, and `upgrade` print text at a terminal. With\n+`--json`, or when stdout is a pipe, they print the JSON result instead, so scripts and agents\n+read the same fields as before."
+        }
+      ],
+      "literate": [
+        "Start where a person first meets the rule: the help text. The `OUTPUT` block in help.ts used to promise one JSON line from every command. It now names the three commands that keep that promise and describes the split for the rest, in two sentences a reader can hold:",
+        {
+          "chunk": 0
+        },
+        "The reference says the same thing at more length, in the section on output and exit codes. Its first paragraph narrows the JSON promise to `prepare`, `validate`, and `publish`. The new second paragraph gives the five commands their text form and says exactly when the JSON comes back:",
+        {
+          "chunk": 1
+        },
+        "Everything else in this change is what makes these two paragraphs true. The next landmarks follow the rule from the one function that decides it, to the lines each command prints, to the one command that runs another pr-review."
+      ],
+      "guards": [
+        {
+          "testPath": "src/commands.test.ts",
+          "behavior": "Each command prints text at a terminal and JSON on a pipe"
+        }
+      ]
+    },
+    {
+      "id": "l2",
+      "stage": "why",
+      "title": "One decision in main, before any command runs",
+      "lead": "outputMode reads the flag, the terminal, and the command name once; every command then asks io.json.",
+      "body": [
+        "`main` strips `--json` from the arguments and calls `outputMode` with the command name and whether stdout is a TTY. The answer lands in `io.json`, the one field every command checks before it prints. No command declares `--json` in its own `parseArgs`, so strict parsing never sees the flag.",
+        "The rule has three ways to say JSON: the flag, a stdout that is not a terminal, or a command in `AGENT_COMMANDS`. `doctor` is the exception. Its checklist is written for a person and an agent alike, so only the flag switches it, on a pipe too."
+      ],
+      "scene": "<div class=\"scene\">\n<div class=\"sc-l2\">\n  <svg class=\"sc-l2-flow\" viewBox=\"0 0 340 372\" role=\"img\" aria-label=\"How outputMode picks text or JSON\">\n    <defs>\n      <marker id=\"sc-l2-arrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\">\n        <path d=\"M 0 0 L 10 5 L 0 10 z\" class=\"sc-l2-arrowhead\"/>\n      </marker>\n    </defs>\n    <rect x=\"8\" y=\"8\" width=\"204\" height=\"30\" rx=\"5\" class=\"sc-l2-box\"/>\n    <text x=\"110\" y=\"27\" text-anchor=\"middle\">pr-review &lt;command&gt; …</text>\n    <line x1=\"110\" y1=\"38\" x2=\"110\" y2=\"60\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n\n    <rect x=\"8\" y=\"62\" width=\"204\" height=\"40\" rx=\"5\" class=\"sc-l2-box\"/>\n    <text x=\"110\" y=\"86\" text-anchor=\"middle\">--json on the command line?</text>\n    <line x1=\"212\" y1=\"82\" x2=\"238\" y2=\"82\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n    <text x=\"225\" y=\"76\" text-anchor=\"middle\" class=\"sc-l2-small\">yes</text>\n    <line x1=\"110\" y1=\"102\" x2=\"110\" y2=\"124\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n    <text x=\"118\" y=\"117\" class=\"sc-l2-small\">no</text>\n\n    <rect x=\"8\" y=\"126\" width=\"204\" height=\"40\" rx=\"5\" class=\"sc-l2-box\"/>\n    <text x=\"110\" y=\"143\" text-anchor=\"middle\">stdout is a pipe,</text>\n    <text x=\"110\" y=\"158\" text-anchor=\"middle\">not a terminal?</text>\n    <line x1=\"212\" y1=\"146\" x2=\"238\" y2=\"146\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n    <text x=\"225\" y=\"140\" text-anchor=\"middle\" class=\"sc-l2-small\">yes</text>\n    <line x1=\"110\" y1=\"166\" x2=\"110\" y2=\"188\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n    <text x=\"118\" y=\"181\" class=\"sc-l2-small\">no</text>\n\n    <rect x=\"8\" y=\"190\" width=\"204\" height=\"40\" rx=\"5\" class=\"sc-l2-box\"/>\n    <text x=\"110\" y=\"214\" text-anchor=\"middle\">prepare, validate, or publish?</text>\n    <line x1=\"212\" y1=\"210\" x2=\"238\" y2=\"210\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n    <text x=\"225\" y=\"204\" text-anchor=\"middle\" class=\"sc-l2-small\">yes</text>\n    <line x1=\"110\" y1=\"230\" x2=\"110\" y2=\"252\" class=\"sc-l2-edge\" marker-end=\"url(#sc-l2-arrow)\"/>\n    <text x=\"118\" y=\"245\" class=\"sc-l2-small\">no</text>\n\n    <rect x=\"8\" y=\"254\" width=\"204\" height=\"40\" rx=\"5\" class=\"sc-l2-box sc-l2-text\"/>\n    <text x=\"110\" y=\"273\" text-anchor=\"middle\" class=\"sc-l2-strong\">text, for a person</text>\n    <text x=\"110\" y=\"287\" text-anchor=\"middle\" class=\"sc-l2-small\">io.json = false</text>\n\n    <rect x=\"240\" y=\"62\" width=\"92\" height=\"232\" rx=\"5\" class=\"sc-l2-box sc-l2-json\"/>\n    <text x=\"286\" y=\"170\" text-anchor=\"middle\" class=\"sc-l2-strong\">JSON</text>\n    <text x=\"286\" y=\"186\" text-anchor=\"middle\" class=\"sc-l2-small\">one line</text>\n    <text x=\"286\" y=\"200\" text-anchor=\"middle\" class=\"sc-l2-small\">io.json = true</text>\n\n    <rect x=\"8\" y=\"310\" width=\"324\" height=\"54\" rx=\"5\" class=\"sc-l2-box sc-l2-note\"/>\n    <text x=\"18\" y=\"329\" class=\"sc-l2-small\">doctor skips the middle two questions:</text>\n    <text x=\"18\" y=\"343\" class=\"sc-l2-small\">its checklist prints on a pipe too, and only</text>\n    <text x=\"18\" y=\"357\" class=\"sc-l2-small\">--json turns it into the JSON report.</text>\n  </svg>\n</div>\n<style>\n.sc-l2 { max-width: 100%; }\n.sc-l2-flow { display: block; width: 100%; max-width: 440px; height: auto; margin: 0 auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }\n.sc-l2-flow text { fill: var(--fg); }\n.sc-l2-small { font-size: 9.5px; fill: var(--muted) !important; }\n.sc-l2-strong { font-size: 12px; font-weight: 600; }\n.sc-l2-box { fill: var(--paper); stroke: var(--line); stroke-width: 1; }\n.sc-l2-json { stroke: var(--ink); stroke-width: 1.5; }\n.sc-l2-text { stroke: var(--good); stroke-width: 1.5; }\n.sc-l2-note { stroke: var(--warn); stroke-dasharray: 3 3; }\n.sc-l2-edge { stroke: var(--muted); stroke-width: 1.2; }\n.sc-l2-arrowhead { fill: var(--muted); }\n</style>\n</div>\n",
+      "code": [
+        {
+          "path": "src/commands.ts",
+          "diff": "@@ -43,6 +44,27 @@ import { readText, writeTextAtomic } from './store/atomic-json.js'\n export interface CliIo {\n   stdout(line: string): void\n   stderr(line: string): void\n+  /** Print results and errors as one JSON line instead of text. `outputMode` decides it. */\n+  json: boolean\n+}\n+\n+/** The steps of review generation: the skill reads their JSON, so they print nothing else. */\n+const AGENT_COMMANDS: ReadonlySet<string> = new Set(['prepare', 'validate', 'publish'])\n+\n+/**\n+ * Takes `--json` out of a command's arguments and decides whether the command prints JSON: with\n+ * the flag, on a stdout that is not a terminal (a script or an agent is reading), or for a command\n+ * only an agent runs. doctor prints its checklist on a pipe too, so only the flag switches it.\n+ */\n+export function outputMode(\n+  command: string,\n+  args: string[],\n+  stdoutIsTTY: boolean\n+): { json: boolean; rest: string[] } {\n+  const rest = args.filter(arg => arg !== '--json')\n+  const flag = rest.length !== args.length\n+  const json = command === 'doctor' ? flag : flag || !stdoutIsTTY || AGENT_COMMANDS.has(command)\n+  return { json, rest }\n }\n\n /** Exit codes: 0 ok, 1 error, 2 usage, 4 gh/glab auth or missing, 5 invalid model output. */"
+        },
+        {
+          "path": "src/cli.ts",
+          "diff": "@@ -207,7 +210,9 @@ async function upgradeCommand(argv: string[]): Promise<number> {\n\n export async function main(argv: string[]): Promise<number> {\n   // `pnpm review -- --port 3011` forwards the `--` itself; drop it so parseArgs sees the flags.\n-  const [command, ...rest] = argv.filter(a => a !== '--')\n+  const [command, ...args] = argv.filter(a => a !== '--')\n+  const { json, rest } = outputMode(command ?? '', args, process.stdout.isTTY === true)\n+  io.json = json\n   if (command === undefined || command === '--help' || command === '-h') {\n     printUsage(process.stdout, readPackageVersion())\n     return command === undefined ? EXIT.usage : EXIT.ok"
+        }
+      ],
+      "literate": [
+        "The rule lives in one function. `outputMode` takes the command name, its arguments, and whether stdout is a terminal. It pulls `--json` out of the arguments, so no command has to declare the flag, and answers with a boolean and the arguments that remain. The comment above it is the rule in words; the last line of the body is the rule in code:",
+        {
+          "chunk": 0
+        },
+        "Read the `json` expression from the left. `doctor` is handled first, by name, and gets only the flag. Every other command gets the flag, or a stdout that is not a terminal, or membership in `AGENT_COMMANDS`. The new `json` field on `CliIo` above it is where the answer will live.",
+        "`main` calls it once, before it knows which command will run. The answer goes into `io.json`, the shared io object every command receives. `rest` replaces the old argument list, so a command with strict `parseArgs` never sees `--json` and never has to reject it:",
+        {
+          "chunk": 1
+        },
+        "From here on a command has one question to ask, `io.json`, and never a flag to parse. The two decisions on this landmark are about that shape: whether a pipe should count, and whether one owner is right."
+      ],
+      "guards": [
+        {
+          "testPath": "src/commands.test.ts",
+          "behavior": "outputMode picks JSON for the flag, a pipe, or an agent command"
+        }
+      ]
+    },
+    {
+      "id": "l3",
+      "stage": "why",
+      "title": "What a person reads, and where failures go",
+      "lead": "Success is a sentence on stdout, a failure is an error: line and a hint on stderr, and JSON mode prints what it did before.",
+      "body": [
+        "Each command writes the lines a person needs. `install-skill` lists where the skill went. `export` names the zip. `import` says in one line whether the canvas is ready, stale, or already stored, with any warnings on stderr. `clean` lists what it removed, would remove, or left alone because a chat turn holds it.",
+        "`printErrorEnvelope` is the one place a failure is printed. In text mode it writes `error: <message> (<code>)` and, when there is one, `hint: <hint>` on stderr, and nothing on stdout. In JSON mode it prints the same `{ \"error\": … }` envelope on stdout as before. Exit codes do not change.",
+        "Play with the simulator below: pick a command, a terminal or a pipe, and the flag. The two streams show what the code at 7f7f84e prints, with a synthetic repository."
+      ],
+      "scene": "<div class=\"scene\">\n<div class=\"sc-l3-term\">\n  <div class=\"sc-l3-bar\"><span></span><span></span><span></span><em>a terminal, from the pull request description</em></div>\n  <pre class=\"sc-l3-body\"><span class=\"sc-l3-prompt\">$</span> pr-review insall-skill\n<span class=\"sc-l3-err\">error: unknown command: insall-skill (BAD_REQUEST)</span>\n<span class=\"sc-l3-err\">hint: run pr-review --help</span>\n\n<span class=\"sc-l3-prompt\">$</span> pr-review install-skill\nCopied the pr-review-canvas skill to:\n  claude  /home/ana/acme-widgets/.claude/skills/pr-review-canvas\n  codex   /home/ana/acme-widgets/.agents/skills/pr-review-canvas\n\n<span class=\"sc-l3-prompt\">$</span> pr-review clean --dry-run | cat\n{\"removed\":[],\"skipped\":[],\"dryRun\":true}</pre>\n  <p class=\"sc-l3-legend\"><span class=\"sc-l3-err\">red</span> lines went to stderr; the rest is stdout.</p>\n</div>\n<style>\n.sc-l3-term { max-width: 100%; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); }\n.sc-l3-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); }\n.sc-l3-bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }\n.sc-l3-bar em { font-family: ui-sans-serif, system-ui, sans-serif; font-style: normal; font-size: 0.72rem; color: var(--muted); margin-left: 6px; }\n.sc-l3-body { margin: 0; padding: 10px 12px; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }\n.sc-l3-prompt { color: var(--ink); }\n.sc-l3-err { color: var(--bad); }\n.sc-l3-legend { margin: 0; padding: 6px 12px 8px; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.75rem; color: var(--muted); border-top: 1px solid var(--line); }\n</style>\n</div>\n",
+      "micro": "<div class=\"scene\">\n<div class=\"sc-sim\">\n  <div class=\"sc-sim-controls\">\n    <fieldset class=\"sc-sim-field\">\n      <legend>command</legend>\n      <label><input type=\"radio\" name=\"sc-sim-cmd\" value=\"install-skill\" checked> install-skill</label>\n      <label><input type=\"radio\" name=\"sc-sim-cmd\" value=\"clean\"> clean --dry-run</label>\n      <label><input type=\"radio\" name=\"sc-sim-cmd\" value=\"insall-skill\"> insall-skill</label>\n      <label><input type=\"radio\" name=\"sc-sim-cmd\" value=\"validate\"> validate</label>\n    </fieldset>\n    <fieldset class=\"sc-sim-field\">\n      <legend>stdout is</legend>\n      <label><input type=\"radio\" name=\"sc-sim-out\" value=\"tty\" checked> a terminal</label>\n      <label><input type=\"radio\" name=\"sc-sim-out\" value=\"pipe\"> a pipe</label>\n    </fieldset>\n    <fieldset class=\"sc-sim-field\">\n      <legend>flag</legend>\n      <label><input type=\"checkbox\" name=\"sc-sim-json\"> --json</label>\n    </fieldset>\n  </div>\n  <div class=\"sc-sim-cmd\"><span class=\"sc-sim-prompt\">$</span><span data-role=\"cmdline\"></span></div>\n  <div class=\"sc-sim-streams\">\n    <div class=\"sc-sim-stream\"><p class=\"sc-sim-title\">stdout</p><div class=\"sc-sim-lines\" data-role=\"stdout\"></div></div>\n    <div class=\"sc-sim-stream\"><p class=\"sc-sim-title\">stderr</p><div class=\"sc-sim-lines\" data-role=\"stderr\"></div></div>\n  </div>\n  <p class=\"sc-sim-foot\"><span class=\"sc-sim-exit\" data-role=\"exit\"></span><span data-role=\"why\"></span></p>\n</div>\n<style>\n.sc-sim { font-family: ui-sans-serif, system-ui, sans-serif; color: var(--fg); max-width: 100%; }\n.sc-sim-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }\n.sc-sim-field { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px 8px; margin: 0; min-width: 0; }\n.sc-sim-field legend { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.75rem; color: var(--muted); padding: 0 4px; }\n.sc-sim-field label { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; padding: 2px 0; cursor: pointer; }\n.sc-sim-field input { margin: 0 6px 0 0; accent-color: var(--ink); }\n.sc-sim-cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-wrap: anywhere; }\n.sc-sim-prompt { color: var(--ink); margin-right: 6px; }\n.sc-sim-streams { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }\n@media (min-width: 600px) { .sc-sim-streams { grid-template-columns: 1fr 1fr; } }\n.sc-sim-stream { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }\n.sc-sim-title { font-size: 0.72rem; color: var(--muted); margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.05em; }\n.sc-sim-lines { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }\n.sc-sim-line-err { color: var(--bad); }\n.sc-sim-empty { color: var(--muted); font-style: italic; }\n.sc-sim-foot { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }\n.sc-sim-exit { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); margin-right: 8px; }\n.sc-sim-exit-bad { color: var(--bad); }\n</style>\n<script>\n(function simInit(root) {\n  const REPO = '/home/ana/acme-widgets'\n  const HINT = 'run pr-review --help'\n  const AGENT_COMMANDS = new Set(['prepare', 'validate', 'publish'])\n  const SUBCOMMANDS = new Set(['install-skill', 'clean', 'validate'])\n  const CHECKOUT = {\n    key: 42,\n    sha: '9c4e1f2a7b3d5e6f8a9b0c1d2e3f4a5b6c7d8e9f',\n    lastUsedAt: '2026-09-20T14:03:11.000Z',\n    dir: `${REPO}/.pr-review/repos/acme__widgets/checkouts/42`,\n  }\n  const ARGV = {\n    'install-skill': ['install-skill'],\n    clean: ['clean', '--dry-run'],\n    'insall-skill': ['insall-skill'],\n    validate: ['validate'],\n  }\n\n  function outputMode(command, args, stdoutIsTTY) {\n    const rest = args.filter(arg => arg !== '--json')\n    const flag = rest.length !== args.length\n    const json = command === 'doctor' ? flag : flag || !stdoutIsTTY || AGENT_COMMANDS.has(command)\n    return { json, rest, flag }\n  }\n\n  function printErrorEnvelope(io, code, message, hint) {\n    if (!io.json) {\n      io.stderr(`error: ${message} (${code})`)\n      if (hint !== undefined) io.stderr(`hint: ${hint}`)\n      return\n    }\n    const error = { code, message }\n    if (hint !== undefined) error.hint = hint\n    io.stdout(JSON.stringify({ error }))\n  }\n\n  const COMMANDS = {\n    'install-skill': io => {\n      const result = {\n        skill: 'pr-review-canvas',\n        targets: [\n          { kind: 'claude', path: `${REPO}/.claude/skills/pr-review-canvas`, status: 'copied' },\n          { kind: 'codex', path: `${REPO}/.agents/skills/pr-review-canvas`, status: 'copied' },\n        ],\n      }\n      if (io.json) {\n        io.stdout(JSON.stringify(result))\n        return 0\n      }\n      io.stdout(`Copied the ${result.skill} skill to:`)\n      for (const target of result.targets) io.stdout(`  ${target.kind.padEnd(6)}  ${target.path}`)\n      return 0\n    },\n    clean: io => {\n      const removed = [CHECKOUT]\n      const skipped = []\n      const dryRun = true\n      if (io.json) {\n        const brief = list => list.map(({ key, sha, lastUsedAt, dir }) => ({ key, sha, lastUsedAt, dir }))\n        io.stdout(JSON.stringify({ removed: brief(removed), skipped: brief(skipped), dryRun }))\n        return 0\n      }\n      const line = ({ key, sha, lastUsedAt, dir }) =>\n        `  ${typeof key === 'number' ? `#${key}` : key} at ${sha.slice(0, 7)}, last used ${lastUsedAt}: ${dir}`\n      io.stdout(`Would remove ${removed.length} review checkout${removed.length === 1 ? '' : 's'}:`)\n      for (const checkout of removed) io.stdout(line(checkout))\n      return 0\n    },\n    validate: io => {\n      // validate with no file: the usage error every command line mistake becomes.\n      printErrorEnvelope(\n        io,\n        'BAD_REQUEST',\n        'validate takes one file: pr-review validate <model.json|review.json> --canvas <dir>',\n        HINT\n      )\n      return 2\n    },\n  }\n\n  function main(argv, stdoutIsTTY) {\n    const [command, ...args] = argv\n    const { json, flag } = outputMode(command, args, stdoutIsTTY)\n    const out = []\n    const err = []\n    const io = { json, stdout: line => out.push(line), stderr: line => err.push(line) }\n    let exit\n    if (!SUBCOMMANDS.has(command)) {\n      printErrorEnvelope(io, 'BAD_REQUEST', `unknown command: ${command}`, HINT)\n      exit = 2\n    } else {\n      exit = COMMANDS[command](io)\n    }\n    let why\n    if (flag) why = '--json is on the command line, so JSON.'\n    else if (!stdoutIsTTY) why = 'stdout is a pipe, so JSON: a script or an agent is reading.'\n    else if (AGENT_COMMANDS.has(command)) why = `${command} is an agent command, so JSON even at a terminal.`\n    else why = 'A terminal, no flag, not an agent command, so text.'\n    return { out, err, exit, why }\n  }\n\n  const checked = name => root.querySelector(`input[name=\"${name}\"]:checked`)\n  const slot = role => root.querySelector(`[data-role=\"${role}\"]`)\n\n  function fill(target, lines) {\n    target.textContent = ''\n    if (lines.length === 0) {\n      const empty = document.createElement('span')\n      empty.className = 'sc-sim-empty'\n      empty.textContent = '(nothing)'\n      target.append(empty)\n      return\n    }\n    for (const line of lines) {\n      const row = document.createElement('div')\n      row.textContent = line\n      if (line.startsWith('error:') || line.startsWith('hint:')) row.className = 'sc-sim-line-err'\n      target.append(row)\n    }\n  }\n\n  function render() {\n    const command = checked('sc-sim-cmd').value\n    const pipe = checked('sc-sim-out').value === 'pipe'\n    const argv = [...ARGV[command], ...(checked('sc-sim-json') === null ? [] : ['--json'])]\n    const result = main(argv, !pipe)\n    slot('cmdline').textContent = `pr-review ${argv.join(' ')}${pipe ? ' | cat' : ''}`\n    fill(slot('stdout'), result.out)\n    fill(slot('stderr'), result.err)\n    const exit = slot('exit')\n    exit.textContent = `exit ${result.exit}`\n    exit.classList.toggle('sc-sim-exit-bad', result.exit !== 0)\n    slot('why').textContent = result.why\n  }\n\n  root.addEventListener('change', render)\n  render()\n})(document)\n</script>\n</div>\n",
+      "code": [
+        {
+          "path": "src/commands.ts",
+          "diff": "@@ -59,7 +81,13 @@ export function printJson(io: CliIo, value: unknown): void {\n   io.stdout(JSON.stringify(value))\n }\n\n+/** The failure as the JSON envelope, or as an `error:` line and its hint on stderr. */\n export function printErrorEnvelope(io: CliIo, code: ErrorCode, message: string, hint?: string): void {\n+  if (!io.json) {\n+    io.stderr(`error: ${message} (${code})`)\n+    if (hint !== undefined) io.stderr(`hint: ${hint}`)\n+    return\n+  }\n   const error: { code: ErrorCode; message: string; hint?: string } = { code, message }\n   if (hint !== undefined) {\n     error.hint = hint"
+        },
+        {
+          "path": "src/commands.ts",
+          "diff": "@@ -449,7 +485,12 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io:\n     ],\n   })\n   await ignoreLocalSettings(env.repoRoot)\n-  printJson(io, result)\n+  if (io.json) {\n+    printJson(io, result)\n+    return EXIT.ok\n+  }\n+  io.stdout(`Copied the ${result.skill} skill to:`)\n+  for (const target of result.targets) io.stdout(`  ${target.kind.padEnd(6)}  ${target.path}`)\n   return EXIT.ok\n }"
+        },
+        {
+          "path": "src/commands.ts",
+          "diff": "@@ -586,18 +656,31 @@ export async function runClean(ctx: AppContext, argv: string[], io: CliIo): Prom\n   const result = await ctx.checkouts.sweep({ all, olderThanDays, dryRun: values['dry-run'] === true })\n-  const brief = (list: typeof result.removed) =>\n-    list.map(({ key, sha, lastUsedAt, dir }) => ({ key, sha, lastUsedAt, dir }))\n-  printJson(io, {\n-    removed: brief(result.removed),\n-    skipped: brief(result.skipped),\n-    dryRun: values['dry-run'] === true,\n-  })\n+  const dryRun = values['dry-run'] === true\n+  if (io.json) {\n+    const brief = (list: CheckoutInfo[]) =>\n+      list.map(({ key, sha, lastUsedAt, dir }) => ({ key, sha, lastUsedAt, dir }))\n+    printJson(io, { removed: brief(result.removed), skipped: brief(result.skipped), dryRun })\n+    return EXIT.ok\n+  }\n+  const checkoutLine = ({ key, sha, lastUsedAt, dir }: CheckoutInfo) =>\n+    `  ${typeof key === 'number' ? `#${key}` : key} at ${shortSha(sha)}, last used ${lastUsedAt}: ${dir}`\n+  if (result.removed.length === 0) {\n+    io.stdout('No review checkouts to remove.')\n+  } else {\n+    const n = plural(result.removed.length, 'review checkout')\n+    io.stdout(dryRun ? `Would remove ${n}:` : `Removed ${n}:`)\n+    for (const checkout of result.removed) io.stdout(checkoutLine(checkout))\n+  }\n+  if (result.skipped.length > 0) {\n+    io.stdout(`Left ${plural(result.skipped.length, 'review checkout')} a chat turn is using:`)\n+    for (const checkout of result.skipped) io.stdout(checkoutLine(checkout))\n+  }\n   return EXIT.ok"
+        }
+      ],
+      "literate": [
+        "Failures first, because every command shares them. `printErrorEnvelope` gains a text branch at the top: when `io.json` is off it writes the `error:` line and, if there is one, the `hint:` line on stderr, then returns before the envelope is built. The JSON path below it is untouched:",
+        {
+          "chunk": 0
+        },
+        "Then each command gets its sentences. The pattern is the same everywhere: if `io.json`, print the result as before and return; otherwise print lines for a person. `install-skill` is the smallest case, one heading and one line per target:",
+        {
+          "chunk": 1
+        },
+        "`export` and `import` follow the same shape. Export names the zip it wrote. Import prints its warnings on stderr and one line from `describeImport`, a new function that turns the result status into a sentence: the canvas is ready, or stale by so many commits, or was already stored and kept:",
+        {
+          "path": "src/commands.ts",
+          "diff": "@@ -550,12 +595,37 @@ export async function runImport(ctx: AppContext, argv: string[], io: CliIo): Pro\n-  printJson(io, await importCanvas(ctx, options))\n+  const result = await importCanvas(ctx, options)\n+  if (io.json) {\n+    printJson(io, result)\n+    return EXIT.ok\n+  }\n+  for (const warning of result.warnings) io.stderr(`warning: ${warning}`)\n+  io.stdout(describeImport(result))\n   return EXIT.ok\n }\n\n+/** One line on what an import did, for a person reading the terminal. */\n+export function describeImport(result: ImportResult): string {\n+  const canvas = shortSha(result.headSha)\n+  if (result.status === 'exists') {\n+    return `A canvas for ${canvas} is already stored and is at least as new; kept it.`\n+  }\n+  if (result.status === 'ready') {\n+    return `Imported the canvas for ${canvas}.`\n+  }\n+  const head = shortSha(result.currentHeadSha)\n+  const behind =\n+    result.relation === 'ancestor' && result.commitsBehind !== undefined\n+      ? `, ${plural(result.commitsBehind, 'commit')} ahead of it`\n+      : result.relation === 'unrelated'\n+        ? ', which does not contain it'\n+        : ''\n+  return `Imported the canvas for ${canvas}, but the head is now ${head}${behind}. The canvas is stale.`\n+}"
+        },
+        "`clean` is the longest, because it has three things to say: nothing to remove, what it removed or would remove, and what it left alone because a chat turn still holds it. The JSON branch keeps the exact object it printed before:",
+        {
+          "chunk": 2
+        },
+        "The simulator on this landmark runs a model of exactly these branches, so you can see each sentence and each envelope land on its stream."
+      ],
+      "guards": [
+        {
+          "testPath": "src/commands.test.ts",
+          "behavior": "A failure prints error: and hint: on stderr in text mode"
+        }
+      ]
+    },
+    {
+      "id": "l4",
+      "stage": "why",
+      "title": "upgrade talks to a person and to its own child",
+      "lead": "The plan and each step go to stderr; the child upgrade runs with --json on a pipe, and the parent reads its last line.",
+      "body": [
+        "`upgrade` already wrote its plan and the confirmation on stderr. Now each step's outcome and the closing line, `Upgrade complete.` or `Upgrade finished with failed steps; see above.`, go there too. At a terminal stdout stays empty. With `--json`, or on a pipe, stdout gets the one JSON line with `applied`, `ok`, and the steps.",
+        "Once pr-review itself is upgraded, the parent hands the rest to the new version: `upgrade --yes --json --only acpx,skill`. The child runs under `execFile`, so its stdout is a pipe and the pipe rule already means JSON. The parent parses the last stdout line and prints the child's steps as its own. An older parent, from before this change, passes no flag and still gets JSON from a newer child."
+      ],
+      "scene": "<div class=\"scene\">\n<div class=\"sc-l4\">\n  <ol class=\"sc-l4-line\">\n    <li class=\"sc-l4-parent\"><span class=\"sc-l4-who\">parent 0.5.0</span><span class=\"sc-l4-what\"><b>stderr</b> pr-review upgrade will: … Proceed? [y/N]</span></li>\n    <li class=\"sc-l4-parent\"><span class=\"sc-l4-who\">parent</span><span class=\"sc-l4-what\"><b>runs</b> npm install -g @vintasoftware/pr-review-canvas@0.6.0</span></li>\n    <li class=\"sc-l4-parent\"><span class=\"sc-l4-who\">parent</span><span class=\"sc-l4-what\"><b>execFile</b> pr-review upgrade --yes --json --only acpx,skill --repo …</span></li>\n    <li class=\"sc-l4-child\"><span class=\"sc-l4-who\">child 0.6.0</span><span class=\"sc-l4-what\"><b>stdout is a pipe</b>, and --json is set: JSON either way. Plans again with its own code.</span></li>\n    <li class=\"sc-l4-child\"><span class=\"sc-l4-who\">child</span><span class=\"sc-l4-what\"><b>stdout</b> {\"applied\":true,\"ok\":true,\"steps\":[…],\"notes\":[…]}</span></li>\n    <li class=\"sc-l4-parent\"><span class=\"sc-l4-who\">parent</span><span class=\"sc-l4-what\"><b>parses</b> the last stdout line, then <b>stderr</b> done: upgrade acpx 0.13.2 -> 0.19.1 (npm install -g acpx@0.19.1)</span></li>\n    <li class=\"sc-l4-parent\"><span class=\"sc-l4-who\">parent</span><span class=\"sc-l4-what\"><b>stderr</b> Upgrade complete. <b>stdout</b> nothing at a terminal; one JSON line with --json or on a pipe.</span></li>\n  </ol>\n</div>\n<style>\n.sc-l4 { max-width: 100%; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--fg); }\n.sc-l4-line { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); }\n.sc-l4-line li { position: relative; padding: 0 0 12px 12px; font-size: 0.82rem; line-height: 1.4; }\n.sc-l4-line li::before { content: ''; position: absolute; left: -21px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); border: 2px solid var(--muted); }\n.sc-l4-child::before { border-color: var(--ink) !important; }\n.sc-l4-who { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }\n.sc-l4-child .sc-l4-who { color: var(--ink); }\n.sc-l4-what { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }\n.sc-l4-what b { font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; color: var(--fg); }\n</style>\n</div>\n",
+      "code": [
+        {
+          "path": "src/upgrade.ts",
+          "diff": "@@ -210,6 +210,7 @@ async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<StepOutcom\n   const result = await deps.runInstalled([\n     'upgrade',\n     '--yes',\n+    '--json',\n     '--only',\n     kinds.join(','),\n     ...(deps.repoRoot === null ? [] : ['--repo', deps.repoRoot]),"
+        },
+        {
+          "path": "src/upgrade.ts",
+          "diff": "@@ -333,6 +334,10 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo):\n     io.stderr(`The project skill changed. Commit and push ${refreshed.join(' and ')} so your team gets it.`)\n   }\n   const ok = outcomes.every(o => o.status !== 'failed')\n-  printJson(io, { applied: true, ok, steps: outcomes, notes: plan.notes })\n+  if (io.json) {\n+    printJson(io, { applied: true, ok, steps: outcomes, notes: plan.notes })\n+  } else {\n+    io.stderr(ok ? 'Upgrade complete.' : 'Upgrade finished with failed steps; see above.')\n+  }\n   return ok ? EXIT.ok : EXIT.error\n }"
+        },
+        {
+          "path": "src/upgrade.test.ts",
+          "diff": "@@ -86,10 +86,12 @@ function fake(opts: {\n     runInstalled: async args => {\n       calls.push(`pr-review ${installed[NAME]} ${args.join(' ')}`)\n       if (opts.garbledInstalled) return { ok: false, stdout: 'Segmentation fault', stderr: 'boom' }\n-      // What cli.ts does with the arguments: the command name, then the common flags.\n-      const [command, ...flags] = args\n+      // What cli.ts does with the arguments: the command name, the output mode on the pipe\n+      // execFile gives the child, then the common flags.\n+      const [command = '', ...commandArgs] = args\n+      const { json, rest: flags } = outputMode(command, commandArgs, false)\n       const { repo: childRepo, rest } = splitCommonFlags(flags)\n-      const child = capture()\n+      const child = capture(json)"
+        }
+      ],
+      "literate": [
+        "`upgrade` is the one command that runs another pr-review, so it has to speak both languages. Two edits in upgrade.ts. First, the handoff line passes `--json` to the newly installed child, right after `--yes`:",
+        {
+          "chunk": 0
+        },
+        "Second, the end of `runUpgrade`. Where it printed the report unconditionally, it now prints it only in JSON mode, and otherwise closes with one line on stderr, where the plan and each step already went:",
+        {
+          "chunk": 1
+        },
+        "The test fake had to learn the rule the real cli.ts applies. It used to hand the child every argument as flags. Now it runs `outputMode` with `stdoutIsTTY` set to false, which is what `execFile` gives a child, and captures the child in the mode that produces:",
+        {
+          "chunk": 2
+        },
+        "That `false` is the whole reason an older parent still works. Even when the parent never passes the flag, the pipe alone makes the child print JSON, and the parent reads its last stdout line as before. The decision here asks whether the explicit flag is worth keeping on top of that."
+      ],
+      "guards": [
+        {
+          "testPath": "src/upgrade.test.ts",
+          "behavior": "The handoff passes --json and the parent reads the last line"
+        }
+      ]
+    },
+    {
+      "id": "l5",
+      "stage": "respect",
+      "title": "What a new command must respect",
+      "lead": "Ask io.json, print failures through printErrorEnvelope, keep stdout to one line in JSON mode, and name agent commands in one set.",
+      "body": [
+        "A new one-shot command never parses `--json` itself: `main` has removed it and set `io.json`. It prints results as lines on stdout in text mode, and exactly one JSON line in JSON mode, because `upgrade`'s parent reads the last line of a child's stdout. Every failure goes through `printErrorEnvelope`, so it lands on stderr as text or on stdout as JSON.",
+        "A command the skill parses belongs in `AGENT_COMMANDS`; there is no other way to force JSON at a terminal. `doctor` is the one command coded by name in `outputMode`. A test fake for `CliIo` must now set `json`, which is why three unrelated test files changed."
+      ],
+      "scene": "<div class=\"scene\">\n<div class=\"sc-l5\">\n  <div class=\"sc-l5-card\"><div class=\"sc-l5-k\">io.json</div><p>Set once by main. Read it before you print. Never declare --json in a command's parseArgs.</p></div>\n  <div class=\"sc-l5-card\"><div class=\"sc-l5-k\">printErrorEnvelope</div><p>Every failure goes through it: error: and hint: on stderr as text, the envelope on stdout as JSON.</p></div>\n  <div class=\"sc-l5-card\"><div class=\"sc-l5-k\">one line</div><p>In JSON mode stdout holds exactly one line. The upgrade parent parses the last line of its child.</p></div>\n  <div class=\"sc-l5-card\"><div class=\"sc-l5-k\">AGENT_COMMANDS</div><p>prepare, validate, publish. A new command the skill parses is added here, nowhere else.</p></div>\n  <div class=\"sc-l5-card sc-l5-warn\"><div class=\"sc-l5-k\">doctor</div><p>The one name coded in outputMode: checklist on a pipe, JSON only with --json. Do not copy this for a new command.</p></div>\n  <div class=\"sc-l5-card\"><div class=\"sc-l5-k\">CliIo fakes</div><p>A test io needs json: true or false. TypeScript refuses a fake without it.</p></div>\n</div>\n<style>\n.sc-l5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; max-width: 100%; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--fg); }\n.sc-l5-card { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }\n.sc-l5-card p { margin: 4px 0 0; font-size: 0.78rem; line-height: 1.4; overflow-wrap: anywhere; }\n.sc-l5-k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }\n.sc-l5-warn { border-color: var(--warn); }\n.sc-l5-warn .sc-l5-k { color: var(--warn); }\n</style>\n</div>\n",
+      "code": [
+        {
+          "path": "src/cli.ts",
+          "diff": "@@ -47,9 +48,11 @@ const SUBCOMMANDS = [\n   'clean',\n ] as const\n\n+/** Filled in by main once it knows the command line. */\n const io: CliIo = {\n   stdout: line => process.stdout.write(`${line}\\n`),\n   stderr: line => process.stderr.write(`${line}\\n`),\n+  json: true,\n }\n\n async function buildContext("
+        },
+        {
+          "path": "src/commands.ts",
+          "diff": "@@ -411,11 +447,11 @@ export async function runDoctor(\n ): Promise<number> {\n   const { values } = parseArgs({\n     args: argv,\n-    options: { 'all-checks': { type: 'boolean' }, json: { type: 'boolean' } },\n+    options: { 'all-checks': { type: 'boolean' } },\n     strict: true,\n   })\n   const report = await runDoctorChecks(deps, { allChecks: values['all-checks'] === true })\n-  if (values.json === true) {\n+  if (io.json) {\n     printJson(io, report)\n   } else {\n     printDoctorReport(report, output)"
+        },
+        {
+          "path": "skills/pr-review-canvas/SKILL.md",
+          "diff": "@@ -219,12 +219,12 @@ For a `--base/--head` run, `sharing.status` is `\"local\"` too, but the canvas has\n own. Report the stored commit and export it:\n\n ```bash\n-pr-review export --head <headSha>\n+pr-review export --head <headSha> --json\n ```\n\n Export prints `{ \"status\": \"exported\", \"path\", \"name\", \"headSha\", \"prNumber\" }`; `prNumber`"
+        }
+      ],
+      "literate": [
+        "What must stay true is easiest to see in three small edits. The shared `io` in cli.ts starts with `json: true`, and the comment says who fills it in. Because the field is now part of `CliIo`, a test fake that builds one has to say which mode it is in, which is why three unrelated test files changed:",
+        {
+          "chunk": 0
+        },
+        "`doctor` shows what a command must not do anymore: declare `json` in its own `parseArgs`. Its option is gone, and the branch reads `io.json` like everyone else. Its exception, checklist on a pipe, lives in `outputMode`, not here:",
+        {
+          "chunk": 1
+        },
+        "And the skill, the one reader that parses `export`, now asks for JSON explicitly rather than relying on the pipe. It costs nothing and keeps working if the pipe rule ever changes:",
+        {
+          "chunk": 2
+        },
+        "A new command copies doctor’s branch, never its old option; prints exactly one line in JSON mode, because the upgrade parent reads the last one; fails through `printErrorEnvelope`; and joins `AGENT_COMMANDS` only if the skill parses it."
+      ],
+      "guards": [
+        {
+          "testPath": "src/review/doctor.test.ts",
+          "behavior": "doctor reads io.json instead of its own flag"
+        }
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "key": "pipe-means-json",
+      "category": "trade-off",
+      "landmark": "l2",
+      "title": "Does a pipe mean JSON?",
+      "context": "`outputMode` prints JSON when stdout is not a terminal, so a script that never passed `--json` keeps getting the line it parsed before. The same rule turns `pr-review clean | less` into JSON for a person.",
+      "keep": {
+        "label": "A pipe means JSON",
+        "consequence": "Every existing script, agent, and the older `upgrade` parent keep working with no flag. A person who pipes into `less`, `tee`, or a log file gets JSON, and CI logs show JSON too."
+      },
+      "change": {
+        "label": "Only --json means JSON",
+        "consequence": "Piping into `less` or a log file shows text. Every script and agent that reads these commands must add `--json` now, and an older `upgrade` parent that hands off to this version would read text and report a failed step."
+      },
+      "recommended": "keep",
+      "reason": {
+        "text": "Scripts and agents never passed a flag; they read the JSON line. A pipe keeps that contract without a release note nobody reads.",
+        "place": "pr"
+      },
+      "anchor": {
+        "path": "src/commands.ts",
+        "line": 66
+      }
+    },
+    {
+      "key": "handoff-passes-json",
+      "category": "pokayoke",
+      "landmark": "l4",
+      "title": "Should the handoff pass --json when the pipe already implies it?",
+      "context": "`handOff` runs the newly installed pr-review through `execFile`, so the child's stdout is a pipe and the pipe rule already gives JSON. The change passes `--json` too, and the parent reads the last stdout line as the report.",
+      "keep": {
+        "label": "Pass --json explicitly",
+        "consequence": "The parent's read of the report never depends on the pipe rule, so changing that rule later cannot break upgrade. The cost is a redundant flag, and one more argument the child must keep accepting."
+      },
+      "change": {
+        "label": "Rely on the pipe alone",
+        "consequence": "One less argument, and the handoff line matches what an older parent sends. The report then depends on a rule in another function, and the first person to make a pipe print text breaks upgrade without touching upgrade.ts."
+      },
+      "recommended": "keep",
+      "reason": {
+        "text": "The parent parses the child's stdout. That must hold even if the pipe rule changes, so the handoff asks for JSON itself.",
+        "place": "code"
+      },
+      "anchor": {
+        "path": "src/upgrade.ts",
+        "line": 213
+      }
+    },
+    {
+      "key": "one-owner-for-json",
+      "category": "architecture",
+      "landmark": "l2",
+      "title": "Where is --json parsed?",
+      "context": "`main` calls `outputMode` once: it removes `--json` from the arguments and sets `io.json` before any command parses its flags. No command declares `json` in its own `parseArgs`, and `doctor` lost the one it had.",
+      "keep": {
+        "label": "One owner in main",
+        "consequence": "A new command supports --json without declaring it, and strict parsing never rejects the flag. Every command accepts --json, even `serve`, where it does nothing, and help lists it only where it matters."
+      },
+      "change": {
+        "label": "Each command declares --json",
+        "consequence": "A command's flags are all in its own `parseArgs`, and `serve --json` is a usage error. Every command must declare it, and a forgotten one rejects --json with a usage error instead of printing JSON."
+      },
+      "recommended": "keep",
+      "reason": {
+        "text": "The output mode is one fact about the run, known before the command runs. One function owns it, so no command can forget the flag.",
+        "place": "code"
+      },
+      "anchor": {
+        "path": "src/commands.ts",
+        "line": 59
+      }
+    }
+  ],
+  "quiz": [
+    {
+      "id": "q1",
+      "landmark": "l2",
+      "question": "A cron job runs `pr-review clean` with stdout redirected to a log file. What lands in the log?",
+      "options": [
+        "\"Removed 1 review checkout:\" and one line per checkout",
+        "One JSON line with removed, skipped, and dryRun",
+        "Nothing: the list goes to stderr"
+      ],
+      "answer": 1,
+      "why": "A file is not a terminal, so outputMode picks JSON: the same line the command printed before this change."
+    },
+    {
+      "id": "q2",
+      "landmark": "l3",
+      "question": "At a terminal, a person runs `pr-review insall-skill 2>/dev/null`. What do they see?",
+      "options": [
+        "error: unknown command: insall-skill (BAD_REQUEST), then the hint",
+        "Nothing: in text mode the failure goes to stderr, which they discarded",
+        "The JSON envelope on stdout"
+      ],
+      "answer": 1,
+      "why": "Text mode puts failures on stderr and nothing on stdout; add --json, or pipe stdout, to get the envelope on stdout instead."
+    },
+    {
+      "id": "q3",
+      "landmark": "l4",
+      "question": "A pr-review from before this change upgrades itself and hands off to the new version without passing --json. What does the old parent read from the child?",
+      "options": [
+        "Text lines, so the parent reports that the new pr-review did not report a result",
+        "One JSON line: the child's stdout is a pipe, and a pipe means JSON",
+        "Nothing: the new child refuses to run without --json"
+      ],
+      "answer": 1,
+      "why": "execFile gives the child a pipe, so outputMode picks JSON in the child even when the parent never asked for it."
+    }
+  ],
+  "notToured": [
+    {
+      "title": "Changelog entry for the new rule",
+      "path": "CHANGELOG.md"
+    },
+    {
+      "title": "Reference: the upgrade section and the output rules in full",
+      "path": "docs/reference.md"
+    },
+    {
+      "title": "The skill passes --json to export",
+      "path": "skills/pr-review-canvas/SKILL.md"
+    },
+    {
+      "title": "Unit tests for the text output of each command and describeImport",
+      "path": "src/commands.test.ts"
+    },
+    {
+      "title": "Upgrade tests: the handoff line and terminal output",
+      "path": "src/upgrade.test.ts"
+    },
+    {
+      "title": "Test fakes that now set io.json (also doctor-view.test.ts, release-06-adversarial.test.ts)",
+      "path": "src/review/doctor.test.ts"
+    }
+  ],
+  "generatedAt": "2026-09-29T16:10:48.101Z",
+  "generator": {
+    "agent": "claude",
+    "harness": "claude-code",
+    "attempts": 1,
+    "model": "claude-fable-5-1"
+  },
+  "source": "local",
+  "record": {
+    "touredBy": []
+  }
+}
