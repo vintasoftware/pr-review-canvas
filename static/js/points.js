@@ -233,11 +233,7 @@ export function applyPointStates(root, points, state, ctx) {
       continue
     }
     el.toggleAttribute('hidden', isSetAside(point, state))
-    refreshPointCommands(el, point, {
-      dismissed: state.dismissed[point.fingerprint] !== undefined,
-      state,
-      ...ctx,
-    })
+    refreshPointCommands(el, point, { state, ...ctx })
   }
   const open = openPoints(points, state)
   for (const counter of Array.from(root.querySelectorAll('.point-count'))) {
@@ -277,10 +273,12 @@ function replaceWithHtml(host, html) {
  * Draws a point's commands again when it has just joined the review or just left it, or when the
  * author reopened it and it can be settled again, wherever the point is on the page. Nothing else
  * is touched: a command that is mid-request keeps its state, because neither posting nor
- * dismissing changes whether the point is waiting in the review.
+ * dismissing changes whether the point is waiting in the review. The commands are always the ones
+ * of a point on the reader's list: the point is hidden while it is dismissed and shows again only
+ * once restored, and the dismissed list draws its own rows.
  * @param {Element} el the element that carries `data-point`
  * @param {Point} p
- * @param {{ dismissed: boolean, state: PrState, posted?: ReadonlyMap<string, string> }} ctx
+ * @param {{ state: PrState, posted?: ReadonlyMap<string, string> }} ctx
  * @returns {boolean} true when the commands were drawn again
  */
 export function refreshPointCommands(el, p, ctx) {
@@ -296,7 +294,6 @@ export function refreshPointCommands(el, p, ctx) {
   }
   const template = document.createElement('template')
   template.innerHTML = pointCommandsHtml(p, {
-    dismissed: ctx.dismissed,
     queued,
     ...(postedFor(p, ctx) === undefined ? {} : { postedUrl: postedFor(p, ctx) }),
   })
