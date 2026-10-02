@@ -279,7 +279,7 @@ function carriedMarkdown(basis: BasisSplit | undefined): string {
   return [
     `**Whole layers** — copy the layer with its title, rationale, decisions, checkByHand, tests, files, notes, folds, and annotations:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
     `**Single files of a re-judged layer** — the file is untouched, so its note, folds, and annotations still fit wherever you put the file:\n\n${files.length === 0 ? '_none_' : files.join('\n')}`,
-    `**Attention points** — repeat the kind, path, title, and audience exactly, so the point keeps its identity, any dismissal the reviewer made, and any resolution the author made. Use each point's printed current anchor; its code is unchanged, so the level and body still hold:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    `**Attention points** — repeat the kind, path, title, and audience exactly, so the point keeps its identity, any dismissal the reviewer made, and any resolution the author made. Use each point's printed current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level and body still hold unless a changed chunk contradicts them:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
   ].join('\n\n')
 }
 
@@ -308,7 +308,7 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
     .map(p => `- ${p.kind} on \`${p.path}\` — "${p.title}"`)
   return [
     `**Layers** — the head touched at least one of their files, so decide the grouping, the prose, and the anchors again:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
-    `**Attention points** — the code under them changed, or could not be compared; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    `**Attention points** — the code under them or a file they link to changed, or could not be compared; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
     '**The summary and the pull-request-wide risk** are always written again: they describe the whole change set, which the new commits changed.',
   ].join('\n\n')
 }

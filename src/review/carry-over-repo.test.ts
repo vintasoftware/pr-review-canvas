@@ -188,7 +188,13 @@ describe('carrying attention points by their lines against a real repository', (
   })
   afterEach(() => t.cleanup())
 
-  const point = (id: string, title: string, side: 'new' | 'old', line: number): Point => ({
+  const point = (
+    id: string,
+    title: string,
+    side: 'new' | 'old',
+    line: number,
+    body = 'Check it.'
+  ): Point => ({
     id,
     fingerprint: fingerprint({ kind: 'risk', path: 'src/app.ts', title }),
     origin: 'model',
@@ -199,8 +205,11 @@ describe('carrying attention points by their lines against a real repository', (
     path: 'src/app.ts',
     side,
     line,
-    body: 'Check it.',
+    body,
   })
+
+  // A point on an unchanged context line whose claim rests on code in another file.
+  const CALLER_BODY = 'Only [the other module](#line:src/other.ts:1) reads this.'
 
   /** A canvas of the basis commit, the one a later head's prepare builds on. */
   async function writeBasisCanvas(): Promise<void> {
@@ -225,7 +234,11 @@ describe('carrying attention points by their lines against a real repository', (
           })),
         },
       ],
-      points: [point('p-1', 'The rewritten line', 'new', 5), point('p-2', 'The deleted line', 'old', 3)],
+      points: [
+        point('p-1', 'The rewritten line', 'new', 5),
+        point('p-2', 'The deleted line', 'old', 3),
+        point('p-3', 'Read only by the other module', 'new', 2, CALLER_BODY),
+      ],
     }
     await t.ctx.canvases.write(canvas, artifact, {
       formatVersion: 1,
@@ -240,21 +253,22 @@ describe('carrying attention points by their lines against a real repository', (
     })
   }
 
-  async function split(head: string) {
+  async function split(head: string, basisSha = canvas) {
     const result = await prepare(
       t.ctx,
       { kind: 'refs', base: 'main', head },
       { force: false, log: () => undefined }
     )
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
-    expect(context.basis?.canvasSha).toBe(canvas)
+    expect(context.basis?.canvasSha).toBe(basisSha)
     return context.basis?.points.map(p => [p.title, p.status, p.headLines])
   }
 
-  it('carries both points past lines added above them, at their new lines', async () => {
+  it('carries every point past lines added above them, at their new lines', async () => {
     expect(await split(heads.shifted)).toEqual([
       ['The rewritten line', 'carried', { side: 'new', line: 7, endLine: 7 }],
       ['The deleted line', 'carried', { side: 'old', line: 3, endLine: 3 }],
+      ['Read only by the other module', 'carried', { side: 'new', line: 4, endLine: 4 }],
     ])
   })
 
@@ -262,6 +276,7 @@ describe('carrying attention points by their lines against a real repository', (
     expect(await split(heads.edited)).toEqual([
       ['The rewritten line', 're-judged', undefined],
       ['The deleted line', 'carried', { side: 'old', line: 3, endLine: 3 }],
+      ['Read only by the other module', 'carried', { side: 'new', line: 2, endLine: 2 }],
     ])
   })
 
@@ -269,10 +284,11 @@ describe('carrying attention points by their lines against a real repository', (
     expect((await split(heads.deleted))?.[0]).toEqual(['The rewritten line', 're-judged', undefined])
   })
 
-  it('carries both points by the file rule when the head leaves their file alone', async () => {
+  it('carries the points of an untouched file, but re-judges one whose link the head changed', async () => {
     expect(await split(heads.elsewhere)).toEqual([
       ['The rewritten line', 'carried', { side: 'new', line: 5, endLine: 5 }],
       ['The deleted line', 'carried', { side: 'old', line: 3, endLine: 3 }],
+      ['Read only by the other module', 're-judged', undefined],
     ])
   })
 
@@ -300,7 +316,11 @@ describe('carrying attention points by their lines against a real repository', (
             annotations: [],
           })),
         })),
-        points: [point('p-1', 'The rewritten line', 'new', 7), point('p-2', 'The deleted line', 'old', 3)],
+        points: [
+          point('p-1', 'The rewritten line', 'new', 7),
+          point('p-2', 'The deleted line', 'old', 3),
+          point('p-3', 'Read only by the other module', 'new', 4, CALLER_BODY),
+        ],
         generatedAt: '2026-09-10T12:00:00.000Z',
         basisCanvasSha: canvas,
       },
@@ -330,6 +350,18 @@ describe('carrying attention points by their lines against a real repository', (
     expect(context.basis?.points.map(p => [p.title, p.headLines])).toEqual([
       ['The rewritten line', { side: 'new', line: 8, endLine: 8 }],
       ['The deleted line', { side: 'old', line: 3, endLine: 3 }],
+      ['Read only by the other module', { side: 'new', line: 5, endLine: 5 }],
+    ])
+
+    // A second update that changes the linked file sends the linking point back, and only it.
+    await g(dir, 'checkout', '-q', '-b', 'shifted-caller', heads.shifted)
+    await write(dir, 'src/other.ts', 'export const other = 4\n')
+    await g(dir, 'commit', '-q', '-am', 'the other module changed')
+    const caller = await g(dir, 'rev-parse', 'HEAD')
+    expect((await split(caller, heads.shifted))?.map(([title, status]) => [title, status])).toEqual([
+      ['The rewritten line', 'carried'],
+      ['The deleted line', 'carried'],
+      ['Read only by the other module', 're-judged'],
     ])
   })
 })

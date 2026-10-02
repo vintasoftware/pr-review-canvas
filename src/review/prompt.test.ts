@@ -314,6 +314,30 @@ describe('renderPrompt', () => {
     expect(renderPrompt(context(), PATCHES, sources)).toContain('At most one layer has `kind: "other"`')
   })
 
+  it.each(['strict', 'surfacing'] as const)(
+    'tells the %s generator to decide a carried point again when a changed chunk contradicts it',
+    mode => {
+      const basis: NonNullable<GenerationContext['basis']> = {
+        canvasSha: 'e'.repeat(40),
+        reviewJsonPath: '/data/canvases/e/review.json',
+        files: { unchanged: [], changed: ['src/app.ts'], added: [], removed: [] },
+        layers: [],
+        points: [],
+      }
+      const prompt = renderPrompt(
+        context({
+          basis,
+          generation: { mode, maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
+        }),
+        PATCHES,
+        sources
+      ).replace(/\s+/g, ' ')
+      expect(prompt).toContain('Check each carried attention point against the changed chunks')
+      expect(prompt).toContain('A new title starts the point unresolved')
+      expect(prompt).toContain('a file they link to changed')
+    }
+  )
+
   it('lists a point carried by its lines under carry, with the lines it moved to', () => {
     const basis: NonNullable<GenerationContext['basis']> = {
       canvasSha: 'e'.repeat(40),
@@ -345,7 +369,7 @@ describe('renderPrompt', () => {
     )
     basis.points = []
     expect(renderPrompt(context({ basis }), PATCHES, sources)).toContain(
-      'current anchor; its code is unchanged, so the level and body still hold:\n\n_none_'
+      'current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level and body still hold unless a changed chunk contradicts them:\n\n_none_'
     )
     expect(() =>
       renderPrompt(context({ basis }), PATCHES, {

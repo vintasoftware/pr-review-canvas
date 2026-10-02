@@ -788,10 +788,18 @@ text, shown by the head diff with the same `+`, `-`, or context marker as before
 only moved up or down. `prepare` finds the block by a line-by-line match of the file's two versions
 on the point's side, and the prompt gives the lines the point now sits on.
 
+A carried point's body is copied word for word, so it must still be true of every file it links
+to. A point the generator wrote whose body links to a file the head changed or dropped, with a
+`#file:`, `#hunk:`, or `#line:` link, is decided again wherever it sits. A `#layer:` link does not
+count. A missing-test point is rebuilt from its layer's tests entry instead, so it follows that
+entry. The generator also checks each carried point against the changed chunks. When a chunk
+contradicts the point, for example a new call to a function the point says nothing calls, the
+generator drops it or rewrites it under a new title, and the new title starts it unresolved.
+
 Everything else is decided again. The summary and risk tags are always rewritten. A carried
 attention point keeps its kind, path, and title, so it keeps its fingerprint and any dismissal.
 The author's resolution of a carried point follows it into the new canvas; a point that is decided
-again comes back unresolved, because its code changed.
+again comes back unresolved, because its code or the code it links to changed.
 Review marks do not follow a point: they follow files and layers, by the rules below.
 
 The canvas records only which basis it came from. Your server decides which review marks follow,

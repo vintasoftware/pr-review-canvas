@@ -15,6 +15,13 @@
   reviewers still see it, and the self-review note still counts it. Restore a dismissed point to
   resolve it.
 
+### Incremental canvases
+
+- An attention point the generator wrote, whose body links to a file the new commits changed or
+  dropped, is decided again instead of being carried word for word with any resolution it had.
+- The update prompt tells the generator to check each carried point against the changed chunks,
+  and to drop or retitle one a chunk contradicts, so its old resolution does not follow.
+
 ## 0.6.1
 
 Changes since 0.6.0.
