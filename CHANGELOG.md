@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.6.2
+
+Changes since 0.6.1.
 
 ### AI Chat
 
