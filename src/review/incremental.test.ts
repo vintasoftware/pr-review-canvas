@@ -131,9 +131,55 @@ describe('splitBasis', () => {
     expect(status('Only [run](#line:src/app.ts:4) calls it.')).toBe('re-judged')
     expect(status('See [the change](#hunk:src/app.ts#1).')).toBe('re-judged')
     expect(status('See #file:src/app.ts.')).toBe('re-judged')
-    expect(status('See [the file](#file:src/never-there.ts).')).toBe('re-judged')
     // Its own untouched file, and a section of the canvas, are not code that moved.
     expect(status(`See [itself](#file:${elsewhere.path}) and [the layer](#layer:run-path).`)).toBe('carried')
+  })
+
+  it('re-judges a point whose body links into a file the head dropped', () => {
+    const basis = derivedOf(SYNTHETIC_DIFF)
+    const head: Derived = {
+      files: basis.files.filter(f => f.path !== 'src/gone.ts'),
+      patches: Object.fromEntries(Object.entries(basis.patches).filter(([key]) => key !== 'src_gone_ts')),
+    }
+    const delta = fileDelta(basis, head)
+    expect(delta.removed).toEqual(['src/gone.ts'])
+    const artifact = syntheticArtifact()
+    const model = artifact.points.find(p => p.origin === 'model')
+    if (model === undefined) {
+      throw new Error('fixture changed')
+    }
+    const status = (body: string) =>
+      splitBasis({ ...artifact, points: [{ ...model, path: 'src/new-name.ts', body }] }, delta, new Map())
+        .points[0]?.status
+    expect(status('Nothing calls it.')).toBe('carried')
+    expect(status('Only [the old module](#file:src/gone.ts) used it.')).toBe('re-judged')
+  })
+
+  it('leaves a missing-test point to its layer, since publish rebuilds it from the tests entry', () => {
+    const delta = fileDelta(derivedOf(SYNTHETIC_DIFF), derivedOf(TOUCHED_APP))
+    const artifact = syntheticArtifact()
+    const layer = artifact.layers[0]
+    const generated = artifact.points.find(p => p.origin === 'tests')
+    if (layer === undefined || generated === undefined) {
+      throw new Error('fixture changed')
+    }
+    // A layer of untouched files only, whose test note links into the changed file.
+    const gone = { path: 'src/gone.ts', hunks: ['src_gone_ts#1'], isTest: false, annotations: [] }
+    const body = 'The layer lists this behavior without a test. It calls [run](#line:src/app.ts:4).'
+    const split = (origin: 'model' | 'tests') =>
+      splitBasis(
+        {
+          ...artifact,
+          layers: [{ ...layer, files: [gone] }],
+          points: [{ ...generated, origin, path: 'src/gone.ts', body }],
+        },
+        delta,
+        new Map()
+      )
+    expect(split('tests').layers[0]?.status).toBe('carried')
+    expect(split('tests').points[0]?.status).toBe('carried')
+    // The same text written by the generator is its own claim, copied word for word.
+    expect(split('model').points[0]?.status).toBe('re-judged')
   })
 
   it('re-judges a point carried by its lines when its body links into its own changed file', () => {

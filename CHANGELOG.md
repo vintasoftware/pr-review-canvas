@@ -12,8 +12,8 @@
 
 ### Incremental canvases
 
-- An attention point whose body links to a file the new commits changed or dropped is decided
-  again, instead of being carried word for word with any resolution it had.
+- An attention point the generator wrote, whose body links to a file the new commits changed or
+  dropped, is decided again instead of being carried word for word with any resolution it had.
 - The update prompt tells the generator to check each carried point against the changed chunks,
   and to drop or retitle one a chunk contradicts, so its old resolution does not follow.
 

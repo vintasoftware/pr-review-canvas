@@ -71,11 +71,11 @@ The earlier canvas an incremental canvas is built from: the newest one generated
 _Avoid_: Parent canvas, carried-over canvas
 
 **Carried**:
-Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched. An attention point whose own lines are unchanged is carried even when they moved; only its line numbers follow them.
+Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched. An attention point whose own lines are unchanged is carried even when they moved; only its line numbers follow them. A point the generator wrote is carried only when every file its body links to is untouched too.
 _Avoid_: Cached, approved, still valid
 
 **Re-judged**:
-Content of the basis canvas that the head's diff touched, which the generator decides anew. It may come back the same, changed, or not at all.
+Content of the basis canvas that the head's diff touched, or a point the generator wrote whose body links to a file the head touched. The generator decides it anew. It may come back the same, changed, or not at all.
 _Avoid_: Invalidated, rejected, expired
 
 **Outdated canvas**:

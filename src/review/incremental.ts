@@ -53,23 +53,28 @@ export function fileDelta(basis: Derived, head: Derived): FileDelta {
 }
 
 /**
- * Whether every file a point's body links to is one the head left untouched. A carried point's body
- * is copied word for word, so it must still be true of the code it names: a link into a changed or
- * gone file may now point at other lines, or at code that no longer does what the body says. A
- * layer link names a section of the canvas, not code, so it does not count.
+ * Whether every file a point's body links to is one the head left untouched. The generator copies a
+ * carried point's body word for word, so it must still be true of the code it names: a link into a
+ * changed or gone file may now point at other lines, or at code that no longer does what the body
+ * says. A layer link names a section of the canvas, not code, so it does not count. A missing-test
+ * point is not copied: publish rebuilds it from its layer's tests entry, which carries with the
+ * layer, so only the generator's own points are checked.
  */
 function linksStand(point: Point, unchanged: ReadonlySet<string>): boolean {
-  return extractLinks(point.body).every(href => {
-    const link = parseLink(href)
-    return link === null || link.kind === 'layer' || unchanged.has(link.path)
-  })
+  return (
+    point.origin !== 'model' ||
+    extractLinks(point.body).every(href => {
+      const link = parseLink(href)
+      return link === null || link.kind === 'layer' || unchanged.has(link.path)
+    })
+  )
 }
 
 /**
  * The basis canvas divided in two. A layer is carried whole when the head touches none of its
  * files; otherwise the layer is re-judged, and only the files the head leaves alone keep their
- * note, folds, and annotations. A point is carried when every file its body links to is untouched,
- * and its own file is untouched too or `lineCarried` holds it: its file changed, but its own lines
+ * note, folds, and annotations. A point is carried when `linksStand` holds for it, and its own file
+ * is untouched too or `lineCarried` holds it: its file changed, but its own lines
  * did not (see `carriedPointLines`). A carried point keeps its title and so its fingerprint, and
  * with it any dismissal the reviewer made and any resolution the author made.
  */
