@@ -1,6 +1,13 @@
+:root {
+  /* The agent glyph on the launcher and on every ask command. */
+  --i-robot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 .9a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8ZM7.4 2.7h1.2V4H7.4ZM4.5 4h7A2.5 2.5 0 0 1 14 6.5v4a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 10.5v-4A2.5 2.5 0 0 1 4.5 4ZM5.8 6.6a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Zm4.4 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4ZM6 10.4h4v1.1H6ZM.4 7h1.1v3H.4Zm14.1 0h1.1v3h-1.1Z'/%3E%3C/svg%3E");
+}
+
 /* The launcher stands in for the chat at every width; the script hides it while the chat is up. */
 .chat-launcher {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   position: fixed;
   right: 20px;
   bottom: 20px;
@@ -14,6 +21,13 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+.chat-launcher::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: currentcolor;
+  mask: var(--i-robot) center / contain no-repeat;
 }
 .chat-launcher[hidden] {
   display: none;
