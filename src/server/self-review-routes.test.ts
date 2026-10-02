@@ -253,11 +253,13 @@ describe('settling an attention point', () => {
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toBeUndefined()
   })
 
-  it('refuses a point marked for the reviewer: its judgment is not the author’s to give', async () => {
+  it('settles a point marked for the reviewer, such as a false positive', async () => {
     t = await withCanvas()
     const res = await settle(t, '42', 'fp-1', { settled: true, reason: 'The spec says sum.' })
-    expect(res.status).toBe(400)
-    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toBeUndefined()
+    expect(res.status).toBe(200)
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled?.['fp-1']).toMatchObject({
+      reason: 'The spec says sum.',
+    })
   })
 
   it('refuses a login that did not write the pull request', async () => {

@@ -396,13 +396,13 @@ describe('publish', () => {
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.basisCanvasSha).toBe(basis)
   })
 
-  it('keeps the author’s settlements when the same commit is generated again, for the author points still there', async () => {
+  it('keeps the author’s settlements when the same commit is generated again, for the points still there', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     await publish(t.ctx, canvasDir, OPTS)
     const first = await t.ctx.canvases.readArtifact(HEAD_SHA)
     const kept = fingerprint({ kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' })
-    // A reviewer point takes no settlement, whatever a stored canvas says.
+    // A reviewer point keeps its settlement too: the author may resolve any point.
     const reviewer = fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' })
     const settlement = { reason: 'Nothing imports it.', at: '2026-09-10T12:00:00.000Z' }
     await t.ctx.canvases.revise(HEAD_SHA, {
@@ -411,7 +411,10 @@ describe('publish', () => {
       revisedAt: settlement.at,
     })
     await publish(t.ctx, canvasDir, OPTS)
-    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({ [kept]: settlement })
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({
+      [kept]: settlement,
+      [reviewer]: settlement,
+    })
   })
 
   it('regenerates over a canvas of a format it no longer reads, keeping no settlement from it', async () => {

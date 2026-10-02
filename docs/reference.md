@@ -443,7 +443,7 @@ assigned to its layer (`side` may also be `old`). Without an anchor, publish use
 changed row of the source matched by `testPath`, then falls back to the layer's first changed row.
 It never defaults to context. Optional `title` uses the point-title cap; otherwise the title is
 shortened at a word boundary. Published entries retain their title, audience, and anchor when
-carried, including older generated author points and their resolutions. Author and
+carried, including older generated points and their resolutions. Author and
 reviewer counts include these generated points, including counts reported for refs runs.
 
 For a small change set, one real layer is the default; optional Other is extra. A test whose
@@ -643,15 +643,16 @@ The author reads the canvas before asking for review. Every attention point name
 - **reviewer**: a trade-off to agree on or a risk to verify, which needs someone else's judgment.
 
 When the login that runs `pr-review serve` wrote the pull request, or the review is of local work,
-each author point has a **resolve** command. A reviewer point has none: the author's answer does not
-close a question that needs someone else's judgment, so it stays on the reviewer's list and the
-author can answer it in a comment instead. Write why the point needs no reviewer decision and click
-**resolve**. On a pull request, **also post the reason as a comment on this line** is checked by
-default; the reason then also appears as a review comment on the point's line.
+every attention point has a **resolve** command. Resolve an author point you can answer, or a
+reviewer point that does not apply, such as a false positive. Leave a reviewer point that needs
+someone else's judgment open; it stays on the reviewer's list. Write why the point needs no
+reviewer decision and click **resolve**. On a pull request, **also post the reason as a comment on
+this line** is checked by default; the reason then also appears as a review comment on the point's
+line.
 
-Self-review offers **resolve** and **reopen** for author points. **Dismiss** is available only
-in reviewer mode. Earlier personal dismissals do not hide points or count as resolutions in
-self-review.
+**Dismiss** is available to every reader, the author too. It hides the point from your own page
+only. It does not resolve the point: reviewers still see it, and the self-review note still counts
+it.
 
 A resolution is written into the canvas itself:
 
@@ -664,12 +665,11 @@ A resolution is written into the canvas itself:
 - **reopen** in that list takes a resolution back and shares the canvas again. A posted comment
   stays on the forge.
 - Regenerating the canvas for the same commit keeps each resolution whose point comes back with the
-  same kind, path, and title and is still an author point. An
-  [incremental canvas](#incremental-canvases) keeps the resolutions of the author points it
-  carries.
+  same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the
+  resolutions of the points it carries.
 
-Only the author can resolve, and only author points: the server refuses anyone else with
-`NOT_AUTHOR`, and a reviewer point with `BAD_REQUEST`. An outdated canvas offers no **resolve**:
+Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
+offers no **resolve**:
 regenerate it for the current head first.
 
 ### Comments and sign-off

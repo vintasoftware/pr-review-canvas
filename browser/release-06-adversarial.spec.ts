@@ -265,33 +265,25 @@ test('a failed settlement preserves the reason for retry', async ({ page, selfRe
   await expect(point).toBeHidden()
 })
 
-test('self-review ignores personal dismissals and offers only resolve for author points', async ({
+test('self-review offers dismiss as a personal hide that leaves every point unresolved', async ({
   page,
   selfReviewUrl,
 }) => {
   await page.goto(selfReviewUrl)
-  // Simulate marks saved by an earlier version, before self-review stopped offering dismiss.
-  for (const fingerprint of ['fp-1', 'fp-2', 'fp-3']) {
-    await page.evaluate(async fp => {
-      const response = await fetch(`/api/prs/42/points/${fp}/dismissed`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ dismissed: true }),
-      })
-      if (!response.ok) throw new Error(await response.text())
-    }, fingerprint)
-  }
-  await page.reload()
-  await expect(page.locator('.self-review-note')).toContainText('3 points are marked yours')
-  await expect(page.locator('[data-act="point-dismiss"]')).toHaveCount(0)
-  await expect(page.locator('[data-act="point-restore"]')).toHaveCount(0)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await expect(card.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
-  await page.keyboard.press(']')
-  await page.keyboard.press('d')
+  await card.locator('[data-act="point-dismiss"]').click()
+  await expect(card).toBeHidden()
+  const dismissed = page.locator('.dismissed-list')
+  await expect(dismissed.locator('.dismissed-line')).toContainText('1 dismissed')
+  await page.reload()
+  await expect(card).toBeHidden()
+  await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
+  await expect(page.locator('.self-review-note')).toContainText('1 point goes to the reviewer')
+  await dismissed.locator('[data-act="show-dismissed"]').click()
+  await dismissed.locator('[data-act="point-restore"]').click()
   await expect(card).toBeVisible()
-  await expect(page.locator('.dismissed-list')).toBeHidden()
-  await expect(page.locator('.self-review-note')).not.toContainText('Self-review done')
+  await expect(card.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
 })
 
 test('settings tabs are usable at a phone width', async ({ page, chatServer }) => {

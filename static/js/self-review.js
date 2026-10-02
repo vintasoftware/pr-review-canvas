@@ -1,6 +1,7 @@
 // @ts-check
 // Self-review on the page: the author settles attention points with a reason, and every reader
-// sees what the author settled and why. The renderers read the settled points from here rather
+// sees what the author settled and why. The author may settle any point, a reviewer point too: a
+// false positive needs no reviewer's judgment. The renderers read the settled points from here rather
 // than threading them through every card; `app.js` sets them once per render, and the review
 // session hands over each new set the server answers with.
 /** @typedef {import('./contract-types.js').Point} Point */
@@ -14,10 +15,6 @@ import { renderMarkdown } from './markdown.js'
 export const REASON_MAX = 600
 
 let selfReview = false
-/** Personal dismissals apply only in reviewer mode. */
-export function canDismissPoints() {
-  return !selfReview
-}
 /** Whether a settlement also updates the canvas comment reviewers load. */
 let sharesCanvas = true
 /** @type {Readonly<Record<string, Settlement>>} */
@@ -56,12 +53,11 @@ export function audiencePillHtml(p) {
 }
 
 /**
- * The settle command: for the author, on a point marked for the author that is not settled yet. A
- * reviewer point needs someone else's judgment, so the author's answer does not close it.
+ * The settle command: for the author, on any point that is not settled yet.
  * @param {Point} p
  */
 export function settleButtonHtml(p) {
-  return selfReview && p.audience === 'author' && settlementOf(p) === undefined
+  return selfReview && settlementOf(p) === undefined
     ? `<button class="cmd" type="button" data-act="point-settle" data-fingerprint="${esc(p.fingerprint)}">resolve</button>`
     : ''
 }
@@ -99,10 +95,9 @@ export function settledListHtml(points, ctx, expanded = false) {
       return []
     }
     const link = settlement.commentUrl === undefined ? '' : viewCommentHtml(settlement.commentUrl)
-    const reopen =
-      selfReview && p.audience === 'author'
-        ? `<button class="cmd" type="button" data-act="point-unsettle" data-fingerprint="${esc(p.fingerprint)}">reopen</button>`
-        : ''
+    const reopen = selfReview
+      ? `<button class="cmd" type="button" data-act="point-unsettle" data-fingerprint="${esc(p.fingerprint)}">reopen</button>`
+      : ''
     return [
       `<li class="finding"><span class="sq ${p.level}" role="img" aria-label="${p.level}"></span><div>` +
         `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
@@ -122,14 +117,16 @@ export function settledListHtml(points, ctx, expanded = false) {
 }
 
 /**
- * The author's note at the top of the overview: how many of their points are still open.
+ * The author's note at the top of the overview: how many points are still open. A personal
+ * dismissal does not answer a point, so the note counts every point the author has not settled.
  * Readers other than the author see nothing here.
- * @param {ReadonlyArray<Point>} open the points nobody set aside
+ * @param {ReadonlyArray<Point>} points every point on the canvas
  */
-export function selfReviewNoteHtml(open) {
+export function selfReviewNoteHtml(points) {
   if (!selfReview) {
     return '<p class="self-review-note" hidden></p>'
   }
+  const open = points.filter(p => settlementOf(p) === undefined)
   const yours = open.filter(p => p.audience === 'author').length
   const theirs = open.length - yours
   const lead =
@@ -141,7 +138,9 @@ export function selfReviewNoteHtml(open) {
     : 'it is written into this canvas'
   return (
     `<p class="self-review-note"><strong>${lead}</strong> ` +
-    (yours === 0 ? '' : `Resolve what you can answer now, with a reason; ${where}. `) +
+    (open.length === 0
+      ? ''
+      : `Resolve any point you can answer now, with a reason, including a reviewer point that does not apply; ${where}. `) +
     `${theirs} ${theirs === 1 ? 'point goes' : 'points go'} to the reviewer.</p>`
   )
 }
