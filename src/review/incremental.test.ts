@@ -117,6 +117,41 @@ describe('splitBasis', () => {
     // The title travels, so a carried point keeps its fingerprint and any dismissal with it.
     expect(split.points.map(p => p.title)).toEqual(syntheticArtifact().points.map(p => p.title))
   })
+
+  it('re-judges a point in an untouched file whose body links into a changed file', () => {
+    const delta = fileDelta(derivedOf(SYNTHETIC_DIFF), derivedOf(TOUCHED_APP))
+    const artifact = syntheticArtifact()
+    const elsewhere = artifact.points.find(p => p.path !== 'src/app.ts')
+    if (elsewhere === undefined) {
+      throw new Error('fixture changed')
+    }
+    const status = (body: string) =>
+      splitBasis({ ...artifact, points: [{ ...elsewhere, body }] }, delta, new Map()).points[0]?.status
+    expect(status('Nothing calls it.')).toBe('carried')
+    expect(status('Only [run](#line:src/app.ts:4) calls it.')).toBe('re-judged')
+    expect(status('See [the change](#hunk:src/app.ts#1).')).toBe('re-judged')
+    expect(status('See #file:src/app.ts.')).toBe('re-judged')
+    expect(status('See [the file](#file:src/never-there.ts).')).toBe('re-judged')
+    // Its own untouched file, and a section of the canvas, are not code that moved.
+    expect(status(`See [itself](#file:${elsewhere.path}) and [the layer](#layer:run-path).`)).toBe('carried')
+  })
+
+  it('re-judges a point carried by its lines when its body links into its own changed file', () => {
+    const delta = fileDelta(derivedOf(SYNTHETIC_DIFF), derivedOf(TOUCHED_APP))
+    const artifact = syntheticArtifact()
+    const onApp = artifact.points.find(p => p.path === 'src/app.ts')
+    if (onApp === undefined) {
+      throw new Error('fixture changed')
+    }
+    const at = { side: 'new' as const, line: 4, endLine: 4 }
+    const split = (body: string) => {
+      const point = { ...onApp, body }
+      return splitBasis({ ...artifact, points: [point] }, delta, new Map([[point, at]])).points[0]
+    }
+    expect(split('Check it.')).toMatchObject({ status: 'carried', headLines: at })
+    // The body is copied word for word, and the linked line may have moved with the edit.
+    expect(split('Check [the line](#line:src/app.ts:4).')).toMatchObject({ status: 're-judged' })
+  })
 })
 
 // The merge base holds a..h. The basis canvas's commit rewrites f; later heads edit around it.
