@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### AI Chat
+
+- **Ask** on an attention point is a button with a robot icon, as it is on a layer or file. The
+  **AI Chat** bubble wears the same icon.
+
 ### Self-review
 
 - The author can **resolve** any attention point, a reviewer point too, such as a false positive.

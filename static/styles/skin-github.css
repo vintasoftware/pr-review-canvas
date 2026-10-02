@@ -11,9 +11,9 @@
    a block.
 
    Buttons or links: a command that changes state or is the main verb of its block is a button
-   (approve, add to review, resolve, ask about a layer). One whose verb is universal is an icon
+   (approve, add to review, resolve, ask about a layer or a point). One whose verb is universal is an icon
    button (copy, ask about a file, settings). A light, reversible, or navigating one (a point's
-   ask, dismiss, reopen, view comment) stays a link.
+   dismiss, reopen, view comment) stays a link.
 
    Dark is GitHub's "dark dimmed": a softer grey-blue ground rather than the near-black one. */
 
@@ -107,7 +107,6 @@
 
   /* Octicons, drawn as masks so each one takes the text color of its button in both themes. */
   --i-copy: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z'/%3E%3Cpath d='M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z'/%3E%3C/svg%3E");
-  --i-comment: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z'/%3E%3C/svg%3E");
   --i-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z'/%3E%3C/svg%3E");
   --i-send: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M.989 8 .064 2.68a1.342 1.342 0 0 1 1.85-1.462l13.402 5.744a1.13 1.13 0 0 1 0 2.076L1.913 14.782a1.343 1.343 0 0 1-1.85-1.463L.99 8Zm.603-5.288L2.38 7.25h4.87a.75.75 0 0 1 0 1.5H2.38l-.788 4.538L13.929 8Z'/%3E%3C/svg%3E");
   --i-plus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z'/%3E%3C/svg%3E");
@@ -184,7 +183,7 @@
   }
 
   /* Buttons, GitHub's btn-sm. This list is the one place that decides which commands are buttons:
-   the header toolbar, sign-off, a point's verbs, the ask of a layer or file, the layer's last
+   the header toolbar, sign-off, a point's verbs, the ask of a layer, file, or point, the layer's last
    step, the author's resolve, and the "reviewed" toggles. */
   :is(
     .hdr-actions .cmd,
@@ -197,7 +196,7 @@
         [data-act='point-settle'],
         [data-act='settle-save']
       ),
-    :is(.layer-ctl, .file-h) .cmd[data-act='ask'],
+    :is(.layer-ctl, .file-h, .findings, .ifind) .cmd[data-act='ask'],
     .layer-end .cmd,
     .chk:has(input[data-reviewed-id])
   ) {
@@ -288,7 +287,6 @@
   }
   :is(.findings, .ifind)
     .cmd:is(
-      [data-act='ask'],
       [data-act='point-dismiss'],
       [data-act='point-restore'],
       [data-act='point-unsettle'],
@@ -313,7 +311,7 @@
     --icon: var(--i-plus);
   }
   .cmd[data-act='ask'] {
-    --icon: var(--i-comment);
+    --icon: var(--i-robot);
   }
   :is(.layer-end .cmd, [data-act='point-settle'], [data-act='settle-save']) {
     --icon: var(--i-check);
