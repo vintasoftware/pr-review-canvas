@@ -171,7 +171,7 @@ describe('splitBasis', () => {
         {
           ...artifact,
           layers: [{ ...layer, files: [gone] }],
-          points: [{ ...generated, origin, path: 'src/gone.ts', body }],
+          points: [{ ...generated, origin, path: 'src/gone.ts', side: 'old', line: 1, body }],
         },
         delta,
         new Map()

@@ -369,7 +369,7 @@ describe('renderPrompt', () => {
     )
     basis.points = []
     expect(renderPrompt(context({ basis }), PATCHES, sources)).toContain(
-      'current anchor; its code and every file its body links to are unchanged, so the level and body still hold unless a changed chunk contradicts them:\n\n_none_'
+      'current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level and body still hold unless a changed chunk contradicts them:\n\n_none_'
     )
     expect(() =>
       renderPrompt(context({ basis }), PATCHES, {
