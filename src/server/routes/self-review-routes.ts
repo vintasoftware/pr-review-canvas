@@ -74,14 +74,6 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
           'reload the page'
         )
       }
-      if (point.audience !== 'author') {
-        throw new AppError(
-          'BAD_REQUEST',
-          `"${point.title}" is for the reviewer to judge, so the author does not resolve it`,
-          400,
-          'answer it in a comment instead'
-        )
-      }
       let state = await ctx.state.read(key)
       let settlement: Settlement | undefined
       if (input.settled) {

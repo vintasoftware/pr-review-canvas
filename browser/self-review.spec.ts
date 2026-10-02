@@ -4,16 +4,16 @@ import { artifactToModelOutput, normalize } from '../src/review/normalize.js'
 import { SYNTHETIC_FILES, syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
-test('the author settles a point with a reason, reads it after a reload, and reopens it', async ({
+test('the author settles a reviewer point with a reason, reads it after a reload, and reopens it', async ({
   page,
   selfReviewUrl,
 }) => {
   await page.goto(selfReviewUrl)
-  await expect(page.locator('.self-review-note')).toContainText('3 points are marked yours')
+  await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
   const railCount = page.locator('nav.rail a[href="#overview"] .m')
   await expect(railCount).toHaveText('3 attention points')
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
-  await expect(card.locator('.pill.audience')).toHaveText('yours')
+  await expect(card.locator('.pill.audience')).toHaveText('reviewer')
   await card.locator('[data-act="point-settle"]').click()
   const box = card.locator('.settle-box')
   await expect(box.locator('textarea')).toBeFocused()
@@ -22,10 +22,11 @@ test('the author settles a point with a reason, reads it after a reload, and reo
   await expect(card).toBeHidden()
   await expect(page.locator('.toast')).toContainText('canvas comment is updated')
   await expect(railCount).toHaveText('2 attention points')
-  await expect(page.locator('.conversation')).toContainText('Not yet resolved by the author: 2')
+  await expect(page.locator('.conversation')).toContainText('For the reviewer: no open attention points')
 
   await page.reload()
-  await expect(page.locator('.conversation')).toContainText('Not yet resolved by the author: 2')
+  await expect(page.locator('.conversation')).toContainText('For the reviewer: no open attention points')
+  await expect(page.locator('.conversation')).toContainText('Resolved by the author: 1')
   const settled = page.locator('.settled-list')
   await expect(settled.locator('.dismissed-line')).toContainText('1 resolved by the author')
   await expect(card).toBeHidden()
@@ -37,9 +38,9 @@ test('the author settles a point with a reason, reads it after a reload, and reo
   await expect(railCount).toHaveText('3 attention points')
   await expect(card.locator('[data-act="point-settle"]')).toBeVisible()
   await expect(settled).toBeHidden()
-  await expect(page.locator('.conversation')).toContainText('Not yet resolved by the author: 3')
+  await expect(page.locator('.conversation')).toContainText('For the reviewer: 1 attention point to judge')
   await page.reload()
-  await expect(page.locator('.conversation')).toContainText('Not yet resolved by the author: 3')
+  await expect(page.locator('.conversation')).toContainText('For the reviewer: 1 attention point to judge')
 })
 
 test('completed self-review leaves only the done sentence and reviewer count', async ({
@@ -61,7 +62,7 @@ test('completed self-review leaves only the done sentence and reviewer count', a
   })
   await page.reload()
   await expect(page.locator('.self-review-note')).toHaveText(
-    'Self-review done: nothing marked yours is open. 0 points go to the reviewer.'
+    'Self-review done: nothing marked yours is open. 1 point goes to the reviewer.'
   )
 })
 

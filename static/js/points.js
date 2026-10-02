@@ -10,7 +10,6 @@ import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import {
   audiencePillHtml,
-  canDismissPoints,
   selfReviewNoteHtml,
   settleButtonHtml,
   settledListHtml,
@@ -38,9 +37,7 @@ export function pointsByLevel(points) {
  * @param {PrState | undefined} state
  */
 export function isSetAside(p, state) {
-  return (
-    (canDismissPoints() && state?.dismissed[p.fingerprint] !== undefined) || settlementOf(p) !== undefined
-  )
+  return state?.dismissed[p.fingerprint] !== undefined || settlementOf(p) !== undefined
 }
 
 /**
@@ -124,8 +121,10 @@ export function pointCommandsHtml(p, opts = {}) {
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}" title="Copy as Markdown">copy</button>` +
     sendCommandsHtml({ kind: 'point', id: p.id, postedUrl: opts.postedUrl, queued: opts.queued }) +
     askButtonHtml(pointContext(p)) +
-    settle +
-    (canDismissPoints() ? toggle : '') +
+    // The dismissed list is drawn again on every change, which would drop a reason being written
+    // there, so the author restores a dismissed point before resolving it.
+    (opts.dismissed ? '' : settle) +
+    toggle +
     '</span>'
   )
 }
@@ -193,7 +192,7 @@ export function pointCardHtml(p, ctx) {
 export function dismissedListHtml(points, state, ctx, expanded = false) {
   // A point the author settled is listed with its reason instead.
   const dismissed = points.filter(
-    p => canDismissPoints() && state.dismissed[p.fingerprint] !== undefined && settlementOf(p) === undefined
+    p => state.dismissed[p.fingerprint] !== undefined && settlementOf(p) === undefined
   )
   if (dismissed.length === 0) {
     return '<div class="dismissed-list" hidden></div>'
@@ -234,11 +233,7 @@ export function applyPointStates(root, points, state, ctx) {
       continue
     }
     el.toggleAttribute('hidden', isSetAside(point, state))
-    refreshPointCommands(el, point, {
-      dismissed: state.dismissed[point.fingerprint] !== undefined,
-      state,
-      ...ctx,
-    })
+    refreshPointCommands(el, point, { state, ...ctx })
   }
   const open = openPoints(points, state)
   for (const counter of Array.from(root.querySelectorAll('.point-count'))) {
@@ -254,7 +249,7 @@ export function applyPointStates(root, points, state, ctx) {
     settledListHtml(points, ctx, expandedIn(host, 'show-settled'))
   )
   replaceWithHtml(root.querySelector('.sevsum'), () => sevsumHtml(open, ctx.layers ?? []))
-  replaceWithHtml(root.querySelector('.self-review-note'), () => selfReviewNoteHtml(open))
+  replaceWithHtml(root.querySelector('.self-review-note'), () => selfReviewNoteHtml(points))
 }
 
 /**
@@ -278,10 +273,12 @@ function replaceWithHtml(host, html) {
  * Draws a point's commands again when it has just joined the review or just left it, or when the
  * author reopened it and it can be settled again, wherever the point is on the page. Nothing else
  * is touched: a command that is mid-request keeps its state, because neither posting nor
- * dismissing changes whether the point is waiting in the review.
+ * dismissing changes whether the point is waiting in the review. The commands are always the ones
+ * of a point on the reader's list: the point is hidden while it is dismissed and shows again only
+ * once restored, and the dismissed list draws its own rows.
  * @param {Element} el the element that carries `data-point`
  * @param {Point} p
- * @param {{ dismissed: boolean, state: PrState, posted?: ReadonlyMap<string, string> }} ctx
+ * @param {{ state: PrState, posted?: ReadonlyMap<string, string> }} ctx
  * @returns {boolean} true when the commands were drawn again
  */
 export function refreshPointCommands(el, p, ctx) {
@@ -297,7 +294,6 @@ export function refreshPointCommands(el, p, ctx) {
   }
   const template = document.createElement('template')
   template.innerHTML = pointCommandsHtml(p, {
-    dismissed: ctx.dismissed,
     queued,
     ...(postedFor(p, ctx) === undefined ? {} : { postedUrl: postedFor(p, ctx) }),
   })
