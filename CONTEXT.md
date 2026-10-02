@@ -37,11 +37,11 @@ The author's pass over their own canvas before asking for review, resolving the 
 _Avoid_: Self-approval, pre-review
 
 **Resolved point**:
-An author attention point answered with a reason saved in the canvas. It leaves the open-point list and stays readable with its reason for anyone loading that canvas.
+An attention point the author answered with a reason saved in the canvas. The author may resolve any point, a reviewer point too when it does not apply. It leaves the open-point list and stays readable with its reason for anyone loading that canvas.
 _Avoid_: Dismissed, approved, closed
 
 **Dismissal**:
-A reviewer's personal mark that hides an attention point from their own list. It does not answer the point for other readers or complete the author's self-review.
+A reader's personal mark that hides an attention point from their own list. Anyone may dismiss, the author too. It does not answer the point for other readers or complete the author's self-review.
 _Avoid_: Resolution, approval
 
 **Review progress**:

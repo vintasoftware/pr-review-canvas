@@ -94,7 +94,7 @@ export function renderOverview(bundle, ctx) {
   return (
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
     `<div class="panel-h"><h2 id="ov-h">Overview</h2>${artifact ? sevsumHtml(active, artifact.layers) : ''}</div>` +
-    `<div class="body">${artifact ? selfReviewNoteHtml(active) : ''}${summary}</div>` +
+    `<div class="body">${artifact ? selfReviewNoteHtml(artifact.points) : ''}${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
     (reviews.length

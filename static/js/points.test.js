@@ -245,15 +245,15 @@ describe('dismissed points', () => {
       throw new Error('no point element')
     }
     // Nothing changed, so the commands are left exactly as they are.
-    expect(refreshPointCommands(el, p, { dismissed: false, state })).toBe(false)
+    expect(refreshPointCommands(el, p, { state })).toBe(false)
 
     const queued = { ...state, pending: [draftFor(p)] }
-    expect(refreshPointCommands(el, p, { dismissed: false, state: queued })).toBe(true)
+    expect(refreshPointCommands(el, p, { state: queued })).toBe(true)
     expect(el.querySelector('.pill.pending')?.textContent).toBe('in your review')
-    expect(refreshPointCommands(el, p, { dismissed: false, state: queued })).toBe(false)
+    expect(refreshPointCommands(el, p, { state: queued })).toBe(false)
 
     // Taking the draft away puts both commands back.
-    expect(refreshPointCommands(el, p, { dismissed: false, state })).toBe(true)
+    expect(refreshPointCommands(el, p, { state })).toBe(true)
     expect([...el.querySelectorAll('button.cmd')].map(b => b.getAttribute('data-act'))).toEqual([
       null,
       'point-post',

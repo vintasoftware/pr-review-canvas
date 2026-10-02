@@ -34,12 +34,21 @@ describe('what a reader sees', () => {
     expect(audiencePillHtml(tests)).toContain('>yours<')
   })
 
-  it('offers settle only to the author, and only on an unsettled point', () => {
+  it('offers settle only to the author, on any unsettled point, a reviewer point too', () => {
     expect(settleButtonHtml(tests)).toBe('')
+    expect(settleButtonHtml(decide)).toBe('')
     setSelfReview(true, { [tests.fingerprint]: settlement })
     expect(settleButtonHtml(tests)).toBe('')
     expect(settleButtonHtml(debt)).toContain('data-act="point-settle"')
-    expect(settleButtonHtml(decide)).toBe('')
+    expect(settleButtonHtml(decide)).toContain('data-act="point-settle"')
+  })
+
+  it('lets the author reopen any settled point, a reviewer point too', () => {
+    setSelfReview(true, { [decide.fingerprint]: settlement })
+    document.body.innerHTML = settledListHtml(artifact.points, ctx)
+    expect(document.querySelector('[data-act="point-unsettle"]')?.getAttribute('data-fingerprint')).toBe(
+      decide.fingerprint
+    )
   })
 
   it('sets settled points aside with dismissed ones, and lists each once', () => {
@@ -58,22 +67,25 @@ describe('what a reader sees', () => {
     expect(document.querySelector('[data-act="point-unsettle"]')).toBeNull()
   })
 
-  it('ignores old personal dismissals in self-review without resolving reviewer points', () => {
+  it('keeps dismiss as a personal hide in self-review, which does not resolve the point', () => {
     const dismissed = {
       ...state,
       dismissed: Object.fromEntries(artifact.points.map(p => [p.fingerprint, { at: 'x' }])),
     }
     setSelfReview(true, { [tests.fingerprint]: settlement })
-    expect(openPoints(artifact.points, dismissed)).toEqual([decide, debt])
-    expect(dismissedListHtml(artifact.points, dismissed, ctx)).toContain('hidden')
-    expect(pointCommandsHtml(debt)).toContain('>resolve</button>')
-    expect(pointCommandsHtml(debt)).not.toContain('point-dismiss')
-    expect(pointCommandsHtml(decide)).not.toContain('point-dismiss')
-    expect(pointCommandsHtml(decide)).not.toContain('point-settle')
-    expect(selfReviewNoteHtml(openPoints(artifact.points, dismissed))).toContain('1 point is marked yours')
-    setSelfReview(false, {})
     expect(openPoints(artifact.points, dismissed)).toEqual([])
+    document.body.innerHTML = dismissedListHtml(artifact.points, dismissed, ctx)
+    expect(document.querySelector('.dismissed-line')?.textContent).toContain('2 dismissed')
+    expect(pointCommandsHtml(debt)).toContain('>resolve</button>')
     expect(pointCommandsHtml(debt)).toContain('point-dismiss')
+    expect(pointCommandsHtml(decide)).toContain('point-dismiss')
+    expect(pointCommandsHtml(decide)).toContain('point-settle')
+    // A dismissed row offers restore, and resolve only after it.
+    expect(pointCommandsHtml(decide, { dismissed: true })).toContain('point-restore')
+    expect(pointCommandsHtml(decide, { dismissed: true })).not.toContain('point-settle')
+    // The note counts what the author has not settled, dismissed or not.
+    expect(selfReviewNoteHtml(artifact.points)).toContain('1 point is marked yours')
+    expect(selfReviewNoteHtml(artifact.points)).toContain('1 point goes to the reviewer')
   })
 
   it('hides the settled list and the note when there is nothing to show', () => {
@@ -84,6 +96,7 @@ describe('what a reader sees', () => {
     expect(selfReviewNoteHtml([decide])).not.toContain('Resolve what you can')
     expect(selfReviewNoteHtml([decide])).toContain('1 point goes to the reviewer')
     expect(selfReviewNoteHtml([tests, decide, debt])).toContain('2 points are marked yours')
+    expect(selfReviewNoteHtml([tests, decide, debt])).toContain('including a reviewer point')
     expect(selfReviewNoteHtml([tests])).toContain('1 point is marked yours')
     expect(selfReviewNoteHtml([tests])).toContain('0 points go to the reviewer')
     expect(selfReviewNoteHtml([tests])).toContain('the canvas comment updates')

@@ -724,6 +724,60 @@ describe('attention points', () => {
     )
   })
 
+  it('offers resolve on a point the author dismissed only after it is restored', async () => {
+    const { root, calls } = setup({ selfReview: true, artifact })
+    const card = () => root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
+    expect(card()?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+    await flush()
+    expect(card()?.hasAttribute('hidden')).toBe(true)
+    const row = root.querySelector('.dismissed-list [data-fingerprint="fp-1"]')
+    expect(row?.querySelector('[data-act="point-settle"]')).toBeNull()
+    click(root, '.dismissed-list [data-act="point-restore"]')
+    await flush()
+    expect(calls).toEqual([
+      ['dismissed', { fingerprint: 'fp-1', dismissed: true }],
+      ['dismissed', { fingerprint: 'fp-1', dismissed: false }],
+    ])
+    expect(card()?.hasAttribute('hidden')).toBe(false)
+    expect(card()?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    expect(card()?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
+  })
+
+  it.each([false, true])(
+    'keeps the card and shows why when the server refuses a dismissal (self-review %s)',
+    async selfReview => {
+      const { root } = setup({
+        selfReview,
+        artifact,
+        api: { putDismissed: () => Promise.reject(new Error('offline')) },
+      })
+      click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+      await flush()
+      const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
+      expect(card?.hasAttribute('hidden')).toBe(false)
+      expect(card?.querySelector('.cmd-err')?.textContent).toBe('offline')
+    }
+  )
+
+  it.each([false, true])(
+    'restores a point queued from the dismissed list with its usual commands (self-review %s)',
+    async selfReview => {
+      const { root } = setup({ selfReview, artifact })
+      click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+      await flush()
+      click(root, '.dismissed-list [data-fingerprint="fp-1"] [data-act="point-queue"]')
+      await flush()
+      click(root, '.dismissed-list [data-act="point-restore"]')
+      await flush()
+      const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
+      expect(card?.hasAttribute('hidden')).toBe(false)
+      expect(card?.querySelector('[data-act="point-restore"]')).toBeNull()
+      expect(card?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
+      expect(card?.querySelector('[data-act="point-settle"]') !== null).toBe(selfReview)
+    }
+  )
+
   it('closes the reason box on cancel', () => {
     const { root } = setup({ selfReview: true, artifact: authored })
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')

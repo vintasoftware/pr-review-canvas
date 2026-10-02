@@ -1,5 +1,6 @@
 // Self-review: the author settles attention points before asking for review, and the canvas carries
-// each answer to every reviewer. A settled point leaves the reviewer's list; its reason stays.
+// each answer to every reviewer. Any point can be settled, a reviewer point too when it does not
+// apply. A settled point leaves the reviewer's list; its reason stays.
 import type { GenerationContext } from '../contract/generation-context.js'
 import type { Point, Pr, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
@@ -11,7 +12,7 @@ type Level = (typeof POINT_LEVELS)[number]
 export interface CanvasTally {
   /** Unsettled points for the reviewer, by level. */
   reviewer: Record<Level, number>
-  /** Unsettled points the author could still settle. */
+  /** Unsettled author points. */
   authorOpen: number
   settled: number
 }
@@ -94,8 +95,8 @@ export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean 
 
 /**
  * The settlements a newly generated canvas keeps. A settlement answers the code under its point, so
- * it survives only where that code survives: in a regeneration of the same commit, under an author
- * point with the same fingerprint; in an incremental run, under one the basis split carried.
+ * it survives only where that code survives: in a regeneration of the same commit, under a point
+ * with the same fingerprint; in an incremental run, under one the basis split carried.
  */
 export function carriedSettlements(
   artifact: Pick<ReviewArtifact, 'points'>,
@@ -107,8 +108,7 @@ export function carriedSettlements(
     } | null
   }
 ): Record<string, Settlement> {
-  // Only an author point takes a settlement: a point regenerated for the reviewer loses its answer.
-  const present = new Set(artifact.points.filter(p => p.audience === 'author').map(p => p.fingerprint))
+  const present = new Set(artifact.points.map(p => p.fingerprint))
   const carriedByBasis = new Set(
     (sources.basis?.split.points ?? []).filter(p => p.status === 'carried').map(p => fingerprint(p))
   )
