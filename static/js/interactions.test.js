@@ -744,6 +744,22 @@ describe('attention points', () => {
     expect(card()?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
   })
 
+  it.each([false, true])(
+    'keeps the card and shows why when the server refuses a dismissal (self-review %s)',
+    async selfReview => {
+      const { root } = setup({
+        selfReview,
+        artifact,
+        api: { putDismissed: () => Promise.reject(new Error('offline')) },
+      })
+      click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+      await flush()
+      const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
+      expect(card?.hasAttribute('hidden')).toBe(false)
+      expect(card?.querySelector('.cmd-err')?.textContent).toBe('offline')
+    }
+  )
+
   it('closes the reason box on cancel', () => {
     const { root } = setup({ selfReview: true, artifact: authored })
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')

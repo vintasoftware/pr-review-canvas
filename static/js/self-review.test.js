@@ -34,14 +34,13 @@ describe('what a reader sees', () => {
     expect(audiencePillHtml(tests)).toContain('>yours<')
   })
 
-  it('offers settle only to the author, on any point neither settled nor dismissed', () => {
-    expect(settleButtonHtml(tests, false)).toBe('')
-    expect(settleButtonHtml(decide, false)).toBe('')
+  it('offers settle only to the author, on any unsettled point, a reviewer point too', () => {
+    expect(settleButtonHtml(tests)).toBe('')
+    expect(settleButtonHtml(decide)).toBe('')
     setSelfReview(true, { [tests.fingerprint]: settlement })
-    expect(settleButtonHtml(tests, false)).toBe('')
-    expect(settleButtonHtml(debt, false)).toContain('data-act="point-settle"')
-    expect(settleButtonHtml(decide, false)).toContain('data-act="point-settle"')
-    expect(settleButtonHtml(decide, true)).toBe('')
+    expect(settleButtonHtml(tests)).toBe('')
+    expect(settleButtonHtml(debt)).toContain('data-act="point-settle"')
+    expect(settleButtonHtml(decide)).toContain('data-act="point-settle"')
   })
 
   it('lets the author reopen any settled point, a reviewer point too', () => {

@@ -115,13 +115,15 @@ export function pointCommandsHtml(p, opts = {}) {
   const toggle = opts.dismissed
     ? `<button class="cmd" type="button" data-act="point-restore" data-fingerprint="${fp}">restore</button>`
     : `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`
-  const settle = settleButtonHtml(p, opts.dismissed === true)
+  const settle = settleButtonHtml(p)
   return (
     `<span class="tbtns" data-queued="${opts.queued === true ? '1' : '0'}" data-settleable="${settle === '' ? '0' : '1'}">` +
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}" title="Copy as Markdown">copy</button>` +
     sendCommandsHtml({ kind: 'point', id: p.id, postedUrl: opts.postedUrl, queued: opts.queued }) +
     askButtonHtml(pointContext(p)) +
-    settle +
+    // The dismissed list is drawn again on every change, which would drop a reason being written
+    // there, so the author restores a dismissed point before resolving it.
+    (opts.dismissed ? '' : settle) +
     toggle +
     '</span>'
   )
@@ -284,7 +286,7 @@ function replaceWithHtml(host, html) {
 export function refreshPointCommands(el, p, ctx) {
   const tbtns = el.querySelector('.tbtns')
   const queued = queuedFor(p, ctx)
-  const settleable = settleButtonHtml(p, ctx.dismissed) !== ''
+  const settleable = settleButtonHtml(p) !== ''
   if (
     tbtns === null ||
     ((tbtns.getAttribute('data-queued') === '1') === queued &&
