@@ -7,7 +7,8 @@
 - The author can **resolve** any attention point, a reviewer point too, such as a false positive.
   Before, a reviewer point had no **resolve**, and the author could only answer it in a comment.
 - **Dismiss** is available in self-review as a personal hide. It does not resolve the point:
-  reviewers still see it, and the self-review note still counts it.
+  reviewers still see it, and the self-review note still counts it. Restore a dismissed point to
+  resolve it.
 
 ## 0.6.1
 

@@ -34,13 +34,14 @@ describe('what a reader sees', () => {
     expect(audiencePillHtml(tests)).toContain('>yours<')
   })
 
-  it('offers settle only to the author, on any unsettled point, a reviewer point too', () => {
-    expect(settleButtonHtml(tests)).toBe('')
-    expect(settleButtonHtml(decide)).toBe('')
+  it('offers settle only to the author, on any point neither settled nor dismissed', () => {
+    expect(settleButtonHtml(tests, false)).toBe('')
+    expect(settleButtonHtml(decide, false)).toBe('')
     setSelfReview(true, { [tests.fingerprint]: settlement })
-    expect(settleButtonHtml(tests)).toBe('')
-    expect(settleButtonHtml(debt)).toContain('data-act="point-settle"')
-    expect(settleButtonHtml(decide)).toContain('data-act="point-settle"')
+    expect(settleButtonHtml(tests, false)).toBe('')
+    expect(settleButtonHtml(debt, false)).toContain('data-act="point-settle"')
+    expect(settleButtonHtml(decide, false)).toContain('data-act="point-settle"')
+    expect(settleButtonHtml(decide, true)).toBe('')
   })
 
   it('lets the author reopen any settled point, a reviewer point too', () => {
@@ -80,6 +81,9 @@ describe('what a reader sees', () => {
     expect(pointCommandsHtml(debt)).toContain('point-dismiss')
     expect(pointCommandsHtml(decide)).toContain('point-dismiss')
     expect(pointCommandsHtml(decide)).toContain('point-settle')
+    // A dismissed row offers restore, and resolve only after it.
+    expect(pointCommandsHtml(decide, { dismissed: true })).toContain('point-restore')
+    expect(pointCommandsHtml(decide, { dismissed: true })).not.toContain('point-settle')
     // The note counts what the author has not settled, dismissed or not.
     expect(selfReviewNoteHtml(artifact.points)).toContain('1 point is marked yours')
     expect(selfReviewNoteHtml(artifact.points)).toContain('1 point goes to the reviewer')
@@ -90,13 +94,10 @@ describe('what a reader sees', () => {
     expect(selfReviewNoteHtml(artifact.points)).toContain('hidden')
     setSelfReview(true, {})
     expect(selfReviewNoteHtml([decide])).toContain('Self-review done')
-    expect(selfReviewNoteHtml([decide])).toContain('including a reviewer point')
+    expect(selfReviewNoteHtml([decide])).not.toContain('Resolve what you can')
     expect(selfReviewNoteHtml([decide])).toContain('1 point goes to the reviewer')
-    setSelfReview(true, { [decide.fingerprint]: settlement })
-    expect(selfReviewNoteHtml([decide])).not.toContain('Resolve any point')
-    expect(selfReviewNoteHtml([decide])).toContain('0 points go to the reviewer')
-    setSelfReview(true, {})
     expect(selfReviewNoteHtml([tests, decide, debt])).toContain('2 points are marked yours')
+    expect(selfReviewNoteHtml([tests, decide, debt])).toContain('including a reviewer point')
     expect(selfReviewNoteHtml([tests])).toContain('1 point is marked yours')
     expect(selfReviewNoteHtml([tests])).toContain('0 points go to the reviewer')
     expect(selfReviewNoteHtml([tests])).toContain('the canvas comment updates')

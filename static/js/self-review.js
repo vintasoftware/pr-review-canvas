@@ -53,11 +53,14 @@ export function audiencePillHtml(p) {
 }
 
 /**
- * The settle command: for the author, on any point that is not settled yet.
+ * The settle command: for the author, on any point that is neither settled nor dismissed. The
+ * dismissed list is drawn again on every change, which would drop a reason being written there, so
+ * the author restores a dismissed point before resolving it.
  * @param {Point} p
+ * @param {boolean} dismissed whether this reader dismissed the point
  */
-export function settleButtonHtml(p) {
-  return selfReview && settlementOf(p) === undefined
+export function settleButtonHtml(p, dismissed) {
+  return selfReview && !dismissed && settlementOf(p) === undefined
     ? `<button class="cmd" type="button" data-act="point-settle" data-fingerprint="${esc(p.fingerprint)}">resolve</button>`
     : ''
 }
@@ -138,9 +141,9 @@ export function selfReviewNoteHtml(points) {
     : 'it is written into this canvas'
   return (
     `<p class="self-review-note"><strong>${lead}</strong> ` +
-    (open.length === 0
+    (yours === 0
       ? ''
-      : `Resolve any point you can answer now, with a reason, including a reviewer point that does not apply; ${where}. `) +
+      : `Resolve what you can answer now with a reason, including a reviewer point that does not apply; ${where}. `) +
     `${theirs} ${theirs === 1 ? 'point goes' : 'points go'} to the reviewer.</p>`
   )
 }

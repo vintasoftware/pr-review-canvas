@@ -724,6 +724,26 @@ describe('attention points', () => {
     )
   })
 
+  it('offers resolve on a point the author dismissed only after it is restored', async () => {
+    const { root, calls } = setup({ selfReview: true, artifact })
+    const card = () => root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
+    expect(card()?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+    await flush()
+    expect(card()?.hasAttribute('hidden')).toBe(true)
+    const row = root.querySelector('.dismissed-list [data-fingerprint="fp-1"]')
+    expect(row?.querySelector('[data-act="point-settle"]')).toBeNull()
+    click(root, '.dismissed-list [data-act="point-restore"]')
+    await flush()
+    expect(calls).toEqual([
+      ['dismissed', { fingerprint: 'fp-1', dismissed: true }],
+      ['dismissed', { fingerprint: 'fp-1', dismissed: false }],
+    ])
+    expect(card()?.hasAttribute('hidden')).toBe(false)
+    expect(card()?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    expect(card()?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
+  })
+
   it('closes the reason box on cancel', () => {
     const { root } = setup({ selfReview: true, artifact: authored })
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')

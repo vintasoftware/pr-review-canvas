@@ -51,6 +51,7 @@ test('completed self-review leaves only the done sentence and reviewer count', a
   await page.evaluate(async () => {
     const bundle = await (await fetch('/api/prs/42')).json()
     for (const point of bundle.artifact.points) {
+      if (point.audience !== 'author') continue
       const answer = await fetch(`/api/prs/42/points/${point.fingerprint}/settled`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -61,7 +62,7 @@ test('completed self-review leaves only the done sentence and reviewer count', a
   })
   await page.reload()
   await expect(page.locator('.self-review-note')).toHaveText(
-    'Self-review done: nothing marked yours is open. 0 points go to the reviewer.'
+    'Self-review done: nothing marked yours is open. 1 point goes to the reviewer.'
   )
 })
 

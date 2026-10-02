@@ -12,7 +12,7 @@ type Level = (typeof POINT_LEVELS)[number]
 export interface CanvasTally {
   /** Unsettled points for the reviewer, by level. */
   reviewer: Record<Level, number>
-  /** Unsettled points the author could still settle. */
+  /** Unsettled author points. */
   authorOpen: number
   settled: number
 }

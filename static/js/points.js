@@ -115,7 +115,7 @@ export function pointCommandsHtml(p, opts = {}) {
   const toggle = opts.dismissed
     ? `<button class="cmd" type="button" data-act="point-restore" data-fingerprint="${fp}">restore</button>`
     : `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`
-  const settle = settleButtonHtml(p)
+  const settle = settleButtonHtml(p, opts.dismissed === true)
   return (
     `<span class="tbtns" data-queued="${opts.queued === true ? '1' : '0'}" data-settleable="${settle === '' ? '0' : '1'}">` +
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}" title="Copy as Markdown">copy</button>` +
@@ -284,7 +284,7 @@ function replaceWithHtml(host, html) {
 export function refreshPointCommands(el, p, ctx) {
   const tbtns = el.querySelector('.tbtns')
   const queued = queuedFor(p, ctx)
-  const settleable = settleButtonHtml(p) !== ''
+  const settleable = settleButtonHtml(p, ctx.dismissed) !== ''
   if (
     tbtns === null ||
     ((tbtns.getAttribute('data-queued') === '1') === queued &&

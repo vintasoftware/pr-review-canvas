@@ -652,7 +652,7 @@ line.
 
 **Dismiss** is available to every reader, the author too. It hides the point from your own page
 only. It does not resolve the point: reviewers still see it, and the self-review note still counts
-it.
+it. To resolve a point you dismissed, **restore** it first.
 
 A resolution is written into the canvas itself:
 
