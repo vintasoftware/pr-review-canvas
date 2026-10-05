@@ -910,7 +910,9 @@ do not have to run the skill in Claude Code or Codex:
   writes it again from a blank page.
 
 The dialog names the agent and says whether publishing shares the canvas on the PR or MR. Click
-**start**. The job runs in the server, so you can close the dialog or reload the page; while it
+**start**. When publishing would share it, the server first checks that `gh` or `glab` is logged
+in with an account that can comment, and refuses with the login command to run, so no agent time
+goes into a canvas that could not be shared. Local reviews, and sharing turned off, need no login. The job runs in the server, so you can close the dialog or reload the page; while it
 runs, the header command reads **generating** with the elapsed time and opens the dialog again.
 The dialog shows the phase, the latest tool calls of the agent, and the problems publish named on
 each repair attempt. **stop** cancels the agent. When the canvas is published, the page loads it.

@@ -1,5 +1,7 @@
+import { buildCanvasZip } from '../src/canvas/zip.js'
 import { artifactToModelOutput } from '../src/review/normalize.js'
-import { syntheticArtifact } from '../src/testing/synthetic.js'
+import { TEST_REPO } from '../src/testing/fakes.js'
+import { BASE_SHA, HEAD_SHA, syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 const MODEL = JSON.stringify(artifactToModelOutput(syntheticArtifact()))
@@ -70,6 +72,73 @@ test('shows a running generation on the header command and stops it', async ({ p
   await expect(dialog.locator('[data-gen="again"]')).toBeVisible()
   await dialog.locator('[data-gen="again"]').click()
   await expect(dialog.locator('h2')).toHaveText('Generate the canvas')
+})
+
+/** A canvas zip of PR 42 at its head, as a teammate would attach it. */
+function canvasZip(): { name: string; mimeType: string; buffer: Buffer } {
+  const artifact = syntheticArtifact()
+  const bytes = buildCanvasZip(
+    {
+      formatVersion: 1,
+      tool: { name: 'pr-review', version: '0.1.0' },
+      repo: TEST_REPO,
+      prNumber: 42,
+      headSha: HEAD_SHA,
+      mergeBaseSha: BASE_SHA,
+      baseRef: 'main',
+      headRef: 'feat/b',
+      generatedAt: artifact.generatedAt,
+      generator: artifact.generator,
+    },
+    artifact
+  )
+  return {
+    name: `pr-42-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`,
+    mimeType: 'application/zip',
+    buffer: Buffer.from(bytes),
+  }
+}
+
+test('imports a canvas zip on the empty screen that offers generation', async ({ page, chatServer }) => {
+  const server = await chatServer({ noCanvas: true })
+  await page.goto(server.url)
+  await expect(page.locator('#generate-start')).toBeVisible()
+  await expect(page.locator('#regenerate')).toHaveText('generate')
+  await page.locator('#zip').setInputFiles(canvasZip())
+  await expect(page.locator('section.layer').first()).toBeVisible()
+  // The imported canvas is current, so the header command now regenerates it.
+  await expect(page.locator('#regenerate')).toHaveText('regenerate')
+})
+
+test('imports a canvas zip while a generation runs, and keeps showing the run', async ({
+  page,
+  chatServer,
+}) => {
+  const server = await chatServer({
+    noCanvas: true,
+    runner: {
+      delayMs: 4000,
+      script: [
+        { type: 'chunk', text: MODEL },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    },
+  })
+  await page.goto(server.url)
+  await page.locator('#generate-start').click()
+  const dialog = page.locator('#generate-dialog')
+  await dialog.locator('[data-gen="start"]').click()
+  await expect(dialog.locator('h2')).toHaveText('The agent is writing the canvas')
+  await dialog.locator('button[value="close"]').click()
+
+  await page.locator('#zip').setInputFiles(canvasZip())
+  await expect(page.locator('section.layer').first()).toBeVisible()
+  // The page drew a new header; the run is still on it, and its dialog still opens from there.
+  await expect(page.locator('#regenerate')).toContainText('generating')
+  await page.locator('#regenerate').click()
+  await dialog.locator('[data-gen="stop"]').click()
+  await expect(dialog.locator('h2')).toHaveText('Generation stopped', { timeout: 10_000 })
+  await expect(page.locator('#regenerate')).toHaveText('regenerate')
 })
 
 test('opens the generation dialog from the home page form', async ({ page, chatServer }) => {

@@ -247,6 +247,12 @@ describe('header', () => {
     // With an agent, the header generates the first canvas; without one, it has nothing to regenerate.
     expect(document.querySelector('#regenerate')?.textContent).toBe('generate')
     expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
+    document.body.innerHTML = renderHeader(
+      bundle({ status: 'missing', artifact: undefined, chat: { enabled: false, acpx: false } }),
+      { host: 'h', theme: 'dark', skin: 'github', now: NOW }
+    )
+    expect(document.querySelector('#regenerate')?.textContent).toBe('regenerate')
+    expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(true)
     expect(document.querySelector('.touches')).toBeNull()
     expect(document.querySelector('.progress')).toBeNull()
     expect(document.querySelector('#theme-toggle')?.textContent).toBe('theme: dark')

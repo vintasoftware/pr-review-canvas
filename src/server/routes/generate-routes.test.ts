@@ -1,10 +1,12 @@
 // @vitest-environment node
 // The generate routes through Hono: start, status, stop, and the refusals before a job starts.
+import { writeFile } from 'node:fs/promises'
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ErrorEnvelope } from '../../contract/api.js'
+import type { Capabilities, ErrorEnvelope } from '../../contract/api.js'
 import type { GenerationJob, GenerationResponse } from '../../contract/generation.js'
 import { GenerationBusyError, type GenerationManager } from '../../generate/generation-manager.js'
+import { gitlabHost } from '../../host/host.js'
 import { DEFAULT_PROJECT_CONFIG } from '../../project-config.js'
 import { artifactToModelOutput } from '../../review/normalize.js'
 import { createFakeRunner } from '../../testing/fake-runner.js'
@@ -37,6 +39,8 @@ afterEach(async () => {
 
 async function context(opts: { chat?: boolean; acpx?: string | null } = {}): Promise<TestContext> {
   t = await makeTestContext({
+    // A host CLI that is logged in, so a PR's canvas could be shared.
+    gh: ghFor42(),
     runner: createFakeRunner({ acpxVersion: opts.acpx === undefined ? '0.19.4' : opts.acpx }),
     projectConfig: {
       config: { ...DEFAULT_PROJECT_CONFIG, chat: { enabled: opts.chat ?? true } },
@@ -136,6 +140,87 @@ describe('generate routes', () => {
       message: 'acpx is not installed',
     })
     expect(manager.start).not.toHaveBeenCalled()
+  })
+
+  describe('the host login a shared canvas needs', () => {
+    const start = (app: Hono, key: string | number = 42) =>
+      app.request(`/api/prs/${key}/generate`, { method: 'POST', headers: POST, body: '{}' })
+
+    /** The capability probe, answering what the test says; `refreshes` counts the fresh reads. */
+    function probe(caps: Capabilities): { refreshes: number } {
+      const seen = { refreshes: 0 }
+      t.ctx.capabilities = {
+        get: async opts => {
+          seen.refreshes += opts?.refresh === true ? 1 : 0
+          return caps
+        },
+      }
+      return seen
+    }
+
+    it('refuses before any agent time when the host CLI is not logged in', async () => {
+      await context()
+      const seen = probe({ canComment: false, tokenKind: 'unknown', login: null })
+      const manager = fakeManager()
+      const res = await start(appWith(manager))
+      expect(res.status).toBe(401)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'GH_UNAUTHENTICATED',
+        message: 'gh is not logged in, so the canvas could not be shared on the PR',
+        hint: 'run `gh auth login` in a terminal, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+      })
+      expect(manager.start).not.toHaveBeenCalled()
+      // The probe is read fresh, so a login made since the page loaded counts.
+      expect(seen.refreshes).toBe(1)
+    })
+
+    it('names the GitLab login on a GitLab project', async () => {
+      t = await makeTestContext({ host: gitlabHost('gitlab.com'), runner: createFakeRunner() })
+      probe({ canComment: false, tokenKind: 'unknown', login: null })
+      const res = await start(appWith(fakeManager()))
+      expect(((await res.json()) as ErrorEnvelope).error).toMatchObject({
+        code: 'GLAB_UNAUTHENTICATED',
+        message: 'glab is not logged in, so the canvas could not be shared on the MR',
+      })
+    })
+
+    it('refuses a login that cannot comment, with why and what to do', async () => {
+      await context()
+      probe({
+        canComment: false,
+        tokenKind: 'classic',
+        login: 'octocat',
+        reason: 'this token has no repo scope',
+        hint: 'gh auth refresh -h github.com -s repo',
+      })
+      const res = await start(appWith(fakeManager()))
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'COMMENT_FORBIDDEN',
+        message: 'octocat cannot comment on acme/widgets: this token has no repo scope',
+        hint: 'gh auth refresh -h github.com -s repo, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+      })
+      probe({ canComment: false, tokenKind: 'classic', login: 'octocat' })
+      expect(((await (await start(appWith(fakeManager()))).json()) as ErrorEnvelope).error).toMatchObject({
+        message: 'octocat cannot comment on acme/widgets',
+        hint: 'log in with an account that can comment, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+      })
+    })
+
+    it('lets through a login whose rights the probe cannot read', async () => {
+      await context()
+      probe({ canComment: 'unknown', tokenKind: 'fine-grained', login: 'octocat' })
+      expect((await start(appWith(fakeManager()))).status).toBe(202)
+    })
+
+    it('needs no login for a local review, or with sharing off', async () => {
+      await context()
+      const seen = probe({ canComment: false, tokenKind: 'unknown', login: null })
+      expect((await start(appWith(fakeManager()), 'uncommitted')).status).toBe(202)
+      await writeFile(t.ctx.settings.file, 'canvasComment: false\n')
+      expect((await start(appWith(fakeManager()), 42)).status).toBe(202)
+      expect(seen.refreshes).toBe(0)
+    })
   })
 
   it('stops a job and answers where it is', async () => {

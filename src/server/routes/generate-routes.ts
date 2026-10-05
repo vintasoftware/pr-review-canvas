@@ -2,7 +2,11 @@
 // these routes do not exist when the project config turns chat off, because both put an agent in
 // the loop.
 import { Hono, type MiddlewareHandler } from 'hono'
+import type { ErrorCode } from '../../contract/api.js'
 import { GenerateInputSchema, type GenerationResponse } from '../../contract/generation.js'
+import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
+import { resolveSharing } from '../../contract/settings.js'
+import { CLI_INFO, type HostCli } from '../../host/client.js'
 import {
   createGenerationManager,
   GenerationBusyError,
@@ -36,6 +40,46 @@ export function createContextGeneration(ctx: AppContext): GenerationManager {
     log: ctx.log,
     now: ctx.now,
   })
+}
+
+/** The code a logged-out host CLI answers with, per CLI. */
+const UNAUTHENTICATED: Record<HostCli, ErrorCode> = { gh: 'GH_UNAUTHENTICATED', glab: 'GLAB_UNAUTHENTICATED' }
+
+/**
+ * Refuses a generation whose canvas could not be shared, before minutes of agent time go into
+ * it: publish shares a pull request's canvas with the host CLI's login. The probe is read fresh,
+ * so a login made since the page loaded counts. A login whose rights the probe cannot read (a
+ * fine-grained token) is let through, as publish lets the host decide. Local reviews and a
+ * project or reader with sharing off post nothing, so they need no login.
+ */
+export async function requireSharingLogin(ctx: AppContext, key: ReviewKey): Promise<void> {
+  if (isLocalKey(key)) {
+    return
+  }
+  const sharing = resolveSharing(ctx.projectConfig.config.sharing, await ctx.settings.read())
+  if (!sharing.canvasComment) {
+    return
+  }
+  const { host, repo } = ctx.config
+  const caps = await ctx.capabilities.get({ refresh: true })
+  const off = 'or turn sharing off with `canvasComment: false` in .pr-review/settings.yml'
+  if (caps.login === null) {
+    const { cli } = host.cli
+    throw new AppError(
+      UNAUTHENTICATED[cli],
+      `${cli} is not logged in, so the canvas could not be shared on the ${host.nounShort}`,
+      401,
+      `run \`${CLI_INFO[cli].loginCommand}\` in a terminal, ${off}`
+    )
+  }
+  if (caps.canComment === false) {
+    throw new AppError(
+      'COMMENT_FORBIDDEN',
+      `${caps.login} cannot comment on ${repo.owner}/${repo.name}${caps.reason === undefined ? '' : `: ${caps.reason}`}`,
+      403,
+      `${caps.hint ?? 'log in with an account that can comment'}, ${off}`
+    )
+  }
 }
 
 export function generateRoutes(
@@ -90,6 +134,7 @@ export function generateRoutes(
         'install it with `npm install -g acpx@latest`, or run the skill from Claude Code or Codex'
       )
     }
+    await requireSharingLogin(ctx, key)
     try {
       const body: GenerationResponse = { job: await generation.start(key, input.data) }
       return c.json(body, 202)

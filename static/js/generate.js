@@ -7,7 +7,7 @@
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
 /** @typedef {import('./contract-types.js').GenerationJob} GenerationJob */
 /** @typedef {import('./contract-types.js').GenerationResponse} GenerationResponse */
-import { fetchJson } from './api.js'
+import { ApiError, fetchJson } from './api.js'
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
 
@@ -105,11 +105,12 @@ function skillFallbackHtml(command) {
 }
 
 /**
- * The screen that starts a run.
+ * The screen that starts a run, with why the server refused the last start when it did.
  * @param {PrBundle} bundle
+ * @param {{ message: string, hint?: string } | null} [refused]
  * @returns {string}
  */
-export function generationStartHtml(bundle) {
+export function generationStartHtml(bundle, refused = null) {
   const mode = generationMode(bundle)
   const agent = bundle.chat.agent ? `<strong>${esc(bundle.chat.agent)}</strong>` : 'the chat agent'
   const choice = mode.choice
@@ -117,6 +118,9 @@ export function generationStartHtml(bundle) {
     : ''
   return (
     `<h2 id="gen-h">${mode.title}</h2>` +
+    (refused === null
+      ? ''
+      : `<div class="callout warn" role="alert">${esc(refused.message)}${refused.hint ? ` — ${esc(refused.hint)}` : ''}</div>`) +
     `<p class="hint">${esc(mode.text)}</p>` +
     `<p class="hint">It runs ${agent} through acpx with the chat's permissions, which deny writes, and the model the project config names for it. ${sharingNote(bundle)}</p>` +
     choice +
@@ -291,6 +295,11 @@ export function createGeneration(root, opts) {
   let bundle = null
   /** The dialog shows the start screen rather than a job. */
   let starting = false
+  /**
+   * Why the server refused the last start, shown on the start screen until the next try.
+   * @type {{ message: string, hint?: string } | null}
+   */
+  let startError = null
   /** True once this page saw the job running, so its end is news to it. */
   let watching = false
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -308,12 +317,13 @@ export function createGeneration(root, opts) {
     if (!(button instanceof HTMLElement)) {
       return
     }
-    button.dataset['label'] ??= button.textContent ?? ''
-    button.dataset['title'] ??= button.title
-    const running = job !== null && isRunning(job)
-    button.textContent = running && job !== null ? runningLabel(job, now()) : (button.dataset['label'] ?? '')
-    button.title = running ? 'Show the canvas generation' : (button.dataset['title'] ?? '')
-    button.classList.toggle('gen-running', running)
+    // The header's own words, kept the first time so the button can have them back.
+    const label = (button.dataset['label'] ??= String(button.textContent))
+    const title = (button.dataset['title'] ??= button.title)
+    const running = job !== null && isRunning(job) ? job : null
+    button.textContent = running === null ? label : runningLabel(running, now())
+    button.title = running === null ? title : 'Show the canvas generation'
+    button.classList.toggle('gen-running', running !== null)
   }
 
   const drawDialog = () => {
@@ -321,7 +331,7 @@ export function createGeneration(root, opts) {
     const form = /** @type {HTMLFormElement} */ (ensureDialog(root).querySelector('form'))
     if (starting || job === null) {
       if (bundle !== null) {
-        form.innerHTML = generationStartHtml(bundle)
+        form.innerHTML = generationStartHtml(bundle, startError)
       }
       return
     }
@@ -367,14 +377,19 @@ export function createGeneration(root, opts) {
   const start = async force => {
     try {
       const res = await startGeneration(opts.prNumber, force, api)
+      startError = null
       starting = false
       update(res.job)
       drawDialog()
     } catch (err) {
-      opts.onError?.(err instanceof Error ? err.message : String(err))
-      // A run another tab started is the one to show.
+      startError =
+        err instanceof ApiError
+          ? { message: err.message, ...(err.hint === undefined ? {} : { hint: err.hint }) }
+          : { message: err instanceof Error ? err.message : String(err) }
+      // A run another tab started is the one to show; otherwise the start screen says why the
+      // server refused, such as a host login that could not share the canvas.
       await poll()
-      starting = false
+      starting = job === null || !isRunning(job)
       drawDialog()
     }
   }
@@ -398,6 +413,7 @@ export function createGeneration(root, opts) {
         err => opts.onError?.(err instanceof Error ? err.message : String(err))
       )
     } else if (kind === 'again') {
+      startError = null
       starting = true
       drawDialog()
     }
@@ -410,6 +426,7 @@ export function createGeneration(root, opts) {
      */
     open(next) {
       bundle = next
+      startError = null
       starting = job === null || !isRunning(job)
       drawDialog()
       showDialog(ensureDialog(root))

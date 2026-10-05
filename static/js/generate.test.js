@@ -393,10 +393,84 @@ describe('createGeneration', () => {
     root.querySelector('[data-gen="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
     await flush()
-    expect(onError).toHaveBeenCalledWith('already running')
+    // The job that refused it is the one to follow, so the refusal itself is not shown.
+    expect(onError).not.toHaveBeenCalled()
     expect(root.querySelector(`#${GENERATE_DIALOG_ID} h2`)?.textContent).toBe(
       'The agent is writing the canvas'
     )
+    generation.stop()
+  })
+
+  it('keeps the start screen with the reason and hint when the server refuses a start', async () => {
+    const root = page()
+    const fetches = fakeFetch({
+      gets: [null],
+      post: () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'GH_UNAUTHENTICATED',
+              message: 'gh is not logged in, so the canvas could not be shared on the PR',
+              hint: 'run `gh auth login` in a terminal',
+            },
+          }),
+          { status: 401 }
+        ),
+    })
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      fetchImpl: fetches.impl,
+      now: () => NOW,
+      pollMs: 60_000,
+    })
+    generation.open(bundle())
+    root.querySelector('[data-gen="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    await flush()
+    const dialog = root.querySelector(`#${GENERATE_DIALOG_ID}`)
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Generate the canvas')
+    expect(dialog?.querySelector('[role="alert"]')?.textContent).toBe(
+      'gh is not logged in, so the canvas could not be shared on the PR — run `gh auth login` in a terminal'
+    )
+    // The start command is live again, and opening the dialog afresh drops the old reason.
+    expect(dialog?.querySelector('[data-gen="start"]')?.hasAttribute('disabled')).toBe(false)
+    generation.open(bundle())
+    expect(dialog?.querySelector('[role="alert"]')).toBeNull()
+    generation.stop()
+  })
+
+  it('shows a refusal that came without a hint, or as a plain network failure', async () => {
+    const root = page()
+    let calls = 0
+    /** @type {typeof fetch} */
+    const impl = async (_url, init) => {
+      if (init?.method === 'POST') {
+        calls += 1
+        if (calls === 1) {
+          return new Response(JSON.stringify({ error: { code: 'INTERNAL', message: 'boom' } }), {
+            status: 500,
+          })
+        }
+        throw new TypeError('network down')
+      }
+      return new Response(JSON.stringify({ job: null }), { status: 200 })
+    }
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      fetchImpl: impl,
+      now: () => NOW,
+    })
+    generation.open(bundle())
+    root.querySelector('[data-gen="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    await flush()
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe('boom')
+    root.querySelector('[data-gen="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    await flush()
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe('network down')
     generation.stop()
   })
 
@@ -478,6 +552,23 @@ describe('createGeneration', () => {
     } finally {
       HTMLDialogElement.prototype.showModal = showModal
     }
+  })
+
+  it('runs on a screen with no header command, and with the default clock', async () => {
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    const fetches = fakeFetch({ gets: [job()] })
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      fetchImpl: fetches.impl,
+      pollMs: 60_000,
+    })
+    generation.attach(bundle())
+    await flush()
+    expect(generation.job?.phase).toBe('generating')
+    expect(root.querySelector('.gen-running')).toBeNull()
+    generation.stop()
   })
 
   it('keeps polling through a failed request', async () => {
