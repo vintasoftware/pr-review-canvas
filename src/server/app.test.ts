@@ -9,6 +9,7 @@ import {
   createFakeGh,
   createFakeGit,
   ghError,
+  ghJson,
   makeTempDir,
   makeTestContext,
   type TestContext,
@@ -184,7 +185,7 @@ describe('createApp', () => {
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
       expect(html).toContain(
-        '{"prNumber":42,"owner":"acme","repo":"widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all"}</script>'
+        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all"}</script>'
       )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
@@ -228,6 +229,67 @@ describe('createApp', () => {
       const missing = await app.request('/nope', { headers: LOCAL })
       expect(missing.status).toBe(404)
       expect(await missing.text()).toContain(painted)
+    })
+
+    it('sends /start to the review of the open PR of the checked-out branch, or home', async () => {
+      const app = createApp(t.ctx)
+      const res = await app.request('/start', { headers: LOCAL })
+      expect(res.status).toBe(302)
+      expect(res.headers.get('location')).toBe('/')
+      await t.cleanup()
+      t = await makeTestContext({
+        basePath: '/r/acme/widgets/',
+        gh: createFakeGh({ routes: { 'repos/acme/widgets/pulls': ghJson([{ number: 42 }]) } }),
+      })
+      const logs: string[] = []
+      t.ctx.log = line => logs.push(line)
+      const found = await createApp(t.ctx).request('/start', { headers: LOCAL })
+      expect(found.headers.get('location')).toBe('/r/acme/widgets/review/42')
+      expect(logs).toEqual(['opening PR #42, the open review of this branch'])
+    })
+
+    it("links every page under the project's base path", async () => {
+      await t.cleanup()
+      t = await makeTestContext({ git: gitFor42(), gh: ghFor42(), basePath: '/r/acme/widgets/' })
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      await t.ctx.prs.writePr('branch', syntheticArtifact().pr)
+      const home = await (await app.request('/', { headers: LOCAL })).text()
+      // The wordmark leads to the project list; the header no longer has a projects command.
+      expect(home).toContain('<a class="brand-wordmark" href="/" title="All projects">')
+      expect(home).not.toContain('>projects</a>')
+      expect(home).toContain('<button class="cmd" type="button" id="skin-toggle"')
+      expect(home).toContain('>skin: github</button>')
+      expect(home).toContain('<button class="cmd" type="button" id="theme-toggle"')
+      expect(home).toContain('>theme: auto</button>')
+      expect(home).toContain('"repo":"widgets","base":"/r/acme/widgets/"')
+      expect(home).toContain('<script type="module" src="/static/js/page-appearance.js"></script>')
+      expect(home).not.toContain('/static/js/app.js')
+      expect(home).toContain('href="/r/acme/widgets/api/health"')
+      expect(home).toContain('action="/r/acme/widgets/review"')
+      expect(home).toContain('href="/r/acme/widgets/review/42"')
+      expect(home).toContain('href="/r/acme/widgets/review/42?generate=1"')
+      expect(home).toContain('<a href="/r/acme/widgets/review/branch">')
+      expect(home).toContain('href="/r/acme/widgets/review/uncommitted?generate=1"')
+      expect(home).not.toMatch(/href="\/review/)
+      const redirect = await app.request('/review?n=42', { headers: LOCAL })
+      expect(redirect.status).toBe(303)
+      expect(redirect.headers.get('location')).toBe('/r/acme/widgets/review/42')
+      const review = await (await app.request('/review/42', { headers: LOCAL })).text()
+      expect(review).toContain('"repo":"widgets","base":"/r/acme/widgets/"')
+      const error = await app.request('/review/abc', { headers: LOCAL })
+      expect(error.status).toBe(400)
+      const errorHtml = await error.text()
+      // The project's name, as on every page of it, leads back to its home page.
+      expect(errorHtml).toContain(
+        '<a class="mono muted" href="/r/acme/widgets/" title="This project\'s home page">acme/widgets</a>'
+      )
+      expect(errorHtml).toContain('"base":"/r/acme/widgets/"')
+      expect(errorHtml).toContain('<script type="module" src="/static/js/page-appearance.js"></script>')
+      expect(errorHtml).toContain('<a class="brand-wordmark" href="/" title="All projects">')
+      const painted = await (await app.request('/?skin=terminal&theme=dark', { headers: LOCAL })).text()
+      expect(painted).toContain('>skin: terminal</button>')
+      expect(painted).toContain('>theme: dark</button>')
     })
 
     it('answers 400 for a non-numeric PR', async () => {

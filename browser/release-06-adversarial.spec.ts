@@ -311,7 +311,7 @@ test('Recent labels prepared PRs without a canvas and pages serve the SVG favico
 }) => {
   const { url, ctx } = await chatServer()
   await ctx.prs.writePr(42, syntheticArtifact().pr)
-  await page.goto(new URL('/', url).href)
+  await page.goto(new URL('../', url).href)
   await expect(page.locator('footer')).toContainText(
     'GitHub operations and AI requests contact their services'
   )

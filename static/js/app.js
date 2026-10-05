@@ -11,6 +11,7 @@ import {
   importCanvas,
   pollBundle,
   saveAppearance,
+  setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
 import { setMentionCanvas } from './points.js'
@@ -29,7 +30,7 @@ import {
   staleBarHtml,
 } from './empty-state.js'
 import { errorCardHtml } from './errors.js'
-import { renderHeader } from './header.js'
+import { bareHeaderHtml, renderHeader } from './header.js'
 import { wireDropZone } from './import-zone.js'
 import { toast, wireReview } from './interactions.js'
 import {
@@ -193,6 +194,7 @@ export class PrAppElement extends HTMLElement {
       return
     }
     setHost(this.bootstrap.host)
+    setApiBase(this.bootstrap.base)
     this.theme = readTheme(document.documentElement)
     this.skin = readSkin(document.documentElement)
     // The reading level the canvas opens at comes from the settings file with the page, so the
@@ -209,8 +211,17 @@ export class PrAppElement extends HTMLElement {
     try {
       bundle = await fetchBundle(this.bootstrap.prNumber)
     } catch (err) {
-      this.innerHTML = errorCardHtml(toEnvelopeError(err)) + footerHtml(this.bootstrap.version)
+      this.innerHTML =
+        bareHeaderHtml({
+          host: location.host,
+          home: this.bootstrap.base,
+          theme: this.theme,
+          skin: this.skin,
+        }) +
+        errorCardHtml(toEnvelopeError(err)) +
+        footerHtml(this.bootstrap.version)
       qs('#retry', this)?.addEventListener('click', () => void this.boot())
+      this.wireAppearance()
       return
     }
     await this.render(bundle, patchesPromise)
@@ -265,7 +276,13 @@ export class PrAppElement extends HTMLElement {
     this.interactions = null
     this.stopChat()
     const now = new Date()
-    const header = renderHeader(bundle, { host: location.host, theme: this.theme, skin: this.skin, now })
+    const header = renderHeader(bundle, {
+      host: location.host,
+      theme: this.theme,
+      skin: this.skin,
+      now,
+      home: this.bootstrap?.base,
+    })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
     const chatMinimized = chatEnabled && readChatMinimized(storage)
@@ -388,16 +405,12 @@ export class PrAppElement extends HTMLElement {
     void saveAppearance(input).catch(() => toast(this, `could not save the ${what} to settings.yml`))
   }
 
-  /** @param {PrBundle} bundle */
-  wireCommands(bundle) {
-    // The review screen routes this through the delegated handler; the empty and stale screens
-    // have no such handler, so the command is wired here for every screen.
-    const settings = qs('#settings', this)
-    if (settings instanceof HTMLElement && this.interactions === null) {
-      settings.addEventListener('click', () => void openSettingsDialog(this, settings))
-    }
-    // Both repaint the page under the click; the settings file catches up after the round trip,
-    // and each says so when it cannot, because the next load would come back in the old one.
+  /**
+   * The skin and theme commands of the header, on every screen and on the error screen too. Both
+   * repaint the page under the click; the settings file catches up after the round trip, and each
+   * says so when it cannot, because the next load would come back in the old one.
+   */
+  wireAppearance() {
     const toggle = qs('#theme-toggle', this)
     toggle?.addEventListener('click', () => {
       this.theme = nextTheme(this.theme)
@@ -412,6 +425,17 @@ export class PrAppElement extends HTMLElement {
       skinToggle.textContent = skinLabel(this.skin)
       this.save({ skin: this.skin }, 'skin')
     })
+  }
+
+  /** @param {PrBundle} bundle */
+  wireCommands(bundle) {
+    // The review screen routes this through the delegated handler; the empty and stale screens
+    // have no such handler, so the command is wired here for every screen.
+    const settings = qs('#settings', this)
+    if (settings instanceof HTMLElement && this.interactions === null) {
+      settings.addEventListener('click', () => void openSettingsDialog(this, settings))
+    }
+    this.wireAppearance()
     const boot = this.bootstrap
     if (!boot) {
       return

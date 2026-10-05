@@ -18,9 +18,16 @@ import { AppError } from '../errors.js'
 import { parseTargetKey } from './api.js'
 import { readBody, requirePosting } from './review-routes.js'
 
-/** The generation manager over the real pipeline: the same prepare and publish the CLI runs. */
-export function createContextGeneration(ctx: AppContext): GenerationManager {
+/**
+ * The generation manager over the real pipeline: the same prepare and publish the CLI runs. The
+ * shared server passes `busyElsewhere` so the worktrees of one clone run one job at a time.
+ */
+export function createContextGeneration(
+  ctx: AppContext,
+  busyElsewhere?: () => ReviewKey | null
+): GenerationManager {
   return createGenerationManager({
+    busyElsewhere,
     runner: ctx.runner,
     checkouts: ctx.checkouts,
     steps: {

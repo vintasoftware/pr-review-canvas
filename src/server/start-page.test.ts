@@ -39,6 +39,32 @@ describe('startPage', () => {
     expect(log).toEqual(['opening PR #42, the open review of this branch'])
   })
 
+  it("answers paths under the project's base path", async () => {
+    const pulls = ghHandler(params => (params['head'] === 'acme:feature' ? [{ number: 42 }] : []))
+    t = await makeTestContext({
+      basePath: '/r/acme/widgets~feature/',
+      gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets~feature/review/42')
+    for (const branch of ['main', null]) {
+      await t.cleanup()
+      t = await makeTestContext({
+        basePath: '/r/acme/widgets/',
+        gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+        git: createFakeGit({ branch }),
+      })
+      expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets/')
+    }
+    await t.cleanup()
+    t = await makeTestContext({
+      basePath: '/r/acme/widgets/',
+      gh: createFakeGh({ routes: { [PULLS]: ghError(new Error('offline')) } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets/')
+  })
+
   describe('on GitLab', () => {
     // Open merge requests by source branch: a fork's `main` and this project's `feature`, which a
     // fork also uses.

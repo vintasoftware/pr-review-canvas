@@ -20,21 +20,67 @@ For setup and the basic review workflow, see the [README](../README.md).
 | `--repo <dir>`                   | All commands                             | Uses the current directory when omitted; resolves the repository root from there                                 |
 | `--data-dir <dir>`               | All except `install-skill` and `upgrade` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
 | `--port <n>`                     | `serve`                                  | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
-| `--no-open`                      | `serve`                                  | Does not open the canvas in the default browser at startup; the browser also stays closed when `CI` is set       |
-| `--chat-agent claude\|codex`     | `serve`                                  | Overrides the saved AI Chat agent for this run; not canvas generation. `--agent` is a deprecated alias           |
-| `--chat-model <id>`              | `serve`                                  | Overrides the saved AI Chat model for this run; not canvas generation. `--model` is a deprecated alias           |
+| `--no-open`                      | `serve`, `open`                          | Does not open the canvas in the default browser; the browser also stays closed when `CI` is set                  |
+| `--chat-agent claude\|codex`     | `serve`, `open`                          | Overrides the saved AI Chat agent for this project; not canvas generation. `--agent` is a deprecated alias       |
+| `--chat-model <id>`              | `serve`, `open`                          | Overrides the saved AI Chat model for this project; not canvas generation. `--model` is a deprecated alias       |
 | `--fixture-canvas <review.json>` | `serve`                                  | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
 | `PR_REVIEW_HOST=gitlab`          | Environment                              | Treats a non-github.com origin as GitLab (self-hosted hosts whose name does not contain `gitlab`)                |
+| `PR_REVIEW_HOME=<dir>`           | Environment                              | Where the server keeps `server.json` and its project list; default `~/.pr-review`                                |
 
 Repository operations require an `origin` remote on **github.com** or **GitLab** (gitlab.com, a
 hostname that contains `gitlab`, or any host with `PR_REVIEW_HOST=gitlab`). GitHub Enterprise Server
 hosts are not supported. Fetching a PR or merge request does not check out its branch. Use `--pr`
 for both GitHub pull request numbers and GitLab merge request IIDs.
 
-At startup, `serve` asks the forge for an open PR or MR whose head is the checked-out branch. When
-one exists, the browser opens its review at `/review/<number>`; otherwise, and on a detached HEAD
-or a failed lookup, it opens the home page. The lookup matches branches of this repository only, so
-a PR from a fork opens the home page.
+### One server for every project
+
+```text
+pr-review serve [--port <n>]                    # once, in any terminal
+pr-review open [<n>|branch|uncommitted]         # in a project's folder
+```
+
+One `pr-review serve` serves every project you open. Each project answers under its own path:
+`/r/<owner>/<repo>/` for the main checkout of a clone, and `/r/<owner>/<repo>~<folder>/` for a
+linked worktree, because its branch and uncommitted work differ. The pages and features under that
+path are the same as before.
+
+`http://localhost:3010/` lists the projects by repository, one row per checkout, and the logo on
+every page leads there; the project's name next to the logo leads to its home page. Every page has
+the same header. The list's **health** (`/api/health`) gives the server's version and port and
+where each project's own health check answers (`<project>/api/health`: git, the host login, the
+chat agent). **remove** takes a project off the list: its
+canvases and review state stay in its `.pr-review/`, and `pr-review open` adds it again. A project
+whose folder no longer exists leaves the list by itself. The list and each project's home page
+have the **skin** and **theme** commands of the review page; a project saves its look in its
+`.pr-review/settings.yml`, and the list in `~/.pr-review/appearance.json`.
+
+- `pr-review open` adds the checkout it runs in to the running server and opens it. With a number,
+  `branch`, or `uncommitted`, it opens that review. With no server running it fails with
+  `SERVER_NOT_RUNNING`. With `--json`, or on a pipe, it prints `{ url, project, kept, server }`.
+- `pr-review serve` inside a repository also adds that project and opens it, as it always did.
+  When a server already runs, `serve` adds the project to it and exits, unless `--port` names
+  another port, which starts a second server.
+- The server runs `gh`, `glab`, and the agent of each project with the environment of the shell
+  that last ran `open` or `serve` for it, such as a project's own `GH_TOKEN` or `PATH`. It keeps
+  that environment in memory only. After a restart, a project opened from a bookmark runs with
+  the server's own environment until you run `open` in it again.
+- Running `open` again reloads `pr-review.config.yml`, unless a chat turn or a generation runs in
+  that project: then it keeps its settings and `open` says so.
+- The worktrees of one clone share its `.pr-review/` data dir. One generation runs at a time across
+  them, and one chat turn per review.
+- With a chat turn or a generation running anywhere, the first **Ctrl+C** lists them, and a second
+  one within five seconds stops the server.
+- The server writes `~/.pr-review/server.json` (readable by its owner only), with its port and a
+  token. Commands read it to find the server; only a command that can read that file can add a
+  project. `projects.json` next to it lists the projects, so their URLs keep working after a
+  restart.
+- `prepare` and `publish` print a `reviewUrl` under the project's path and on the running
+  server's port.
+
+When the browser opens a project, the server asks the forge for an open PR or MR whose head is the
+checked-out branch. When one exists, the browser opens its review at `<project>/review/<number>`;
+otherwise, and on a detached HEAD or a failed lookup, it opens the project's home page. The lookup
+matches branches of this repository only, so a PR from a fork opens the home page.
 
 ### Prepare, validate, and publish
 
@@ -70,14 +116,14 @@ Run the installed skill in Claude Code or Codex:
 /pr-review-canvas uncommitted     # the same, with your working-tree edits and new files on top
 ```
 
-Start `pr-review serve` and open **http://localhost:3010/review/branch** or
-**http://localhost:3010/review/uncommitted**.
+With the server running, run `pr-review open branch` or `pr-review open uncommitted` in the
+project's folder.
 
 There are two reviews of the work in a clone, and they are separate targets:
 
 ```bash
-pr-review prepare --branch        # served at /review/branch
-pr-review prepare --uncommitted   # served at /review/uncommitted
+pr-review prepare --branch        # served at <project>/review/branch
+pr-review prepare --uncommitted   # served at <project>/review/uncommitted
 ```
 
 `--branch` describes the tip of the current branch. `--uncommitted` describes the working tree as
@@ -544,7 +590,7 @@ Deleting the directory loses saved preferences, canvases, progress, and chat his
 
 ### Links to specific code
 
-Append a fragment to `/review/<pr-number>`:
+Append a fragment to `<project>/review/<pr-number>`:
 
 | Target              | Fragment example            |
 | ------------------- | --------------------------- |
@@ -880,12 +926,12 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   review progress, and chat history go with it. They also appear in `git worktree list`.
 - If the checkout cannot be created or moved, the turn reads your checkout instead and the answer
   carries a warning naming your branch, also when the thread is reopened later.
-- Every worktree of one clone shares the checkouts. While one `pr-review serve` answers about a
-  review, a turn on the same review from another is refused with `CHAT_BUSY`; ask again once the
-  first answer is done.
+- Every worktree of one clone shares the checkouts. While one worktree's project answers about a
+  review, a turn on the same review from another worktree, or from a second `pr-review serve`, is
+  refused with `CHAT_BUSY`; ask again once the first answer is done.
 
-`serve` removes checkouts with no chat turn for `checkoutIdleDays`, at startup and every
-`checkoutSweepMinutes`. `pr-review clean` does the same on demand:
+The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
+clone and every `checkoutSweepMinutes` after. `pr-review clean` does the same on demand:
 
 ```text
 pr-review clean [--all | --older-than <days>] [--dry-run]
@@ -918,7 +964,8 @@ canvas that could not be shared. A token whose rights cannot be read, such as a 
 app token, is let through, and the host decides at publish time. Local reviews, and sharing
 turned off, need no login.
 
-One generation runs at a time in a server. The job runs in the server, so you can close the dialog
+One generation runs at a time across the worktrees of a clone; projects of other clones run their
+own. The job runs in the server, so you can close the dialog
 or reload the page; while it runs, the header command reads **generating** with the elapsed time
 and opens the dialog again.
 The dialog shows the phase, the latest tool calls of the agent, and the problems publish named on
@@ -942,7 +989,10 @@ instead.
 ## Network access and permissions
 
 The server binds to `127.0.0.1` and rejects browser writes from other origins. It is intended for
-local use with your GitHub or GitLab login.
+local use with your GitHub or GitLab login. One server serves every project you open with
+`pr-review open`, so any page it serves can read the review data of each of them. Projects are
+added only by a command that can read `~/.pr-review/server.json`, which is readable by its owner
+only; the browser cannot add one.
 
 Publishing sends the canvas as a PR/MR comment. Host requests also fetch PR or MR data and
 attachments and submit the comments or reviews you choose to
@@ -984,6 +1034,8 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                                  |
 | `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                     |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                 |
+| `SERVER_NOT_RUNNING`                    | Start the server with `pr-review serve` in any terminal, then run `pr-review open` again                                                                 |
+| `SERVER_TOKEN_INVALID`                  | Run the command as the user who started the server, or restart it so `~/.pr-review/server.json` is written again                                         |
 
 ### Validation diagnostics
 

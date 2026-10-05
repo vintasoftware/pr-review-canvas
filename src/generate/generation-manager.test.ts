@@ -81,6 +81,7 @@ function harness(
     steps?: Partial<GenerationSteps>
     lease?: 'busy' | 'move-fails'
     maxRepairRounds?: number
+    busyElsewhere?: () => ReviewKey | null
   } = {}
 ): Harness {
   const runner = createFakeRunner({
@@ -138,6 +139,7 @@ function harness(
     repoRoot: '/repo',
     log: line => logs.push(line),
     now: () => new Date('2026-10-05T12:00:00.000Z'),
+    busyElsewhere: opts.busyElsewhere,
   })
   return { manager, runner, steps, leases, logs }
 }
@@ -378,6 +380,37 @@ describe('createGenerationManager', () => {
     // The job the server ran last is the one a page can read; the earlier review's is gone.
     expect(h.manager.status(42)).toBeNull()
     await settled(h.manager, 'branch')
+  })
+
+  it('names the review whose job is running, and none once it ends', async () => {
+    const h = harness({ runner: { delayMs: 5 } })
+    expect(h.manager.running()).toBeNull()
+    await h.manager.start('branch', { force: false })
+    expect(h.manager.running()).toBe('branch')
+    await settled(h.manager, 'branch')
+    expect(h.manager.running()).toBeNull()
+  })
+
+  it('refuses to start while a manager over the same data dir runs a job, naming its review', async () => {
+    let elsewhere: ReviewKey | null = 42
+    const h = harness({ busyElsewhere: () => elsewhere })
+    const refused = await h.manager.start(7, { force: false }).catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(GenerationBusyError)
+    expect(refused).toMatchObject({ key: 42 })
+    expect(h.manager.status(7)).toBeNull()
+    elsewhere = null
+    await h.manager.start(7, { force: false })
+    await settled(h.manager, 7)
+  })
+
+  it('refuses to start when a sibling job started while the settings were read', async () => {
+    let checks = 0
+    const h = harness({ busyElsewhere: () => (++checks === 1 ? null : 'uncommitted') })
+    const refused = await h.manager.start(7, { force: false }).catch((err: unknown) => err)
+    expect(refused).toMatchObject({ key: 'uncommitted' })
+    expect(checks).toBe(2)
+    expect(h.manager.status(7)).toBeNull()
+    expect(h.steps.prepare).not.toHaveBeenCalled()
   })
 
   it('stops the agent mid-turn', async () => {

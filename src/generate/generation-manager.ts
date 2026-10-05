@@ -67,6 +67,11 @@ export interface GenerationManagerDeps {
   currentBranch: () => Promise<string | null>
   log: (line: string) => void
   now: () => Date
+  /**
+   * The review a manager over the same data dir is generating, if any. The worktrees of one clone
+   * write the same canvas folders, so one job runs at a time across all of them.
+   */
+  busyElsewhere?: (() => ReviewKey | null) | undefined
 }
 
 export interface GenerationManager {
@@ -80,6 +85,8 @@ export interface GenerationManager {
   status(key: ReviewKey): GenerationJob | null
   /** True when a running job was asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
+  /** The review whose job is running now, if any. */
+  running(): ReviewKey | null
 }
 
 /** The running side of a job, which the status never shows. */
@@ -225,6 +232,8 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
   /** The job the server ran last, running or ended. */
   let last: Slot | null = null
   const running = (): Slot | null => (last !== null && isRunning(last.job) ? last : null)
+  /** The review a job runs for here or in a sibling manager, which keeps this one from starting. */
+  const busyWith = (): ReviewKey | null => running()?.job.key ?? deps.busyElsewhere?.() ?? null
   const of = (key: ReviewKey): Slot | null => (last !== null && last.job.key === key ? last : null)
   const maxRounds = deps.generation.maxRepairRounds + 1
 
@@ -404,9 +413,9 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
 
   return {
     async start(key, opts) {
-      const current = running()
+      const current = busyWith()
       if (current !== null) {
-        throw new GenerationBusyError(current.job.key)
+        throw new GenerationBusyError(current)
       }
       const settings = await deps.settings()
       const agent = settings.chatAgent
@@ -414,9 +423,9 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       const model =
         named === undefined ? null : latestModel(agent, named, await deps.runner.modelUpgrades(agent))
       // Checked again after the awaits: two clicks that both got past the first check start one job.
-      const again = running()
+      const again = busyWith()
       if (again !== null) {
-        throw new GenerationBusyError(again.job.key)
+        throw new GenerationBusyError(again)
       }
       const slot: Slot = {
         job: {
@@ -461,5 +470,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       await slot.run?.cancel()
       return true
     },
+
+    running: () => running()?.job.key ?? null,
   }
 }

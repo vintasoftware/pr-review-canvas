@@ -16,6 +16,7 @@ import { loadSeedTemplate } from '../chat/seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
+import type { ReviewKey } from '../contract/review-key.js'
 import { createGit, type Git } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { createHostClient, type HostClient } from '../host/client.js'
@@ -127,6 +128,14 @@ export interface CreateAppContextOptions {
   fetch?: typeof fetch
   runner?: AgentRunner
   now?: () => Date
+  log?: (line: string) => void
+  /**
+   * The environment the host CLI and the agent run under: that of the shell that opened the
+   * project, held in memory only. This process's own when omitted.
+   */
+  env?: NodeJS.ProcessEnv | undefined
+  /** Whether a sibling context over the same data dir runs a chat turn for a review. */
+  chatBusyElsewhere?: ((key: ReviewKey) => boolean) | undefined
 }
 
 export interface ChatSet {
@@ -152,7 +161,11 @@ export function createChatSet(
   stores: StoreSet,
   now: () => Date,
   git: Git,
-  opts: { prompts?: PromptOverrides | undefined; checkoutGit?: CheckoutGit | undefined } = {}
+  opts: {
+    prompts?: PromptOverrides | undefined
+    checkoutGit?: CheckoutGit | undefined
+    chatBusyElsewhere?: ((key: ReviewKey) => boolean) | undefined
+  } = {}
 ): ChatSet {
   const { prompts } = opts
   const settings = createSettingsStore(config.dataDir)
@@ -182,27 +195,45 @@ export function createChatSet(
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,
+      busyElsewhere: opts.chatBusyElsewhere,
     }),
   }
+}
+
+/** The set variables of `env`, which a child process takes on top of the server's own. */
+function definedVariables(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  )
 }
 
 export function createAppContext(opts: CreateAppContextOptions): AppContext {
   const git = opts.git ?? createGit(opts.config.repoRoot)
   const now = opts.now ?? (() => new Date())
   const { host, repo } = opts.config
-  const gh = opts.gh ?? createHostClient(host.cli)
+  // The host CLI and the agent run as they would from the shell that opened the project: its
+  // token, config dir, and PATH, with the host's own variables (glab's instance) on top.
+  const gh =
+    opts.gh ??
+    createHostClient(
+      opts.env === undefined
+        ? host.cli
+        : { ...host.cli, env: { ...definedVariables(opts.env), ...host.cli.env } }
+    )
+  const runner = opts.runner ?? createAgentRunner(opts.env === undefined ? {} : { env: opts.env })
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
   return {
     config: opts.config,
-    log: line => process.stderr.write(`${line}\n`),
+    log: opts.log ?? (line => process.stderr.write(`${line}\n`)),
     projectConfig: opts.projectConfig,
     git,
     gh,
     capabilities: createCapabilityProbe(() => host.probeCapabilities(gh, repo), now),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     ...stores,
-    ...createChatSet(opts.config, opts.runner ?? createAgentRunner(), stores, now, git, {
+    ...createChatSet(opts.config, runner, stores, now, git, {
       prompts: opts.projectConfig.config.prompts,
+      chatBusyElsewhere: opts.chatBusyElsewhere,
     }),
     now,
     version: readPackageVersion(),

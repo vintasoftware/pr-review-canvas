@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
-import { parseArgs } from 'node:util'
 import { ACPX_BIN, createAgentRunner, findOnPath } from './acpx/acpx.js'
 import {
   type CliIo,
@@ -21,22 +21,33 @@ import {
   runValidate,
   splitCommonFlags,
 } from './commands.js'
-import { ConfigError, loadRuntimeConfig, parsePort, readEnv, resolveRepoRoot } from './config.js'
-import { type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
-import { createGit } from './git/git.js'
+import { loadRuntimeConfig, parsePort, readEnv, resolveRepoRoot } from './config.js'
+import { createGit, GitError } from './git/git.js'
 import { printUsage } from './help.js'
 import { createHostClient } from './host/client.js'
+import { findServer, originOf, registerProject, runningPort } from './hub/client.js'
+import { type HubCommandDeps, runOpen, runServe, type StartedServer } from './hub/commands.js'
+import { hubHome } from './hub/home.js'
+import { createHubApp } from './hub/hub-app.js'
+import { createHub, type ProjectRegistration } from './hub/hub.js'
+import { loadFixture, projectLoader } from './hub/project.js'
 import { loadProjectConfig } from './project-config.js'
 import { checkSkill } from './review/doctor.js'
-import { type AppContext, createAppContext, readPackageVersion } from './server/context.js'
-import { startServer } from './server/node-server.js'
-import { PACKAGE_ROOT } from './paths.js'
-import { readJson } from './store/atomic-json.js'
+import {
+  type AppContext,
+  createAppContext,
+  readPackageVersion,
+  resolveVendorRoots,
+} from './server/context.js'
+import { startHubServer } from './server/node-server.js'
+import { openBrowser } from './server/open-browser.js'
+import { PACKAGE_ROOT, STATIC_DIR } from './paths.js'
 import { ensureDataDir } from './store/data-dir.js'
 import { type CommandResult, runUpgrade } from './upgrade.js'
 
 const SUBCOMMANDS = [
   'serve',
+  'open',
   'prepare',
   'validate',
   'publish',
@@ -74,7 +85,13 @@ async function buildContext(
   const git = createGit(repoDir)
   const config = await loadRuntimeConfig(
     {
-      port: extra.port === undefined ? undefined : parsePort(extra.port, 0),
+      // Without --port or PR_REVIEW_PORT, the running server's port, so publish prints a URL it answers.
+      port:
+        extra.port !== undefined
+          ? parsePort(extra.port, 0)
+          : readEnv(process.env, 'PR_REVIEW_PORT') === undefined
+            ? await runningPort(hubHome(process.env))
+            : undefined,
       dataDir,
       canvasDir: extra.canvasDir,
       fixtureCanvas: extra.fixtureCanvas,
@@ -95,45 +112,79 @@ async function buildContext(
   return createAppContext({ config, projectConfig, fixtureArtifact })
 }
 
-async function loadFixture(file: string): Promise<ReviewArtifact> {
-  const artifact = await readJson(file, ReviewArtifactSchema)
-  if (artifact === null) {
-    throw new ConfigError('BAD_REQUEST', `fixture canvas not found: ${file}`)
+/** The top-level folder of the checkout `dir` is in; null outside one, as `serve` allows. */
+async function repoRootOf(dir: string): Promise<string | null> {
+  try {
+    return await createGit(dir).topLevel()
+  } catch (err) {
+    if (err instanceof GitError) {
+      return null
+    }
+    throw err
   }
-  return artifact
 }
 
-async function serve(argv: string[]): Promise<number> {
-  const { values } = parseArgs({
-    args: argv,
-    options: {
-      port: { type: 'string' },
-      repo: { type: 'string' },
-      'data-dir': { type: 'string' },
-      'fixture-canvas': { type: 'string' },
-      'chat-agent': { type: 'string' },
-      'chat-model': { type: 'string' },
-      // Deprecated spellings of --chat-agent and --chat-model.
-      agent: { type: 'string' },
-      model: { type: 'string' },
-      'no-open': { type: 'boolean' },
-    },
-    strict: true,
-  })
-  if (values.agent !== undefined || values.model !== undefined) {
-    io.stderr('pr-review serve: --agent and --model are deprecated; use --chat-agent and --chat-model')
+function hubDeps(): HubCommandDeps {
+  const home = hubHome(process.env)
+  return {
+    cwd: process.cwd(),
+    env: process.env,
+    version: readPackageVersion(),
+    repoRoot: repoRootOf,
+    findServer: () => findServer(home),
+    register: registerProject,
+    openBrowser: url => openBrowser(url, io.stderr),
   }
-  const ctx = await buildContext(values.repo, values['data-dir'], {
-    port: values.port,
-    fixtureCanvas: values['fixture-canvas'],
-    chatAgent: values['chat-agent'] ?? values.agent,
-    chatModel: values['chat-model'] ?? values.model,
-    noOpen: values['no-open'],
+}
+
+/** The shared server, in this process: every project registered with it answers under its path. */
+async function startServer(opts: {
+  port: number
+  registration: ProjectRegistration | null
+  advertise: boolean
+}): Promise<StartedServer> {
+  const log = (line: string): void => {
+    process.stderr.write(`${line}\n`)
+  }
+  const home = hubHome(process.env)
+  const version = readPackageVersion()
+  let port = opts.port
+  const hub = await createHub({ home, load: projectLoader(() => port), log })
+  const token = randomBytes(32).toString('base64url')
+  const app = createHubApp({
+    hub,
+    home,
+    token,
+    version,
+    port: () => port,
+    staticDir: STATIC_DIR,
+    vendorRoots: resolveVendorRoots(),
+    log,
   })
-  const skill = await checkSkill(ctx.config.repoRoot)
-  if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)
-  startServer(ctx, line => process.stderr.write(`${line}\n`))
-  return EXIT.ok
+  const server = await startHubServer({
+    fetch: app.fetch,
+    port,
+    hub,
+    home,
+    advertise: opts.advertise,
+    info: { version, token },
+    log,
+  })
+  port = server.port
+  const origin = originOf(port)
+  log(`pr-review ${version} · ${origin}/`)
+  if (opts.registration === null) {
+    return { origin, basePath: null }
+  }
+  try {
+    const { project } = await hub.register(opts.registration)
+    log(`serving ${project.name} at ${origin}${project.ctx.config.basePath}`)
+    return { origin, basePath: project.ctx.config.basePath }
+  } catch (err) {
+    // A checkout that cannot be served (no origin, a bad flag) stops the server it started.
+    await server.close()
+    throw err
+  }
 }
 
 /** doctor builds no AppContext: it has to answer even when the repo or host CLI is the problem. */
@@ -228,7 +279,9 @@ export async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case 'serve':
-        return await serve(rest)
+        return await runServe({ ...hubDeps(), startServer, checkSkill }, rest, io)
+      case 'open':
+        return await runOpen(hubDeps(), rest, io)
       case 'install-skill':
         return await installSkillCommand(rest)
       case 'doctor':

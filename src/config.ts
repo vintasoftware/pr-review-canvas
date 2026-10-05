@@ -4,6 +4,7 @@ import { isChatAgent, type SettingsOverrides } from './contract/settings.js'
 import { type Git, GitError } from './git/git.js'
 import type { Host } from './host/host.js'
 import { type OriginRemote, parseOriginRemote } from './host/remote.js'
+import { basePathOf, projectSlug } from './hub/slug.js'
 import { resolveDataDir } from './store/data-dir.js'
 
 export const DEFAULT_PORT = 3010
@@ -29,6 +30,11 @@ export interface RuntimeConfig {
   repo: Repo
   /** The forge origin points at, which owns every request or answer that differs between them. */
   host: Host
+  /**
+   * Where this checkout's pages and API live on the shared server, with a trailing slash:
+   * `/r/<owner>/<repo>/`, or `/r/<owner>/<repo>~<worktree>/` for a linked worktree.
+   */
+  basePath: string
   /** Dev only: every PR reports `ready` with this artifact re-keyed to the live head. */
   fixtureCanvasPath: string | null
   /** Chat agent and model the flags force for this run, if any. */
@@ -148,6 +154,7 @@ export async function loadRuntimeConfig(
     dataDir,
     repo,
     host,
+    basePath: basePathOf(projectSlug(repo, repoRoot, commonDir)),
     fixtureCanvasPath: flags.fixtureCanvas === undefined ? null : path.resolve(cwd, flags.fixtureCanvas),
     chatOverrides: parseChatOverrides(flags),
     openBrowser: flags.noOpen !== true && readEnv(env, 'CI') === undefined,

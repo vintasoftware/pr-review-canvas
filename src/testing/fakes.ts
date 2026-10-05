@@ -10,6 +10,7 @@ import type { CheckoutGit } from '../chat/checkouts.js'
 import type { RuntimeConfig } from '../config.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
+import type { ReviewKey } from '../contract/review-key.js'
 import { type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
@@ -388,6 +389,10 @@ export interface TestContextOptions {
   checkoutGit?: CheckoutGit
   /** `serve --agent/--model` for this context. */
   chatOverrides?: RuntimeConfig['chatOverrides']
+  /** Where the project's pages live; the server root unless a test mounts it under a prefix. */
+  basePath?: string
+  /** The shared server's check for a chat turn in a sibling worktree of the same clone. */
+  chatBusyElsewhere?: (key: ReviewKey) => boolean
   now?: () => Date
   vendorRoots?: VendorRoots
 }
@@ -412,6 +417,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     dataDir,
     repo: TEST_REPO,
     host: opts.host ?? GITHUB_HOST,
+    basePath: opts.basePath ?? '/',
     fixtureCanvasPath: null,
     chatOverrides: opts.chatOverrides ?? {},
     openBrowser: false,
@@ -433,6 +439,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     ...createChatSet(config, opts.runner ?? createFakeRunner(), stores, now, git, {
       prompts: opts.projectConfig?.config.prompts,
       checkoutGit: opts.checkoutGit ?? createFakeCheckoutGit(),
+      chatBusyElsewhere: opts.chatBusyElsewhere,
     }),
     now,
     version: '0.0.0-test',

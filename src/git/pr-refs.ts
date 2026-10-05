@@ -1,4 +1,4 @@
-import type { Git } from './git.js'
+import { type Git, GitError } from './git.js'
 import type { Host } from '../host/host.js'
 import type { PrMeta } from '../host/pr.js'
 
@@ -8,6 +8,11 @@ export function prHeadRef(number: number): string {
 
 export function prBaseRef(number: number): string {
   return `refs/pr/${number}/base`
+}
+
+/** True when a fetch failed because the remote has no branch of that name any more. */
+function isMissingRemoteRef(err: unknown, branch: string): boolean {
+  return err instanceof GitError && err.stderr.includes(`couldn't find remote ref refs/heads/${branch}`)
 }
 
 /**
@@ -25,10 +30,17 @@ export async function fetchPrRefs(
   host: Host,
   meta: PrMeta
 ): Promise<{ headSha: string; mergeBaseSha: string }> {
-  await git.fetch('origin', [
-    `+${host.remoteHeadRef(meta.number)}:${prHeadRef(meta.number)}`,
-    `+refs/heads/${meta.baseRef}:${prBaseRef(meta.number)}`,
-  ])
+  const head = `+${host.remoteHeadRef(meta.number)}:${prHeadRef(meta.number)}`
+  try {
+    await git.fetch('origin', [head, `+refs/heads/${meta.baseRef}:${prBaseRef(meta.number)}`])
+  } catch (err) {
+    // A merged PR whose base branch was deleted since, as a stacked PR's is once the PR below it
+    // merges. Its diff needs only the merge commit, which the forge still serves by its sha.
+    if (meta.mergeCommitSha === null || !isMissingRemoteRef(err, meta.baseRef)) {
+      throw err
+    }
+    await git.fetch('origin', [head, meta.mergeCommitSha])
+  }
   const headSha = await git.revParse(prHeadRef(meta.number))
   const base = meta.mergeCommitSha === null ? prBaseRef(meta.number) : `${meta.mergeCommitSha}^1`
   const mergeBaseSha = await git.mergeBase(base, headSha)

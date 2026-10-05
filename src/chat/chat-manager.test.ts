@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
 import type { ChatEvent } from '../contract/chat.js'
+import type { ReviewKey } from '../contract/review-key.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { createPrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
@@ -47,6 +48,7 @@ function build(
     runner?: FakeRunner
     overrides?: { chatAgent?: 'claude' | 'codex'; chatModel?: string }
     checkoutGit?: FakeCheckoutGit
+    busyElsewhere?: (key: ReviewKey) => boolean
   } = {}
 ) {
   runner = opts.runner ?? createFakeRunner()
@@ -72,6 +74,7 @@ function build(
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
+    busyElsewhere: opts.busyElsewhere,
   })
 }
 
@@ -268,6 +271,41 @@ describe('createChatManager().send', () => {
     expect(events.at(-1)).toEqual({ event: 'cancelled' })
     const turns = await transcripts.read(42, T1)
     expect(turns.at(-1)).toMatchObject({ role: 'assistant', incomplete: 'cancelled' })
+  })
+
+  it('lists the reviews with a turn running', async () => {
+    build({ runner: createFakeRunner({ delayMs: 5 }) })
+    expect(manager.running()).toEqual([])
+    const turn = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    expect(manager.running()).toEqual([42])
+    await advanceTo(iterator, 'done')
+    await iterator.next()
+    expect(manager.running()).toEqual([])
+  })
+
+  it('refuses a turn on a review a manager over the same data dir is running one for', async () => {
+    const asked: ReviewKey[] = []
+    build({
+      busyElsewhere: key => {
+        asked.push(key)
+        return true
+      },
+    })
+    await expect(
+      collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
+    expect(asked).toEqual([42])
+    expect(runner.runs).toEqual([])
+    expect(manager.busy(42)).toBe(false)
+    build({ busyElsewhere: () => false })
+    expect(
+      (await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))).at(-1)
+    ).toEqual({
+      event: 'done',
+      stopReason: 'end_turn',
+    })
   })
 
   it('says there is nothing to cancel when no turn is running', async () => {

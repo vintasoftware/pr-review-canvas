@@ -135,6 +135,14 @@ export const ERROR_CARDS = {
     title: 'The canvas could not be generated',
     action: 'Follow the hint, or run the skill from Claude Code or Codex.',
   },
+  SERVER_NOT_RUNNING: {
+    title: 'No review server is running',
+    action: 'Start one with pr-review serve in any terminal, then run pr-review open again.',
+  },
+  SERVER_TOKEN_INVALID: {
+    title: 'The review server refused the command',
+    action: 'Run the command as the user who started pr-review serve, or restart the server.',
+  },
   NOT_IMPLEMENTED: {
     title: 'That part is not built yet',
     action: 'Nothing to do here; the feature is not in this version.',

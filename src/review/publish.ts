@@ -286,10 +286,10 @@ export async function publish(
     attempts,
   }
   if (context.target.kind === 'local') {
-    published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.source}`
+    published.reviewUrl = `http://localhost:${ctx.config.port}${ctx.config.basePath}review/${context.target.source}`
   }
   if (context.target.kind === 'pr') {
-    published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.number}`
+    published.reviewUrl = `http://localhost:${ctx.config.port}${ctx.config.basePath}review/${context.target.number}`
     published.sharing = await shareCanvasOnPr(ctx, context.headSha, context.target.number)
   }
   return published

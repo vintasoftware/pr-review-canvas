@@ -1,7 +1,8 @@
 import { once } from 'node:events'
 import { serve } from '@hono/node-server'
 import { test as base, expect, type Page } from '@playwright/test'
-import { createApp } from '../src/server/app.js'
+import { createHubApp } from '../src/hub/hub-app.js'
+import { createHub } from '../src/hub/hub.js'
 import { resolveVendorRoots } from '../src/server/context.js'
 import { DEFAULT_PROJECT_CONFIG } from '../src/project-config.js'
 import { createFakeRunner, type FakeRunnerOptions } from '../src/testing/fake-runner.js'
@@ -128,6 +129,9 @@ export const test = base.extend<{
   },
 })
 
+/** Where the test project answers, as the shared server serves `acme/widgets`. */
+const PROJECT_BASE = '/r/acme/widgets/'
+
 /** Serves PR 42 on a free port; `stop` fails the test if the page threw or a request 500ed. */
 async function startServer(
   page: Page,
@@ -185,13 +189,27 @@ async function startServer(
     }),
     fixtureArtifact: syntheticArtifact(),
     vendorRoots: resolveVendorRoots(),
+    basePath: PROJECT_BASE,
     ...extra,
   })
   // Closing the server drops the sockets, not the handlers: a request the page fired and the test
   // never waited for (a rebuild of `derived/` behind a reload or refresh) keeps writing into the
   // data dir. `stop` waits for every handler to return before that dir is removed, or `rm` races
   // the write and fails with ENOTEMPTY.
-  const app = createApp(t.ctx)
+  // Served as the shared server serves it: under the project's base path, behind the hub's front.
+  let port = 0
+  const hub = await createHub({ home: t.dataDir, load: async () => t.ctx, log: () => undefined })
+  await hub.register({ repoRoot: t.ctx.config.repoRoot })
+  const app = createHubApp({
+    hub,
+    home: t.dataDir,
+    token: 'test-token',
+    version: t.ctx.version,
+    port: () => port,
+    staticDir: t.ctx.staticDir,
+    vendorRoots: t.ctx.vendorRoots,
+    log: () => undefined,
+  })
   const inFlight = new Set<Request>()
   const settled: Array<() => void> = []
   const fetch = async (request: Request): Promise<Response> => {
@@ -209,9 +227,11 @@ async function startServer(
   if (address === null || typeof address === 'string') {
     throw new Error('test server did not bind a port')
   }
+  port = address.port
   const origin = `http://127.0.0.1:${address.port}`
   const stop = async (): Promise<void> => {
     try {
+      hub.close()
       if ('closeAllConnections' in server) {
         server.closeAllConnections()
       }
@@ -224,5 +244,5 @@ async function startServer(
     }
     expect(errors).toEqual([])
   }
-  return { url: `${origin}/review/42`, t, stop }
+  return { url: `${origin}${PROJECT_BASE}review/42`, t, stop }
 }

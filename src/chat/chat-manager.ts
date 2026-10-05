@@ -42,6 +42,11 @@ export interface ChatManagerDeps {
   /** The branch the reader's checkout is on, for the warning when a turn falls back to it. */
   currentBranch: () => Promise<string | null>
   now: () => Date
+  /**
+   * True when a manager over the same data dir runs a turn for `key`. The worktrees of one clone
+   * share its threads and review checkout, so a turn from one refuses a turn from another.
+   */
+  busyElsewhere?: ((key: ReviewKey) => boolean) | undefined
 }
 
 /** Everything about the review target one turn needs, resolved by the route. */
@@ -71,6 +76,8 @@ export interface ChatManager {
   /** True when a turn was running and has been asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
   busy(key: ReviewKey): boolean
+  /** The reviews with a turn running now. */
+  running(): ReviewKey[]
 }
 
 /** The slot a turn holds while it runs. The handle is filled in once the agent has started. */
@@ -213,7 +220,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
-    if (running.has(target.key)) {
+    if (running.has(target.key) || deps.busyElsewhere?.(target.key) === true) {
       throw new ChatBusyError()
     }
     // The slot is taken before the first await, so a second request that arrives while this one
@@ -468,6 +475,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       return true
     },
     busy: key => running.has(key),
+    running: () => [...running.keys()],
   }
 }
 

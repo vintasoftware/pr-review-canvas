@@ -8,8 +8,10 @@ import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../
 import { renderChatShell } from './chat.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
 import {
+  bareHeaderHtml,
   generateCommand,
   progressHtml,
+  projectNameOf,
   refreshProgress,
   renderHeader,
   riskLineHtml,
@@ -145,6 +147,69 @@ describe('review history', () => {
 })
 
 describe('header', () => {
+  it('links the wordmark to the project list, and names the project next to it with a link home', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      home: '/r/acme/widgets~fix/',
+    })
+    const wordmark = document.querySelector('a.brand-wordmark')
+    expect(wordmark?.getAttribute('href')).toBe('/')
+    expect(wordmark?.getAttribute('title')).toBe('All projects')
+    const project = document.querySelector('.brand a.mono.muted')
+    expect(project?.getAttribute('href')).toBe('/r/acme/widgets~fix/')
+    expect(project?.textContent).toBe('acme/widgets~fix')
+    expect(document.querySelector('.brand span.mono.muted')).toBeNull()
+  })
+
+  it('shows the host next to the wordmark when the page has no project path', () => {
+    for (const home of [undefined, '/', '/review/42']) {
+      document.body.innerHTML = renderHeader(bundle(), {
+        host: 'localhost:3010',
+        theme: 'auto',
+        skin: 'terminal',
+        now: NOW,
+        home,
+      })
+      expect([home, document.querySelector('.brand span.mono.muted')?.textContent]).toEqual([
+        home,
+        'localhost:3010',
+      ])
+      expect(document.querySelector('.brand a.mono.muted')).toBeNull()
+    }
+  })
+
+  it('escapes the project name and its link', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      home: '/r/acme/%3Cb%3E%22x/',
+    })
+    const project = document.querySelector('.brand a.mono.muted')
+    expect(project?.textContent).toBe('acme/<b>"x')
+    expect(project?.getAttribute('href')).toBe('/r/acme/%3Cb%3E%22x/')
+    expect(document.querySelector('.brand b')).toBeNull()
+  })
+
+  it('keeps the wordmark and the project link on a page whose review did not load', () => {
+    document.body.innerHTML = bareHeaderHtml({
+      host: 'localhost:3010',
+      home: '/r/acme/widgets/',
+      theme: 'dark',
+      skin: 'olive',
+    })
+    expect(document.querySelector('a.brand-wordmark')?.getAttribute('href')).toBe('/')
+    expect(document.querySelector('.brand a.mono.muted')?.getAttribute('href')).toBe('/r/acme/widgets/')
+    expect([...document.querySelectorAll('.hdr button')].map(b => b.textContent)).toEqual([
+      'skin: olive',
+      'theme: dark',
+    ])
+  })
+
   it('renders brand, commands, title, meta, risk line, progress, and the sign-off gate for a ready bundle', () => {
     document.body.innerHTML = renderHeader(bundle(), {
       host: 'localhost:3010',
@@ -377,6 +442,21 @@ describe('header', () => {
       'Generate the canvas of this local work again from a blank page'
     )
     expect(hdr?.querySelector('.pill')?.textContent).toBe('uncommitted')
+  })
+})
+
+describe('projectNameOf', () => {
+  it("reads the project's name from its base path, decoded", () => {
+    expect(projectNameOf('/r/acme/widgets/')).toBe('acme/widgets')
+    expect(projectNameOf('/r/acme/widgets~fix/')).toBe('acme/widgets~fix')
+    expect(projectNameOf('/r/group/proj/sub/')).toBe('group/proj/sub')
+    expect(projectNameOf('/r/acme/my%20widgets/')).toBe('acme/my widgets')
+  })
+
+  it('is null for a path that is not a project base', () => {
+    for (const home of ['/', '', '/r/', '/r/acme/widgets', '/x/acme/widgets/', 'r/acme/widgets/']) {
+      expect([home, projectNameOf(home)]).toEqual([home, null])
+    }
   })
 })
 

@@ -76,9 +76,21 @@ describe('loadRuntimeConfig', () => {
       dataDir: '/work/repo/.pr-review',
       repo: { owner: 'acme', name: 'widgets' },
       host: GITHUB_HOST,
+      basePath: '/r/acme/widgets/',
       fixtureCanvasPath: null,
       chatOverrides: {},
       openBrowser: true,
+    })
+  })
+
+  it('gives a linked worktree a base path of its own', async () => {
+    const worktree = createFakeGit({
+      topLevel: '/work/trees/fix login',
+      commonDir: '/work/repo/.git',
+      remotes: { origin: 'git@github.com:acme/widgets.git' },
+    })
+    expect(await loadRuntimeConfig({}, {}, worktree, '/cwd')).toMatchObject({
+      basePath: '/r/acme/widgets~fix-login/',
     })
   })
 

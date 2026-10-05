@@ -144,7 +144,7 @@ test('imports a canvas zip while a generation runs, and keeps showing the run', 
 
 test('opens the generation dialog from the home page form', async ({ page, chatServer }) => {
   const server = await chatServer({ noCanvas: true })
-  await page.goto(new URL('/', server.url).href)
+  await page.goto(new URL('../', server.url).href)
   await page.locator('input[name="n"]').fill('42')
   await page.locator('button[name="generate"]').click()
   await expect(page.locator('#generate-dialog h2')).toHaveText('Generate the canvas')

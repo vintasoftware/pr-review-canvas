@@ -4,6 +4,7 @@ import { BASE_SHA, GH_PULL, HEAD_SHA } from '../testing/synthetic.js'
 import { GITHUB_HOST } from '../host/host.js'
 import { mapPull } from '../github/pr.js'
 import { toPr } from '../host/pr.js'
+import { GitError } from './git.js'
 import { fetchPrRefs, prBaseRef, prHeadRef } from './pr-refs.js'
 
 describe('fetchPrRefs and toPr', () => {
@@ -52,5 +53,52 @@ describe('fetchPrRefs and toPr', () => {
     const meta = mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
     expect(await fetchPrRefs(git, GITHUB_HOST, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: forkPoint })
     expect(git.calls[2]).toEqual(['merge-base', `${merge}^1`, HEAD_SHA])
+  })
+
+  describe('when the base branch is gone from the remote', () => {
+    const merge = 'c'.repeat(40)
+    const missing = new GitError(['fetch'], "fatal: couldn't find remote ref refs/heads/main", 128)
+
+    /** A fake git whose fetch fails while it names the base branch. */
+    function gitWithoutBase(failure: Error = missing) {
+      const git = createFakeGit({
+        refs: { 'pull/42/head': HEAD_SHA },
+        mergeBases: { [`${merge}^1..${HEAD_SHA}`]: BASE_SHA },
+      })
+      const fetches: string[][] = []
+      return {
+        fetches,
+        git: {
+          ...git,
+          fetch: async (remote: string, refspecs: string[]) => {
+            fetches.push(refspecs)
+            if (refspecs.some(spec => spec.includes('refs/heads/main'))) {
+              throw failure
+            }
+            await git.fetch(remote, refspecs)
+          },
+        },
+      }
+    }
+
+    it('fetches the merge commit of a merged PR by its sha instead', async () => {
+      const { git, fetches } = gitWithoutBase()
+      const meta = mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
+      expect(await fetchPrRefs(git, GITHUB_HOST, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
+      expect(fetches[1]).toEqual([`+pull/42/head:${prHeadRef(42)}`, merge])
+    })
+
+    it('fails for an open PR, which has no merge commit to fall back on', async () => {
+      const { git } = gitWithoutBase()
+      await expect(fetchPrRefs(git, GITHUB_HOST, mapPull(GH_PULL))).rejects.toBe(missing)
+    })
+
+    it('fails on any other fetch error of a merged PR', async () => {
+      const offline = new GitError(['fetch'], 'fatal: unable to access the remote', 128)
+      const { git, fetches } = gitWithoutBase(offline)
+      const meta = mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
+      await expect(fetchPrRefs(git, GITHUB_HOST, meta)).rejects.toBe(offline)
+      expect(fetches).toHaveLength(1)
+    })
   })
 })

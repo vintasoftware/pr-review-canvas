@@ -38,6 +38,8 @@ export const ERROR_CODES = [
   'CHAT_BUSY',
   'GENERATION_BUSY',
   'GENERATION_FAILED',
+  'SERVER_NOT_RUNNING',
+  'SERVER_TOKEN_INVALID',
   'NOT_IMPLEMENTED',
   'INTERNAL',
 ] as const
@@ -256,6 +258,8 @@ export interface ReviewBootstrap {
   prNumber: ReviewKey
   owner: string
   repo: string
+  /** Where the project's pages and API live on the server, with a trailing slash. */
+  base: string
   version: string
   host: PublicHost
   /** The reading level the canvas opens at, from the settings file. */

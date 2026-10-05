@@ -83,8 +83,67 @@ export function generateCommand(bundle, hasCanvas) {
 }
 
 /**
+ * The project's name, from its base path on the shared server: `/r/acme/widgets~fix/` names
+ * `acme/widgets~fix`. Null for a page served at the root.
+ * @param {string} home
+ * @returns {string | null}
+ */
+export function projectNameOf(home) {
+  const match = /^\/r\/(.+)\/$/.exec(home)
+  return match?.[1] === undefined ? null : decodeURIComponent(match[1])
+}
+
+/**
+ * Next to the wordmark: a link to the project's home page, named for the project, or the host the
+ * page is served from when it has no project path.
+ * @param {{ host: string, home?: string | undefined }} opts
+ * @returns {string}
+ */
+function projectLinkHtml(opts) {
+  const name = opts.home === undefined ? null : projectNameOf(opts.home)
+  return name === null || opts.home === undefined
+    ? `<span class="mono muted">${esc(opts.host)}</span>`
+    : `<a class="mono muted" href="${esc(opts.home)}" title="This project's home page">${esc(name)}</a>`
+}
+
+/** The wordmark, which leads to the list of every project the server serves. */
+const BRAND_HTML =
+  '<a class="brand-wordmark" href="/" title="All projects"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a>'
+
+/** @typedef {{ host: string, home?: string | undefined, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin }} BarOptions */
+
+/**
+ * The bar every page starts with, as the server draws it on its own pages too: the wordmark, the
+ * project link, the page's own commands, and the skin and theme commands last.
+ * @param {BarOptions} opts
+ * @param {string} commands
+ * @returns {string}
+ */
+function headerBarHtml(opts, commands) {
+  return (
+    `<div class="hdr-bar"><div class="brand">${BRAND_HTML}${projectLinkHtml(opts)}</div>` +
+    '<div class="hdr-actions" role="group" aria-label="Page actions">' +
+    commands +
+    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
+    `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
+    '</div></div>'
+  )
+}
+
+/**
+ * The header of a page that could not load its review: the bar with no commands of its own, so
+ * the reader can still leave for another review or project, or change the look.
+ * @param {BarOptions} opts
+ * @returns {string}
+ */
+export function bareHeaderHtml(opts) {
+  return `<header class="hdr">${headerBarHtml(opts, '')}<div class="stripe" aria-hidden="true"></div></header>`
+}
+
+/**
  * @param {PrBundle} bundle
- * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date }} opts
+ * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date, home?: string | undefined }} opts
+ *   The wordmark links to the project list; `home`, the project's home page, gets a link of its own.
  * @returns {string}
  */
 export function renderHeader(bundle, opts) {
@@ -126,16 +185,14 @@ export function renderHeader(bundle, opts) {
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
-    `<div class="hdr-bar"><div class="brand"><a class="brand-wordmark" href="/"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a><span class="mono muted">${esc(opts.host)}</span></div>` +
-    '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
-    `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
-    `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
-    `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
-    '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +
-    '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
-    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
-    `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
-    '</div></div>' +
+    headerBarHtml(
+      opts,
+      `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
+        `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
+        `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
+        '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +
+        '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>'
+    ) +
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
     `<div class="title"><h1>${number}${esc(pr.title)}</h1>${forgeLink}</div>` +

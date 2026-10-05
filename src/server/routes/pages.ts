@@ -5,6 +5,7 @@ import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
 import { homePage, reviewPage } from '../html.js'
+import { startPage } from '../start-page.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
 export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Promise<Appearance> {
@@ -40,6 +41,7 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           repo: ctx.config.repo.name,
           version: ctx.version,
           port: ctx.config.port,
+          base: ctx.config.basePath,
           host: ctx.config.host,
           canGenerate: acpx.installed,
         },
@@ -49,13 +51,17 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
     )
   })
 
+  // Where `pr-review open` and `serve` point the browser. The lookup runs here rather than in the
+  // command, so the browser opens at once and lands on the branch's open review when it is found.
+  app.get('/start', async c => c.redirect(await startPage(ctx, ctx.log), 302))
+
   // Where the home page's form lands. It is a plain GET form, so the page needs no script of its
   // own and the number arrives as a query parameter.
   app.get('/review', c => {
     const raw = c.req.query('n') ?? ''
     // The form's generate button carries the flag on to the review page, which opens the dialog.
     const generate = c.req.query('generate') === '1' ? '?generate=1' : ''
-    return c.redirect(`/review/${encodeURIComponent(raw)}${generate}`, 303)
+    return c.redirect(`${ctx.config.basePath}review/${encodeURIComponent(raw)}${generate}`, 303)
   })
 
   app.get('/review/:n', async c => {
@@ -78,6 +84,7 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           prNumber,
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
+          base: ctx.config.basePath,
           version: ctx.version,
           host: ctx.config.host,
           foldLevel: settings.foldLevel,

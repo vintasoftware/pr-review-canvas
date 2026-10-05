@@ -57,6 +57,7 @@ function fakeManager(over: Partial<GenerationManager> = {}) {
     ),
     status: vi.fn<GenerationManager['status']>(over.status ?? (() => null)),
     cancel: vi.fn<GenerationManager['cancel']>(over.cancel ?? (async () => false)),
+    running: vi.fn<GenerationManager['running']>(() => null),
   }
 }
 

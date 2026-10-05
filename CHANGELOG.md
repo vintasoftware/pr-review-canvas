@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### One server for every project
+
+- One `pr-review serve` now serves every project. Start it once, in any folder, and run
+  `pr-review open` in a project to add it and open its review: the open PR or MR of the current
+  branch, or the project's home page. `pr-review open 123`, `open branch`, and `open uncommitted`
+  open that review.
+- Each project answers under `/r/<owner>/<repo>/`, and a linked worktree under
+  `/r/<owner>/<repo>~<folder>/`, because its branch and uncommitted work differ. The pages and
+  features under that path are unchanged.
+- `http://localhost:3010/` lists the projects. **remove** takes one off the list; its canvases and
+  review state stay, and `pr-review open` adds it again. A project whose folder is gone leaves the
+  list by itself.
+- The logo leads to the project list. Next to it, the project's name leads to its home page.
+- The project list and each project's home page have the **skin** and **theme** commands of the
+  review page.
+- `pr-review serve` inside a project still adds and opens it. When a server already runs, it adds
+  the project to that server and exits, unless `--port` names another port.
+- The server runs `gh`, `glab`, and the agent of each project with the environment of the shell
+  that ran `open` for it, kept in memory only. `--chat-agent` and `--chat-model` also work on
+  `open`, per project.
+- The worktrees of one clone share one generation at a time and one chat turn per review, because
+  they write the same canvases and threads.
+- With a chat turn or a generation running, the first **Ctrl+C** lists them; a second one within
+  five seconds stops the server.
+- `prepare` and `publish` print a `reviewUrl` under the project's path and on the running server's
+  port.
+- The server keeps `server.json` (readable by its owner only), `projects.json`, and the project
+  list's look in `~/.pr-review`, or in `PR_REVIEW_HOME`. Only a command that can read
+  `server.json` can add a project.
+
 ## 0.7.0
 
 Changes since 0.6.2.
