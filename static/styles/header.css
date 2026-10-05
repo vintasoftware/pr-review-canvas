@@ -29,6 +29,7 @@
   padding-left: 40px;
   white-space: nowrap;
   color: var(--fg);
+  text-decoration: none;
 }
 .brand-icon {
   position: absolute;

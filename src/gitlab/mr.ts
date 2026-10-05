@@ -113,3 +113,26 @@ export async function fetchMrDiffRefs(client: HostClient, repo: Repo, number: nu
   }
   return refs
 }
+
+/**
+ * The open merge request whose source is `branch` in this project, or null when there is none. The
+ * list also holds merge requests from forks that use the same branch name; equal project ids skip them.
+ */
+export async function findOpenMr(client: HostClient, repo: Repo, branch: string): Promise<number | null> {
+  const mrs = z
+    .array(
+      z.object({
+        iid: z.number().int(),
+        source_project_id: z.number().int(),
+        target_project_id: z.number().int(),
+      })
+    )
+    .parse(
+      await client.api(`${gitlabProjectApi(repo)}/merge_requests`, {
+        state: 'opened',
+        source_branch: branch,
+        per_page: '100',
+      })
+    )
+  return mrs.find(mr => mr.source_project_id === mr.target_project_id)?.iid ?? null
+}

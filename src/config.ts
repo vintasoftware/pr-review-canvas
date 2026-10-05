@@ -33,7 +33,10 @@ export interface RuntimeConfig {
   fixtureCanvasPath: string | null
   /** Chat agent and model the flags force for this run, if any. */
   chatOverrides: SettingsOverrides
-  /** Open the index in the default browser once the port is bound. Off with `--no-open` or in CI. */
+  /**
+   * Open the start page in the default browser once the port is bound: the review of the checked-out
+   * branch's open PR or MR, or the home page. Off with `--no-open` or in CI.
+   */
   openBrowser: boolean
 }
 

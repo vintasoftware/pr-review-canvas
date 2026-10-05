@@ -106,7 +106,7 @@ export function renderHeader(bundle, opts) {
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
-    `<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
+    `<div class="hdr-bar"><div class="brand"><a class="brand-wordmark" href="/"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a><span class="mono muted">${esc(opts.host)}</span></div>` +
     '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
     `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
     `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
