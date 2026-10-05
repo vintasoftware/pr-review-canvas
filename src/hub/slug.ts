@@ -9,6 +9,9 @@ import type { Repo } from '../contract/review-artifact.js'
 /** The prefix every project path starts with. */
 export const PROJECTS_PREFIX = '/r/'
 
+/** What separates a linked worktree's folder from its repository in a slug. */
+const WORKTREE_MARK = '~'
+
 /** A worktree folder name as a path segment: letters, digits, `.`, `_` and `-`. */
 function worktreeLabel(repoRoot: string): string {
   return path.basename(repoRoot).replace(/[^A-Za-z0-9._-]+/g, '-')
@@ -22,12 +25,15 @@ export function projectSlug(repo: Repo, repoRoot: string, commonDir: string): st
   const name = `${repo.owner}/${repo.name}`
   const main =
     path.basename(commonDir) === '.git' && path.resolve(path.dirname(commonDir)) === path.resolve(repoRoot)
-  return main ? name : `${name}~${worktreeLabel(repoRoot)}`
+  return main ? name : `${name}${WORKTREE_MARK}${worktreeLabel(repoRoot)}`
 }
 
-/** `owner/repo~worktree` from `/r/owner/repo~worktree/`. */
-export function projectName(basePath: string): string {
-  return decodeURIComponent(basePath.slice(PROJECTS_PREFIX.length, -1))
+/** The repository and the worktree folder a slug names; a main checkout names no worktree. */
+export function slugParts(slug: string): { repo: string; worktree: string | null } {
+  const cut = slug.indexOf(WORKTREE_MARK)
+  return cut === -1
+    ? { repo: slug, worktree: null }
+    : { repo: slug.slice(0, cut), worktree: slug.slice(cut + 1) }
 }
 
 /** The path a project's pages and API answer under, with its trailing slash. */

@@ -77,8 +77,12 @@ describe('server info', () => {
 
 describe('registry', () => {
   const projects = [
-    { basePath: '/r/acme/widgets/', repoRoot: '/src/widgets' },
-    { basePath: '/r/acme/widgets~wt/', repoRoot: '/wt' },
+    { slug: 'acme/widgets', repoRoot: '/src/widgets', flags: {} },
+    {
+      slug: 'acme/widgets~wt',
+      repoRoot: '/wt',
+      flags: { dataDir: '/data', chatAgent: 'codex', chatModel: 'o3' },
+    },
   ]
 
   it('round trips, creating the folder', async () => {
@@ -92,7 +96,10 @@ describe('registry', () => {
     expect(await readRegistry(dir)).toEqual([])
     await writeFile(path.join(dir, 'projects.json'), 'not json')
     expect(await readRegistry(dir)).toEqual([])
-    await writeFile(path.join(dir, 'projects.json'), JSON.stringify({ projects: [{ basePath: 1 }] }))
+    await writeFile(
+      path.join(dir, 'projects.json'),
+      JSON.stringify({ projects: [{ basePath: '/r/acme/widgets/', repoRoot: '/src/widgets' }] })
+    )
     expect(await readRegistry(dir)).toEqual([])
   })
 

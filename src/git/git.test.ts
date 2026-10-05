@@ -2,7 +2,7 @@
 // The real adapter against a throwaway repository: git is a process boundary, but the adapter
 // itself is what this file tests, so it needs the real binary once.
 import { execFile } from 'node:child_process'
-import { access, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { makeTempDir } from '../testing/fakes.js'
@@ -11,6 +11,7 @@ import {
   CANVAS_ANCHOR_PREFIX,
   createGit,
   execGit,
+  execGitIn,
   GitError,
   type GitExec,
   redactStderr,
@@ -331,5 +332,41 @@ describe('createGit (real adapter)', () => {
     expect(redactStderr('ssh://git@host/repo and http://a:b@h/x')).toBe(
       'ssh://***@host/repo and http://***@h/x'
     )
+  })
+})
+
+describe('execGitIn', () => {
+  let dir: string
+  beforeEach(async () => {
+    dir = await makeTempDir('pr-review-git-env-')
+    // A git that prints the variables it was run with, first on the PATH of the given environment.
+    await writeFile(
+      path.join(dir, 'git'),
+      '#!/bin/sh\necho "$PR_REVIEW_MARK/${PR_REVIEW_EXTRA:-none}/${GIT_DIR:-no-git-dir}/${PR_REVIEW_PROCESS_ONLY:-unset}"\n'
+    )
+    await chmod(path.join(dir, 'git'), 0o755)
+  })
+  afterEach(async () => {
+    delete process.env['PR_REVIEW_PROCESS_ONLY']
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it("runs git under the given environment, not this process's, with the repo pointers taken out", async () => {
+    process.env['PR_REVIEW_PROCESS_ONLY'] = 'leaked'
+    const exec = execGitIn({
+      PATH: `${dir}:/usr/bin:/bin`,
+      PR_REVIEW_MARK: 'from-shell',
+      GIT_DIR: '/elsewhere',
+    })
+    const r = await exec(dir, ['status'], { PR_REVIEW_EXTRA: 'extra' })
+    expect(r.code).toBe(0)
+    expect(r.stdout.toString('utf8')).toBe('from-shell/extra/no-git-dir/unset\n')
+    expect(await createGit(dir, exec).topLevel()).toBe('from-shell/none/no-git-dir/unset')
+  })
+
+  it("runs git under this process's environment when given none", async () => {
+    const r = await execGit(dir, ['--version'])
+    expect(r.code).toBe(0)
+    expect(r.stdout.toString('utf8')).toMatch(/^git version /)
   })
 })

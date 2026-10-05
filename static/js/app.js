@@ -214,7 +214,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         bareHeaderHtml({
           host: location.host,
-          home: this.bootstrap.base,
+          project: { slug: this.bootstrap.project, home: this.bootstrap.base },
           theme: this.theme,
           skin: this.skin,
         }) +
@@ -281,7 +281,7 @@ export class PrAppElement extends HTMLElement {
       theme: this.theme,
       skin: this.skin,
       now,
-      home: this.bootstrap?.base,
+      project: this.bootstrap ? { slug: this.bootstrap.project, home: this.bootstrap.base } : undefined,
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage

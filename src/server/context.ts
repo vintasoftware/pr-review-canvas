@@ -17,9 +17,17 @@ import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import type { ReviewKey } from '../contract/review-key.js'
-import { createGit, type Git } from '../git/git.js'
+import {
+  createGenerationManager,
+  type GenerationLane,
+  type GenerationManager,
+} from '../generate/generation-manager.js'
+import { createGit, execGitIn, type Git } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
-import { createHostClient, type HostClient } from '../host/client.js'
+import { createHostClient, execCliIn, type HostClient } from '../host/client.js'
+import { describeFixes, fixModel } from '../review/fix-model.js'
+import { prepare } from '../review/prepare.js'
+import { publish, readContext } from '../review/publish.js'
 import { PACKAGE_ROOT, STATIC_DIR } from '../paths.js'
 import type { LoadedProjectConfig } from '../project-config.js'
 import { type CanvasStore, createCanvasStore } from '../store/canvas-store.js'
@@ -64,6 +72,10 @@ export interface AppContext {
   /** Is acpx itself installed? A missing acpx disables the chat pane with a banner. */
   preflight: PreflightProbe
   chat: ChatManager
+  /** The canvas generation the review page starts. */
+  generation: GenerationManager
+  /** What the context shares with the other worktrees of its clone. */
+  clone: CloneShared
   /** The acpx boundary, shared by the chat and the generation the review page starts. */
   runner: AgentRunner
   transcripts: TranscriptStore
@@ -128,14 +140,44 @@ export interface CreateAppContextOptions {
   fetch?: typeof fetch
   runner?: AgentRunner
   now?: () => Date
-  log?: (line: string) => void
+  log?: ((line: string) => void) | undefined
   /**
-   * The environment the host CLI and the agent run under: that of the shell that opened the
+   * The environment git, the host CLI, and the agent run under: that of the shell that opened the
    * project, held in memory only. This process's own when omitted.
    */
   env?: NodeJS.ProcessEnv | undefined
-  /** Whether a sibling context over the same data dir runs a chat turn for a review. */
-  chatBusyElsewhere?: ((key: ReviewKey) => boolean) | undefined
+  /** What the context shares with the other worktrees of its clone; a part of its own if omitted. */
+  clone?: CloneShared | undefined
+}
+
+/**
+ * What the worktrees of one clone share, as they share its `.pr-review/` data dir: the review
+ * checkouts, and the work that writes its files. A chat turn on a review, or a generation, in one
+ * worktree keeps the others from starting one over the same files.
+ */
+export interface CloneShared {
+  /** Run from the clone's common git dir, so no one worktree's folder has to stay. */
+  checkouts: ReviewCheckouts
+  /** The reviews with a chat turn running. */
+  chatTurns: Set<ReviewKey>
+  generationLane: GenerationLane
+}
+
+/**
+ * The review checkouts' git runs under the server's own environment: one clone part serves
+ * worktrees opened from different shells, and adding or moving a checkout reads only objects the
+ * clone already has.
+ */
+export function createCloneShared(
+  config: Pick<RuntimeConfig, 'dataDir' | 'repo' | 'commonDir'>,
+  now: () => Date,
+  checkoutGit: CheckoutGit = createCheckoutGit(config.commonDir)
+): CloneShared {
+  return {
+    checkouts: createReviewCheckouts({ root: checkoutsRoot(config.dataDir, config), git: checkoutGit, now }),
+    chatTurns: new Set(),
+    generationLane: { key: null },
+  }
 }
 
 export interface ChatSet {
@@ -161,19 +203,11 @@ export function createChatSet(
   stores: StoreSet,
   now: () => Date,
   git: Git,
-  opts: {
-    prompts?: PromptOverrides | undefined
-    checkoutGit?: CheckoutGit | undefined
-    chatBusyElsewhere?: ((key: ReviewKey) => boolean) | undefined
-  } = {}
+  clone: CloneShared,
+  prompts?: PromptOverrides
 ): ChatSet {
-  const { prompts } = opts
   const settings = createSettingsStore(config.dataDir)
-  const checkouts = createReviewCheckouts({
-    root: checkoutsRoot(config.dataDir, config),
-    git: opts.checkoutGit ?? createCheckoutGit(config.repoRoot),
-    now,
-  })
+  const { checkouts } = clone
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
@@ -195,35 +229,57 @@ export function createChatSet(
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,
-      busyElsewhere: opts.chatBusyElsewhere,
+      turns: clone.chatTurns,
     }),
   }
 }
 
-/** The set variables of `env`, which a child process takes on top of the server's own. */
-function definedVariables(env: NodeJS.ProcessEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
-  )
+/**
+ * The generation manager over the real pipeline: the same prepare and publish the CLI runs. It is
+ * built from the rest of the context, and its steps run over the whole context once it exists.
+ */
+export function createContextGeneration(
+  ctx: Omit<AppContext, 'generation'>,
+  lane: GenerationLane,
+  whole: () => AppContext
+): GenerationManager {
+  return createGenerationManager({
+    runner: ctx.runner,
+    checkouts: ctx.checkouts,
+    lane,
+    steps: {
+      prepare: (input, opts) => prepare(whole(), input, opts),
+      publish: (canvasDir, opts) => publish(whole(), canvasDir, opts),
+      fix: async (canvasDir, modelPath, text) => {
+        const context = await readContext(canvasDir)
+        const { patches } = await ctx.derived.ensure(context.headSha, context.mergeBaseSha)
+        return describeFixes(await fixModel(modelPath, text, context, patches))
+      },
+    },
+    settings: () => ctx.chat.effectiveSettings(),
+    generation: ctx.projectConfig.config.generation,
+    repo: ctx.config.repo,
+    repoRoot: ctx.config.repoRoot,
+    currentBranch: () => ctx.git.currentBranch(),
+    log: ctx.log,
+    now: ctx.now,
+  })
 }
 
 export function createAppContext(opts: CreateAppContextOptions): AppContext {
-  const git = opts.git ?? createGit(opts.config.repoRoot)
+  // git, the host CLI, and the agent all run as they would from the shell that opened the
+  // project: its tokens, ssh agent, config dirs, and PATH.
+  const env = opts.env ?? process.env
+  const git = opts.git ?? createGit(opts.config.repoRoot, execGitIn(env))
   const now = opts.now ?? (() => new Date())
   const { host, repo } = opts.config
-  // The host CLI and the agent run as they would from the shell that opened the project: its
-  // token, config dir, and PATH, with the host's own variables (glab's instance) on top.
-  const gh =
-    opts.gh ??
-    createHostClient(
-      opts.env === undefined
-        ? host.cli
-        : { ...host.cli, env: { ...definedVariables(opts.env), ...host.cli.env } }
-    )
-  const runner = opts.runner ?? createAgentRunner(opts.env === undefined ? {} : { env: opts.env })
+  const gh = opts.gh ?? createHostClient(host.cli, execCliIn(env))
+  const runner = opts.runner ?? createAgentRunner({ env })
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
-  return {
+  const clone = opts.clone ?? createCloneShared(opts.config, now)
+  const parts: Omit<AppContext, 'generation'> = {
     config: opts.config,
+    clone,
     log: opts.log ?? (line => process.stderr.write(`${line}\n`)),
     projectConfig: opts.projectConfig,
     git,
@@ -231,14 +287,16 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
     capabilities: createCapabilityProbe(() => host.probeCapabilities(gh, repo), now),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     ...stores,
-    ...createChatSet(opts.config, runner, stores, now, git, {
-      prompts: opts.projectConfig.config.prompts,
-      chatBusyElsewhere: opts.chatBusyElsewhere,
-    }),
+    ...createChatSet(opts.config, runner, stores, now, git, clone, opts.projectConfig.config.prompts),
     now,
     version: readPackageVersion(),
     staticDir: STATIC_DIR,
     vendorRoots: resolveVendorRoots(),
     fixtureArtifact: opts.fixtureArtifact,
   }
+  const ctx: AppContext = {
+    ...parts,
+    generation: createContextGeneration(parts, clone.generationLane, () => ctx),
+  }
+  return ctx
 }

@@ -14,6 +14,7 @@ import {
   createGenerationManager,
   extractModelJson,
   GenerationBusyError,
+  type GenerationLane,
   type GenerationManager,
   type GenerationSteps,
   codeNote,
@@ -81,7 +82,9 @@ function harness(
     steps?: Partial<GenerationSteps>
     lease?: 'busy' | 'move-fails'
     maxRepairRounds?: number
-    busyElsewhere?: () => ReviewKey | null
+    lane?: GenerationLane
+    /** Settles before the settings are read. */
+    settingsGate?: Promise<void>
   } = {}
 ): Harness {
   const runner = createFakeRunner({
@@ -132,14 +135,17 @@ function harness(
     runner,
     checkouts,
     steps,
-    settings: async () => ({ ...DEFAULT_SETTINGS, ...opts.settings }),
+    settings: async () => {
+      await opts.settingsGate
+      return { ...DEFAULT_SETTINGS, ...opts.settings }
+    },
     generation: { models: { claude: 'opus' }, maxRepairRounds: opts.maxRepairRounds ?? 3 },
     repo: { owner: 'Acme', name: 'widgets' },
     currentBranch: async () => 'feat/b',
     repoRoot: '/repo',
     log: line => logs.push(line),
     now: () => new Date('2026-10-05T12:00:00.000Z'),
-    busyElsewhere: opts.busyElsewhere,
+    lane: opts.lane,
   })
   return { manager, runner, steps, leases, logs }
 }
@@ -392,25 +398,61 @@ describe('createGenerationManager', () => {
   })
 
   it('refuses to start while a manager over the same data dir runs a job, naming its review', async () => {
-    let elsewhere: ReviewKey | null = 42
-    const h = harness({ busyElsewhere: () => elsewhere })
-    const refused = await h.manager.start(7, { force: false }).catch((err: unknown) => err)
+    const lane: GenerationLane = { key: null }
+    let release: () => void = () => undefined
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const a = harness({
+      lane,
+      steps: {
+        prepare: async () => {
+          await gate
+          return prepared()
+        },
+      },
+    })
+    const b = harness({ lane })
+    await a.manager.start(42, { force: false })
+    expect(lane.key).toBe(42)
+    const refused = await b.manager.start(7, { force: false }).catch((err: unknown) => err)
     expect(refused).toBeInstanceOf(GenerationBusyError)
     expect(refused).toMatchObject({ key: 42 })
-    expect(h.manager.status(7)).toBeNull()
-    elsewhere = null
+    expect(b.manager.status(7)).toBeNull()
+    release()
+    expect((await settled(a.manager, 42)).phase).toBe('done')
+    expect(lane.key).toBeNull()
+    await b.manager.start(7, { force: false })
+    expect(lane.key).toBe(7)
+    expect((await settled(b.manager, 7)).phase).toBe('done')
+    expect(lane.key).toBeNull()
+  })
+
+  it('clears the lane when a job fails, so the next one starts', async () => {
+    const lane: GenerationLane = { key: null }
+    const h = harness({ lane, lease: 'busy' })
     await h.manager.start(7, { force: false })
-    await settled(h.manager, 7)
+    expect((await settled(h.manager, 7)).phase).toBe('failed')
+    expect(lane.key).toBeNull()
   })
 
   it('refuses to start when a sibling job started while the settings were read', async () => {
-    let checks = 0
-    const h = harness({ busyElsewhere: () => (++checks === 1 ? null : 'uncommitted') })
-    const refused = await h.manager.start(7, { force: false }).catch((err: unknown) => err)
+    const lane: GenerationLane = { key: null }
+    let release: () => void = () => undefined
+    const settingsGate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const a = harness({ lane, settingsGate })
+    const b = harness({ lane })
+    const pending = a.manager.start(7, { force: false }).catch((err: unknown) => err)
+    await b.manager.start('uncommitted', { force: false })
+    release()
+    const refused = await pending
+    expect(refused).toBeInstanceOf(GenerationBusyError)
     expect(refused).toMatchObject({ key: 'uncommitted' })
-    expect(checks).toBe(2)
-    expect(h.manager.status(7)).toBeNull()
-    expect(h.steps.prepare).not.toHaveBeenCalled()
+    expect(a.manager.status(7)).toBeNull()
+    expect(a.steps.prepare).not.toHaveBeenCalled()
+    await settled(b.manager, 'uncommitted')
   })
 
   it('stops the agent mid-turn', async () => {

@@ -61,7 +61,7 @@ function fakeDeps(
     register: (_server, input) => {
       registered.push(input)
       return Promise.resolve({
-        name: 'acme/widgets',
+        slug: 'acme/widgets',
         basePath: '/r/acme/widgets/',
         kept: false,
         ...opts.answer,

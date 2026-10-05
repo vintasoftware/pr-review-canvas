@@ -43,10 +43,11 @@ export interface ChatManagerDeps {
   currentBranch: () => Promise<string | null>
   now: () => Date
   /**
-   * True when a manager over the same data dir runs a turn for `key`. The worktrees of one clone
-   * share its threads and review checkout, so a turn from one refuses a turn from another.
+   * The reviews with a turn running, in this manager or any other over the same data dir. The
+   * worktrees of one clone share its threads and review checkout, and so this set; a manager of
+   * its own has one of its own.
    */
-  busyElsewhere?: ((key: ReviewKey) => boolean) | undefined
+  turns?: Set<ReviewKey> | undefined
 }
 
 /** Everything about the review target one turn needs, resolved by the route. */
@@ -114,6 +115,7 @@ async function modelForTurn(
 
 export function createChatManager(deps: ChatManagerDeps): ChatManager {
   const running = new Map<ReviewKey, RunningTurn>()
+  const turns = deps.turns ?? new Set<ReviewKey>()
 
   const effectiveSettings = async (): Promise<Settings> => {
     const saved = await deps.settings.read()
@@ -220,19 +222,21 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
-    if (running.has(target.key) || deps.busyElsewhere?.(target.key) === true) {
+    if (turns.has(target.key)) {
       throw new ChatBusyError()
     }
     // The slot is taken before the first await, so a second request that arrives while this one
     // is still reading the settings sees a busy chat rather than starting a second agent.
     const slot: RunningTurn = { run: null, stopped: false, lease: null }
     running.set(target.key, slot)
+    turns.add(target.key)
     try {
       yield* runTurn(target, input, slot)
     } finally {
       // The lock goes first, so a slot that looks free always has a free checkout behind it.
       await slot.lease?.release().catch(() => undefined)
       running.delete(target.key)
+      turns.delete(target.key)
     }
   }
 

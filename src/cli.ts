@@ -21,7 +21,7 @@ import {
   runValidate,
   splitCommonFlags,
 } from './commands.js'
-import { loadRuntimeConfig, parsePort, readEnv, resolveRepoRoot } from './config.js'
+import { readEnv, resolveRepoRoot } from './config.js'
 import { createGit, GitError } from './git/git.js'
 import { printUsage } from './help.js'
 import { createHostClient } from './host/client.js'
@@ -30,19 +30,12 @@ import { type HubCommandDeps, runOpen, runServe, type StartedServer } from './hu
 import { hubHome } from './hub/home.js'
 import { createHubApp } from './hub/hub-app.js'
 import { createHub, type ProjectRegistration } from './hub/hub.js'
-import { loadFixture, projectLoader } from './hub/project.js'
-import { loadProjectConfig } from './project-config.js'
+import { loadContext } from './load-context.js'
 import { checkSkill } from './review/doctor.js'
-import {
-  type AppContext,
-  createAppContext,
-  readPackageVersion,
-  resolveVendorRoots,
-} from './server/context.js'
+import { type AppContext, readPackageVersion, resolveVendorRoots } from './server/context.js'
 import { startHubServer } from './server/node-server.js'
 import { openBrowser } from './server/open-browser.js'
 import { PACKAGE_ROOT, STATIC_DIR } from './paths.js'
-import { ensureDataDir } from './store/data-dir.js'
 import { type CommandResult, runUpgrade } from './upgrade.js'
 
 const SUBCOMMANDS = [
@@ -66,50 +59,24 @@ const io: CliIo = {
   json: true,
 }
 
+/** The context of the checkout a one-shot command runs in. */
 async function buildContext(
   repo: string | undefined,
   dataDir: string | undefined,
-  extra: {
-    canvasDir?: string | undefined
-    /** False for validate and publish: they work in the data dir prepare made, so they create none. */
-    createDataDir?: boolean | undefined
-    port?: string | undefined
-    fixtureCanvas?: string | undefined
-    chatAgent?: string | undefined
-    chatModel?: string | undefined
-    noOpen?: boolean | undefined
-  } = {}
+  extra: { canvasDir?: string | undefined; createDataDir?: boolean | undefined } = {}
 ): Promise<AppContext> {
   const cwd = process.cwd()
-  const repoDir = repo === undefined ? cwd : path.resolve(cwd, repo)
-  const git = createGit(repoDir)
-  const config = await loadRuntimeConfig(
-    {
-      // Without --port or PR_REVIEW_PORT, the running server's port, so publish prints a URL it answers.
-      port:
-        extra.port !== undefined
-          ? parsePort(extra.port, 0)
-          : readEnv(process.env, 'PR_REVIEW_PORT') === undefined
-            ? await runningPort(hubHome(process.env))
-            : undefined,
-      dataDir,
-      canvasDir: extra.canvasDir,
-      fixtureCanvas: extra.fixtureCanvas,
-      chatAgent: extra.chatAgent,
-      chatModel: extra.chatModel,
-      noOpen: extra.noOpen,
-    },
-    process.env,
-    git,
-    cwd
-  )
-  const projectConfig = await loadProjectConfig(config.repoRoot)
-  if (extra.createDataDir !== false) {
-    await ensureDataDir(config.dataDir)
-  }
-  const fixtureArtifact =
-    config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
-  return createAppContext({ config, projectConfig, fixtureArtifact })
+  const env = process.env
+  return loadContext({
+    repoDir: repo === undefined ? cwd : path.resolve(cwd, repo),
+    cwd,
+    env,
+    flags: dataDir === undefined ? {} : { dataDir },
+    canvasDir: extra.canvasDir,
+    createDataDir: extra.createDataDir,
+    // Without PR_REVIEW_PORT, the running server's port, so publish prints a URL it answers.
+    port: readEnv(env, 'PR_REVIEW_PORT') === undefined ? await runningPort(hubHome(env)) : undefined,
+  })
 }
 
 /** The top-level folder of the checkout `dir` is in; null outside one, as `serve` allows. */
@@ -149,7 +116,20 @@ async function startServer(opts: {
   const home = hubHome(process.env)
   const version = readPackageVersion()
   let port = opts.port
-  const hub = await createHub({ home, load: projectLoader(() => port), log })
+  const hub = await createHub({
+    home,
+    load: (registration, hooks) =>
+      loadContext({
+        repoDir: registration.repoRoot,
+        cwd: registration.repoRoot,
+        env: registration.env,
+        flags: registration.flags,
+        port,
+        log: hooks.log,
+        cloneOf: hooks.cloneOf,
+      }),
+    log,
+  })
   const token = randomBytes(32).toString('base64url')
   const app = createHubApp({
     hub,
@@ -178,7 +158,7 @@ async function startServer(opts: {
   }
   try {
     const { project } = await hub.register(opts.registration)
-    log(`serving ${project.name} at ${origin}${project.ctx.config.basePath}`)
+    log(`serving ${project.ctx.config.slug} at ${origin}${project.ctx.config.basePath}`)
     return { origin, basePath: project.ctx.config.basePath }
   } catch (err) {
     // A checkout that cannot be served (no origin, a bad flag) stops the server it started.

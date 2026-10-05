@@ -1,4 +1,4 @@
-import { basePathOf, PROJECTS_PREFIX, projectSlug } from './slug.js'
+import { basePathOf, PROJECTS_PREFIX, projectSlug, slugParts } from './slug.js'
 
 const repo = { owner: 'acme', name: 'widgets' }
 
@@ -37,5 +37,18 @@ describe('basePathOf', () => {
 
   it('encodes each segment', () => {
     expect(basePathOf('ac me/wid#gets')).toBe('/r/ac%20me/wid%23gets/')
+  })
+})
+
+describe('slugParts', () => {
+  it('splits a worktree slug into its repository and folder, and names no folder for a main checkout', () => {
+    expect(slugParts('acme/widgets')).toEqual({ repo: 'acme/widgets', worktree: null })
+    expect(slugParts('acme/widgets~feature-x')).toEqual({ repo: 'acme/widgets', worktree: 'feature-x' })
+    expect(slugParts('group/sub/widgets~wt')).toEqual({ repo: 'group/sub/widgets', worktree: 'wt' })
+  })
+
+  it('reads back what projectSlug builds', () => {
+    const slug = projectSlug(repo, '/wt/my feature', '/src/widgets/.git')
+    expect(slugParts(slug)).toEqual({ repo: 'acme/widgets', worktree: 'my-feature' })
   })
 })

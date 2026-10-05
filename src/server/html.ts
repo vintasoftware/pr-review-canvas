@@ -4,7 +4,7 @@ import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.j
 import { keyLabel, keyToString, LOCAL_KEYS, type LocalKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
-import { projectName } from '../hub/slug.js'
+import { basePathOf, slugParts } from '../hub/slug.js'
 
 type Html = HtmlEscapedString | Promise<HtmlEscapedString>
 
@@ -68,15 +68,15 @@ const BRAND = html`<a class="brand-wordmark" href="/" title="All projects"><img 
  * the page's own commands, and the skin and theme commands last.
  */
 function headerBar(opts: {
-  /** The project's base path; null on a page of the server's own. */
-  home: string | null
+  /** The project's slug; null on a page of the server's own. */
+  project: string | null
   port?: number
   commands?: Html
   appearance: Appearance
 }): Html {
   const context =
-    opts.home !== null
-      ? html`<a class="mono muted" href="${opts.home}" title="This project's home page">${projectName(opts.home)}</a>`
+    opts.project !== null
+      ? html`<a class="mono muted" href="${basePathOf(opts.project)}" title="This project's home page">${opts.project}</a>`
       : opts.port === undefined
         ? ''
         : html`<span class="mono muted">localhost:${String(opts.port)}</span>`
@@ -140,7 +140,8 @@ export function homePage(
     owner: string
     repo: string
     version: string
-    port: number
+    /** The project's name on the server, which its path is built from. */
+    slug: string
     /** The project's base path on the server, with a trailing slash. */
     base: string
     host: Host
@@ -168,7 +169,7 @@ export function homePage(
     scripts: [PAGE_APPEARANCE_SCRIPT],
     body: html`<div class="page">
 <header class="hdr">
-${headerBar({ home: data.base, commands: html`<a class="cmd" id="health" href="${data.base}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`, appearance })}
+${headerBar({ project: data.slug, commands: html`<a class="cmd" id="health" href="${data.base}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`, appearance })}
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>${data.owner}/${data.repo}</h1></div>
 <p class="meta"><span>Open a ${noun} by number. Diffs come from your local clone; the canvas from a published review.</span></p></div>
@@ -214,9 +215,7 @@ ${
 
 /** One checkout the server serves, as the project list shows it. */
 export interface ListedProject {
-  /** `owner/repo`, or `owner/repo~folder` for a linked worktree. */
-  name: string
-  basePath: string
+  slug: string
   repoRoot: string
   /** `repoRoot` as the list prints it, with the home folder written `~`. */
   shownPath: string
@@ -231,9 +230,7 @@ export function groupProjects(
 ): { repo: string; checkouts: { worktree: string | null; project: ListedProject }[] }[] {
   const groups = new Map<string, { worktree: string | null; project: ListedProject }[]>()
   for (const project of projects) {
-    const cut = project.name.indexOf('~')
-    const repo = cut === -1 ? project.name : project.name.slice(0, cut)
-    const worktree = cut === -1 ? null : project.name.slice(cut + 1)
+    const { repo, worktree } = slugParts(project.slug)
     groups.set(repo, [...(groups.get(repo) ?? []), { worktree, project }])
   }
   return [...groups.entries()]
@@ -266,7 +263,7 @@ export function projectsPage(
     scripts: [PAGE_APPEARANCE_SCRIPT, PROJECTS_PAGE_SCRIPT],
     body: html`<div class="page">
 <header class="hdr">
-${headerBar({ home: null, port: data.port, commands: html`<a class="cmd" id="health" href="/api/health" title="The server version, its port, and the projects it serves">health</a>`, appearance })}
+${headerBar({ project: null, port: data.port, commands: html`<a class="cmd" id="health" href="/api/health" title="The server version, its port, and the projects it serves">health</a>`, appearance })}
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>Projects</h1></div>
 <p class="meta"><span>Every checkout this server serves, by repository. Run <code>pr-review open</code> in a project's folder to add it.</span></p></div>
@@ -280,7 +277,7 @@ ${
         group => html`<section class="panel project-group"><div class="panel-h"><h2>${group.repo}</h2><span class="muted">${String(group.checkouts.length)} ${group.checkouts.length === 1 ? 'checkout' : 'checkouts'}</span></div>
 <ul class="project-list">${group.checkouts.map(
           ({ worktree, project }) =>
-            html`<li class="project-row"><div class="project-main"><a class="project-name" href="${project.basePath}">${worktree ?? 'main checkout'}</a>${worktree === null ? '' : html` <span class="pill">worktree</span>`}<span class="project-path mono muted" title="${project.repoRoot}">${project.shownPath}</span></div><button class="cmd project-remove" type="button" data-remove="${project.basePath}" title="Take ${project.name} off this list. Its canvases and review state stay in its .pr-review folder, and pr-review open adds it again.">remove</button></li>`
+            html`<li class="project-row"><div class="project-main"><a class="project-name" href="${basePathOf(project.slug)}">${worktree ?? 'main checkout'}</a>${worktree === null ? '' : html` <span class="pill">worktree</span>`}<span class="project-path mono muted" title="${project.repoRoot}">${project.shownPath}</span></div><button class="cmd project-remove" type="button" data-remove="${project.slug}" title="Take ${project.slug} off this list. Its canvases and review state stay in its .pr-review folder, and pr-review open adds it again.">remove</button></li>`
         )}</ul></section>`
       )
 }
@@ -291,22 +288,22 @@ ${
   })
 }
 
-/** `home` is the project's base path, or `/` for an error of the server's own. */
+/** `project` is the slug of the project the error is in; null for an error of the server's own. */
 export function errorPage(
   error: ErrorEnvelope['error'],
   nonce: string,
   appearance: Appearance,
-  home = '/'
+  project: string | null = null
 ): Html {
   return pageShell({
     title: `Error · ${error.code}`,
-    bootstrap: { error, base: home },
+    bootstrap: { error, base: project === null ? '/' : basePathOf(project) },
     nonce,
     appearance,
     app: false,
     scripts: [PAGE_APPEARANCE_SCRIPT],
     body: html`<div class="page"><header class="hdr">
-${headerBar({ home: home === '/' ? null : home, appearance })}
+${headerBar({ project, appearance })}
 <div class="stripe" aria-hidden="true"></div></header>
 <main id="main" class="home"><section class="panel error-card"><div class="panel-h"><h2><span class="mono">${error.code}</span></h2></div>
 <div class="body"><p>${error.message}</p>${error.hint ? html`<p class="muted">${error.hint}</p>` : ''}</div></section></main></div>`,

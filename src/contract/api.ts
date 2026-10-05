@@ -258,6 +258,8 @@ export interface ReviewBootstrap {
   prNumber: ReviewKey
   owner: string
   repo: string
+  /** The project's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
+  project: string
   /** Where the project's pages and API live on the server, with a trailing slash. */
   base: string
   version: string

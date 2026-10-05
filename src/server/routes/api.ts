@@ -18,7 +18,6 @@ import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { chatRoutes } from './chat-routes.js'
-import type { GenerationManager } from '../../generate/generation-manager.js'
 import { generateRoutes } from './generate-routes.js'
 import { selfReviewRoutes } from './self-review-routes.js'
 import { reviewRoutes } from './review-routes.js'
@@ -112,12 +111,12 @@ async function currentCanvasSha(
   return found.headSha
 }
 
-export function apiRoutes(ctx: AppContext, generation?: GenerationManager): Hono {
+export function apiRoutes(ctx: AppContext): Hono {
   const api = new Hono()
   const loader = createPrLoader(ctx)
   api.route('/', reviewRoutes(ctx, loader))
   api.route('/', chatRoutes(ctx, loader))
-  api.route('/', generateRoutes(ctx, generation))
+  api.route('/', generateRoutes(ctx))
   api.route('/', selfReviewRoutes(ctx, loader))
 
   // How the page is painted. It lives in the same settings file the chat settings do, but on its

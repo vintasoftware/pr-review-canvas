@@ -11,7 +11,6 @@ import {
   bareHeaderHtml,
   generateCommand,
   progressHtml,
-  projectNameOf,
   refreshProgress,
   renderHeader,
   riskLineHtml,
@@ -153,7 +152,7 @@ describe('header', () => {
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
-      home: '/r/acme/widgets~fix/',
+      project: { slug: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
     })
     const wordmark = document.querySelector('a.brand-wordmark')
     expect(wordmark?.getAttribute('href')).toBe('/')
@@ -164,21 +163,18 @@ describe('header', () => {
     expect(document.querySelector('.brand span.mono.muted')).toBeNull()
   })
 
-  it('shows the host next to the wordmark when the page has no project path', () => {
-    for (const home of [undefined, '/', '/review/42']) {
-      document.body.innerHTML = renderHeader(bundle(), {
-        host: 'localhost:3010',
-        theme: 'auto',
-        skin: 'terminal',
-        now: NOW,
-        home,
-      })
-      expect([home, document.querySelector('.brand span.mono.muted')?.textContent]).toEqual([
-        home,
-        'localhost:3010',
-      ])
-      expect(document.querySelector('.brand a.mono.muted')).toBeNull()
-    }
+  it('shows the host next to the wordmark when the page has no project', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: undefined,
+    })
+    expect(document.querySelector('.brand span.mono.muted')?.textContent).toBe('localhost:3010')
+    expect(document.querySelector('.brand a.mono.muted')).toBeNull()
+    document.body.innerHTML = bareHeaderHtml({ host: 'localhost:3010', theme: 'dark', skin: 'olive' })
+    expect(document.querySelector('.brand span.mono.muted')?.textContent).toBe('localhost:3010')
   })
 
   it('escapes the project name and its link', () => {
@@ -187,18 +183,18 @@ describe('header', () => {
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
-      home: '/r/acme/%3Cb%3E%22x/',
+      project: { slug: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
     })
     const project = document.querySelector('.brand a.mono.muted')
     expect(project?.textContent).toBe('acme/<b>"x')
-    expect(project?.getAttribute('href')).toBe('/r/acme/%3Cb%3E%22x/')
+    expect(project?.getAttribute('href')).toBe('/r/acme/<b>"x/')
     expect(document.querySelector('.brand b')).toBeNull()
   })
 
   it('keeps the wordmark and the project link on a page whose review did not load', () => {
     document.body.innerHTML = bareHeaderHtml({
       host: 'localhost:3010',
-      home: '/r/acme/widgets/',
+      project: { slug: 'acme/widgets', home: '/r/acme/widgets/' },
       theme: 'dark',
       skin: 'olive',
     })
@@ -442,21 +438,6 @@ describe('header', () => {
       'Generate the canvas of this local work again from a blank page'
     )
     expect(hdr?.querySelector('.pill')?.textContent).toBe('uncommitted')
-  })
-})
-
-describe('projectNameOf', () => {
-  it("reads the project's name from its base path, decoded", () => {
-    expect(projectNameOf('/r/acme/widgets/')).toBe('acme/widgets')
-    expect(projectNameOf('/r/acme/widgets~fix/')).toBe('acme/widgets~fix')
-    expect(projectNameOf('/r/group/proj/sub/')).toBe('group/proj/sub')
-    expect(projectNameOf('/r/acme/my%20widgets/')).toBe('acme/my widgets')
-  })
-
-  it('is null for a path that is not a project base', () => {
-    for (const home of ['/', '', '/r/', '/r/acme/widgets', '/x/acme/widgets/', 'r/acme/widgets/']) {
-      expect([home, projectNameOf(home)]).toEqual([home, null])
-    }
   })
 })
 

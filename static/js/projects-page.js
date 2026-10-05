@@ -19,7 +19,7 @@ export function wireRemove(doc, fetchImpl) {
       button.parentElement?.querySelector('.project-error')?.remove()
       fetchJson('/api/projects/remove', {
         method: 'POST',
-        body: { basePath: button.dataset['remove'] },
+        body: { slug: button.dataset['remove'] },
         fetchImpl,
       }).then(
         () => doc.defaultView?.location.reload(),

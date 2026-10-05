@@ -1,5 +1,4 @@
 import { type Context, Hono } from 'hono'
-import type { GenerationManager } from '../generate/generation-manager.js'
 import type { AppContext } from './context.js'
 import type { AppEnv } from './env.js'
 import { AppError, logRequestError, toAppError } from './errors.js'
@@ -14,11 +13,8 @@ function wantsJson(pathname: string): boolean {
   return pathname.startsWith('/api/') || pathname.startsWith('/vendor/') || pathname.startsWith('/static/')
 }
 
-/**
- * One project's pages and API, answering at its root. The shared server mounts it under the
- * project's base path and passes the generation manager it watches; tests build one of their own.
- */
-export function createApp(ctx: AppContext, generation?: GenerationManager): Hono<AppEnv> {
+/** One project's pages and API, answering at its root; the shared server mounts it under its base path. */
+export function createApp(ctx: AppContext): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
   app.use('*', responseHeaders)
@@ -35,7 +31,7 @@ export function createApp(ctx: AppContext, generation?: GenerationManager): Hono
     const res = wantsJson(c.req.path)
       ? c.json(envelope, err.status)
       : await c.html(
-          errorPage(envelope.error, nonce, await appearanceFor(ctx, appearanceQuery(c)), ctx.config.basePath),
+          errorPage(envelope.error, nonce, await appearanceFor(ctx, appearanceQuery(c)), ctx.config.slug),
           err.status
         )
     applyResponseHeaders(res, c.req.path, nonce)
@@ -51,7 +47,7 @@ export function createApp(ctx: AppContext, generation?: GenerationManager): Hono
     errorResponse(c, new AppError('NOT_FOUND', `no route for ${c.req.method} ${c.req.path}`, 404))
   )
 
-  app.route('/api', apiRoutes(ctx, generation))
+  app.route('/api', apiRoutes(ctx))
   app.route('/', staticRoutes(ctx))
   app.route('/', pageRoutes(ctx))
 

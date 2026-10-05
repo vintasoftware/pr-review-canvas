@@ -86,7 +86,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
-      reviewUrl: 'http://localhost:3010/review/42',
+      reviewUrl: 'http://localhost:3010/r/acme/widgets/review/42',
     })
     // validate also reads a stored review.json, converting it back to the model's shape.
     const reviewIo = fakeIo()

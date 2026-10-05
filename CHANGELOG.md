@@ -19,13 +19,11 @@
   review page.
 - `pr-review serve` inside a project still adds and opens it. When a server already runs, it adds
   the project to that server and exits, unless `--port` names another port.
-- The server runs `gh`, `glab`, and the agent of each project with the environment of the shell
-  that ran `open` for it, kept in memory only. `--chat-agent` and `--chat-model` also work on
-  `open`, per project.
+- The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
+  shell that ran `open` for it, kept in memory only. `--data-dir`, `--chat-agent`, and
+  `--chat-model` also work on `open`, per project, and are saved with it.
 - The worktrees of one clone share one generation at a time and one chat turn per review, because
   they write the same canvases and threads.
-- With a chat turn or a generation running, the first **Ctrl+C** lists them; a second one within
-  five seconds stops the server.
 - `prepare` and `publish` print a `reviewUrl` under the project's path and on the running server's
   port.
 - The server keeps `server.json` (readable by its owner only), `projects.json`, and the project

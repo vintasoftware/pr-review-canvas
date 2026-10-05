@@ -3,9 +3,6 @@ import { serve } from '@hono/node-server'
 import { removeServerInfo, type ServerInfo, writeServerInfo } from '../hub/home.js'
 import type { Hub } from '../hub/hub.js'
 
-/** How long a second Ctrl-C has to come to stop a server that still runs an agent. */
-export const CONFIRM_STOP_MS = 5_000
-
 export interface HubServerOptions {
   fetch: (request: Request) => Response | Promise<Response>
   port: number
@@ -16,7 +13,6 @@ export interface HubServerOptions {
   advertise: boolean
   info: Omit<ServerInfo, 'port' | 'pid'>
   log: (line: string) => void
-  now?: () => number
 }
 
 export interface HubServer {
@@ -29,7 +25,6 @@ export interface HubServer {
  * is bound, and rejects when it cannot be, such as when another program holds it.
  */
 export async function startHubServer(opts: HubServerOptions): Promise<HubServer> {
-  const now = opts.now ?? Date.now
   const server = serve({ fetch: opts.fetch, port: opts.port, hostname: '127.0.0.1' })
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve)
@@ -61,29 +56,13 @@ export async function startHubServer(opts: HubServerOptions): Promise<HubServer>
     }
   }
 
-  // Every project's chat and generation live in this process, so a stop ends all of them. With
-  // any running, the first Ctrl-C lists them and a second one, soon after, stops the server.
-  let warnedAt: number | null = null
-  const onSignal = (signal: NodeJS.Signals): void => {
-    const running = opts.hub.running()
-    const confirmed = warnedAt !== null && now() - warnedAt <= CONFIRM_STOP_MS
-    if (signal === 'SIGINT' && running.length > 0 && !confirmed) {
-      warnedAt = now()
-      opts.log(
-        [
-          'still running:',
-          ...running.map(line => `  ${line}`),
-          `press Ctrl-C again within ${CONFIRM_STOP_MS / 1000} seconds to stop them and the server`,
-        ].join('\n')
-      )
-      return
-    }
+  const onSignal = (): void => {
     void close().then(() => {
       opts.log('stopped')
       process.exit(0)
     })
   }
-  process.on('SIGINT', onSignal)
-  process.on('SIGTERM', onSignal)
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
   return { port, close }
 }

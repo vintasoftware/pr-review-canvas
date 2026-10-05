@@ -87,7 +87,7 @@ describe('publish', () => {
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
-      reviewUrl: 'http://localhost:3010/review/42',
+      reviewUrl: 'http://localhost:3010/r/acme/widgets/review/42',
     })
     const context = await readContext(canvasDir)
     const stored = ReviewArtifactSchema.parse(JSON.parse(await readFile(result.reviewJsonPath, 'utf8')))

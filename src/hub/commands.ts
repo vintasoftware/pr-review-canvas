@@ -11,7 +11,8 @@ import { AppError } from '../server/errors.js'
 import type { RunningServer } from './client.js'
 import type { ServerInfo } from './home.js'
 import type { RegisterInput, RegisterResponse } from './hub-app.js'
-import type { ProjectFlags, ProjectRegistration } from './hub.js'
+import type { ProjectFlags } from '../load-context.js'
+import type { ProjectRegistration } from './hub.js'
 
 export interface HubCommandDeps {
   cwd: string
@@ -51,15 +52,7 @@ function shellEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 }
 
 /** The folders the flags name, made absolute here: the server does not run in this folder. */
-function projectFlags(
-  cwd: string,
-  values: {
-    dataDir?: string | undefined
-    fixtureCanvas?: string | undefined
-    chatAgent?: string | undefined
-    chatModel?: string | undefined
-  }
-): ProjectFlags {
+function projectFlags(cwd: string, values: ProjectFlags): ProjectFlags {
   const flags: ProjectFlags = {}
   if (values.dataDir !== undefined) flags.dataDir = path.resolve(cwd, values.dataDir)
   if (values.fixtureCanvas !== undefined) flags.fixtureCanvas = path.resolve(cwd, values.fixtureCanvas)
@@ -135,7 +128,7 @@ export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): 
   const url = `${server.origin}${added.basePath}${target === undefined ? 'start' : `review/${target}`}`
   if (added.kept) {
     io.stderr(
-      `pr-review open: ${added.name} has a chat turn or a generation running, so it keeps its settings until that ends`
+      `pr-review open: ${added.slug} has a chat turn or a generation running, so it keeps its settings until that ends`
     )
   }
   if (shouldOpen(deps.env, values['no-open'])) {
@@ -144,7 +137,7 @@ export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): 
   if (io.json) {
     printJson(io, {
       url,
-      project: added.name,
+      project: added.slug,
       kept: added.kept,
       server: { port: server.port, version: server.version },
     })
@@ -205,7 +198,7 @@ export async function runServe(deps: ServeDeps, argv: string[], io: CliIo): Prom
     warnVersion(io, running, deps.version)
     const added = repoRoot === null ? null : await addTo(deps, running, repoRoot, flags)
     io.stderr(
-      `pr-review serve: a server already runs at ${running.origin}/ (pid ${running.pid})${added === null ? '' : `; added ${added.name}`}`
+      `pr-review serve: a server already runs at ${running.origin}/ (pid ${running.pid})${added === null ? '' : `; added ${added.slug}`}`
     )
     if (open) {
       deps.openBrowser(`${running.origin}${added === null ? '/' : `${added.basePath}start`}`)

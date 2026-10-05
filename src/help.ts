@@ -33,7 +33,7 @@ const COMMANDS: CommandHelp[] = [
     ],
     notes: [
       'Run it in any folder. Inside a repository it also adds that project and opens its review. When a server already runs, serve adds the project to it and exits, unless --port names another port.',
-      'Each project answers under /r/<owner>/<repo>/, and a linked worktree under /r/<owner>/<repo>~<folder>/. Ctrl-C asks again while a chat turn or a generation runs.',
+      'Each project answers under /r/<owner>/<repo>/, and a linked worktree under /r/<owner>/<repo>~<folder>/.',
       '--chat-agent and --chat-model win over .pr-review/settings.yml. They set AI Chat only, not canvas generation. --agent and --model are deprecated aliases.',
     ],
   },
@@ -47,7 +47,7 @@ const COMMANDS: CommandHelp[] = [
       { form: '--json', detail: 'one JSON line, as on a pipe' },
     ],
     notes: [
-      'Without a review, opens the open pull request of the current branch, or the project home page. The server runs the host CLI and agent for this project with the environment of the shell you ran open in; it keeps it in memory only.',
+      'Without a review, opens the open pull request of the current branch, or the project home page. The server runs git, the host CLI, and the agent for this project with the environment of the shell you ran open in; it keeps it in memory only, and saves the flags with the project.',
     ],
   },
   {

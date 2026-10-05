@@ -1,38 +1,56 @@
 // @vitest-environment node
-import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+// The hub over real throwaway repositories: each checkout's name, base path, and data dir come from
+// git as `serve` reads them (its origin, its folder, its clone), and the worktrees of one clone get
+// their shared part from the hub's own `cloneOf`. Only the forge, the agent, and the git commands a
+// request runs are fakes, so a test can hold a chat turn or a generation open.
+import { chmod, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ChatBusyError } from '../chat/chat-manager.js'
+import type { CheckoutSweeper } from '../chat/checkout-sweep.js'
+import { ConfigError, loadRuntimeConfig } from '../config.js'
+import type { ErrorEnvelope } from '../contract/api.js'
 import type { ChatEvent } from '../contract/chat.js'
 import type { ReviewKey } from '../contract/review-key.js'
-import { DEFAULT_SETTINGS } from '../contract/settings.js'
 import { GenerationBusyError } from '../generate/generation-manager.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
-import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
-import type { AppContext } from '../server/context.js'
+import { createGit, execGit, type Git, GitError } from '../git/git.js'
+import type { HostClient } from '../host/client.js'
+import { loadFixture } from '../load-context.js'
+import { loadProjectConfig } from '../project-config.js'
+import { type AppContext, createAppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
+import { ensureDataDir } from '../store/data-dir.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
-import {
-  createFakeGh,
-  createFakeGit,
-  makeTempDir,
-  makeTestContext,
-  type TestContext,
-  type TestContextOptions,
-} from '../testing/fakes.js'
-import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
+import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
+import { ghFor42, gitFor42, HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import { readRegistry, writeRegistry } from './home.js'
-import { createHub, type Hub, type LoadProject, type Project, type ProjectHooks, projectName } from './hub.js'
+import { createHub, type Hub, type LoadProject, type Project } from './hub.js'
 
-/** The checkouts the test loader knows, and the clone whose data dir each one uses. */
-const CHECKOUTS: Record<string, { basePath: string; clone: string }> = {
-  '/src/widgets': { basePath: '/r/acme/widgets/', clone: 'widgets' },
-  '/src/widgets-b': { basePath: '/r/acme/widgets~widgets-b/', clone: 'widgets' },
-  // Another clone whose main checkout has the same slug.
-  '/elsewhere/widgets': { basePath: '/r/acme/widgets/', clone: 'widgets-elsewhere' },
-  '/src/gadgets': { basePath: '/r/acme/gadgets/', clone: 'gadgets' },
-  '/src/group': { basePath: '/r/group/proj/', clone: 'group' },
-  '/src/subgroup': { basePath: '/r/group/proj/sub/', clone: 'subgroup' },
-}
+/** Every checkout sweep the hub starts, by the checkouts folder it sweeps, and whether it stopped. */
+const sweeps = vi.hoisted(() => [] as { root: string; stopped: boolean }[])
+
+vi.mock('../chat/checkout-sweep.js', async importOriginal => {
+  const real = await importOriginal<typeof import('../chat/checkout-sweep.js')>()
+  return {
+    ...real,
+    startCheckoutSweep: (opts: Parameters<typeof real.startCheckoutSweep>[0]): CheckoutSweeper => {
+      const sweeper = real.startCheckoutSweep(opts)
+      const record = { root: opts.checkouts.root, stopped: false }
+      sweeps.push(record)
+      return {
+        runOnce: () => sweeper.runOnce(),
+        stop: () => {
+          expect(record.stopped).toBe(false)
+          record.stopped = true
+          sweeper.stop()
+        },
+      }
+    },
+  }
+})
+
+const LOCAL = { host: '127.0.0.1:3010' }
+const POST = { ...LOCAL, origin: 'http://127.0.0.1:3010', 'content-type': 'application/json' }
 
 /** Every call waits for `gate`, so a job that reaches git or the forge keeps running until then. */
 function held<T extends object>(target: T, gate: Promise<void>): T {
@@ -52,57 +70,96 @@ function held<T extends object>(target: T, gate: Promise<void>): T {
 
 let root: string
 let home: string
-let hub: Hub | null
-let contexts: TestContext[]
+let hubs: Hub[]
+let contexts: AppContext[]
 let loads: string[]
-let hooksOf: Map<string, ProjectHooks>
 let logs: string[]
-let swept: string[]
 let gate: Promise<void>
 let open: () => void
-/** Per checkout: context options, and a promise the load waits for before it goes on. */
-let extra: Record<string, TestContextOptions & { fixtureCanvasPath?: string }>
+/** Per checkout: the git and forge its requests run against; held fakes by default. */
+let adapters: Record<string, { git?: Git; gh?: HostClient }>
+/** Per checkout: a promise its load waits for before it reads anything. */
 let waits: Map<string, Promise<void>>
 
-/**
- * A checkout's real folder under the test's temp root: the hub drops a saved project whose folder
- * is gone, so every checkout the tests use exists. The loader names them by `name`.
- */
+/** A checkout's folder under the test's temp root; the loader names a checkout by `name`. */
 function at(name: string): string {
   return path.join(root, name)
 }
 
+function nameOf(dir: string): string {
+  return `/${path.relative(root, dir)}`
+}
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  const r = await execGit(cwd, args)
+  if (r.code !== 0) {
+    throw new GitError(args, r.stderr, r.code)
+  }
+  return r.stdout.toString('utf8').trim()
+}
+
+/** A clone at `name` whose origin is `origin`, with one commit so it can have worktrees. */
+async function makeClone(name: string, origin: string): Promise<void> {
+  await mkdir(at(name), { recursive: true })
+  await git(at(name), 'init', '-q', '-b', 'main')
+  await git(at(name), 'remote', 'add', 'origin', origin)
+  await git(
+    at(name),
+    '-c',
+    'user.name=Test',
+    '-c',
+    'user.email=test@example.com',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'one'
+  )
+}
+
+/**
+ * The checkout's context as `serve` builds one: the config from git and the flags, the project
+ * config, and the fixture, under the shell's variables (none here unless the command sent some).
+ * The clone is named before the fixture is read, so a missing fixture is a build that fails after
+ * the hub made the clone's part.
+ */
 const load: LoadProject = async (registration, hooks) => {
-  const { repoRoot } = registration
-  const name = `/${path.relative(root, repoRoot)}`
+  const name = nameOf(registration.repoRoot)
   loads.push(name)
-  hooksOf.set(name, hooks)
   hooks.log(`loading ${name}`)
   await waits.get(name)
-  const checkout = CHECKOUTS[name]
-  if (checkout === undefined) {
-    throw new Error(`${name} is not a git checkout`)
-  }
-  const { fixtureCanvasPath, ...options } = extra[name] ?? {}
-  const t = await makeTestContext({
-    basePath: checkout.basePath,
-    chatBusyElsewhere: hooks.chatBusyElsewhere,
+  const flags = registration.flags ?? {}
+  const config = await loadRuntimeConfig(
+    {
+      port: 3010,
+      dataDir: flags.dataDir,
+      fixtureCanvas: flags.fixtureCanvas,
+      chatAgent: flags.chatAgent,
+      chatModel: flags.chatModel,
+    },
+    registration.env ?? {},
+    createGit(registration.repoRoot),
+    registration.repoRoot
+  )
+  await ensureDataDir(config.dataDir)
+  const clone = hooks.cloneOf(config)
+  const projectConfig = await loadProjectConfig(config.repoRoot)
+  const fixtureArtifact =
+    config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
+  const ctx = createAppContext({
+    config,
+    projectConfig,
+    fixtureArtifact,
+    git: adapters[name]?.git ?? held(createFakeGit(), gate),
+    gh: adapters[name]?.gh ?? held(createFakeGh(), gate),
     runner: createFakeRunner({ ensureGate: gate }),
-    git: held(createFakeGit(), gate),
-    gh: held(createFakeGh(), gate),
-    ...options,
+    log: hooks.log,
+    clone,
   })
-  t.ctx.config.repoRoot = repoRoot
-  t.ctx.config.dataDir = path.join(root, checkout.clone)
-  t.ctx.config.fixtureCanvasPath = fixtureCanvasPath ?? null
-  t.ctx.log = hooks.log
-  const sweep = t.ctx.checkouts.sweep
-  t.ctx.checkouts.sweep = opts => {
-    swept.push(name)
-    return sweep(opts)
-  }
-  contexts.push(t)
-  return t.ctx
+  contexts.push(ctx)
+  return ctx
 }
 
 async function servedAt(h: Hub, pathname: string): Promise<Project | null> {
@@ -111,8 +168,21 @@ async function servedAt(h: Hub, pathname: string): Promise<Project | null> {
 }
 
 async function startHub(): Promise<Hub> {
-  hub = await createHub({ home, load, log: line => logs.push(line) })
+  const hub = await createHub({ home, load, log: line => logs.push(line) })
+  hubs.push(hub)
   return hub
+}
+
+/** The checkouts with a sweep running, by the clone whose data dir holds them. */
+function liveSweeps(): string[] {
+  return sweeps
+    .filter(sweep => !sweep.stopped)
+    .map(sweep => nameOf(sweep.root.slice(0, sweep.root.indexOf('/.pr-review/'))))
+    .sort()
+}
+
+function isIdle(ctx: AppContext): boolean {
+  return ctx.generation.running() === null && ctx.chat.running().length === 0
 }
 
 /** Starts a chat turn on `key` that holds until the gate opens; resolves once it has ended. */
@@ -138,45 +208,48 @@ function chatTurn(ctx: AppContext, key: ReviewKey): Promise<ChatEvent[]> {
   })()
 }
 
+/** A chat question on #42 through the project's own route, after the bundle route built `derived/`. */
+async function askThroughRoute(project: Project): Promise<Response> {
+  await project.app.request('/api/prs/42', { headers: LOCAL })
+  return project.app.request('/api/prs/42/chat', {
+    method: 'POST',
+    headers: POST,
+    body: JSON.stringify({ message: 'why?', context: { kind: 'pr' } }),
+  })
+}
+
 beforeEach(async () => {
-  root = await makeTempDir('pr-review-hub-')
+  root = await realpath(await makeTempDir('pr-review-hub-'))
   home = path.join(root, 'home')
-  hub = null
+  hubs = []
   contexts = []
   loads = []
-  hooksOf = new Map()
   logs = []
-  swept = []
-  extra = {}
+  adapters = {}
   waits = new Map()
+  sweeps.length = 0
   gate = new Promise(resolve => {
     open = resolve
   })
-  for (const name of [...Object.keys(CHECKOUTS), '/src/moved']) {
-    await mkdir(at(name), { recursive: true })
-  }
+  await makeClone('/src/widgets', 'git@github.com:acme/widgets.git')
+  await git(at('/src/widgets'), 'worktree', 'add', '-q', '--detach', at('/src/widgets-b'))
+  // Another clone of the same repository, whose main checkout has the same name.
+  await makeClone('/elsewhere/widgets', 'git@github.com:acme/widgets.git')
+  await makeClone('/src/gadgets', 'git@github.com:acme/gadgets.git')
+  // A folder that is no git checkout.
+  await mkdir(at('/src/moved'), { recursive: true })
 })
 
 afterEach(async () => {
-  vi.useRealTimers()
   open()
-  if (hub !== null) {
-    const h = hub
-    await vi.waitFor(() => expect(h.running()).toEqual([]))
+  for (const ctx of contexts) {
+    await vi.waitFor(() => expect(isIdle(ctx)).toBe(true))
+  }
+  for (const h of hubs) {
     h.close()
   }
-  for (const t of contexts) {
-    await t.cleanup()
-  }
+  expect(liveSweeps()).toEqual([])
   await rm(root, { recursive: true, force: true })
-})
-
-describe('projectName', () => {
-  it('reads the slug back from a base path', () => {
-    expect(projectName('/r/acme/widgets/')).toBe('acme/widgets')
-    expect(projectName('/r/acme/widgets~feature-x/')).toBe('acme/widgets~feature-x')
-    expect(projectName('/r/acme/my%20widgets/')).toBe('acme/my widgets')
-  })
 })
 
 describe('createHub', () => {
@@ -184,14 +257,19 @@ describe('createHub', () => {
     const h = await startHub()
     const { project, kept } = await h.register({ repoRoot: at('/src/widgets') })
     expect(kept).toBe(false)
-    expect(project.name).toBe('acme/widgets')
+    expect(project.ctx.config).toMatchObject({
+      slug: 'acme/widgets',
+      basePath: '/r/acme/widgets/',
+      repoRoot: at('/src/widgets'),
+      dataDir: at('/src/widgets/.pr-review'),
+    })
     expect(await h.resolve('/r/acme/widgets/review/42')).toEqual({
       kind: 'project',
       project,
       rest: '/review/42',
     })
     expect(await h.resolve('/r/acme/widgets/')).toMatchObject({ rest: '/' })
-    expect(await h.projects()).toEqual([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+    expect(await h.projects()).toEqual([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     expect(await readRegistry(home)).toEqual(await h.projects())
   })
 
@@ -205,8 +283,10 @@ describe('createHub', () => {
   })
 
   it('sends a path to the longest base it falls under, whatever the order they were saved in', async () => {
-    const group = { basePath: '/r/group/proj/', repoRoot: at('/src/group') }
-    const subgroup = { basePath: '/r/group/proj/sub/', repoRoot: at('/src/subgroup') }
+    await makeClone('/src/group', 'git@gitlab.com:group/proj.git')
+    await makeClone('/src/subgroup', 'git@gitlab.com:group/proj/sub.git')
+    const group = { slug: 'group/proj', repoRoot: at('/src/group'), flags: {} }
+    const subgroup = { slug: 'group/proj/sub', repoRoot: at('/src/subgroup'), flags: {} }
     for (const saved of [
       [group, subgroup],
       [subgroup, group],
@@ -214,11 +294,11 @@ describe('createHub', () => {
       await writeRegistry(home, saved)
       const h = await startHub()
       expect(await h.resolve('/r/group/proj/sub/review/1')).toMatchObject({
-        project: { name: 'group/proj/sub' },
+        project: { ctx: { config: { slug: 'group/proj/sub' } } },
         rest: '/review/1',
       })
       expect(await h.resolve('/r/group/proj/review/1')).toMatchObject({
-        project: { name: 'group/proj' },
+        project: { ctx: { config: { slug: 'group/proj' } } },
         rest: '/review/1',
       })
       h.close()
@@ -226,9 +306,12 @@ describe('createHub', () => {
   })
 
   it('builds a saved project on its first request, once, and lists it before that', async () => {
-    await writeRegistry(home, [{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+    const first = await startHub()
+    await first.register({ repoRoot: at('/src/widgets') })
+    first.close()
+    loads = []
     const h = await startHub()
-    expect(await h.projects()).toEqual([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+    expect(await h.projects()).toEqual([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     expect(loads).toEqual([])
     const [a, b] = await Promise.all([h.resolve('/r/acme/widgets/'), h.resolve('/r/acme/widgets/api/health')])
     expect(a).toMatchObject({ kind: 'project', rest: '/' })
@@ -239,58 +322,62 @@ describe('createHub', () => {
   })
 
   it('tries a saved project again on the next request after its build failed', async () => {
-    await writeRegistry(home, [{ basePath: '/r/acme/widgets/', repoRoot: at('/src/moved') }])
+    await writeRegistry(home, [{ slug: 'acme/widgets', repoRoot: at('/src/moved'), flags: {} }])
     const h = await startHub()
-    await expect(h.resolve('/r/acme/widgets/')).rejects.toThrow('/src/moved is not a git checkout')
-    await expect(h.resolve('/r/acme/widgets/')).rejects.toThrow('/src/moved is not a git checkout')
+    for (let i = 0; i < 2; i++) {
+      const failed = await h.resolve('/r/acme/widgets/').catch((err: unknown) => err)
+      expect(failed).toBeInstanceOf(ConfigError)
+      expect(failed).toMatchObject({ code: 'NOT_A_REPO' })
+    }
     expect(loads).toEqual(['/src/moved', '/src/moved'])
+    expect(await h.projects()).toEqual([{ slug: 'acme/widgets', repoRoot: at('/src/moved'), flags: {} }])
   })
 
   it('names the project in the log lines of its context, and logs where it serves from', async () => {
-    extra['/src/widgets'] = {
-      fixtureArtifact: syntheticArtifact(),
-      projectConfig: {
-        config: DEFAULT_PROJECT_CONFIG,
-        warnings: ['chat.enabled is not a boolean'],
-        source: null,
-      },
-    }
-    extra['/src/gadgets'] = {
-      fixtureArtifact: syntheticArtifact(),
-      fixtureCanvasPath: '/fixtures/review.json',
-    }
+    await writeFile(at('/src/widgets/pr-review.config.yml'), 'chat: [\n')
+    const fixture = at('/review.json')
+    await writeFile(fixture, JSON.stringify(syntheticArtifact()))
     const h = await startHub()
     const { project } = await h.register({ repoRoot: at('/src/widgets') })
-    await h.register({ repoRoot: at('/src/gadgets') })
+    await h.register({ repoRoot: at('/src/gadgets'), flags: { fixtureCanvas: fixture } })
     project.ctx.log('hello')
     expect(logs).toEqual([
       'loading /src/widgets',
-      `[acme/widgets] ${at('/src/widgets')} · data dir ${path.join(root, 'widgets')}`,
-      '[acme/widgets] fixture canvas  (dev only): every PR reports ready',
-      '[acme/widgets] warning: chat.enabled is not a boolean',
+      `[acme/widgets] ${at('/src/widgets')} · data dir ${at('/src/widgets/.pr-review')}`,
+      expect.stringMatching(/^\[acme\/widgets\] warning: pr-review\.config\.yml is not valid YAML/),
       'loading /src/gadgets',
-      `[acme/gadgets] ${at('/src/gadgets')} · data dir ${path.join(root, 'gadgets')}`,
-      '[acme/gadgets] fixture canvas /fixtures/review.json (dev only): every PR reports ready',
+      `[acme/gadgets] ${at('/src/gadgets')} · data dir ${at('/src/gadgets/.pr-review')}`,
+      `[acme/gadgets] fixture canvas ${fixture} (dev only): every PR reports ready`,
       '[acme/widgets] hello',
     ])
   })
 
-  it('replaces an idle project when its checkout registers again', async () => {
+  it('replaces an idle project when its checkout registers again, with the flags it sends now', async () => {
     const h = await startHub()
-    const first = await h.register({ repoRoot: at('/src/widgets'), env: { A: '1' } })
-    const second = await h.register({ repoRoot: at('/src/widgets'), env: { A: '2' } })
+    const first = await h.register({ repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } })
+    const second = await h.register({ repoRoot: at('/src/widgets') })
     expect(second.kept).toBe(false)
     expect(second.project).not.toBe(first.project)
+    expect(second.project.ctx.config.chatOverrides).toEqual({})
     expect(await servedAt(h, '/r/acme/widgets/')).toBe(second.project)
+    expect(await h.projects()).toEqual([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     expect(logs.some(line => line.includes('now serves'))).toBe(false)
+    // Both contexts got the clone's one part; one sweep runs for it.
+    expect(second.project.ctx.clone).toBe(first.project.ctx.clone)
+    expect(liveSweeps()).toEqual(['/src/widgets'])
   })
 
   it('keeps a project that is running a chat turn when its checkout registers again', async () => {
     const h = await startHub()
     const { project } = await h.register({ repoRoot: at('/src/widgets') })
     const turn = chatTurn(project.ctx, 42)
-    expect(await h.register({ repoRoot: at('/src/widgets') })).toEqual({ project, kept: true })
-    expect(h.running()).toEqual(['acme/widgets: a chat turn on #42'])
+    expect(await h.register({ repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } })).toEqual({
+      project,
+      kept: true,
+    })
+    // The flags of a kept project stay those it was built with.
+    expect(await h.projects()).toEqual([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
+    expect(liveSweeps()).toEqual(['/src/widgets'])
     open()
     expect((await turn).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
     expect(await h.register({ repoRoot: at('/src/widgets') })).toMatchObject({ kept: false })
@@ -299,9 +386,9 @@ describe('createHub', () => {
   it('keeps a project that is generating a canvas when its checkout registers again', async () => {
     const h = await startHub()
     const { project } = await h.register({ repoRoot: at('/src/widgets') })
-    await project.generation.start(7, { force: false })
+    await project.ctx.generation.start(7, { force: false })
     expect(await h.register({ repoRoot: at('/src/widgets') })).toEqual({ project, kept: true })
-    expect(h.running()).toEqual(['acme/widgets: generating a canvas for #7'])
+    expect(project.ctx.generation.running()).toBe(7)
   })
 
   it('refuses another checkout the path of a busy project, and gives it the path once idle', async () => {
@@ -313,10 +400,16 @@ describe('createHub', () => {
     expect(refused).toMatchObject({
       code: 'BAD_REQUEST',
       status: 409,
-      message: `/r/acme/widgets/ serves ${at('/src/widgets')}, which has a chat turn or a generation running`,
+      message: `acme/widgets serves ${at('/src/widgets')}, which has a chat turn or a generation running`,
       hint: 'try again when it ends, or rename one of the two worktree folders',
     })
     expect(await servedAt(h, '/r/acme/widgets/')).toBe(project)
+    // The refused checkout's clone had a part and a sweep made for it; neither outlives the refusal.
+    expect(sweeps.map(sweep => nameOf(sweep.root.slice(0, sweep.root.indexOf('/.pr-review/'))))).toEqual([
+      '/src/widgets',
+      '/elsewhere/widgets',
+    ])
+    expect(liveSweeps()).toEqual(['/src/widgets'])
     open()
     await turn
     const moved = await h.register({ repoRoot: at('/elsewhere/widgets') })
@@ -325,12 +418,14 @@ describe('createHub', () => {
       `acme/widgets now serves ${at('/elsewhere/widgets')}, in place of ${at('/src/widgets')}`
     )
     expect(await readRegistry(home)).toEqual([
-      { basePath: '/r/acme/widgets/', repoRoot: at('/elsewhere/widgets') },
+      { slug: 'acme/widgets', repoRoot: at('/elsewhere/widgets'), flags: {} },
     ])
+    // The old clone has no served project left, so its sweep stops.
+    expect(liveSweeps()).toEqual(['/elsewhere/widgets'])
   })
 
   it('serves a checkout that takes over the path while the saved one is still failing to build', async () => {
-    await writeRegistry(home, [{ basePath: '/r/acme/widgets/', repoRoot: at('/src/moved') }])
+    await writeRegistry(home, [{ slug: 'acme/widgets', repoRoot: at('/src/moved'), flags: {} }])
     let fail = (): void => undefined
     waits.set(
       '/src/moved',
@@ -341,76 +436,289 @@ describe('createHub', () => {
     const h = await startHub()
     const resolving = h.resolve('/r/acme/widgets/').catch((err: unknown) => err)
     const registering = h.register({ repoRoot: at('/src/widgets') })
-    // The new context is built; the register now waits on the old build, which fails.
-    await vi.waitFor(() => expect(contexts).toHaveLength(1))
+    // The registration waits its turn behind the build of the saved project, which fails.
+    await vi.waitFor(() => expect(loads).toEqual(['/src/moved']))
     fail()
-    expect(await resolving).toBeInstanceOf(Error)
-    expect(await registering).toMatchObject({ kept: false, project: { name: 'acme/widgets' } })
+    expect(await resolving).toBeInstanceOf(ConfigError)
+    expect(await registering).toMatchObject({
+      kept: false,
+      project: { ctx: { config: { slug: 'acme/widgets' } } },
+    })
+    expect(loads).toEqual(['/src/moved', '/src/widgets'])
     expect(logs).toContain(`acme/widgets now serves ${at('/src/widgets')}, in place of ${at('/src/moved')}`)
   })
 
+  it("logs its clone's checkout sweep under the repository's name", async () => {
+    // A settings file that cannot be read skips the sweep, which says so.
+    await mkdir(at('/src/widgets/.pr-review/settings.yml'), { recursive: true })
+    const h = await startHub()
+    await h.register({ repoRoot: at('/src/widgets-b') })
+    await vi.waitFor(() =>
+      expect(logs).toContainEqual(expect.stringMatching(/^\[acme\/widgets\] review checkout sweep failed: /))
+    )
+  })
+
+  it('answers nothing for a saved project removed while its first request waited its turn', async () => {
+    await writeRegistry(home, [{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
+    const h = await startHub()
+    const removing = h.remove('acme/widgets')
+    const resolving = h.resolve('/r/acme/widgets/review/42')
+    expect(await removing).toBe(true)
+    expect(await resolving).toBeNull()
+    expect(loads).toEqual([])
+  })
+
+  it("leaves no part of a clone behind when a checkout's build fails after naming it", async () => {
+    const h = await startHub()
+    const failed = await h
+      .register({ repoRoot: at('/src/gadgets'), flags: { fixtureCanvas: at('/nope.json') } })
+      .catch((err: unknown) => err)
+    expect(failed).toBeInstanceOf(ConfigError)
+    expect(sweeps).toHaveLength(1)
+    expect(liveSweeps()).toEqual([])
+    expect(await h.projects()).toEqual([])
+  })
+
   describe('worktrees of one clone', () => {
-    it('refuse a chat turn on a review a sibling is chatting about', async () => {
+    it('share its data dir and one part, while another clone has its own', async () => {
       const h = await startHub()
       const { project: main } = await h.register({ repoRoot: at('/src/widgets') })
       const { project: worktree } = await h.register({ repoRoot: at('/src/widgets-b') })
-      await h.register({ repoRoot: at('/src/gadgets') })
+      expect(worktree.ctx.config).toMatchObject({
+        slug: 'acme/widgets~widgets-b',
+        dataDir: at('/src/widgets/.pr-review'),
+      })
+      expect(worktree.ctx.clone).toBe(main.ctx.clone)
+      expect(worktree.ctx.checkouts).toBe(main.ctx.checkouts)
+      const { project: gadgets } = await h.register({ repoRoot: at('/src/gadgets') })
+      expect(gadgets.ctx.clone).not.toBe(main.ctx.clone)
+      expect(liveSweeps()).toEqual(['/src/gadgets', '/src/widgets'])
+    })
+
+    it('refuse a chat turn on a review a sibling is chatting about, in the manager and through the route', async () => {
+      const fixture = at('/review.json')
+      await writeFile(fixture, JSON.stringify(syntheticArtifact()))
+      adapters['/src/widgets-b'] = { git: gitFor42(), gh: ghFor42() }
+      const h = await startHub()
+      const { project: main } = await h.register({ repoRoot: at('/src/widgets') })
+      const { project: worktree } = await h.register({
+        repoRoot: at('/src/widgets-b'),
+        flags: { fixtureCanvas: fixture },
+      })
+      const { project: other } = await h.register({ repoRoot: at('/src/gadgets') })
       const turn = chatTurn(main.ctx, 42)
       await expect(chatTurn(worktree.ctx, 42)).rejects.toBeInstanceOf(ChatBusyError)
-      expect(hooksOf.get('/src/widgets-b')?.chatBusyElsewhere(42)).toBe(true)
-      expect(hooksOf.get('/src/widgets-b')?.chatBusyElsewhere(7)).toBe(false)
-      expect(hooksOf.get('/src/widgets')?.chatBusyElsewhere(42)).toBe(false)
-      expect(hooksOf.get('/src/gadgets')?.chatBusyElsewhere(42)).toBe(false)
+      const refused = await askThroughRoute(worktree)
+      expect(refused.status).toBe(409)
+      expect(((await refused.json()) as ErrorEnvelope).error).toMatchObject({
+        code: 'CHAT_BUSY',
+        hint: 'stop the running answer, or wait for it to finish',
+      })
+      // Another review of the clone, and the same review in another clone, are free.
+      const seven = chatTurn(worktree.ctx, 7)
+      const elsewhere = chatTurn(other.ctx, 42)
       open()
-      await turn
-      expect(hooksOf.get('/src/widgets-b')?.chatBusyElsewhere(42)).toBe(false)
+      for (const events of [await turn, await seven, await elsewhere]) {
+        expect(events.at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
+      }
+      expect((await chatTurn(worktree.ctx, 42)).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
     })
 
     it('run one generation at a time across the clone, while another clone runs its own', async () => {
+      adapters['/src/widgets-b'] = { git: gitFor42(), gh: ghFor42() }
       const h = await startHub()
       const { project: main } = await h.register({ repoRoot: at('/src/widgets') })
       const { project: worktree } = await h.register({ repoRoot: at('/src/widgets-b') })
       const { project: other } = await h.register({ repoRoot: at('/src/gadgets') })
-      await worktree.generation.start(7, { force: false })
-      const refused = await main.generation.start(42, { force: false }).catch((err: unknown) => err)
+      await main.ctx.generation.start(7, { force: false })
+      const refused = await worktree.ctx.generation.start(42, { force: false }).catch((err: unknown) => err)
       expect(refused).toBeInstanceOf(GenerationBusyError)
       expect(refused).toMatchObject({ key: 7 })
-      await other.generation.start(42, { force: false })
-      expect(h.running()).toEqual([
-        'acme/widgets~widgets-b: generating a canvas for #7',
-        'acme/gadgets: generating a canvas for #42',
-      ])
+      const res = await worktree.app.request('/api/prs/42/generate', {
+        method: 'POST',
+        headers: POST,
+        body: '{"force":false}',
+      })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'GENERATION_BUSY',
+        message: 'a canvas is already being generated for #7, and one runs at a time',
+        hint: 'wait for it to finish, or stop it from the review page that started it',
+      })
+      await other.ctx.generation.start(42, { force: false })
+      expect([main, worktree, other].map(p => p.ctx.generation.running())).toEqual([7, null, 42])
+      open()
+      await vi.waitFor(() => expect(main.ctx.generation.running()).toBeNull())
+      await worktree.ctx.generation.start(42, { force: false })
+      expect(worktree.ctx.generation.running()).toBe(42)
     })
 
-    it('share one checkout sweep, which stops with the hub', async () => {
+    it("refuse a chat turn on a review whose checkout a sibling's generation holds, naming the generation", async () => {
+      const fixture = at('/review.json')
+      await writeFile(fixture, JSON.stringify(syntheticArtifact()))
+      // The generation gets past prepare and holds the review checkout until the agent starts.
+      adapters['/src/widgets'] = { git: gitFor42(), gh: ghFor42() }
+      adapters['/src/widgets-b'] = { git: gitFor42(), gh: ghFor42() }
+      const h = await startHub()
+      const { project: main } = await h.register({ repoRoot: at('/src/widgets') })
+      const { project: worktree } = await h.register({
+        repoRoot: at('/src/widgets-b'),
+        flags: { fixtureCanvas: fixture },
+      })
+      await main.ctx.generation.start(42, { force: false })
+      await vi.waitFor(() => expect(main.ctx.generation.status(42)?.phase).toBe('checkout'))
+      const refused = await askThroughRoute(worktree)
+      expect(refused.status).toBe(409)
+      expect(((await refused.json()) as ErrorEnvelope).error).toEqual({
+        code: 'CHAT_BUSY',
+        message: 'a canvas generation is using the review checkout of 42',
+        hint: 'ask again once the canvas generation of this review ends, or stop it',
+      })
+    })
+
+    it('share one checkout sweep per clone, which stops with the hub', async () => {
       const h = await startHub()
       await h.register({ repoRoot: at('/src/widgets') })
       await h.register({ repoRoot: at('/src/widgets-b') })
       await h.register({ repoRoot: at('/src/gadgets') })
-      // Re-registering keeps the sweep the clone already has.
+      // Registering again keeps the sweep the clone already has.
       await h.register({ repoRoot: at('/src/widgets') })
-      await vi.waitFor(() => expect(swept).toContain('/src/gadgets'))
-      expect(swept.sort()).toEqual(['/src/gadgets', '/src/widgets'])
+      expect(sweeps).toHaveLength(2)
+      expect(liveSweeps()).toEqual(['/src/gadgets', '/src/widgets'])
       h.close()
       h.close()
+      expect(liveSweeps()).toEqual([])
     })
   })
 })
 
+describe('a saved project built again', () => {
+  const widgets = (flags = {}) => ({ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags })
+
+  it('gets the flags it was registered with, after one restart and the next', async () => {
+    const dataDir = at('/flag-data')
+    const flags = { dataDir, chatAgent: 'codex', chatModel: 'o3' }
+    const first = await startHub()
+    const { project } = await first.register({ repoRoot: at('/src/widgets'), flags })
+    expect(project.ctx.config).toMatchObject({
+      dataDir,
+      chatOverrides: { chatAgent: 'codex', chatModel: 'o3' },
+    })
+    await project.ctx.settings.write({ foldLevel: 'moderate' })
+    first.close()
+
+    for (let restart = 0; restart < 2; restart++) {
+      const h = await startHub()
+      expect(await h.projects()).toEqual([widgets(flags)])
+      const restored = await servedAt(h, '/r/acme/widgets/review/42')
+      expect(restored?.ctx.config).toMatchObject({
+        dataDir,
+        chatOverrides: { chatAgent: 'codex', chatModel: 'o3' },
+      })
+      // It reads and writes that data dir, not the checkout's own.
+      expect(await restored?.ctx.settings.read()).toMatchObject({ foldLevel: 'moderate' })
+      expect(await readRegistry(home)).toEqual([widgets(flags)])
+      h.close()
+    }
+    await expect(stat(at('/src/widgets/.pr-review'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(loads).toEqual(['/src/widgets', '/src/widgets', '/src/widgets'])
+  })
+
+  it('gets the flags of its latest registration, which replace the ones before', async () => {
+    const first = await startHub()
+    await first.register({ repoRoot: at('/src/widgets'), flags: { dataDir: at('/flag-data') } })
+    await first.register({ repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } })
+    first.close()
+    const h = await startHub()
+    const restored = await servedAt(h, '/r/acme/widgets/')
+    expect(restored?.ctx.config).toMatchObject({
+      dataDir: at('/src/widgets/.pr-review'),
+      chatOverrides: { chatAgent: 'codex' },
+    })
+  })
+
+  it('runs under the server environment, since the shell one is never saved', async () => {
+    const first = await startHub()
+    const { project } = await first.register({
+      repoRoot: at('/src/widgets'),
+      env: { PR_REVIEW_DATA_DIR: at('/shell-data') },
+    })
+    expect(project.ctx.config.dataDir).toBe(at('/shell-data'))
+    first.close()
+    expect(JSON.stringify(await readRegistry(home))).not.toContain('shell-data')
+    const h = await startHub()
+    expect((await servedAt(h, '/r/acme/widgets/'))?.ctx.config.dataDir).toBe(at('/src/widgets/.pr-review'))
+  })
+
+  it('moves to the path its checkout answers under now, and its old path leaves the list', async () => {
+    const first = await startHub()
+    await first.register({ repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } })
+    first.close()
+    await git(at('/src/widgets'), 'remote', 'set-url', 'origin', 'git@github.com:acme/renamed.git')
+    const h = await startHub()
+    expect(await h.resolve('/r/acme/widgets/review/42')).toEqual({
+      kind: 'redirect',
+      location: '/r/acme/renamed/review/42',
+    })
+    const renamed = { slug: 'acme/renamed', repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } }
+    expect(await h.projects()).toEqual([renamed])
+    expect(await readRegistry(home)).toEqual([renamed])
+    expect(await h.resolve('/r/acme/widgets/')).toBeNull()
+    const served = await servedAt(h, '/r/acme/renamed/review/42')
+    expect(served?.ctx.config).toMatchObject({ slug: 'acme/renamed', chatOverrides: { chatAgent: 'codex' } })
+    expect(loads).toEqual(['/src/widgets', '/src/widgets'])
+    expect(liveSweeps()).toEqual(['/src/widgets'])
+  })
+
+  it('sends its base path alone to the new base path', async () => {
+    const first = await startHub()
+    await first.register({ repoRoot: at('/src/widgets') })
+    first.close()
+    await git(at('/src/widgets'), 'remote', 'set-url', 'origin', 'git@github.com:acme/renamed.git')
+    const h = await startHub()
+    expect(await h.resolve('/r/acme/widgets/')).toEqual({ kind: 'redirect', location: '/r/acme/renamed/' })
+  })
+
+  it.each(['restore first', 'register first'])(
+    'is served once when a restore and a registration race (%s), with one part and one sweep',
+    async order => {
+      const first = await startHub()
+      await first.register({ repoRoot: at('/src/widgets') })
+      first.close()
+      expect(liveSweeps()).toEqual([])
+      const h = await startHub()
+      let restoring: Promise<unknown>
+      let registering: Promise<{ project: Project; kept: boolean }>
+      if (order === 'restore first') {
+        restoring = h.resolve('/r/acme/widgets/review/42')
+        registering = h.register({ repoRoot: at('/src/widgets') })
+      } else {
+        registering = h.register({ repoRoot: at('/src/widgets') })
+        restoring = h.resolve('/r/acme/widgets/review/42')
+      }
+      const [restored, registered] = await Promise.all([restoring, registering])
+      expect(restored).toMatchObject({ kind: 'project', rest: '/review/42' })
+      expect(registered.kept).toBe(false)
+      expect(await servedAt(h, '/r/acme/widgets/')).toBe(registered.project)
+      expect(await h.projects()).toEqual([widgets()])
+      const built = contexts.slice(1)
+      expect(built).toHaveLength(order === 'restore first' ? 2 : 1)
+      expect(new Set(built.map(ctx => ctx.clone)).size).toBe(1)
+      expect(liveSweeps()).toEqual(['/src/widgets'])
+      expect(await h.remove('acme/widgets')).toBe(true)
+      expect(liveSweeps()).toEqual([])
+    }
+  )
+})
+
 describe('a project whose folder is gone', () => {
-  const widgets = (): { basePath: string; repoRoot: string } => ({
-    basePath: '/r/acme/widgets/',
-    repoRoot: at('/src/widgets'),
-  })
-  const gadgets = (): { basePath: string; repoRoot: string } => ({
-    basePath: '/r/acme/gadgets/',
-    repoRoot: at('/src/gadgets'),
-  })
+  const widgets = () => ({ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} })
+  const gadgets = () => ({ slug: 'acme/gadgets', repoRoot: at('/src/gadgets'), flags: {} })
 
   it('leaves the list when the hub starts, and the list is saved without it', async () => {
     // A path through a file stats as ENOTDIR; a missing folder as ENOENT.
     await writeFile(at('/a-file'), '')
-    const throughFile = { basePath: '/r/acme/file/', repoRoot: at('/a-file/sub') }
+    const throughFile = { slug: 'acme/file', repoRoot: at('/a-file/sub'), flags: {} }
     await rm(at('/src/gadgets'), { recursive: true })
     await writeRegistry(home, [widgets(), gadgets(), throughFile])
     const h = await startHub()
@@ -429,7 +737,7 @@ describe('a project whose folder is gone', () => {
     await mkdir(path.join(locked, 'checkout'), { recursive: true })
     await chmod(locked, 0o000)
     try {
-      const saved = [{ basePath: '/r/acme/locked/', repoRoot: path.join(locked, 'checkout') }]
+      const saved = [{ slug: 'acme/locked', repoRoot: path.join(locked, 'checkout'), flags: {} }]
       // Written by hand, so a rewrite of the list would show in its text.
       await mkdir(home, { recursive: true })
       const text = JSON.stringify({ projects: saved })
@@ -452,6 +760,7 @@ describe('a project whose folder is gone', () => {
     expect(await readRegistry(home)).toEqual([widgets()])
     expect(logs).toContain(`removed acme/gadgets: ${at('/src/gadgets')} no longer exists`)
     expect(await h.resolve('/r/acme/gadgets/')).toBeNull()
+    expect(liveSweeps()).toEqual(['/src/widgets'])
     // Listing again finds nothing more to drop.
     expect(await h.projects()).toEqual([widgets()])
     expect(logs.filter(line => line.startsWith('removed'))).toHaveLength(1)
@@ -470,26 +779,30 @@ describe('a project whose folder is gone', () => {
 
   it('stays while it runs a generation, and leaves once it is idle', async () => {
     const h = await startHub()
-    const { project } = await h.register({ repoRoot: at('/src/widgets') })
-    await project.generation.start(7, { force: false })
+    const flags = { dataDir: at('/data') }
+    const { project } = await h.register({ repoRoot: at('/src/widgets'), flags })
+    await project.ctx.generation.start(7, { force: false })
     await rm(at('/src/widgets'), { recursive: true })
-    expect(await h.projects()).toEqual([widgets()])
+    expect(await h.projects()).toEqual([{ ...widgets(), flags }])
     // A built project keeps answering while it works, whatever happened to its folder.
     expect(await servedAt(h, '/r/acme/widgets/')).toBe(project)
     expect(logs.some(line => line.startsWith('removed'))).toBe(false)
     open()
-    await vi.waitFor(() => expect(project.generation.running()).toBeNull())
+    await vi.waitFor(() => expect(project.ctx.generation.running()).toBeNull())
     expect(await h.projects()).toEqual([])
     expect(logs).toContain(`removed acme/widgets: ${at('/src/widgets')} no longer exists`)
     expect(await readRegistry(home)).toEqual([])
+    expect(liveSweeps()).toEqual([])
   })
 
   it('stays while it runs a chat turn', async () => {
     const h = await startHub()
-    const { project } = await h.register({ repoRoot: at('/src/widgets') })
+    // The turn writes its thread to the data dir, which is kept out of the folder deleted here.
+    const flags = { dataDir: at('/data') }
+    const { project } = await h.register({ repoRoot: at('/src/widgets'), flags })
     const turn = chatTurn(project.ctx, 42)
     await rm(at('/src/widgets'), { recursive: true })
-    expect(await h.projects()).toEqual([widgets()])
+    expect(await h.projects()).toEqual([{ ...widgets(), flags }])
     open()
     await turn
     expect(await h.projects()).toEqual([])
@@ -497,50 +810,41 @@ describe('a project whose folder is gone', () => {
 })
 
 describe('remove', () => {
-  it('is false for a path no project is served at', async () => {
+  it('is false for a slug no project has', async () => {
     const h = await startHub()
     await h.register({ repoRoot: at('/src/widgets') })
-    expect(await h.remove('/r/acme/nope/')).toBe(false)
+    expect(await h.remove('acme/nope')).toBe(false)
+    expect(await h.remove('/r/acme/widgets/')).toBe(false)
     expect(await h.projects()).toHaveLength(1)
     expect(logs.some(line => line.startsWith('removed'))).toBe(false)
   })
 
-  it('takes a built project off the list and out of the sibling checks, and saves the list', async () => {
+  it('takes a built project off the list, and saves the list', async () => {
     const h = await startHub()
-    const { project: main } = await h.register({ repoRoot: at('/src/widgets') })
-    const { project: worktree } = await h.register({ repoRoot: at('/src/widgets-b') })
+    await h.register({ repoRoot: at('/src/widgets') })
+    await h.register({ repoRoot: at('/src/widgets-b') })
     await h.register({ repoRoot: at('/src/gadgets') })
-    expect(await h.remove('/r/acme/widgets~widgets-b/')).toBe(true)
+    expect(await h.remove('acme/widgets~widgets-b')).toBe(true)
     expect(logs.at(-1)).toBe('removed acme/widgets~widgets-b')
     expect(await h.resolve('/r/acme/widgets~widgets-b/')).toBeNull()
-    expect((await h.projects()).map(p => p.basePath)).toEqual(['/r/acme/widgets/', '/r/acme/gadgets/'])
-    expect((await readRegistry(home)).map(p => p.basePath)).toEqual(['/r/acme/widgets/', '/r/acme/gadgets/'])
+    expect((await h.projects()).map(p => p.slug)).toEqual(['acme/widgets', 'acme/gadgets'])
+    expect((await readRegistry(home)).map(p => p.slug)).toEqual(['acme/widgets', 'acme/gadgets'])
     // Its folder stays: removing takes the project off the list only.
     expect((await stat(at('/src/widgets-b'))).isDirectory()).toBe(true)
-    // A generation the removed project still runs no longer holds back its old sibling.
-    await worktree.generation.start(7, { force: false })
-    await main.generation.start(42, { force: false })
-    expect(h.running()).toEqual(['acme/widgets: generating a canvas for #42'])
-    open()
-    await vi.waitFor(() =>
-      expect([worktree.generation.running(), main.generation.running()]).toEqual([null, null])
-    )
   })
 
   it('takes a saved project that was never built off the list', async () => {
-    await writeRegistry(home, [
-      { basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') },
-      { basePath: '/r/acme/gadgets/', repoRoot: at('/src/gadgets') },
-    ])
+    const widgets = { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }
+    await writeRegistry(home, [widgets, { slug: 'acme/gadgets', repoRoot: at('/src/gadgets'), flags: {} }])
     const h = await startHub()
-    expect(await h.remove('/r/acme/gadgets/')).toBe(true)
-    expect(await readRegistry(home)).toEqual([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+    expect(await h.remove('acme/gadgets')).toBe(true)
+    expect(await readRegistry(home)).toEqual([widgets])
     expect(loads).toEqual([])
     expect(logs).toEqual(['removed acme/gadgets'])
   })
 
   it('waits for a build in flight, and removes the project once that build fails', async () => {
-    await writeRegistry(home, [{ basePath: '/r/acme/widgets/', repoRoot: at('/src/moved') }])
+    await writeRegistry(home, [{ slug: 'acme/widgets', repoRoot: at('/src/moved'), flags: {} }])
     let fail = (): void => undefined
     waits.set(
       '/src/moved',
@@ -551,9 +855,9 @@ describe('remove', () => {
     const h = await startHub()
     const resolving = h.resolve('/r/acme/widgets/').catch((err: unknown) => err)
     await vi.waitFor(() => expect(loads).toEqual(['/src/moved']))
-    const removing = h.remove('/r/acme/widgets/')
+    const removing = h.remove('acme/widgets')
     fail()
-    expect(await resolving).toBeInstanceOf(Error)
+    expect(await resolving).toBeInstanceOf(ConfigError)
     expect(await removing).toBe(true)
     expect(await h.projects()).toEqual([])
     expect(await h.resolve('/r/acme/widgets/')).toBeNull()
@@ -562,8 +866,8 @@ describe('remove', () => {
   it('refuses a project that runs a chat turn or a generation, and keeps it', async () => {
     const h = await startHub()
     const { project } = await h.register({ repoRoot: at('/src/widgets') })
-    await project.generation.start(7, { force: false })
-    const refused = await h.remove('/r/acme/widgets/').catch((err: unknown) => err)
+    await project.ctx.generation.start(7, { force: false })
+    const refused = await h.remove('acme/widgets').catch((err: unknown) => err)
     expect(refused).toBeInstanceOf(AppError)
     expect(refused).toMatchObject({
       code: 'BAD_REQUEST',
@@ -572,42 +876,42 @@ describe('remove', () => {
       hint: 'remove it once that ends',
     })
     expect(await servedAt(h, '/r/acme/widgets/')).toBe(project)
-    expect(await readRegistry(home)).toEqual([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+    expect(await readRegistry(home)).toEqual([
+      { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} },
+    ])
+    expect(liveSweeps()).toEqual(['/src/widgets'])
     open()
-    await vi.waitFor(() => expect(project.generation.running()).toBeNull())
-    expect(await h.remove('/r/acme/widgets/')).toBe(true)
+    await vi.waitFor(() => expect(project.ctx.generation.running()).toBeNull())
+    expect(await h.remove('acme/widgets')).toBe(true)
+    expect(liveSweeps()).toEqual([])
   })
 
   it('waits for a registration in flight, so it removes what that registered', async () => {
     const h = await startHub()
     const [registered, removed] = await Promise.all([
       h.register({ repoRoot: at('/src/widgets') }),
-      h.remove('/r/acme/widgets/'),
+      h.remove('acme/widgets'),
     ])
     expect(registered.kept).toBe(false)
     expect(removed).toBe(true)
     expect(await h.projects()).toEqual([])
     expect(await readRegistry(home)).toEqual([])
+    expect(liveSweeps()).toEqual([])
   })
 
   it("stops the clone's sweep with its last project, and keeps it while a sibling is served", async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    open()
     const h = await startHub()
     await h.register({ repoRoot: at('/src/widgets') })
     await h.register({ repoRoot: at('/src/widgets-b') })
     await h.register({ repoRoot: at('/src/gadgets') })
-    // One sweep per clone, each waiting for its next run.
-    await vi.waitFor(() => expect(vi.getTimerCount()).toBe(2))
-    expect(await h.remove('/r/acme/widgets/')).toBe(true)
-    expect(vi.getTimerCount()).toBe(2)
-    expect(await h.remove('/r/acme/gadgets/')).toBe(true)
-    expect(vi.getTimerCount()).toBe(1)
-    swept = []
-    await vi.advanceTimersByTimeAsync(DEFAULT_SETTINGS.checkoutSweepMinutes * 60 * 1000)
-    // The clone's sweep still runs for the worktree left; the other clone's runs no more.
-    await vi.waitFor(() => expect(swept).toEqual(['/src/widgets']))
-    expect(await h.remove('/r/acme/widgets~widgets-b/')).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
+    expect(liveSweeps()).toEqual(['/src/gadgets', '/src/widgets'])
+    expect(await h.remove('acme/widgets')).toBe(true)
+    // The worktree left still uses the clone's part, so its sweep goes on.
+    expect(liveSweeps()).toEqual(['/src/gadgets', '/src/widgets'])
+    expect(await h.remove('acme/gadgets')).toBe(true)
+    expect(liveSweeps()).toEqual(['/src/widgets'])
+    expect(await h.remove('acme/widgets~widgets-b')).toBe(true)
+    expect(liveSweeps()).toEqual([])
+    expect(sweeps).toHaveLength(2)
   })
 })

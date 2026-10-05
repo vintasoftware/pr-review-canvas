@@ -1,16 +1,24 @@
 // @vitest-environment node
 import { chmod, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { ChatBusyError } from '../chat/chat-manager.js'
+import { ChatBusyError, type ChatTarget } from '../chat/chat-manager.js'
 import type { RuntimeConfig } from '../config.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { GITHUB_HOST, gitlabHost } from '../host/host.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
-import { createFakeGh, createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
+import {
+  createFakeCheckoutGit,
+  createFakeGh,
+  createFakeGit,
+  makeTempDir,
+  TEST_REPO,
+} from '../testing/fakes.js'
 import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import {
+  type AppContext,
   createAppContext,
+  createCloneShared,
   PACKAGE_ROOT,
   readPackageVersion,
   resolveVendorRoots,
@@ -47,10 +55,10 @@ describe('context', () => {
           dataDir,
           repo: TEST_REPO,
           host: GITHUB_HOST,
-          basePath: '/',
+          slug: 'acme/widgets',
+          basePath: '/r/acme/widgets/',
           fixtureCanvasPath: null,
           chatOverrides: {},
-          openBrowser: false,
         },
         projectConfig: { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
         fixtureArtifact: null,
@@ -80,10 +88,10 @@ describe('context', () => {
           dataDir,
           repo: TEST_REPO,
           host: GITHUB_HOST,
-          basePath: '/',
+          slug: 'acme/widgets',
+          basePath: '/r/acme/widgets/',
           fixtureCanvasPath: null,
           chatOverrides: {},
-          openBrowser: false,
         },
         projectConfig: { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
         fixtureArtifact: null,
@@ -91,6 +99,15 @@ describe('context', () => {
       expect(typeof ctx.git.topLevel).toBe('function')
       expect(typeof ctx.gh.authStatus).toBe('function')
       expect(ctx.now()).toBeInstanceOf(Date)
+      // The log goes to stderr, and fetch is the platform's.
+      const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      try {
+        ctx.log('hello')
+        expect(write).toHaveBeenCalledWith('hello\n')
+      } finally {
+        write.mockRestore()
+      }
+      expect(await (await ctx.fetch('data:text/plain,fetched')).text()).toBe('fetched')
     } finally {
       await rm(dataDir, { recursive: true, force: true })
     }
@@ -105,10 +122,10 @@ describe('context', () => {
       dataDir: path.join(dir, 'data'),
       repo: TEST_REPO,
       host,
+      slug: 'acme/widgets',
       basePath: '/r/acme/widgets/',
       fixtureCanvasPath: null,
       chatOverrides: {},
-      openBrowser: false,
     })
     const projectConfig = { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null }
 
@@ -128,23 +145,31 @@ describe('context', () => {
       return bin
     }
 
-    it("runs the host CLI and the agent under the shell's environment, with the host's own variables on top", async () => {
+    it("runs git, the host CLI, and the agent under the shell's environment, with the host's own variables on top", async () => {
+      const print = 'echo "$PR_REVIEW_MARK/${PR_REVIEW_PROCESS_ONLY:-unset}"'
+      await onPath('git', print)
       await onPath('glab', 'echo "{\\"mark\\":\\"$PR_REVIEW_MARK\\",\\"host\\":\\"$GITLAB_HOST\\"}"')
-      const bin = await onPath('acpx', 'echo "acpx $PR_REVIEW_MARK"')
-      const ctx = createAppContext({
-        config: config(gitlabHost('gitlab.example.com')),
-        projectConfig,
-        fixtureArtifact: null,
-        git: createFakeGit(),
-        env: {
-          PATH: `${bin}:/usr/bin:/bin`,
-          PR_REVIEW_MARK: 'from-shell',
-          GITLAB_HOST: 'gitlab.other.example',
-          UNSET: undefined,
-        },
-      })
-      expect(await ctx.gh.api('user')).toEqual({ mark: 'from-shell', host: 'gitlab.example.com' })
-      expect(await ctx.runner.acpxVersion()).toBe('acpx from-shell')
+      const bin = await onPath('acpx', `echo "acpx $(${print})"`)
+      // Set in this process only: a child of a project opened from another shell does not see it.
+      process.env['PR_REVIEW_PROCESS_ONLY'] = 'leaked'
+      try {
+        const ctx = createAppContext({
+          config: config(gitlabHost('gitlab.example.com')),
+          projectConfig,
+          fixtureArtifact: null,
+          env: {
+            PATH: `${bin}:/usr/bin:/bin`,
+            PR_REVIEW_MARK: 'from-shell',
+            GITLAB_HOST: 'gitlab.other.example',
+            UNSET: undefined,
+          },
+        })
+        expect(await ctx.git.topLevel()).toBe('from-shell/unset')
+        expect(await ctx.gh.api('user')).toEqual({ mark: 'from-shell', host: 'gitlab.example.com' })
+        expect(await ctx.runner.acpxVersion()).toBe('acpx from-shell/unset')
+      } finally {
+        delete process.env['PR_REVIEW_PROCESS_ONLY']
+      }
     })
 
     it('logs through the log it is given', () => {
@@ -161,31 +186,61 @@ describe('context', () => {
       expect(logs).toEqual(['hello'])
     })
 
-    it('refuses a chat turn on a review a sibling context is chatting about', async () => {
-      const runner = createFakeRunner()
-      const ctx = createAppContext({
-        config: config(),
-        projectConfig,
-        fixtureArtifact: null,
-        git: createFakeGit(),
-        gh: createFakeGh(),
-        runner,
-        chatBusyElsewhere: key => key === 42,
-      })
-      const turn = ctx.chat.send(
-        {
-          key: 42,
-          headSha: HEAD_SHA,
-          artifact: syntheticArtifact(),
-          files: SYNTHETIC_FILES.map(toFileEntry),
-          patches: toPatchMap(SYNTHETIC_FILES),
-          derivedDir: path.join(dir, 'derived'),
-          readLines: async () => [],
-        },
-        { message: 'x', context: { kind: 'pr' } }
+    it('shares the clone part it is given, so a sibling context refuses a chat turn and a generation', async () => {
+      const now = () => new Date(0)
+      const clone = createCloneShared(config(), now, createFakeCheckoutGit())
+      const contexts = ['a', 'b'].map(name =>
+        createAppContext({
+          config: { ...config(), repoRoot: path.join(dir, name) },
+          projectConfig,
+          fixtureArtifact: null,
+          git: createFakeGit(),
+          gh: createFakeGh(),
+          runner: createFakeRunner({ delayMs: 5 }),
+          now,
+          clone,
+        })
       )
-      await expect(turn[Symbol.asyncIterator]().next()).rejects.toBeInstanceOf(ChatBusyError)
-      expect(runner.runs).toEqual([])
+      const [a, b] = contexts as [AppContext, AppContext]
+      expect(a.clone).toBe(clone)
+      expect(b.checkouts).toBe(a.checkouts)
+      const first = a.chat.send(target(), { message: 'x', context: { kind: 'pr' } })
+      const turn = first[Symbol.asyncIterator]()
+      await turn.next()
+      expect([...clone.chatTurns]).toEqual([42])
+      const second = b.chat.send(target(), { message: 'y', context: { kind: 'pr' } })
+      await expect(second[Symbol.asyncIterator]().next()).rejects.toBeInstanceOf(ChatBusyError)
+      await turn.return?.(undefined)
+      clone.generationLane.key = 7
+      await expect(b.generation.start(8, { force: false })).rejects.toMatchObject({ key: 7 })
     })
+
+    it('gives a context a clone part of its own when none is given', () => {
+      const build = () =>
+        createAppContext({
+          config: config(),
+          projectConfig,
+          fixtureArtifact: null,
+          git: createFakeGit(),
+          gh: createFakeGh(),
+        })
+      const a = build()
+      const b = build()
+      expect(a.clone).not.toBe(b.clone)
+      expect(a.checkouts).toBe(a.clone.checkouts)
+      expect(a.checkouts.root).toBe(path.join(dir, 'data', 'repos', 'acme__widgets', 'checkouts'))
+    })
+
+    function target(): ChatTarget {
+      return {
+        key: 42,
+        headSha: HEAD_SHA,
+        artifact: syntheticArtifact(),
+        files: SYNTHETIC_FILES.map(toFileEntry),
+        patches: toPatchMap(SYNTHETIC_FILES),
+        derivedDir: path.join(dir, 'derived'),
+        readLines: async () => [],
+      }
+    }
   })
 })

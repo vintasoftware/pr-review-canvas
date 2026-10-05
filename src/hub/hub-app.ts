@@ -7,6 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { type Context, Hono, type MiddlewareHandler } from 'hono'
 import { z } from 'zod'
+import { ConfigError } from '../config.js'
 import { AppearanceInputSchema, type AppearanceResponse, appearanceForRequest } from '../contract/settings.js'
 import type { VendorRoots } from '../server/context.js'
 import type { AppEnv } from '../server/env.js'
@@ -23,8 +24,9 @@ import {
   securityMiddleware,
 } from '../server/security.js'
 import { readAppearance, writeAppearance } from './home.js'
-import { type Hub, projectName } from './hub.js'
-import { PROJECTS_PREFIX } from './slug.js'
+import { ProjectFlagsSchema } from '../load-context.js'
+import type { Hub } from './hub.js'
+import { basePathOf, PROJECTS_PREFIX } from './slug.js'
 
 export interface HubAppOptions {
   hub: Hub
@@ -45,21 +47,15 @@ export interface HubAppOptions {
 export const RegisterInputSchema = z.object({
   repoRoot: z.string().refine(p => p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p), 'an absolute path'),
   env: z.record(z.string(), z.string()).optional(),
-  flags: z
-    .object({
-      dataDir: z.string().optional(),
-      fixtureCanvas: z.string().optional(),
-      chatAgent: z.string().optional(),
-      chatModel: z.string().optional(),
-    })
-    .optional(),
+  flags: ProjectFlagsSchema.optional(),
 })
 export type RegisterInput = z.infer<typeof RegisterInputSchema>
 
-const RemoveInputSchema = z.object({ basePath: z.string() })
+const RemoveInputSchema = z.object({ slug: z.string() })
 
 export interface RegisterResponse {
-  name: string
+  /** The checkout's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
+  slug: string
   basePath: string
   /** True when the project kept its running context, and with it the environment it had. */
   kept: boolean
@@ -70,7 +66,7 @@ export interface HubHealthResponse {
   version: string
   port: number
   /** Each checkout served, with where its own checks (git, the host login, the agent) answer. */
-  projects: { name: string; repoRoot: string; health: string }[]
+  projects: { slug: string; repoRoot: string; health: string }[]
 }
 
 export interface HubInfoResponse {
@@ -175,9 +171,11 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
   app.post('/api/hub/projects', requireToken, async c => {
     const input = await readBody(c.req.raw, RegisterInputSchema, '{ "repoRoot": "/path/to/checkout" }')
     const { project, kept } = await opts.hub.register(input).catch((err: unknown) => {
-      throw toAppError(err)
+      // A folder that is no repository, or a flag the config refuses, is the command's mistake.
+      throw err instanceof ConfigError ? new AppError(err.code, err.message, 400, err.hint) : err
     })
-    const body: RegisterResponse = { name: project.name, basePath: project.ctx.config.basePath, kept }
+    const { slug, basePath } = project.ctx.config
+    const body: RegisterResponse = { slug, basePath, kept }
     return c.json(body)
   })
 
@@ -190,9 +188,9 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
       version: opts.version,
       port: opts.port(),
       projects: projects.map(entry => ({
-        name: projectName(entry.basePath),
+        slug: entry.slug,
         repoRoot: entry.repoRoot,
-        health: `${entry.basePath}api/health`,
+        health: `${basePathOf(entry.slug)}api/health`,
       })),
     }
     return c.json(body)
@@ -215,9 +213,9 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
   // keeps other sites out. It takes the project off the list only; its data stays, and
   // `pr-review open` adds it again.
   app.post('/api/projects/remove', async c => {
-    const { basePath } = await readBody(c.req.raw, RemoveInputSchema, '{ "basePath": "/r/owner/repo/" }')
-    if (!(await opts.hub.remove(basePath))) {
-      throw new AppError('NOT_FOUND', 'no project is served at that path', 404, 'reload the project list')
+    const { slug } = await readBody(c.req.raw, RemoveInputSchema, '{ "slug": "owner/repo" }')
+    if (!(await opts.hub.remove(slug))) {
+      throw new AppError('NOT_FOUND', `no project ${slug} is served here`, 404, 'reload the project list')
     }
     return c.json({ removed: true })
   })
@@ -232,8 +230,8 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
           version: opts.version,
           port: opts.port(),
           projects: projects.map(entry => ({
-            ...entry,
-            name: projectName(entry.basePath),
+            slug: entry.slug,
+            repoRoot: entry.repoRoot,
             shownPath: shortPath(entry.repoRoot, opts.homeDir ?? os.homedir()),
           })),
         },

@@ -116,7 +116,7 @@ One server serves every project you open: each answers at
 `/r/<owner>/<repo>~<folder>/`, because its branch and working tree differ.
 **http://localhost:3010** lists them, and the logo on every page leads there; **remove** takes a
 project off the list without touching its data. Keep the server's terminal running while you review; stop
-it with **Ctrl+C**. While a chat turn or a generation runs, it asks you to press **Ctrl+C** again.
+it with **Ctrl+C**.
 
 ## Documentation
 

@@ -18,16 +18,16 @@ function respond(body, status = 200) {
 function list() {
   document.body.innerHTML =
     '<ul class="plain body">' +
-    '<li><a href="/r/acme/widgets/">acme/widgets</a> <button class="cmd project-remove" type="button" data-remove="/r/acme/widgets/">remove</button></li>' +
-    '<li><a href="/r/acme/gadgets/">acme/gadgets</a> <button class="cmd project-remove" type="button" data-remove="/r/acme/gadgets/">remove</button></li>' +
+    '<li><a href="/r/acme/widgets/">acme/widgets</a> <button class="cmd project-remove" type="button" data-remove="acme/widgets">remove</button></li>' +
+    '<li><a href="/r/acme/gadgets/">acme/gadgets</a> <button class="cmd project-remove" type="button" data-remove="acme/gadgets">remove</button></li>' +
     '</ul>'
 }
 
-/** @param {string} basePath */
-function removeButton(basePath) {
-  const el = document.querySelector(`button[data-remove="${basePath}"]`)
+/** @param {string} slug */
+function removeButton(slug) {
+  const el = document.querySelector(`button[data-remove="${slug}"]`)
   if (!(el instanceof HTMLButtonElement)) {
-    throw new Error(`no remove command for ${basePath}`)
+    throw new Error(`no remove command for ${slug}`)
   }
   return el
 }
@@ -50,24 +50,24 @@ afterEach(() => {
 })
 
 describe('wireRemove', () => {
-  it('posts the project path, disables the command while it waits, and reloads the list', async () => {
+  it('posts the project slug, disables the command while it waits, and reloads the list', async () => {
     list()
     wireRemove(document, fetchMock)
-    const button = removeButton('/r/acme/gadgets/')
+    const button = removeButton('acme/gadgets')
     button.click()
     expect(button.disabled).toBe(true)
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
     expect(
       fetchMock.mock.calls.map(([url, init]) => [url, init?.method, JSON.parse(String(init?.body))])
-    ).toEqual([['/api/projects/remove', 'POST', { basePath: '/r/acme/gadgets/' }]])
-    expect(removeButton('/r/acme/widgets/').disabled).toBe(false)
+    ).toEqual([['/api/projects/remove', 'POST', { slug: 'acme/gadgets' }]])
+    expect(removeButton('acme/widgets').disabled).toBe(false)
   })
 
   it('uses the page fetch when given none', async () => {
     vi.stubGlobal('fetch', fetchMock)
     list()
     wireRemove(document)
-    removeButton('/r/acme/widgets/').click()
+    removeButton('acme/widgets').click()
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
@@ -87,7 +87,7 @@ describe('wireRemove', () => {
       )
     )
     wireRemove(document, fetchMock)
-    const button = removeButton('/r/acme/widgets/')
+    const button = removeButton('acme/widgets')
     button.click()
     await vi.waitFor(() => expect(noteAfter(button)).toHaveLength(1))
     const note = button.nextElementSibling
@@ -104,27 +104,27 @@ describe('wireRemove', () => {
     expect(noteAfter(button)).toHaveLength(0)
     await vi.waitFor(() => expect(noteAfter(button)).toHaveLength(1))
     expect(button.nextElementSibling?.textContent).toBe('Failed to fetch')
-    expect(removeButton('/r/acme/gadgets/').nextElementSibling).toBeNull()
+    expect(removeButton('acme/gadgets').nextElementSibling).toBeNull()
   })
 
   it('shows a failure that is not an Error as text', async () => {
     list()
     fetchMock.mockImplementation(() => Promise.reject('offline'))
     wireRemove(document, fetchMock)
-    const button = removeButton('/r/acme/widgets/')
+    const button = removeButton('acme/widgets')
     button.click()
     await vi.waitFor(() => expect(button.nextElementSibling?.textContent).toBe('offline'))
   })
 
   it('copes with a command taken off the page and a document with no window', async () => {
     list()
-    const detached = removeButton('/r/acme/widgets/')
+    const detached = removeButton('acme/widgets')
     wireRemove(document, fetchMock)
     detached.remove()
     detached.click()
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
     const doc = document.implementation.createHTMLDocument('list')
-    doc.body.innerHTML = '<button type="button" data-remove="/r/acme/widgets/">remove</button>'
+    doc.body.innerHTML = '<button type="button" data-remove="acme/widgets">remove</button>'
     wireRemove(doc, fetchMock)
     doc.querySelector('button')?.click()
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
@@ -153,7 +153,7 @@ describe('the module', () => {
     list()
     vi.resetModules()
     await import('./projects-page.js')
-    removeButton('/r/acme/widgets/').click()
+    removeButton('acme/widgets').click()
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
   })
 

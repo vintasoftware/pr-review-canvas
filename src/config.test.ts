@@ -76,10 +76,10 @@ describe('loadRuntimeConfig', () => {
       dataDir: '/work/repo/.pr-review',
       repo: { owner: 'acme', name: 'widgets' },
       host: GITHUB_HOST,
+      slug: 'acme/widgets',
       basePath: '/r/acme/widgets/',
       fixtureCanvasPath: null,
       chatOverrides: {},
-      openBrowser: true,
     })
   })
 
@@ -90,14 +90,9 @@ describe('loadRuntimeConfig', () => {
       remotes: { origin: 'git@github.com:acme/widgets.git' },
     })
     expect(await loadRuntimeConfig({}, {}, worktree, '/cwd')).toMatchObject({
+      slug: 'acme/widgets~fix-login',
       basePath: '/r/acme/widgets~fix-login/',
     })
-  })
-
-  it('opens the browser unless --no-open is passed or CI is set', async () => {
-    expect(await loadRuntimeConfig({ noOpen: true }, {}, git(), '/cwd')).toMatchObject({ openBrowser: false })
-    expect(await loadRuntimeConfig({}, { CI: 'true' }, git(), '/cwd')).toMatchObject({ openBrowser: false })
-    expect(await loadRuntimeConfig({}, { CI: '' }, git(), '/cwd')).toMatchObject({ openBrowser: false })
   })
 
   it('classifies a GitLab origin', async () => {

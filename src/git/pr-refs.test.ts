@@ -55,12 +55,16 @@ describe('fetchPrRefs and toPr', () => {
     expect(git.calls[2]).toEqual(['merge-base', `${merge}^1`, HEAD_SHA])
   })
 
-  describe('when the base branch is gone from the remote', () => {
+  describe('when the fetch of the head and the base fails', () => {
     const merge = 'c'.repeat(40)
     const missing = new GitError(['fetch'], "fatal: couldn't find remote ref refs/heads/main", 128)
+    const merged = () => mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
 
-    /** A fake git whose fetch fails while it names the base branch. */
-    function gitWithoutBase(failure: Error = missing) {
+    /**
+     * A fake git whose fetch fails with `failure` when it names the base branch, and with
+     * `retryFailure`, if given, when it names the merge commit.
+     */
+    function failingGit(failure: unknown, retryFailure?: Error) {
       const git = createFakeGit({
         refs: { 'pull/42/head': HEAD_SHA },
         mergeBases: { [`${merge}^1..${HEAD_SHA}`]: BASE_SHA },
@@ -75,30 +79,55 @@ describe('fetchPrRefs and toPr', () => {
             if (refspecs.some(spec => spec.includes('refs/heads/main'))) {
               throw failure
             }
+            if (retryFailure !== undefined && refspecs.includes(merge)) {
+              throw retryFailure
+            }
             await git.fetch(remote, refspecs)
           },
         },
       }
     }
 
-    it('fetches the merge commit of a merged PR by its sha instead', async () => {
-      const { git, fetches } = gitWithoutBase()
-      const meta = mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
-      expect(await fetchPrRefs(git, GITHUB_HOST, meta)).toEqual({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
-      expect(fetches[1]).toEqual([`+pull/42/head:${prHeadRef(42)}`, merge])
+    it('fetches the merge commit of a merged PR by its sha instead, when the base branch is gone', async () => {
+      const { git, fetches } = failingGit(missing)
+      expect(await fetchPrRefs(git, GITHUB_HOST, merged())).toEqual({
+        headSha: HEAD_SHA,
+        mergeBaseSha: BASE_SHA,
+      })
+      expect(fetches).toEqual([
+        [`+pull/42/head:${prHeadRef(42)}`, `+refs/heads/main:${prBaseRef(42)}`],
+        [`+pull/42/head:${prHeadRef(42)}`, merge],
+      ])
     })
 
-    it('fails for an open PR, which has no merge commit to fall back on', async () => {
-      const { git } = gitWithoutBase()
-      await expect(fetchPrRefs(git, GITHUB_HOST, mapPull(GH_PULL))).rejects.toBe(missing)
+    it('tries the merge commit of a merged PR whatever the first fetch failed with', async () => {
+      for (const failure of [
+        new GitError(['fetch'], 'fatal: unable to access the remote', 128),
+        new Error('spawn failed'),
+      ]) {
+        const { git, fetches } = failingGit(failure)
+        expect(await fetchPrRefs(git, GITHUB_HOST, merged())).toEqual({
+          headSha: HEAD_SHA,
+          mergeBaseSha: BASE_SHA,
+        })
+        expect(fetches[1]).toEqual([`+pull/42/head:${prHeadRef(42)}`, merge])
+      }
     })
 
-    it('fails on any other fetch error of a merged PR', async () => {
+    it("fails with the second fetch's error when the merge commit cannot be fetched either", async () => {
       const offline = new GitError(['fetch'], 'fatal: unable to access the remote', 128)
-      const { git, fetches } = gitWithoutBase(offline)
-      const meta = mapPull({ ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge })
-      await expect(fetchPrRefs(git, GITHUB_HOST, meta)).rejects.toBe(offline)
-      expect(fetches).toHaveLength(1)
+      const { git, fetches } = failingGit(missing, offline)
+      await expect(fetchPrRefs(git, GITHUB_HOST, merged())).rejects.toBe(offline)
+      expect(fetches).toHaveLength(2)
+    })
+
+    it('fails for an open PR, which has no merge commit to fall back on, without fetching again', async () => {
+      const offline = new GitError(['fetch'], 'fatal: unable to access the remote', 128)
+      for (const failure of [missing, offline]) {
+        const { git, fetches } = failingGit(failure)
+        await expect(fetchPrRefs(git, GITHUB_HOST, mapPull(GH_PULL))).rejects.toBe(failure)
+        expect(fetches).toHaveLength(1)
+      }
     })
   })
 })

@@ -82,35 +82,25 @@ export function generateCommand(bundle, hasCanvas) {
   return { label, title, disabled: false }
 }
 
-/**
- * The project's name, from its base path on the shared server: `/r/acme/widgets~fix/` names
- * `acme/widgets~fix`. Null for a page served at the root.
- * @param {string} home
- * @returns {string | null}
- */
-export function projectNameOf(home) {
-  const match = /^\/r\/(.+)\/$/.exec(home)
-  return match?.[1] === undefined ? null : decodeURIComponent(match[1])
-}
+/** @typedef {{ slug: string, home: string }} ProjectLink The project's name and home page, from the bootstrap. */
 
 /**
  * Next to the wordmark: a link to the project's home page, named for the project, or the host the
- * page is served from when it has no project path.
- * @param {{ host: string, home?: string | undefined }} opts
+ * page is served from when it has no project.
+ * @param {{ host: string, project?: ProjectLink | undefined }} opts
  * @returns {string}
  */
 function projectLinkHtml(opts) {
-  const name = opts.home === undefined ? null : projectNameOf(opts.home)
-  return name === null || opts.home === undefined
+  return opts.project === undefined
     ? `<span class="mono muted">${esc(opts.host)}</span>`
-    : `<a class="mono muted" href="${esc(opts.home)}" title="This project's home page">${esc(name)}</a>`
+    : `<a class="mono muted" href="${esc(opts.project.home)}" title="This project's home page">${esc(opts.project.slug)}</a>`
 }
 
 /** The wordmark, which leads to the list of every project the server serves. */
 const BRAND_HTML =
   '<a class="brand-wordmark" href="/" title="All projects"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a>'
 
-/** @typedef {{ host: string, home?: string | undefined, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin }} BarOptions */
+/** @typedef {{ host: string, project?: ProjectLink | undefined, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin }} BarOptions */
 
 /**
  * The bar every page starts with, as the server draws it on its own pages too: the wordmark, the
@@ -142,8 +132,8 @@ export function bareHeaderHtml(opts) {
 
 /**
  * @param {PrBundle} bundle
- * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date, home?: string | undefined }} opts
- *   The wordmark links to the project list; `home`, the project's home page, gets a link of its own.
+ * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date, project?: ProjectLink | undefined }} opts
+ *   The wordmark links to the project list; the project, when the page has one, gets a link home.
  * @returns {string}
  */
 export function renderHeader(bundle, opts) {

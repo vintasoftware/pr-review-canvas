@@ -1,18 +1,15 @@
 // @vitest-environment node
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, realpath, rm } from 'node:fs/promises'
 import path from 'node:path'
 import type { Hono } from 'hono'
-import { ConfigError } from '../config.js'
-import { STATIC_DIR } from '../server/context.js'
+import { loadRuntimeConfig } from '../config.js'
+import { createGit, execGit, GitError } from '../git/git.js'
+import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
+import { type AppContext, createAppContext, STATIC_DIR } from '../server/context.js'
 import type { AppEnv } from '../server/env.js'
-import {
-  createFakeGh,
-  createFakeGit,
-  makeTempDir,
-  makeTestContext,
-  type TestContext,
-} from '../testing/fakes.js'
-import { readAppearance, readRegistry, writeAppearance, writeRegistry } from './home.js'
+import { createFakeRunner } from '../testing/fake-runner.js'
+import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
+import { readAppearance, readRegistry, type RegistryEntry, writeAppearance, writeRegistry } from './home.js'
 import { createHub, type Hub, type ProjectRegistration } from './hub.js'
 import { createHubApp, shortPath } from './hub-app.js'
 import { groupProjects } from '../server/html.js'
@@ -23,11 +20,6 @@ const AUTH = { ...LOCAL, authorization: `Bearer ${TOKEN}` }
 const POST = { ...AUTH, 'content-type': 'application/json' }
 /** What the project list's own scripts send: same origin, no token. */
 const PAGE = { ...LOCAL, origin: 'http://localhost:3010', 'content-type': 'application/json' }
-
-const BASE_PATHS: Record<string, string> = {
-  '/src/widgets': '/r/acme/widgets/',
-  '/elsewhere/widgets': '/r/acme/widgets/',
-}
 
 /** Every call waits for `gate`, so a generation stays running until the test opens it. */
 function held<T extends object>(target: T, gate: Promise<void>): T {
@@ -48,7 +40,7 @@ let root: string
 let home: string
 let hub: Hub
 let app: Hono<AppEnv>
-let contexts: TestContext[]
+let contexts: AppContext[]
 let registrations: ProjectRegistration[]
 let logs: string[]
 let failure: unknown
@@ -67,28 +59,52 @@ function at(name: string): string {
   return path.join(root, name)
 }
 
-async function start(saved: { basePath: string; repoRoot: string }[] = []): Promise<void> {
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  const r = await execGit(cwd, args)
+  if (r.code !== 0) {
+    throw new GitError(args, r.stderr, r.code)
+  }
+  return r.stdout.toString('utf8').trim()
+}
+
+/** A real clone at `name` whose origin is `origin`: the config the hub serves it under comes from git. */
+async function makeClone(name: string, origin: string): Promise<void> {
+  await mkdir(at(name), { recursive: true })
+  await git(at(name), 'init', '-q', '-b', 'main')
+  await git(at(name), 'remote', 'add', 'origin', origin)
+}
+
+async function start(saved: RegistryEntry[] = []): Promise<void> {
   await writeRegistry(home, saved)
   hub = await createHub({
     home,
     log: () => undefined,
-    load: async registration => {
+    // The checkout's config as `serve` reads it, from git and the flags; the forge and the git a
+    // request runs are held fakes, so a generation stays running until the test opens the gate.
+    load: async (registration, hooks) => {
       registrations.push(registration)
       if (failure !== undefined) {
         throw failure
       }
-      const basePath = BASE_PATHS[`/${path.relative(root, registration.repoRoot)}`]
-      if (basePath === undefined) {
-        throw new ConfigError('NOT_A_REPO', 'not inside a git repository', 'run from a clone')
-      }
-      const t = await makeTestContext({
-        basePath,
+      const flags = registration.flags ?? {}
+      const config = await loadRuntimeConfig(
+        { port: 3010, dataDir: flags.dataDir, chatAgent: flags.chatAgent, chatModel: flags.chatModel },
+        registration.env ?? {},
+        createGit(registration.repoRoot),
+        registration.repoRoot
+      )
+      const ctx = createAppContext({
+        config,
+        projectConfig: { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
+        fixtureArtifact: null,
         git: held(createFakeGit(), gate),
         gh: held(createFakeGh(), gate),
+        runner: createFakeRunner(),
+        log: hooks.log,
+        clone: hooks.cloneOf(config),
       })
-      t.ctx.config.repoRoot = registration.repoRoot
-      contexts.push(t)
-      return t.ctx
+      contexts.push(ctx)
+      return ctx
     },
   })
   app = createHubApp({
@@ -131,11 +147,13 @@ const register = (body: unknown, headers: Record<string, string> = POST) =>
   })
 
 beforeEach(async () => {
-  root = await makeTempDir('pr-review-hub-app-')
+  root = await realpath(await makeTempDir('pr-review-hub-app-'))
   home = path.join(root, 'home')
-  for (const name of ['/src/widgets', '/elsewhere/widgets', '/src/gadgets-feature']) {
-    await mkdir(at(name), { recursive: true })
-  }
+  await makeClone('/src/widgets', 'git@github.com:acme/widgets.git')
+  // Another clone of the same repository, whose main checkout has the same name.
+  await makeClone('/elsewhere/widgets', 'git@github.com:acme/widgets.git')
+  // A saved worktree the tests list but never build.
+  await mkdir(at('/src/gadgets-feature'), { recursive: true })
   contexts = []
   registrations = []
   logs = []
@@ -147,17 +165,17 @@ beforeEach(async () => {
 
 afterEach(async () => {
   open()
-  hub.close()
-  for (const t of contexts) {
-    await t.cleanup()
+  for (const ctx of contexts) {
+    await vi.waitFor(() => expect(ctx.generation.running()).toBeNull())
   }
+  hub.close()
   await rm(root, { recursive: true, force: true })
 })
 
 describe('createHubApp', () => {
   describe('project paths', () => {
     beforeEach(async () => {
-      await start([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+      await start([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     })
 
     it("serves a project's pages with the prefix taken off and its links under the prefix", async () => {
@@ -194,7 +212,7 @@ describe('createHubApp', () => {
       })
       expect(saved.status).toBe(200)
       expect(await json(saved)).toEqual({ skin: 'github', theme: 'dark' })
-      expect(await contexts[0]?.ctx.settings.read()).toMatchObject({ theme: 'dark' })
+      expect(await contexts[0]?.settings.read()).toMatchObject({ theme: 'dark' })
     })
 
     it('redirects a project path without its trailing slash, keeping the query', async () => {
@@ -221,6 +239,9 @@ describe('createHubApp', () => {
     })
 
     it('answers 404 with a hint when the project cannot be built', async () => {
+      await rm(at('/src/widgets/.git'), { recursive: true })
+      const notRepo = await (await app.request('/r/acme/widgets/', { headers: LOCAL })).text()
+      expect(notRepo).toContain('could not open this project: not inside a git repository')
       failure = new Error('/src/widgets is gone')
       const res = await app.request('/r/acme/widgets/', { headers: LOCAL })
       expect(res.status).toBe(404)
@@ -271,12 +292,20 @@ describe('createHubApp', () => {
 
     it('registers a checkout with its environment and flags, and serves it', async () => {
       const env = { GH_TOKEN: 'from-shell' }
-      const flags = { chatAgent: 'codex', dataDir: '/data' }
+      const flags = { chatAgent: 'codex', dataDir: at('/data') }
       const res = await register({ repoRoot: at('/src/widgets'), env, flags })
       expect(res.status).toBe(200)
-      expect(await json(res)).toEqual({ name: 'acme/widgets', basePath: '/r/acme/widgets/', kept: false })
+      expect(await json(res)).toEqual({ slug: 'acme/widgets', basePath: '/r/acme/widgets/', kept: false })
       expect(registrations).toEqual([{ repoRoot: at('/src/widgets'), env, flags }])
+      expect(contexts[0]?.config).toMatchObject({
+        dataDir: at('/data'),
+        chatOverrides: { chatAgent: 'codex' },
+      })
       expect((await app.request('/r/acme/widgets/', { headers: LOCAL })).status).toBe(200)
+      // The flags are saved with the project; the environment is not.
+      expect(await readRegistry(home)).toEqual([
+        { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags },
+      ])
     })
 
     it('refuses a body that is not JSON or names no absolute folder', async () => {
@@ -295,12 +324,26 @@ describe('createHubApp', () => {
       expect(registrations).toEqual([])
     })
 
-    it('answers with the error a failed build maps to, and logs an unexpected one', async () => {
-      const notRepo = await register({ repoRoot: 'C:\\src\\widgets' })
-      expect(notRepo.status).toBe(500)
+    it('answers 400 for a checkout the config refuses, and 500 with a log line for anything else', async () => {
+      const notRepo = await register({ repoRoot: at('/src/gadgets-feature') })
+      expect(notRepo.status).toBe(400)
       expect(await json(notRepo)).toEqual({
-        error: { code: 'NOT_A_REPO', message: 'not inside a git repository', hint: 'run from a clone' },
+        error: {
+          code: 'NOT_A_REPO',
+          message: 'not inside a git repository',
+          hint: 'run from a clone or pass --repo <dir>',
+        },
       })
+      const badFlag = await register({ repoRoot: at('/src/widgets'), flags: { chatAgent: 'gpt' } })
+      expect(badFlag.status).toBe(400)
+      expect(await json(badFlag)).toEqual({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'unknown chat agent: gpt',
+          hint: 'use --chat-agent claude or --chat-agent codex',
+        },
+      })
+      expect(await readRegistry(home)).toEqual([])
       failure = new Error('disk unavailable')
       const broken = await register({ repoRoot: at('/src/widgets') })
       expect(broken.status).toBe(500)
@@ -308,28 +351,46 @@ describe('createHubApp', () => {
       expect(logs.some(line => line.startsWith('[serve] POST /api/hub/projects 500 INTERNAL'))).toBe(true)
     })
 
+    it('sends a saved project whose checkout answers under another path now there, keeping the query', async () => {
+      await hub.register({ repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } })
+      hub.close()
+      await git(at('/src/widgets'), 'remote', 'set-url', 'origin', 'git@github.com:acme/renamed.git')
+      await start(await readRegistry(home))
+      const res = await app.request('/r/acme/widgets/review/42?theme=dark', { headers: LOCAL })
+      expect(res.status).toBe(308)
+      expect(res.headers.get('location')).toBe('/r/acme/renamed/review/42?theme=dark')
+      expect(await readRegistry(home)).toEqual([
+        { slug: 'acme/renamed', repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } },
+      ])
+      expect((await app.request('/r/acme/widgets/', { headers: LOCAL })).status).toBe(404)
+      const renamed = await app.request('/r/acme/renamed/', { headers: LOCAL })
+      expect(renamed.status).toBe(200)
+      expect(await renamed.text()).toContain('<h1>acme/renamed</h1>')
+      expect(registrations.map(r => r.flags)).toEqual([{ chatAgent: 'codex' }, { chatAgent: 'codex' }])
+    })
+
     it('answers 409 when another checkout holds the path with a generation running', async () => {
       const { project } = await hub.register({ repoRoot: at('/src/widgets') })
-      await project.generation.start(7, { force: false })
+      await project.ctx.generation.start(7, { force: false })
       const res = await register({ repoRoot: at('/elsewhere/widgets') })
       expect(res.status).toBe(409)
       expect(await json(res)).toEqual({
         error: {
           code: 'BAD_REQUEST',
-          message: `/r/acme/widgets/ serves ${at('/src/widgets')}, which has a chat turn or a generation running`,
+          message: `acme/widgets serves ${at('/src/widgets')}, which has a chat turn or a generation running`,
           hint: 'try again when it ends, or rename one of the two worktree folders',
         },
       })
       open()
-      await vi.waitFor(() => expect(project.generation.running()).toBeNull())
+      await vi.waitFor(() => expect(project.ctx.generation.running()).toBeNull())
     })
   })
 
   describe('the server pages', () => {
     it('lists every saved project at the root, built or not', async () => {
       await start([
-        { basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') },
-        { basePath: '/r/acme/gadgets~feature/', repoRoot: at('/src/gadgets-feature') },
+        { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} },
+        { slug: 'acme/gadgets~feature', repoRoot: at('/src/gadgets-feature'), flags: {} },
       ])
       const res = await app.request('/', { headers: LOCAL })
       expect(res.status).toBe(200)
@@ -348,11 +409,9 @@ describe('createHubApp', () => {
       expect(html).toContain('localhost:3010')
       expect(html).toContain('<a class="cmd" id="health" href="/api/health"')
       // A remove command per project, run by the page's own script.
+      expect(html).toContain('<button class="cmd project-remove" type="button" data-remove="acme/widgets"')
       expect(html).toContain(
-        '<button class="cmd project-remove" type="button" data-remove="/r/acme/widgets/"'
-      )
-      expect(html).toContain(
-        '<button class="cmd project-remove" type="button" data-remove="/r/acme/gadgets~feature/"'
+        '<button class="cmd project-remove" type="button" data-remove="acme/gadgets~feature"'
       )
       expect(html).not.toContain('<form')
       expect(html).toContain('<a class="brand-wordmark" href="/" title="All projects">')
@@ -369,15 +428,15 @@ describe('createHubApp', () => {
 
     it('leaves out a saved project whose folder is gone, and saves the list without it', async () => {
       await start([
-        { basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') },
-        { basePath: '/r/acme/gadgets~feature/', repoRoot: at('/src/gadgets-feature') },
+        { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} },
+        { slug: 'acme/gadgets~feature', repoRoot: at('/src/gadgets-feature'), flags: {} },
       ])
       await rm(at('/src/gadgets-feature'), { recursive: true })
       const html = await (await app.request('/', { headers: LOCAL })).text()
       expect(html).toContain('acme/widgets')
       expect(html).not.toContain('acme/gadgets~feature')
       expect(await readRegistry(home)).toEqual([
-        { basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') },
+        { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} },
       ])
     })
 
@@ -469,12 +528,12 @@ describe('createHubApp', () => {
 
   describe('/api/projects/remove', () => {
     beforeEach(async () => {
-      await start([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+      await start([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     })
 
     it('takes a project off the list without the token, and stops serving it', async () => {
       expect((await app.request('/r/acme/widgets/', { headers: LOCAL })).status).toBe(200)
-      const res = await removeProject({ basePath: '/r/acme/widgets/' })
+      const res = await removeProject({ slug: 'acme/widgets' })
       expect(res.status).toBe(200)
       expect(res.headers.get('cache-control')).toBe('no-store')
       expect(await json(res)).toEqual({ removed: true })
@@ -483,21 +542,21 @@ describe('createHubApp', () => {
       expect((await app.request('/r/acme/widgets/', { headers: LOCAL })).status).toBe(404)
     })
 
-    it('answers 404 for a path no project is served at', async () => {
-      const res = await removeProject({ basePath: '/r/acme/nope/' })
+    it('answers 404 for a slug no project has', async () => {
+      const res = await removeProject({ slug: 'acme/nope' })
       expect(res.status).toBe(404)
       expect(await json(res)).toEqual({
         error: {
           code: 'NOT_FOUND',
-          message: 'no project is served at that path',
+          message: 'no project acme/nope is served here',
           hint: 'reload the project list',
         },
       })
       expect(await readRegistry(home)).toHaveLength(1)
     })
 
-    it('refuses a body that is not JSON or names no path', async () => {
-      for (const body of ['not json', {}, { basePath: 7 }]) {
+    it('refuses a body that is not JSON or names no slug', async () => {
+      for (const body of ['not json', {}, { slug: 7 }, { basePath: '/r/acme/widgets/' }]) {
         const res = await removeProject(body)
         expect([body, res.status]).toEqual([body, 400])
         expect((await json<{ error: { code: string } }>(res)).error.code).toBe('BAD_REQUEST')
@@ -507,8 +566,8 @@ describe('createHubApp', () => {
 
     it('answers 409 while the project runs a generation, and keeps it', async () => {
       const { project } = await hub.register({ repoRoot: at('/src/widgets') })
-      await project.generation.start(7, { force: false })
-      const res = await removeProject({ basePath: '/r/acme/widgets/' })
+      await project.ctx.generation.start(7, { force: false })
+      const res = await removeProject({ slug: 'acme/widgets' })
       expect(res.status).toBe(409)
       expect(await json(res)).toEqual({
         error: {
@@ -519,17 +578,17 @@ describe('createHubApp', () => {
       })
       expect(await readRegistry(home)).toHaveLength(1)
       open()
-      await vi.waitFor(() => expect(project.generation.running()).toBeNull())
+      await vi.waitFor(() => expect(project.ctx.generation.running()).toBeNull())
     })
 
     it('refuses a request from another site', async () => {
       const crossSite = await removeProject(
-        { basePath: '/r/acme/widgets/' },
+        { slug: 'acme/widgets' },
         { ...PAGE, 'sec-fetch-site': 'cross-site' }
       )
       expect(crossSite.status).toBe(403)
       expect((await json<{ error: { code: string } }>(crossSite)).error.code).toBe('CROSS_ORIGIN')
-      const foreign = await removeProject({ basePath: '/r/acme/widgets/' }, { ...PAGE, origin: 'null' })
+      const foreign = await removeProject({ slug: 'acme/widgets' }, { ...PAGE, origin: 'null' })
       expect(foreign.status).toBe(403)
       expect(await readRegistry(home)).toHaveLength(1)
     })
@@ -538,7 +597,7 @@ describe('createHubApp', () => {
 
 describe('the server health', () => {
   it('names the version, the port, and where each project checks its own health', async () => {
-    await start([{ basePath: '/r/acme/widgets/', repoRoot: at('/src/widgets') }])
+    await start([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     const res = await app.request('/api/health', { headers: LOCAL })
     expect(res.status).toBe(200)
     expect(await json(res)).toEqual({
@@ -546,7 +605,7 @@ describe('the server health', () => {
       version: '1.2.3',
       port: 3010,
       projects: [
-        { name: 'acme/widgets', repoRoot: at('/src/widgets'), health: '/r/acme/widgets/api/health' },
+        { slug: 'acme/widgets', repoRoot: at('/src/widgets'), health: '/r/acme/widgets/api/health' },
       ],
     })
   })
@@ -562,12 +621,7 @@ describe('shortPath', () => {
 })
 
 describe('groupProjects', () => {
-  const listed = (name: string) => ({
-    name,
-    basePath: `/r/${name}/`,
-    repoRoot: `/x/${name}`,
-    shownPath: name,
-  })
+  const listed = (slug: string) => ({ slug, repoRoot: `/x/${slug}`, shownPath: slug })
 
   it('groups checkouts by repository, the main checkout first and worktrees by folder name', () => {
     const groups = groupProjects([

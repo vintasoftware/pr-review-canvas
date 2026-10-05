@@ -14,6 +14,7 @@ import {
   SKINS,
   THEMES,
 } from '../contract/settings.js'
+import { ProjectFlagsSchema } from '../load-context.js'
 import { readJsonOrDefault, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 
 export function hubHome(env: NodeJS.ProcessEnv): string {
@@ -56,7 +57,15 @@ export async function removeServerInfo(home: string, pid: number): Promise<void>
 }
 
 const RegistrySchema = z.object({
-  projects: z.array(z.object({ basePath: z.string(), repoRoot: z.string() })),
+  projects: z.array(
+    z.object({
+      /** The checkout's name on the server, which its path is built from. */
+      slug: z.string(),
+      repoRoot: z.string(),
+      /** The flags it was opened with, so a restart builds it the same way. They hold no secrets. */
+      flags: ProjectFlagsSchema,
+    })
+  ),
 })
 export type RegistryEntry = z.infer<typeof RegistrySchema>['projects'][number]
 

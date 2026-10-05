@@ -10,14 +10,17 @@ import type { CheckoutGit } from '../chat/checkouts.js'
 import type { RuntimeConfig } from '../config.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
-import type { ReviewKey } from '../contract/review-key.js'
 import { type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
+import { basePathOf, projectSlug } from '../hub/slug.js'
 import { DEFAULT_PROJECT_CONFIG, type LoadedProjectConfig } from '../project-config.js'
 import {
   type AppContext,
+  type CloneShared,
   createChatSet,
+  createCloneShared,
+  createContextGeneration,
   createStores,
   STATIC_DIR,
   type VendorRoots,
@@ -389,10 +392,15 @@ export interface TestContextOptions {
   checkoutGit?: CheckoutGit
   /** `serve --agent/--model` for this context. */
   chatOverrides?: RuntimeConfig['chatOverrides']
-  /** Where the project's pages live; the server root unless a test mounts it under a prefix. */
-  basePath?: string
-  /** The shared server's check for a chat turn in a sibling worktree of the same clone. */
-  chatBusyElsewhere?: (key: ReviewKey) => boolean
+  /**
+   * The checkout's folder, `/repo` by default, which names it on the server as the real config
+   * does: the main checkout of `/repo/.git` is `acme/widgets`, any other folder a worktree of it.
+   */
+  repoRoot?: string
+  /** A data dir to share with another context, as the worktrees of one clone do; a fresh one by default. */
+  dataDir?: string
+  /** The part shared with the other worktrees of the clone; one of the context's own by default. */
+  clone?: CloneShared
   now?: () => Date
   vendorRoots?: VendorRoots
 }
@@ -409,25 +417,30 @@ export async function makeTempDir(prefix = 'pr-review-test-'): Promise<string> {
 
 /** A full AppContext with real stores under a fresh temp data dir. */
 export async function makeTestContext(opts: TestContextOptions = {}): Promise<TestContext> {
-  const dataDir = await makeTempDir()
+  const dataDir = opts.dataDir ?? (await makeTempDir())
+  const repoRoot = opts.repoRoot ?? '/repo'
+  const commonDir = '/repo/.git'
+  const slug = projectSlug(TEST_REPO, repoRoot, commonDir)
   const config: RuntimeConfig = {
     port: 3010,
-    repoRoot: '/repo',
-    commonDir: '/repo/.git',
+    repoRoot,
+    commonDir,
     dataDir,
     repo: TEST_REPO,
     host: opts.host ?? GITHUB_HOST,
-    basePath: opts.basePath ?? '/',
+    slug,
+    basePath: basePathOf(slug),
     fixtureCanvasPath: null,
     chatOverrides: opts.chatOverrides ?? {},
-    openBrowser: false,
   }
   const git = opts.git ?? createFakeGit()
   const now = opts.now ?? (() => new Date('2026-09-10T12:00:00.000Z'))
   const gh = opts.gh ?? createFakeGh()
   const stores = createStores(dataDir, config, git, now)
-  const ctx: AppContext = {
+  const clone = opts.clone ?? createCloneShared(config, now, opts.checkoutGit ?? createFakeCheckoutGit())
+  const parts: Omit<AppContext, 'generation'> = {
     log: () => undefined,
+    clone,
     config,
     projectConfig: opts.projectConfig ?? { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
     git,
@@ -436,11 +449,15 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
       opts.capabilities ?? createCapabilityProbe(() => config.host.probeCapabilities(gh, TEST_REPO), now),
     fetch: opts.fetch ?? notFetched,
     ...stores,
-    ...createChatSet(config, opts.runner ?? createFakeRunner(), stores, now, git, {
-      prompts: opts.projectConfig?.config.prompts,
-      checkoutGit: opts.checkoutGit ?? createFakeCheckoutGit(),
-      chatBusyElsewhere: opts.chatBusyElsewhere,
-    }),
+    ...createChatSet(
+      config,
+      opts.runner ?? createFakeRunner(),
+      stores,
+      now,
+      git,
+      clone,
+      opts.projectConfig?.config.prompts
+    ),
     now,
     version: '0.0.0-test',
     staticDir: STATIC_DIR,
@@ -453,7 +470,14 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     },
     fixtureArtifact: opts.fixtureArtifact ?? null,
   }
-  return { ctx, dataDir, cleanup: () => rm(dataDir, { recursive: true, force: true }) }
+  const ctx: AppContext = {
+    ...parts,
+    generation: createContextGeneration(parts, clone.generationLane, () => ctx),
+  }
+  // A data dir the caller shares belongs to the caller, who removes it once.
+  const cleanup =
+    opts.dataDir === undefined ? () => rm(dataDir, { recursive: true, force: true }) : async () => {}
+  return { ctx, dataDir, cleanup }
 }
 
 export interface FakeTerminal {

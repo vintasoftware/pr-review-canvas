@@ -48,7 +48,7 @@ function build(
     runner?: FakeRunner
     overrides?: { chatAgent?: 'claude' | 'codex'; chatModel?: string }
     checkoutGit?: FakeCheckoutGit
-    busyElsewhere?: (key: ReviewKey) => boolean
+    turns?: Set<ReviewKey>
   } = {}
 ) {
   runner = opts.runner ?? createFakeRunner()
@@ -74,7 +74,7 @@ function build(
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
-    busyElsewhere: opts.busyElsewhere,
+    turns: opts.turns,
   })
 }
 
@@ -286,26 +286,40 @@ describe('createChatManager().send', () => {
   })
 
   it('refuses a turn on a review a manager over the same data dir is running one for', async () => {
-    const asked: ReviewKey[] = []
-    build({
-      busyElsewhere: key => {
-        asked.push(key)
-        return true
-      },
-    })
+    const turns = new Set<ReviewKey>()
+    build({ runner: createFakeRunner({ delayMs: 5 }), turns })
+    const first = manager
+    build({ turns })
+    const second = manager
+    const secondRunner = runner
+    const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    expect([...turns]).toEqual([42])
     await expect(
-      collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+      collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))
     ).rejects.toBeInstanceOf(ChatBusyError)
-    expect(asked).toEqual([42])
-    expect(runner.runs).toEqual([])
-    expect(manager.busy(42)).toBe(false)
-    build({ busyElsewhere: () => false })
+    expect(secondRunner.runs).toEqual([])
+    expect(second.busy(42)).toBe(false)
+    await advanceTo(iterator, 'done')
+    await iterator.next()
+    expect([...turns]).toEqual([])
     expect(
-      (await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))).at(-1)
-    ).toEqual({
-      event: 'done',
-      stopReason: 'end_turn',
-    })
+      (await collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))).at(-1)
+    ).toEqual({ event: 'done', stopReason: 'end_turn' })
+    expect([...turns]).toEqual([])
+  })
+
+  it('refuses a second turn on the same review in one manager, which keeps its own set', async () => {
+    build({ runner: createFakeRunner({ delayMs: 5 }) })
+    const turn = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    await expect(
+      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
+    await advanceTo(iterator, 'done')
+    await iterator.next()
   })
 
   it('says there is nothing to cancel when no turn is running', async () => {

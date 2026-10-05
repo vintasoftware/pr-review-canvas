@@ -129,9 +129,6 @@ export const test = base.extend<{
   },
 })
 
-/** Where the test project answers, as the shared server serves `acme/widgets`. */
-const PROJECT_BASE = '/r/acme/widgets/'
-
 /** Serves PR 42 on a free port; `stop` fails the test if the page threw or a request 500ed. */
 async function startServer(
   page: Page,
@@ -189,7 +186,6 @@ async function startServer(
     }),
     fixtureArtifact: syntheticArtifact(),
     vendorRoots: resolveVendorRoots(),
-    basePath: PROJECT_BASE,
     ...extra,
   })
   // Closing the server drops the sockets, not the handlers: a request the page fired and the test
@@ -244,5 +240,5 @@ async function startServer(
     }
     expect(errors).toEqual([])
   }
-  return { url: `${origin}${PROJECT_BASE}review/42`, t, stop }
+  return { url: `${origin}${t.ctx.config.basePath}review/42`, t, stop }
 }
