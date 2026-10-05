@@ -186,7 +186,7 @@ it.fails('checkout listing ignores manually malformed metadata instead of return
   const root = await makeTempDir('release06-meta-')
   directories.push(root)
   const store = createReviewCheckouts({ root, git: createFakeCheckoutGit(), now: () => new Date() })
-  const lease = await store.lease(42)
+  const lease = await store.lease(42, 'chat')
   await lease.moveTo(HEAD_SHA)
   await lease.release()
   await writeFile(path.join(root, '43.json'), '{}')
@@ -195,7 +195,7 @@ it.fails('checkout listing ignores manually malformed metadata instead of return
 
 it('clean dry-run, active lock protection, and never-clean settings agree', async () => {
   const t = await context()
-  const lease = await t.ctx.checkouts.lease(42)
+  const lease = await t.ctx.checkouts.lease(42, 'chat')
   await lease.moveTo(HEAD_SHA)
   expect(await t.ctx.checkouts.sweep({ all: true, dryRun: true })).toMatchObject({
     removed: [],
@@ -231,7 +231,7 @@ it('review checkout uses the reviewed commit without running hooks or touching r
     git: createCheckoutGit(root),
     now: () => new Date(),
   })
-  const lease = await store.lease(42)
+  const lease = await store.lease(42, 'chat')
   await lease.moveTo(sha)
   expect(await readFile(path.join(lease.dir, 'app.txt'), 'utf8')).toBe('reviewed\n')
   expect(await readFile(path.join(root, 'app.txt'), 'utf8')).toBe('reader edits\n')

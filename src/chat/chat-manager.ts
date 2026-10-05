@@ -10,7 +10,7 @@ import type { ReviewKey } from '../contract/review-key.js'
 import type { ChatThread } from '../contract/state.js'
 import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
-import type { CheckoutLease, ReviewCheckouts } from './checkouts.js'
+import { type CheckoutLease, readCodeAt, type ReviewCheckouts } from './checkouts.js'
 import { type ContextSources, renderChatContext } from './context.js'
 import { type CodeSource, renderSeed, type SeedPaths } from './seed.js'
 import {
@@ -230,38 +230,32 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   /**
-   * Where the agent reads code for this turn, and the events that say so. The uncommitted review,
-   * and a reader who turned checkouts off, read the reader's own checkout. Otherwise the review
-   * checkout is leased before the first event, so another process holding it is a refusal, and
-   * then put at the turn's commit; a checkout that fails falls back to the reader's checkout with
-   * a warning rather than failing the turn.
+   * Where the agent reads code for this turn (see `readCodeAt`), and the events that say so. The
+   * checkout is leased before the first event, so a holder elsewhere refuses the turn.
    */
   async function* prepareCode(
     target: ChatTarget,
     settings: Settings,
     slot: RunningTurn
   ): AsyncGenerator<ChatEvent, CodeSource> {
-    if (target.key === 'uncommitted') {
-      return { kind: 'working-tree', cwd: deps.repoRoot }
-    }
-    if (!settings.checkoutEnabled) {
-      return { kind: 'reader-checkout', cwd: deps.repoRoot }
-    }
-    const lease = await deps.checkouts.lease(target.key)
-    slot.lease = lease
-    if (lease.head !== target.headSha) {
-      yield { event: 'checkout', status: 'preparing', sha: target.headSha, creating: lease.head === null }
-    }
-    try {
-      await lease.moveTo(target.headSha)
-      return { kind: 'checkout', cwd: lease.dir, sha: target.headSha }
-    } catch (err) {
-      const fallback = {
-        message: err instanceof Error ? err.message : String(err),
-        branch: await deps.currentBranch().catch(() => null),
+    const steps = readCodeAt({
+      key: target.key,
+      headSha: target.headSha,
+      checkoutEnabled: settings.checkoutEnabled,
+      holder: 'chat',
+      checkouts: deps.checkouts,
+      repoRoot: deps.repoRoot,
+      currentBranch: deps.currentBranch,
+      onLease: lease => {
+        slot.lease = lease
+      },
+    })
+    for (;;) {
+      const next = await steps.next()
+      if (next.done === true) {
+        return next.value
       }
-      yield { event: 'checkout', status: 'fallback', ...fallback }
-      return { kind: 'fallback', cwd: deps.repoRoot, ...fallback }
+      yield { event: 'checkout', ...next.value }
     }
   }
 

@@ -32,14 +32,6 @@ export function isRunning(job) {
 }
 
 /**
- * True when the skill command the server built regenerates the head's own canvas.
- * @param {string} command
- */
-export function forceOf(command) {
-  return /\s--force$/.test(command)
-}
-
-/**
  * How long the job has run, as `3m 12s`.
  * @param {Pick<GenerationJob, 'startedAt' | 'endedAt'>} job
  * @param {Date} now
@@ -52,34 +44,43 @@ export function elapsedText(job, now) {
 }
 
 /**
- * What a start from this screen does: generate the first canvas, update an outdated one from
- * where it is, or write the current one again. `choice` is true when the reader may pick between
- * updating and a blank page; `force` is the default.
+ * What generating does on this screen, named once for the header command and the dialog: the
+ * first canvas, an update of an outdated one, or the current one written again. `choice` is true
+ * when the reader may pick between updating an earlier canvas and a blank page, and `blank` is
+ * the default. A head that already has a canvas needs neither: the server always writes it again
+ * from a blank page.
  * @param {PrBundle} bundle
- * @returns {{ title: string, text: string, force: boolean, choice: boolean }}
+ * @returns {{ label: string, title: string, heading: string, text: string, blank: boolean, choice: boolean }}
  */
 export function generationMode(bundle) {
-  const sameHead = forceOf(bundle.skillCommand)
+  const what = bundle.local ? 'this local work' : 'this PR'
   if (bundle.status === 'stale') {
     return {
-      title: 'Update the canvas',
+      label: 'update',
+      title: `Update the canvas of ${what} for its current head`,
+      heading: 'Update the canvas',
       text: 'The agent updates the canvas of the earlier commit for the current head. What the new commits left untouched is carried over, and review progress on it follows.',
-      force: false,
+      blank: false,
       choice: true,
     }
   }
   if (bundle.status === 'ready') {
     return {
-      title: 'Regenerate the canvas',
+      label: 'regenerate',
+      title: `Generate the canvas of ${what} again from a blank page`,
+      heading: 'Regenerate the canvas',
       text: 'The agent writes the canvas for the current head again. The current canvas stays until the new one is published.',
-      force: true,
-      choice: !sameHead,
+      blank: true,
+      // A carried-over canvas belongs to an earlier commit, so the head may still be updated from it.
+      choice: bundle.carriedOver !== undefined,
     }
   }
   return {
-    title: 'Generate the canvas',
+    label: 'generate',
+    title: `Generate a canvas for ${what}`,
+    heading: 'Generate the canvas',
     text: 'The agent reads the diff and writes the canvas. It usually takes several minutes.',
-    force: sameHead,
+    blank: false,
     choice: false,
   }
 }
@@ -114,10 +115,10 @@ export function generationStartHtml(bundle, refused = null) {
   const mode = generationMode(bundle)
   const agent = bundle.chat.agent ? `<strong>${esc(bundle.chat.agent)}</strong>` : 'the chat agent'
   const choice = mode.choice
-    ? `<label class="gen-force"><input type="checkbox" name="force"${mode.force ? ' checked' : ''}> Start from a blank page instead of updating the earlier canvas</label>`
+    ? `<label class="gen-force"><input type="checkbox" name="force"${mode.blank ? ' checked' : ''}> Start from a blank page instead of updating the earlier canvas</label>`
     : ''
   return (
-    `<h2 id="gen-h">${mode.title}</h2>` +
+    `<h2 id="gen-h">${mode.heading}</h2>` +
     (refused === null
       ? ''
       : `<div class="callout warn" role="alert">${esc(refused.message)}${refused.hint ? ` — ${esc(refused.hint)}` : ''}</div>`) +
@@ -127,31 +128,26 @@ export function generationStartHtml(bundle, refused = null) {
     skillFallbackHtml(bundle.skillCommand) +
     '<div class="dialog-actions">' +
     '<button class="cmd" type="submit" value="close">cancel</button>' +
-    `<button class="cmd fill" type="button" data-gen="start" data-force="${mode.force ? '1' : '0'}">start</button>` +
+    '<button class="cmd fill" type="button" data-gen="start">start</button>' +
     '</div>'
   )
 }
 
 /**
- * What a done job did, in a sentence.
+ * What publish did with the canvas of a done job, in a sentence. A failed share keeps the warning
+ * publish wrote, which already says to upload the ZIP, and adds where the ZIP is.
  * @param {GenerationJob} job
  */
 function outcomeHtml(job) {
-  if (job.outcome === 'exists') {
-    return '<p class="hint">A canvas already exists for this commit, so nothing was generated. Regenerate it to write it again.</p>'
-  }
   const sharing = job.sharing
   if (sharing?.status === 'shared') {
     return `<p class="hint">The canvas is published and <a href="${esc(sharing.url)}" target="_blank" rel="noopener noreferrer">shared on ${esc(hostLabel())}</a>.</p>`
   }
   if (sharing?.status === 'failed') {
-    return (
-      `<div class="callout warn" role="status">The canvas is published here, but sharing it failed: ${esc(sharing.warning)}` +
-      ` Upload <code>${esc(sharing.zipPath)}</code> to the description by hand so reviewers get it.</div>`
-    )
+    return `<div class="callout warn" role="status">${esc(sharing.warning)} The ZIP: <code>${esc(sharing.zipPath)}</code></div>`
   }
   if (sharing?.status === 'off') {
-    return '<p class="hint">The canvas is published. The project config keeps canvases local, so nothing was posted.</p>'
+    return '<p class="hint">The canvas is published. Sharing is off, so nothing was posted.</p>'
   }
   return '<p class="hint">The canvas is published.</p>'
 }
@@ -402,8 +398,10 @@ export function createGeneration(root, opts) {
     }
     const kind = action.dataset['gen']
     if (kind === 'start') {
+      // Only the blank-page box is the reader's to decide; with none on screen there is no earlier
+      // canvas to update, and a head that has its own canvas the server writes again anyway.
       const box = root.querySelector(`#${GENERATE_DIALOG_ID} input[name="force"]`)
-      const force = box instanceof HTMLInputElement ? box.checked : action.dataset['force'] === '1'
+      const force = box instanceof HTMLInputElement && box.checked
       action.disabled = true
       void start(force)
     } else if (kind === 'stop') {

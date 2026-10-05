@@ -304,11 +304,14 @@ export function toChatError(err: unknown): AppError {
     return new AppError('CHAT_BUSY', err.message, 409, 'stop the running answer, or wait for it to finish')
   }
   if (err instanceof CheckoutBusyError) {
+    // A generation holds the checkout for its whole run; another serve, for one answer.
     return new AppError(
       'CHAT_BUSY',
       err.message,
       409,
-      'another pr-review serve of this clone is answering about this review; ask again once it is done'
+      err.holder === 'generation'
+        ? 'ask again once the canvas generation of this review ends, or stop it'
+        : 'another pr-review serve of this clone is answering about this review; ask again once it is done'
     )
   }
   if (err instanceof ChatContextError) {

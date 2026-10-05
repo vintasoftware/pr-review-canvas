@@ -1,11 +1,12 @@
 // The canvas generation the review page starts: the same prepare, validate, and publish the skill
-// runs, with the agent kept to reading. The agent never writes a file or runs a command; it answers
-// with the model JSON, and this file writes it, publishes it, and hands the problems back.
+// runs, with the agent kept to reading: it runs under the chat's flags, which deny every write, and
+// answers with the model JSON, which this file writes, publishes, and hands the problems back on.
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { AgentRun, AgentRunner } from '../acpx/acpx.js'
 import { latestModel } from '../acpx/models.js'
-import { CheckoutBusyError, type CheckoutLease, type ReviewCheckouts } from '../chat/checkouts.js'
+import { CheckoutBusyError, type CheckoutLease, readCodeAt, type ReviewCheckouts } from '../chat/checkouts.js'
+import type { CodeSource } from '../chat/seed.js'
 import { slug } from '../chat/threads.js'
 import type { PrepareTargetInput } from '../contract/generation-context.js'
 import type { ErrorEnvelope } from '../contract/api.js'
@@ -58,6 +59,8 @@ export interface GenerationManagerDeps {
   generation: { models: GenerationModels; maxRepairRounds: number }
   repo: Repo
   repoRoot: string
+  /** The branch the reader's checkout is on, named when the review checkout falls back to it. */
+  currentBranch: () => Promise<string | null>
   log: (line: string) => void
   now: () => Date
 }
@@ -69,12 +72,6 @@ export interface GenerationManager {
   status(key: ReviewKey): GenerationJob | null
   /** True when a running job was asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
-}
-
-/** What the agent reads code from, and how the prompt describes it. */
-interface CodeSource {
-  cwd: string
-  note: string
 }
 
 /** The running side of a job, which the status never shows. */
@@ -136,18 +133,31 @@ function targetOf(key: ReviewKey): PrepareTargetInput {
   return isLocalKey(key) ? { kind: 'local', source: key } : { kind: 'pr', number: key }
 }
 
+/** What the agent is told about its working directory, for each place `readCodeAt` can pick. */
+export function codeNote(code: CodeSource, headSha: string): string {
+  switch (code.kind) {
+    case 'checkout':
+      return `Your working directory is a checkout of ${code.sha}, the head: read any file there, changed or untouched, as it is at the head.`
+    case 'working-tree':
+      return 'Your working directory is the work under review: read any file there as it is now.'
+    case 'reader-checkout':
+    case 'fallback':
+      return `Your working directory is the reader's checkout, which may be on another commit than ${headSha}. Read changed files from \`<head>\` and \`<base>\`; an untouched file there may differ from the head.`
+  }
+}
+
 /**
  * What the agent is told before the prepared prompt. The prompt is written for the skill, which
  * writes the file and runs publish itself; here the server does both, and the agent runs under the
  * chat's flags, which deny every write, so the parts that say otherwise are named and replaced.
  */
-export function generationPreface(code: CodeSource, modelPath: string): string {
+export function generationPreface(code: CodeSource, headSha: string, modelPath: string): string {
   return [
     '# Generate a review canvas',
     '',
     'The pr-review server runs this generation. Read and search only: write no file and run no command that changes anything. A request to write is denied.',
     '',
-    `- ${code.note}`,
+    `- ${codeNote(code, headSha)}`,
     '- Where the task below says to read a file with `git show`, read it from your working directory instead, or from the `<head>` and `<base>` folders it names.',
     `- Where it says to write \`<model>\` (${modelPath}) or to run validate or publish, do neither. Answer with the model JSON itself, and nothing else: no prose before or after it and no code fence.`,
     '- The server writes your answer to `<model>`, validates and publishes it, and sends you the problems publish names. Then answer with the whole corrected model JSON, again with nothing else.',
@@ -197,11 +207,8 @@ export function jobError(err: unknown): ErrorEnvelope['error'] {
     return { code: err.code, message: err.message, hint: err.hint }
   }
   if (err instanceof CheckoutBusyError) {
-    return {
-      code: 'GENERATION_BUSY',
-      message: err.message,
-      hint: 'another pr-review serve of this clone holds the review checkout; try again once it is done',
-    }
+    // The message names who holds the checkout; either way, the run can start once it is free.
+    return { code: 'GENERATION_BUSY', message: err.message, hint: 'try again once it is done' }
   }
   return toAppError(err).toEnvelope().error
 }
@@ -223,9 +230,8 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
   }
 
   /**
-   * Where the agent reads code. The uncommitted review reads the reader's checkout, which is the
-   * work under review; any other review reads its review checkout at the prepared head, the one
-   * the chat uses, so the chat of that review waits while the generation holds it.
+   * Where the agent reads code: the chat's rule (`readCodeAt`). The job holds the review
+   * checkout to its end, so a chat turn on that review is refused until then.
    */
   const codeSource = async (
     slot: Slot,
@@ -233,33 +239,30 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     headSha: string,
     settings: Settings
   ): Promise<CodeSource> => {
-    if (key === 'uncommitted') {
-      return {
-        cwd: deps.repoRoot,
-        note: 'Your working directory is the work under review: read any file there as it is now.',
+    const steps = readCodeAt({
+      key,
+      headSha,
+      checkoutEnabled: settings.checkoutEnabled,
+      holder: 'generation',
+      checkouts: deps.checkouts,
+      repoRoot: deps.repoRoot,
+      currentBranch: deps.currentBranch,
+      onLease: lease => {
+        slot.lease = lease
+      },
+    })
+    for (;;) {
+      const next = await steps.next()
+      if (next.done === true) {
+        return next.value
       }
-    }
-    const approximate = {
-      cwd: deps.repoRoot,
-      note: `Your working directory is the reader's checkout, which may be on another commit than ${headSha}. Read changed files from \`<head>\` and \`<base>\`; an untouched file there may differ from the head.`,
-    }
-    if (!settings.checkoutEnabled) {
-      return approximate
-    }
-    slot.job.phase = 'checkout'
-    const lease = await deps.checkouts.lease(key)
-    slot.lease = lease
-    try {
-      await lease.moveTo(headSha)
-    } catch (err) {
-      deps.log(
-        `generation ${label(key)}: the review checkout did not move (${err instanceof Error ? err.message : String(err)}); reading the reader's checkout`
-      )
-      return approximate
-    }
-    return {
-      cwd: lease.dir,
-      note: `Your working directory is a checkout of ${headSha}, the head: read any file there, changed or untouched, as it is at the head.`,
+      if (next.value.status === 'preparing') {
+        slot.job.phase = 'checkout'
+      } else {
+        deps.log(
+          `generation ${label(key)}: the review checkout did not move (${next.value.message}); reading the reader's checkout`
+        )
+      }
     }
   }
 
@@ -307,12 +310,15 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
 
   const runJob = async (slot: Slot, key: ReviewKey): Promise<void> => {
     const { job } = slot
-    const prepared = await deps.steps.prepare(targetOf(key), { force: job.force, log: () => undefined })
+    // `force` is the reader's "start from a blank page". A canvas that already exists for the
+    // head can only be written again from one, so prepare says so and is asked again with force.
+    const target = targetOf(key)
+    const first = await deps.steps.prepare(target, { force: job.force, log: () => undefined })
+    const prepared =
+      first.status === 'exists'
+        ? await deps.steps.prepare(target, { force: true, log: () => undefined })
+        : first
     job.headSha = prepared.headSha
-    if (prepared.status === 'exists') {
-      end(slot, 'done', { outcome: 'exists' })
-      return
-    }
     throwIfStopped(slot)
     const settings = await deps.settings()
     const code = await codeSource(slot, key, prepared.headSha, settings)
@@ -330,7 +336,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       timeoutSec: GENERATION_TURN_TIMEOUT_SEC,
     })
 
-    let prompt = `${generationPreface(code, modelPath)}${task}`
+    let prompt = `${generationPreface(code, prepared.headSha, modelPath)}${task}`
     for (;;) {
       job.phase = job.round === 1 ? 'generating' : 'repairing'
       const answer = await turn(slot, session, prompt, code.cwd)
@@ -347,7 +353,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
           harness: 'other',
           allowStale: false,
         })
-        end(slot, 'done', { outcome: 'published', sharing: result.sharing })
+        end(slot, 'done', { sharing: result.sharing })
         deps.log(`generation ${label(key)}: published ${prepared.headSha.slice(0, 7)}`)
         return
       } catch (err) {

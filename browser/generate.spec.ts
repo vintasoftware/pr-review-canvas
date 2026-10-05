@@ -32,7 +32,8 @@ test('generates the first canvas from the empty screen and loads it', async ({ p
   await expect(page.locator('#regenerate')).toContainText('generating')
   await expect(dialog.locator('.gen-activity li')).toHaveText('Read src/b.ts')
   // The fake forge refuses the comment, so the dialog stays over the new canvas with the zip to upload.
-  await expect(dialog).toContainText('sharing it failed', { timeout: 15_000 })
+  await expect(dialog).toContainText('Automatic canvas sharing failed', { timeout: 15_000 })
+  await expect(dialog).toContainText('The ZIP: ')
   await expect(dialog.locator('h2')).toHaveText('Done')
   await dialog.locator('button[value="close"]').click()
   // The new canvas is current, so the header command regenerates it.

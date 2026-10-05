@@ -146,6 +146,18 @@ describe('createApp', () => {
       expect(redirect.headers.get('location')).toBe('/review/42?generate=1')
     })
 
+    it('keeps offering the local review that is not started yet once the other one is', async () => {
+      const app = createApp(t.ctx)
+      await t.ctx.prs.writePr('branch', syntheticArtifact().pr)
+      const html = await (await app.request('/', { headers: LOCAL })).text()
+      expect(html).toContain('href="/review/branch"')
+      expect(html).not.toContain('href="/review/branch?generate=1"')
+      expect(html).toContain('href="/review/uncommitted?generate=1"')
+      await t.ctx.prs.writePr('uncommitted', syntheticArtifact().pr)
+      const both = await (await app.request('/', { headers: LOCAL })).text()
+      expect(both).not.toContain('?generate=1">generate for')
+    })
+
     it('offers no generation without acpx or with agents off', async () => {
       const { DEFAULT_PROJECT_CONFIG } = await import('../project-config.js')
       for (const opts of [

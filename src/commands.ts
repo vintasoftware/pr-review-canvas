@@ -34,8 +34,7 @@ import {
   readContext,
   validationInput,
 } from './review/publish.js'
-import { describeFoldFix } from './review/fix-folds.js'
-import { fixModel } from './review/fix-model.js'
+import { describeFixes, fixModel } from './review/fix-model.js'
 import { validateModelOutput } from './review/validate.js'
 import type { AppContext } from './server/context.js'
 import { AppError, CLI_SETUP_CODES, toAppError } from './server/errors.js'
@@ -312,13 +311,12 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     printJson(io, values.fix === true ? { ...report, fixed: [...fixed.folds, ...fixed.trims] } : report)
     return report.ok ? EXIT.ok : EXIT.invalid
   }
-  for (const fold of fixed.folds) {
-    io.stdout(`fixed ${fold.where}: ${describeFoldFix(fold)}`)
+  // The fixes in the words the generation in the review app hands its agent, then what is left.
+  for (const line of describeFixes(fixed)) {
+    io.stdout(`fixed ${line}`)
   }
   for (const trim of fixed.trims) {
-    if (trim.outcome === 'fixed') {
-      io.stdout(`fixed ${trim.where}: "${trim.from}" -> "${trim.to}"`)
-    } else {
+    if (trim.outcome === 'unfixable') {
       io.stdout(
         `unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`
       )

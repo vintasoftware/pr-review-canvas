@@ -487,8 +487,10 @@ The data directory's `settings.yml` accepts these keys and values:
 | `mentionCanvas`        | `null`   | `true`, `false`, or `null` to follow the project (3)                             |
 
 (1) A model ID names a family; see [Model families](#model-families).
-(2) AI Chat only. Canvas generation reads `generation.models` in the project config instead. A
-file written before these keys were renamed keeps working: `agent` and `model` are read as
+(2) `chatAgent` also picks the agent that [generates canvases from the review
+app](#generating-from-the-review-app). `chatModel` is AI Chat only: generation reads
+`generation.models` in the project config instead. A file written before these keys were renamed
+keeps working: `agent` and `model` are read as
 `chatAgent` and `chatModel`, and the next save renames them in the file.
 (3) Overrides `sharing.canvasComment` or `sharing.mentionCanvas` in the project config for you; see
 [turning sharing off](#turning-sharing-off). Edit these in the file; the settings dialog does not
@@ -948,35 +950,35 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 ## Troubleshooting
 
-| Symptom or code                         | Next step                                                                                                                                             |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NOT_A_REPO`                            | Run inside a Git clone or pass `--repo <dir>`                                                                                                         |
-| `NO_ORIGIN`                             | Check that `origin` points to github.com or GitLab; for self-hosted GitLab set `PR_REVIEW_HOST=gitlab`                                                |
-| `GH_MISSING` / `GH_UNAUTHENTICATED`     | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server              |
-| `GITHUB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                                      |
-| `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server |
-| `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                      |
-| `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                      |
-| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                  |
-| `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                            |
-| `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                          |
-| `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own              |
-| `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                           |
-| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                               |
-| `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                  |
-| `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                               |
-| `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                             |
-| `CHAT_BUSY`                             | Wait for the running reply or press **stop**; when another `pr-review serve` holds the review checkout, ask again once its answer is done             |
-| `GENERATION_BUSY`                       | A generation already runs for this review; open it from the header command, or stop it and start again                                                |
-| `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                  |
-| `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                  |
-| `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                               |
-| `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                        |
-| `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                          |
-| `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                               |
-| `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                               |
-| `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                  |
-| `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                              |
+| Symptom or code                         | Next step                                                                                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_A_REPO`                            | Run inside a Git clone or pass `--repo <dir>`                                                                                                            |
+| `NO_ORIGIN`                             | Check that `origin` points to github.com or GitLab; for self-hosted GitLab set `PR_REVIEW_HOST=gitlab`                                                   |
+| `GH_MISSING` / `GH_UNAUTHENTICATED`     | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server                 |
+| `GITHUB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                                         |
+| `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server    |
+| `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                         |
+| `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                         |
+| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                     |
+| `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                               |
+| `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                             |
+| `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                 |
+| `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                              |
+| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                  |
+| `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                     |
+| `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                  |
+| `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                |
+| `CHAT_BUSY`                             | Wait for the running reply or press **stop**; when a canvas generation or another `pr-review serve` holds the review checkout, ask again once it is done |
+| `GENERATION_BUSY`                       | A generation already runs for this review; open it from the header command, or stop it and start again                                                   |
+| `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                     |
+| `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                     |
+| `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                                  |
+| `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                           |
+| `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                             |
+| `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                                  |
+| `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                                  |
+| `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                     |
+| `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                 |
 
 ### Validation diagnostics
 

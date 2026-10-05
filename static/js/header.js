@@ -3,6 +3,7 @@
 /** @typedef {import('./contract-types.js').RiskTag} RiskTag */
 import { setDisabledReason } from './composer.js'
 import { esc, timeAgo } from './dom.js'
+import { generationMode } from './generate.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
 import { canvasHiddenLines, getFoldLevel, refreshRail } from './layers.js'
 import { pendingBarHtml, pendingCount } from './pending.js'
@@ -73,21 +74,12 @@ export function statePill(pr) {
  * @returns {{ label: string, title: string, disabled: boolean }}
  */
 export function generateCommand(bundle, hasCanvas) {
-  const what = bundle.local !== undefined ? 'this local work' : 'this PR'
   if (!bundle.chat.enabled) {
+    const what = bundle.local !== undefined ? 'this local work' : 'this PR'
     return { label: 'regenerate', title: `Generate a new canvas for ${what}`, disabled: !hasCanvas }
   }
-  if (bundle.status === 'stale') {
-    return { label: 'update', title: `Update the canvas of ${what} for its current head`, disabled: false }
-  }
-  if (hasCanvas) {
-    return {
-      label: 'regenerate',
-      title: `Generate the canvas of ${what} again from a blank page`,
-      disabled: false,
-    }
-  }
-  return { label: 'generate', title: `Generate a canvas for ${what}`, disabled: false }
+  const { label, title } = generationMode(bundle)
+  return { label, title, disabled: false }
 }
 
 /**

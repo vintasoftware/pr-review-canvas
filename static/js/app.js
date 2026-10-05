@@ -505,7 +505,7 @@ export class PrAppElement extends HTMLElement {
     if (wasOpen || job.sharing?.status === 'failed') {
       this.generation?.showLast()
     } else {
-      toast(this, job.outcome === 'exists' ? 'a canvas already exists for this commit' : 'canvas published')
+      toast(this, 'canvas published')
     }
   }
 

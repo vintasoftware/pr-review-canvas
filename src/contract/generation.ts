@@ -3,8 +3,11 @@ import type { ErrorEnvelope } from './api.js'
 import type { ReviewKey } from './review-key.js'
 import type { CanvasSharing } from './self-review.js'
 
-/** What the generate button sends: `force` regenerates a canvas that exists for the head already. */
-export const GenerateInputSchema = z.object({ force: z.boolean().default(false) }).strict()
+/**
+ * What the generate button sends: `force` starts from a blank page instead of updating the
+ * earlier canvas. A head that already has a canvas is written again from one whatever it says.
+ */
+export const GenerateInputSchema = z.object({ force: z.boolean() }).strict()
 
 /**
  * Where a generation the server runs is. `checkout` puts the review checkout at the head,
@@ -45,8 +48,7 @@ export interface GenerationJob {
   activity: string[]
   /** The problems the last rejected publish named, one line each. */
   problems?: string[]
-  /** Set on a done job: published, or prepare found a canvas for the head already. */
-  outcome?: 'published' | 'exists'
+  /** Set on a done job, which always published: what publish did with the canvas. */
   sharing?: GenerationSharing
   error?: ErrorEnvelope['error']
 }

@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Capabilities, ErrorEnvelope } from '../../contract/api.js'
 import type { GenerationJob, GenerationResponse } from '../../contract/generation.js'
 import { GenerationBusyError, type GenerationManager } from '../../generate/generation-manager.js'
-import { gitlabHost } from '../../host/host.js'
 import { DEFAULT_PROJECT_CONFIG } from '../../project-config.js'
 import { artifactToModelOutput } from '../../review/normalize.js'
 import { createFakeRunner } from '../../testing/fake-runner.js'
@@ -93,8 +92,8 @@ describe('generate routes', () => {
     expect(((await res.json()) as GenerationResponse).job).toMatchObject({ key: 42, force: true })
     expect(manager.start).toHaveBeenCalledWith(42, { force: true })
 
-    // An empty body is a start without force; a local review is a target like any other.
-    await app.request('/api/prs/branch/generate', { method: 'POST', headers: POST })
+    // A local review is a target like any other.
+    await app.request('/api/prs/branch/generate', { method: 'POST', headers: POST, body: '{"force":false}' })
     expect(manager.start).toHaveBeenLastCalledWith('branch', { force: false })
   })
 
@@ -102,6 +101,8 @@ describe('generate routes', () => {
     await context()
     const app = appWith(fakeManager())
     for (const body of [
+      '',
+      '{}',
       'not json',
       JSON.stringify({ force: 'yes' }),
       JSON.stringify({ force: true, x: 1 }),
@@ -121,7 +122,11 @@ describe('generate routes', () => {
         },
       })
     )
-    const res = await app.request('/api/prs/42/generate', { method: 'POST', headers: POST, body: '{}' })
+    const res = await app.request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: '{"force":false}',
+    })
     expect(res.status).toBe(409)
     expect(((await res.json()) as ErrorEnvelope).error.code).toBe('GENERATION_BUSY')
   })
@@ -132,7 +137,7 @@ describe('generate routes', () => {
     const res = await appWith(manager).request('/api/prs/42/generate', {
       method: 'POST',
       headers: POST,
-      body: '{}',
+      body: '{"force":false}',
     })
     expect(res.status).toBe(503)
     expect(((await res.json()) as ErrorEnvelope).error).toMatchObject({
@@ -144,7 +149,7 @@ describe('generate routes', () => {
 
   describe('the host login a shared canvas needs', () => {
     const start = (app: Hono, key: string | number = 42) =>
-      app.request(`/api/prs/${key}/generate`, { method: 'POST', headers: POST, body: '{}' })
+      app.request(`/api/prs/${key}/generate`, { method: 'POST', headers: POST, body: '{"force":false}' })
 
     /** The capability probe, answering what the test says; `refreshes` counts the fresh reads. */
     function probe(caps: Capabilities): { refreshes: number } {
@@ -158,58 +163,42 @@ describe('generate routes', () => {
       return seen
     }
 
-    it('refuses before any agent time when the host CLI is not logged in', async () => {
+    it('refuses before any agent time a login that cannot post, as posting a comment does', async () => {
       await context()
-      const seen = probe({ canComment: false, tokenKind: 'unknown', login: null })
+      // What the probe reads from a logged-out gh: no user, and a repository call that fails.
+      const seen = probe({
+        canComment: false,
+        tokenKind: 'unknown',
+        login: null,
+        reason: 'gh: To get started with GitHub CLI, please run:  gh auth login',
+        hint: 'run `gh auth status` and log in again',
+      })
       const manager = fakeManager()
       const res = await start(appWith(manager))
-      expect(res.status).toBe(401)
+      expect(res.status).toBe(403)
       expect(((await res.json()) as ErrorEnvelope).error).toEqual({
-        code: 'GH_UNAUTHENTICATED',
-        message: 'gh is not logged in, so the canvas could not be shared on the PR',
-        hint: 'run `gh auth login` in a terminal, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+        code: 'COMMENT_FORBIDDEN',
+        message: 'gh: To get started with GitHub CLI, please run:  gh auth login',
+        hint: 'run `gh auth status` and log in again, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
       })
       expect(manager.start).not.toHaveBeenCalled()
       // The probe is read fresh, so a login made since the page loaded counts.
       expect(seen.refreshes).toBe(1)
-    })
-
-    it('names the GitLab login on a GitLab project', async () => {
-      t = await makeTestContext({ host: gitlabHost('gitlab.com'), runner: createFakeRunner() })
-      probe({ canComment: false, tokenKind: 'unknown', login: null })
-      const res = await start(appWith(fakeManager()))
-      expect(((await res.json()) as ErrorEnvelope).error).toMatchObject({
-        code: 'GLAB_UNAUTHENTICATED',
-        message: 'glab is not logged in, so the canvas could not be shared on the MR',
-      })
-    })
-
-    it('refuses a login that cannot comment, with why and what to do', async () => {
-      await context()
-      probe({
-        canComment: false,
-        tokenKind: 'classic',
-        login: 'octocat',
-        reason: 'this token has no repo scope',
-        hint: 'gh auth refresh -h github.com -s repo',
-      })
-      const res = await start(appWith(fakeManager()))
-      expect(res.status).toBe(403)
-      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
-        code: 'COMMENT_FORBIDDEN',
-        message: 'octocat cannot comment on acme/widgets: this token has no repo scope',
-        hint: 'gh auth refresh -h github.com -s repo, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
-      })
+      // A probe with no reason or hint of its own still names the way out.
       probe({ canComment: false, tokenKind: 'classic', login: 'octocat' })
-      expect(((await (await start(appWith(fakeManager()))).json()) as ErrorEnvelope).error).toMatchObject({
-        message: 'octocat cannot comment on acme/widgets',
-        hint: 'log in with an account that can comment, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+      expect(((await (await start(appWith(fakeManager()))).json()) as ErrorEnvelope).error).toEqual({
+        code: 'COMMENT_FORBIDDEN',
+        message: 'this GitHub login cannot post on this repository',
+        hint: 'turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
       })
     })
 
-    it('lets through a login whose rights the probe cannot read', async () => {
+    it('lets through a login whose rights the probe cannot read, named or not', async () => {
       await context()
       probe({ canComment: 'unknown', tokenKind: 'fine-grained', login: 'octocat' })
+      expect((await start(appWith(fakeManager()))).status).toBe(202)
+      // An app token cannot read /user, so the probe names nobody; publish can still share.
+      probe({ canComment: 'unknown', tokenKind: 'fine-grained', login: null })
       expect((await start(appWith(fakeManager()))).status).toBe(202)
     })
 
@@ -265,7 +254,11 @@ describe('generate routes', () => {
     })
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42(), runner })
     const app = createApp(t.ctx)
-    const started = await app.request('/api/prs/42/generate', { method: 'POST', headers: POST, body: '{}' })
+    const started = await app.request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: '{"force":false}',
+    })
     expect(started.status).toBe(202)
 
     let job: GenerationJob | null = null
@@ -281,7 +274,8 @@ describe('generate routes', () => {
       }
       await new Promise(resolve => setTimeout(resolve, 5))
     }
-    expect(job).toMatchObject({ phase: 'done', outcome: 'published', round: 2, headSha: HEAD_SHA })
+    // The fake forge refuses the comment, so publish falls back to the ZIP to upload by hand.
+    expect(job).toMatchObject({ phase: 'done', round: 2, headSha: HEAD_SHA, sharing: { status: 'failed' } })
     expect(runner.runs[0]?.prompt).toContain('The pr-review server runs this generation')
     expect(runner.runs[1]?.prompt).toMatch(/HUNK_UNASSIGNED/)
     expect(runner.runs[1]?.prompt).toContain('keep them')
@@ -293,7 +287,7 @@ describe('generate routes', () => {
     const res = await createApp(t.ctx).request('/api/prs/42/generate', {
       method: 'POST',
       headers: { ...POST, origin: 'https://evil.example' },
-      body: '{}',
+      body: '{"force":false}',
     })
     expect(res.status).toBe(403)
   })

@@ -1,7 +1,7 @@
 import { html, raw } from 'hono/html'
 import type { HtmlEscapedString } from 'hono/utils/html'
 import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.js'
-import { keyLabel, keyToString, type LocalKey } from '../contract/review-key.js'
+import { keyLabel, keyToString, LOCAL_KEYS, type LocalKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 
@@ -90,6 +90,12 @@ export function reviewPage(
   })
 }
 
+/** The home page's link that generates the first canvas of a local review. */
+const LOCAL_GENERATE: Record<LocalKey, string> = {
+  branch: 'generate for this branch',
+  uncommitted: 'generate for uncommitted work',
+}
+
 export function homePage(
   data: HomeData & {
     owner: string
@@ -130,15 +136,18 @@ ${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" valu
 <section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
 <div class="body">${
       data.localReviews.length === 0
-        ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>${
-            data.canGenerate
-              ? html`<p class="tbtns"><a class="cmd" href="/review/branch?generate=1">generate for this branch</a><a class="cmd" href="/review/uncommitted?generate=1">generate for uncommitted work</a></p>`
-              : ''
-          }`
+        ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>`
         : html`<ul class="plain">${data.localReviews.map(
             key =>
               html`<li><a href="/review/${key}">${keyLabel(key)}</a> <span class="muted">/review/${key}</span></li>`
           )}</ul>`
+    }${
+      // Each local review not started here yet can be, whether or not the other one was.
+      data.canGenerate && data.localReviews.length < LOCAL_KEYS.length
+        ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !data.localReviews.includes(key)).map(
+            key => html`<a class="cmd" href="/review/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
+          )}</p>`
+        : ''
     }</div></section>
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${

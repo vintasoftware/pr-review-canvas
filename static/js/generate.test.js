@@ -7,7 +7,6 @@ import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   createGeneration,
   elapsedText,
-  forceOf,
   GENERATE_DIALOG_ID,
   generationMode,
   generationStartHtml,
@@ -71,11 +70,6 @@ afterEach(() => {
 })
 
 describe('helpers', () => {
-  it('reads the force flag off the skill command', () => {
-    expect(forceOf('/pr-review-canvas 42 --force')).toBe(true)
-    expect(forceOf('/pr-review-canvas 42')).toBe(false)
-  })
-
   it('tells a running job from an ended one', () => {
     expect(isRunning({ phase: 'repairing' })).toBe(true)
     for (const phase of /** @type {const} */ (['done', 'failed', 'cancelled'])) {
@@ -91,35 +85,39 @@ describe('helpers', () => {
 })
 
 describe('generationMode', () => {
-  it('generates a first canvas, forcing only when the head already has one in another format', () => {
-    expect(generationMode(bundle())).toMatchObject({
-      title: 'Generate the canvas',
-      force: false,
+  it('generates the first canvas, with no earlier canvas to choose to update', () => {
+    expect(generationMode(bundle())).toEqual({
+      label: 'generate',
+      title: 'Generate a canvas for this PR',
+      heading: 'Generate the canvas',
+      text: 'The agent reads the diff and writes the canvas. It usually takes several minutes.',
+      blank: false,
       choice: false,
     })
-    expect(generationMode(bundle({ skillCommand: '/pr-review-canvas 42 --force' }))).toMatchObject({
-      force: true,
-      choice: false,
-    })
+    expect(generationMode(bundle({ local: 'branch' })).title).toBe('Generate a canvas for this local work')
   })
 
   it('updates an outdated canvas, with a blank page as the choice', () => {
     expect(generationMode(bundle({ status: 'stale' }))).toMatchObject({
-      title: 'Update the canvas',
-      force: false,
+      label: 'update',
+      heading: 'Update the canvas',
+      blank: false,
       choice: true,
     })
   })
 
   it('regenerates a ready canvas from a blank page, with a choice only for a carried-over one', () => {
-    expect(
-      generationMode(bundle({ status: 'ready', skillCommand: '/pr-review-canvas 42 --force' }))
-    ).toMatchObject({
-      title: 'Regenerate the canvas',
-      force: true,
+    expect(generationMode(bundle({ status: 'ready' }))).toMatchObject({
+      label: 'regenerate',
+      heading: 'Regenerate the canvas',
+      blank: true,
       choice: false,
     })
-    expect(generationMode(bundle({ status: 'ready' }))).toMatchObject({ force: true, choice: true })
+    const carried = { canvasHeadSha: 'c'.repeat(40), currentHeadSha: 'd'.repeat(40) }
+    expect(generationMode(bundle({ status: 'ready', carriedOver: carried }))).toMatchObject({
+      blank: true,
+      choice: true,
+    })
   })
 })
 
@@ -130,7 +128,7 @@ describe('generationStartHtml', () => {
     expect(document.body.textContent).toContain('claude')
     expect(document.body.textContent).toContain('shares the canvas as a comment on the pull request')
     expect(document.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('/pr-review-canvas 42')
-    expect(document.querySelector('[data-gen="start"]')?.getAttribute('data-force')).toBe('0')
+    expect(document.querySelector('[data-gen="start"]')).not.toBeNull()
     expect(document.querySelector('input[name="force"]')).toBeNull()
   })
 
@@ -195,24 +193,27 @@ describe('generationStatusHtml', () => {
     expect(document.querySelector('[data-gen="stop"]')).toBeNull()
   })
 
-  it('says what a done job did with the canvas', () => {
-    const done = job({ phase: 'done', outcome: 'published' })
+  it('says what publish did with the canvas of a done job', () => {
+    const done = job({ phase: 'done', sharing: { status: 'local' } })
     expect(
       generationStatusHtml({ ...done, sharing: { status: 'shared', url: 'https://x/c' } }, NOW)
     ).toContain('href="https://x/c"')
     expect(generationStatusHtml({ ...done, sharing: { status: 'off' } }, NOW)).toContain(
-      'keeps canvases local'
+      'Sharing is off, so nothing was posted.'
     )
-    expect(generationStatusHtml({ ...done, sharing: { status: 'local' } }, NOW)).toContain(
-      'The canvas is published.'
-    )
-    const failed = generationStatusHtml(
-      { ...done, sharing: { status: 'failed', warning: 'upload refused.', zipPath: '/x/c.zip' } },
+    expect(generationStatusHtml(done, NOW)).toContain('The canvas is published.')
+    expect(generationStatusHtml(done, NOW)).not.toContain('data-gen="again"')
+  })
+
+  it('shows a failed share with the warning publish wrote, once, and where the ZIP is', () => {
+    // The warning as publish writes it (src/canvas/share.ts), which already says to upload the ZIP.
+    const warning =
+      'Automatic canvas sharing failed: gh: Not Found (HTTP 404). Upload the ZIP to the pull request description manually.'
+    document.body.innerHTML = generationStatusHtml(
+      job({ phase: 'done', sharing: { status: 'failed', warning, zipPath: '/x/c.zip' } }),
       NOW
     )
-    expect(failed).toContain('/x/c.zip')
-    expect(generationStatusHtml(job({ phase: 'done', outcome: 'exists' }), NOW)).toContain('already exists')
-    expect(generationStatusHtml(done, NOW)).not.toContain('data-gen="again"')
+    expect(document.querySelector('.callout')?.textContent).toBe(`${warning} The ZIP: /x/c.zip`)
   })
 
   it('labels the header command with the running job', () => {
@@ -266,7 +267,7 @@ describe('createGeneration', () => {
     const root = page()
     const running = job()
     const fetches = fakeFetch({
-      gets: [null, running, job({ phase: 'done', outcome: 'published', endedAt: NOW.toISOString() })],
+      gets: [null, running, job({ phase: 'done', sharing: { status: 'local' }, endedAt: NOW.toISOString() })],
       post: () => new Response(JSON.stringify({ job: job({ phase: 'preparing' }) }), { status: 202 }),
     })
     const onEnded = vi.fn()
@@ -310,7 +311,9 @@ describe('createGeneration', () => {
     const fetches = fakeFetch({
       gets: [null],
       post: () =>
-        new Response(JSON.stringify({ job: job({ phase: 'done', outcome: 'exists' }) }), { status: 202 }),
+        new Response(JSON.stringify({ job: job({ phase: 'done', sharing: { status: 'local' } }) }), {
+          status: 202,
+        }),
     })
     const generation = createGeneration(root, {
       prNumber: 42,
@@ -503,10 +506,14 @@ describe('createGeneration', () => {
       fetchImpl: fetches.impl,
       now: () => NOW,
     })
-    generation.open(bundle({ status: 'ready' }))
+    generation.open(
+      bundle({
+        status: 'ready',
+        carriedOver: { canvasHeadSha: 'c'.repeat(40), currentHeadSha: 'd'.repeat(40) },
+      })
+    )
     const box = root.querySelector('input[name="force"]')
     expect(box instanceof HTMLInputElement && box.checked).toBe(true)
-    expect(root.querySelector('[data-gen="start"]')?.getAttribute('data-force')).toBe('1')
     root.querySelector('#regenerate')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     root.dispatchEvent(new MouseEvent('click'))
     expect(fetches.calls).toEqual([])

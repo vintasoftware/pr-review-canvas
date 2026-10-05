@@ -16,6 +16,7 @@ import {
   GenerationBusyError,
   type GenerationManager,
   type GenerationSteps,
+  codeNote,
   generationPreface,
   repairPrompt,
 } from './generation-manager.js'
@@ -98,7 +99,7 @@ function harness(
     root: '/data/checkouts',
     async lease(key) {
       if (opts.lease === 'busy') {
-        throw new CheckoutBusyError(key)
+        throw new CheckoutBusyError(key, 'chat')
       }
       const lease = { key, moved: [] as string[], released: false }
       leases.push(lease)
@@ -133,6 +134,7 @@ function harness(
     settings: async () => ({ ...DEFAULT_SETTINGS, ...opts.settings }),
     generation: { models: { claude: 'opus' }, maxRepairRounds: opts.maxRepairRounds ?? 3 },
     repo: { owner: 'Acme', name: 'widgets' },
+    currentBranch: async () => 'feat/b',
     repoRoot: '/repo',
     log: line => logs.push(line),
     now: () => new Date('2026-10-05T12:00:00.000Z'),
@@ -166,12 +168,19 @@ describe('extractModelJson', () => {
 })
 
 describe('prompts', () => {
-  it('tells the agent it has no shell and must answer with the JSON', () => {
-    const text = generationPreface({ cwd: '/c', note: 'Your working directory is X.' }, '/d/model.json')
-    expect(text).toContain('Your working directory is X.')
+  it('tells the agent to write nothing and to answer with the JSON', () => {
+    const text = generationPreface({ kind: 'working-tree', cwd: '/c' }, HEAD, '/d/model.json')
+    expect(text).toContain('the work under review')
     expect(text).toContain('/d/model.json')
     expect(text).toContain('write no file')
     expect(text).toMatch(/Answer with the model JSON itself/)
+  })
+
+  it('describes each place the agent can read code from', () => {
+    expect(codeNote({ kind: 'checkout', cwd: '/c', sha: HEAD }, HEAD)).toContain(`a checkout of ${HEAD}`)
+    const fallback = codeNote({ kind: 'fallback', cwd: '/r', message: 'm', branch: null }, HEAD)
+    expect(fallback).toContain(`may be on another commit than ${HEAD}`)
+    expect(codeNote({ kind: 'reader-checkout', cwd: '/r' }, HEAD)).toBe(fallback)
   })
 
   it('names the problems, the fixes to keep, and the attempt', () => {
@@ -199,7 +208,6 @@ describe('createGenerationManager', () => {
     const job = await settled(h.manager, 7)
     expect(job).toMatchObject({
       phase: 'done',
-      outcome: 'published',
       headSha: HEAD,
       sharing: PUBLISHED.sharing,
     })
@@ -267,11 +275,19 @@ describe('createGenerationManager', () => {
     expect(h.runner.runs[0]?.model).toBeUndefined()
   })
 
-  it('ends at once when prepare finds a canvas for the head', async () => {
-    const h = harness({ steps: { prepare: async () => prepared({ status: 'exists' }) } })
+  it('writes a head that already has a canvas again from a blank page', async () => {
+    const h = harness({
+      steps: {
+        prepare: async (_input, opts) => prepared(opts.force ? {} : { status: 'exists' }),
+      },
+    })
     await h.manager.start(7, { force: false })
-    expect(await settled(h.manager, 7)).toMatchObject({ phase: 'done', outcome: 'exists' })
-    expect(h.runner.runs).toEqual([])
+    expect(await settled(h.manager, 7)).toMatchObject({ phase: 'done', sharing: PUBLISHED.sharing })
+    expect(h.steps.prepare.mock.calls.map(call => (call[1] as { force: boolean }).force)).toEqual([
+      false,
+      true,
+    ])
+    expect(h.runner.runs).toHaveLength(1)
   })
 
   it('sends the problems back and publishes the corrected model', async () => {

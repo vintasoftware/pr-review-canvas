@@ -5,14 +5,75 @@ import { lstat, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node
 import path from 'node:path'
 import { execGit, GitError, type GitExec } from '../git/git.js'
 import { keyToString, parseReviewKey, type ReviewKey } from '../contract/review-key.js'
+import type { CodeSource } from './seed.js'
 
 /** A lock older than this is left over from a process that died without letting go. */
 export const STALE_LOCK_MS = 2 * 60 * 60 * 1000
 
+/** Who in this process reads code from a review checkout: a chat turn, or a canvas generation. */
+export type CheckoutHolder = 'chat' | 'generation'
+
+const HOLDER_WORDS: Record<CheckoutHolder, string> = {
+  chat: 'a chat answer',
+  generation: 'a canvas generation',
+}
+
 export class CheckoutBusyError extends Error {
-  constructor(key: ReviewKey) {
-    super(`another pr-review process is using the review checkout of ${keyToString(key)}`)
+  /** Who holds it in this process, or null when another pr-review process does. */
+  readonly holder: CheckoutHolder | null
+
+  constructor(key: ReviewKey, holder: CheckoutHolder | null) {
+    const who = holder === null ? 'another pr-review process' : HOLDER_WORDS[holder]
+    super(`${who} is using the review checkout of ${keyToString(key)}`)
     this.name = 'CheckoutBusyError'
+    this.holder = holder
+  }
+}
+
+/** A step on the way to the code: the checkout being made or moved, or the fallback taken. */
+export type CodeSourceStep =
+  | { status: 'preparing'; sha: string; creating: boolean }
+  | { status: 'fallback'; message: string; branch: string | null }
+
+/**
+ * Where an agent reads the code of `key` at `headSha`, for the chat and for a generation alike.
+ * The uncommitted review, and a reader who turned checkouts off, read the reader's own checkout.
+ * Otherwise the review checkout is leased first, so a holder elsewhere is a refusal, and then put
+ * at the commit; a checkout that fails falls back to the reader's checkout rather than failing.
+ * It yields each step a reader may want to see, and returns the source.
+ */
+export async function* readCodeAt(input: {
+  key: ReviewKey
+  headSha: string
+  checkoutEnabled: boolean
+  holder: CheckoutHolder
+  checkouts: ReviewCheckouts
+  repoRoot: string
+  currentBranch: () => Promise<string | null>
+  /** Gets the lease the moment it is taken, so the caller releases it whatever happens next. */
+  onLease: (lease: CheckoutLease) => void
+}): AsyncGenerator<CodeSourceStep, CodeSource> {
+  if (input.key === 'uncommitted') {
+    return { kind: 'working-tree', cwd: input.repoRoot }
+  }
+  if (!input.checkoutEnabled) {
+    return { kind: 'reader-checkout', cwd: input.repoRoot }
+  }
+  const lease = await input.checkouts.lease(input.key, input.holder)
+  input.onLease(lease)
+  if (lease.head !== input.headSha) {
+    yield { status: 'preparing', sha: input.headSha, creating: lease.head === null }
+  }
+  try {
+    await lease.moveTo(input.headSha)
+    return { kind: 'checkout', cwd: lease.dir, sha: input.headSha }
+  } catch (err) {
+    const fallback = {
+      message: err instanceof Error ? err.message : String(err),
+      branch: await input.currentBranch().catch(() => null),
+    }
+    yield { status: 'fallback', ...fallback }
+    return { kind: 'fallback', cwd: input.repoRoot, ...fallback }
   }
 }
 
@@ -93,8 +154,11 @@ export interface SweepResult {
 export interface ReviewCheckouts {
   /** The folder all checkouts of this repository live in. */
   root: string
-  /** Takes the checkout of `key` for one turn; throws CheckoutBusyError when another process has it. */
-  lease(key: ReviewKey): Promise<CheckoutLease>
+  /**
+   * Takes the checkout of `key` for `holder`; throws CheckoutBusyError, naming who has it, when a
+   * holder in this process or another process has it.
+   */
+  lease(key: ReviewKey, holder: CheckoutHolder): Promise<CheckoutLease>
   list(): Promise<CheckoutInfo[]>
   /** Removes idle checkouts, or every one with `all`. A checkout in use is never removed. */
   sweep(options: SweepOptions): Promise<SweepResult>
@@ -133,6 +197,8 @@ export function createReviewCheckouts(opts: {
 }): ReviewCheckouts {
   const { root, git, now } = opts
   const dirOf = (key: ReviewKey): string => path.join(root, keyToString(key))
+  /** Who holds each checkout leased in this process. */
+  const holders = new Map<ReviewKey, CheckoutHolder>()
   const metaOf = (key: ReviewKey): string => `${dirOf(key)}.json`
   const lockOf = (key: ReviewKey): string => `${dirOf(key)}.lock`
 
@@ -242,16 +308,28 @@ export function createReviewCheckouts(opts: {
 
   return {
     root,
-    async lease(key) {
+    async lease(key, holder) {
+      // A holder in this process is asked first: its lock file names this very pid, which the
+      // stale check cannot tell from a lock this process forgot, so only its age would decide.
+      const current = holders.get(key)
+      if (current !== undefined) {
+        throw new CheckoutBusyError(key, current)
+      }
+      holders.set(key, holder)
       if (!(await tryLock(key))) {
-        throw new CheckoutBusyError(key)
+        holders.delete(key)
+        throw new CheckoutBusyError(key, null)
       }
       const dir = dirOf(key)
+      const release = async (): Promise<void> => {
+        holders.delete(key)
+        await unlock(key)
+      }
       let head: string | null
       try {
         head = await git.head(dir)
       } catch (err) {
-        await unlock(key)
+        await release()
         throw err
       }
       return {
@@ -268,7 +346,7 @@ export function createReviewCheckouts(opts: {
           head = sha
           await writeFile(metaOf(key), JSON.stringify({ sha, lastUsedAt: now().toISOString() }))
         },
-        release: () => unlock(key),
+        release,
       }
     },
     list,
@@ -290,7 +368,7 @@ export function createReviewCheckouts(opts: {
           continue
         }
         // Holding the lock while removing keeps a turn from starting in a folder that is going away.
-        if (!(await tryLock(info.key))) {
+        if (holders.has(info.key) || !(await tryLock(info.key))) {
           skipped.push({ ...info, locked: true })
           continue
         }
