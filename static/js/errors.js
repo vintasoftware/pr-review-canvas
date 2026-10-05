@@ -125,7 +125,7 @@ export const ERROR_CARDS = {
   },
   CHAT_BUSY: {
     title: 'The chat is answering another message',
-    action: 'Wait for the answer, or stop it, then send again.',
+    action: 'Wait for the answer, or stop it from the page that asked, then send again.',
   },
   GENERATION_BUSY: {
     title: 'A canvas is already being generated',
