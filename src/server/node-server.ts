@@ -12,13 +12,7 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
     const url = `http://localhost:${info.port}/`
     log(`pr-review ${ctx.version} · ${url} · ${ctx.config.repo.owner}/${ctx.config.repo.name}`)
     if (ctx.config.openBrowser) {
-      void (async () => {
-        const start = await startPage(ctx)
-        if (start.prNumber !== null) {
-          log(`opening ${ctx.config.host.nounShort} #${start.prNumber}, the open review of this branch`)
-        }
-        openBrowser(new URL(start.path, url).href, log)
-      })()
+      void startPage(ctx, log).then(path => openBrowser(new URL(path, url).href, log))
     }
     log(`data dir ${ctx.config.dataDir}`)
     if (ctx.fixtureArtifact !== null) {
