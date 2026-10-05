@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
+
+Changes since 0.6.2.
 
 ### Review server
 
@@ -26,6 +28,18 @@
   be shared. The dialog shows the reason and the command to run.
 - The server runs `prepare` and `publish` itself. The agent runs with the flags of AI Chat, which
   deny every write, and answers with the model JSON, which the server writes, fixes, and publishes.
+
+### Project
+
+- Releases are also published to GitHub Packages, next to npm.
+
+### Upgrade from 0.6.2
+
+1. Run `pr-review upgrade` in each project, then restart `pr-review serve`. The skill and the
+   canvas format did not change, so teammates on 0.6.2 can still open the canvases.
+2. To generate from the review app, install `acpx` and pick the agent under `chatAgent` in
+   **settings**, as for [AI Chat](README.md#optional-ai-chat-install). Generation uses the model
+   that `generation.models` names for that agent.
 
 ## 0.6.2
 
