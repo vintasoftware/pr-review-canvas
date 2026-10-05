@@ -913,9 +913,14 @@ do not have to run the skill in Claude Code or Codex:
 
 The dialog names the agent and says whether publishing shares the canvas on the PR or MR. Click
 **start**. When publishing would share it, the server first checks that `gh` or `glab` is logged
-in with an account that can comment, and refuses with the login command to run, so no agent time
-goes into a canvas that could not be shared. Local reviews, and sharing turned off, need no login. The job runs in the server, so you can close the dialog or reload the page; while it
-runs, the header command reads **generating** with the elapsed time and opens the dialog again.
+in with an account that can comment, and refuses with what to do, so no agent time goes into a
+canvas that could not be shared. A token whose rights cannot be read, such as a fine-grained or
+app token, is let through, and the host decides at publish time. Local reviews, and sharing
+turned off, need no login.
+
+One generation runs at a time in a server. The job runs in the server, so you can close the dialog
+or reload the page; while it runs, the header command reads **generating** with the elapsed time
+and opens the dialog again.
 The dialog shows the phase, the latest tool calls of the agent, and the problems publish named on
 each repair attempt. **stop** cancels the agent. When the canvas is published, the page loads it.
 
@@ -969,7 +974,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                  |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                |
 | `CHAT_BUSY`                             | Wait for the running reply or press **stop**; when a canvas generation or another `pr-review serve` holds the review checkout, ask again once it is done |
-| `GENERATION_BUSY`                       | A generation already runs for this review; open it from the header command, or stop it and start again                                                   |
+| `GENERATION_BUSY`                       | One generation runs at a time; open the running one from its review page to follow or stop it, then start again                                          |
 | `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                     |
 | `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                     |
 | `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                                  |

@@ -361,18 +361,23 @@ describe('createGenerationManager', () => {
     expect((await settled(held.manager, 7)).error?.code).toBe('GENERATION_BUSY')
   })
 
-  it('refuses a second job for the same review while one runs, and allows one for another', async () => {
+  it('runs one job at a time, for any review, and shows each review only its own', async () => {
     const h = harness({ runner: { delayMs: 30 } })
-    await h.manager.start(7, { force: false })
-    await expect(h.manager.start(7, { force: true })).rejects.toBeInstanceOf(GenerationBusyError)
-    await expect(h.manager.start(8, { force: false })).resolves.toMatchObject({ key: 8 })
-    await settled(h.manager, 7)
-    await settled(h.manager, 8)
-    await expect(h.manager.start(7, { force: true })).resolves.toMatchObject({
-      force: true,
-      phase: 'preparing',
+    await h.manager.start(42, { force: false })
+    await expect(h.manager.start(42, { force: true })).rejects.toBeInstanceOf(GenerationBusyError)
+    // A PR and the branch review of its branch share a head, and with it a canvas folder.
+    const refused = await h.manager.start('branch', { force: false }).catch((err: unknown) => err)
+    expect(refused).toMatchObject({
+      key: 42,
+      message: 'a canvas is already being generated for #42, and one runs at a time',
     })
-    await settled(h.manager, 7)
+    expect(h.manager.status('branch')).toBeNull()
+    expect(await h.manager.cancel('branch')).toBe(false)
+    await settled(h.manager, 42)
+    await expect(h.manager.start('branch', { force: true })).resolves.toMatchObject({ key: 'branch' })
+    // The job the server ran last is the one a page can read; the earlier review's is gone.
+    expect(h.manager.status(42)).toBeNull()
+    await settled(h.manager, 'branch')
   })
 
   it('stops the agent mid-turn', async () => {

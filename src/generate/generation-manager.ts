@@ -12,7 +12,7 @@ import type { PrepareTargetInput } from '../contract/generation-context.js'
 import type { ErrorEnvelope } from '../contract/api.js'
 import { type GenerationJob, isRunning } from '../contract/generation.js'
 import type { Repo } from '../contract/review-artifact.js'
-import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
+import { isLocalKey, keyLabel, keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { Settings } from '../contract/settings.js'
 import { formatValidationError } from '../contract/validation.js'
 import type { GenerationModels } from '../project-config.js'
@@ -32,9 +32,13 @@ export const GENERATION_TURN_TIMEOUT_SEC = 30 * 60
 export const ACTIVITY_KEPT = 8
 
 export class GenerationBusyError extends Error {
-  constructor() {
-    super('a canvas is already being generated for this review')
+  /** The review whose generation is running. */
+  readonly key: ReviewKey
+
+  constructor(key: ReviewKey) {
+    super(`a canvas is already being generated for ${keyLabel(key)}, and one runs at a time`)
     this.name = 'GenerationBusyError'
+    this.key = key
   }
 }
 
@@ -66,9 +70,13 @@ export interface GenerationManagerDeps {
 }
 
 export interface GenerationManager {
-  /** Starts a job for `key`; throws GenerationBusyError when one is running for it. */
+  /**
+   * Starts a job for `key`; throws GenerationBusyError when any job is running. One runs at a
+   * time: two reviews can share a head (a PR and the branch review of its branch), and the jobs
+   * of one head write the same canvas folder.
+   */
   start(key: ReviewKey, opts: { force: boolean }): Promise<GenerationJob>
-  /** The job of `key` the server ran last, or null. */
+  /** The job the server ran last, when it was for `key`; null otherwise. */
   status(key: ReviewKey): GenerationJob | null
   /** True when a running job was asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
@@ -214,7 +222,10 @@ export function jobError(err: unknown): ErrorEnvelope['error'] {
 }
 
 export function createGenerationManager(deps: GenerationManagerDeps): GenerationManager {
-  const slots = new Map<ReviewKey, Slot>()
+  /** The job the server ran last, running or ended. */
+  let last: Slot | null = null
+  const running = (): Slot | null => (last !== null && isRunning(last.job) ? last : null)
+  const of = (key: ReviewKey): Slot | null => (last !== null && last.job.key === key ? last : null)
   const maxRounds = deps.generation.maxRepairRounds + 1
 
   const label = (key: ReviewKey): string => (isLocalKey(key) ? key : `#${key}`)
@@ -393,9 +404,9 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
 
   return {
     async start(key, opts) {
-      const current = slots.get(key)
-      if (current !== undefined && isRunning(current.job)) {
-        throw new GenerationBusyError()
+      const current = running()
+      if (current !== null) {
+        throw new GenerationBusyError(current.job.key)
       }
       const settings = await deps.settings()
       const agent = settings.chatAgent
@@ -403,9 +414,9 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       const model =
         named === undefined ? null : latestModel(agent, named, await deps.runner.modelUpgrades(agent))
       // Checked again after the awaits: two clicks that both got past the first check start one job.
-      const again = slots.get(key)
-      if (again !== undefined && isRunning(again.job)) {
-        throw new GenerationBusyError()
+      const again = running()
+      if (again !== null) {
+        throw new GenerationBusyError(again.job.key)
       }
       const slot: Slot = {
         job: {
@@ -425,7 +436,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         activityIds: [],
         shortPaths: [],
       }
-      slots.set(key, slot)
+      last = slot
       deps.log(`generation ${label(key)}: started with ${agent}${model === null ? '' : ` (${model})`}`)
       void runJob(slot, key).then(
         () => finish(slot, key, undefined),
@@ -435,13 +446,13 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     },
 
     status(key) {
-      const slot = slots.get(key)
-      return slot === undefined ? null : { ...slot.job, activity: [...slot.job.activity] }
+      const slot = of(key)
+      return slot === null ? null : { ...slot.job, activity: [...slot.job.activity] }
     },
 
     async cancel(key) {
-      const slot = slots.get(key)
-      if (slot === undefined || !isRunning(slot.job)) {
+      const slot = of(key)
+      if (slot === null || !isRunning(slot.job)) {
         return false
       }
       // A job between agent turns is stopped by the flag; one inside a turn by its handle too.

@@ -106,7 +106,7 @@ export function generateRoutes(
           'GENERATION_BUSY',
           err.message,
           409,
-          'stop the running generation, or wait for it to finish'
+          'stop it from its review page, or wait for it to finish'
         )
       }
       throw err

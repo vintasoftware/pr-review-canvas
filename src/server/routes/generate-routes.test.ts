@@ -118,7 +118,7 @@ describe('generate routes', () => {
     const app = appWith(
       fakeManager({
         start: async () => {
-          throw new GenerationBusyError()
+          throw new GenerationBusyError(43)
         },
       })
     )
@@ -128,7 +128,11 @@ describe('generate routes', () => {
       body: '{"force":false}',
     })
     expect(res.status).toBe(409)
-    expect(((await res.json()) as ErrorEnvelope).error.code).toBe('GENERATION_BUSY')
+    expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+      code: 'GENERATION_BUSY',
+      message: 'a canvas is already being generated for #43, and one runs at a time',
+      hint: 'stop it from its review page, or wait for it to finish',
+    })
   })
 
   it('refuses to start without acpx', async () => {

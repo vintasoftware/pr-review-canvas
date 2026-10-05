@@ -19,7 +19,8 @@
   **regenerate** and shows the skill command.
 - The generation dialog shows the phase, the elapsed time, the latest tool calls of the agent, and
   the problems publish named, and **stop** cancels the run. While it runs, the header command
-  shows **generating** with the elapsed time and reopens the dialog, also after a reload.
+  shows **generating** with the elapsed time and reopens the dialog, also after a reload. One
+  generation runs at a time.
 - When the canvas would be shared on the PR or MR, a start is refused unless `gh` or `glab` is
   logged in with an account that can comment, so no agent time goes into a canvas that cannot
   be shared. The dialog shows the reason and the command to run.
