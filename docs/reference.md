@@ -894,6 +894,42 @@ Cleanup never touches canvases or review state. The **Checkouts** tab of the set
 lists the current checkouts and edits these settings. Set `checkoutEnabled: false` to read your
 own checkout, as before review checkouts existed.
 
+## Generating from the review app
+
+When `acpx` and the chat agent are installed, the review app can generate a canvas itself, so you
+do not have to run the skill in Claude Code or Codex:
+
+- **generate canvas** on the screen of a PR, MR, or local review with no canvas starts the first
+  generation. The home page has a **generate canvas** button beside **open**, a **generate** link
+  next to each recent PR with no canvas, and links for the branch and uncommitted reviews.
+- **generate for current head** on an outdated canvas updates it as an
+  [incremental canvas](#incremental-canvases). Tick **Start from a blank page** to start over, as
+  `--force` does.
+- The header has one generate command, named for what it does on the screen: **generate** when
+  there is no canvas, **update** on an outdated canvas, and **regenerate** on a current one, which
+  writes it again from a blank page.
+
+The dialog names the agent and says whether publishing shares the canvas on the PR or MR. Click
+**start**. The job runs in the server, so you can close the dialog or reload the page; while it
+runs, the header command reads **generating** with the elapsed time and opens the dialog again.
+The dialog shows the phase, the latest tool calls of the agent, and the problems publish named on
+each repair attempt. **stop** cancels the agent. When the canvas is published, the page loads it.
+
+The server runs the same `prepare` and `publish` as the skill, with the chat agent from
+**settings** and the model that [`generation.models`](#project-config) names for that agent. The
+agent runs with the same flags as AI Chat: acpx approves reads and denies every other permission
+request, and the agent is told to write nothing. The agent's own rules still decide what needs a
+request: Claude Code, for example, runs shell commands it counts as read-only, such as `grep`,
+without asking. See [network access and permissions](#network-access-and-permissions). The agent reads
+code from the [review checkout](#review-checkouts) at the head, or your working tree for the
+uncommitted review, and answers with the model JSON. The server writes `model.json`, applies
+the fixes of `validate --fix`, publishes, and sends the problems back to the agent, up to
+`maxRepairRounds` times. While a generation holds a review's checkout, chat turns on that review
+answer `CHAT_BUSY`. Each agent turn can run for 30 minutes.
+
+With `chat.enabled: false`, or without `acpx`, the review app shows the skill command to copy
+instead.
+
 ## Network access and permissions
 
 The server binds to `127.0.0.1` and rejects browser writes from other origins. It is intended for
@@ -929,6 +965,8 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                               |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                             |
 | `CHAT_BUSY`                             | Wait for the running reply or press **stop**; when another `pr-review serve` holds the review checkout, ask again once its answer is done             |
+| `GENERATION_BUSY`                       | A generation already runs for this review; open it from the header command, or stop it and start again                                                |
+| `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                  |
 | `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                  |
 | `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                               |
 | `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                        |

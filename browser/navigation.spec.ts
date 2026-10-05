@@ -239,7 +239,8 @@ for (const bodyState of ['generated', 'edited', 'posted'] as const) {
 }
 
 test('refresh stops regeneration polling before waiting for patches', async ({ page, chatServer }) => {
-  const server = await chatServer()
+  // Without acpx the page gives the skill command and polls for the canvas it publishes.
+  const server = await chatServer({ runner: { acpxVersion: null } })
   await page.clock.install()
   await page.goto(server.url)
   await page.locator('#regenerate').click()

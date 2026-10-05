@@ -63,6 +63,8 @@ export interface AppContext {
   /** Is acpx itself installed? A missing acpx disables the chat pane with a banner. */
   preflight: PreflightProbe
   chat: ChatManager
+  /** The acpx boundary, shared by the chat and the generation the review page starts. */
+  runner: AgentRunner
   transcripts: TranscriptStore
   /** The review checkouts AI Chat reads code from, one per review. */
   checkouts: ReviewCheckouts
@@ -128,6 +130,8 @@ export interface CreateAppContextOptions {
 }
 
 export interface ChatSet {
+  /** The acpx boundary, shared by the chat and the generation the review page starts. */
+  runner: AgentRunner
   settings: SettingsStore
   agents: AgentDirectory
   preflight: PreflightProbe
@@ -160,6 +164,7 @@ export function createChatSet(
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
+    runner,
     settings,
     preflight,
     transcripts,

@@ -127,6 +127,14 @@ export const ERROR_CARDS = {
     title: 'The chat is answering another message',
     action: 'Wait for the answer, or stop it, then send again.',
   },
+  GENERATION_BUSY: {
+    title: 'A canvas is already being generated',
+    action: 'Open the generation dialog to follow it, or stop it, then start again.',
+  },
+  GENERATION_FAILED: {
+    title: 'The canvas could not be generated',
+    action: 'Follow the hint, or run the skill from Claude Code or Codex.',
+  },
   NOT_IMPLEMENTED: {
     title: 'That part is not built yet',
     action: 'Nothing to do here; the feature is not in this version.',

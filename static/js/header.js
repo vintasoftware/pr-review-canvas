@@ -64,6 +64,33 @@ export function statePill(pr) {
 }
 
 /**
+ * The one generate command in the header, named for what it does on this screen. With an agent,
+ * the page generates the first canvas, updates an outdated one, or writes the current one again.
+ * Without one, it shows the skill command, which needs a canvas to regenerate. While a job runs,
+ * `generate.js` puts the job on this button instead.
+ * @param {PrBundle} bundle
+ * @param {boolean} hasCanvas
+ * @returns {{ label: string, title: string, disabled: boolean }}
+ */
+export function generateCommand(bundle, hasCanvas) {
+  const what = bundle.local !== undefined ? 'this local work' : 'this PR'
+  if (!bundle.chat.enabled) {
+    return { label: 'regenerate', title: `Generate a new canvas for ${what}`, disabled: !hasCanvas }
+  }
+  if (bundle.status === 'stale') {
+    return { label: 'update', title: `Update the canvas of ${what} for its current head`, disabled: false }
+  }
+  if (hasCanvas) {
+    return {
+      label: 'regenerate',
+      title: `Generate the canvas of ${what} again from a blank page`,
+      disabled: false,
+    }
+  }
+  return { label: 'generate', title: `Generate a canvas for ${what}`, disabled: false }
+}
+
+/**
  * @param {PrBundle} bundle
  * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date }} opts
  * @returns {string}
@@ -73,6 +100,7 @@ export function renderHeader(bundle, opts) {
   const ready = bundle.status === 'ready' && artifact !== undefined
   // A stale canvas can be exported and regenerated too, so both commands stay live for it.
   const hasCanvas = artifact !== undefined && (bundle.status === 'ready' || bundle.status === 'stale')
+  const generate = generateCommand(bundle, hasCanvas)
   const agent = ready
     ? `<span class="pill agent" title="The agent, model, and harness that generated this canvas">canvas by ${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''} · ${esc(artifact.generator.harness)}</span><span>generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`
     : ''
@@ -108,7 +136,7 @@ export function renderHeader(bundle, opts) {
     '<header class="hdr">' +
     `<div class="hdr-bar"><div class="brand"><a class="brand-wordmark" href="/"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a><span class="mono muted">${esc(opts.host)}</span></div>` +
     '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
-    `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
+    `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
     `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
     `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
     '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +

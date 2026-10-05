@@ -99,6 +99,8 @@ export function homePage(
     host: Host
     /** The local reviews prepared here, so the home page can link straight to them. */
     localReviews: readonly LocalKey[]
+    /** An agent can run here, so the page offers to generate a canvas as well as to open one. */
+    canGenerate: boolean
   },
   nonce: string,
   appearance: Appearance
@@ -123,11 +125,16 @@ export function homePage(
 <form class="body home-form" method="get" action="/review">
 <label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
 <button class="cmd fill" type="submit">open</button>
+${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the ${noun} and generate its canvas with the chat agent">generate canvas</button>` : ''}
 </form></section>
 <section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
 <div class="body">${
       data.localReviews.length === 0
-        ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>`
+        ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>${
+            data.canGenerate
+              ? html`<p class="tbtns"><a class="cmd" href="/review/branch?generate=1">generate for this branch</a><a class="cmd" href="/review/uncommitted?generate=1">generate for uncommitted work</a></p>`
+              : ''
+          }`
         : html`<ul class="plain">${data.localReviews.map(
             key =>
               html`<li><a href="/review/${key}">${keyLabel(key)}</a> <span class="muted">/review/${key}</span></li>`
@@ -139,7 +146,7 @@ ${
     ? html`<div class="body muted">No ${noun}s opened yet.</div>`
     : html`<ul class="plain body">${data.recentPrs.map(
         p =>
-          html`<li><a href="/review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasCanvas === false ? html` <span class="muted">no canvas yet</span>` : ''}</li>`
+          html`<li><a href="/review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasCanvas === false ? html` <span class="muted">no canvas yet</span>${data.canGenerate ? html` <a class="cmd" href="/review/${String(p.number)}?generate=1">generate</a>` : ''}` : ''}</li>`
       )}</ul>`
 }
 </section>

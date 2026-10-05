@@ -322,7 +322,8 @@
   #export-zip {
     --icon: var(--i-download);
   }
-  #refresh {
+  #refresh,
+  #regenerate.gen-running {
     --icon: var(--i-sync);
   }
   #settings {

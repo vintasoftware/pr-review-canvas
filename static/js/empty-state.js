@@ -111,9 +111,10 @@ export function sharedCanvasCalloutHtml(bundle) {
  * @returns {string}
  */
 function skillCommandHtml(bundle) {
+  const run = bundle.chat.enabled ? 'Or run this' : 'Run this'
   return (
-    '<p class="hint">Run this in Claude Code or Codex from this repo. The page updates when the canvas is published.</p>' +
-    `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd fill" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></div>`
+    `<p class="hint">${run} in Claude Code or Codex from this repo. The page updates when the canvas is published.</p>` +
+    `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd${bundle.chat.enabled ? '' : ' fill'}" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></div>`
   )
 }
 
@@ -150,6 +151,9 @@ export function renderEmptyState(bundle) {
     '<section class="panel empty" id="empty-state" aria-labelledby="es-h">' +
     `<div class="panel-h"><h2 id="es-h">${heading}</h2></div>` +
     '<div class="body center">' +
+    (bundle.chat.enabled
+      ? '<div class="cmdbox"><button class="cmd fill" type="button" id="generate-start" aria-haspopup="dialog">generate canvas</button></div>'
+      : '') +
     skillCommandHtml(bundle) +
     transfer +
     '</div></section>'

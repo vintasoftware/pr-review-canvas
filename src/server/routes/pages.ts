@@ -22,7 +22,8 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
   app.get('/', async c => {
-    const [recentPrs, ...localPrs] = await Promise.all([
+    const [acpx, recentPrs, ...localPrs] = await Promise.all([
+      ctx.projectConfig.config.chat.enabled ? ctx.preflight.get() : Promise.resolve({ installed: false }),
       ctx.prs.listRecent(10),
       ...LOCAL_KEYS.map(key => ctx.prs.readPr(key)),
     ])
@@ -40,6 +41,7 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           version: ctx.version,
           port: ctx.config.port,
           host: ctx.config.host,
+          canGenerate: acpx.installed,
         },
         c.get('cspNonce'),
         await appearanceFor(ctx, appearanceQuery(c))
@@ -51,7 +53,9 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
   // own and the number arrives as a query parameter.
   app.get('/review', c => {
     const raw = c.req.query('n') ?? ''
-    return c.redirect(`/review/${encodeURIComponent(raw)}`, 303)
+    // The form's generate button carries the flag on to the review page, which opens the dialog.
+    const generate = c.req.query('generate') === '1' ? '?generate=1' : ''
+    return c.redirect(`/review/${encodeURIComponent(raw)}${generate}`, 303)
   })
 
   app.get('/review/:n', async c => {

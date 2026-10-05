@@ -81,6 +81,11 @@ Then request review from your team.
 After pushing new commits, run `/pr-review-canvas 123` again to update the canvas.
 Reviewers click **refresh** to load it.
 
+With [AI Chat](#optional-ai-chat-install) installed, you can also generate from the review app:
+click **generate canvas** on the home page or on a review with no canvas, or
+**generate for current head** on an outdated one. See
+[generating from the review app](docs/reference.md#generating-from-the-review-app).
+
 See [self-review](docs/reference.md#self-review) for resolution details and
 [manual sharing](docs/reference.md#automatic-sharing-and-zip-fallback) if automatic sharing fails.
 
