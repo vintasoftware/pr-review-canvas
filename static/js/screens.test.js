@@ -147,6 +147,7 @@ describe('header', () => {
     })
     const hdr = document.querySelector('header.hdr')
     expect(hdr?.querySelector('.brand-wordmark')?.textContent).toBe('PR review canvas')
+    expect(hdr?.querySelector('a.brand-wordmark')?.getAttribute('href')).toBe('/')
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
       'regenerate',
       'export zip',
