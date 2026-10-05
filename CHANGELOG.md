@@ -8,6 +8,25 @@
   so a server started in a PR's worktree lands on that PR. Other branches open the home page.
 - The logo in the header links to the home page, where you enter another PR or MR number.
 
+### Generating from the review app
+
+- With `acpx` installed, the review app generates canvases itself. **generate canvas** on an empty
+  screen or on the home page starts the first generation, **generate for current head** updates an
+  outdated canvas, and **regenerate** writes the current one again from a blank page. The local
+  branch and uncommitted reviews work the same way.
+- The header's generate command is named for what it does: **generate** with no canvas,
+  **update** on an outdated one, **regenerate** on a current one. Without an agent it stays
+  **regenerate** and shows the skill command.
+- The generation dialog shows the phase, the elapsed time, the latest tool calls of the agent, and
+  the problems publish named, and **stop** cancels the run. While it runs, the header command
+  shows **generating** with the elapsed time and reopens the dialog, also after a reload. One
+  generation runs at a time.
+- When the canvas would be shared on the PR or MR, a start is refused unless `gh` or `glab` is
+  logged in with an account that can comment, so no agent time goes into a canvas that cannot
+  be shared. The dialog shows the reason and the command to run.
+- The server runs `prepare` and `publish` itself. The agent runs with the flags of AI Chat, which
+  deny every write, and answers with the model JSON, which the server writes, fixes, and publishes.
+
 ## 0.6.2
 
 Changes since 0.6.1.

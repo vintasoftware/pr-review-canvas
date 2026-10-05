@@ -34,12 +34,11 @@ import {
   readContext,
   validationInput,
 } from './review/publish.js'
-import { applyFoldFixes, describeFoldFix, type FoldFix } from './review/fix-folds.js'
-import { applyTitleTrims, type TitleTrim } from './review/trim-caps.js'
+import { describeFixes, fixModel } from './review/fix-model.js'
 import { validateModelOutput } from './review/validate.js'
 import type { AppContext } from './server/context.js'
 import { AppError, CLI_SETUP_CODES, toAppError } from './server/errors.js'
-import { readText, writeTextAtomic } from './store/atomic-json.js'
+import { readText } from './store/atomic-json.js'
 
 export interface CliIo {
   stdout(line: string): void
@@ -312,13 +311,12 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     printJson(io, values.fix === true ? { ...report, fixed: [...fixed.folds, ...fixed.trims] } : report)
     return report.ok ? EXIT.ok : EXIT.invalid
   }
-  for (const fold of fixed.folds) {
-    io.stdout(`fixed ${fold.where}: ${describeFoldFix(fold)}`)
+  // The fixes in the words the generation in the review app hands its agent, then what is left.
+  for (const line of describeFixes(fixed)) {
+    io.stdout(`fixed ${line}`)
   }
   for (const trim of fixed.trims) {
-    if (trim.outcome === 'fixed') {
-      io.stdout(`fixed ${trim.where}: "${trim.from}" -> "${trim.to}"`)
-    } else {
+    if (trim.outcome === 'unfixable') {
       io.stdout(
         `unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`
       )
@@ -332,38 +330,6 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     }
   }
   return report.ok ? EXIT.ok : EXIT.invalid
-}
-
-/**
- * Trims the over-cap titles of a model file, repairs its mechanically broken folds, and writes it
- * back. Returns the text to validate, unchanged when nothing needed fixing, so a file that is
- * already fine is never rewritten. A stored review.json keeps the folds it was published with.
- */
-async function fixModel(
-  file: string,
-  text: string,
-  context: GenerationContext,
-  patches: Readonly<Record<string, string>>
-): Promise<{ text: string; trims: TitleTrim[]; folds: FoldFix[] }> {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    // An unparseable file has nothing to fix; the validator reports the syntax error.
-    return { text, trims: [], folds: [] }
-  }
-  // Folds first, so every reported path, a trimmed fold title's included, is one into the file
-  // as written back.
-  const folds = ReviewArtifactSchema.safeParse(parsed).success
-    ? []
-    : applyFoldFixes(parsed, context.files, patches)
-  const trims = applyTitleTrims(parsed, context.caps)
-  if (!trims.some(trim => trim.outcome === 'fixed') && folds.length === 0) {
-    return { text, trims, folds }
-  }
-  const next = `${JSON.stringify(parsed, null, 2)}\n`
-  await writeTextAtomic(file, next)
-  return { text: next, trims, folds }
 }
 
 function parseHarness(raw: string | undefined): (typeof HARNESSES)[number] {

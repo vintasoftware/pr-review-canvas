@@ -171,15 +171,24 @@ export async function mentionsCanvas(ctx: AppContext): Promise<boolean> {
   return resolveSharing(ctx.projectConfig.config.sharing, await ctx.settings.read()).mentionCanvas
 }
 
-/** Posting is refused here as well as in the UI, so a stale page cannot post either. */
-async function requirePosting(ctx: AppContext): Promise<void> {
-  const caps = await ctx.capabilities.get()
+/**
+ * Posting is refused here as well as in the UI, so a stale page cannot post either. A login whose
+ * rights the probe cannot read is let through, and the host decides. `refresh` reads the login
+ * afresh instead of from the cache; `otherwise` is a way out the caller offers besides the probe's
+ * own hint.
+ */
+export async function requirePosting(
+  ctx: AppContext,
+  opts: { refresh?: boolean; otherwise?: string } = {}
+): Promise<void> {
+  const caps = await ctx.capabilities.get(opts.refresh === true ? { refresh: true } : {})
   if (caps.canComment === false) {
+    const hints = [caps.hint, opts.otherwise].filter(hint => hint !== undefined)
     throw new AppError(
       'COMMENT_FORBIDDEN',
       caps.reason ?? `this ${ctx.config.host.label} login cannot post on this repository`,
       403,
-      caps.hint
+      hints.length === 0 ? undefined : hints.join(', or ')
     )
   }
 }

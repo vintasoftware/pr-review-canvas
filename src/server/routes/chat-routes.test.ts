@@ -524,8 +524,12 @@ describe('toChatError', () => {
   it('maps every way a turn can be refused', () => {
     expect(toChatError(new ChatBusyError()).code).toBe('CHAT_BUSY')
     // Another process's answer cannot be stopped from this page, so the hint does not say to.
-    expect(toChatError(new CheckoutBusyError(42))).toMatchObject({ code: 'CHAT_BUSY', status: 409 })
-    expect(toChatError(new CheckoutBusyError(42)).hint).toContain('another pr-review serve')
+    expect(toChatError(new CheckoutBusyError(42, null))).toMatchObject({ code: 'CHAT_BUSY', status: 409 })
+    expect(toChatError(new CheckoutBusyError(42, null)).hint).toContain('another pr-review serve')
+    // A generation of this server holds the checkout: the refusal says so, not another serve.
+    const byGeneration = toChatError(new CheckoutBusyError(42, 'generation'))
+    expect(byGeneration.message).toBe('a canvas generation is using the review checkout of 42')
+    expect(byGeneration.hint).toBe('ask again once the canvas generation of this review ends, or stop it')
     expect(toChatError(new ChatContextError('no such file')).status).toBe(400)
     const app = new AppError('CANVAS_NOT_FOUND', 'gone', 404)
     expect(toChatError(app)).toBe(app)

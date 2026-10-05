@@ -630,7 +630,7 @@ describe('export and import through the CLI layer', () => {
 
 describe('clean', () => {
   async function useCheckout(key: number): Promise<void> {
-    const lease = await t.ctx.checkouts.lease(key)
+    const lease = await t.ctx.checkouts.lease(key, 'chat')
     await lease.moveTo(HEAD_SHA)
     await lease.release()
   }
@@ -656,7 +656,7 @@ describe('clean', () => {
       'Would remove 1 review checkout:',
       expect.stringMatching(new RegExp(`^  #42 at ${HEAD_SHA.slice(0, 7)}, last used .+: /`)),
     ])
-    const lease = await t.ctx.checkouts.lease(42)
+    const lease = await t.ctx.checkouts.lease(42, 'chat')
     const busy = fakeIo(false)
     expect(await runClean(t.ctx, ['--all'], busy)).toBe(EXIT.ok)
     expect(busy.out[0]).toBe('No review checkouts to remove.')

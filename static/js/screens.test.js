@@ -7,7 +7,14 @@ import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
-import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
+import {
+  generateCommand,
+  progressHtml,
+  refreshProgress,
+  renderHeader,
+  riskLineHtml,
+  statePill,
+} from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
 import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
@@ -237,6 +244,14 @@ describe('header', () => {
       now: NOW,
     })
     expect(document.querySelector('.pill.agent')).toBeNull()
+    // With an agent, the header generates the first canvas; without one, it has nothing to regenerate.
+    expect(document.querySelector('#regenerate')?.textContent).toBe('generate')
+    expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
+    document.body.innerHTML = renderHeader(
+      bundle({ status: 'missing', artifact: undefined, chat: { enabled: false, acpx: false } }),
+      { host: 'h', theme: 'dark', skin: 'github', now: NOW }
+    )
+    expect(document.querySelector('#regenerate')?.textContent).toBe('regenerate')
     expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(true)
     expect(document.querySelector('.touches')).toBeNull()
     expect(document.querySelector('.progress')).toBeNull()
@@ -308,7 +323,7 @@ describe('header', () => {
       percent: 0,
     })
   })
-  it('keeps export and regenerate live on a stale canvas', () => {
+  it('keeps export and regenerate live on a stale canvas, where generating updates it', () => {
     document.body.innerHTML = renderHeader(bundle({ status: 'stale' }), {
       host: 'localhost:3010',
       theme: 'auto',
@@ -317,6 +332,30 @@ describe('header', () => {
     })
     expect(document.querySelector('#export-zip')?.hasAttribute('disabled')).toBe(false)
     expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
+    expect(document.querySelector('#regenerate')?.textContent).toBe('update')
+  })
+
+  it('names the generate command for what it does, and falls back to regenerate without an agent', () => {
+    const noAgent = { enabled: false, acpx: false }
+    expect(generateCommand(bundle(), true)).toEqual({
+      label: 'regenerate',
+      title: 'Generate the canvas of this PR again from a blank page',
+      disabled: false,
+    })
+    expect(generateCommand(bundle({ status: 'missing', local: 'branch' }), false)).toEqual({
+      label: 'generate',
+      title: 'Generate a canvas for this local work',
+      disabled: false,
+    })
+    expect(generateCommand(bundle({ status: 'stale' }), true).title).toBe(
+      'Update the canvas of this PR for its current head'
+    )
+    expect(generateCommand(bundle({ status: 'stale', chat: noAgent }), true)).toEqual({
+      label: 'regenerate',
+      title: 'Generate a new canvas for this PR',
+      disabled: false,
+    })
+    expect(generateCommand(bundle({ status: 'missing', chat: noAgent }), false).disabled).toBe(true)
   })
 
   it('drops the forge link and speaks of local work when the canvas has no pull request', () => {
@@ -335,7 +374,7 @@ describe('header', () => {
       'Snapshot the working tree again and redraw'
     )
     expect(hdr?.querySelector('#regenerate')?.getAttribute('title')).toBe(
-      'Generate a new canvas for this local work'
+      'Generate the canvas of this local work again from a blank page'
     )
     expect(hdr?.querySelector('.pill')?.textContent).toBe('uncommitted')
   })
@@ -414,8 +453,14 @@ describe('overview', () => {
 describe('empty state', () => {
   it('shows the skill command with one filled copy command, a live drop zone, and no callout', () => {
     document.body.innerHTML = renderEmptyState(
-      bundle({ status: 'missing', artifact: undefined, skillCommand: '/pr-review-canvas 42' })
+      bundle({
+        status: 'missing',
+        artifact: undefined,
+        skillCommand: '/pr-review-canvas 42',
+        chat: { enabled: false, acpx: false },
+      })
     )
+    expect(document.querySelector('#generate-start')).toBeNull()
     expect(document.querySelector('.cmdbox code')?.textContent).toBe('/pr-review-canvas 42')
     const copy = document.querySelector('.cmdbox .cmd.fill')
     expect(copy?.textContent).toBe('copy')
@@ -423,6 +468,17 @@ describe('empty state', () => {
     expect(document.querySelectorAll('.cmd.fill').length).toBe(1)
     expect(document.querySelector('.drop input')?.hasAttribute('disabled')).toBe(false)
     expect(document.querySelector('.callout')).toBeNull()
+  })
+
+  it('makes generate the filled command when an agent can run, and keeps the skill command to copy', () => {
+    document.body.innerHTML = renderEmptyState(
+      bundle({ status: 'missing', artifact: undefined, skillCommand: '/pr-review-canvas 42' })
+    )
+    const fills = document.querySelectorAll('.cmd.fill')
+    expect(fills.length).toBe(1)
+    expect(fills[0]?.id).toBe('generate-start')
+    expect(document.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('/pr-review-canvas 42')
+    expect(document.querySelector('.hint')?.textContent).toMatch(/^Or run this/)
   })
 
   it('renders the shared-canvas callout in both states', () => {

@@ -47,8 +47,8 @@ it.fails('stale-lock recovery cannot delete a lock another caller just acquired'
   try {
     await writeFile(path.join(root, '42.lock'), '999999999')
     const options = { root, git: createFakeCheckoutGit(), now: () => new Date() }
-    const first = createReviewCheckouts(options).lease(42)
-    const second = createReviewCheckouts(options).lease(42)
+    const first = createReviewCheckouts(options).lease(42, 'chat')
+    const second = createReviewCheckouts(options).lease(42, 'chat')
     await Promise.any([first, second])
     continueSecond()
     const results = await Promise.allSettled([first, second])

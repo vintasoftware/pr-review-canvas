@@ -21,7 +21,9 @@ test('notes a canvas carried over to a head with the identical diff, without dis
   await expect(page.locator('#es-h')).toHaveCount(0)
 })
 
-test('warns above an outdated canvas and clears the warning after refresh', async ({ page, reviewUrl }) => {
+test('warns above an outdated canvas and clears the warning after refresh', async ({ page, chatServer }) => {
+  // Without acpx, generating means running the skill command the dialog gives.
+  const reviewUrl = (await chatServer({ runner: { acpxVersion: null } })).url
   let outdated = true
   await page.route(/\/api\/prs\/42(?:\?.*)?$/, async route => {
     const response = await route.fetch()

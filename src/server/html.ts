@@ -1,7 +1,7 @@
 import { html, raw } from 'hono/html'
 import type { HtmlEscapedString } from 'hono/utils/html'
 import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.js'
-import { keyLabel, keyToString, type LocalKey } from '../contract/review-key.js'
+import { keyLabel, keyToString, LOCAL_KEYS, type LocalKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 
@@ -90,6 +90,12 @@ export function reviewPage(
   })
 }
 
+/** The home page's link that generates the first canvas of a local review. */
+const LOCAL_GENERATE: Record<LocalKey, string> = {
+  branch: 'generate for this branch',
+  uncommitted: 'generate for uncommitted work',
+}
+
 export function homePage(
   data: HomeData & {
     owner: string
@@ -99,6 +105,8 @@ export function homePage(
     host: Host
     /** The local reviews prepared here, so the home page can link straight to them. */
     localReviews: readonly LocalKey[]
+    /** An agent can run here, so the page offers to generate a canvas as well as to open one. */
+    canGenerate: boolean
   },
   nonce: string,
   appearance: Appearance
@@ -123,6 +131,7 @@ export function homePage(
 <form class="body home-form" method="get" action="/review">
 <label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
 <button class="cmd fill" type="submit">open</button>
+${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the ${noun} and generate its canvas with the chat agent">generate canvas</button>` : ''}
 </form></section>
 <section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
 <div class="body">${
@@ -132,6 +141,13 @@ export function homePage(
             key =>
               html`<li><a href="/review/${key}">${keyLabel(key)}</a> <span class="muted">/review/${key}</span></li>`
           )}</ul>`
+    }${
+      // Each local review not started here yet can be, whether or not the other one was.
+      data.canGenerate && data.localReviews.length < LOCAL_KEYS.length
+        ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !data.localReviews.includes(key)).map(
+            key => html`<a class="cmd" href="/review/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
+          )}</p>`
+        : ''
     }</div></section>
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${
@@ -139,7 +155,7 @@ ${
     ? html`<div class="body muted">No ${noun}s opened yet.</div>`
     : html`<ul class="plain body">${data.recentPrs.map(
         p =>
-          html`<li><a href="/review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasCanvas === false ? html` <span class="muted">no canvas yet</span>` : ''}</li>`
+          html`<li><a href="/review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasCanvas === false ? html` <span class="muted">no canvas yet</span>${data.canGenerate ? html` <a class="cmd" href="/review/${String(p.number)}?generate=1">generate</a>` : ''}` : ''}</li>`
       )}</ul>`
 }
 </section>

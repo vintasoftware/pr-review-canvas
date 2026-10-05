@@ -43,6 +43,7 @@ import {
 import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
 import { wireQuickQuestions } from './quick-questions.js'
+import { createGeneration } from './generate.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
@@ -148,6 +149,12 @@ export class PrAppElement extends HTMLElement {
   quickQuestions = null
   /** The reader asked to read the canvas of the older commit. */
   viewStale = false
+  /**
+   * The canvas generation this page can start and watch, made on the first screen that has an
+   * agent to run it. Kept across renders, like the job it follows.
+   * @type {ReturnType<typeof createGeneration> | null}
+   */
+  generation = null
 
   connectedCallback() {
     // Once per element: the content is re-rendered on every flip, the element itself is not.
@@ -157,6 +164,8 @@ export class PrAppElement extends HTMLElement {
 
   disconnectedCallback() {
     this.stopPolling()
+    this.generation?.stop()
+    this.generation = null
     this.diagrams?.stop()
     this.diagrams = null
     this.deepLinks?.stop()
@@ -205,6 +214,14 @@ export class PrAppElement extends HTMLElement {
       return
     }
     await this.render(bundle, patchesPromise)
+    // The home page's generate button lands here with `?generate=1`: the dialog opens on the
+    // screen it asked for, and the flag leaves the URL so a reload does not open it again.
+    const url = new URL(location.href)
+    if (url.searchParams.has('generate')) {
+      url.searchParams.delete('generate')
+      history.replaceState(history.state, '', url)
+      this.generation?.open(bundle)
+    }
   }
 
   /**
@@ -395,16 +412,31 @@ export class PrAppElement extends HTMLElement {
       skinToggle.textContent = skinLabel(this.skin)
       this.save({ skin: this.skin }, 'skin')
     })
-    const openDialog = () => {
-      openRegenerateDialog(this, bundle.skillCommand)
-      this.startPolling(next => canvasChanged(bundle, next))
-    }
-    qs('#regenerate', this)?.addEventListener('click', openDialog)
-    qs('#stale-generate', this)?.addEventListener('click', openDialog)
     const boot = this.bootstrap
     if (!boot) {
       return
     }
+    // With an agent to run it, the page generates the canvas itself; without one, it gives the
+    // skill command to run in Claude Code or Codex and waits for the canvas that command publishes.
+    if (bundle.chat.enabled) {
+      this.generation ??= createGeneration(this, {
+        prNumber: boot.prNumber,
+        onEnded: job => this.generationEnded(job),
+        onError: message => toast(this, message),
+      })
+      this.generation.attach(bundle)
+    }
+    const generation = bundle.chat.enabled ? this.generation : null
+    const openDialog =
+      generation === null
+        ? () => {
+            openRegenerateDialog(this, bundle.skillCommand)
+            this.startPolling(next => canvasChanged(bundle, next))
+          }
+        : () => generation.open(bundle)
+    qs('#regenerate', this)?.addEventListener('click', openDialog)
+    qs('#stale-generate', this)?.addEventListener('click', openDialog)
+    qs('#generate-start', this)?.addEventListener('click', openDialog)
     const exportZip = qs('#export-zip', this)
     if (exportZip instanceof HTMLElement) {
       exportZip.addEventListener('click', () => {
@@ -448,6 +480,32 @@ export class PrAppElement extends HTMLElement {
         importImpl: importCanvas,
         onImported: () => void this.reload(),
       })
+    }
+  }
+
+  /**
+   * A job this page watched has ended. A published canvas is loaded; the dialog comes back over
+   * it when the reader had it open, or when sharing failed and the reader has an upload to do.
+   * @param {import('./contract-types.js').GenerationJob} job
+   */
+  async generationEnded(job) {
+    const wasOpen = this.querySelector('#generate-dialog')?.hasAttribute('open') === true
+    if (job.phase !== 'done') {
+      if (!wasOpen) {
+        toast(
+          this,
+          job.phase === 'cancelled'
+            ? 'canvas generation stopped'
+            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+        )
+      }
+      return
+    }
+    await this.reload().catch(() => undefined)
+    if (wasOpen || job.sharing?.status === 'failed') {
+      this.generation?.showLast()
+    } else {
+      toast(this, 'canvas published')
     }
   }
 

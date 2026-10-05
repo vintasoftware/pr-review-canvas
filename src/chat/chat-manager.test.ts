@@ -709,13 +709,13 @@ describe('the review checkout a turn reads', () => {
   })
 
   it('is busy while another process holds the checkout, and free again after the turn', async () => {
-    const held = await checkouts.lease(42)
+    const held = await checkouts.lease(42, 'chat')
     await expect(
       collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
     ).rejects.toThrow(CheckoutBusyError)
     await held.release()
     await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
-    const again = await checkouts.lease(42)
+    const again = await checkouts.lease(42, 'chat')
     await again.release()
   })
 

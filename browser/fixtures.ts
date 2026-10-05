@@ -29,6 +29,8 @@ export interface ChatServerOptions {
   checkout?: { delayMs?: number; fail?: string }
   /** Runs against the server's context before the page loads, e.g. to save settings. */
   setup?: (t: TestContext) => Promise<void>
+  /** Serve PR 42 with no canvas, so the page starts on the empty screen. */
+  noCanvas?: boolean
 }
 
 /** A review server with AI Chat on, driven by a fake agent and fake review checkouts. */
@@ -60,6 +62,7 @@ export const test = base.extend<{
         },
         runner: createFakeRunner(options.runner),
         checkoutGit: createFakeCheckoutGit(options.checkout),
+        ...(options.noCanvas ? { fixtureArtifact: null } : {}),
       })
       stops.push(server.stop)
       await options.setup?.(server.t)
