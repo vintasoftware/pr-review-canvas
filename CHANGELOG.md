@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Review server
+
+- `pr-review serve` opens the review of the open PR or MR whose head is the checked-out branch,
+  so a server started in a PR's worktree lands on that PR. Other branches open the home page.
+- The logo in the header links to the home page, where you enter another PR or MR number.
+
 ## 0.6.2
 
 Changes since 0.6.1.

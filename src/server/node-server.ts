@@ -3,6 +3,7 @@ import { startCheckoutSweep } from '../chat/checkout-sweep.js'
 import { createApp } from './app.js'
 import type { AppContext } from './context.js'
 import { openBrowser } from './open-browser.js'
+import { startPage } from './start-page.js'
 
 /** Binds 127.0.0.1 only. The Host allowlist in security.ts covers the rest. */
 export function startServer(ctx: AppContext, log: (line: string) => void): { close: () => void } {
@@ -11,7 +12,13 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
     const url = `http://localhost:${info.port}/`
     log(`pr-review ${ctx.version} · ${url} · ${ctx.config.repo.owner}/${ctx.config.repo.name}`)
     if (ctx.config.openBrowser) {
-      openBrowser(url, log)
+      void (async () => {
+        const start = await startPage(ctx)
+        if (start.prNumber !== null) {
+          log(`opening ${ctx.config.host.nounShort} #${start.prNumber}, the open review of this branch`)
+        }
+        openBrowser(new URL(start.path, url).href, log)
+      })()
     }
     log(`data dir ${ctx.config.dataDir}`)
     if (ctx.fixtureArtifact !== null) {

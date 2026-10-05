@@ -53,3 +53,15 @@ export async function fetchPrMeta(client: HostClient, repo: Repo, number: number
     throw err
   }
 }
+
+/** The open pull request whose head is `branch` in this repository, or null when there is none. */
+export async function findOpenPull(client: HostClient, repo: Repo, branch: string): Promise<number | null> {
+  const pulls = z.array(z.object({ number: z.number().int() })).parse(
+    await client.api(`repos/${repo.owner}/${repo.name}/pulls`, {
+      state: 'open',
+      head: `${repo.owner}:${branch}`,
+      per_page: '1',
+    })
+  )
+  return pulls[0]?.number ?? null
+}

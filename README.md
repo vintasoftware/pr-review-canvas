@@ -101,6 +101,8 @@ for details.
 
 Run `pr-review serve` from your clone of the project. It opens **http://localhost:3010**.
 Enter the PR or MR number to load the shared canvas, read the grouped diffs, and leave comments.
+When the checked-out branch is the head of an open PR or MR, as in a worktree made for that
+review, the server opens that review directly.
 Keep the terminal running while you review; stop the server with **Ctrl+C**.
 
 ## Documentation

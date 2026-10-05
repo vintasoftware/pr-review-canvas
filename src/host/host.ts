@@ -16,12 +16,12 @@ import { postComment } from '../github/post-comment.js'
 import type { PendingComment } from '../contract/pending.js'
 import type { ReviewEvent } from '../contract/reviews.js'
 import { postReview } from '../github/post-review.js'
-import { fetchPrMeta } from '../github/pr.js'
+import { fetchPrMeta, findOpenPull } from '../github/pr.js'
 import type { PrMeta } from './pr.js'
 import { gitlabAttachments } from '../gitlab/attachments.js'
 import { probeGitlabCapabilities } from '../gitlab/capabilities.js'
 import { fetchGitlabComments } from '../gitlab/comments.js'
-import { fetchMrMeta } from '../gitlab/mr.js'
+import { fetchMrMeta, findOpenMr } from '../gitlab/mr.js'
 import { postGitlabComment } from '../gitlab/post-comment.js'
 import { postGitlabReview } from '../gitlab/post-review.js'
 import type { Derived } from '../store/derived-store.js'
@@ -65,6 +65,8 @@ export interface Host {
   remoteHeadRef(number: number): string
   compareUrl(repo: Repo, base: string, head: string): string
   fetchPrMeta(client: HostClient, repo: Repo, number: number): Promise<PrMeta>
+  /** The number of the open review whose head is `branch`, or null when there is none. */
+  findOpenPr(client: HostClient, repo: Repo, branch: string): Promise<number | null>
   fetchComments(
     client: HostClient,
     repo: Repo,
@@ -111,6 +113,7 @@ export const GITHUB_HOST: Host = {
   remoteHeadRef: number => `pull/${number}/head`,
   compareUrl: (repo, base, head) => `https://github.com/${repo.owner}/${repo.name}/compare/${base}...${head}`,
   fetchPrMeta,
+  findOpenPr: findOpenPull,
   fetchComments,
   postComment,
   postReview,
@@ -136,6 +139,7 @@ export function gitlabHost(hostname: string): Host {
     remoteHeadRef: number => `merge-requests/${number}/head`,
     compareUrl: (repo, base, head) => `${webBase}/${repo.owner}/${repo.name}/-/compare/${base}...${head}`,
     fetchPrMeta: fetchMrMeta,
+    findOpenPr: findOpenMr,
     fetchComments: (client, repo, number, headSha, now) =>
       fetchGitlabComments(client, repo, number, headSha, now, webBase),
     postComment: (client, repo, number, headSha, input, diff) =>

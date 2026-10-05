@@ -31,6 +31,11 @@ hostname that contains `gitlab`, or any host with `PR_REVIEW_HOST=gitlab`). GitH
 hosts are not supported. Fetching a PR or merge request does not check out its branch. Use `--pr`
 for both GitHub pull request numbers and GitLab merge request IIDs.
 
+At startup, `serve` asks the forge for an open PR or MR whose head is the checked-out branch. When
+one exists, the browser opens its review at `/review/<number>`; otherwise, and on a detached HEAD
+or a failed lookup, it opens the home page. The lookup matches branches of this repository only, so
+a PR from a fork opens the home page.
+
 ### Prepare, validate, and publish
 
 These commands support custom generation workflows. The bundled
