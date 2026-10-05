@@ -125,7 +125,7 @@ describe('POST /api/prs/:n/chat', () => {
     expect(second.status).toBe(409)
     const envelope = await json<ErrorEnvelope>(second)
     expect(envelope.error.code).toBe('CHAT_BUSY')
-    expect(envelope.error.hint).toContain('stop the running answer')
+    expect(envelope.error.hint).toBe('wait for it to finish, or stop it from the page that asked')
     await (await first).text()
   })
 

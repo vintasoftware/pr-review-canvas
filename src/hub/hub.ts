@@ -154,16 +154,10 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
 
   const build = async (registration: ProjectRegistration): Promise<Project> => {
     let named: string | null = null
-    const ctx = await opts
-      .load(registration, {
-        log: line => opts.log(named === null ? line : `[${named}] ${line}`),
-        cloneOf,
-      })
-      .catch((err: unknown) => {
-        // A checkout that fails to load after its config named its clone leaves no part behind.
-        releaseClones()
-        throw err
-      })
+    const ctx = await opts.load(registration, {
+      log: line => opts.log(named === null ? line : `[${named}] ${line}`),
+      cloneOf,
+    })
     named = ctx.config.slug
     return { ctx, app: createApp(ctx) }
   }

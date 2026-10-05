@@ -2,10 +2,9 @@
 import { mkdir, realpath, rm } from 'node:fs/promises'
 import path from 'node:path'
 import type { Hono } from 'hono'
-import { loadRuntimeConfig } from '../config.js'
-import { createGit, execGit, GitError } from '../git/git.js'
-import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
-import { type AppContext, createAppContext, STATIC_DIR } from '../server/context.js'
+import { execGit, GitError } from '../git/git.js'
+import { loadContext } from '../load-context.js'
+import { type AppContext, STATIC_DIR } from '../server/context.js'
 import type { AppEnv } from '../server/env.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
 import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
@@ -79,29 +78,26 @@ async function start(saved: RegistryEntry[] = []): Promise<void> {
   hub = await createHub({
     home,
     log: () => undefined,
-    // The checkout's config as `serve` reads it, from git and the flags; the forge and the git a
-    // request runs are held fakes, so a generation stays running until the test opens the gate.
+    // The checkout's context as `serve` builds it, through the real loader; the forge and the git
+    // a request runs are held fakes, so a generation stays running until the test opens the gate.
     load: async (registration, hooks) => {
       registrations.push(registration)
       if (failure !== undefined) {
         throw failure
       }
-      const flags = registration.flags ?? {}
-      const config = await loadRuntimeConfig(
-        { port: 3010, dataDir: flags.dataDir, chatAgent: flags.chatAgent, chatModel: flags.chatModel },
-        registration.env ?? {},
-        createGit(registration.repoRoot),
-        registration.repoRoot
-      )
-      const ctx = createAppContext({
-        config,
-        projectConfig: { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
-        fixtureArtifact: null,
-        git: held(createFakeGit(), gate),
-        gh: held(createFakeGh(), gate),
-        runner: createFakeRunner(),
+      const ctx = await loadContext({
+        repoDir: registration.repoRoot,
+        cwd: registration.repoRoot,
+        env: registration.env,
+        flags: registration.flags,
+        port: 3010,
         log: hooks.log,
-        clone: hooks.cloneOf(config),
+        cloneOf: hooks.cloneOf,
+        adapters: {
+          git: held(createFakeGit(), gate),
+          gh: held(createFakeGh(), gate),
+          runner: createFakeRunner(),
+        },
       })
       contexts.push(ctx)
       return ctx

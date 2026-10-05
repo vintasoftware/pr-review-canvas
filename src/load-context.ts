@@ -4,7 +4,9 @@ import path from 'node:path'
 import { z } from 'zod'
 import { ConfigError, loadRuntimeConfig, type RuntimeConfig } from './config.js'
 import { type ReviewArtifact, ReviewArtifactSchema } from './contract/review-artifact.js'
-import { createGit, execGitIn } from './git/git.js'
+import type { AgentRunner } from './acpx/acpx.js'
+import { createGit, execGitIn, type Git } from './git/git.js'
+import type { HostClient } from './host/client.js'
 import { loadProjectConfig } from './project-config.js'
 import { type AppContext, type CloneShared, createAppContext } from './server/context.js'
 import { readJson } from './store/atomic-json.js'
@@ -35,6 +37,8 @@ export interface LoadContextOptions {
   log?: ((line: string) => void) | undefined
   /** The part the server shares between the worktrees of one clone, once the config names it. */
   cloneOf?: ((config: RuntimeConfig) => CloneShared) | undefined
+  /** Stand-ins for the git a request runs, the host CLI, and the agent, which tests pass; the config is always read with real git. */
+  adapters?: { git?: Git; gh?: HostClient; runner?: AgentRunner } | undefined
 }
 
 export async function loadFixture(file: string): Promise<ReviewArtifact> {
@@ -73,6 +77,7 @@ export async function loadContext(opts: LoadContextOptions): Promise<AppContext>
     projectConfig,
     fixtureArtifact,
     git,
+    ...opts.adapters,
     env,
     log: opts.log,
     clone: opts.cloneOf?.(config),

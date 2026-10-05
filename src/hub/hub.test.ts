@@ -7,19 +7,17 @@ import { chmod, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/p
 import path from 'node:path'
 import { ChatBusyError } from '../chat/chat-manager.js'
 import type { CheckoutSweeper } from '../chat/checkout-sweep.js'
-import { ConfigError, loadRuntimeConfig } from '../config.js'
+import { ConfigError } from '../config.js'
 import type { ErrorEnvelope } from '../contract/api.js'
 import type { ChatEvent } from '../contract/chat.js'
 import type { ReviewKey } from '../contract/review-key.js'
 import { GenerationBusyError } from '../generate/generation-manager.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
-import { createGit, execGit, type Git, GitError } from '../git/git.js'
+import { execGit, type Git, GitError } from '../git/git.js'
 import type { HostClient } from '../host/client.js'
-import { loadFixture } from '../load-context.js'
-import { loadProjectConfig } from '../project-config.js'
-import { type AppContext, createAppContext } from '../server/context.js'
+import { loadContext } from '../load-context.js'
+import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { ensureDataDir } from '../store/data-dir.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
 import { createFakeGh, createFakeGit, makeTempDir } from '../testing/fakes.js'
 import { ghFor42, gitFor42, HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
@@ -120,43 +118,28 @@ async function makeClone(name: string, origin: string): Promise<void> {
 }
 
 /**
- * The checkout's context as `serve` builds one: the config from git and the flags, the project
- * config, and the fixture, under the shell's variables (none here unless the command sent some).
- * The clone is named before the fixture is read, so a missing fixture is a build that fails after
- * the hub made the clone's part.
+ * The checkout's context as `serve` builds one, through the real loader: the config from git and
+ * the flags, the project config, and the fixture. Only the git a request runs, the forge, and the
+ * agent are stand-ins, held at `gate`.
  */
 const load: LoadProject = async (registration, hooks) => {
   const name = nameOf(registration.repoRoot)
   loads.push(name)
   hooks.log(`loading ${name}`)
   await waits.get(name)
-  const flags = registration.flags ?? {}
-  const config = await loadRuntimeConfig(
-    {
-      port: 3010,
-      dataDir: flags.dataDir,
-      fixtureCanvas: flags.fixtureCanvas,
-      chatAgent: flags.chatAgent,
-      chatModel: flags.chatModel,
-    },
-    registration.env ?? {},
-    createGit(registration.repoRoot),
-    registration.repoRoot
-  )
-  await ensureDataDir(config.dataDir)
-  const clone = hooks.cloneOf(config)
-  const projectConfig = await loadProjectConfig(config.repoRoot)
-  const fixtureArtifact =
-    config.fixtureCanvasPath === null ? null : await loadFixture(config.fixtureCanvasPath)
-  const ctx = createAppContext({
-    config,
-    projectConfig,
-    fixtureArtifact,
-    git: adapters[name]?.git ?? held(createFakeGit(), gate),
-    gh: adapters[name]?.gh ?? held(createFakeGh(), gate),
-    runner: createFakeRunner({ ensureGate: gate }),
+  const ctx = await loadContext({
+    repoDir: registration.repoRoot,
+    cwd: registration.repoRoot,
+    env: registration.env,
+    flags: registration.flags,
+    port: 3010,
     log: hooks.log,
-    clone,
+    cloneOf: hooks.cloneOf,
+    adapters: {
+      git: adapters[name]?.git ?? held(createFakeGit(), gate),
+      gh: adapters[name]?.gh ?? held(createFakeGh(), gate),
+      runner: createFakeRunner({ ensureGate: gate }),
+    },
   })
   contexts.push(ctx)
   return ctx
@@ -468,14 +451,13 @@ describe('createHub', () => {
     expect(loads).toEqual([])
   })
 
-  it("leaves no part of a clone behind when a checkout's build fails after naming it", async () => {
+  it('starts no sweep for a checkout whose build fails', async () => {
     const h = await startHub()
     const failed = await h
       .register({ repoRoot: at('/src/gadgets'), flags: { fixtureCanvas: at('/nope.json') } })
       .catch((err: unknown) => err)
     expect(failed).toBeInstanceOf(ConfigError)
-    expect(sweeps).toHaveLength(1)
-    expect(liveSweeps()).toEqual([])
+    expect(sweeps).toEqual([])
     expect(await h.projects()).toEqual([])
   })
 
@@ -512,7 +494,7 @@ describe('createHub', () => {
       expect(refused.status).toBe(409)
       expect(((await refused.json()) as ErrorEnvelope).error).toMatchObject({
         code: 'CHAT_BUSY',
-        hint: 'stop the running answer, or wait for it to finish',
+        hint: 'wait for it to finish, or stop it from the page that asked',
       })
       // Another review of the clone, and the same review in another clone, are free.
       const seven = chatTurn(worktree.ctx, 7)

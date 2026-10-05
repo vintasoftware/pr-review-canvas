@@ -301,7 +301,13 @@ export function replayFrom(
 /** The status a refused turn answers with: busy, a context that does not resolve, or a failure. */
 export function toChatError(err: unknown): AppError {
   if (err instanceof ChatBusyError) {
-    return new AppError('CHAT_BUSY', err.message, 409, 'stop the running answer, or wait for it to finish')
+    // The turn may be another worktree's of the same clone, which only its own page can stop.
+    return new AppError(
+      'CHAT_BUSY',
+      err.message,
+      409,
+      'wait for it to finish, or stop it from the page that asked'
+    )
   }
   if (err instanceof CheckoutBusyError) {
     // A generation holds the checkout for its whole run; another serve, for one answer.
