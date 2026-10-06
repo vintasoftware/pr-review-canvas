@@ -22,7 +22,6 @@ export default defineConfig({
       include: ['src/**/*.ts', 'src/git/**/*.mjs', 'static/js/**/*.js'],
       exclude: [
         'src/cli.ts',
-        'src/server/node-server.ts',
         'src/server/html.ts',
         'static/js/app.js',
         'static/vendor/**',
