@@ -33,6 +33,11 @@
   list's look in `~/.pr-review`, or in `PR_REVIEW_HOME`. Only a command that can read
   `server.json` can add a project.
 
+### Fixes
+
+- A merged pull request whose base branch was deleted since, as a stacked PR's is once the PR
+  below it merges, failed to load with a git error. Its review now loads from its merge commit.
+
 ## 0.7.0
 
 Changes since 0.6.2.
