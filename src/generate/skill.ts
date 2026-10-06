@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { GenerationSkill } from '../contract/generation.js'
 import type { ChatAgent } from '../contract/settings.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from '../review/install-skill.js'
+import { findSkillCopies } from '../review/doctor.js'
+import { SKILL_SOURCE_DIR } from '../review/install-skill.js'
 import { skillContent } from '../review/skill-content.js'
 import { AppError } from '../server/errors.js'
 
@@ -15,51 +16,28 @@ export interface LoadedSkill {
   body: string
 }
 
-async function readIfThere(file: string): Promise<string | null> {
-  try {
-    return await readFile(file, 'utf8')
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null
-    }
-    throw err
-  }
-}
-
 /**
  * The project's copy in the agent's own skills folder, else in the other harness's, else the
- * shipped one. A copy is `current` when its instructions are the shipped ones, `outdated` when
- * they are the ones an older pr-review installed (the body still matches the hash it was stamped
- * with), and `edited` otherwise.
+ * shipped one. The copy's state is the one `doctor` and `upgrade` go by.
  */
 export async function loadGenerationSkill(
   repoRoot: string,
   agent: ChatAgent,
   version: string
 ): Promise<LoadedSkill> {
-  const shipped = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8'))
-  const dirs =
-    agent === 'codex' ? [CODEX_SKILLS_DIR, CLAUDE_SKILLS_DIR] : [CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR]
-  for (const dir of dirs) {
-    const rel = path.join(dir, SKILL_NAME)
-    let copy: ReturnType<typeof skillContent> | null
-    try {
-      const text = await readIfThere(path.join(repoRoot, rel, 'SKILL.md'))
-      copy = text === null ? null : skillContent(text)
-    } catch (err) {
-      throw new AppError(
-        'GENERATION_FAILED',
-        `the project's skill at ${rel} cannot be read: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-        'fix it, or replace it with `pr-review install-skill --force`'
-      )
-    }
-    if (copy === null) {
-      continue
-    }
-    const stamped = copy.frontmatter.getIn(['metadata', 'body-sha256'])
-    const state = copy.hash === shipped.hash ? 'current' : copy.hash === stamped ? 'outdated' : 'edited'
-    return { info: { source: 'project', path: rel, state }, body: copy.body }
+  const copies = await findSkillCopies(repoRoot)
+  const copy = copies.find(c => c.kind === agent) ?? copies[0]
+  if (copy === undefined) {
+    const shipped = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8'))
+    return { info: { source: 'default', version }, body: shipped.body }
   }
-  return { info: { source: 'default', version }, body: shipped.body }
+  if (copy.state === 'unreadable') {
+    throw new AppError(
+      'GENERATION_FAILED',
+      `the project's skill at ${copy.path} cannot be read: ${copy.error}`,
+      500,
+      'fix it, or replace it with `pr-review install-skill --force`'
+    )
+  }
+  return { info: { source: 'project', path: copy.path, state: copy.state }, body: copy.body }
 }

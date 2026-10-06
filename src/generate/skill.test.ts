@@ -70,9 +70,9 @@ describe('loadGenerationSkill', () => {
     expect(changed.body).not.toContain('body-sha256')
   })
 
-  it('counts an unstamped copy of the shipped body as current, and any other unstamped one as edited', async () => {
+  it('counts any unstamped copy as edited, as doctor does, the shipped body included', async () => {
     await writeCopy(CLAUDE, shippedText)
-    expect((await loadGenerationSkill(repoRoot, 'claude', '1')).info).toMatchObject({ state: 'current' })
+    expect((await loadGenerationSkill(repoRoot, 'claude', '1')).info).toMatchObject({ state: 'edited' })
     await writeCopy(CLAUDE, '---\nname: pr-review-canvas\n---\nOur own skill.\n')
     const own = await loadGenerationSkill(repoRoot, 'claude', '1')
     expect(own.info).toMatchObject({ state: 'edited' })

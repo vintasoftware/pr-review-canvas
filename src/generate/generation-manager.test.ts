@@ -590,6 +590,7 @@ describe('createGenerationManager', () => {
         script: [
           { type: 'thought', text: 'Which layers…' },
           { type: 'usage', used: 1000, size: 200000 },
+          { type: 'tool', id: 't1', title: 'Read src/a.ts', status: 'in_progress' },
           { type: 'tool', id: 't1', title: 'Read src/a.ts', status: 'completed' },
           { type: 'chunk', text: 'Here: ' },
           { type: 'chunk', text: MODEL },
@@ -607,6 +608,8 @@ describe('createGenerationManager', () => {
       // Usage is a sign of work that keeps what the agent was doing.
       { doing: 'thinking', at, written: 0 },
       { doing: 'tool', at, written: 0 },
+      // A finished tool call leaves the model to work out its next step.
+      { doing: 'thinking', at, written: 0 },
       { doing: 'writing', at, written: 'Here: '.length },
       { doing: 'writing', at, written: 'Here: '.length + MODEL.length },
     ])

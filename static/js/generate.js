@@ -151,7 +151,7 @@ export function skillHtml(skill) {
   const where = `this project's skill, <code>${esc(skill.path)}</code>`
   const state = {
     current: '',
-    edited: ', with the changes the project made to it',
+    edited: ', changed from the copy pr-review installs',
     outdated: ', which an older pr-review installed; <code>pr-review upgrade</code> refreshes it',
   }[skill.state]
   return `<p class="hint gen-skill">Follows ${where}${state}.</p>`

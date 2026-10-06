@@ -161,7 +161,7 @@ describe('generationStartHtml', () => {
     expect(document.querySelector('.gen-skill')).toBeNull()
     document.body.innerHTML = generationStartHtml(bundle(), null, PROJECT_SKILL)
     expect(document.querySelector('.gen-skill')?.textContent).toBe(
-      "Follows this project's skill, .claude/skills/pr-review-canvas, with the changes the project made to it."
+      "Follows this project's skill, .claude/skills/pr-review-canvas, changed from the copy pr-review installs."
     )
     // Above the start command, with a refusal still shown.
     document.body.innerHTML = generationStartHtml(bundle(), { message: 'no' }, DEFAULT_SKILL)
@@ -192,7 +192,7 @@ describe('skillHtml', () => {
       "Follows this project's skill, .agents/skills/pr-review-canvas."
     )
     expect(sentence({ source: 'project', path, state: 'edited' })).toBe(
-      "Follows this project's skill, .agents/skills/pr-review-canvas, with the changes the project made to it."
+      "Follows this project's skill, .agents/skills/pr-review-canvas, changed from the copy pr-review installs."
     )
     expect(sentence({ source: 'project', path, state: 'outdated' })).toBe(
       "Follows this project's skill, .agents/skills/pr-review-canvas, which an older pr-review installed; pr-review upgrade refreshes it."

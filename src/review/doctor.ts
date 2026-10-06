@@ -11,7 +11,8 @@ import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
-import { skillContent } from './skill-content.js'
+import type { SkillState } from '../contract/generation.js'
+import { skillContent, skillState } from './skill-content.js'
 
 export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill'] as const
 export type DoctorCheckName = (typeof DOCTOR_CHECKS)[number]
@@ -68,17 +69,24 @@ export type ReadSkill = (file: string) => Promise<string | null>
 const readSkillFile: ReadSkill = file => readFile(file, 'utf8')
 
 /** One copy of the skill in the repository, next to how it compares with the bundled one. */
-export interface SkillCopy {
+export type SkillCopy = {
   kind: 'claude' | 'codex'
   /** The skills directory the copy sits in, absolute. */
   dir: string
   /** `<dir>/pr-review-canvas`, relative to the repository. */
   path: string
-  /** True when the copy's body or recorded hash differs from the bundled skill, or it cannot be read. */
-  stale: boolean
-  /** Why the copy could not be read, when it could not. */
-  error?: string
-}
+} & (
+  | {
+      state: SkillState
+      /** The instructions, without the frontmatter. */
+      body: string
+    }
+  | {
+      state: 'unreadable'
+      /** Why the copy could not be read. */
+      error: string
+    }
+)
 
 /**
  * The copies of the skill in `.claude/skills` and `.agents/skills`. A directory without one is
@@ -100,12 +108,11 @@ export async function findSkillCopies(
     try {
       const text = await readSkill(path.join(target, 'SKILL.md'))
       if (text === null) continue
-      const { hash, frontmatter } = skillContent(text)
-      const matches = hash === expected && frontmatter.getIn(['metadata', 'body-sha256']) === expected
-      copies.push({ kind, dir, path: rel, stale: !matches })
+      const copy = skillContent(text)
+      copies.push({ kind, dir, path: rel, state: skillState(copy, expected), body: copy.body })
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        copies.push({ kind, dir, path: rel, stale: true, error: message(err) })
+        copies.push({ kind, dir, path: rel, state: 'unreadable', error: message(err) })
       }
     }
   }
@@ -126,9 +133,10 @@ export async function checkSkill(
   } catch (err) {
     return { ok: false, detail: message(err), hint: 'reinstall the pr-review package' }
   }
-  const stale = copies.flatMap(copy =>
-    copy.stale ? [copy.error === undefined ? copy.path : `${copy.path}: ${copy.error}`] : []
-  )
+  const stale = copies.flatMap(copy => {
+    if (copy.state === 'current') return []
+    return [copy.state === 'unreadable' ? `${copy.path}: ${copy.error}` : copy.path]
+  })
   if (stale.length > 0) {
     return {
       ok: false,

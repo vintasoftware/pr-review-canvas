@@ -347,7 +347,8 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
           // there ("Reading the manifest first") is no part of the model.
           answer = ''
           noteTool(slot, event.id, event.title)
-          beat('tool')
+          // A tool call reports its end too; after it the model works out its next step.
+          beat(event.status === 'completed' || event.status === 'failed' ? 'thinking' : 'tool')
         } else if (event.type === 'usage' || event.type === 'plan') {
           // Still a sign of work, which keeps doing what it did.
           beat(doing)

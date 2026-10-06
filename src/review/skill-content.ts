@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { parseDocument } from 'yaml'
+import type { SkillState } from '../contract/generation.js'
 
 /** Normalize checkout line endings so Git's CRLF conversion does not stale a copy. */
 export function skillContent(text: string) {
@@ -11,6 +12,13 @@ export function skillContent(text: string) {
   const body = normalized.slice(match[0].length)
   const hash = createHash('sha256').update(body).digest('hex')
   return { frontmatter, body, hash }
+}
+
+/** How a project copy compares with the shipped skill; see `SkillState`. */
+export function skillState(copy: ReturnType<typeof skillContent>, shippedHash: string): SkillState {
+  const stamp = copy.frontmatter.getIn(['metadata', 'body-sha256'])
+  if (copy.hash === shippedHash && stamp === shippedHash) return 'current'
+  return copy.hash === stamp ? 'outdated' : 'edited'
 }
 
 export function stampSkill(text: string): string {

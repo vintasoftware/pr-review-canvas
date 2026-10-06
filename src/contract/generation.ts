@@ -39,13 +39,19 @@ export interface AgentPulse {
 }
 
 /**
+ * How a project copy of the skill compares with the shipped one: `current` when its body and stamp
+ * are the shipped ones, `outdated` when its body is still the one an older pr-review stamped, and
+ * `edited` otherwise (a changed body, or no stamp).
+ */
+export type SkillState = 'current' | 'outdated' | 'edited'
+
+/**
  * The pr-review-canvas skill a generation follows: the project's own copy, by its path from the
  * repository root, or the one the server's pr-review ships when the project has none. A project
- * copy is `current` when it matches the shipped one, `outdated` when an older pr-review installed
- * it unchanged, and `edited` when the project changed it.
+ * copy's state is the one `doctor` and `upgrade` go by.
  */
 export type GenerationSkill =
-  | { source: 'project'; path: string; state: 'current' | 'outdated' | 'edited' }
+  | { source: 'project'; path: string; state: SkillState }
   | { source: 'default'; version: string }
 
 /** What a generation would follow if it started now. */
