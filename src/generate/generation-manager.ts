@@ -10,10 +10,15 @@ import type { CodeSource } from '../chat/seed.js'
 import { slug } from '../chat/threads.js'
 import type { PrepareTargetInput } from '../contract/generation-context.js'
 import type { ErrorEnvelope } from '../contract/api.js'
-import { type GenerationJob, isRunning } from '../contract/generation.js'
+import {
+  type AgentPulse,
+  type GenerationJob,
+  type GenerationSkill,
+  isRunning,
+} from '../contract/generation.js'
 import type { Repo } from '../contract/review-artifact.js'
 import { isLocalKey, keyLabel, keyToString, type ReviewKey } from '../contract/review-key.js'
-import type { Settings } from '../contract/settings.js'
+import type { ChatAgent, Settings } from '../contract/settings.js'
 import { formatValidationError } from '../contract/validation.js'
 import type { GenerationModels } from '../project-config.js'
 import type { PrepareOptions, PrepareResult } from '../review/prepare.js'
@@ -24,6 +29,7 @@ import {
   type PublishResult,
 } from '../review/publish.js'
 import { toAppError } from '../server/errors.js'
+import type { LoadedSkill } from './skill.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
 
 /** One agent turn may take this long; a large canvas takes the agent many minutes to write. */
@@ -59,6 +65,8 @@ export interface GenerationManagerDeps {
   steps: GenerationSteps
   /** The chat settings with the `serve` flags applied: the agent, and whether checkouts are on. */
   settings: () => Promise<Settings>
+  /** The skill the agent follows: the project's copy for that agent, or the shipped one. */
+  skill: (agent: ChatAgent) => Promise<LoadedSkill>
   /** The project's `generation.models` and `maxRepairRounds`. */
   generation: { models: GenerationModels; maxRepairRounds: number }
   repo: Repo
@@ -80,6 +88,8 @@ export interface GenerationManager {
   status(key: ReviewKey): GenerationJob | null
   /** True when a running job was asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
+  /** The skill a job started now would follow, with the agent the settings name. */
+  nextSkill(): Promise<GenerationSkill>
 }
 
 /** The running side of a job, which the status never shows. */
@@ -92,6 +102,8 @@ interface Slot {
   activityIds: string[]
   /** Folders a tool title is shown relative to: the agent's working directory and the canvas's. */
   shortPaths: string[]
+  /** The instructions of `job.skill`, which the first turn sends. */
+  skillBody: string
 }
 
 /** The title acpx gives a tool update that names neither a title nor a kind. */
@@ -154,24 +166,49 @@ export function codeNote(code: CodeSource, headSha: string): string {
   }
 }
 
+/** Where the skill came from, in the words the prompt uses. */
+function skillSource(skill: GenerationSkill): string {
+  return skill.source === 'project'
+    ? `this project's copy, ${skill.path}`
+    : `the one pr-review ${skill.version} ships`
+}
+
 /**
- * What the agent is told before the prepared prompt. The prompt is written for the skill, which
- * writes the file and runs publish itself; here the server does both, and the agent runs under the
- * chat's flags, which deny every write, so the parts that say otherwise are named and replaced.
+ * What the agent is sent first: the server's rules, the pr-review-canvas skill the project uses,
+ * and the task prepare wrote. The skill is written for a run from a terminal, which runs prepare,
+ * writes the file, and runs publish itself. Here the server does those, and the agent runs under
+ * the chat's flags, which deny every write, so the steps that say otherwise are named and
+ * replaced; everything else the skill says, including what the project changed in it, holds.
  */
-export function generationPreface(code: CodeSource, headSha: string, modelPath: string): string {
+export function generationPrompt(
+  code: CodeSource,
+  headSha: string,
+  modelPath: string,
+  skill: LoadedSkill,
+  task: string
+): string {
   return [
     '# Generate a review canvas',
     '',
-    'The pr-review server runs this generation. Read and search only: write no file and run no command that changes anything. A request to write is denied.',
+    `The pr-review server runs this generation. Follow the pr-review-canvas skill below (${skillSource(skill.info)}) and the task prepare wrote after it. Read and search only: write no file and run no command that changes anything. A request to write is denied.`,
     '',
     `- ${codeNote(code, headSha)}`,
-    '- Where the task below says to read a file with `git show`, read it from your working directory instead, or from the `<head>` and `<base>` folders it names.',
-    `- Where it says to write \`<model>\` (${modelPath}) or to run validate or publish, do neither. Answer with the model JSON itself, and nothing else: no prose before or after it and no code fence.`,
+    "- The server already ran the skill's prepare step and runs you on the model it picked: skip the skill's model choice and prepare steps, and its report to the user.",
+    '- Where the skill or the task says to read a file with `git show`, read it from your working directory instead, or from the `<head>` and `<base>` folders the task names.',
+    `- Where they say to write \`<model>\` (${modelPath}) or to run validate, publish, or any other pr-review command, do neither. Answer with the model JSON itself, and nothing else: no prose before or after it and no code fence.`,
     '- The server writes your answer to `<model>`, validates and publishes it, and sends you the problems publish names. Then answer with the whole corrected model JSON, again with nothing else.',
     '',
     '---',
     '',
+    '# The pr-review-canvas skill',
+    '',
+    skill.body.trim(),
+    '',
+    '---',
+    '',
+    '# The task prepare wrote',
+    '',
+    task,
   ].join('\n')
 }
 
@@ -292,15 +329,28 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     // `run` spawns without waiting, so a stop arriving from here on finds the handle.
     slot.run = run
     let answer = ''
+    let doing: AgentPulse['doing'] = 'starting'
+    const beat = (next: AgentPulse['doing']): void => {
+      doing = next
+      job.pulse = { doing, at: deps.now().toISOString(), written: answer.length }
+    }
+    beat('starting')
     try {
       for await (const event of run.events) {
         if (event.type === 'chunk') {
           answer += event.text
+          beat('writing')
+        } else if (event.type === 'thought') {
+          beat('thinking')
         } else if (event.type === 'tool') {
           // The answer is what the agent says after its last tool call; what it said on the way
           // there ("Reading the manifest first") is no part of the model.
           answer = ''
           noteTool(slot, event.id, event.title)
+          beat('tool')
+        } else if (event.type === 'usage' || event.type === 'plan') {
+          // Still a sign of work, which keeps doing what it did.
+          beat(doing)
         } else if (event.type === 'done') {
           if (event.stopReason === 'cancelled') {
             throw new Cancelled()
@@ -314,6 +364,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       }
     } finally {
       slot.run = null
+      delete job.pulse
     }
     throwIfStopped(slot)
     return answer
@@ -347,7 +398,13 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       timeoutSec: GENERATION_TURN_TIMEOUT_SEC,
     })
 
-    let prompt = `${generationPreface(code, prepared.headSha, modelPath)}${task}`
+    let prompt = generationPrompt(
+      code,
+      prepared.headSha,
+      modelPath,
+      { info: job.skill, body: slot.skillBody },
+      task
+    )
     for (;;) {
       job.phase = job.round === 1 ? 'generating' : 'repairing'
       const answer = await turn(slot, session, prompt, code.cwd)
@@ -410,6 +467,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       }
       const settings = await deps.settings()
       const agent = settings.chatAgent
+      const skill = await deps.skill(agent)
       const named = deps.generation.models[agent]
       const model =
         named === undefined ? null : latestModel(agent, named, await deps.runner.modelUpgrades(agent))
@@ -424,6 +482,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
           force: opts.force,
           agent,
           model,
+          skill: skill.info,
           phase: 'preparing',
           round: 1,
           maxRounds,
@@ -435,6 +494,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         stopped: false,
         activityIds: [],
         shortPaths: [],
+        skillBody: skill.body,
       }
       last = slot
       deps.log(`generation ${label(key)}: started with ${agent}${model === null ? '' : ` (${model})`}`)
@@ -460,6 +520,11 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       slot.job.stopping = true
       await slot.run?.cancel()
       return true
+    },
+
+    async nextSkill() {
+      const { chatAgent } = await deps.settings()
+      return (await deps.skill(chatAgent)).info
     },
   }
 }

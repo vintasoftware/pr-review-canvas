@@ -6,7 +6,7 @@ import type { AgentEvent } from '../acpx/events.js'
 import { CheckoutBusyError, type ReviewCheckouts } from '../chat/checkouts.js'
 import type { GenerationJob } from '../contract/generation.js'
 import type { ReviewKey } from '../contract/review-key.js'
-import { DEFAULT_SETTINGS, type Settings } from '../contract/settings.js'
+import { type ChatAgent, DEFAULT_SETTINGS, type Settings } from '../contract/settings.js'
 import type { PrepareResult } from '../review/prepare.js'
 import { ModelInvalidError, PublishError, type PublishResult } from '../review/publish.js'
 import { createFakeRunner, type FakeRunnerOptions } from '../testing/fake-runner.js'
@@ -17,13 +17,16 @@ import {
   type GenerationManager,
   type GenerationSteps,
   codeNote,
-  generationPreface,
+  generationPrompt,
   repairPrompt,
 } from './generation-manager.js'
+import type { LoadedSkill } from './skill.js'
 
 const HEAD = 'a'.repeat(40)
 const BASE = 'b'.repeat(40)
 const MODEL = '{"summary":"s","layers":[]}'
+const SKILL_BODY = '\n# PR Review Canvas\n\nGroup the hunks into layers.\n'
+const DEFAULT_SKILL: LoadedSkill = { info: { source: 'default', version: '9.9.9' }, body: SKILL_BODY }
 
 let dir: string
 
@@ -72,6 +75,8 @@ interface Harness {
   steps: { [K in keyof GenerationSteps]: ReturnType<typeof vi.fn> }
   leases: { key: ReviewKey; moved: string[]; released: boolean }[]
   logs: string[]
+  /** The agents the skill was asked for, in order. */
+  skillAgents: ChatAgent[]
 }
 
 function harness(
@@ -81,6 +86,8 @@ function harness(
     steps?: Partial<GenerationSteps>
     lease?: 'busy' | 'move-fails'
     maxRepairRounds?: number
+    /** What the `skill` dep answers; the shipped default by default. */
+    skill?: (agent: ChatAgent) => Promise<LoadedSkill>
   } = {}
 ): Harness {
   const runner = createFakeRunner({
@@ -127,11 +134,16 @@ function harness(
     fix: vi.fn(opts.steps?.fix ?? (async () => [])),
   }
   const logs: string[] = []
+  const skillAgents: ChatAgent[] = []
   const manager = createGenerationManager({
     runner,
     checkouts,
     steps,
     settings: async () => ({ ...DEFAULT_SETTINGS, ...opts.settings }),
+    skill: async agent => {
+      skillAgents.push(agent)
+      return opts.skill === undefined ? DEFAULT_SKILL : opts.skill(agent)
+    },
     generation: { models: { claude: 'opus' }, maxRepairRounds: opts.maxRepairRounds ?? 3 },
     repo: { owner: 'Acme', name: 'widgets' },
     currentBranch: async () => 'feat/b',
@@ -139,7 +151,7 @@ function harness(
     log: line => logs.push(line),
     now: () => new Date('2026-10-05T12:00:00.000Z'),
   })
-  return { manager, runner, steps, leases, logs }
+  return { manager, runner, steps, leases, logs, skillAgents }
 }
 
 /** Polls the status until the job ends. */
@@ -169,11 +181,43 @@ describe('extractModelJson', () => {
 
 describe('prompts', () => {
   it('tells the agent to write nothing and to answer with the JSON', () => {
-    const text = generationPreface({ kind: 'working-tree', cwd: '/c' }, HEAD, '/d/model.json')
+    const text = generationPrompt(
+      { kind: 'working-tree', cwd: '/c' },
+      HEAD,
+      '/d/model.json',
+      DEFAULT_SKILL,
+      'the task'
+    )
     expect(text).toContain('the work under review')
     expect(text).toContain('/d/model.json')
     expect(text).toContain('write no file')
     expect(text).toMatch(/Answer with the model JSON itself/)
+  })
+
+  it('sends the server rules, then the skill, then the task prepare wrote', () => {
+    const code = { kind: 'working-tree', cwd: '/c' } as const
+    const text = generationPrompt(code, HEAD, '/d/model.json', DEFAULT_SKILL, '## Paths\n\nthe task\n')
+    expect(text).toContain('(the one pr-review 9.9.9 ships)')
+    const skillAt = text.indexOf('# The pr-review-canvas skill')
+    const taskAt = text.indexOf('# The task prepare wrote')
+    expect(text.indexOf('write no file')).toBeLessThan(skillAt)
+    expect(skillAt).toBeLessThan(taskAt)
+    // The body goes in trimmed, between the two headings.
+    expect(text.slice(skillAt, taskAt)).toContain('# PR Review Canvas\n\nGroup the hunks into layers.\n\n---')
+    expect(text.endsWith('# The task prepare wrote\n\n## Paths\n\nthe task\n')).toBe(true)
+
+    const project = generationPrompt(
+      code,
+      HEAD,
+      '/d/model.json',
+      {
+        info: { source: 'project', path: '.claude/skills/pr-review-canvas', state: 'edited' },
+        body: 'Ours.',
+      },
+      'task'
+    )
+    expect(project).toContain("(this project's copy, .claude/skills/pr-review-canvas)")
+    expect(project).toContain('# The pr-review-canvas skill\n\nOurs.\n')
   })
 
   it('describes each place the agent can read code from', () => {
@@ -203,7 +247,9 @@ describe('createGenerationManager', () => {
       phase: 'preparing',
       round: 1,
       maxRounds: 4,
+      skill: { source: 'default', version: '9.9.9' },
     })
+    expect(h.skillAgents).toEqual(['claude'])
 
     const job = await settled(h.manager, 7)
     expect(job).toMatchObject({
@@ -225,6 +271,16 @@ describe('createGenerationManager', () => {
     expect(h.runner.ensured).toEqual([run?.session])
     expect(run?.prompt).toContain(`a checkout of ${HEAD}`)
     expect(run?.prompt).toContain('the task')
+    // The first turn sends the skill the job names, between its heading and the task's.
+    const prompt = run?.prompt ?? ''
+    expect(prompt).toContain('Follow the pr-review-canvas skill below (the one pr-review 9.9.9 ships)')
+    const skillAt = prompt.indexOf('# The pr-review-canvas skill')
+    const taskAt = prompt.indexOf('# The task prepare wrote')
+    expect(skillAt).toBeGreaterThan(-1)
+    expect(taskAt).toBeGreaterThan(skillAt)
+    expect(prompt.slice(skillAt, taskAt)).toContain(SKILL_BODY.trim())
+    expect(prompt.slice(taskAt)).toContain('the task')
+    expect(job.skill).toEqual({ source: 'default', version: '9.9.9' })
 
     expect(await readFile(path.join(dir, 'model.json'), 'utf8')).toBe(`${MODEL}\n`)
     expect(h.steps.fix).toHaveBeenCalledWith(dir, path.join(dir, 'model.json'), MODEL)
@@ -265,6 +321,42 @@ describe('createGenerationManager', () => {
     expect(broken.runner.runs[0]?.cwd).toBe('/repo')
     expect(broken.leases[0]?.released).toBe(true)
     expect(broken.logs.some(l => l.includes('did not move'))).toBe(true)
+  })
+
+  it("follows the skill for the settings' agent, and names the project's copy it sends", async () => {
+    const info = { source: 'project', path: '.agents/skills/pr-review-canvas', state: 'outdated' } as const
+    const h = harness({
+      settings: { chatAgent: 'codex' },
+      skill: async () => ({ info, body: 'The project skill.' }),
+    })
+    expect(await h.manager.nextSkill()).toEqual(info)
+    expect(h.skillAgents).toEqual(['codex'])
+    // Asking which skill a run would follow starts nothing.
+    expect(h.manager.status(7)).toBeNull()
+
+    const started = await h.manager.start(7, { force: false })
+    expect(started.skill).toEqual(info)
+    expect(h.skillAgents).toEqual(['codex', 'codex'])
+    const job = await settled(h.manager, 7)
+    expect(job.skill).toEqual(info)
+    const prompt = h.runner.runs[0]?.prompt ?? ''
+    expect(prompt).toContain("(this project's copy, .agents/skills/pr-review-canvas)")
+    expect(prompt).toContain(
+      '# The pr-review-canvas skill\n\nThe project skill.\n\n---\n\n# The task prepare wrote'
+    )
+  })
+
+  it('refuses to start when the skill cannot be read, and starts nothing', async () => {
+    const h = harness({
+      skill: async () => {
+        throw new Error('broken skill')
+      },
+    })
+    await expect(h.manager.start(7, { force: false })).rejects.toThrow('broken skill')
+    expect(h.manager.status(7)).toBeNull()
+    expect(h.steps.prepare).not.toHaveBeenCalled()
+    expect(h.runner.runs).toEqual([])
+    await expect(h.manager.nextSkill()).rejects.toThrow('broken skill')
   })
 
   it('runs with the agent default when the project names no model for the agent', async () => {
@@ -489,6 +581,37 @@ describe('createGenerationManager', () => {
       'Read derived/patches/a.diff',
       'Read src/b.ts',
     ])
+  })
+
+  it('keeps a pulse of what the agent does in a turn, which a turn with no tool call still moves', async () => {
+    const seen: unknown[] = []
+    const h = harness({
+      runner: {
+        script: [
+          { type: 'thought', text: 'Which layers…' },
+          { type: 'usage', used: 1000, size: 200000 },
+          { type: 'tool', id: 't1', title: 'Read src/a.ts', status: 'completed' },
+          { type: 'chunk', text: 'Here: ' },
+          { type: 'chunk', text: MODEL },
+          { type: 'done', stopReason: 'end_turn' },
+        ],
+        beforeEvent: () => seen.push(h.manager.status(7)?.pulse),
+      },
+    })
+    await h.manager.start(7, { force: false })
+    const job = await settled(h.manager, 7)
+    const at = '2026-10-05T12:00:00.000Z'
+    expect(seen).toEqual([
+      { doing: 'starting', at, written: 0 },
+      { doing: 'thinking', at, written: 0 },
+      // Usage is a sign of work that keeps what the agent was doing.
+      { doing: 'thinking', at, written: 0 },
+      { doing: 'tool', at, written: 0 },
+      { doing: 'writing', at, written: 'Here: '.length },
+      { doing: 'writing', at, written: 'Here: '.length + MODEL.length },
+    ])
+    // Outside a turn there is no agent to show.
+    expect(job.pulse).toBeUndefined()
   })
 
   it('starts one job for two clicks that arrive together', async () => {

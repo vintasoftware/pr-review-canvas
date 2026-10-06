@@ -26,6 +26,33 @@ export const GENERATION_PHASES = [
 ] as const
 export type GenerationPhase = (typeof GENERATION_PHASES)[number]
 
+/**
+ * What the agent did last in the turn that runs now, and when. A turn can go minutes with no tool
+ * call while the agent thinks or writes the canvas, so the dialog shows this to tell a working
+ * agent from a stuck one. `written` is how much of the answer it has written since its last tool
+ * call; `starting` is the time before the agent says anything.
+ */
+export interface AgentPulse {
+  doing: 'starting' | 'thinking' | 'writing' | 'tool'
+  at: string
+  written: number
+}
+
+/**
+ * The pr-review-canvas skill a generation follows: the project's own copy, by its path from the
+ * repository root, or the one the server's pr-review ships when the project has none. A project
+ * copy is `current` when it matches the shipped one, `outdated` when an older pr-review installed
+ * it unchanged, and `edited` when the project changed it.
+ */
+export type GenerationSkill =
+  | { source: 'project'; path: string; state: 'current' | 'outdated' | 'edited' }
+  | { source: 'default'; version: string }
+
+/** What a generation would follow if it started now. */
+export interface GenerationSkillResponse {
+  skill: GenerationSkill
+}
+
 /** What publish did with the canvas: shared it on the pull request, or kept it local. */
 export type GenerationSharing = CanvasSharing | { status: 'local' }
 
@@ -35,6 +62,8 @@ export interface GenerationJob {
   agent: string
   /** The `--model` the agent runs with, or null for the agent's own default. */
   model: string | null
+  /** The skill the agent was given. */
+  skill: GenerationSkill
   phase: GenerationPhase
   /** True once a stop was asked for, until the job ends. */
   stopping?: boolean
@@ -46,6 +75,8 @@ export interface GenerationJob {
   headSha?: string
   /** The latest tool calls the agent made, newest last: their titles only, never their output. */
   activity: string[]
+  /** Set while an agent turn runs. */
+  pulse?: AgentPulse
   /** The problems the last rejected publish named, one line each. */
   problems?: string[]
   /** Set on a done job, which always published: what publish did with the canvas. */

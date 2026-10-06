@@ -2,7 +2,7 @@
 // Claude Code (`.claude/skills`) and Codex (`.agents/skills`) both see `/pr-review-canvas`.
 import { appendFile, cp, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { PACKAGE_ROOT } from '../server/context.js'
+import { PACKAGE_ROOT } from '../paths.js'
 import { readText } from '../store/atomic-json.js'
 import { stampSkill } from './skill-content.js'
 

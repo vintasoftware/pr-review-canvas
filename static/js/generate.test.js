@@ -7,16 +7,25 @@ import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   createGeneration,
   elapsedText,
+  fetchGenerationSkill,
   GENERATE_DIALOG_ID,
   generationMode,
   generationStartHtml,
   generationStatusHtml,
   isRunning,
+  QUIET_MS,
   runningLabel,
+  skillHtml,
 } from './generate.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').GenerationJob} GenerationJob */
+/** @typedef {import('./contract-types.js').GenerationSkill} GenerationSkill */
+
+/** @type {GenerationSkill} */
+const DEFAULT_SKILL = { source: 'default', version: '1.4.0' }
+/** @type {GenerationSkill} */
+const PROJECT_SKILL = { source: 'project', path: '.claude/skills/pr-review-canvas', state: 'edited' }
 
 const NOW = new Date('2026-10-05T12:03:12.000Z')
 
@@ -55,6 +64,7 @@ function job(over = {}) {
     force: false,
     agent: 'claude',
     model: 'opus',
+    skill: DEFAULT_SKILL,
     phase: 'generating',
     round: 1,
     maxRounds: 4,
@@ -145,9 +155,106 @@ describe('generationStartHtml', () => {
   it('calls a local review a review', () => {
     expect(generationStartHtml(bundle({ local: 'branch' }))).toContain('comment on the review')
   })
+
+  it('names the skill the run would follow once the server has said which', () => {
+    document.body.innerHTML = generationStartHtml(bundle())
+    expect(document.querySelector('.gen-skill')).toBeNull()
+    document.body.innerHTML = generationStartHtml(bundle(), null, PROJECT_SKILL)
+    expect(document.querySelector('.gen-skill')?.textContent).toBe(
+      "Follows this project's skill, .claude/skills/pr-review-canvas, with the changes the project made to it."
+    )
+    // Above the start command, with a refusal still shown.
+    document.body.innerHTML = generationStartHtml(bundle(), { message: 'no' }, DEFAULT_SKILL)
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe('no')
+    expect(document.querySelectorAll('.gen-skill')).toHaveLength(1)
+    expect(document.querySelector('.gen-skill ~ .dialog-actions [data-gen="start"]')).not.toBeNull()
+  })
+})
+
+describe('skillHtml', () => {
+  /** @param {GenerationSkill} skill */
+  const sentence = skill => {
+    document.body.innerHTML = skillHtml(skill)
+    const p = document.querySelectorAll('p.hint.gen-skill')
+    expect(p).toHaveLength(1)
+    return p[0]?.textContent
+  }
+
+  it('says the default skill of the server version is followed when the project has none', () => {
+    expect(sentence(DEFAULT_SKILL)).toBe(
+      'Follows the default skill of pr-review 1.4.0: this project has none installed.'
+    )
+  })
+
+  it("names the project's copy, and what state it is in", () => {
+    const path = '.agents/skills/pr-review-canvas'
+    expect(sentence({ source: 'project', path, state: 'current' })).toBe(
+      "Follows this project's skill, .agents/skills/pr-review-canvas."
+    )
+    expect(sentence({ source: 'project', path, state: 'edited' })).toBe(
+      "Follows this project's skill, .agents/skills/pr-review-canvas, with the changes the project made to it."
+    )
+    expect(sentence({ source: 'project', path, state: 'outdated' })).toBe(
+      "Follows this project's skill, .agents/skills/pr-review-canvas, which an older pr-review installed; pr-review upgrade refreshes it."
+    )
+    expect([...document.querySelectorAll('.gen-skill code')].map(c => c.textContent)).toEqual([
+      path,
+      'pr-review upgrade',
+    ])
+  })
+
+  it('escapes what the server sends', () => {
+    expect(skillHtml({ source: 'project', path: '<b>x</b>', state: 'current' })).toContain('&lt;b&gt;')
+    expect(skillHtml({ source: 'default', version: '<i>1</i>' })).toContain('&lt;i&gt;')
+  })
 })
 
 describe('generationStatusHtml', () => {
+  it('names the skill the job follows, running or ended', () => {
+    document.body.innerHTML = generationStatusHtml(job(), NOW)
+    expect(document.querySelector('.gen-skill')?.textContent).toContain('default skill of pr-review 1.4.0')
+    document.body.innerHTML = generationStatusHtml(
+      job({ phase: 'done', sharing: { status: 'local' }, skill: PROJECT_SKILL }),
+      NOW
+    )
+    expect(document.querySelector('.gen-skill')?.textContent).toContain('.claude/skills/pr-review-canvas')
+  })
+
+  it('shows what the agent does in its turn, and when it last showed it was working', () => {
+    /** @param {number} msAgo */
+    const at = msAgo => new Date(NOW.getTime() - msAgo).toISOString()
+    /**
+     * @param {import('./contract-types.js').AgentPulse['doing']} doing
+     * @param {number} msAgo
+     */
+    const pulse = (doing, msAgo, written = 0) => {
+      document.body.innerHTML = generationStatusHtml(job({ pulse: { doing, at: at(msAgo), written } }), NOW)
+      return document.querySelector('.gen-pulse')
+    }
+    expect(pulse('starting', 1000)?.textContent).toBe('Waiting for the agent to start · last activity 1s ago')
+    expect(pulse('thinking', 4000)?.textContent).toBe('Thinking · last activity 4s ago')
+    expect(pulse('tool', 0)?.textContent).toBe('Running a tool · last activity 0s ago')
+    const writing = pulse('writing', 2000, 12345)
+    expect(writing?.textContent).toBe('Writing the answer · 12,345 characters · last activity 2s ago')
+    expect(writing?.hasAttribute('data-quiet')).toBe(false)
+    expect(document.querySelector('.callout.warn')).toBeNull()
+    // A quiet spell as long as QUIET_MS says the agent may be stuck, with the stop command below.
+    const quiet = pulse('thinking', QUIET_MS + 12000)
+    expect(quiet?.hasAttribute('data-quiet')).toBe(true)
+    expect(document.querySelector('.callout.warn')?.textContent).toBe(
+      'Nothing from the agent for 3m 12s. It may be stuck: stop the run, or keep waiting.'
+    )
+    expect(document.querySelector('[data-gen="stop"]')).not.toBeNull()
+    // Outside a turn, and once the job ends, there is no pulse to show.
+    document.body.innerHTML = generationStatusHtml(job(), NOW)
+    expect(document.querySelector('.gen-pulse')).toBeNull()
+    document.body.innerHTML = generationStatusHtml(
+      job({ phase: 'failed', pulse: { doing: 'writing', at: at(0), written: 3 } }),
+      NOW
+    )
+    expect(document.querySelector('.gen-pulse')).toBeNull()
+  })
+
   it('shows a running job with its activity, attempt, and stop command', () => {
     document.body.innerHTML = generationStatusHtml(
       job({
@@ -224,8 +331,9 @@ describe('generationStatusHtml', () => {
 
 /**
  * A fetch that answers from a list of jobs: each GET answers the next one, POST and DELETE what
- * the test sets.
- * @param {{ gets: Array<GenerationJob | null>, post?: () => Response, del?: () => Response }} script
+ * the test sets. The skill a run would follow is `script.skill`, the default one unless the test
+ * names another, or a server error when it is null.
+ * @param {{ gets: Array<GenerationJob | null>, post?: () => Response, del?: () => Response, skill?: GenerationSkill | null }} script
  */
 function fakeFetch(script) {
   /** @type {Array<{ method: string, url: string, body: unknown }>} */
@@ -244,6 +352,13 @@ function fakeFetch(script) {
     }
     if (method === 'DELETE' && script.del) {
       return script.del()
+    }
+    if (String(url) === '/api/generate/skill') {
+      return script.skill === null
+        ? new Response(JSON.stringify({ error: { code: 'GENERATION_FAILED', message: 'unreadable' } }), {
+            status: 500,
+          })
+        : new Response(JSON.stringify({ skill: script.skill ?? DEFAULT_SKILL }), { status: 200 })
     }
     const next = script.gets[Math.min(i, script.gets.length - 1)] ?? null
     i += 1
@@ -457,7 +572,8 @@ describe('createGeneration', () => {
         }
         throw new TypeError('network down')
       }
-      return new Response(JSON.stringify({ job: null }), { status: 200 })
+      const body = String(_url) === '/api/generate/skill' ? { skill: DEFAULT_SKILL } : { job: null }
+      return new Response(JSON.stringify(body), { status: 200 })
     }
     const generation = createGeneration(root, {
       prNumber: 42,
@@ -494,6 +610,113 @@ describe('createGeneration', () => {
     root.querySelector('[data-gen="again"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(dialog?.querySelector('[data-gen="start"]')).not.toBeNull()
     expect(generation.job?.phase).toBe('failed')
+    // The start screen it goes back to reads which skill the next run would follow.
+    await flush()
+    expect(fetches.calls.filter(c => c.url === '/api/generate/skill')).toHaveLength(1)
+    expect(dialog?.querySelector('.gen-skill')?.textContent).toContain('default skill')
+    generation.stop()
+  })
+
+  it('reads the skill when it opens the start screen, and draws the screen again with it', async () => {
+    const root = page()
+    const fetches = fakeFetch({ gets: [null], skill: PROJECT_SKILL })
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      fetchImpl: fetches.impl,
+      now: () => NOW,
+      pollMs: 60_000,
+    })
+    generation.open(bundle())
+    const dialog = root.querySelector(`#${GENERATE_DIALOG_ID}`)
+    // The screen shows at once, and names the skill once the server says which.
+    expect(dialog?.querySelector('[data-gen="start"]')).not.toBeNull()
+    expect(dialog?.querySelector('.gen-skill')).toBeNull()
+    await vi.waitFor(() =>
+      expect(dialog?.querySelector('.gen-skill')?.textContent).toContain('.claude/skills/pr-review-canvas')
+    )
+    expect(fetches.calls.filter(c => c.url === '/api/generate/skill')).toHaveLength(1)
+    // Each opening reads it again: the project's copy can change between runs.
+    generation.open(bundle())
+    await flush()
+    expect(fetches.calls.filter(c => c.url === '/api/generate/skill')).toHaveLength(2)
+    generation.stop()
+  })
+
+  it('leaves the start screen without the skill when it cannot be read', async () => {
+    const root = page()
+    const fetches = fakeFetch({ gets: [null], skill: null })
+    const onError = vi.fn()
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      onError,
+      fetchImpl: fetches.impl,
+      now: () => NOW,
+      pollMs: 60_000,
+    })
+    generation.open(bundle())
+    await flush()
+    await flush()
+    const dialog = root.querySelector(`#${GENERATE_DIALOG_ID}`)
+    expect(fetches.calls.some(c => c.url === '/api/generate/skill')).toBe(true)
+    expect(dialog?.querySelector('[data-gen="start"]')).not.toBeNull()
+    expect(dialog?.querySelector('.gen-skill')).toBeNull()
+    expect(onError).not.toHaveBeenCalled()
+    generation.stop()
+  })
+
+  it('keeps the status of a job started before the skill arrived', async () => {
+    const root = page()
+    /** @type {(value: Response) => void} */
+    let answerSkill = () => undefined
+    /** @type {typeof fetch} */
+    const impl = async (url, init) => {
+      if (String(url) === '/api/generate/skill') {
+        return new Promise(resolve => {
+          answerSkill = resolve
+        })
+      }
+      const status = init?.method === 'POST' ? 202 : 200
+      return new Response(JSON.stringify({ job: job({ phase: 'preparing' }) }), { status })
+    }
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      fetchImpl: impl,
+      now: () => NOW,
+      pollMs: 60_000,
+    })
+    generation.open(bundle())
+    root.querySelector('[data-gen="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    const dialog = root.querySelector(`#${GENERATE_DIALOG_ID}`)
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Preparing the diff')
+    answerSkill(new Response(JSON.stringify({ skill: PROJECT_SKILL }), { status: 200 }))
+    await flush()
+    await flush()
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Preparing the diff')
+    // The status names the job's own skill, not the one the start screen asked about.
+    expect(dialog?.querySelector('.gen-skill')?.textContent).toContain('default skill')
+    generation.stop()
+  })
+
+  it('does not read the skill when it opens on a running job', async () => {
+    const root = page()
+    const fetches = fakeFetch({ gets: [job()] })
+    const generation = createGeneration(root, {
+      prNumber: 42,
+      onEnded: () => undefined,
+      fetchImpl: fetches.impl,
+      now: () => NOW,
+      pollMs: 60_000,
+    })
+    generation.attach(bundle())
+    await flush()
+    generation.open(bundle())
+    await flush()
+    expect(fetches.calls.some(c => c.url === '/api/generate/skill')).toBe(false)
+    expect(root.querySelector(`#${GENERATE_DIALOG_ID} .gen-skill`)?.textContent).toContain('default skill')
     generation.stop()
   })
 
@@ -516,7 +739,8 @@ describe('createGeneration', () => {
     expect(box instanceof HTMLInputElement && box.checked).toBe(true)
     root.querySelector('#regenerate')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     root.dispatchEvent(new MouseEvent('click'))
-    expect(fetches.calls).toEqual([])
+    // Opening the start screen reads only which skill the run would follow.
+    expect(fetches.calls).toEqual([{ method: 'GET', url: '/api/generate/skill', body: undefined }])
     generation.stop()
   })
 
@@ -552,7 +776,11 @@ describe('createGeneration', () => {
     // @ts-expect-error: the method is removed to stand for an engine without it
     delete HTMLDialogElement.prototype.showModal
     try {
-      const generation = createGeneration(root, { prNumber: 42, onEnded: () => undefined })
+      const generation = createGeneration(root, {
+        prNumber: 42,
+        onEnded: () => undefined,
+        fetchImpl: fakeFetch({ gets: [null] }).impl,
+      })
       generation.open(bundle())
       expect(root.querySelector(`#${GENERATE_DIALOG_ID}`)?.hasAttribute('open')).toBe(true)
       generation.stop()
@@ -599,5 +827,13 @@ describe('createGeneration', () => {
     generation.attach(bundle())
     await vi.waitFor(() => expect(calls).toBeGreaterThanOrEqual(3))
     generation.stop()
+  })
+})
+
+describe('fetchGenerationSkill', () => {
+  it('reads the skill a run started now would follow', async () => {
+    const fetches = fakeFetch({ gets: [], skill: PROJECT_SKILL })
+    expect(await fetchGenerationSkill({ fetchImpl: fetches.impl })).toEqual({ skill: PROJECT_SKILL })
+    expect(fetches.calls).toEqual([{ method: 'GET', url: '/api/generate/skill', body: undefined }])
   })
 })
