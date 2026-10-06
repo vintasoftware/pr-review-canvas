@@ -24,8 +24,8 @@
   `--chat-model` also work on `open`, per project, and are saved with it.
 - After a restart, a project opened from a bookmark runs with the server's environment, with the
   data dir and `PR_REVIEW_HOST` it was opened with, which are saved with it. The server logs this,
-  and a line under the project's page header says to run `pr-review open` in its folder to give it
-  the shell's again.
+  and a **server env** badge next to the project's name opens a dialog: what may fail when the
+  project's shell sets its own token or `PATH`, and the command to give it the shell's again.
 - Each worktree of a clone has its own `branch` and `uncommitted` reviews: review progress,
   chat threads, review checkout, and the earlier canvases they fall back on. A linked worktree's
   go by `branch~<worktree>` in the clone's `.pr-review/`; local reviews a linked worktree prepared

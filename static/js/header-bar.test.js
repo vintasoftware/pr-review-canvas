@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 // The bar every page starts with, which the server and the review page both draw from this module.
-import { headerBarHtml } from './header-bar.js'
+import { ENV_DIALOG_ID, headerBarHtml, wireEnvBadge } from './header-bar.js'
 
 /** @param {string} html */
 function bar(html) {
@@ -95,26 +95,60 @@ describe('headerBarHtml', () => {
     expect(host).not.toContain('<i>')
   })
 
-  it("says under the bar where to run open when the project runs without the shell's environment", () => {
-    const holder = document.createElement('div')
-    holder.innerHTML = headerBarHtml({
-      project: { slug: 'acme/widgets', home: '/r/acme/widgets/', reopenIn: '/src/<w>' },
+  describe("a project running under the server's environment", () => {
+    const restored = {
+      project: { slug: 'acme/widgets', home: '/r/acme/widgets/', reopenIn: "/src/<it's>" },
       ...look,
+    }
+
+    it("wears a badge next to its name, whose dialog says what can differ and how to give it the terminal's back", () => {
+      const holder = document.createElement('div')
+      holder.innerHTML = headerBarHtml(restored)
+      const [, name, badge, ...rest] = brandChildren(bar(holder.innerHTML))
+      expect(rest).toEqual([])
+      expect(name?.textContent).toBe('acme/widgets')
+      expect(badge?.tagName).toBe('BUTTON')
+      expect(badge?.textContent).toBe('server env')
+      expect(badge?.getAttribute('aria-haspopup')).toBe('dialog')
+      const dialog = holder.querySelector(`dialog#${ENV_DIALOG_ID}`)
+      expect(dialog?.hasAttribute('open')).toBe(false)
+      expect(dialog?.querySelector('h2')?.textContent).toBe("Running with the server's environment")
+      expect(dialog?.textContent).toMatch(
+        /comments may post as that account.*the chat agent or the CLI may not be found/
+      )
+      // The command quotes the folder for the shell; the page escapes it for HTML.
+      const command = "cd '/src/<it'\\''s>' && pr-review open"
+      expect(dialog?.querySelector('.cmdbox code')?.textContent).toBe(command)
+      expect(dialog?.querySelector('.cmdbox button')?.getAttribute('data-copy')).toBe(command)
+      expect(headerBarHtml(restored)).not.toContain('<it')
     })
-    const notice = holder.querySelector('.hdr-bar + .env-notice')
-    expect(notice?.getAttribute('role')).toBe('status')
-    expect(notice?.textContent).toBe(
-      "This project runs without your shell's environment. Run pr-review open in /src/<w> to use it."
-    )
-    expect(holder.querySelector('.env-notice code:last-child')?.innerHTML).toBe('/src/&lt;w&gt;')
+
+    it('opens the dialog from the badge, after the header is drawn again too', () => {
+      const root = document.createElement('div')
+      document.body.append(root)
+      wireEnvBadge(root)
+      wireEnvBadge(root)
+      for (let draw = 0; draw < 2; draw++) {
+        root.innerHTML = headerBarHtml(restored)
+        const dialog = /** @type {HTMLDialogElement} */ (root.querySelector(`#${ENV_DIALOG_ID}`))
+        const opened = vi.spyOn(dialog, 'showModal')
+        root.querySelector('[data-env-help]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        expect(opened).toHaveBeenCalledTimes(1)
+        expect(dialog.open).toBe(true)
+        dialog.close()
+      }
+      root.remove()
+    })
   })
 
-  it('has no notice for a project with the shell environment, or on a page of the server', () => {
+  it('has no badge and no dialog for a project with the shell environment, or on a page of the server', () => {
     for (const opts of [
       { project: { slug: 'acme/widgets', home: '/r/acme/widgets/' }, ...look },
       { host: 'localhost:3010', ...look },
     ]) {
-      expect(headerBarHtml(opts)).not.toContain('env-notice')
+      const html = headerBarHtml(opts)
+      expect(html).not.toContain('data-env-help')
+      expect(html).not.toContain(ENV_DIALOG_ID)
     }
   })
 })

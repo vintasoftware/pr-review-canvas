@@ -237,7 +237,7 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     ctx.log(`${repoRoot} · data dir ${ctx.config.dataDir}`)
     if (!project.shellEnv) {
       opts.log(
-        `${slug} started without your shell's environment; run \`pr-review open\` in ${repoRoot} to use it`
+        `${slug} uses the server's environment since the restart; if your terminal sets a token or PATH only for it, run \`pr-review open\` in ${repoRoot}`
       )
     }
     if (ctx.fixtureArtifact !== null) {

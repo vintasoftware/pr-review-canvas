@@ -752,8 +752,8 @@ describe('a saved project built again', () => {
     const restored = await servedAt(h, '/r/acme/widgets/')
     expect(restored?.shellEnv).toBe(false)
     expect(await servedAt(h, '/r/acme/widgets/review/42')).toBe(restored)
-    expect(logs.filter(line => line.includes("shell's environment"))).toEqual([
-      `acme/widgets started without your shell's environment; run \`pr-review open\` in ${at('/src/widgets')} to use it`,
+    expect(logs.filter(line => line.includes("server's environment"))).toEqual([
+      `acme/widgets uses the server's environment since the restart; if your terminal sets a token or PATH only for it, run \`pr-review open\` in ${at('/src/widgets')}`,
     ])
     expect(await reopenIn(restored)).toBe(at('/src/widgets'))
 

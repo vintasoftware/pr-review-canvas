@@ -30,6 +30,7 @@ import {
 } from './empty-state.js'
 import { errorCardHtml } from './errors.js'
 import { bareHeaderHtml, renderHeader } from './header.js'
+import { wireEnvBadge } from './header-bar.js'
 import { wireDropZone } from './import-zone.js'
 import { toast, wireReview } from './interactions.js'
 import {
@@ -165,6 +166,7 @@ export class PrAppElement extends HTMLElement {
   connectedCallback() {
     // Once per element: the content is re-rendered on every flip, the element itself is not.
     wireCopyCommands(this)
+    wireEnvBadge(this)
     void this.boot()
   }
 

@@ -68,8 +68,11 @@ have the **skin** and **theme** commands of the review page; a project saves its
   bookmark runs with the server's own environment until you run `open` in it again. Its flags
   (`--data-dir`, `--chat-agent`, `--chat-model`), the data dir it resolved, and the shell's
   `PR_REVIEW_HOST` are saved with it and still apply, so it reads the same canvases and review
-  state. The server's log and a line under the project's page header say so, and name the folder
-  to run `open` in.
+  state. This matters only when the project's shell sets something of its own: a token for
+  another account can post comments as that other account, and a `PATH` of its own can leave the
+  agent or the host CLI not found. The server logs it, and a **server env** badge next to the
+  project's name in the page header opens a dialog that says so, with the command to run `open`
+  in the project's folder.
 - Running `open` again reloads `pr-review.config.yml` and takes the shell's environment again. A
   chat turn or a generation that is running finishes under the settings it started with, and its
   page keeps showing it. The flags given now replace the ones before; when that moves the project
