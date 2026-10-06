@@ -12,7 +12,7 @@ import { cssEscape, drawCardOf, fileCardOf, findRow } from './anchors.js'
 import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
-import { runCommand, runControl, showCommandError } from './commands.js'
+import { runCommand, runControl, showCommandError, toast } from './commands.js'
 import { replacePostButton } from './comment-link.js'
 import {
   applyCapabilityGating,
@@ -117,9 +117,6 @@ export function signoffEvent(raw) {
   return raw === 'APPROVE' || raw === 'REQUEST_CHANGES' ? raw : 'COMMENT'
 }
 
-/** @type {WeakMap<Element, ReturnType<typeof setTimeout>>} */
-const toastTimers = new WeakMap()
-
 /**
  * The first element of an HTML string built by this app's renderers.
  * @param {Document} doc
@@ -140,33 +137,6 @@ export function nodeFrom(doc, html) {
  */
 export function rowFrom(doc, html) {
   return nodeFrom(doc, `<table><tbody>${html}</tbody></table>`)?.querySelector('tr') ?? null
-}
-
-/**
- * The one place the page says what just happened. Screen readers get it through `aria-live`.
- * @param {HTMLElement} root
- * @param {string} message
- */
-export function toast(root, message) {
-  let box = root.querySelector('.toast')
-  if (!(box instanceof HTMLElement)) {
-    box = document.createElement('div')
-    box.className = 'toast'
-    box.setAttribute('role', 'status')
-    box.setAttribute('aria-live', 'polite')
-    root.appendChild(box)
-  }
-  clearTimeout(toastTimers.get(box))
-  box.textContent = message
-  const region = box
-  toastTimers.set(
-    region,
-    setTimeout(() => {
-      region.textContent = ''
-      toastTimers.delete(region)
-    }, 5000)
-  )
-  return box
 }
 
 /**

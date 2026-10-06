@@ -16,7 +16,7 @@ import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
 import { carriedOverBarHtml } from './empty-state.js'
-import { askTargetFor, nextUnreviewedTarget, padUnderStickyBar, toast, wireReview } from './interactions.js'
+import { askTargetFor, nextUnreviewedTarget, padUnderStickyBar, wireReview } from './interactions.js'
 import { renderChatShell, wireChat } from './chat.js'
 import {
   cardOf,
@@ -1768,47 +1768,6 @@ describe('padUnderStickyBar', () => {
   it('leaves the page alone with no bar', () => {
     padUnderStickyBar(document, null)()
     expect(document.documentElement.style.scrollPaddingTop).toBe('')
-  })
-})
-
-describe('toast', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => {
-    vi.clearAllTimers()
-    vi.useRealTimers()
-  })
-
-  it('clears the dismissal notification after five seconds', () => {
-    const root = document.createElement('div')
-    const box = toast(root, 'attention point dismissed')
-
-    vi.advanceTimersByTime(4999)
-    expect(box.textContent).toBe('attention point dismissed')
-    vi.advanceTimersByTime(1)
-    expect(box.textContent).toBe('')
-  })
-
-  it('gives a replacement notification its own five seconds', () => {
-    const root = document.createElement('div')
-    const box = toast(root, 'attention point dismissed')
-    vi.advanceTimersByTime(3000)
-    toast(root, 'attention point restored')
-
-    vi.advanceTimersByTime(2000)
-    expect(box.textContent).toBe('attention point restored')
-    vi.advanceTimersByTime(3000)
-    expect(box.textContent).toBe('')
-  })
-
-  it('reuses one live region', () => {
-    document.body.innerHTML = '<div id="root"></div>'
-    const root = document.querySelector('#root')
-    if (!(root instanceof HTMLElement)) {
-      throw new Error('no root')
-    }
-    expect(toast(root, 'one').getAttribute('aria-live')).toBe('polite')
-    expect(toast(root, 'two').textContent).toBe('two')
-    expect(root.querySelectorAll('.toast').length).toBe(1)
   })
 })
 

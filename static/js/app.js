@@ -16,7 +16,7 @@ import { setChatEnabled } from './ask.js'
 import { setMentionCanvas } from './points.js'
 import { wireBarDismissal } from './bar-dismissal.js'
 import { readChatMinimized, readChatWidth, renderChatShell, wireChat } from './chat.js'
-import { runCommand, wireCopyCommands } from './commands.js'
+import { runCommand, toast, wireCopyCommands } from './commands.js'
 import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
 import { esc, qs } from './dom.js'
@@ -31,7 +31,7 @@ import {
 import { errorCardHtml } from './errors.js'
 import { renderHeader } from './header.js'
 import { wireDropZone } from './import-zone.js'
-import { toast, wireReview } from './interactions.js'
+import { wireReview } from './interactions.js'
 import {
   defineLayerElements,
   pathSet,

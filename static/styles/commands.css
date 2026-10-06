@@ -64,6 +64,13 @@
   transform: translate(-2px, -2px);
   box-shadow: 7px 7px 0 var(--shadow);
 }
+/* How the last copy went, for a moment after the click. */
+.cmd[data-copied='copied'] {
+  color: var(--ok);
+}
+.cmd[data-copied='failed'] {
+  color: var(--bad);
+}
 .cmd-err {
   display: inline-block;
   margin-left: 8px;
