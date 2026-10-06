@@ -134,7 +134,8 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
     if (!isAllowedHost(c.req.header('host'))) {
       throw new AppError('FORBIDDEN_HOST', 'this server only answers to localhost', 403)
     }
-    const resolved = await opts.hub.resolve(c.req.path).catch((err: unknown) => {
+    // The URL's own path, not `c.req.path`, which Hono has decoded: the hub compares by name.
+    const resolved = await opts.hub.resolve(new URL(c.req.url).pathname).catch((err: unknown) => {
       throw new AppError(
         'NOT_FOUND',
         `could not open this project: ${err instanceof Error ? err.message : String(err)}`,

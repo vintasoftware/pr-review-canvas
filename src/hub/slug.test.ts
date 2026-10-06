@@ -1,4 +1,4 @@
-import { basePathOf, PROJECTS_PREFIX, projectSlug, slugParts, worktreeOf } from './slug.js'
+import { basePathOf, pathSegments, PROJECTS_PREFIX, projectSlug, slugParts, worktreeOf } from './slug.js'
 
 const repo = { owner: 'acme', name: 'widgets' }
 
@@ -43,6 +43,27 @@ describe('basePathOf', () => {
 
   it('encodes each segment', () => {
     expect(basePathOf('ac me/wid#gets')).toBe('/r/ac%20me/wid%23gets/')
+  })
+})
+
+describe('pathSegments', () => {
+  it('decodes each segment of a path under the prefix, as basePathOf encoded it', () => {
+    expect(pathSegments(basePathOf('acme/widgets~café'))).toEqual(['acme', 'widgets~café', ''])
+    expect(pathSegments('/r/acme/widgets~caf%C3%A9/review/42')).toEqual([
+      'acme',
+      'widgets~café',
+      'review',
+      '42',
+    ])
+    // A `%` in git's name arrives doubly encoded and decodes once, back to the name.
+    expect(pathSegments(basePathOf('acme/widgets~a%2Fb'))).toEqual(['acme', 'widgets~a%2Fb', ''])
+    expect(pathSegments('/r/acme/widgets')).toEqual(['acme', 'widgets'])
+  })
+
+  it('is null outside the prefix, or for a segment that is not valid percent-encoding', () => {
+    expect(pathSegments('/')).toBeNull()
+    expect(pathSegments('/static/brand.svg')).toBeNull()
+    expect(pathSegments('/r/acme/widgets~%E0%A4%A/')).toBeNull()
   })
 })
 

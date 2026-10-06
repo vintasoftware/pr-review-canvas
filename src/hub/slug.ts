@@ -39,3 +39,20 @@ export function slugParts(slug: string): { repo: string; worktree: string | null
 export function basePathOf(slug: string): string {
   return `${PROJECTS_PREFIX}${slug.split('/').map(encodeURIComponent).join('/')}/`
 }
+
+/**
+ * The segments of a request path under the projects prefix, each decoded as `basePathOf` encodes
+ * it, so a slug is compared by name and never by one of its encodings: the browser sends `é` as
+ * `%C3%A9` and `+` as itself. Null for a path outside the prefix, or one that is not valid
+ * percent-encoding.
+ */
+export function pathSegments(pathname: string): string[] | null {
+  if (!pathname.startsWith(PROJECTS_PREFIX)) {
+    return null
+  }
+  try {
+    return pathname.slice(PROJECTS_PREFIX.length).split('/').map(decodeURIComponent)
+  } catch {
+    return null
+  }
+}

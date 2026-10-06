@@ -292,6 +292,27 @@ describe('createHub', () => {
     expect(await h.resolve('/')).toBeNull()
   })
 
+  it('reaches a worktree whose git name has characters the browser sends encoded, and hands the project the raw rest', async () => {
+    await git(at('/src/widgets'), 'worktree', 'add', '-q', '--detach', at('/src/widgets-café'))
+    const h = await startHub()
+    const { project } = await h.register({ repoRoot: at('/src/widgets-café') })
+    expect(project.ctx.config).toMatchObject({
+      slug: 'acme/widgets~widgets-café',
+      basePath: '/r/acme/widgets~widgets-caf%C3%A9/',
+    })
+    expect(await h.resolve('/r/acme/widgets~widgets-caf%C3%A9/review/42%2F')).toEqual({
+      kind: 'project',
+      project,
+      rest: '/review/42%2F',
+    })
+    expect(await h.resolve('/r/acme/widgets~widgets-caf%C3%A9')).toEqual({
+      kind: 'redirect',
+      location: '/r/acme/widgets~widgets-caf%C3%A9/',
+    })
+    expect(await h.resolve('/r/acme/widgets~widgets-cafe/')).toBeNull()
+    expect(await h.resolve('/r/acme/widgets~%E0%A4%A/')).toBeNull()
+  })
+
   it('sends a path to the longest base it falls under, whatever the order they were saved in', async () => {
     await makeClone('/src/group', 'git@gitlab.com:group/proj.git')
     await makeClone('/src/subgroup', 'git@gitlab.com:group/proj/sub.git')

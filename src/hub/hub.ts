@@ -21,7 +21,7 @@ import { oneAtATime } from '../server/one-at-a-time.js'
 import { repoDir } from '../store/data-dir.js'
 import { createSettingsStore } from '../store/settings-store.js'
 import { type RegistryEntry, readRegistry, writeRegistry } from './home.js'
-import { basePathOf } from './slug.js'
+import { basePathOf, pathSegments, PROJECTS_PREFIX } from './slug.js'
 
 export interface ProjectRegistration {
   /** The checkout's top-level folder. */
@@ -76,7 +76,11 @@ export interface Hub {
    * checkout holds the path with such work running, which the new project could not see.
    */
   register(registration: ProjectRegistration): Promise<Registered>
-  /** The project a request path falls under, built now if this is its first request. */
+  /**
+   * The project a request path falls under, built now if this is its first request. `pathname`
+   * is the request URL's own, percent-encoded as the browser sent it; the rest handed on keeps
+   * that encoding for the project app to read.
+   */
   resolve(pathname: string): Promise<Resolved | null>
   /** Every saved project, built or not, after dropping those whose folder is gone. */
   projects(): Promise<RegistryEntry[]>
@@ -311,27 +315,31 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     register: registration => inTurn('projects', () => registerNow(registration)),
 
     async resolve(pathname) {
-      let match: Slot | null = null
+      const segments = pathSegments(pathname)
+      if (segments === null) {
+        return null
+      }
+      let match: { slot: Slot; depth: number } | null = null
       for (const slot of slots.values()) {
-        const base = basePathOf(slot.entry.slug)
-        if (pathname === base.slice(0, -1)) {
-          return { kind: 'redirect', location: base }
-        }
-        // The longest base wins: a GitLab group can hold a project and a subgroup of one name.
+        const parts = slot.entry.slug.split('/')
+        // The longest slug wins: a GitLab group can hold a project and a subgroup of one name.
         if (
-          pathname.startsWith(base) &&
-          (match === null || base.length > basePathOf(match.entry.slug).length)
+          parts.every((part, i) => segments[i] === part) &&
+          (match === null || parts.length > match.depth)
         ) {
-          match = slot
+          match = { slot, depth: parts.length }
         }
       }
       if (match === null) {
         return null
       }
-      const { slug } = match.entry
-      const rest = `/${pathname.slice(basePathOf(slug).length)}`
-      return match.project !== null
-        ? { kind: 'project', project: match.project, rest }
+      const { slug } = match.slot.entry
+      if (segments.length === match.depth) {
+        return { kind: 'redirect', location: basePathOf(slug) }
+      }
+      const rest = `/${pathname.slice(PROJECTS_PREFIX.length).split('/').slice(match.depth).join('/')}`
+      return match.slot.project !== null
+        ? { kind: 'project', project: match.slot.project, rest }
         : inTurn('projects', () => restore(slug, rest))
     },
 

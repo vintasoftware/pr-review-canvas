@@ -326,6 +326,36 @@ describe('createHubApp', () => {
       })
     })
 
+    it('serves a worktree whose git name the browser sends percent-encoded', async () => {
+      await git(
+        at('/src/widgets'),
+        '-c',
+        'user.name=T',
+        '-c',
+        'user.email=t@example.com',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'one'
+      )
+      await git(at('/src/widgets'), 'worktree', 'add', '-q', '--detach', at('/src/widgets-café'))
+      const res = await register({ repoRoot: at('/src/widgets-café') })
+      expect(await json(res)).toMatchObject({
+        slug: 'acme/widgets~widgets-café',
+        basePath: '/r/acme/widgets~widgets-caf%C3%A9/',
+      })
+      // The base path as `open` prints it, and as the browser sends the same name typed in.
+      for (const url of ['/r/acme/widgets~widgets-caf%C3%A9/', '/r/acme/widgets~widgets-café/']) {
+        const page = await app.request(url, { headers: LOCAL })
+        expect(page.status).toBe(200)
+        expect(await page.text()).toContain('acme/widgets~widgets-café')
+      }
+      const bare = await app.request('/r/acme/widgets~widgets-caf%C3%A9?theme=dark', { headers: LOCAL })
+      expect(bare.status).toBe(308)
+      expect(bare.headers.get('location')).toBe('/r/acme/widgets~widgets-caf%C3%A9/?theme=dark')
+    })
+
     it('refuses a body that is not JSON or names no absolute folder', async () => {
       for (const body of [
         'not json',
