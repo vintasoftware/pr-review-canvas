@@ -31,8 +31,7 @@
   go by `branch~<worktree>` in the clone's `.pr-review/`; local reviews a linked worktree prepared
   before now are the main checkout's, so prepare them again there. A pull request's review stays shared by every worktree,
   which run one generation at a time and one chat turn per pull request.
-- `prepare` and `publish` print a `reviewUrl` under the project's path and on the running server's
-  port.
+- `publish` prints a `reviewUrl` under the project's path and on the running server's port.
 - The server keeps `server.json` (readable by its owner only), `projects.json`, and the project
   list's look in `~/.pr-review`, or in `PR_REVIEW_HOME`. Only a command that can read
   `server.json` can add a project.

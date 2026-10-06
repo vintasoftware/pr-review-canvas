@@ -80,8 +80,7 @@ have the **skin** and **theme** commands of the review page; a project saves its
   token. Commands read it to find the server; only a command that can read that file can add a
   project. `projects.json` next to it lists the projects, so their URLs keep working after a
   restart.
-- `prepare` and `publish` print a `reviewUrl` under the project's path and on the running
-  server's port.
+- `publish` prints a `reviewUrl` under the project's path and on the running server's port.
 
 When the browser opens a project, the server asks the forge for an open PR or MR whose head is the
 checked-out branch. When one exists, the browser opens its review at `<project>/review/<number>`;
