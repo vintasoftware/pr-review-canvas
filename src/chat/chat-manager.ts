@@ -83,8 +83,11 @@ export interface ChatManager {
   send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent>
   /** True when a turn was running and has been asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
-  busy(key: ReviewKey): boolean
-  /** The reviews with a turn running now. */
+  /**
+   * The reviews this manager runs a turn for now: its own project's work, which the server checks
+   * before it replaces or removes the project. Whether a review can take a turn is `send`'s to say:
+   * it also counts the turns of sibling worktrees.
+   */
   running(): ReviewKey[]
 }
 
@@ -485,7 +488,6 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       await slot.run?.cancel()
       return true
     },
-    busy: key => running.has(key),
     running: () => [...running.keys()],
   }
 }

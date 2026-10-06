@@ -244,7 +244,7 @@ describe('createChatManager().send', () => {
     const iterator = stream[Symbol.asyncIterator]()
     // The lock is taken by the time the first event comes back.
     await iterator.next()
-    expect(manager.busy(42)).toBe(true)
+    expect(manager.running()).toContain(42)
     await expect(
       collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
     ).rejects.toBeInstanceOf(ChatBusyError)
@@ -253,7 +253,7 @@ describe('createChatManager().send', () => {
         break
       }
     }
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('reports a turn that was stopped as cancelled and saves what was said', async () => {
@@ -303,7 +303,7 @@ describe('createChatManager().send', () => {
       collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))
     ).rejects.toBeInstanceOf(ChatBusyError)
     expect(secondRunner.runs).toEqual([])
-    expect(second.busy(42)).toBe(false)
+    expect(second.running()).not.toContain(42)
     await advanceTo(iterator, 'done')
     await iterator.next()
     expect([...turns]).toEqual([])
@@ -526,7 +526,7 @@ describe('two turns that arrive together', () => {
     await iterator.next()
     await iterator.return?.(undefined)
     expect(runner.cancelled).toEqual([T1])
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('frees the chat when the reader goes away before the first event', async () => {
@@ -536,7 +536,7 @@ describe('two turns that arrive together', () => {
     const started = iterator.next()
     await iterator.return?.(undefined)
     await started.catch(() => undefined)
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 })
 
@@ -599,7 +599,7 @@ describe('a stop that arrives before the agent has started', () => {
     ])
     // No agent was started at all, so there was nothing left to cancel.
     expect(runner.runs).toEqual([])
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('leaves the thread unseeded, because the seed never went anywhere', async () => {

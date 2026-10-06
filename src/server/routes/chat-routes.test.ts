@@ -120,7 +120,7 @@ describe('POST /api/prs/:n/chat', () => {
     t = await context({ runner: createFakeRunner({ delayMs: 20 }) })
     await warmDerived()
     const first = sendChat({ message: 'one', context: { kind: 'pr' } })
-    await expect.poll(() => t.ctx.chat.busy(42)).toBe(true)
+    await expect.poll(() => t.ctx.chat.running().includes(42)).toBe(true)
     const second = await sendChat({ message: 'two', context: { kind: 'pr' } })
     expect(second.status).toBe(409)
     const envelope = await json<ErrorEnvelope>(second)
@@ -147,7 +147,7 @@ describe('POST /api/prs/:n/chat', () => {
     }
     await reader.cancel()
     expect(runner.cancelled).toEqual([T1])
-    await expect.poll(() => t.ctx.chat.busy(42)).toBe(false)
+    await expect.poll(() => t.ctx.chat.running().includes(42)).toBe(false)
   })
 
   it('refuses a context the canvas does not have, with a status rather than a stream', async () => {
