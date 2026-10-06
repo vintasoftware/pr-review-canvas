@@ -324,7 +324,11 @@ describe('createGenerationManager', () => {
   })
 
   it("follows the skill for the settings' agent, and names the project's copy it sends", async () => {
-    const info = { source: 'project', path: '.agents/skills/pr-review-canvas', state: 'outdated' } as const
+    const info = {
+      source: 'project',
+      path: '.agents/skills/pr-review-canvas',
+      state: 'other-version',
+    } as const
     const h = harness({
       settings: { chatAgent: 'codex' },
       skill: async () => ({ info, body: 'The project skill.' }),
@@ -591,7 +595,9 @@ describe('createGenerationManager', () => {
           { type: 'thought', text: 'Which layers…' },
           { type: 'usage', used: 1000, size: 200000 },
           { type: 'tool', id: 't1', title: 'Read src/a.ts', status: 'in_progress' },
+          { type: 'tool', id: 't2', title: 'Read src/b.ts', status: 'in_progress' },
           { type: 'tool', id: 't1', title: 'Read src/a.ts', status: 'completed' },
+          { type: 'tool', id: 't2', title: 'Read src/b.ts', status: 'completed' },
           { type: 'chunk', text: 'Here: ' },
           { type: 'chunk', text: MODEL },
           { type: 'done', stopReason: 'end_turn' },
@@ -608,7 +614,10 @@ describe('createGenerationManager', () => {
       // Usage is a sign of work that keeps what the agent was doing.
       { doing: 'thinking', at, written: 0 },
       { doing: 'tool', at, written: 0 },
-      // A finished tool call leaves the model to work out its next step.
+      { doing: 'tool', at, written: 0 },
+      // Calls run side by side: the first one's end leaves the second running.
+      { doing: 'tool', at, written: 0 },
+      // Once no call runs, the model works out its next step.
       { doing: 'thinking', at, written: 0 },
       { doing: 'writing', at, written: 'Here: '.length },
       { doing: 'writing', at, written: 'Here: '.length + MODEL.length },

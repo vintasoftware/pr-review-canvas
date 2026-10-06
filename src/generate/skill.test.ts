@@ -33,9 +33,9 @@ function installed(): string {
   return stampSkill(shippedText)
 }
 
-/** What an older pr-review installed: its own body, stamped with that body's hash. */
-function olderInstall(): string {
-  return stampSkill(shippedText.replace('# pr-review-canvas', '# pr-review-canvas (an older wording)'))
+/** What another pr-review version installed: its own body, stamped with that body's hash. */
+function otherVersionInstall(): string {
+  return stampSkill(shippedText.replace('# pr-review-canvas', '# pr-review-canvas (another wording)'))
 }
 
 /** A stamped copy whose body the project then changed. */
@@ -52,16 +52,16 @@ describe('loadGenerationSkill', () => {
     expect(skill.body).toContain('# pr-review-canvas')
   })
 
-  it('tells a current, an outdated, and an edited project copy apart', async () => {
+  it('tells a current, an other-version, and an edited project copy apart', async () => {
     await writeCopy(CLAUDE, installed())
     const current = await loadGenerationSkill(repoRoot, 'claude', '1.2.3')
     expect(current.info).toEqual({ source: 'project', path: CLAUDE, state: 'current' })
     expect(current.body).toBe(skillContent(shippedText).body)
 
-    await writeCopy(CLAUDE, olderInstall())
-    const outdated = await loadGenerationSkill(repoRoot, 'claude', '1.2.3')
-    expect(outdated.info).toEqual({ source: 'project', path: CLAUDE, state: 'outdated' })
-    expect(outdated.body).toContain('# pr-review-canvas (an older wording)')
+    await writeCopy(CLAUDE, otherVersionInstall())
+    const otherVersion = await loadGenerationSkill(repoRoot, 'claude', '1.2.3')
+    expect(otherVersion.info).toEqual({ source: 'project', path: CLAUDE, state: 'other-version' })
+    expect(otherVersion.body).toContain('# pr-review-canvas (another wording)')
 
     await writeCopy(CLAUDE, edited())
     const changed = await loadGenerationSkill(repoRoot, 'claude', '1.2.3')
@@ -100,11 +100,11 @@ describe('loadGenerationSkill', () => {
   })
 
   it("looks in codex's folder first for codex, then in claude's", async () => {
-    await writeCopy(CLAUDE, olderInstall())
+    await writeCopy(CLAUDE, otherVersionInstall())
     expect((await loadGenerationSkill(repoRoot, 'codex', '1')).info).toEqual({
       source: 'project',
       path: CLAUDE,
-      state: 'outdated',
+      state: 'other-version',
     })
     await writeCopy(CODEX, installed())
     expect((await loadGenerationSkill(repoRoot, 'codex', '1')).info).toEqual({

@@ -18,7 +18,7 @@ export function skillContent(text: string) {
 export function skillState(copy: ReturnType<typeof skillContent>, shippedHash: string): SkillState {
   const stamp = copy.frontmatter.getIn(['metadata', 'body-sha256'])
   if (copy.hash === shippedHash && stamp === shippedHash) return 'current'
-  return copy.hash === stamp ? 'outdated' : 'edited'
+  return copy.hash === stamp ? 'other-version' : 'edited'
 }
 
 export function stampSkill(text: string): string {

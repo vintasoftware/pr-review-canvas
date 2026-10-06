@@ -194,8 +194,8 @@ describe('skillHtml', () => {
     expect(sentence({ source: 'project', path, state: 'edited' })).toBe(
       "Follows this project's skill, .agents/skills/pr-review-canvas, changed from the copy pr-review installs."
     )
-    expect(sentence({ source: 'project', path, state: 'outdated' })).toBe(
-      "Follows this project's skill, .agents/skills/pr-review-canvas, which an older pr-review installed; pr-review upgrade refreshes it."
+    expect(sentence({ source: 'project', path, state: 'other-version' })).toBe(
+      "Follows this project's skill, .agents/skills/pr-review-canvas, which a different pr-review version installed; pr-review upgrade replaces it with this one."
     )
     expect([...document.querySelectorAll('.gen-skill code')].map(c => c.textContent)).toEqual([
       path,

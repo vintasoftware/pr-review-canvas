@@ -932,8 +932,8 @@ The agent follows the project's own copy of the `pr-review-canvas` skill, so a p
 tailored its skill gets the canvas it would get from a terminal: `.claude/skills/pr-review-canvas`
 for Claude and `.agents/skills/pr-review-canvas` for Codex, the other harness's copy when the
 agent's own is missing, and the skill your pr-review ships when the project has none. The start
-screen and the run's status say which, and whether the project's copy was edited or is older than
-the shipped one (`pr-review upgrade` refreshes an unedited copy). The skill's text goes to the
+screen and the run's status say which, and whether the project's copy was edited or was installed
+by a different pr-review version (`pr-review upgrade` replaces it with this version's). The skill's text goes to the
 agent ahead of the task prepare wrote; the steps the server does itself (prepare, the model
 choice, writing `model.json`, validate, and publish) are named in the prompt as done by the
 server, so a step a project added to its skill that writes a file or runs a command does not run

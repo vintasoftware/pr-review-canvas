@@ -40,10 +40,10 @@ export interface AgentPulse {
 
 /**
  * How a project copy of the skill compares with the shipped one: `current` when its body and stamp
- * are the shipped ones, `outdated` when its body is still the one an older pr-review stamped, and
+ * are the shipped ones, `other-version` when its body is still the one another pr-review version stamped, and
  * `edited` otherwise (a changed body, or no stamp).
  */
-export type SkillState = 'current' | 'outdated' | 'edited'
+export type SkillState = 'current' | 'other-version' | 'edited'
 
 /**
  * The pr-review-canvas skill a generation follows: the project's own copy, by its path from the

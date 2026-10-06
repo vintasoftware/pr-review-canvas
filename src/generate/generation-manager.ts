@@ -102,8 +102,8 @@ interface Slot {
   activityIds: string[]
   /** Folders a tool title is shown relative to: the agent's working directory and the canvas's. */
   shortPaths: string[]
-  /** The instructions of `job.skill`, which the first turn sends. */
-  skillBody: string
+  /** The skill the first turn sends; `job.skill` is its `info`. */
+  skill: LoadedSkill
 }
 
 /** The title acpx gives a tool update that names neither a title nor a kind. */
@@ -330,6 +330,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     slot.run = run
     let answer = ''
     let doing: AgentPulse['doing'] = 'starting'
+    const runningTools = new Set<string>()
     const beat = (next: AgentPulse['doing']): void => {
       doing = next
       job.pulse = { doing, at: deps.now().toISOString(), written: answer.length }
@@ -347,8 +348,14 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
           // there ("Reading the manifest first") is no part of the model.
           answer = ''
           noteTool(slot, event.id, event.title)
-          // A tool call reports its end too; after it the model works out its next step.
-          beat(event.status === 'completed' || event.status === 'failed' ? 'thinking' : 'tool')
+          // Calls can run side by side, and each reports its own end; once none runs, the model
+          // works out its next step.
+          if (event.status === 'completed' || event.status === 'failed') {
+            runningTools.delete(event.id)
+          } else {
+            runningTools.add(event.id)
+          }
+          beat(runningTools.size > 0 ? 'tool' : 'thinking')
         } else if (event.type === 'usage' || event.type === 'plan') {
           // Still a sign of work, which keeps doing what it did.
           beat(doing)
@@ -399,13 +406,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       timeoutSec: GENERATION_TURN_TIMEOUT_SEC,
     })
 
-    let prompt = generationPrompt(
-      code,
-      prepared.headSha,
-      modelPath,
-      { info: job.skill, body: slot.skillBody },
-      task
-    )
+    let prompt = generationPrompt(code, prepared.headSha, modelPath, slot.skill, task)
     for (;;) {
       job.phase = job.round === 1 ? 'generating' : 'repairing'
       const answer = await turn(slot, session, prompt, code.cwd)
@@ -495,7 +496,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         stopped: false,
         activityIds: [],
         shortPaths: [],
-        skillBody: skill.body,
+        skill,
       }
       last = slot
       deps.log(`generation ${label(key)}: started with ${agent}${model === null ? '' : ` (${model})`}`)
