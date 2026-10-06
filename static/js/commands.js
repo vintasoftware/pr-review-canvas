@@ -181,29 +181,20 @@ export function wireCopyCommands(root, copy = copyToClipboard) {
  */
 async function copyFrom(root, el, copy) {
   showCopyResult(el, null)
-  /** @type {string | null} */
-  let failure = null
-  await runCommand(
+  // On a failure runCommand shows the reason beside the button, so the toast does not repeat it.
+  const copied = await runCommand(
     el,
     async () => {
-      try {
-        await copy(el.getAttribute('data-copy') ?? '')
-      } catch (err) {
-        failure = err instanceof Error ? err.message : String(err)
-        throw err
-      }
+      await copy(el.getAttribute('data-copy') ?? '')
+      return true
     },
     { pendingLabel: 'copying…' }
   )
-  showCopyResult(el, failure === null ? 'copied' : 'failed')
+  showCopyResult(el, copied ? 'copied' : 'failed')
   // A modal dialog is in the top layer and makes the page behind it inert, so the page's toast
   // would be hidden and unannounced there. The dialog gets its own.
   const where = el.closest('dialog:modal')
-  toast(
-    where instanceof HTMLElement ? where : root,
-    failure === null ? 'copied to clipboard' : `could not copy: ${failure}`,
-    {
-      failed: failure !== null,
-    }
-  )
+  toast(where instanceof HTMLElement ? where : root, copied ? 'copied to clipboard' : 'could not copy', {
+    failed: !copied,
+  })
 }

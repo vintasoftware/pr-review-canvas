@@ -8,8 +8,9 @@
   comments, attention points, layer notes, the summary, and GitHub comments and descriptions. It
   copies the block as written. With a mouse, it shows when the pointer is over the block.
 - Every `copy` command says how it went. For two seconds the button shows `copied` (a check in the
-  GitHub skin) or `failed` (a cross), and a toast says "copied to clipboard" or, in red, why the
-  copy failed.
+  GitHub skin) or `failed` (a cross), and a toast says "copied to clipboard" or, in red, "could not
+  copy". A failure's reason shows beside the button. A copy inside a modal dialog toasts in that
+  dialog.
 
 ### Generating from the review app
 

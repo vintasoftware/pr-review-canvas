@@ -144,14 +144,14 @@ describe('wireCopyCommands', () => {
       expect(button.hasAttribute('data-copied')).toBe(false)
     })
 
-    it('marks the button failed, toasts the reason as a failure, and keeps the inline error', async () => {
+    it('marks the button failed, toasts the failure, and gives the reason beside the button', async () => {
       const { root, button } = await clickCopy(async () => {
         throw new Error('Write permission denied.')
       })
       expect(button.textContent).toBe('failed')
       expect(button.getAttribute('data-copied')).toBe('failed')
       const box = root.querySelector('.toast')
-      expect(box?.textContent).toBe('could not copy: Write permission denied.')
+      expect(box?.textContent).toBe('could not copy')
       expect(box?.classList.contains('failed')).toBe(true)
       expect(root.querySelector('.cmd-err')?.textContent).toBe('Write permission denied.')
       vi.advanceTimersByTime(COPY_RESULT_MS)
