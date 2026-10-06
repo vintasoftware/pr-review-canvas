@@ -31,6 +31,8 @@ export interface Git {
   commitAuthor(ref: string): Promise<string>
   topLevel(): Promise<string>
   commonDir(): Promise<string>
+  /** This checkout's own git dir: the common dir for the main checkout, `<common>/worktrees/<name>` for a linked one. */
+  gitDir(): Promise<string>
   remoteUrl(name: string): Promise<string | null>
   /** The checked-out branch, or null on a detached HEAD. */
   currentBranch(): Promise<string | null>
@@ -191,6 +193,7 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
     commitAuthor: ref => run(['log', '-1', '--format=%an', ref]),
     topLevel: () => run(['rev-parse', '--show-toplevel']),
     commonDir: () => run(['rev-parse', '--path-format=absolute', '--git-common-dir']),
+    gitDir: () => run(['rev-parse', '--path-format=absolute', '--git-dir']),
     remoteUrl: async name => {
       const r = await exec(cwd, ['remote', 'get-url', name])
       return r.code === 0 ? r.stdout.toString('utf8').trim() : null

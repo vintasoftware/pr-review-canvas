@@ -305,9 +305,9 @@ describe('createApp', () => {
       expect(painted).toContain('>theme: dark</button>')
     })
 
-    it("names a linked worktree's pages after its folder, under a base path of its own", async () => {
+    it("names a linked worktree's pages with git's name for it, under a base path of its own", async () => {
       await t.cleanup()
-      t = await makeTestContext({ git: gitFor42(), gh: ghFor42(), repoRoot: '/trees/fix login' })
+      t = await makeTestContext({ git: gitFor42(), gh: ghFor42(), repoRoot: '/trees/fix-login' })
       expect(t.ctx.config.slug).toBe('acme/widgets~fix-login')
       const app = createApp(t.ctx)
       const home = await (await app.request('/', { headers: LOCAL })).text()

@@ -73,13 +73,24 @@ function warnVersion(io: CliIo, server: RunningServer, version: string): void {
   }
 }
 
+/**
+ * Registers the checkout. When its flags moved the project to another data dir, says so: the
+ * canvases and review state until now stay where they were, and look gone otherwise.
+ */
 async function addTo(
   deps: HubCommandDeps,
+  io: CliIo,
   server: RunningServer,
   repoRoot: string,
   flags: ProjectFlags
 ): Promise<RegisterResponse> {
-  return deps.register(server, { repoRoot, env: shellEnv(deps.env), flags })
+  const added = await deps.register(server, { repoRoot, env: shellEnv(deps.env), flags })
+  if (added.dataDirBefore !== undefined) {
+    io.stderr(
+      `pr-review: ${added.slug} now reads ${added.dataDir}; its canvases and review state until now are in ${added.dataDirBefore}`
+    )
+  }
+  return added
 }
 
 export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): Promise<number> {
@@ -121,16 +132,12 @@ export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): 
   warnVersion(io, server, deps.version)
   const added = await addTo(
     deps,
+    io,
     server,
     repoRoot,
     projectFlags(deps.cwd, { dataDir, chatAgent: values['chat-agent'], chatModel: values['chat-model'] })
   )
   const url = `${server.origin}${added.basePath}${target === undefined ? 'start' : `review/${target}`}`
-  if (added.kept) {
-    io.stderr(
-      `pr-review open: ${added.slug} has a chat turn or a generation running, so it keeps its settings until that ends`
-    )
-  }
   if (shouldOpen(deps.env, values['no-open'])) {
     deps.openBrowser(url)
   }
@@ -138,7 +145,7 @@ export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): 
     printJson(io, {
       url,
       project: added.slug,
-      kept: added.kept,
+      dataDir: added.dataDir,
       server: { port: server.port, version: server.version },
     })
   } else {
@@ -196,7 +203,7 @@ export async function runServe(deps: ServeDeps, argv: string[], io: CliIo): Prom
   // A port the user named that differs from the running server's starts a server of its own.
   if (running !== null && (explicitPort === undefined || port === running.port)) {
     warnVersion(io, running, deps.version)
-    const added = repoRoot === null ? null : await addTo(deps, running, repoRoot, flags)
+    const added = repoRoot === null ? null : await addTo(deps, io, running, repoRoot, flags)
     io.stderr(
       `pr-review serve: a server already runs at ${running.origin}/ (pid ${running.pid})${added === null ? '' : `; added ${added.slug}`}`
     )

@@ -291,7 +291,11 @@ describe('createHubApp', () => {
       const flags = { chatAgent: 'codex', dataDir: at('/data') }
       const res = await register({ repoRoot: at('/src/widgets'), env, flags })
       expect(res.status).toBe(200)
-      expect(await json(res)).toEqual({ slug: 'acme/widgets', basePath: '/r/acme/widgets/', kept: false })
+      expect(await json(res)).toEqual({
+        slug: 'acme/widgets',
+        basePath: '/r/acme/widgets/',
+        dataDir: at('/data'),
+      })
       expect(registrations).toEqual([{ repoRoot: at('/src/widgets'), env, flags }])
       expect(contexts[0]?.config).toMatchObject({
         dataDir: at('/data'),
@@ -302,6 +306,24 @@ describe('createHubApp', () => {
       expect(await readRegistry(home)).toEqual([
         { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags },
       ])
+    })
+
+    it('names the data dir the project read until now, when the flags moved it', async () => {
+      await register({ repoRoot: at('/src/widgets'), flags: { dataDir: at('/data') } })
+      const moved = await register({ repoRoot: at('/src/widgets') })
+      expect(await json(moved)).toEqual({
+        slug: 'acme/widgets',
+        basePath: '/r/acme/widgets/',
+        dataDir: at('/src/widgets/.pr-review'),
+        dataDirBefore: at('/data'),
+      })
+      // The same data dir again is no move.
+      const same = await register({ repoRoot: at('/src/widgets') })
+      expect(await json(same)).toEqual({
+        slug: 'acme/widgets',
+        basePath: '/r/acme/widgets/',
+        dataDir: at('/src/widgets/.pr-review'),
+      })
     })
 
     it('refuses a body that is not JSON or names no absolute folder', async () => {
@@ -356,13 +378,20 @@ describe('createHubApp', () => {
       expect(res.status).toBe(308)
       expect(res.headers.get('location')).toBe('/r/acme/renamed/review/42?theme=dark')
       expect(await readRegistry(home)).toEqual([
-        { slug: 'acme/renamed', repoRoot: at('/src/widgets'), flags: { chatAgent: 'codex' } },
+        {
+          slug: 'acme/renamed',
+          repoRoot: at('/src/widgets'),
+          flags: { chatAgent: 'codex', dataDir: at('/src/widgets/.pr-review') },
+        },
       ])
       expect((await app.request('/r/acme/widgets/', { headers: LOCAL })).status).toBe(404)
       const renamed = await app.request('/r/acme/renamed/', { headers: LOCAL })
       expect(renamed.status).toBe(200)
       expect(await renamed.text()).toContain('<h1>acme/renamed</h1>')
-      expect(registrations.map(r => r.flags)).toEqual([{ chatAgent: 'codex' }, { chatAgent: 'codex' }])
+      expect(registrations.map(r => r.flags)).toEqual([
+        { chatAgent: 'codex' },
+        { chatAgent: 'codex', dataDir: at('/src/widgets/.pr-review') },
+      ])
     })
 
     it('answers 409 when another checkout holds the path with a generation running', async () => {
@@ -374,7 +403,7 @@ describe('createHubApp', () => {
         error: {
           code: 'BAD_REQUEST',
           message: `acme/widgets serves ${at('/src/widgets')}, which has a chat turn or a generation running`,
-          hint: 'try again when it ends, or rename one of the two worktree folders',
+          hint: 'try again when it ends',
         },
       })
       open()

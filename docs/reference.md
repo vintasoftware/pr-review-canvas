@@ -40,9 +40,10 @@ pr-review open [<n>|branch|uncommitted]         # in a project's folder
 ```
 
 One `pr-review serve` serves every project you open. Each project answers under its own path:
-`/r/<owner>/<repo>/` for the main checkout of a clone, and `/r/<owner>/<repo>~<folder>/` for a
-linked worktree, because its branch and uncommitted work differ. The pages and features under that
-path are the same as before.
+`/r/<owner>/<repo>/` for the main checkout of a clone, and `/r/<owner>/<repo>~<worktree>/` for a
+linked worktree, because its branch and uncommitted work differ. `<worktree>` is git's name for
+the worktree: its folder's name, unless another worktree of the clone had that name first (see
+`.git/worktrees/`). The pages and features under that path are the same as before.
 
 `http://localhost:3010/` lists the projects by repository, one row per checkout, and the logo on
 every page leads there; the project's name next to the logo leads to its home page. Every page has
@@ -56,18 +57,22 @@ have the **skin** and **theme** commands of the review page; a project saves its
 
 - `pr-review open` adds the checkout it runs in to the running server and opens it. With a number,
   `branch`, or `uncommitted`, it opens that review. With no server running it fails with
-  `SERVER_NOT_RUNNING`. With `--json`, or on a pipe, it prints `{ url, project, kept, server }`.
+  `SERVER_NOT_RUNNING`. With `--json`, or on a pipe, it prints `{ url, project, dataDir, server }`.
 - `pr-review serve` inside a repository also adds that project and opens it, as it always did.
   When a server already runs, `serve` adds the project to it and exits, unless `--port` names
   another port, which starts a second server.
 - The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
   shell that last ran `open` or `serve` for it, such as a project's own `GH_TOKEN`, ssh agent, or
   `PATH`. It keeps that environment in memory only. After a restart, a project opened from a
-  bookmark runs with the server's own environment until you run `open` in it again; its flags
-  (`--data-dir`, `--chat-agent`, `--chat-model`) are saved with it and still apply. The server's
-  log and a line under the project's page header say so, and name the folder to run `open` in.
-- Running `open` again reloads `pr-review.config.yml`, unless a chat turn or a generation runs in
-  that project: then it keeps its settings and `open` says so.
+  bookmark runs with the server's own environment until you run `open` in it again. Its flags
+  (`--data-dir`, `--chat-agent`, `--chat-model`), the data dir it resolved, and the shell's
+  `PR_REVIEW_HOST` are saved with it and still apply, so it reads the same canvases and review
+  state. The server's log and a line under the project's page header say so, and name the folder
+  to run `open` in.
+- Running `open` again reloads `pr-review.config.yml` and takes the shell's environment again. A
+  chat turn or a generation that is running finishes under the settings it started with, and its
+  page keeps showing it. The flags given now replace the ones before; when that moves the project
+  to another data dir, `open` says where its canvases and review state until then are.
 - The worktrees of one clone share its `.pr-review/` data dir. One generation runs at a time across
   them, and one chat turn per pull request; each worktree's `branch` and `uncommitted` reviews are
   its own (see [worktrees](#reviewing-before-the-pull-request-exists)).
@@ -150,8 +155,8 @@ one never disturbs the other.
   review progress, chat threads, review checkout, and the canvases they fall back on are that
   checkout's own. A canvas belongs to its commit, so two checkouts at the same commit show the
   same one, each with its own progress on it. In the clone's `.pr-review/`, a linked
-  worktree's local reviews go by `branch~<folder>` and `uncommitted~<folder>`, the same label its
-  path on the server carries; the main checkout's keep the bare names. The snapshot index and its
+  worktree's local reviews go by `branch~<worktree>` and `uncommitted~<worktree>`, the same label
+  its path on the server carries; the main checkout's keep the bare names. The snapshot index and its
   anchor are per worktree as well. A pull request's review is the same in every worktree.
   Local reviews prepared in a linked worktree before this layout lived under the bare names, which
   are now the main checkout's; prepare them again in the worktree.
@@ -936,7 +941,7 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   of them: while one worktree's project answers about it, a turn on the same pull request from
   another worktree, or from a second `pr-review serve`, is refused with `CHAT_BUSY`; ask again once
   the first answer is done. A linked worktree's branch review has a checkout of its own
-  (`checkouts/branch~<folder>`).
+  (`checkouts/branch~<worktree>`).
 
 The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
 clone and every `checkoutSweepMinutes` after. `pr-review clean` does the same on demand:

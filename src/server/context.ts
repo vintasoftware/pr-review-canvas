@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { type AgentRunner, createAgentRunner } from '../acpx/acpx.js'
 import { type AgentDirectory, createAgentDirectory } from '../acpx/agents.js'
 import { createPreflightProbe, type PreflightProbe } from '../acpx/preflight.js'
-import { type ChatManager, createChatManager, type TurnSet } from '../chat/chat-manager.js'
+import { type ChatManager, createChatManager, type RunningTurns } from '../chat/chat-manager.js'
 import {
   type CheckoutGit,
   type CheckoutStore,
@@ -18,8 +18,8 @@ import { loadSeedTemplate } from '../chat/seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
-import { reviewFolder } from '../contract/review-key.js'
 import {
+  createGenerationLane,
   createGenerationManager,
   type GenerationLane,
   type GenerationManager,
@@ -156,26 +156,20 @@ export interface CreateAppContextOptions {
 /**
  * What the worktrees of one clone share, as they share its `.pr-review/` data dir: the review
  * checkouts, and the work that writes its files. A chat turn on a review, or a generation, in one
- * worktree keeps the others from starting one over the same files.
+ * worktree keeps the others from starting one over the same files. The work outlives the context
+ * that started it: a project built again by `pr-review open` sees and stops what the one before
+ * it started.
  */
 export interface CloneShared {
   /** Run from the clone's common git dir, so no one worktree's folder has to stay. */
   checkouts: CheckoutStore
   /**
-   * The reviews with a chat turn running, by review folder: a pull request is one review for every
-   * worktree, a local review is its own checkout's.
+   * The chat turns running, by review folder: a pull request is one review for every worktree, a
+   * local review is its own checkout's.
    */
-  chatTurns: Set<string>
+  chatTurns: RunningTurns
+  /** The generations: one runs at a time in the clone. */
   generationLane: GenerationLane
-}
-
-/** The clone's chat turns as one checkout sees them, the same way it sees the clone's checkouts. */
-function turnsFor(folders: Set<string>, worktree: string | null): TurnSet {
-  return {
-    has: key => folders.has(reviewFolder(key, worktree)),
-    add: key => void folders.add(reviewFolder(key, worktree)),
-    delete: key => void folders.delete(reviewFolder(key, worktree)),
-  }
 }
 
 /**
@@ -190,8 +184,8 @@ export function createCloneShared(
 ): CloneShared {
   return {
     checkouts: createReviewCheckouts({ root: checkoutsRoot(config.dataDir, config), git: checkoutGit, now }),
-    chatTurns: new Set(),
-    generationLane: { key: null },
+    chatTurns: new Map(),
+    generationLane: createGenerationLane(),
   }
 }
 
@@ -244,7 +238,8 @@ export function createChatSet(
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,
-      turns: turnsFor(clone.chatTurns, config.worktree),
+      turns: clone.chatTurns,
+      worktree: config.worktree,
     }),
   }
 }
@@ -262,6 +257,7 @@ export function createContextGeneration(
     runner: ctx.runner,
     checkouts: ctx.checkouts,
     lane,
+    worktree: ctx.config.worktree,
     steps: {
       prepare: (input, opts) => prepare(whole(), input, opts),
       publish: (canvasDir, opts) => publish(whole(), canvasDir, opts),

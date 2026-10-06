@@ -19,6 +19,8 @@ export interface ServeFlags {
   /** Wins over `.pr-review/settings.yml` for this run; the settings dialog reports it. */
   chatAgent?: string | undefined
   chatModel?: string | undefined
+  /** The `PR_REVIEW_HOST` of the shell that opened the project, saved with it; wins over the environment's. */
+  host?: string | undefined
 }
 
 export interface RuntimeConfig {
@@ -77,12 +79,17 @@ export async function resolveCommonDir(git: Git): Promise<string> {
 export const ORIGIN_HINT =
   'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab for self-hosted GitLab'
 
-export async function resolveOrigin(git: Git, env: NodeJS.ProcessEnv = {}): Promise<OriginRemote> {
+/** `host` is the `PR_REVIEW_HOST` to classify origin with; the environment's when not given. */
+export async function resolveOrigin(
+  git: Git,
+  env: NodeJS.ProcessEnv = {},
+  host: string | undefined = readEnv(env, 'PR_REVIEW_HOST')
+): Promise<OriginRemote> {
   const url = await git.remoteUrl('origin')
   if (url === null) {
     throw new ConfigError('NO_ORIGIN', 'the repository has no "origin" remote', ORIGIN_HINT)
   }
-  const parsed = parseOriginRemote(url, env)
+  const parsed = parseOriginRemote(url, host)
   if (parsed === null) {
     throw new ConfigError('NO_ORIGIN', `origin is not a GitHub or GitLab URL: ${url}`, ORIGIN_HINT)
   }
@@ -135,14 +142,15 @@ export async function loadRuntimeConfig(
 ): Promise<RuntimeConfig> {
   const repoRoot = await resolveRepoRoot(git)
   const commonDir = await resolveCommonDir(git)
-  const { repo, host } = await resolveOrigin(git, env)
+  const gitDir = await git.gitDir()
+  const { repo, host } = await resolveOrigin(git, env, flags.host)
   const port = flags.port ?? parsePort(readEnv(env, 'PR_REVIEW_PORT'), DEFAULT_PORT)
   const dataDir = resolveDataDir({
     override: flags.dataDir ?? readEnv(env, 'PR_REVIEW_DATA_DIR'),
     canvasDir: flags.canvasDir === undefined ? undefined : path.resolve(cwd, flags.canvasDir),
     commonDir,
   })
-  const worktree = worktreeOf(repoRoot, commonDir)
+  const worktree = worktreeOf(gitDir, commonDir)
   const slug = projectSlug(repo, worktree)
   return {
     port,

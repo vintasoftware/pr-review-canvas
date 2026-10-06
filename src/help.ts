@@ -33,7 +33,7 @@ const COMMANDS: CommandHelp[] = [
     ],
     notes: [
       'Run it in any folder. Inside a repository it also adds that project and opens its review. When a server already runs, serve adds the project to it and exits, unless --port names another port.',
-      'Each project answers under /r/<owner>/<repo>/, and a linked worktree under /r/<owner>/<repo>~<folder>/.',
+      "Each project answers under /r/<owner>/<repo>/, and a linked worktree under /r/<owner>/<repo>~<worktree>/, with git's name for the worktree.",
       '--chat-agent and --chat-model win over .pr-review/settings.yml. They set AI Chat only, not canvas generation. --agent and --model are deprecated aliases.',
     ],
   },

@@ -62,7 +62,7 @@ const RegistrySchema = z.object({
       /** The checkout's name on the server, which its path is built from. */
       slug: z.string(),
       repoRoot: z.string(),
-      /** The flags it was opened with, so a restart builds it the same way. They hold no secrets. */
+      /** Its flags, the data dir it resolved, and the shell's `PR_REVIEW_HOST`, so a restart builds it the same way. They hold no secrets. */
       flags: ProjectFlagsSchema,
     })
   ),

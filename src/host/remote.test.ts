@@ -43,9 +43,7 @@ describe('parseOriginRemote', () => {
       host: { hostname: 'gitlab.example.com', webBase: 'https://gitlab.example.com' },
       repo: { owner: 'group/sub', name: 'repo' },
     })
-    expect(
-      parseOriginRemote('ssh://git@git.company.com:2222/group/repo.git', { PR_REVIEW_HOST: 'gitlab' })
-    ).toMatchObject({
+    expect(parseOriginRemote('ssh://git@git.company.com:2222/group/repo.git', 'gitlab')).toMatchObject({
       host: { hostname: 'git.company.com' },
       repo: { owner: 'group', name: 'repo' },
     })
@@ -62,14 +60,12 @@ describe('parseOriginRemote', () => {
   it('needs PR_REVIEW_HOST=gitlab for a self-hosted instance whose name does not say so', () => {
     const url = 'git@git.company.com:group/app.git'
     expect(parseOriginRemote(url)).toBeNull()
-    expect(parseOriginRemote(url, { PR_REVIEW_HOST: 'nope' })).toBeNull()
-    expect(parseOriginRemote(url, { PR_REVIEW_HOST: ' GitLab ' })).toMatchObject({
+    expect(parseOriginRemote(url, 'nope')).toBeNull()
+    expect(parseOriginRemote(url, ' GitLab ')).toMatchObject({
       host: { kind: 'gitlab', hostname: 'git.company.com' },
       repo: { owner: 'group', name: 'app' },
     })
     // github.com stays GitHub whatever the variable says.
-    expect(parseOriginRemote('git@github.com:acme/widgets.git', { PR_REVIEW_HOST: 'gitlab' })?.host).toBe(
-      GITHUB_HOST
-    )
+    expect(parseOriginRemote('git@github.com:acme/widgets.git', 'gitlab')?.host).toBe(GITHUB_HOST)
   })
 })

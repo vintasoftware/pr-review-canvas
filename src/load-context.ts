@@ -12,12 +12,17 @@ import { type AppContext, type CloneShared, createAppContext } from './server/co
 import { readJson } from './store/atomic-json.js'
 import { ensureDataDir } from './store/data-dir.js'
 
-/** The per-project flags of `serve` and `open`. The server saves them with the project. */
+/**
+ * The per-project flags of `serve` and `open`, which the server saves with the project along
+ * with what a restart must repeat and could not read again: the data dir as resolved, and the
+ * shell's `PR_REVIEW_HOST`.
+ */
 export const ProjectFlagsSchema = z.object({
   dataDir: z.string().optional(),
   fixtureCanvas: z.string().optional(),
   chatAgent: z.string().optional(),
   chatModel: z.string().optional(),
+  host: z.string().optional(),
 })
 export type ProjectFlags = z.infer<typeof ProjectFlagsSchema>
 
@@ -61,6 +66,7 @@ export async function loadContext(opts: LoadContextOptions): Promise<AppContext>
       fixtureCanvas: flags.fixtureCanvas,
       chatAgent: flags.chatAgent,
       chatModel: flags.chatModel,
+      host: flags.host,
     },
     env,
     git,

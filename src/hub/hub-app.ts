@@ -57,8 +57,10 @@ export interface RegisterResponse {
   /** The checkout's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
   slug: string
   basePath: string
-  /** True when the project kept its running context, and with it the environment it had. */
-  kept: boolean
+  /** Where the project reads and writes: its `.pr-review/` data dir. */
+  dataDir: string
+  /** The data dir the project read until this registration, when its flags moved it elsewhere. */
+  dataDirBefore?: string
 }
 
 export interface HubHealthResponse {
@@ -172,12 +174,18 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
 
   app.post('/api/hub/projects', requireToken, async c => {
     const input = await readBody(c.req.raw, RegisterInputSchema, '{ "repoRoot": "/path/to/checkout" }')
-    const { project, kept } = await opts.hub.register(input).catch((err: unknown) => {
+    const { project, before } = await opts.hub.register(input).catch((err: unknown) => {
       // A folder that is no repository, or a flag the config refuses, is the command's mistake.
       throw err instanceof ConfigError ? new AppError(err.code, err.message, 400, err.hint) : err
     })
-    const { slug, basePath } = project.ctx.config
-    const body: RegisterResponse = { slug, basePath, kept }
+    const { slug, basePath, dataDir } = project.ctx.config
+    const previous = before?.flags.dataDir
+    const body: RegisterResponse = {
+      slug,
+      basePath,
+      dataDir,
+      ...(previous !== undefined && previous !== dataDir ? { dataDirBefore: previous } : {}),
+    }
     return c.json(body)
   })
 

@@ -3,26 +3,22 @@ import { basePathOf, PROJECTS_PREFIX, projectSlug, slugParts, worktreeOf } from 
 const repo = { owner: 'acme', name: 'widgets' }
 
 describe('worktreeOf', () => {
-  it('is null for the main checkout', () => {
-    expect(worktreeOf('/src/widgets', '/src/widgets/.git')).toBeNull()
+  it('is null for the main checkout, whose git dir is the common one', () => {
+    expect(worktreeOf('/src/widgets/.git', '/src/widgets/.git')).toBeNull()
   })
 
   it('compares resolved paths, so a trailing slash still names the main checkout', () => {
-    expect(worktreeOf('/src/widgets/', '/src/widgets/.git')).toBeNull()
+    expect(worktreeOf('/src/widgets/.git/', '/src/widgets/.git')).toBeNull()
   })
 
-  it('is the folder name for a linked worktree', () => {
-    expect(worktreeOf('/wt/feature-x', '/src/widgets/.git')).toBe('feature-x')
+  it("is git's name for a linked worktree, the last part of its git dir", () => {
+    expect(worktreeOf('/src/widgets/.git/worktrees/feature-x', '/src/widgets/.git')).toBe('feature-x')
+    // Two worktrees in folders of one name: git names the second one apart, and so does the label.
+    expect(worktreeOf('/src/widgets/.git/worktrees/feature-x1', '/src/widgets/.git')).toBe('feature-x1')
   })
 
   it('treats every worktree of a bare clone as linked', () => {
-    expect(worktreeOf('/x', '/x/repo.git')).toBe('x')
-    expect(worktreeOf('/x/main', '/x/repo.git')).toBe('main')
-  })
-
-  it('sanitizes spaces and odd characters in the folder name', () => {
-    expect(worktreeOf('/wt/my feature (2)!', '/src/widgets/.git')).toBe('my-feature-2-')
-    expect(worktreeOf('/wt/v1.2_rc-3', '/src/widgets/.git')).toBe('v1.2_rc-3')
+    expect(worktreeOf('/x/repo.git/worktrees/main', '/x/repo.git')).toBe('main')
   })
 })
 
@@ -33,9 +29,6 @@ describe('projectSlug', () => {
 
   it("adds a linked worktree's label", () => {
     expect(projectSlug(repo, 'feature-x')).toBe('acme/widgets~feature-x')
-    expect(projectSlug(repo, worktreeOf('/wt/my feature (2)!', '/src/widgets/.git'))).toBe(
-      'acme/widgets~my-feature-2-'
-    )
   })
 })
 
@@ -61,7 +54,7 @@ describe('slugParts', () => {
   })
 
   it('reads back what projectSlug builds', () => {
-    const slug = projectSlug(repo, worktreeOf('/wt/my feature', '/src/widgets/.git'))
+    const slug = projectSlug(repo, worktreeOf('/src/widgets/.git/worktrees/my-feature', '/src/widgets/.git'))
     expect(slugParts(slug)).toEqual({ repo: 'acme/widgets', worktree: 'my-feature' })
   })
 })

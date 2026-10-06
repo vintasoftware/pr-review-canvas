@@ -282,18 +282,20 @@ describe('the chat turns of the clone', () => {
       fix: createFakeRunner(),
     })
     const held = chatTurn(main, 'branch')
-    await vi.waitFor(() => expect([...clone.chatTurns]).toEqual(['branch']))
+    await vi.waitFor(() => expect([...clone.chatTurns.keys()]).toEqual(['branch']))
     // The worktree's branch review is its own, so its turn runs while the main checkout's holds.
     expect((await chatTurn(fix, 'branch')).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
     const pr = chatTurn(main, 42)
-    await vi.waitFor(() => expect([...clone.chatTurns].sort()).toEqual(['42', 'branch']))
+    await vi.waitFor(() => expect([...clone.chatTurns.keys()].sort()).toEqual(['42', 'branch']))
     await expect(chatTurn(fix, 42)).rejects.toBeInstanceOf(ChatBusyError)
     expect(main.ctx.chat.running().sort()).toEqual([42, 'branch'].sort())
+    // The worktree counts the pull request's turn, which is its too, not the main checkout's branch review.
+    expect(fix.ctx.chat.running()).toEqual([42])
     open()
     for (const events of [await held, await pr]) {
       expect(events.at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
     }
-    expect([...clone.chatTurns]).toEqual([])
+    expect([...clone.chatTurns.keys()]).toEqual([])
     expect((await chatTurn(fix, 42)).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
   })
 })

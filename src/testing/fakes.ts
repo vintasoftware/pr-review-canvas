@@ -35,6 +35,8 @@ export interface FakeGitOptions {
   blobs?: Record<string, string>
   topLevel?: string
   commonDir?: string
+  /** The checkout's own git dir; the common dir, a main checkout's, when omitted. */
+  gitDir?: string
   remotes?: Record<string, string>
   /** `<sha>` → author name; unknown commits answer 'someone'. */
   authors?: Record<string, string>
@@ -143,6 +145,12 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     commonDir: async () => {
       calls.push(['rev-parse', '--git-common-dir'])
       return options.commonDir ?? fail(['rev-parse', '--git-common-dir'], 'fatal: not a git repository')
+    },
+    gitDir: async () => {
+      calls.push(['rev-parse', '--git-dir'])
+      return (
+        options.gitDir ?? options.commonDir ?? fail(['rev-parse', '--git-dir'], 'fatal: not a git repository')
+      )
     },
     remoteUrl: async name => {
       calls.push(['remote', 'get-url', name])
@@ -420,7 +428,9 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
   const dataDir = opts.dataDir ?? (await makeTempDir())
   const repoRoot = opts.repoRoot ?? '/repo'
   const commonDir = '/repo/.git'
-  const worktree = worktreeOf(repoRoot, commonDir)
+  // Any other folder is a linked worktree, whose git dir git names after the folder.
+  const gitDir = repoRoot === '/repo' ? commonDir : path.join(commonDir, 'worktrees', path.basename(repoRoot))
+  const worktree = worktreeOf(gitDir, commonDir)
   const slug = projectSlug(TEST_REPO, worktree)
   const config: RuntimeConfig = {
     port: 3010,

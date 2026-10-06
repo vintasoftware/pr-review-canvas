@@ -9,8 +9,8 @@
   branch, or the project's home page. `pr-review open 123`, `open branch`, and `open uncommitted`
   open that review.
 - Each project answers under `/r/<owner>/<repo>/`, and a linked worktree under
-  `/r/<owner>/<repo>~<folder>/`, because its branch and uncommitted work differ. The pages and
-  features under that path are unchanged.
+  `/r/<owner>/<repo>~<worktree>/`, with git's name for the worktree, because its branch and
+  uncommitted work differ. The pages and features under that path are unchanged.
 - `http://localhost:3010/` lists the projects. **remove** takes one off the list; its canvases and
   review state stay, and `pr-review open` adds it again. A project whose folder is gone leaves the
   list by itself.
@@ -22,13 +22,14 @@
 - The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
   shell that ran `open` for it, kept in memory only. `--data-dir`, `--chat-agent`, and
   `--chat-model` also work on `open`, per project, and are saved with it.
-- After a restart, a project opened from a bookmark runs with the server's environment. The server
-  logs this, and a line under the project's page header says to run `pr-review open` in its folder
-  to give it the shell's again.
+- After a restart, a project opened from a bookmark runs with the server's environment, with the
+  data dir and `PR_REVIEW_HOST` it was opened with, which are saved with it. The server logs this,
+  and a line under the project's page header says to run `pr-review open` in its folder to give it
+  the shell's again.
 - Each worktree of a clone has its own `branch` and `uncommitted` reviews: review progress,
-  chat threads, review checkout, and the earlier canvases they fall back on. A linked worktree's go by `branch~<folder>` in the
-  clone's `.pr-review/`; local reviews a linked worktree prepared before now are the main
-  checkout's, so prepare them again there. A pull request's review stays shared by every worktree,
+  chat threads, review checkout, and the earlier canvases they fall back on. A linked worktree's
+  go by `branch~<worktree>` in the clone's `.pr-review/`; local reviews a linked worktree prepared
+  before now are the main checkout's, so prepare them again there. A pull request's review stays shared by every worktree,
   which run one generation at a time and one chat turn per pull request.
 - `prepare` and `publish` print a `reviewUrl` under the project's path and on the running server's
   port.

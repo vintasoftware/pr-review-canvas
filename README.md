@@ -128,7 +128,7 @@ for that review, the project opens on that review directly.
 
 One server serves every project you open: each answers at
 `http://localhost:3010/r/<owner>/<repo>/`, and a linked worktree at
-`/r/<owner>/<repo>~<folder>/`, because its branch and working tree differ.
+`/r/<owner>/<repo>~<worktree>/`, because its branch and working tree differ.
 **http://localhost:3010** lists them, and the logo on every page leads there; **remove** takes a
 project off the list without touching its data. Keep the server's terminal running while you review; stop
 it with **Ctrl+C**.

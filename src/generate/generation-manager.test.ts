@@ -11,6 +11,7 @@ import type { PrepareResult } from '../review/prepare.js'
 import { ModelInvalidError, PublishError, type PublishResult } from '../review/publish.js'
 import { createFakeRunner, type FakeRunnerOptions } from '../testing/fake-runner.js'
 import {
+  createGenerationLane,
   createGenerationManager,
   extractModelJson,
   GenerationBusyError,
@@ -88,6 +89,7 @@ function harness(
     lease?: 'busy' | 'move-fails'
     maxRepairRounds?: number
     lane?: GenerationLane
+    worktree?: string | null
     /** Settles before the settings are read. */
     settingsGate?: Promise<void>
     /** What the `skill` dep answers; the shipped default by default. */
@@ -158,6 +160,7 @@ function harness(
     log: line => logs.push(line),
     now: () => new Date('2026-10-05T12:00:00.000Z'),
     lane: opts.lane,
+    worktree: opts.worktree,
   })
   return { manager, runner, steps, leases, logs, skillAgents }
 }
@@ -494,7 +497,7 @@ describe('createGenerationManager', () => {
   })
 
   it('refuses to start while a manager over the same data dir runs a job, naming its review', async () => {
-    const lane: GenerationLane = { key: null }
+    const lane = createGenerationLane()
     let release: () => void = () => undefined
     const gate = new Promise<void>(resolve => {
       release = resolve
@@ -510,30 +513,59 @@ describe('createGenerationManager', () => {
     })
     const b = harness({ lane })
     await a.manager.start(42, { force: false })
-    expect(lane.key).toBe(42)
+    expect(a.manager.running()).toBe(42)
     const refused = await b.manager.start(7, { force: false }).catch((err: unknown) => err)
     expect(refused).toBeInstanceOf(GenerationBusyError)
     expect(refused).toMatchObject({ key: 42 })
     expect(b.manager.status(7)).toBeNull()
     release()
     expect((await settled(a.manager, 42)).phase).toBe('done')
-    expect(lane.key).toBeNull()
+    expect(a.manager.running()).toBeNull()
     await b.manager.start(7, { force: false })
-    expect(lane.key).toBe(7)
+    expect(b.manager.running()).toBe(7)
     expect((await settled(b.manager, 7)).phase).toBe('done')
-    expect(lane.key).toBeNull()
+    expect(b.manager.running()).toBeNull()
   })
 
   it('clears the lane when a job fails, so the next one starts', async () => {
-    const lane: GenerationLane = { key: null }
+    const lane = createGenerationLane()
     const h = harness({ lane, lease: 'busy' })
     await h.manager.start(7, { force: false })
     expect((await settled(h.manager, 7)).phase).toBe('failed')
-    expect(lane.key).toBeNull()
+    expect(h.manager.running()).toBeNull()
+  })
+
+  it('shows and stops, from a manager over the same data dir, the job another one started', async () => {
+    const lane = createGenerationLane()
+    const a = harness({ lane, runner: { delayMs: 20 } })
+    const b = harness({ lane })
+    await a.manager.start(42, { force: false })
+    expect(b.manager.running()).toBe(42)
+    expect(b.manager.status(42)).toMatchObject({ key: 42 })
+    expect(await b.manager.cancel(42)).toBe(true)
+    expect((await settled(b.manager, 42)).phase).toBe('cancelled')
+    expect(b.manager.running()).toBeNull()
+    expect(a.manager.status(42)?.phase).toBe('cancelled')
+  })
+
+  it("counts a pull request's job as every worktree's, and a local review's as its own checkout's", async () => {
+    const lane = createGenerationLane()
+    const main = harness({ lane, runner: { delayMs: 20 } })
+    const fix = harness({ lane, worktree: 'fix' })
+    await main.manager.start('branch', { force: false })
+    // The main checkout's branch review is not the worktree's, though its job holds the lane.
+    expect(fix.manager.running()).toBeNull()
+    expect(fix.manager.status('branch')).toBeNull()
+    await expect(fix.manager.start('branch', { force: false })).rejects.toMatchObject({ key: 'branch' })
+    await settled(main.manager, 'branch')
+    await fix.manager.start(42, { force: false })
+    expect(main.manager.running()).toBe(42)
+    expect(main.manager.status(42)).toMatchObject({ key: 42 })
+    await settled(main.manager, 42)
   })
 
   it('refuses to start when a sibling job started while the settings were read', async () => {
-    const lane: GenerationLane = { key: null }
+    const lane = createGenerationLane()
     let release: () => void = () => undefined
     const settingsGate = new Promise<void>(resolve => {
       release = resolve

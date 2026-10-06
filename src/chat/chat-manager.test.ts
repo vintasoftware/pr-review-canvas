@@ -4,7 +4,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
 import type { ChatEvent } from '../contract/chat.js'
-import type { ReviewKey } from '../contract/review-key.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { createPrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
@@ -12,7 +11,13 @@ import { createStateStore, type StateStore } from '../store/state-store.js'
 import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import { createFakeCheckoutGit, type FakeCheckoutGit, makeTempDir } from '../testing/fakes.js'
 import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
-import { ChatBusyError, type ChatManager, type ChatTarget, createChatManager } from './chat-manager.js'
+import {
+  type RunningTurns,
+  ChatBusyError,
+  type ChatManager,
+  type ChatTarget,
+  createChatManager,
+} from './chat-manager.js'
 import { CheckoutBusyError, checkoutsFor, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
 import { createTranscriptStore, type TranscriptStore } from './threads.js'
 
@@ -48,7 +53,7 @@ function build(
     runner?: FakeRunner
     overrides?: { chatAgent?: 'claude' | 'codex'; chatModel?: string }
     checkoutGit?: FakeCheckoutGit
-    turns?: Set<ReviewKey>
+    turns?: RunningTurns
   } = {}
 ) {
   runner = opts.runner ?? createFakeRunner()
@@ -289,7 +294,7 @@ describe('createChatManager().send', () => {
   })
 
   it('refuses a turn on a review a manager over the same data dir is running one for', async () => {
-    const turns = new Set<ReviewKey>()
+    const turns: RunningTurns = new Map()
     build({ runner: createFakeRunner({ delayMs: 5 }), turns })
     const first = manager
     build({ turns })
@@ -298,19 +303,20 @@ describe('createChatManager().send', () => {
     const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
     const iterator = turn[Symbol.asyncIterator]()
     await iterator.next()
-    expect([...turns]).toEqual([42])
+    expect([...turns.keys()]).toEqual(['42'])
     await expect(
       collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))
     ).rejects.toBeInstanceOf(ChatBusyError)
     expect(secondRunner.runs).toEqual([])
-    expect(second.running()).not.toContain(42)
+    // A pull request's turn is every sibling's: the second manager counts it as running.
+    expect(second.running()).toEqual([42])
     await advanceTo(iterator, 'done')
     await iterator.next()
-    expect([...turns]).toEqual([])
+    expect([...turns.keys()]).toEqual([])
     expect(
       (await collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))).at(-1)
     ).toEqual({ event: 'done', stopReason: 'end_turn' })
-    expect([...turns]).toEqual([])
+    expect([...turns.keys()]).toEqual([])
   })
 
   it('refuses a second turn on the same review in one manager, which keeps its own set', async () => {
@@ -323,6 +329,23 @@ describe('createChatManager().send', () => {
     ).rejects.toBeInstanceOf(ChatBusyError)
     await advanceTo(iterator, 'done')
     await iterator.next()
+  })
+
+  it('stops, from a manager over the same data dir, the turn another one started', async () => {
+    const turns: RunningTurns = new Map()
+    build({ runner: createFakeRunner({ delayMs: 5 }), turns })
+    const first = manager
+    build({ turns })
+    const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    expect(await manager.cancel(42)).toBe(true)
+    let step = await iterator.next()
+    while (step.done !== true) {
+      step = await iterator.next()
+    }
+    expect(first.running()).toEqual([])
+    expect([...turns.keys()]).toEqual([])
   })
 
   it('says there is nothing to cancel when no turn is running', async () => {

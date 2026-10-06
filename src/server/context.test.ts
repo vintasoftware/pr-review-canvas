@@ -189,7 +189,7 @@ describe('context', () => {
       expect(logs).toEqual(['hello'])
     })
 
-    it('shares the clone part it is given, so a sibling context refuses a chat turn and a generation', async () => {
+    it('shares the clone part it is given, so a sibling context refuses a chat turn, and sees it', async () => {
       const now = () => new Date(0)
       const clone = createCloneShared(config(), now, createFakeCheckoutGit())
       const contexts = ['a', 'b'].map(name =>
@@ -210,13 +210,13 @@ describe('context', () => {
       const first = a.chat.send(target(), { message: 'x', context: { kind: 'pr' } })
       const turn = first[Symbol.asyncIterator]()
       await turn.next()
-      // The shared set holds review folders: a pull request's is its number.
-      expect([...clone.chatTurns]).toEqual(['42'])
+      // The shared turns go by review folder: a pull request's is its number.
+      expect([...clone.chatTurns.keys()]).toEqual(['42'])
       const second = b.chat.send(target(), { message: 'y', context: { kind: 'pr' } })
       await expect(second[Symbol.asyncIterator]().next()).rejects.toBeInstanceOf(ChatBusyError)
+      expect(b.chat.running()).toEqual([42])
       await turn.return?.(undefined)
-      clone.generationLane.key = 7
-      await expect(b.generation.start(8, { force: false })).rejects.toMatchObject({ key: 7 })
+      expect(b.generation.running()).toBeNull()
     })
 
     it('gives a context a clone part of its own when none is given', () => {

@@ -63,7 +63,7 @@ function fakeDeps(
       return Promise.resolve({
         slug: 'acme/widgets',
         basePath: '/r/acme/widgets/',
-        kept: false,
+        dataDir: '/home/me/widgets/.pr-review',
         ...opts.answer,
       })
     },
@@ -131,14 +131,6 @@ describe('runOpen', () => {
     ])
   })
 
-  it('notes when the project kept its settings', async () => {
-    const io = fakeIo()
-    await runOpen(fakeDeps({ answer: { kept: true } }), [], io)
-    expect(io.err).toEqual([
-      'pr-review open: acme/widgets has a chat turn or a generation running, so it keeps its settings until that ends',
-    ])
-  })
-
   it('does not open the browser with --no-open or under CI', async () => {
     const noOpen = fakeDeps()
     await runOpen(noOpen, ['--no-open'], fakeIo())
@@ -150,14 +142,22 @@ describe('runOpen', () => {
 
   it('prints JSON when asked', async () => {
     const io = fakeIo(true)
-    await runOpen(fakeDeps({ answer: { kept: true } }), ['42'], io)
+    await runOpen(fakeDeps(), ['42'], io)
     expect(io.out.map(l => JSON.parse(l) as unknown)).toEqual([
       {
         url: 'http://localhost:3010/r/acme/widgets/review/42',
         project: 'acme/widgets',
-        kept: true,
+        dataDir: '/home/me/widgets/.pr-review',
         server: { port: 3010, version: '1.0.0' },
       },
+    ])
+  })
+
+  it('says where the canvases are when the flags moved the project to another data dir', async () => {
+    const io = fakeIo()
+    await runOpen(fakeDeps({ answer: { dataDirBefore: '/home/me/old-data' } }), [], io)
+    expect(io.err).toEqual([
+      'pr-review: acme/widgets now reads /home/me/widgets/.pr-review; its canvases and review state until now are in /home/me/old-data',
     ])
   })
 

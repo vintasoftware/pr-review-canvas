@@ -11,7 +11,7 @@
 import { stat } from 'node:fs/promises'
 import type { Hono } from 'hono'
 import { type CheckoutSweeper, startCheckoutSweep } from '../chat/checkout-sweep.js'
-import type { RuntimeConfig } from '../config.js'
+import { readEnv, type RuntimeConfig } from '../config.js'
 import type { ProjectFlags } from '../load-context.js'
 import { createApp } from '../server/app.js'
 import { type AppContext, type CloneShared, createCloneShared } from '../server/context.js'
@@ -54,6 +54,12 @@ export interface Project {
   shellEnv: boolean
 }
 
+export interface Registered {
+  project: Project
+  /** The saved entry this registration replaced, with the project's settings until now; null for a new project. */
+  before: RegistryEntry | null
+}
+
 export type Resolved =
   | { kind: 'project'; project: Project; rest: string }
   /**
@@ -65,10 +71,11 @@ export type Resolved =
 export interface Hub {
   /**
    * Builds the checkout's project and serves it from now on. A project already served at that
-   * path is replaced, which also reloads its config, unless it has a chat turn or a generation
-   * running: then it stays as it is, and `kept` says so.
+   * path is replaced, which also reloads its config; a chat turn or a generation it runs goes on
+   * in the clone's part, where the new project sees and stops it. Refused while another clone's
+   * checkout holds the path with such work running, which the new project could not see.
    */
-  register(registration: ProjectRegistration): Promise<{ project: Project; kept: boolean }>
+  register(registration: ProjectRegistration): Promise<Registered>
   /** The project a request path falls under, built now if this is its first request. */
   resolve(pathname: string): Promise<Resolved | null>
   /** Every saved project, built or not, after dropping those whose folder is gone. */
@@ -105,8 +112,19 @@ interface Clone {
   sweeper: CheckoutSweeper
 }
 
+/** Work of the project's own checkout; a pull request's counts for every worktree of its clone. */
 function isBusy(project: Project): boolean {
   return project.ctx.generation.running() !== null || project.ctx.chat.running().length > 0
+}
+
+/**
+ * What a restart builds the project with: its flags, with the data dir as the config resolved it
+ * (from a flag, the shell, or the clone) and the shell's `PR_REVIEW_HOST`, both of which the
+ * config could not read again once the environment is gone.
+ */
+function savedFlags(registration: ProjectRegistration, config: RuntimeConfig): ProjectFlags {
+  const host = registration.flags?.host ?? readEnv(registration.env ?? {}, 'PR_REVIEW_HOST')
+  return { ...registration.flags, dataDir: config.dataDir, ...(host === undefined ? {} : { host }) }
 }
 
 /** True when the folder no longer exists: a deleted worktree, a clone moved elsewhere. */
@@ -183,31 +201,33 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     }
   }
 
-  const registerNow = async (
-    registration: ProjectRegistration
-  ): Promise<{ project: Project; kept: boolean }> => {
+  const registerNow = async (registration: ProjectRegistration): Promise<Registered> => {
     const project = await build(registration)
-    const { slug, repoRoot } = project.ctx.config
+    const { slug, repoRoot, dataDir } = project.ctx.config
     const slot = slots.get(slug)
     const current = slot?.project ?? null
-    if (current !== null && isBusy(current)) {
+    // Two clones of one repository share a path. The work of the one serving it lives in its own
+    // clone part, which the new project cannot see or stop, so it keeps the path while that runs.
+    if (current !== null && current.ctx.clone !== project.ctx.clone && isBusy(current)) {
       releaseClones()
-      // Two worktree folders of one name share a path. While the other one works, this one
-      // cannot take the path, and opening it would show the other checkout.
-      if (current.ctx.config.repoRoot !== repoRoot) {
-        throw new AppError(
-          'BAD_REQUEST',
-          `${slug} serves ${current.ctx.config.repoRoot}, which has a chat turn or a generation running`,
-          409,
-          'try again when it ends, or rename one of the two worktree folders'
-        )
-      }
-      return { project: current, kept: true }
+      throw new AppError(
+        'BAD_REQUEST',
+        `${slug} serves ${current.ctx.config.repoRoot}, which has a chat turn or a generation running`,
+        409,
+        'try again when it ends'
+      )
     }
-    if (slot !== undefined && slot.entry.repoRoot !== repoRoot) {
-      opts.log(`${slug} now serves ${repoRoot}, in place of ${slot.entry.repoRoot}`)
+    const before = slot?.entry ?? null
+    if (before !== null && before.repoRoot !== repoRoot) {
+      opts.log(`${slug} now serves ${repoRoot}, in place of ${before.repoRoot}`)
     }
-    slots.set(slug, { entry: { slug, repoRoot, flags: registration.flags ?? {} }, project })
+    if (before?.flags.dataDir !== undefined && before.flags.dataDir !== dataDir) {
+      opts.log(`${slug} now reads ${dataDir}, in place of ${before.flags.dataDir}`)
+    }
+    slots.set(slug, {
+      entry: { slug, repoRoot, flags: savedFlags(registration, project.ctx.config) },
+      project,
+    })
     releaseClones()
     const { ctx } = project
     ctx.log(`${repoRoot} · data dir ${ctx.config.dataDir}`)
@@ -223,7 +243,7 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
       ctx.log(`warning: ${w}`)
     }
     await save()
-    return { project, kept: false }
+    return { project, before }
   }
 
   /** Takes a project off the list; the caller saves the list. */

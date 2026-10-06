@@ -11,11 +11,11 @@ corepack pnpm verify
 corepack pnpm start --repo /path/to/your-project
 ```
 
-When an installed `pr-review serve` already runs, `pnpm start` adds your project to that server
-and exits. Pass another port, as in `corepack pnpm start --port 3011 --repo /path/to/your-project`,
-to run this clone's server next to it. A server on another port leaves `~/.pr-review/server.json`
-and the saved project list to the installed one, so `pr-review open` keeps opening projects there;
-the projects you add to it last until it stops.
+`pnpm start` and `pnpm dev` run this clone's server on port **3011**, with its own `.pr-review-dev/`
+folder (gitignored) for `server.json` and the project list, apart from an installed
+`pr-review serve` on 3010: the two share nothing, so `pr-review open` keeps opening projects on the
+installed one. Open **http://localhost:3011**, or pass `--repo /path/to/your-project` to add and
+open that project on this server. `--port` picks another port.
 
 The pre-commit hook runs `pnpm precommit`: lint, formatting, strict type checks, and tests.
 Run `pnpm hooks:install` once per clone to enable it. Use `pnpm lint:fix` and `pnpm format` to apply automatic fixes.

@@ -14,9 +14,18 @@ export interface RunningServer extends ServerInfo {
   origin: string
 }
 
-/** The origin a server on `port` answers at. */
+/** The origin the browser opens a server on `port` at. */
 export function originOf(port: number): string {
   return `http://localhost:${port}`
+}
+
+/**
+ * Where a command calls the server: the address it binds (see node-server.ts), by number.
+ * `localhost` may resolve to `::1` first, where a process of another user could listen and be
+ * sent the token and the shell's environment.
+ */
+function callAddress(port: number): string {
+  return `http://127.0.0.1:${port}`
 }
 
 async function call<T>(
@@ -25,7 +34,7 @@ async function call<T>(
   init: RequestInit = {},
   timeoutMs = ANSWER_TIMEOUT_MS
 ): Promise<T> {
-  const res = await fetch(`${originOf(server.port)}${path}`, {
+  const res = await fetch(`${callAddress(server.port)}${path}`, {
     ...init,
     headers: { authorization: `Bearer ${server.token}`, 'content-type': 'application/json' },
     signal: AbortSignal.timeout(timeoutMs),

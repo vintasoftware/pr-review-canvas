@@ -12,6 +12,7 @@ interface Seen {
   method: string | undefined
   url: string | undefined
   authorization: string | undefined
+  host: string | undefined
   contentType: string | undefined
   body: string
 }
@@ -31,6 +32,7 @@ async function listen(answer: Answer): Promise<number> {
         method: req.method,
         url: req.url,
         authorization: req.headers.authorization,
+        host: req.headers.host,
         contentType: req.headers['content-type'],
         body,
       })
@@ -76,7 +78,7 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true })
 })
 
-it('originOf names localhost and the port', () => {
+it('originOf names localhost and the port, for the browser', () => {
   expect(originOf(4321)).toBe('http://localhost:4321')
 })
 
@@ -100,8 +102,15 @@ describe('findServer', () => {
       version: '2.0.0',
       origin: `http://localhost:${port}`,
     })
+    // The token goes to the address the server binds, never to `localhost`, which can resolve
+    // to `::1` first and reach a listener of another user there.
     expect(seen).toEqual([
-      expect.objectContaining({ method: 'GET', url: '/api/hub', authorization: 'Bearer tok' }),
+      expect.objectContaining({
+        method: 'GET',
+        url: '/api/hub',
+        authorization: 'Bearer tok',
+        host: `127.0.0.1:${port}`,
+      }),
     ])
   })
 
@@ -150,7 +159,7 @@ describe('registerProject', () => {
   const input = { repoRoot: '/src/widgets', env: { HOME: '/home/me' }, flags: { chatAgent: 'claude' } }
 
   it('posts the input with the token and returns the answer', async () => {
-    const answer = { name: 'acme/widgets', basePath: '/r/acme/widgets/', kept: false }
+    const answer = { slug: 'acme/widgets', basePath: '/r/acme/widgets/' }
     const port = await listen(json(200, answer))
     expect(await registerProject(infoFor(port), input)).toEqual(answer)
     expect(seen).toEqual([
@@ -158,6 +167,7 @@ describe('registerProject', () => {
         method: 'POST',
         url: '/api/hub/projects',
         authorization: 'Bearer tok',
+        host: `127.0.0.1:${port}`,
         contentType: 'application/json',
         body: JSON.stringify(input),
       },
