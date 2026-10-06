@@ -89,12 +89,14 @@ const toastTimers = new WeakMap()
 
 /**
  * The one place the page says what just happened. Screen readers get it through `aria-live`.
+ * The region is a direct child of `root`, so a page toast never lands in the region of a dialog
+ * inside the page.
  * @param {HTMLElement} root
  * @param {string} message
  * @param {{ failed?: boolean }} [opts] `failed` draws it as a failure
  */
 export function toast(root, message, opts = {}) {
-  let box = root.querySelector('.toast')
+  let box = root.querySelector(':scope > .toast')
   if (!(box instanceof HTMLElement)) {
     box = document.createElement('div')
     box.className = 'toast'
@@ -126,6 +128,7 @@ const copyResultTimers = new WeakMap()
 /**
  * Shows on the button how a copy went, `copied` or `failed`, in its label and `data-copied` for
  * COPY_RESULT_MS. null puts `copy` back; a click does that first, so runCommand restores `copy`.
+ * Every copy button is labelled `copy`, which commands.test.js checks across the renderers.
  * @param {HTMLElement} el
  * @param {'copied' | 'failed' | null} result
  */
@@ -151,7 +154,8 @@ function showCopyResult(el, result) {
  * One delegated click handler per root for every `button[data-copy]` under it, present now or
  * rendered later. Calling it again for the same root does nothing, so re-rendering the root's
  * content never stacks handlers (a second handler would run runCommand twice on one click). The
- * button shows how the copy went, and the root's toast says it.
+ * button shows how the copy went, and a toast says it: the root's, or the modal dialog's when the
+ * button is in one.
  * @param {HTMLElement} root
  * @param {(text: string) => Promise<void>} [copy]
  * @returns {boolean} true when the handler was added by this call
@@ -192,7 +196,14 @@ async function copyFrom(root, el, copy) {
     { pendingLabel: 'copying…' }
   )
   showCopyResult(el, failure === null ? 'copied' : 'failed')
-  toast(root, failure === null ? 'copied to clipboard' : `could not copy: ${failure}`, {
-    failed: failure !== null,
-  })
+  // A modal dialog is in the top layer and makes the page behind it inert, so the page's toast
+  // would be hidden and unannounced there. The dialog gets its own.
+  const where = el.closest('dialog:modal')
+  toast(
+    where instanceof HTMLElement ? where : root,
+    failure === null ? 'copied to clipboard' : `could not copy: ${failure}`,
+    {
+      failed: failure !== null,
+    }
+  )
 }

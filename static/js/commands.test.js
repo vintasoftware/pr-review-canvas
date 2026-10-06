@@ -1,5 +1,8 @@
 // @ts-check
 // @vitest-environment happy-dom
+import { readdir, readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { PACKAGE_ROOT } from '../../src/server/context.js'
 import {
   COPY_RESULT_MS,
   clearCommandError,
@@ -255,6 +258,17 @@ describe('toast', () => {
     expect(toast(root, 'copied to clipboard').classList.contains('failed')).toBe(false)
   })
 
+  it('keeps the page region apart from the region of a dialog inside the page', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<dialog open></dialog>'
+    const dialog = /** @type {HTMLElement} */ (root.querySelector('dialog'))
+    const inDialog = toast(dialog, 'copied to clipboard')
+    const onPage = toast(root, 'comment posted to github')
+    expect(onPage).not.toBe(inDialog)
+    expect(onPage.parentElement).toBe(root)
+    expect(inDialog.textContent).toBe('copied to clipboard')
+  })
+
   it('reuses one live region', () => {
     document.body.innerHTML = '<div id="root"></div>'
     const root = document.querySelector('#root')
@@ -265,4 +279,20 @@ describe('toast', () => {
     expect(toast(root, 'two').textContent).toBe('two')
     expect(root.querySelectorAll('.toast').length).toBe(1)
   })
+})
+
+// showCopyResult puts the word `copy` back after a result, so every copy button must carry it.
+it('labels every rendered copy button copy', async () => {
+  const dir = path.join(PACKAGE_ROOT, 'static/js')
+  const sources = (await readdir(dir)).filter(f => f.endsWith('.js') && !f.endsWith('.test.js'))
+  /** @type {string[]} */
+  const labels = []
+  for (const file of sources) {
+    const text = await readFile(path.join(dir, file), 'utf8')
+    for (const m of text.matchAll(/data-copy="[^"]*"[^>]*>([^<]*)</g)) {
+      labels.push(`${file}: ${m[1]}`)
+    }
+  }
+  expect(labels.length).toBeGreaterThan(5)
+  expect(labels.filter(l => !l.endsWith(': copy'))).toEqual([])
 })
