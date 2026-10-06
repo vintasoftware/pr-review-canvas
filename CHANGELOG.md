@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Reading
+
+- Every code block in rendered text has a `copy` command: chat answers, proposed and pending
+  comments, attention points, layer notes, the summary, and GitHub comments and descriptions. It
+  copies the block as written. With a mouse, it shows when the pointer is over the block.
+
 ### Generating from the review app
 
 - A generation from the review app follows the project's own `pr-review-canvas` skill: the copy

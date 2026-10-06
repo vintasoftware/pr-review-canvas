@@ -196,9 +196,34 @@
   border-top: 1px solid var(--line);
 }
 .prose pre {
-  margin: 0 0 0.6em;
+  margin: 0;
   border: 1px solid var(--line);
   background: var(--panel-2);
+}
+/* The copy command sits on the block's top-right corner. It does not scroll with a wide line. */
+.prose .codeblock {
+  position: relative;
+  margin: 0 0 0.6em;
+}
+.prose .codeblock > .cmd {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 28px;
+  background: var(--panel-2);
+}
+/* With a pointer, it shows on hover or focus only, so it does not cover the first line. */
+@media (hover: hover) {
+  .prose .codeblock > .cmd {
+    opacity: 0;
+  }
+  .prose .codeblock:hover > .cmd,
+  .prose .codeblock > .cmd:focus-visible,
+  .prose .codeblock > .cmd[aria-busy='true'] {
+    opacity: 1;
+  }
 }
 .prose pre code {
   background: none;
