@@ -111,10 +111,9 @@ Before opening a PR, you can generate a canvas for your local work:
 /pr-review-canvas uncommitted     # includes working-tree edits and new files
 ```
 
-With `pr-review serve` running, open **http://localhost:3010/r/<owner>/<repo>/review/branch** or
-**.../review/uncommitted**, or run `pr-review open branch` or `pr-review open uncommitted` in the
-project's folder. These reviews stay local, and you can resolve
-attention points before sharing your work. Use `--base <ref>` to compare against another branch.
+With `pr-review serve` running, the project's home page, where `serve` opens, links to them under
+**Before the pull request**; **http://localhost:3010** lists every project. These reviews stay
+local, and you can resolve attention points before sharing your work. Use `--base <ref>` to compare against another branch.
 See [local branch and uncommitted reviews](docs/reference.md#reviewing-before-the-pull-request-exists)
 for details.
 

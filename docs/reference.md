@@ -122,8 +122,9 @@ Run the installed skill in Claude Code or Codex:
 /pr-review-canvas uncommitted     # the same, with your working-tree edits and new files on top
 ```
 
-With `pr-review serve` running, open `<project>/review/branch` or `<project>/review/uncommitted`,
-or run `pr-review open branch` or `pr-review open uncommitted` in the project's folder.
+With `pr-review serve` running, the project's home page links to them under **Before the pull
+request**; `pr-review open branch` or `pr-review open uncommitted` in the project's folder opens
+one directly.
 
 There are two reviews of the work in a clone, and they are separate targets:
 
