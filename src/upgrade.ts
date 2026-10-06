@@ -6,8 +6,13 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { z } from 'zod'
 import { type CliIo, EXIT, printJson, UsageError } from './commands.js'
-import { findSkillCopies, type ReadSkill, type SkillCopy } from './review/doctor.js'
-import { installSkill, SkillDirExistsError } from './review/install-skill.js'
+import {
+  findSkillCopies,
+  installSkill,
+  SkillDirExistsError,
+  type ReadSkill,
+  type SkillCopy,
+} from './review/install-skill.js'
 
 export const ACPX_PACKAGE = 'acpx'
 

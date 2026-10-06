@@ -1,10 +1,12 @@
 // `pr-review install-skill`: copy the bundled skill into the host repo's skill directories, so
-// Claude Code (`.claude/skills`) and Codex (`.agents/skills`) both see `/pr-review-canvas`.
+// Claude Code (`.claude/skills`) and Codex (`.agents/skills`) both see `/pr-review-canvas`, and
+// find the copies a project has, which doctor, upgrade, and generation read.
 import { appendFile, cp, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PACKAGE_ROOT } from '../paths.js'
 import { readText } from '../store/atomic-json.js'
-import { stampSkill } from './skill-content.js'
+import type { SkillState } from '../contract/generation.js'
+import { skillContent, skillState, stampSkill } from './skill-content.js'
 
 export const SKILL_NAME = 'pr-review-canvas'
 export const SKILL_SOURCE_DIR = path.join(PACKAGE_ROOT, 'skills', SKILL_NAME)
@@ -100,4 +102,65 @@ export async function installSkill(opts: InstallSkillOptions): Promise<InstallSk
     targets.push({ kind: t.kind, ...done })
   }
   return { skill: SKILL_NAME, targets }
+}
+
+export type ReadSkill = (file: string) => Promise<string | null>
+
+const readSkillFile: ReadSkill = file => readFile(file, 'utf8')
+
+/** One copy of the skill in the repository, next to how it compares with the bundled one. */
+export type SkillCopy = {
+  kind: 'claude' | 'codex'
+  /** The skills directory the copy sits in, absolute. */
+  dir: string
+  /** `<dir>/pr-review-canvas`, relative to the repository. */
+  path: string
+} & (
+  | {
+      state: SkillState
+      /** The instructions, without the frontmatter. */
+      body: string
+    }
+  | {
+      state: 'unreadable'
+      /** Why the copy could not be read. */
+      error: string
+    }
+)
+
+/**
+ * The copies of the skill in `.claude/skills` and `.agents/skills`. A directory without one is
+ * left out. Throws when the bundled skill itself cannot be read.
+ */
+export async function findSkillCopies(
+  repoRoot: string,
+  readSkill: ReadSkill = readSkillFile
+): Promise<SkillCopy[]> {
+  const expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
+  const copies: SkillCopy[] = []
+  for (const [kind, skillsDir] of [
+    ['claude', CLAUDE_SKILLS_DIR],
+    ['codex', CODEX_SKILLS_DIR],
+  ] as const) {
+    const dir = path.join(repoRoot, skillsDir)
+    const target = path.join(dir, SKILL_NAME)
+    const rel = path.relative(repoRoot, target)
+    try {
+      const text = await readSkill(path.join(target, 'SKILL.md'))
+      if (text === null) continue
+      const copy = skillContent(text)
+      copies.push({ kind, dir, path: rel, state: skillState(copy, expected), body: copy.body })
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        copies.push({
+          kind,
+          dir,
+          path: rel,
+          state: 'unreadable',
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+  return copies
 }
