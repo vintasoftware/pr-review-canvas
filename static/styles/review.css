@@ -214,14 +214,15 @@
   line-height: 28px;
   background: var(--panel-2);
 }
-/* With a pointer, it shows on hover or focus only, so it does not cover the first line. */
+/* With a pointer, it shows on hover or focus only, so it does not cover the first line. It stays
+   while it shows how a copy went. */
 @media (hover: hover) {
   .prose .codeblock > .cmd {
     opacity: 0;
   }
   .prose .codeblock:hover > .cmd,
   .prose .codeblock > .cmd:focus-visible,
-  .prose .codeblock > .cmd[aria-busy='true'] {
+  .prose .codeblock > .cmd:is([aria-busy='true'], [data-copied]) {
     opacity: 1;
   }
 }

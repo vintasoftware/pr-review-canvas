@@ -7,6 +7,9 @@
 - Every code block in rendered text has a `copy` command: chat answers, proposed and pending
   comments, attention points, layer notes, the summary, and GitHub comments and descriptions. It
   copies the block as written. With a mouse, it shows when the pointer is over the block.
+- Every `copy` command says how it went. For two seconds the button shows `copied` (a check in the
+  GitHub skin) or `failed` (a cross), and a toast says "copied to clipboard" or, in red, why the
+  copy failed.
 
 ### Generating from the review app
 

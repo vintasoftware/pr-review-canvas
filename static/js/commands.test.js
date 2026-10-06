@@ -1,6 +1,14 @@
 // @ts-check
 // @vitest-environment happy-dom
-import { clearCommandError, runCommand, runControl, showCommandError, wireCopyCommands } from './commands.js'
+import {
+  COPY_RESULT_MS,
+  clearCommandError,
+  runCommand,
+  runControl,
+  showCommandError,
+  toast,
+  wireCopyCommands,
+} from './commands.js'
 
 describe('runCommand', () => {
   /** @returns {HTMLButtonElement} */
@@ -84,7 +92,7 @@ describe('wireCopyCommands', () => {
     await Promise.resolve()
     expect(written).toEqual(['/pr-review-canvas 2'])
     await new Promise(r => setTimeout(r, 0))
-    expect(button?.textContent).toBe('copy')
+    expect(button?.textContent).toBe('copied')
     expect(button?.disabled).toBe(false)
     // Clicks elsewhere copy nothing.
     root.querySelector('p')?.click()
@@ -101,6 +109,63 @@ describe('wireCopyCommands', () => {
     root.querySelector('button')?.click()
     await new Promise(r => setTimeout(r, 0))
     expect(root.querySelector('.cmd-err')?.textContent).toBe('clipboard is not available')
+  })
+
+  describe('says how the copy went', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    })
+
+    /** @param {(text: string) => Promise<void>} copy */
+    const clickCopy = async copy => {
+      const root = document.createElement('div')
+      root.innerHTML = '<button class="cmd" data-copy="x">copy</button>'
+      wireCopyCommands(root, copy)
+      const button = /** @type {HTMLButtonElement} */ (root.querySelector('button'))
+      button.click()
+      await vi.advanceTimersByTimeAsync(0)
+      return { root, button }
+    }
+
+    it('marks the button copied for a moment and toasts it', async () => {
+      const { root, button } = await clickCopy(async () => {})
+      expect(button.textContent).toBe('copied')
+      expect(button.getAttribute('data-copied')).toBe('copied')
+      const box = root.querySelector('.toast')
+      expect(box?.textContent).toBe('copied to clipboard')
+      expect(box?.classList.contains('failed')).toBe(false)
+      vi.advanceTimersByTime(COPY_RESULT_MS)
+      expect(button.textContent).toBe('copy')
+      expect(button.hasAttribute('data-copied')).toBe(false)
+    })
+
+    it('marks the button failed, toasts the reason as a failure, and keeps the inline error', async () => {
+      const { root, button } = await clickCopy(async () => {
+        throw new Error('Write permission denied.')
+      })
+      expect(button.textContent).toBe('failed')
+      expect(button.getAttribute('data-copied')).toBe('failed')
+      const box = root.querySelector('.toast')
+      expect(box?.textContent).toBe('could not copy: Write permission denied.')
+      expect(box?.classList.contains('failed')).toBe(true)
+      expect(root.querySelector('.cmd-err')?.textContent).toBe('Write permission denied.')
+      vi.advanceTimersByTime(COPY_RESULT_MS)
+      expect(button.textContent).toBe('copy')
+    })
+
+    it('gives a second click the label copy back, and its own moment', async () => {
+      const { button } = await clickCopy(async () => {})
+      vi.advanceTimersByTime(COPY_RESULT_MS - 500)
+      button.click()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(button.textContent).toBe('copied')
+      vi.advanceTimersByTime(COPY_RESULT_MS - 1)
+      expect(button.textContent).toBe('copied')
+      vi.advanceTimersByTime(1)
+      expect(button.textContent).toBe('copy')
+    })
   })
 })
 
@@ -152,5 +217,52 @@ describe('runControl', () => {
     ).toBeUndefined()
     expect(document.querySelector('.cmd-err')?.textContent).toBe('offline')
     expect(box.disabled).toBe(false)
+  })
+})
+
+describe('toast', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('clears the dismissal notification after five seconds', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point dismissed')
+
+    vi.advanceTimersByTime(4999)
+    expect(box.textContent).toBe('attention point dismissed')
+    vi.advanceTimersByTime(1)
+    expect(box.textContent).toBe('')
+  })
+
+  it('gives a replacement notification its own five seconds', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point dismissed')
+    vi.advanceTimersByTime(3000)
+    toast(root, 'attention point restored')
+
+    vi.advanceTimersByTime(2000)
+    expect(box.textContent).toBe('attention point restored')
+    vi.advanceTimersByTime(3000)
+    expect(box.textContent).toBe('')
+  })
+
+  it('draws a failure as one, and the next message as ordinary again', () => {
+    const root = document.createElement('div')
+    expect(toast(root, 'could not copy', { failed: true }).classList.contains('failed')).toBe(true)
+    expect(toast(root, 'copied to clipboard').classList.contains('failed')).toBe(false)
+  })
+
+  it('reuses one live region', () => {
+    document.body.innerHTML = '<div id="root"></div>'
+    const root = document.querySelector('#root')
+    if (!(root instanceof HTMLElement)) {
+      throw new Error('no root')
+    }
+    expect(toast(root, 'one').getAttribute('aria-live')).toBe('polite')
+    expect(toast(root, 'two').textContent).toBe('two')
+    expect(root.querySelectorAll('.toast').length).toBe(1)
   })
 })
