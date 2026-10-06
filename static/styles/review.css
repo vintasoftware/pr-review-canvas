@@ -196,9 +196,37 @@
   border-top: 1px solid var(--line);
 }
 .prose pre {
-  margin: 0 0 0.6em;
+  margin: 0;
   border: 1px solid var(--line);
   background: var(--panel-2);
+}
+/* The copy command sits on the block's top-right corner. It does not scroll with a wide line, and a
+   text selection across the block leaves its label out. */
+.codeblock {
+  position: relative;
+  margin: 0 0 0.6em;
+}
+.codeblock > .cmd {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 28px;
+  background: var(--panel-2);
+  user-select: none;
+}
+/* With a pointer, it shows on hover or focus only, so it does not cover the first line. It stays
+   while it shows how a copy went. */
+@media (hover: hover) {
+  .codeblock > .cmd {
+    opacity: 0;
+  }
+  .codeblock:hover > .cmd,
+  .codeblock > .cmd:focus-visible,
+  .codeblock > .cmd:is([aria-busy='true'], [data-copied]) {
+    opacity: 1;
+  }
 }
 .prose pre code {
   background: none;

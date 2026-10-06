@@ -73,6 +73,10 @@ tr.composer .x {
   font-size: 12px;
   max-width: 340px;
 }
+.toast.failed {
+  border-color: var(--bad);
+  color: var(--bad);
+}
 .toast:empty {
   display: none;
 }

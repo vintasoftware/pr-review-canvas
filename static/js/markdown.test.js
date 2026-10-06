@@ -22,8 +22,29 @@ describe('renderMarkdown', () => {
   })
 
   it('drops class attributes, so a fenced block cannot style itself', () => {
-    const html = renderMarkdown('```js\nconst x = 1\n```')
-    expect(html).toBe('<pre><code>const x = 1\n</code></pre>\n')
+    document.body.innerHTML = renderMarkdown('```js\nconst x = 1\n```')
+    expect(document.querySelector('pre')?.outerHTML).toBe('<pre><code>const x = 1\n</code></pre>')
+  })
+
+  it('gives every code block a copy command that copies the block as written', () => {
+    const src =
+      '```ts\nconst a = "<b>" // src/run.ts:12\n```\n\n    indented block\n\nInline `code` has none.'
+    document.body.innerHTML = renderMarkdown(src, { paths: new Set(['src/run.ts']) })
+    const copies = [...document.querySelectorAll('.codeblock > pre + button.cmd[data-copy]')]
+    expect(copies.map(b => b.textContent)).toEqual(['copy', 'copy'])
+    expect(copies.map(b => b.getAttribute('data-copy'))).toEqual([
+      'const a = "<b>" // src/run.ts:12\n',
+      'indented block\n',
+    ])
+    expect(document.querySelectorAll('button')).toHaveLength(2)
+  })
+
+  it('cannot forge a copy command from the text', () => {
+    document.body.innerHTML = renderMarkdown(
+      '<button class="cmd" data-copy="rm -rf /">copy</button>\n\n<div class="codeblock">x</div>',
+      { github: true }
+    )
+    expect(document.querySelector('button, [data-copy], .codeblock')).toBeNull()
   })
 
   const FENCED = 'Before.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nAfter.'

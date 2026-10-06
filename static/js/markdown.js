@@ -148,6 +148,27 @@ function decorateLinks(root) {
 }
 
 /**
+ * Every code block gets a copy command, added after the sanitizer so the button is the page's
+ * markup and never the text's. The command copies the block as written: linkifyPaths skips `pre`,
+ * so the text in the DOM is the source text.
+ * @param {HTMLElement} root
+ */
+function addCopyCommands(root) {
+  for (const pre of Array.from(root.querySelectorAll('pre'))) {
+    const block = document.createElement('div')
+    block.className = 'codeblock'
+    const copy = document.createElement('button')
+    copy.className = 'cmd'
+    copy.type = 'button'
+    copy.title = 'Copy'
+    copy.setAttribute('data-copy', pre.textContent ?? '')
+    copy.textContent = 'copy'
+    pre.replaceWith(block)
+    block.append(pre, copy)
+  }
+}
+
+/**
  * GitHub images can require a signed-in browser session. Link to them so the browser
  * can open them on their own origin, where that session is available.
  * @param {HTMLImageElement} img
@@ -213,6 +234,7 @@ function renderProse(src, opts) {
   demoteHeadings(root)
   linkifyPaths(root, opts.paths ?? new Set())
   decorateLinks(root)
+  addCopyCommands(root)
   return root.innerHTML
 }
 

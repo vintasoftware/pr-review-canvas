@@ -137,7 +137,7 @@ export function initials(login) {
 export async function copyToClipboard(text, clipboard) {
   const target = clipboard === undefined ? globalThis.navigator?.clipboard : clipboard
   if (!target || typeof target.writeText !== 'function') {
-    throw new Error('clipboard is not available; copy the command by hand')
+    throw new Error('clipboard is not available; select the text and copy it by hand')
   }
   await target.writeText(text)
 }

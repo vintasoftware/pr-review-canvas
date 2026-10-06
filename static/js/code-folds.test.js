@@ -252,7 +252,7 @@ describe('applyCodeFolds', () => {
       side: /** @type {const} */ ('new'),
       startLine: 3,
       endLine: 3,
-      text: 'The value is read twice on purpose.',
+      text: 'The value is read twice on purpose:\n\n```ts\nread() + read()\n```',
     }
 
     const light = mount()
@@ -265,7 +265,10 @@ describe('applyCodeFolds', () => {
     insertNoteRow(card, 'src_app_ts', annotation)
     applyCodeFolds(card, 'src_app_ts', [{ ...FOLD, level: 'aggressive' }], 'aggressive', false)
 
-    expect(card.querySelector('.fold-title')?.textContent).toBe('The value is read twice on purpose.')
+    // The label is the annotation's text, without the copy command of its code block.
+    expect(card.querySelector('.fold-title')?.textContent).toBe(
+      'The value is read twice on purpose:\nread() + read()'
+    )
     expect(card.querySelector('[data-decoration="note"]')?.hasAttribute('hidden')).toBe(true)
   })
 

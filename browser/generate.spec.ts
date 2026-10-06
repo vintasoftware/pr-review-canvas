@@ -6,7 +6,12 @@ import { expect, test } from './fixtures.js'
 
 const MODEL = JSON.stringify(artifactToModelOutput(syntheticArtifact()))
 
-test('generates the first canvas from the empty screen and loads it', async ({ page, chatServer }) => {
+test('generates the first canvas from the empty screen and loads it', async ({
+  page,
+  context,
+  chatServer,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const server = await chatServer({
     noCanvas: true,
     runner: {
@@ -27,6 +32,11 @@ test('generates the first canvas from the empty screen and loads it', async ({ p
   await expect(dialog.locator('h2')).toHaveText('Generate the canvas')
   await expect(dialog).toContainText('shares the canvas as a comment on the pull request')
   await expect(dialog.locator('[data-copy]')).toHaveAttribute('data-copy', '/pr-review-canvas 42')
+  // The dialog is modal, so the page's toast would sit behind it: the copy toasts in the dialog.
+  await dialog.locator('[data-copy]').click()
+  await expect(dialog.locator('.toast')).toHaveText('copied to clipboard')
+  await expect(dialog.locator('.toast')).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('/pr-review-canvas 42')
   // The test server's checkout has no skill installed, so the run follows the one the server ships.
   await expect(dialog.locator('.gen-skill')).toContainText('default skill of pr-review 0.0.0-test')
   await dialog.locator('[data-gen="start"]').click()

@@ -93,3 +93,23 @@ test('renders avatars, safe GitHub Markdown, and comments missing from current f
   await page.locator('.review-history + .outdated-comments > summary .chev').click()
   await expect(page.getByText('A comment on a removed file', { exact: true })).toBeVisible()
 })
+
+test('leaves the copy command of a code block out of a text selection', async ({ page, reviewUrl }) => {
+  await page.route('**/api/prs/42', async route => {
+    const response = await route.fetch()
+    const bundle = await response.json()
+    bundle.pr.body = 'Before.\n\n```\nconst x = 1\n```\n\nAfter.'
+    await route.fulfill({ response, json: bundle })
+  })
+  await page.goto(reviewUrl)
+  await page.locator('.pr-desc > summary').click()
+  const body = page.locator('.pr-desc .body')
+  await expect(body.locator('.codeblock > button[data-copy]')).toHaveText('copy')
+  const selected = await body.evaluate(el => {
+    const selection = window.getSelection()
+    selection?.selectAllChildren(el)
+    return selection?.toString() ?? ''
+  })
+  expect(selected).toContain('const x = 1')
+  expect(selected).not.toContain('copy')
+})

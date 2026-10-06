@@ -105,7 +105,7 @@ describe('copyToClipboard', () => {
     await copyToClipboard('/pr-review-canvas 7', clipboard)
     expect(written).toEqual(['/pr-review-canvas 7'])
     await expect(copyToClipboard('x', null)).rejects.toThrow(
-      'clipboard is not available; copy the command by hand'
+      'clipboard is not available; select the text and copy it by hand'
     )
     await expect(
       copyToClipboard('x', /** @type {Clipboard} */ (/** @type {unknown} */ ({})))
