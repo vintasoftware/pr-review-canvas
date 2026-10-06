@@ -153,7 +153,7 @@ export function skillHtml(skill) {
     current: '',
     edited: ', changed from the copy pr-review installs',
     'other-version':
-      ', which a different pr-review version installed; <code>pr-review upgrade</code> replaces it with this one',
+      ', which a different pr-review version installed; <code>pr-review upgrade</code> refreshes it',
   }[skill.state]
   return `<p class="hint gen-skill">Follows ${where}${state}.</p>`
 }
