@@ -36,6 +36,17 @@
   list's look in `~/.pr-review`, or in `PR_REVIEW_HOME`. Only a command that can read
   `server.json` can add a project.
 
+### Generating from the review app
+
+- A generation from the review app follows the project's own `pr-review-canvas` skill: the copy
+  in the agent's skills folder (`.claude/skills` or `.agents/skills`), else the other harness's,
+  else the skill pr-review ships. The start screen and the run's status say which, and whether the
+  project's copy was edited or was installed by a different pr-review version.
+- The generation dialog says what the agent is doing right now: waiting to start, thinking,
+  writing the answer (with how many characters so far), or running a tool, and how long ago it
+  last showed it was working. A run that writes the canvas for minutes without a tool call no
+  longer looks stuck; after three minutes with nothing from the agent, the dialog says it may be.
+
 ### Fixes
 
 - A merged pull request whose base branch was deleted since, as a stacked PR's is once the PR

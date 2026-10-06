@@ -2,7 +2,11 @@
 // these routes do not exist when the project config turns chat off, because both put an agent in
 // the loop.
 import { Hono, type MiddlewareHandler } from 'hono'
-import { GenerateInputSchema, type GenerationResponse } from '../../contract/generation.js'
+import {
+  GenerateInputSchema,
+  type GenerationResponse,
+  type GenerationSkillResponse,
+} from '../../contract/generation.js'
 import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
 import { resolveSharing } from '../../contract/settings.js'
 import { GenerationBusyError } from '../../generate/generation-manager.js'
@@ -46,6 +50,13 @@ export function generateRoutes(ctx: AppContext): Hono {
     await next()
   }
   api.use('/prs/:n/generate', requireAgent)
+  api.use('/generate/skill', requireAgent)
+
+  // Which skill a run would follow, for the start screen to say before the reader starts one.
+  api.get('/generate/skill', async c => {
+    const body: GenerationSkillResponse = { skill: await generation.nextSkill() }
+    return c.json(body)
+  })
 
   api.get('/prs/:n/generate', c => {
     const body: GenerationResponse = { job: generation.status(parseTargetKey(c.req.param('n'))) }

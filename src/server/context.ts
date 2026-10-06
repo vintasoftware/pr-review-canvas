@@ -24,6 +24,7 @@ import {
   type GenerationLane,
   type GenerationManager,
 } from '../generate/generation-manager.js'
+import { loadGenerationSkill } from '../generate/skill.js'
 import { createGit, execGitIn, type Git } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { createHostClient, execCliIn, type HostClient } from '../host/client.js'
@@ -271,6 +272,7 @@ export function createContextGeneration(
       },
     },
     settings: () => ctx.chat.effectiveSettings(),
+    skill: agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version),
     generation: ctx.projectConfig.config.generation,
     repo: ctx.config.repo,
     repoRoot: ctx.config.repoRoot,

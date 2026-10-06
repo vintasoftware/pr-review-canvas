@@ -1,18 +1,25 @@
 // @vitest-environment node
 // The generate routes through Hono: start, status, stop, and the refusals before a job starts.
-import { writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Capabilities, ErrorEnvelope } from '../../contract/api.js'
-import type { GenerationJob, GenerationResponse } from '../../contract/generation.js'
+import type {
+  GenerationJob,
+  GenerationResponse,
+  GenerationSkill,
+  GenerationSkillResponse,
+} from '../../contract/generation.js'
 import { GenerationBusyError, type GenerationManager } from '../../generate/generation-manager.js'
 import { DEFAULT_PROJECT_CONFIG } from '../../project-config.js'
+import { SKILL_SOURCE_DIR } from '../../review/install-skill.js'
 import { artifactToModelOutput } from '../../review/normalize.js'
 import { createFakeRunner } from '../../testing/fake-runner.js'
-import { makeTestContext, type TestContext } from '../../testing/fakes.js'
+import { makeTempDir, makeTestContext, type TestContext } from '../../testing/fakes.js'
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../../testing/synthetic.js'
 import { createApp } from '../app.js'
-import { toAppError } from '../errors.js'
+import { AppError, toAppError } from '../errors.js'
 import { generateRoutes } from './generate-routes.js'
 
 const LOCAL = { host: '127.0.0.1:3010' }
@@ -23,6 +30,7 @@ const JOB: GenerationJob = {
   force: false,
   agent: 'claude',
   model: 'opus',
+  skill: { source: 'default', version: '0.0.0-test' },
   phase: 'preparing',
   round: 1,
   maxRounds: 4,
@@ -58,6 +66,9 @@ function fakeManager(over: Partial<GenerationManager> = {}) {
     status: vi.fn<GenerationManager['status']>(over.status ?? (() => null)),
     cancel: vi.fn<GenerationManager['cancel']>(over.cancel ?? (async () => false)),
     running: vi.fn<GenerationManager['running']>(() => null),
+    nextSkill: vi.fn<GenerationManager['nextSkill']>(
+      over.nextSkill ?? (async () => ({ source: 'default', version: '0.0.0-test' }))
+    ),
   }
 }
 
@@ -233,6 +244,69 @@ describe('generate routes', () => {
       const res = await app.request('/api/prs/42/generate', { method, headers: POST })
       expect(res.status).toBe(404)
     }
+    const manager = fakeManager()
+    expect((await appWith(manager).request('/api/generate/skill', { headers: LOCAL })).status).toBe(404)
+    expect(manager.nextSkill).not.toHaveBeenCalled()
+  })
+
+  describe('the skill a run would follow', () => {
+    it("answers the manager's next skill", async () => {
+      await context()
+      const skill: GenerationSkill = {
+        source: 'project',
+        path: '.agents/skills/pr-review-canvas',
+        state: 'edited',
+      }
+      const manager = fakeManager({ nextSkill: async () => skill })
+      const res = await appWith(manager).request('/api/generate/skill', { headers: LOCAL })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ skill })
+      expect(manager.nextSkill).toHaveBeenCalledTimes(1)
+    })
+
+    it('answers the error a skill that cannot be read raises', async () => {
+      await context()
+      const manager = fakeManager({
+        nextSkill: async () => {
+          throw new AppError('GENERATION_FAILED', 'unreadable', 500, 'run `pr-review install-skill --force`')
+        },
+      })
+      const res = await appWith(manager).request('/api/generate/skill', { headers: LOCAL })
+      expect(res.status).toBe(500)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'GENERATION_FAILED',
+        message: 'unreadable',
+        hint: 'run `pr-review install-skill --force`',
+      })
+    })
+
+    it('answers the default skill of the server version for a project with none', async () => {
+      await context()
+      const res = await createApp(t.ctx).request('/api/generate/skill', { headers: LOCAL })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ skill: { source: 'default', version: '0.0.0-test' } })
+    })
+
+    it("answers the project's own copy, read from its checkout", async () => {
+      const repoRoot = await makeTempDir('pr-review-skill-route-')
+      try {
+        const dir = path.join(repoRoot, '.claude/skills/pr-review-canvas')
+        await mkdir(dir, { recursive: true })
+        const shipped = await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')
+        await writeFile(path.join(dir, 'SKILL.md'), `${shipped}\nOur own rule.\n`)
+        await context()
+        // The checkout the context serves is the folder that holds the copy.
+        t.ctx.config.repoRoot = repoRoot
+        const res = await createApp(t.ctx).request('/api/generate/skill', { headers: LOCAL })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as GenerationSkillResponse
+        expect(body).toEqual({
+          skill: { source: 'project', path: '.claude/skills/pr-review-canvas', state: 'edited' },
+        })
+      } finally {
+        await rm(repoRoot, { recursive: true, force: true })
+      }
+    })
   })
 
   it('refuses a target that is not a review', async () => {
@@ -283,6 +357,10 @@ describe('generate routes', () => {
     // The fake forge refuses the comment, so publish falls back to the ZIP to upload by hand.
     expect(job).toMatchObject({ phase: 'done', round: 2, headSha: HEAD_SHA, sharing: { status: 'failed' } })
     expect(runner.runs[0]?.prompt).toContain('The pr-review server runs this generation')
+    // A project with no skill of its own follows the one this server ships.
+    expect(job?.skill).toEqual({ source: 'default', version: '0.0.0-test' })
+    expect(runner.runs[0]?.prompt).toContain('(the one pr-review 0.0.0-test ships)')
+    expect(runner.runs[0]?.prompt).toContain('# The pr-review-canvas skill\n\n# pr-review-canvas\n')
     expect(runner.runs[1]?.prompt).toMatch(/HUNK_UNASSIGNED/)
     expect(runner.runs[1]?.prompt).toContain('keep them')
     expect(await t.ctx.canvases.findForPr(42, HEAD_SHA)).toEqual({ status: 'ready', headSha: HEAD_SHA })

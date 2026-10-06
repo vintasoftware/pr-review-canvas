@@ -7,12 +7,27 @@
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
 /** @typedef {import('./contract-types.js').GenerationJob} GenerationJob */
 /** @typedef {import('./contract-types.js').GenerationResponse} GenerationResponse */
+/** @typedef {import('./contract-types.js').AgentPulse} AgentPulse */
+/** @typedef {import('./contract-types.js').GenerationSkill} GenerationSkill */
 import { ApiError, fetchJson } from './api.js'
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
 
 export const GENERATE_DIALOG_ID = 'generate-dialog'
 export const GENERATION_POLL_MS = 2000
+/**
+ * How long the agent can say nothing before the dialog says it may be stuck. Thinking and writing
+ * both stream, so a working agent is rarely quiet this long; a slow first answer can be.
+ */
+export const QUIET_MS = 3 * 60 * 1000
+
+/** @type {Record<AgentPulse['doing'], string>} */
+const DOING_LABELS = {
+  starting: 'Waiting for the agent to start',
+  thinking: 'Thinking',
+  writing: 'Writing the answer',
+  tool: 'Running a tool',
+}
 
 /** @type {Record<GenerationJob['phase'], string>} */
 const PHASE_LABELS = {
@@ -38,9 +53,37 @@ export function isRunning(job) {
  */
 export function elapsedText(job, now) {
   const end = job.endedAt === undefined ? now.getTime() : Date.parse(job.endedAt)
-  const seconds = Math.max(0, Math.round((end - Date.parse(job.startedAt)) / 1000))
+  return durationText(end - Date.parse(job.startedAt))
+}
+
+/**
+ * A span of time as `42s` or `3m 12s`.
+ * @param {number} ms
+ */
+function durationText(ms) {
+  const seconds = Math.max(0, Math.round(ms / 1000))
   const minutes = Math.floor(seconds / 60)
   return minutes === 0 ? `${seconds}s` : `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`
+}
+
+/**
+ * What the agent is doing in the turn that runs now, and how long since it last showed it was
+ * working. A quiet spell past QUIET_MS adds a warning, with the stop command below it.
+ * @param {AgentPulse | undefined} pulse
+ * @param {Date} now
+ * @returns {string}
+ */
+export function pulseHtml(pulse, now) {
+  if (pulse === undefined) {
+    return ''
+  }
+  const quiet = now.getTime() - Date.parse(pulse.at)
+  const written = pulse.doing === 'writing' ? ` · ${pulse.written.toLocaleString('en-US')} characters` : ''
+  const stuck = quiet >= QUIET_MS
+  const line = `<p class="gen-pulse" data-doing="${pulse.doing}"${stuck ? ' data-quiet' : ''}>${DOING_LABELS[pulse.doing]}${written} · last activity ${durationText(quiet)} ago</p>`
+  return !stuck
+    ? line
+    : `${line}<div class="callout warn" role="status">Nothing from the agent for ${durationText(quiet)}. It may be stuck: stop the run, or keep waiting.</div>`
 }
 
 /**
@@ -96,6 +139,26 @@ function sharingNote(bundle) {
 }
 
 /**
+ * Which pr-review-canvas skill the run follows: the project's own copy, or the default when the
+ * project has none.
+ * @param {GenerationSkill} skill
+ * @returns {string}
+ */
+export function skillHtml(skill) {
+  if (skill.source === 'default') {
+    return `<p class="hint gen-skill">Follows the default skill of pr-review ${esc(skill.version)}: this project has none installed.</p>`
+  }
+  const where = `this project's skill, <code>${esc(skill.path)}</code>`
+  const state = {
+    current: '',
+    edited: ', changed from the copy pr-review installs',
+    'other-version':
+      ', which a different pr-review version installed; <code>pr-review upgrade</code> refreshes it',
+  }[skill.state]
+  return `<p class="hint gen-skill">Follows ${where}${state}.</p>`
+}
+
+/**
  * @param {string} command
  */
 function skillFallbackHtml(command) {
@@ -106,12 +169,14 @@ function skillFallbackHtml(command) {
 }
 
 /**
- * The screen that starts a run, with why the server refused the last start when it did.
+ * The screen that starts a run, with why the server refused the last start when it did, and the
+ * skill the run would follow once the server has said which.
  * @param {PrBundle} bundle
  * @param {{ message: string, hint?: string } | null} [refused]
+ * @param {GenerationSkill | null} [skill]
  * @returns {string}
  */
-export function generationStartHtml(bundle, refused = null) {
+export function generationStartHtml(bundle, refused = null, skill = null) {
   const mode = generationMode(bundle)
   const agent = bundle.chat.agent ? `<strong>${esc(bundle.chat.agent)}</strong>` : 'the chat agent'
   const choice = mode.choice
@@ -124,6 +189,7 @@ export function generationStartHtml(bundle, refused = null) {
       : `<div class="callout warn" role="alert">${esc(refused.message)}${refused.hint ? ` — ${esc(refused.hint)}` : ''}</div>`) +
     `<p class="hint">${esc(mode.text)}</p>` +
     `<p class="hint">It runs ${agent} through acpx with the chat's permissions, which deny writes, and the model the project config names for it. ${sharingNote(bundle)}</p>` +
+    (skill === null ? '' : skillHtml(skill)) +
     choice +
     skillFallbackHtml(bundle.skillCommand) +
     '<div class="dialog-actions">' +
@@ -185,8 +251,10 @@ export function generationStatusHtml(job, now) {
     (running
       ? '<p class="hint">You can close this dialog; the run goes on. The page loads the canvas when it is published.</p>'
       : '') +
+    skillHtml(job.skill) +
     error +
     done +
+    (running ? pulseHtml(job.pulse, now) : '') +
     activity +
     problems +
     `<div class="dialog-actions">${actions}</div>`
@@ -212,6 +280,15 @@ export function runningLabel(job, now) {
  */
 export function fetchGeneration(prNumber, opts = {}) {
   return fetchJson(`/api/prs/${prNumber}/generate`, { fetchImpl: opts.fetchImpl })
+}
+
+/**
+ * The skill a run started now would follow.
+ * @param {{ fetchImpl?: typeof fetch | undefined }} [opts]
+ * @returns {Promise<import('./contract-types.js').GenerationSkillResponse>}
+ */
+export function fetchGenerationSkill(opts = {}) {
+  return fetchJson('/api/generate/skill', { fetchImpl: opts.fetchImpl })
 }
 
 /**
@@ -296,6 +373,12 @@ export function createGeneration(root, opts) {
    * @type {{ message: string, hint?: string } | null}
    */
   let startError = null
+  /**
+   * The skill a run would follow, read each time the start screen opens: the project's copy can
+   * change between runs.
+   * @type {GenerationSkill | null}
+   */
+  let skill = null
   /** True once this page saw the job running, so its end is news to it. */
   let watching = false
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -303,6 +386,16 @@ export function createGeneration(root, opts) {
   let stopped = false
 
   const dialogOpen = () => root.querySelector(`#${GENERATE_DIALOG_ID}`)?.hasAttribute('open') === true
+
+  /** Reads which skill a run would follow; the start screen shows without it until then. */
+  const readSkill = async () => {
+    try {
+      skill = (await fetchGenerationSkill(api)).skill
+    } catch {
+      return
+    }
+    if (starting && dialogOpen()) drawDialog()
+  }
 
   /**
    * Puts the running job on the header's generate command, and gives it back its own label and
@@ -327,7 +420,7 @@ export function createGeneration(root, opts) {
     const form = /** @type {HTMLFormElement} */ (ensureDialog(root).querySelector('form'))
     if (starting || job === null) {
       if (bundle !== null) {
-        form.innerHTML = generationStartHtml(bundle, startError)
+        form.innerHTML = generationStartHtml(bundle, startError, skill)
       }
       return
     }
@@ -414,6 +507,7 @@ export function createGeneration(root, opts) {
       startError = null
       starting = true
       drawDialog()
+      void readSkill()
     }
   })
 
@@ -425,9 +519,14 @@ export function createGeneration(root, opts) {
     open(next) {
       bundle = next
       startError = null
+      // The project's copy can change between openings, so the last answer is not this one's.
+      skill = null
       starting = job === null || !isRunning(job)
       drawDialog()
       showDialog(ensureDialog(root))
+      if (starting) {
+        void readSkill()
+      }
     },
     /**
      * Called after every render: the bundle the screen shows, and the running job put back on the

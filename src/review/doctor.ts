@@ -2,7 +2,7 @@
 // It reports instead of throwing, so a broken setup still answers. The CLI prints one checklist
 // a person or an agent can read. `--json` prints the same report as one JSON line.
 import { randomBytes } from 'node:crypto'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ORIGIN_HINT } from '../config.js'
 import type { Git } from '../git/git.js'
@@ -10,8 +10,14 @@ import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
-import { skillContent } from './skill-content.js'
+import {
+  CLAUDE_SKILLS_DIR,
+  CODEX_SKILLS_DIR,
+  findSkillCopies,
+  SKILL_NAME,
+  type ReadSkill,
+  type SkillCopy,
+} from './install-skill.js'
 
 export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill'] as const
 export type DoctorCheckName = (typeof DOCTOR_CHECKS)[number]
@@ -63,60 +69,8 @@ async function checkDataDir(dir: string): Promise<DoctorCheck> {
   }
 }
 
-export type ReadSkill = (file: string) => Promise<string | null>
-
-const readSkillFile: ReadSkill = file => readFile(file, 'utf8')
-
-/** One copy of the skill in the repository, next to how it compares with the bundled one. */
-export interface SkillCopy {
-  kind: 'claude' | 'codex'
-  /** The skills directory the copy sits in, absolute. */
-  dir: string
-  /** `<dir>/pr-review-canvas`, relative to the repository. */
-  path: string
-  /** True when the copy's body or recorded hash differs from the bundled skill, or it cannot be read. */
-  stale: boolean
-  /** Why the copy could not be read, when it could not. */
-  error?: string
-}
-
-/**
- * The copies of the skill in `.claude/skills` and `.agents/skills`. A directory without one is
- * left out. Throws when the bundled skill itself cannot be read.
- */
-export async function findSkillCopies(
-  repoRoot: string,
-  readSkill: ReadSkill = readSkillFile
-): Promise<SkillCopy[]> {
-  const expected = skillContent(await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')).hash
-  const copies: SkillCopy[] = []
-  for (const [kind, skillsDir] of [
-    ['claude', CLAUDE_SKILLS_DIR],
-    ['codex', CODEX_SKILLS_DIR],
-  ] as const) {
-    const dir = path.join(repoRoot, skillsDir)
-    const target = path.join(dir, SKILL_NAME)
-    const rel = path.relative(repoRoot, target)
-    try {
-      const text = await readSkill(path.join(target, 'SKILL.md'))
-      if (text === null) continue
-      const { hash, frontmatter } = skillContent(text)
-      const matches = hash === expected && frontmatter.getIn(['metadata', 'body-sha256']) === expected
-      copies.push({ kind, dir, path: rel, stale: !matches })
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        copies.push({ kind, dir, path: rel, stale: true, error: message(err) })
-      }
-    }
-  }
-  return copies
-}
-
 /** The skill the generation flow needs, in either harness's directory. */
-export async function checkSkill(
-  repoRoot: string | null,
-  readSkill: ReadSkill = readSkillFile
-): Promise<DoctorCheck> {
+export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill): Promise<DoctorCheck> {
   if (repoRoot === null) {
     return { ok: false, detail: 'no repository, so no skill directory to look in', hint: 'run from a clone' }
   }
@@ -126,9 +80,10 @@ export async function checkSkill(
   } catch (err) {
     return { ok: false, detail: message(err), hint: 'reinstall the pr-review package' }
   }
-  const stale = copies.flatMap(copy =>
-    copy.stale ? [copy.error === undefined ? copy.path : `${copy.path}: ${copy.error}`] : []
-  )
+  const stale = copies.flatMap(copy => {
+    if (copy.state === 'current') return []
+    return [copy.state === 'unreadable' ? `${copy.path}: ${copy.error}` : copy.path]
+  })
   if (stale.length > 0) {
     return {
       ok: false,

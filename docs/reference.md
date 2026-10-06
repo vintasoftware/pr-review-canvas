@@ -977,7 +977,22 @@ own. The job runs in the server, so you can close the dialog
 or reload the page; while it runs, the header command reads **generating** with the elapsed time
 and opens the dialog again.
 The dialog shows the phase, the latest tool calls of the agent, and the problems publish named on
-each repair attempt. **stop** cancels the agent. When the canvas is published, the page loads it.
+each repair attempt. While the agent works, a line says what it is doing (waiting to start,
+thinking, writing the answer with its length so far, or running a tool) and how long ago it last
+showed it was working, so a long stretch with no tool call does not look stuck. After three
+minutes with nothing from the agent, the dialog says it may be stuck. **stop** cancels the agent.
+When the canvas is published, the page loads it.
+
+The agent follows the project's own copy of the `pr-review-canvas` skill, so a project that
+tailored its skill gets the canvas it would get from a terminal: `.claude/skills/pr-review-canvas`
+for Claude and `.agents/skills/pr-review-canvas` for Codex, the other harness's copy when the
+agent's own is missing, and the skill your pr-review ships when the project has none. The start
+screen and the run's status say which, and whether the project's copy was edited or was installed
+by a different pr-review version (`pr-review upgrade` refreshes it). The skill's text goes to the
+agent ahead of the task prepare wrote; the steps the server does itself (prepare, the model
+choice, writing `model.json`, validate, and publish) are named in the prompt as done by the
+server, so a step a project added to its skill that writes a file or runs a command does not run
+from the review app.
 
 The server runs the same `prepare` and `publish` as the skill, with the chat agent from
 **settings** and the model that [`generation.models`](#project-config) names for that agent. The

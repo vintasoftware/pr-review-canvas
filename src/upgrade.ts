@@ -6,8 +6,13 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { z } from 'zod'
 import { type CliIo, EXIT, printJson, UsageError } from './commands.js'
-import { findSkillCopies, type ReadSkill, type SkillCopy } from './review/doctor.js'
-import { installSkill, SkillDirExistsError } from './review/install-skill.js'
+import {
+  findSkillCopies,
+  installSkill,
+  SkillDirExistsError,
+  type ReadSkill,
+  type SkillCopy,
+} from './review/install-skill.js'
 
 export const ACPX_PACKAGE = 'acpx'
 
@@ -150,7 +155,7 @@ export async function planUpgrade(deps: UpgradeDeps): Promise<UpgradePlan> {
     const copies = await skillCopies(deps)
     // A new pr-review can ship a new skill, so every copy is in question once the package moves.
     const packageMoves = steps.some(step => step.kind === 'package')
-    const toCheck = copies.filter(copy => packageMoves || copy.stale)
+    const toCheck = copies.filter(copy => packageMoves || copy.state !== 'current')
     if (copies.length === 0) {
       notes.push('the project has no copy of the skill; run `pr-review install-skill` to add one')
     } else if (toCheck.length > 0) {
@@ -173,7 +178,7 @@ async function applySkill(deps: UpgradeDeps): Promise<{ written: string[]; skipp
   const written: string[] = []
   const skipped: string[] = []
   for (const copy of await skillCopies(deps)) {
-    if (!copy.stale) continue
+    if (copy.state === 'current') continue
     try {
       await installSkill({ targets: [{ kind: copy.kind, dir: copy.dir }] })
       written.push(copy.path)

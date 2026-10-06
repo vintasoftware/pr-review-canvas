@@ -164,6 +164,24 @@ dialog.gen {
   align-items: baseline;
   font-size: 13px;
 }
+/* What the agent is doing right now; the dot turns to a warning while it says nothing. */
+.gen-pulse {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.gen-pulse::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.gen-pulse[data-quiet]::before {
+  background: var(--warn);
+}
 .gen-activity,
 .gen-problems ul {
   margin: 0;
