@@ -195,7 +195,8 @@ async function startServer(
   // Served as the shared server serves it: under the project's base path, behind the hub's front.
   let port = 0
   const hub = await createHub({ registry: t.dataDir, load: async () => t.ctx, log: () => undefined })
-  await hub.register({ repoRoot: t.ctx.config.repoRoot })
+  // As `open` does: with the shell's environment, so the project runs under it.
+  await hub.register({ repoRoot: t.ctx.config.repoRoot, env: process.env })
   const app = createHubApp({
     hub,
     home: t.dataDir,
