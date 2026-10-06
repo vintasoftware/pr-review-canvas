@@ -35,11 +35,12 @@ for both GitHub pull request numbers and GitLab merge request IIDs.
 ### One server for every project
 
 ```text
-pr-review serve [--port <n>]                    # once, in any terminal
-pr-review open [<n>|branch|uncommitted]         # in a project's folder
+pr-review serve [--port <n>]                    # in a project: starts the server and opens it
+pr-review open [<n>|branch|uncommitted]         # adds another project to the running server
 ```
 
-One `pr-review serve` serves every project you open. Each project answers under its own path:
+`pr-review serve` in a project starts the server and opens that project, as it always did; one
+server then serves every project you add to it. Each project answers under its own path:
 `/r/<owner>/<repo>/` for the main checkout of a clone, and `/r/<owner>/<repo>~<worktree>/` for a
 linked worktree, because its branch and uncommitted work differ. `<worktree>` is git's name for
 the worktree: its folder's name, unless another worktree of the clone had that name first (see
@@ -55,12 +56,12 @@ whose folder no longer exists leaves the list by itself. The list and each proje
 have the **skin** and **theme** commands of the review page; a project saves its look in its
 `.pr-review/settings.yml`, and the list in `~/.pr-review/appearance.json`.
 
+- `pr-review serve` inside a repository adds that project and opens it. When a server already
+  runs, `serve` adds the project to it and exits, unless `--port` names another port, which starts
+  a second server. Outside a repository it starts the server alone.
 - `pr-review open` adds the checkout it runs in to the running server and opens it. With a number,
   `branch`, or `uncommitted`, it opens that review. With no server running it fails with
   `SERVER_NOT_RUNNING`. With `--json`, or on a pipe, it prints `{ url, project, dataDir, server }`.
-- `pr-review serve` inside a repository also adds that project and opens it, as it always did.
-  When a server already runs, `serve` adds the project to it and exits, unless `--port` names
-  another port, which starts a second server.
 - The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
   shell that last ran `open` or `serve` for it, such as a project's own `GH_TOKEN`, ssh agent, or
   `PATH`. It keeps that environment in memory only. After a restart, a project opened from a
@@ -121,8 +122,8 @@ Run the installed skill in Claude Code or Codex:
 /pr-review-canvas uncommitted     # the same, with your working-tree edits and new files on top
 ```
 
-With the server running, run `pr-review open branch` or `pr-review open uncommitted` in the
-project's folder.
+With `pr-review serve` running, open `<project>/review/branch` or `<project>/review/uncommitted`,
+or run `pr-review open branch` or `pr-review open uncommitted` in the project's folder.
 
 There are two reviews of the work in a clone, and they are separate targets:
 

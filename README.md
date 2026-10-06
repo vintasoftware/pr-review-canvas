@@ -82,11 +82,10 @@ The skill generates and validates the canvas, then shares it in a PR or MR comme
 your `gh` or `glab` login. It returns a local review URL and the comment link.
 Anyone with access to the PR or MR can read the shared canvas.
 
-Start the server once, in any terminal, and open your project from its folder:
+Start the server from your project; it opens the review in the browser:
 
 ```bash
-pr-review serve     # keep this terminal running
-pr-review open      # in the project's folder: opens its review in the browser
+pr-review serve
 ```
 
 Open the review URL. For each attention point marked **yours**, click **resolve** and
@@ -112,7 +111,8 @@ Before opening a PR, you can generate a canvas for your local work:
 /pr-review-canvas uncommitted     # includes working-tree edits and new files
 ```
 
-With the server running, run `pr-review open branch` or `pr-review open uncommitted` in the
+With `pr-review serve` running, open **http://localhost:3010/r/<owner>/<repo>/review/branch** or
+**.../review/uncommitted**, or run `pr-review open branch` or `pr-review open uncommitted` in the
 project's folder. These reviews stay local, and you can resolve
 attention points before sharing your work. Use `--base <ref>` to compare against another branch.
 See [local branch and uncommitted reviews](docs/reference.md#reviewing-before-the-pull-request-exists)
@@ -120,18 +120,18 @@ for details.
 
 ### Reviewing PRs
 
-Run `pr-review open` in your clone of the project, or `pr-review open 123` for one PR or MR.
-Start the server first with `pr-review serve` in any terminal; running `serve` inside a project
-also opens it. Enter the PR or MR number to load the shared canvas, read the grouped diffs, and
-leave comments. When the checked-out branch is the head of an open PR or MR, as in a worktree made
-for that review, the project opens on that review directly.
+Run `pr-review serve` from your clone of the project. It opens the project in the browser: enter
+the PR or MR number to load the shared canvas, read the grouped diffs, and leave comments. When the
+checked-out branch is the head of an open PR or MR, as in a worktree made for that review, the
+project opens on that review directly. Keep the terminal running while you review; stop the server
+with **Ctrl+C**.
 
-One server serves every project you open: each answers at
-`http://localhost:3010/r/<owner>/<repo>/`, and a linked worktree at
+One server serves every project. With it running, `pr-review serve` or `pr-review open` in
+another project's folder adds that project to it, and `pr-review open 123` opens one PR or MR.
+Each project answers at `http://localhost:3010/r/<owner>/<repo>/`, and a linked worktree at
 `/r/<owner>/<repo>~<worktree>/`, because its branch and working tree differ.
 **http://localhost:3010** lists them, and the logo on every page leads there; **remove** takes a
-project off the list without touching its data. Keep the server's terminal running while you review; stop
-it with **Ctrl+C**.
+project off the list without touching its data.
 
 ## Documentation
 

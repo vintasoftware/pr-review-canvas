@@ -181,8 +181,8 @@ the canvas any other way. Always inspect `sharing.status`: local validation succ
 remote sharing succeeded.
 
 For a local run there is nothing to share: `sharing.status` is `"local"`. Report `reviewUrl` and
-tell the user to run `pr-review open` in the project to read the canvas (with `pr-review serve`
-running in any terminal first, if no server runs yet).
+tell the user to run `pr-review serve` in the project to read the canvas (or `pr-review open`,
+when a server already runs for another project).
 
 On failure the command prints one line per problem, then an error line, and exits 5:
 
@@ -201,8 +201,8 @@ prepare again; pass `--allow-stale` only when the user asks for the canvas of th
 
 ### 6. Report the sharing result
 
-For a PR/MR run, report the local `reviewUrl` (`pr-review open` in the project adds it to the
-running server; start one with `pr-review serve` if none runs) and inspect `sharing`:
+For a PR/MR run, report the local `reviewUrl` (`pr-review serve` in the project starts the server
+and opens it, or adds the project when one already runs) and inspect `sharing`:
 
 - `status: "shared"`: link to `sharing.url` and say the canvas was shared automatically.
 - `status: "off"`: the config keeps canvases local, so nothing was posted. Say so, give the local
@@ -215,8 +215,8 @@ running server; start one with `pr-review serve` if none runs) and inspect `shar
 
 For a local run, `sharing.status` is `"local"` and there is nothing to share. Give the user
 `reviewUrl` (`http://localhost:<port>/r/<owner>/<repo>/review/branch` or `.../review/uncommitted`)
-and tell them to run `pr-review open branch` or `pr-review open uncommitted` in the project, after
-`pr-review serve` if no server runs. Say which base was compared and whether uncommitted
+and tell them to run `pr-review serve` in the project and open that URL, or `pr-review open branch`
+or `pr-review open uncommitted` when a server already runs. Say which base was compared and whether uncommitted
 work was included, both from the `local` object prepare printed.
 
 For a `--base/--head` run, `sharing.status` is `"local"` too, but the canvas has no page of its
@@ -236,8 +236,8 @@ its commit is on no branch, so generate a fresh one for the PR.
 ### 7. Hand over the self-review
 
 The canvas is ready for its author before it is ready for reviewers. End your report of a PR/MR or
-local run by asking the user to self-review before requesting review: run `pr-review open` in the
-project (after `pr-review serve`, if no server runs), open `reviewUrl`, and resolve each attention point marked **yours** with a one-line reason. A
+local run by asking the user to self-review before requesting review: run `pr-review serve` in the
+project, open `reviewUrl`, and resolve each attention point marked **yours** with a one-line reason. A
 reviewer point that does not apply, such as a false positive, can be resolved the same way.
 Resolving updates the canvas comment for a PR/MR run, so reviewers see only what is left; when
 `sharing.status` was `"off"`, the resolutions stay in the local canvas. Say how many points
