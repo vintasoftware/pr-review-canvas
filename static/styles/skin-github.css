@@ -184,9 +184,10 @@
 
   /* Buttons, GitHub's btn-sm. This list is the one place that decides which commands are buttons:
    the header toolbar, sign-off, a point's verbs, the ask of a layer, file, or point, the layer's last
-   step, the author's resolve, and the "reviewed" toggles. */
+   step, the author's resolve, a code block's copy, and the "reviewed" toggles. */
   :is(
     .hdr-actions .cmd,
+    .codeblock > .cmd,
     .signoff .cmd,
     :is(.findings, .ifind)
       .cmd:is(
@@ -252,6 +253,7 @@
     &:is(
       .findings [data-copy],
       .ifind [data-copy],
+      .codeblock > .cmd,
       .file-h .cmd,
       #settings,
       [data-act='help'],

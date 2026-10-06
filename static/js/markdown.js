@@ -160,6 +160,7 @@ function addCopyCommands(root) {
     const copy = document.createElement('button')
     copy.className = 'cmd'
     copy.type = 'button'
+    copy.title = 'Copy'
     copy.setAttribute('data-copy', pre.textContent ?? '')
     copy.textContent = 'copy'
     pre.replaceWith(block)
