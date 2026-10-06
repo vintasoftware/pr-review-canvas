@@ -27,18 +27,31 @@ Run these commands in the repository you want to review:
 
 ```bash
 cd /path/to/your-project
-pr-review install-skill
 pr-review doctor --all-checks
 ```
 
-`install-skill` installs the generation skill for Claude Code and Codex in
-`.claude/skills/pr-review-canvas` and `.agents/skills/pr-review-canvas`.
-Commit these copies so your team can use them. Restart your coding agent if the skill
-does not appear. Repeat this setup for each project.
-
-`doctor --all-checks` checks your repository, host CLI login, local storage, installed
-skills, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
+`doctor --all-checks` checks your repository, host CLI login, local storage, the project's
+skill, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
 If only `acpx` is missing, you can still review canvases; install it below to enable chat.
+If only the skill is missing, you can still generate from the review app, which uses the skill
+pr-review ships.
+
+### Optional: install the skill
+
+Install the generation skill to run `/pr-review-canvas` in Claude Code or Codex, or to
+customize it for the project:
+
+```bash
+pr-review install-skill
+```
+
+`install-skill` copies the skill to `.claude/skills/pr-review-canvas` and
+`.agents/skills/pr-review-canvas`. Commit these copies so your team can use them. Restart your
+coding agent if the skill does not appear. Repeat this for each project.
+
+Generations from the review app follow the project's copy when there is one, with any changes
+the project made to it. `pr-review upgrade` replaces a changed copy with the shipped skill, so
+commit your changes before you upgrade.
 
 ### Optional: AI Chat install
 
@@ -58,7 +71,8 @@ See [AI Chat](docs/reference.md#ai-chat) for model settings and review checkouts
 
 ### Self-reviewing your PRs
 
-Run the installed skill in Claude Code or Codex, replacing `123` with your PR or MR number:
+With the [skill installed](#optional-install-the-skill), run it in Claude Code or Codex,
+replacing `123` with your PR or MR number:
 
 ```text
 /pr-review-canvas 123
@@ -81,7 +95,8 @@ Then request review from your team.
 After pushing new commits, run `/pr-review-canvas 123` again to update the canvas.
 Reviewers click **refresh** to load it.
 
-With [AI Chat](#optional-ai-chat-install) installed, you can also generate from the review app:
+With [AI Chat](#optional-ai-chat-install) installed, you can also generate from the review app,
+with or without the skill installed:
 click **generate canvas** on the home page or on a review with no canvas, or
 **generate for current head** on an outdated one. See
 [generating from the review app](docs/reference.md#generating-from-the-review-app).
