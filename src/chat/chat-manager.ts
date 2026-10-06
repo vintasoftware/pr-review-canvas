@@ -44,8 +44,8 @@ export interface ChatManagerDeps {
   now: () => Date
   /**
    * The reviews with a turn running, in this manager or any other over the same data dir. The
-   * worktrees of one clone share its threads and review checkout, and so this set; a manager of
-   * its own has one of its own.
+   * worktrees of one clone share a pull request's threads and review checkout, and so this set,
+   * while each worktree's local reviews are its own; a manager of its own has one of its own.
    */
   turns?: TurnSet | undefined
 }
