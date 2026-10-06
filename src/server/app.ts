@@ -4,7 +4,7 @@ import type { AppEnv } from './env.js'
 import { AppError, logRequestError, toAppError } from './errors.js'
 import { errorPage } from './html.js'
 import { apiRoutes } from './routes/api.js'
-import { appearanceFor, appearanceQuery, pageRoutes } from './routes/pages.js'
+import { appearanceFor, appearanceQuery, pageRoutes, projectLink, type Served } from './routes/pages.js'
 import { staticRoutes } from './routes/static.js'
 import { applyResponseHeaders, createNonce, responseHeaders, securityMiddleware } from './security.js'
 
@@ -14,8 +14,9 @@ function wantsJson(pathname: string): boolean {
 }
 
 /** One project's pages and API, answering at its root; the shared server mounts it under its base path. */
-export function createApp(ctx: AppContext): Hono<AppEnv> {
+export function createApp(ctx: AppContext, served: Served = { shellEnv: true }): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
+  const project = projectLink(ctx, served)
 
   app.use('*', responseHeaders)
   app.use('*', securityMiddleware)
@@ -31,7 +32,7 @@ export function createApp(ctx: AppContext): Hono<AppEnv> {
     const res = wantsJson(c.req.path)
       ? c.json(envelope, err.status)
       : await c.html(
-          errorPage(envelope.error, nonce, await appearanceFor(ctx, appearanceQuery(c)), ctx.config.slug),
+          errorPage(envelope.error, nonce, await appearanceFor(ctx, appearanceQuery(c)), project),
           err.status
         )
     applyResponseHeaders(res, c.req.path, nonce)
@@ -49,7 +50,7 @@ export function createApp(ctx: AppContext): Hono<AppEnv> {
 
   app.route('/api', apiRoutes(ctx))
   app.route('/', staticRoutes(ctx))
-  app.route('/', pageRoutes(ctx))
+  app.route('/', pageRoutes(ctx, project))
 
   return app
 }

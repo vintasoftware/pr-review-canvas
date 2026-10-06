@@ -6,6 +6,7 @@ import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
 import { homePage, reviewPage } from '../html.js'
 import { startPage } from '../start-page.js'
+import type { ProjectLink } from '../../../static/js/header-bar.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
 export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Promise<Appearance> {
@@ -19,7 +20,25 @@ export function appearanceQuery(c: {
   return { skin: c.req.query('skin'), theme: c.req.query('theme') }
 }
 
-export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
+/** What the shared server knows of a project beyond its context. */
+export interface Served {
+  /** False when the project runs under the server's environment rather than its shell's. */
+  shellEnv: boolean
+}
+
+/**
+ * The project as its pages' header names it. A project running under the server's environment
+ * names its folder too, where `pr-review open` gives it the shell's.
+ */
+export function projectLink(ctx: AppContext, served: Served): ProjectLink {
+  return {
+    slug: ctx.config.slug,
+    home: ctx.config.basePath,
+    reopenIn: served.shellEnv ? undefined : ctx.config.repoRoot,
+  }
+}
+
+export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
   app.get('/', async c => {
@@ -40,7 +59,7 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
           version: ctx.version,
-          slug: ctx.config.slug,
+          project,
           base: ctx.config.basePath,
           host: ctx.config.host,
           canGenerate: acpx.installed,
@@ -86,6 +105,7 @@ export function pageRoutes(ctx: AppContext): Hono<AppEnv> {
           repo: ctx.config.repo.name,
           base: ctx.config.basePath,
           project: ctx.config.slug,
+          reopenIn: project.reopenIn,
           version: ctx.version,
           host: ctx.config.host,
           foldLevel: settings.foldLevel,

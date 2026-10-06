@@ -8,7 +8,11 @@ import { esc } from './dom.js'
 import { skinLabel } from './skin.js'
 import { themeLabel } from './theme.js'
 
-/** @typedef {{ slug: string, home: string }} ProjectLink The project's name and home page. */
+/**
+ * @typedef {{ slug: string, home: string, reopenIn?: string | undefined }} ProjectLink The project's
+ *   name and home page; `reopenIn` is its folder when it runs under the server's environment
+ *   rather than the shell's that opened it.
+ */
 
 /**
  * @typedef {{
@@ -34,6 +38,21 @@ function contextHtml(opts) {
 }
 
 /**
+ * A project the server built again after a restart runs git, the host CLI, and the agent under the
+ * server's environment, which may lack the shell's login or PATH. A line under the bar says how to
+ * give it the shell's back; the page works as it is meanwhile.
+ * @param {BarOptions} opts
+ * @returns {string}
+ */
+function envNoticeHtml(opts) {
+  const folder = opts.project?.reopenIn
+  if (folder === undefined) {
+    return ''
+  }
+  return `<p class="banner env-notice" role="status">This project runs without your shell's environment. Run <code>pr-review open</code> in <code>${esc(folder)}</code> to use it.</p>`
+}
+
+/**
  * @param {BarOptions} opts
  * @param {string} [commands] the page's own commands, already HTML
  * @returns {string}
@@ -45,6 +64,7 @@ export function headerBarHtml(opts, commands = '') {
     commands +
     `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
     `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
-    '</div></div>'
+    '</div></div>' +
+    envNoticeHtml(opts)
   )
 }

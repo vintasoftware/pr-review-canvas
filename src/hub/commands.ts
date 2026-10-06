@@ -207,7 +207,7 @@ export async function runServe(deps: ServeDeps, argv: string[], io: CliIo): Prom
   }
   const started = await deps.startServer({
     port,
-    registration: repoRoot === null ? null : { repoRoot, flags },
+    registration: repoRoot === null ? null : { repoRoot, env: shellEnv(deps.env), flags },
     advertise: running === null,
   })
   if (open) {

@@ -339,8 +339,8 @@ describe('createHub', () => {
     const fixture = at('/review.json')
     await writeFile(fixture, JSON.stringify(syntheticArtifact()))
     const h = await startHub()
-    const { project } = await h.register({ repoRoot: at('/src/widgets') })
-    await h.register({ repoRoot: at('/src/gadgets'), flags: { fixtureCanvas: fixture } })
+    const { project } = await h.register({ repoRoot: at('/src/widgets'), env: process.env })
+    await h.register({ repoRoot: at('/src/gadgets'), env: process.env, flags: { fixtureCanvas: fixture } })
     project.ctx.log('hello')
     expect(logs).toEqual([
       'loading /src/widgets',
@@ -639,16 +639,71 @@ describe('a saved project built again', () => {
   })
 
   it('runs under the server environment, since the shell one is never saved', async () => {
+    const shell = { PR_REVIEW_DATA_DIR: at('/shell-data') }
+    const savedText = () => readFile(path.join(home, 'projects.json'), 'utf8')
     const first = await startHub()
-    const { project } = await first.register({
-      repoRoot: at('/src/widgets'),
-      env: { PR_REVIEW_DATA_DIR: at('/shell-data') },
-    })
+    const { project } = await first.register({ repoRoot: at('/src/widgets'), env: shell })
     expect(project.ctx.config.dataDir).toBe(at('/shell-data'))
     first.close()
-    expect(JSON.stringify(await readRegistry(home))).not.toContain('shell-data')
+    const saved = [await savedText()]
     const h = await startHub()
     expect((await servedAt(h, '/r/acme/widgets/'))?.ctx.config.dataDir).toBe(at('/src/widgets/.pr-review'))
+    saved.push(await savedText())
+    await h.register({ repoRoot: at('/src/widgets'), env: shell })
+    saved.push(await savedText())
+    // Neither the environment nor whether a project runs under it reaches the file.
+    for (const text of saved) {
+      expect(JSON.parse(text)).toEqual({ projects: [widgets()] })
+    }
+  })
+
+  /** The folder the project's review page tells the reader to run `pr-review open` in, if any. */
+  async function reopenIn(project: Project | null): Promise<unknown> {
+    const page = await (await project?.app.request('/review/42', { headers: LOCAL }))?.text()
+    const bootstrap = /<script id="bootstrap"[^>]*>(.*?)<\/script>/s.exec(page ?? '')?.[1]
+    return (JSON.parse(bootstrap ?? 'null') as { reopenIn?: string } | null)?.reopenIn
+  }
+
+  it('runs without the shell environment until opened again, and says so once and on its pages', async () => {
+    const first = await startHub()
+    expect((await first.register({ repoRoot: at('/src/widgets'), env: process.env })).project.shellEnv).toBe(
+      true
+    )
+    first.close()
+    const h = await startHub()
+    const restored = await servedAt(h, '/r/acme/widgets/')
+    expect(restored?.shellEnv).toBe(false)
+    expect(await servedAt(h, '/r/acme/widgets/review/42')).toBe(restored)
+    expect(logs.filter(line => line.includes("shell's environment"))).toEqual([
+      `acme/widgets started without your shell's environment; run \`pr-review open\` in ${at('/src/widgets')} to use it`,
+    ])
+    expect(await reopenIn(restored)).toBe(at('/src/widgets'))
+
+    const { project } = await h.register({ repoRoot: at('/src/widgets'), env: process.env })
+    expect(project.shellEnv).toBe(true)
+    expect(await servedAt(h, '/r/acme/widgets/')).toBe(project)
+    expect(await reopenIn(project)).toBeUndefined()
+  })
+
+  it('keeps running without it while a chat turn keeps it from being replaced', async () => {
+    const first = await startHub()
+    await first.register({ repoRoot: at('/src/widgets'), env: process.env })
+    first.close()
+    const h = await startHub()
+    const restored = await servedAt(h, '/r/acme/widgets/')
+    if (restored === null) {
+      throw new Error('not restored')
+    }
+    const turn = chatTurn(restored.ctx, 42)
+    expect(await h.register({ repoRoot: at('/src/widgets'), env: process.env })).toEqual({
+      project: restored,
+      kept: true,
+    })
+    expect(restored.shellEnv).toBe(false)
+    expect(await reopenIn(restored)).toBe(at('/src/widgets'))
+    open()
+    await turn
+    expect((await h.register({ repoRoot: at('/src/widgets'), env: process.env })).project.shellEnv).toBe(true)
   })
 
   it('moves to the path its checkout answers under now, and its old path leaves the list', async () => {

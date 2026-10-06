@@ -71,6 +71,15 @@ function readBootstrap() {
 }
 
 /**
+ * The project as the header names it.
+ * @param {Bootstrap} bootstrap
+ * @returns {import('./header-bar.js').ProjectLink}
+ */
+function projectLinkOf(bootstrap) {
+  return { slug: bootstrap.project, home: bootstrap.base, reopenIn: bootstrap.reopenIn }
+}
+
+/**
  * @param {string} version
  * @param {PrBundle} [bundle]
  */
@@ -208,7 +217,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         bareHeaderHtml({
           host: location.host,
-          project: { slug: this.bootstrap.project, home: this.bootstrap.base },
+          project: projectLinkOf(this.bootstrap),
           theme: readTheme(document.documentElement),
           skin: readSkin(document.documentElement),
         }) +
@@ -275,7 +284,7 @@ export class PrAppElement extends HTMLElement {
       theme: readTheme(document.documentElement),
       skin: readSkin(document.documentElement),
       now,
-      project: this.bootstrap ? { slug: this.bootstrap.project, home: this.bootstrap.base } : undefined,
+      project: this.bootstrap ? projectLinkOf(this.bootstrap) : undefined,
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage

@@ -5,7 +5,7 @@ import { keyLabel, keyToString, LOCAL_KEYS, type LocalKey } from '../contract/re
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
 import { esc } from '../../static/js/dom.js'
-import { headerBarHtml } from '../../static/js/header-bar.js'
+import { headerBarHtml, type ProjectLink } from '../../static/js/header-bar.js'
 import { basePathOf, slugParts } from '../hub/slug.js'
 
 type Html = HtmlEscapedString | Promise<HtmlEscapedString>
@@ -112,8 +112,8 @@ export function homePage(
     owner: string
     repo: string
     version: string
-    /** The project's name on the server, which its path is built from. */
-    slug: string
+    /** The project as the header names it. */
+    project: ProjectLink
     /** The project's base path on the server, with a trailing slash. */
     base: string
     host: Host
@@ -141,7 +141,7 @@ export function homePage(
     scripts: [PAGE_APPEARANCE_SCRIPT],
     body: html`<div class="page">
 <header class="hdr">
-${raw(headerBarHtml({ project: { slug: data.slug, home: data.base }, ...appearance }, `<a class="cmd" id="health" href="${esc(data.base)}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`))}
+${raw(headerBarHtml({ project: data.project, ...appearance }, `<a class="cmd" id="health" href="${esc(data.base)}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`))}
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>${data.owner}/${data.repo}</h1></div>
 <p class="meta"><span>Open a ${noun} by number. Diffs come from your local clone; the canvas from a published review.</span></p></div>
@@ -260,22 +260,22 @@ ${
   })
 }
 
-/** `project` is the slug of the project the error is in; null for an error of the server's own. */
+/** `project` is the project the error is in; null for an error of the server's own. */
 export function errorPage(
   error: ErrorEnvelope['error'],
   nonce: string,
   appearance: Appearance,
-  project: string | null = null
+  project: ProjectLink | null = null
 ): Html {
   return pageShell({
     title: `Error · ${error.code}`,
-    bootstrap: { error, base: project === null ? '/' : basePathOf(project) },
+    bootstrap: { error, base: project === null ? '/' : project.home },
     nonce,
     appearance,
     app: false,
     scripts: [PAGE_APPEARANCE_SCRIPT],
     body: html`<div class="page"><header class="hdr">
-${raw(headerBarHtml({ project: project === null ? undefined : { slug: project, home: basePathOf(project) }, ...appearance }))}
+${raw(headerBarHtml({ project: project ?? undefined, ...appearance }))}
 <div class="stripe" aria-hidden="true"></div></header>
 <main id="main" class="home"><section class="panel error-card"><div class="panel-h"><h2><span class="mono">${error.code}</span></h2></div>
 <div class="body"><p>${error.message}</p>${error.hint ? html`<p class="muted">${error.hint}</p>` : ''}</div></section></main></div>`,

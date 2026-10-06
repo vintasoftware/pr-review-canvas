@@ -27,8 +27,9 @@ export interface ProjectRegistration {
   /** The checkout's top-level folder. */
   repoRoot: string
   /**
-   * The environment of the shell that opened the project, kept in memory only. A project built
-   * from the saved list after a restart runs under the server's own until it is opened again.
+   * The environment of the shell that opened the project, kept in memory only. Every command
+   * passes one; a project built from the saved list after a restart has none, and runs under the
+   * server's own until it is opened again.
    */
   env?: NodeJS.ProcessEnv | undefined
   flags?: ProjectFlags | undefined
@@ -46,6 +47,11 @@ export type LoadProject = (registration: ProjectRegistration, hooks: ProjectHook
 export interface Project {
   ctx: AppContext
   app: Hono<AppEnv>
+  /**
+   * False for a project built from the saved list after a restart: it runs under the server's
+   * environment until a command opens it again, and its pages say so.
+   */
+  shellEnv: boolean
 }
 
 export type Resolved =
@@ -164,7 +170,8 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
       cloneOf,
     })
     named = ctx.config.slug
-    return { ctx, app: createApp(ctx) }
+    const shellEnv = registration.env !== undefined
+    return { ctx, app: createApp(ctx, { shellEnv }), shellEnv }
   }
 
   const save = async (): Promise<void> => {
@@ -204,6 +211,11 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     releaseClones()
     const { ctx } = project
     ctx.log(`${repoRoot} · data dir ${ctx.config.dataDir}`)
+    if (!project.shellEnv) {
+      opts.log(
+        `${slug} started without your shell's environment; run \`pr-review open\` in ${repoRoot} to use it`
+      )
+    }
     if (ctx.fixtureArtifact !== null) {
       ctx.log(`fixture canvas ${ctx.config.fixtureCanvasPath ?? ''} (dev only): every PR reports ready`)
     }

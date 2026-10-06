@@ -228,13 +228,13 @@ describe('runServe', () => {
     expect(deps.opened).toEqual([])
   })
 
-  it('starts and advertises a server when none runs', async () => {
-    const deps = fakeDeps({ server: null })
+  it('starts and advertises a server when none runs, with the shell env for its project', async () => {
+    const deps = fakeDeps({ server: null, env: { HOME: '/home/me', UNSET: undefined } })
     expect(await runServe(deps, [], fakeIo())).toBe(0)
     expect(deps.started).toEqual([
       {
         port: 3010,
-        registration: { repoRoot: '/home/me/widgets', flags: {} },
+        registration: { repoRoot: '/home/me/widgets', env: { HOME: '/home/me' }, flags: {} },
         advertise: true,
       },
     ])

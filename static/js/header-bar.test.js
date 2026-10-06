@@ -94,4 +94,27 @@ describe('headerBarHtml', () => {
     expect(host).toContain('&lt;i&gt;evil&lt;/i&gt;')
     expect(host).not.toContain('<i>')
   })
+
+  it("says under the bar where to run open when the project runs without the shell's environment", () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = headerBarHtml({
+      project: { slug: 'acme/widgets', home: '/r/acme/widgets/', reopenIn: '/src/<w>' },
+      ...look,
+    })
+    const notice = holder.querySelector('.hdr-bar + .env-notice')
+    expect(notice?.getAttribute('role')).toBe('status')
+    expect(notice?.textContent).toBe(
+      "This project runs without your shell's environment. Run pr-review open in /src/<w> to use it."
+    )
+    expect(holder.querySelector('.env-notice code:last-child')?.innerHTML).toBe('/src/&lt;w&gt;')
+  })
+
+  it('has no notice for a project with the shell environment, or on a page of the server', () => {
+    for (const opts of [
+      { project: { slug: 'acme/widgets', home: '/r/acme/widgets/' }, ...look },
+      { host: 'localhost:3010', ...look },
+    ]) {
+      expect(headerBarHtml(opts)).not.toContain('env-notice')
+    }
+  })
 })

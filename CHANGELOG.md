@@ -22,6 +22,9 @@
 - The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
   shell that ran `open` for it, kept in memory only. `--data-dir`, `--chat-agent`, and
   `--chat-model` also work on `open`, per project, and are saved with it.
+- After a restart, a project opened from a bookmark runs with the server's environment. The server
+  logs this, and a line under the project's page header says to run `pr-review open` in its folder
+  to give it the shell's again.
 - Each worktree of a clone has its own `branch` and `uncommitted` reviews: review progress,
   chat threads, review checkout, and the earlier canvases they fall back on. A linked worktree's go by `branch~<folder>` in the
   clone's `.pr-review/`; local reviews a linked worktree prepared before now are the main

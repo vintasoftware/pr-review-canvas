@@ -64,7 +64,8 @@ have the **skin** and **theme** commands of the review page; a project saves its
   shell that last ran `open` or `serve` for it, such as a project's own `GH_TOKEN`, ssh agent, or
   `PATH`. It keeps that environment in memory only. After a restart, a project opened from a
   bookmark runs with the server's own environment until you run `open` in it again; its flags
-  (`--data-dir`, `--chat-agent`, `--chat-model`) are saved with it and still apply.
+  (`--data-dir`, `--chat-agent`, `--chat-model`) are saved with it and still apply. The server's
+  log and a line under the project's page header say so, and name the folder to run `open` in.
 - Running `open` again reloads `pr-review.config.yml`, unless a chat turn or a generation runs in
   that project: then it keeps its settings and `open` says so.
 - The worktrees of one clone share its `.pr-review/` data dir. One generation runs at a time across
