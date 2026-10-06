@@ -194,7 +194,7 @@ async function startServer(
   // the write and fails with ENOTEMPTY.
   // Served as the shared server serves it: under the project's base path, behind the hub's front.
   let port = 0
-  const hub = await createHub({ home: t.dataDir, load: async () => t.ctx, log: () => undefined })
+  const hub = await createHub({ registry: t.dataDir, load: async () => t.ctx, log: () => undefined })
   await hub.register({ repoRoot: t.ctx.config.repoRoot })
   const app = createHubApp({
     hub,

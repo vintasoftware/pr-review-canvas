@@ -68,7 +68,8 @@ have the **skin** and **theme** commands of the review page; a project saves its
 - Running `open` again reloads `pr-review.config.yml`, unless a chat turn or a generation runs in
   that project: then it keeps its settings and `open` says so.
 - The worktrees of one clone share its `.pr-review/` data dir. One generation runs at a time across
-  them, and one chat turn per review.
+  them, and one chat turn per pull request; each worktree's `branch` and `uncommitted` reviews are
+  its own (see [worktrees](#reviewing-before-the-pull-request-exists)).
 - The server writes `~/.pr-review/server.json` (readable by its owner only), with its port and a
   token. Commands read it to find the server; only a command that can read that file can add a
   project. `projects.json` next to it lists the projects, so their URLs keep working after a
@@ -144,10 +145,15 @@ one never disturbs the other.
   reads the head again when it is opened and when `refresh` is pressed, and offers to regenerate.
   Its background polls answer about that same head, so they never contradict what the page shows;
   they read the work again only once a new canvas has been prepared.
-- **Worktrees.** The snapshot index and its anchor are per worktree, so two worktrees of one clone
-  never overwrite each other's snapshot. The review targets are not: `branch` and `uncommitted`
-  name one review per clone, so worktrees share their canvas, review progress and chat threads.
-  Review local work from one worktree at a time.
+- **Worktrees.** Each worktree of a clone has its own `branch` and `uncommitted` reviews: their
+  review progress, chat threads, review checkout, and the canvases they fall back on are that
+  checkout's own. A canvas belongs to its commit, so two checkouts at the same commit show the
+  same one, each with its own progress on it. In the clone's `.pr-review/`, a linked
+  worktree's local reviews go by `branch~<folder>` and `uncommitted~<folder>`, the same label its
+  path on the server carries; the main checkout's keep the bare names. The snapshot index and its
+  anchor are per worktree as well. A pull request's review is the same in every worktree.
+  Local reviews prepared in a linked worktree before this layout lived under the bare names, which
+  are now the main checkout's; prepare them again in the worktree.
 - **No forge side.** A local canvas posts nothing: comments, sign-off, canvas import, and
   attachment discovery are refused for it. The page draws no import drop zone and no shared-canvas
   callout, and the comment and sign-off commands stay disabled with the reason. A canvas of a working-tree
@@ -925,9 +931,11 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   review progress, and chat history go with it. They also appear in `git worktree list`.
 - If the checkout cannot be created or moved, the turn reads your checkout instead and the answer
   carries a warning naming your branch, also when the thread is reopened later.
-- Every worktree of one clone shares the checkouts. While one worktree's project answers about a
-  review, a turn on the same review from another worktree, or from a second `pr-review serve`, is
-  refused with `CHAT_BUSY`; ask again once the first answer is done.
+- Every worktree of one clone shares the checkouts folder. A pull request has one checkout for all
+  of them: while one worktree's project answers about it, a turn on the same pull request from
+  another worktree, or from a second `pr-review serve`, is refused with `CHAT_BUSY`; ask again once
+  the first answer is done. A linked worktree's branch review has a checkout of its own
+  (`checkouts/branch~<folder>`).
 
 The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
 clone and every `checkoutSweepMinutes` after. `pr-review clean` does the same on demand:

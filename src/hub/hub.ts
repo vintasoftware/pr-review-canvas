@@ -77,7 +77,12 @@ export interface Hub {
 }
 
 export interface HubOptions {
-  home: string
+  /**
+   * The folder whose `projects.json` holds the saved list: the server's home when it owns
+   * `server.json`. A second server, on another port, passes null and keeps its list in memory, so
+   * the two never write over each other's list.
+   */
+  registry: string | null
   load: LoadProject
   log: (line: string) => void
   now?: () => Date
@@ -112,7 +117,7 @@ async function folderGone(dir: string): Promise<boolean> {
 export async function createHub(opts: HubOptions): Promise<Hub> {
   const now = opts.now ?? (() => new Date())
   const slots = new Map<string, Slot>()
-  for (const entry of await readRegistry(opts.home)) {
+  for (const entry of opts.registry === null ? [] : await readRegistry(opts.registry)) {
     slots.set(entry.slug, { entry, project: null })
   }
   /** One part per clone, keyed by its repository's folder in the data dir. */
@@ -162,11 +167,14 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     return { ctx, app: createApp(ctx) }
   }
 
-  const save = (): Promise<void> =>
-    writeRegistry(
-      opts.home,
-      [...slots.values()].map(slot => slot.entry)
-    )
+  const save = async (): Promise<void> => {
+    if (opts.registry !== null) {
+      await writeRegistry(
+        opts.registry,
+        [...slots.values()].map(slot => slot.entry)
+      )
+    }
+  }
 
   const registerNow = async (
     registration: ProjectRegistration

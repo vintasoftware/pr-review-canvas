@@ -92,7 +92,7 @@ function manifest(): CanvasManifest {
 
 describe('canvas-store', () => {
   it('starts empty and reports missing', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     expect(await store.readIndex()).toEqual({ canvases: {} })
     expect(await store.findForPr(42, HEAD_SHA)).toEqual({ status: 'missing' })
     expect(await store.readArtifact(HEAD_SHA)).toBeNull()
@@ -100,7 +100,7 @@ describe('canvas-store', () => {
   })
 
   it('writes review.json + manifest.json and indexes the canvas by sha', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     const artifact = { ...syntheticArtifact(), importedAt: '2026-09-10T11:30:00.000Z' }
     await store.write(HEAD_SHA, artifact, manifest())
     expect(await store.readArtifact(HEAD_SHA)).toEqual(artifact)
@@ -128,7 +128,7 @@ describe('canvas-store', () => {
   })
 
   it('revises a stored canvas in place, keeping the rest of its index entry, and refuses an unknown one', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     await store.write(HEAD_SHA, syntheticArtifact(), manifest(), 42, { worktree: true })
     const revised = { ...syntheticArtifact(), settled: {}, revisedAt: '2026-09-10T12:00:00.000Z' }
     await store.revise(HEAD_SHA, revised)
@@ -144,7 +144,7 @@ describe('canvas-store', () => {
   })
 
   it('takes the PR number argument over the manifest and omits it when neither has one', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     await store.write(HEAD_SHA, syntheticArtifact(), manifest(), 7)
     const { prNumber: _ignored, ...noPr } = manifest()
     await store.write(BASE_SHA, syntheticArtifact(), noPr)
@@ -154,7 +154,9 @@ describe('canvas-store', () => {
   })
 
   it('refuses a sha that is not 40 hex chars', () => {
-    expect(() => createCanvasStore(dir, createFakeGit()).canvasDir('../etc')).toThrow(/not a commit sha/)
+    expect(() => createCanvasStore(dir, createFakeGit(), null).canvasDir('../etc')).toThrow(
+      /not a commit sha/
+    )
   })
 })
 
@@ -168,7 +170,7 @@ describe('derived-store', () => {
 
   it('builds derived/ from git once and serves it from disk after', async () => {
     const g = git()
-    const store = createDerivedStore(createCanvasStore(dir, createFakeGit()), g, now)
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), g, now)
     expect(await store.derivable(HEAD_SHA, BASE_SHA)).toBe(true)
     expect(await store.derivable(HEAD_SHA, 'c'.repeat(40))).toBe(false)
     expect(await store.read(HEAD_SHA)).toBeNull()
@@ -205,14 +207,14 @@ describe('derived-store', () => {
       ...g.options.diffs,
       [`${'c'.repeat(40)}..${HEAD_SHA}`]: SYNTHETIC_DIFF.split('diff --git a/src/new.ts')[0] ?? '',
     }
-    const store = createDerivedStore(createCanvasStore(dir, createFakeGit()), g, now)
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), g, now)
     await store.ensure(HEAD_SHA, BASE_SHA)
     const rebuilt = await store.ensure(HEAD_SHA, 'c'.repeat(40))
     expect(rebuilt.files.map(f => f.key)).toEqual(['src_app_ts'])
   })
 
   it('reads lines from materialized files and refuses traversal', async () => {
-    const store = createDerivedStore(createCanvasStore(dir, createFakeGit()), git(), now)
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), git(), now)
     await store.ensure(HEAD_SHA, BASE_SHA)
     expect(await store.readLines(HEAD_SHA, 'head', 'src/app.ts', 3, 4)).toEqual([
       'export function run() {',
@@ -235,7 +237,7 @@ describe('derived-store', () => {
 
 describe('pr-store and state-store', () => {
   it('caches pr.json and comments.json per PR and lists recent PRs newest first', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     expect(await prs.readPr(42)).toBeNull()
     expect(await prs.readComments(42)).toBeNull()
     expect(await prs.listRecent(5)).toEqual([])
@@ -258,13 +260,13 @@ describe('pr-store and state-store', () => {
   })
 
   it('refuses invalid PR numbers and meta filed under the wrong one', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     expect(() => prs.prDir(0)).toThrow(/not a pull request number/)
     await expect(prs.writePr(7, syntheticArtifact().pr)).rejects.toThrow(/cannot hold the meta of/)
   })
 
   it('files each local review under its own directory, out of the recent list', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     const pr = { ...syntheticArtifact().pr, number: null, title: 'Uncommitted work on feature' }
     for (const key of LOCAL_KEYS) {
       await prs.writePr(key, { ...pr, title: key })
@@ -279,7 +281,7 @@ describe('pr-store and state-store', () => {
   })
 
   it('reads state.json or falls back to defaults for missing, invalid JSON, and old shapes', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     const state = createStateStore(prs, now)
     expect(await state.read(42)).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
     const file = path.join(prs.prDir(42), 'state.json')
@@ -301,8 +303,8 @@ describe('pr-store and state-store', () => {
 })
 
 it('merges comments from independent store instances and leaves an absent cache for a full fetch', async () => {
-  const server = createPrStore(dir)
-  const cli = createPrStore(dir)
+  const server = createPrStore(dir, null)
+  const cli = createPrStore(dir, null)
   const comment = {
     id: 6001,
     author: 'octocat',

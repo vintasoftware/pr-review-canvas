@@ -47,7 +47,14 @@ export interface ChatManagerDeps {
    * worktrees of one clone share its threads and review checkout, and so this set; a manager of
    * its own has one of its own.
    */
-  turns?: Set<ReviewKey> | undefined
+  turns?: TurnSet | undefined
+}
+
+/** The reviews with a chat turn running, as one manager sees a set its sibling managers share. */
+export interface TurnSet {
+  has(key: ReviewKey): boolean
+  add(key: ReviewKey): void
+  delete(key: ReviewKey): void
 }
 
 /** Everything about the review target one turn needs, resolved by the route. */
@@ -115,7 +122,7 @@ async function modelForTurn(
 
 export function createChatManager(deps: ChatManagerDeps): ChatManager {
   const running = new Map<ReviewKey, RunningTurn>()
-  const turns = deps.turns ?? new Set<ReviewKey>()
+  const turns: TurnSet = deps.turns ?? new Set<ReviewKey>()
 
   const effectiveSettings = async (): Promise<Settings> => {
     const saved = await deps.settings.read()

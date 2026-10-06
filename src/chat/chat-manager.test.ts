@@ -13,7 +13,7 @@ import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import { createFakeCheckoutGit, type FakeCheckoutGit, makeTempDir } from '../testing/fakes.js'
 import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import { ChatBusyError, type ChatManager, type ChatTarget, createChatManager } from './chat-manager.js'
-import { CheckoutBusyError, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
+import { CheckoutBusyError, checkoutsFor, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
 import { createTranscriptStore, type TranscriptStore } from './threads.js'
 
 const artifact = syntheticArtifact()
@@ -53,12 +53,15 @@ function build(
 ) {
   runner = opts.runner ?? createFakeRunner()
   checkoutGit = opts.checkoutGit ?? createFakeCheckoutGit()
-  checkouts = createReviewCheckouts({
-    root: path.join(dataDir, 'checkouts'),
-    git: checkoutGit,
-    now: () => new Date('2026-09-11T10:00:00.000Z'),
-  })
-  const prs = createPrStore(dataDir)
+  checkouts = checkoutsFor(
+    createReviewCheckouts({
+      root: path.join(dataDir, 'checkouts'),
+      git: checkoutGit,
+      now: () => new Date('2026-09-11T10:00:00.000Z'),
+    }),
+    null
+  )
+  const prs = createPrStore(dataDir, null)
   state = createStateStore(prs, () => new Date('2026-09-11T10:00:00.000Z'))
   settings = createSettingsStore(dataDir)
   transcripts = createTranscriptStore(number => prs.prDir(number))

@@ -10,8 +10,7 @@ import { pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { approveBlockedReason } from './signoff.js'
-import { skinLabel } from './skin.js'
-import { themeLabel } from './theme.js'
+import { headerBarHtml } from './header-bar.js'
 
 /**
  * @param {ReadonlyArray<RiskTag>} risk
@@ -82,43 +81,8 @@ export function generateCommand(bundle, hasCanvas) {
   return { label, title, disabled: false }
 }
 
-/** @typedef {{ slug: string, home: string }} ProjectLink The project's name and home page, from the bootstrap. */
-
-/**
- * Next to the wordmark: a link to the project's home page, named for the project, or the host the
- * page is served from when it has no project.
- * @param {{ host: string, project?: ProjectLink | undefined }} opts
- * @returns {string}
- */
-function projectLinkHtml(opts) {
-  return opts.project === undefined
-    ? `<span class="mono muted">${esc(opts.host)}</span>`
-    : `<a class="mono muted" href="${esc(opts.project.home)}" title="This project's home page">${esc(opts.project.slug)}</a>`
-}
-
-/** The wordmark, which leads to the list of every project the server serves. */
-const BRAND_HTML =
-  '<a class="brand-wordmark" href="/" title="All projects"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a>'
-
-/** @typedef {{ host: string, project?: ProjectLink | undefined, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin }} BarOptions */
-
-/**
- * The bar every page starts with, as the server draws it on its own pages too: the wordmark, the
- * project link, the page's own commands, and the skin and theme commands last.
- * @param {BarOptions} opts
- * @param {string} commands
- * @returns {string}
- */
-function headerBarHtml(opts, commands) {
-  return (
-    `<div class="hdr-bar"><div class="brand">${BRAND_HTML}${projectLinkHtml(opts)}</div>` +
-    '<div class="hdr-actions" role="group" aria-label="Page actions">' +
-    commands +
-    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
-    `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
-    '</div></div>'
-  )
-}
+/** @typedef {import('./header-bar.js').ProjectLink} ProjectLink */
+/** @typedef {import('./header-bar.js').BarOptions} BarOptions */
 
 /**
  * The header of a page that could not load its review: the bar with no commands of its own, so

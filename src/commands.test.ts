@@ -671,6 +671,19 @@ describe('clean', () => {
     expect(off.out).toEqual([])
   })
 
+  it("names a linked worktree's branch checkout by its folder, so it reads apart from the main one", async () => {
+    t = await makeTestContext({ repoRoot: '/trees/fix' })
+    const lease = await t.ctx.checkouts.lease('branch', 'chat')
+    await lease.moveTo(HEAD_SHA)
+    await lease.release()
+    const text = fakeIo(false)
+    expect(await runClean(t.ctx, ['--all', '--dry-run'], text)).toBe(EXIT.ok)
+    expect(text.out[1]).toMatch(new RegExp(`^  branch~fix at ${HEAD_SHA.slice(0, 7)}, last used .+: /`))
+    const json = fakeIo()
+    expect(await runClean(t.ctx, ['--all'], json)).toBe(EXIT.ok)
+    expect(lastJson(json)).toMatchObject({ removed: [{ key: 'branch', worktree: 'fix' }] })
+  })
+
   it('removes nothing with idle cleanup off, and says to use --all', async () => {
     t = await makeTestContext()
     await useCheckout(42)

@@ -103,7 +103,7 @@ function harness(
     root: '/data/checkouts',
     async lease(key) {
       if (opts.lease === 'busy') {
-        throw new CheckoutBusyError(key, 'chat')
+        throw new CheckoutBusyError(String(key), 'chat')
       }
       const lease = { key, moved: [] as string[], released: false }
       leases.push(lease)

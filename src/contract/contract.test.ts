@@ -6,6 +6,7 @@ import { CanvasIndexSchema, CanvasManifestSchema } from './canvas-manifest.js'
 import { CommentsPayloadSchema, emptyComments } from './comments.js'
 import { GenerationContextSchema, isLargePr, LARGE_PR } from './generation-context.js'
 import { LIMITS, TEXT_CAPS } from './review-artifact.js'
+import { parseReviewFolder, type ReviewKey, reviewFolder, WORKTREE_MARK } from './review-key.js'
 import { appearanceForRequest } from './settings.js'
 import { emptyState, PrStateSchema } from './state.js'
 
@@ -78,6 +79,37 @@ describe('small contracts', () => {
   it('names the error codes once each', () => {
     expect(ERROR_CODES).toContain('PR_NOT_FOUND')
     expect(new Set(ERROR_CODES).size).toBe(ERROR_CODES.length)
+  })
+})
+
+describe('review folders', () => {
+  it('names a pull request by its number in every worktree, and a local review by its checkout', () => {
+    expect(WORKTREE_MARK).toBe('~')
+    expect(reviewFolder(42, null)).toBe('42')
+    expect(reviewFolder(42, 'fix')).toBe('42')
+    expect(reviewFolder('branch', null)).toBe('branch')
+    expect(reviewFolder('uncommitted', null)).toBe('uncommitted')
+    expect(reviewFolder('branch', 'fix')).toBe('branch~fix')
+    expect(reviewFolder('uncommitted', 'fix')).toBe('uncommitted~fix')
+  })
+
+  it('reads back every folder reviewFolder names', () => {
+    const keys: ReviewKey[] = [42, 'branch', 'uncommitted']
+    for (const key of keys) {
+      for (const worktree of [null, 'fix', 'v1.2_rc-3']) {
+        const folder = reviewFolder(key, worktree)
+        expect(parseReviewFolder(folder)).toEqual({
+          key,
+          worktree: typeof key === 'number' ? null : worktree,
+        })
+      }
+    }
+  })
+
+  it('names nothing for garbage, a label on a pull request number, or an empty label', () => {
+    for (const name of ['', 'notes', '0', '-1', '4.2', '~fix', '42~fix', '42~', 'branch~', 'other~fix']) {
+      expect(parseReviewFolder(name)).toBeNull()
+    }
   })
 })
 

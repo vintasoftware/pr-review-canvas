@@ -5,27 +5,27 @@
 // prints the same URL the server answers on.
 import path from 'node:path'
 import type { Repo } from '../contract/review-artifact.js'
+import { WORKTREE_MARK } from '../contract/review-key.js'
 
 /** The prefix every project path starts with. */
 export const PROJECTS_PREFIX = '/r/'
 
-/** What separates a linked worktree's folder from its repository in a slug. */
-const WORKTREE_MARK = '~'
-
-/** A worktree folder name as a path segment: letters, digits, `.`, `_` and `-`. */
-function worktreeLabel(repoRoot: string): string {
-  return path.basename(repoRoot).replace(/[^A-Za-z0-9._-]+/g, '-')
-}
-
 /**
- * `<owner>/<repo>`, with `~<folder>` for a linked worktree. The main checkout is the folder that
- * holds the common `.git`; any other worktree, including every worktree of a bare clone, is linked.
+ * The label of a linked worktree, from its folder name as a path segment (letters, digits, `.`,
+ * `_` and `-`); null for the clone's main checkout, the folder that holds the common `.git`. Every
+ * worktree of a bare clone is linked. The checkout's slug and the folders of its local reviews
+ * both carry this label.
  */
-export function projectSlug(repo: Repo, repoRoot: string, commonDir: string): string {
-  const name = `${repo.owner}/${repo.name}`
+export function worktreeOf(repoRoot: string, commonDir: string): string | null {
   const main =
     path.basename(commonDir) === '.git' && path.resolve(path.dirname(commonDir)) === path.resolve(repoRoot)
-  return main ? name : `${name}${WORKTREE_MARK}${worktreeLabel(repoRoot)}`
+  return main ? null : path.basename(repoRoot).replace(/[^A-Za-z0-9._-]+/g, '-')
+}
+
+/** `<owner>/<repo>`, with `~<label>` for a linked worktree. */
+export function projectSlug(repo: Repo, worktree: string | null): string {
+  const name = `${repo.owner}/${repo.name}`
+  return worktree === null ? name : `${name}${WORKTREE_MARK}${worktree}`
 }
 
 /** The repository and the worktree folder a slug names; a main checkout names no worktree. */

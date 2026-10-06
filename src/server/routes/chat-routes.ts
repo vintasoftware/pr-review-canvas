@@ -190,8 +190,9 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const body: CheckoutsResponse = {
       root: ctx.checkouts.root,
       checkouts: await Promise.all(
-        listed.map(async ({ key, sha, lastUsedAt, locked, dir }) => ({
+        listed.map(async ({ key, worktree, sha, lastUsedAt, locked, dir }) => ({
           key,
+          worktree,
           sha,
           lastUsedAt,
           locked,

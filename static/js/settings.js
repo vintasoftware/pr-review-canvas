@@ -147,8 +147,10 @@ export function checkoutListHtml(data) {
   }
   const rows = data.checkouts
     .map(c => {
-      // The uncommitted review reads the working tree and never has a checkout.
-      const review = c.key === 'branch' ? 'Branch review' : `#${c.key}`
+      // The uncommitted review reads the working tree and never has a checkout. A branch review is
+      // one checkout's, so a linked worktree's names it; the clone's checkouts are listed together.
+      const review =
+        c.key === 'branch' ? `Branch review${c.worktree === null ? '' : ` (${c.worktree})`}` : `#${c.key}`
       const used = c.lastUsedAt.slice(0, 16).replace('T', ' ')
       return (
         `<tr><td>${esc(review)}${c.locked ? ' <span class="muted">(in use)</span>' : ''}</td>` +

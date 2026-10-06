@@ -220,7 +220,8 @@ describe('loadContext', () => {
     })
     expect(seen).toEqual([ctx.config])
     expect(ctx.clone).toBe(shared)
-    expect(ctx.checkouts).toBe(ctx.clone.checkouts)
+    // The context's checkouts are its own view of the store the clone shares.
+    expect(ctx.checkouts.root).toBe(ctx.clone.checkouts.root)
     const alone = await loadContext({ repoDir: repo, cwd: repo, env: {} })
     expect(alone.clone).not.toBe(shared)
   })

@@ -76,7 +76,7 @@ async function makeClone(name: string, origin: string): Promise<void> {
 async function start(saved: RegistryEntry[] = []): Promise<void> {
   await writeRegistry(home, saved)
   hub = await createHub({
-    home,
+    registry: home,
     log: () => undefined,
     // The checkout's context as `serve` builds it, through the real loader; the forge and the git
     // a request runs are held fakes, so a generation stays running until the test opens the gate.

@@ -76,6 +76,7 @@ describe('loadRuntimeConfig', () => {
       dataDir: '/work/repo/.pr-review',
       repo: { owner: 'acme', name: 'widgets' },
       host: GITHUB_HOST,
+      worktree: null,
       slug: 'acme/widgets',
       basePath: '/r/acme/widgets/',
       fixtureCanvasPath: null,
@@ -90,6 +91,7 @@ describe('loadRuntimeConfig', () => {
       remotes: { origin: 'git@github.com:acme/widgets.git' },
     })
     expect(await loadRuntimeConfig({}, {}, worktree, '/cwd')).toMatchObject({
+      worktree: 'fix-login',
       slug: 'acme/widgets~fix-login',
       basePath: '/r/acme/widgets~fix-login/',
     })

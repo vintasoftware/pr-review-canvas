@@ -9,8 +9,9 @@ import { createFakeCheckoutGit, makeTempDir } from '../testing/fakes.js'
 import {
   CheckoutBusyError,
   createCheckoutGit,
+  type CheckoutStore,
+  checkoutsFor,
   createReviewCheckouts,
-  type ReviewCheckouts,
   STALE_LOCK_MS,
 } from './checkouts.js'
 
@@ -22,7 +23,7 @@ vi.mock('node:fs/promises', async importOriginal => {
 
 let tmp: string
 let now: Date
-let checkouts: ReviewCheckouts
+let checkouts: CheckoutStore
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -40,8 +41,8 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true })
 })
 
-async function use(key: number | 'branch', sha: string): Promise<void> {
-  const lease = await checkouts.lease(key, 'chat')
+async function use(folder: string, sha: string): Promise<void> {
+  const lease = await checkouts.lease(folder, 'chat')
   try {
     await lease.moveTo(sha)
   } finally {
@@ -51,8 +52,8 @@ async function use(key: number | 'branch', sha: string): Promise<void> {
 
 describe('a lease', () => {
   it('names the holder in this process that refuses it, and another process otherwise', async () => {
-    const held = await checkouts.lease(42, 'generation')
-    const refused = await checkouts.lease(42, 'chat').catch((err: unknown) => err)
+    const held = await checkouts.lease('42', 'generation')
+    const refused = await checkouts.lease('42', 'chat').catch((err: unknown) => err)
     expect(refused).toBeInstanceOf(CheckoutBusyError)
     expect(refused).toMatchObject({
       holder: 'generation',
@@ -64,14 +65,14 @@ describe('a lease', () => {
       git: createFakeCheckoutGit(),
       now: () => now,
     })
-    await expect(other.lease(42, 'chat')).rejects.toMatchObject({ holder: null })
+    await expect(other.lease('42', 'chat')).rejects.toMatchObject({ holder: null })
     await held.release()
-    const again = await checkouts.lease(42, 'chat')
+    const again = await checkouts.lease('42', 'chat')
     await again.release()
   })
 
   it('keeps a holder in this process however old its lock is, and the sweep leaves it', async () => {
-    const held = await checkouts.lease(42, 'generation')
+    const held = await checkouts.lease('42', 'generation')
     await held.moveTo('a'.repeat(40))
     // Past the stale age, a lock of this very pid would be taken over by its age alone.
     now = new Date(now.getTime() + STALE_LOCK_MS + 60_000)
@@ -81,7 +82,7 @@ describe('a lease', () => {
       new Date(now.getTime() - STALE_LOCK_MS - 60_000),
       new Date(now.getTime() - STALE_LOCK_MS - 60_000)
     )
-    await expect(checkouts.lease(42, 'chat')).rejects.toMatchObject({ holder: 'generation' })
+    await expect(checkouts.lease('42', 'chat')).rejects.toMatchObject({ holder: 'generation' })
     const swept = await checkouts.sweep({ all: true })
     expect(swept.removed).toEqual([])
     expect(swept.skipped.map(info => info.key)).toEqual([42])
@@ -89,48 +90,48 @@ describe('a lease', () => {
   })
 
   it('is refused while another holder has the checkout, and free again once released', async () => {
-    const held = await checkouts.lease(42, 'chat')
-    await expect(checkouts.lease(42, 'chat')).rejects.toThrow(CheckoutBusyError)
+    const held = await checkouts.lease('42', 'chat')
+    await expect(checkouts.lease('42', 'chat')).rejects.toThrow(CheckoutBusyError)
     await held.release()
-    const again = await checkouts.lease(42, 'chat')
+    const again = await checkouts.lease('42', 'chat')
     await again.release()
   })
 
   it('takes over a lock whose process is gone', async () => {
-    await use(42, 'a'.repeat(40))
+    await use('42', 'a'.repeat(40))
     await writeFile(path.join(tmp, 'checkouts', '42.lock'), '999999999')
-    const lease = await checkouts.lease(42, 'chat')
+    const lease = await checkouts.lease('42', 'chat')
     await lease.release()
   })
 
   it('takes over a lock older than any turn could run', async () => {
-    await use(42, 'a'.repeat(40))
+    await use('42', 'a'.repeat(40))
     const lock = path.join(tmp, 'checkouts', '42.lock')
     await writeFile(lock, String(process.pid))
     const old = new Date(now.getTime() - STALE_LOCK_MS - 1000)
     await utimes(lock, old, old)
-    const lease = await checkouts.lease(42, 'chat')
+    const lease = await checkouts.lease('42', 'chat')
     await lease.release()
   })
 
   it('runs no git command when the checkout is already at the commit', async () => {
     const git = createFakeCheckoutGit()
     const own = createReviewCheckouts({ root: path.join(tmp, 'own'), git, now: () => now })
-    const first = await own.lease(42, 'chat')
+    const first = await own.lease('42', 'chat')
     await first.moveTo('a'.repeat(40))
     await first.release()
-    const second = await own.lease(42, 'chat')
+    const second = await own.lease('42', 'chat')
     await second.moveTo('a'.repeat(40))
     await second.release()
     expect(git.calls.map(c => c[0])).toEqual(['add'])
   })
 
   it('reports the commit the checkout is on, and none before it exists', async () => {
-    const first = await checkouts.lease(42, 'chat')
+    const first = await checkouts.lease('42', 'chat')
     expect(first.head).toBeNull()
     await first.moveTo('a'.repeat(40))
     await first.release()
-    const second = await checkouts.lease(42, 'chat')
+    const second = await checkouts.lease('42', 'chat')
     expect(second.head).toBe('a'.repeat(40))
     await second.release()
   })
@@ -159,7 +160,7 @@ describe('size', () => {
 
 describe('the idle sweep', () => {
   it('removes checkouts unused for longer than the limit and keeps the rest', async () => {
-    await use(42, 'a'.repeat(40))
+    await use('42', 'a'.repeat(40))
     now = new Date(now.getTime() + 5 * DAY)
     await use('branch', 'b'.repeat(40))
     now = new Date(now.getTime() + 3 * DAY)
@@ -169,29 +170,77 @@ describe('the idle sweep', () => {
   })
 
   it('ignores files in the checkouts folder that name no review', async () => {
-    await use(42, 'a'.repeat(40))
+    await use('42', 'a'.repeat(40))
     await writeFile(path.join(tmp, 'checkouts', 'notes.json'), '{}')
+    // A worktree label on a pull request, or an empty label, names no review either.
+    await writeFile(path.join(tmp, 'checkouts', '42~fix.json'), '{}')
+    await writeFile(path.join(tmp, 'checkouts', 'branch~.json'), '{}')
     expect((await checkouts.list()).map(c => c.key)).toEqual([42])
   })
 
+  it("lists a linked worktree's branch checkout with its label, and removes it by its folder", async () => {
+    await use('branch', 'a'.repeat(40))
+    now = new Date(now.getTime() + DAY)
+    await use('branch~fix', 'b'.repeat(40))
+    const listed = await checkouts.list()
+    expect(listed.map(({ key, worktree, folder, dir }) => ({ key, worktree, folder, dir }))).toEqual([
+      {
+        key: 'branch',
+        worktree: 'fix',
+        folder: 'branch~fix',
+        dir: path.join(tmp, 'checkouts', 'branch~fix'),
+      },
+      { key: 'branch', worktree: null, folder: 'branch', dir: path.join(tmp, 'checkouts', 'branch') },
+    ])
+    const result = await checkouts.sweep({ olderThanDays: 0.5 })
+    expect(result.removed.map(c => c.folder)).toEqual(['branch'])
+    expect((await checkouts.list()).map(c => c.folder)).toEqual(['branch~fix'])
+  })
+})
+
+describe('checkoutsFor', () => {
+  it("leases a local review's checkout of its own worktree, and a pull request's shared one", async () => {
+    const main = checkoutsFor(checkouts, null)
+    const linked = checkoutsFor(checkouts, 'fix')
+    expect(linked.root).toBe(checkouts.root)
+    const mine = await main.lease('branch', 'chat')
+    const theirs = await linked.lease('branch', 'chat')
+    expect([mine.dir, theirs.dir]).toEqual([
+      path.join(tmp, 'checkouts', 'branch'),
+      path.join(tmp, 'checkouts', 'branch~fix'),
+    ])
+    await mine.moveTo('a'.repeat(40))
+    await theirs.moveTo('b'.repeat(40))
+    const pr = await main.lease(42, 'generation')
+    await expect(linked.lease(42, 'chat')).rejects.toMatchObject({
+      holder: 'generation',
+      message: 'a canvas generation is using the review checkout of 42',
+    })
+    await Promise.all([mine.release(), theirs.release(), pr.release()])
+    expect((await linked.list()).map(c => c.folder).sort()).toEqual(['branch', 'branch~fix'])
+    expect(await linked.size(path.join(tmp, 'checkouts', 'branch~fix'))).toBe(40)
+    const swept = await linked.sweep({ all: true })
+    expect(swept.removed.map(c => c.folder).sort()).toEqual(['branch', 'branch~fix'])
+  })
+
   it('lists what it would remove on a dry run, and removes nothing', async () => {
-    await use(42, 'a'.repeat(40))
+    await use('42', 'a'.repeat(40))
     const result = await checkouts.sweep({ all: true, dryRun: true })
     expect(result.removed.map(c => c.key)).toEqual([42])
     expect(await checkouts.list()).toHaveLength(1)
   })
 
   it('lists a checkout a turn is holding as skipped on a dry run', async () => {
-    await use(42, 'a'.repeat(40))
-    const held = await checkouts.lease(42, 'chat')
+    await use('42', 'a'.repeat(40))
+    const held = await checkouts.lease('42', 'chat')
     const result = await checkouts.sweep({ all: true, dryRun: true })
     expect(result).toMatchObject({ removed: [], skipped: [{ key: 42, locked: true }] })
     await held.release()
   })
 
   it('leaves a checkout a turn is holding', async () => {
-    await use(42, 'a'.repeat(40))
-    const held = await checkouts.lease(42, 'chat')
+    await use('42', 'a'.repeat(40))
+    const held = await checkouts.lease('42', 'chat')
     const result = await checkouts.sweep({ all: true })
     expect(result.removed).toEqual([])
     expect(result.skipped.map(c => c.key)).toEqual([42])
@@ -226,7 +275,7 @@ describe('createCheckoutGit', () => {
       git: createCheckoutGit(repo),
       now: () => now,
     })
-    const lease = await real.lease(7, 'chat')
+    const lease = await real.lease('7', 'chat')
     await expect(lease.moveTo('f'.repeat(40))).rejects.toThrow(GitError)
     await lease.moveTo(first)
     expect(await readFile(path.join(lease.dir, 'a.txt'), 'utf8')).toBe('one\n')
@@ -236,7 +285,7 @@ describe('createCheckoutGit', () => {
     expect(await readFile(path.join(repo, 'a.txt'), 'utf8')).toBe('uncommitted\n')
     expect(git(repo, 'branch', '--show-current')).toBe('main')
 
-    const reopened = await real.lease(7, 'chat')
+    const reopened = await real.lease('7', 'chat')
     expect(reopened.head).toBe(second)
     await reopened.release()
     // A symlink is not counted: it is not a file of its own.
@@ -250,11 +299,11 @@ describe('createCheckoutGit', () => {
     expect(git(repo, 'worktree', 'list')).toContain(readerWorktree)
 
     // A checkout folder deleted by hand is taken over on the next turn.
-    const again = await real.lease(7, 'chat')
+    const again = await real.lease('7', 'chat')
     await again.moveTo(first)
     await again.release()
     await rm(again.dir, { recursive: true, force: true })
-    const retaken = await real.lease(7, 'chat')
+    const retaken = await real.lease('7', 'chat')
     expect(retaken.head).toBeNull()
     await retaken.moveTo(second)
     expect(await readFile(path.join(retaken.dir, 'a.txt'), 'utf8')).toBe('two\n')

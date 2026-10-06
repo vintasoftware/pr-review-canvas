@@ -4,7 +4,7 @@ import { isChatAgent, type SettingsOverrides } from './contract/settings.js'
 import { type Git, GitError } from './git/git.js'
 import type { Host } from './host/host.js'
 import { type OriginRemote, parseOriginRemote } from './host/remote.js'
-import { basePathOf, projectSlug } from './hub/slug.js'
+import { basePathOf, projectSlug, worktreeOf } from './hub/slug.js'
 import { resolveDataDir } from './store/data-dir.js'
 
 export const DEFAULT_PORT = 3010
@@ -29,6 +29,8 @@ export interface RuntimeConfig {
   repo: Repo
   /** The forge origin points at, which owns every request or answer that differs between them. */
   host: Host
+  /** The linked worktree's label; null for the clone's main checkout. */
+  worktree: string | null
   /** The checkout's name on the shared server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
   slug: string
   /** Where its pages and API live on the server, with a trailing slash: `/r/<slug>/`. */
@@ -140,7 +142,8 @@ export async function loadRuntimeConfig(
     canvasDir: flags.canvasDir === undefined ? undefined : path.resolve(cwd, flags.canvasDir),
     commonDir,
   })
-  const slug = projectSlug(repo, repoRoot, commonDir)
+  const worktree = worktreeOf(repoRoot, commonDir)
+  const slug = projectSlug(repo, worktree)
   return {
     port,
     repoRoot,
@@ -148,6 +151,7 @@ export async function loadRuntimeConfig(
     dataDir,
     repo,
     host,
+    worktree,
     slug,
     basePath: basePathOf(slug),
     fixtureCanvasPath: flags.fixtureCanvas === undefined ? null : path.resolve(cwd, flags.fixtureCanvas),

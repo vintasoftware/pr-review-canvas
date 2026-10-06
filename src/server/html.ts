@@ -4,6 +4,8 @@ import type { ErrorEnvelope, HomeData, ReviewBootstrap } from '../contract/api.j
 import { keyLabel, keyToString, LOCAL_KEYS, type LocalKey } from '../contract/review-key.js'
 import type { Appearance } from '../contract/settings.js'
 import { type Host, publicHost } from '../host/host.js'
+import { esc } from '../../static/js/dom.js'
+import { headerBarHtml } from '../../static/js/header-bar.js'
 import { basePathOf, slugParts } from '../hub/slug.js'
 
 type Html = HtmlEscapedString | Promise<HtmlEscapedString>
@@ -53,36 +55,6 @@ export interface PageOptions {
 const PAGE_APPEARANCE_SCRIPT = '/static/js/page-appearance.js'
 /** The module behind the project list's remove commands. */
 const PROJECTS_PAGE_SCRIPT = '/static/js/projects-page.js'
-
-/** The skin and theme commands, as the review header has them. */
-function appearanceCommands(appearance: Appearance): Html {
-  return html`<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">skin: ${appearance.skin}</button><button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">theme: ${appearance.theme}</button>`
-}
-
-/** The wordmark, which leads to the list of every project the server serves. */
-const BRAND = html`<a class="brand-wordmark" href="/" title="All projects"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</a>`
-
-/**
- * The bar every page starts with, as the review page's header draws it too: the wordmark, then the
- * project's name leading to its home page (or, on the project list, the server's address), then
- * the page's own commands, and the skin and theme commands last.
- */
-function headerBar(opts: {
-  /** The project's slug; null on a page of the server's own. */
-  project: string | null
-  port?: number
-  commands?: Html
-  appearance: Appearance
-}): Html {
-  const context =
-    opts.project !== null
-      ? html`<a class="mono muted" href="${basePathOf(opts.project)}" title="This project's home page">${opts.project}</a>`
-      : opts.port === undefined
-        ? ''
-        : html`<span class="mono muted">localhost:${String(opts.port)}</span>`
-  return html`<div class="hdr-bar"><div class="brand">${BRAND}${context}</div>
-<div class="hdr-actions">${opts.commands ?? ''}${appearanceCommands(opts.appearance)}</div></div>`
-}
 
 export function pageShell(opts: PageOptions): Html {
   const preload = Object.entries(IMPORT_MAP.imports)
@@ -169,7 +141,7 @@ export function homePage(
     scripts: [PAGE_APPEARANCE_SCRIPT],
     body: html`<div class="page">
 <header class="hdr">
-${headerBar({ project: data.slug, commands: html`<a class="cmd" id="health" href="${data.base}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`, appearance })}
+${raw(headerBarHtml({ project: { slug: data.slug, home: data.base }, ...appearance }, `<a class="cmd" id="health" href="${esc(data.base)}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`))}
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>${data.owner}/${data.repo}</h1></div>
 <p class="meta"><span>Open a ${noun} by number. Diffs come from your local clone; the canvas from a published review.</span></p></div>
@@ -263,7 +235,7 @@ export function projectsPage(
     scripts: [PAGE_APPEARANCE_SCRIPT, PROJECTS_PAGE_SCRIPT],
     body: html`<div class="page">
 <header class="hdr">
-${headerBar({ project: null, port: data.port, commands: html`<a class="cmd" id="health" href="/api/health" title="The server version, its port, and the projects it serves">health</a>`, appearance })}
+${raw(headerBarHtml({ host: `localhost:${String(data.port)}`, ...appearance }, '<a class="cmd" id="health" href="/api/health" title="The server version, its port, and the projects it serves">health</a>'))}
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>Projects</h1></div>
 <p class="meta"><span>Every checkout this server serves, by repository. Run <code>pr-review open</code> in a project's folder to add it.</span></p></div>
@@ -303,7 +275,7 @@ export function errorPage(
     app: false,
     scripts: [PAGE_APPEARANCE_SCRIPT],
     body: html`<div class="page"><header class="hdr">
-${headerBar({ project, appearance })}
+${raw(headerBarHtml({ project: project === null ? undefined : { slug: project, home: basePathOf(project) }, ...appearance }))}
 <div class="stripe" aria-hidden="true"></div></header>
 <main id="main" class="home"><section class="panel error-card"><div class="panel-h"><h2><span class="mono">${error.code}</span></h2></div>
 <div class="body"><p>${error.message}</p>${error.hint ? html`<p class="muted">${error.hint}</p>` : ''}</div></section></main></div>`,

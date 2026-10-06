@@ -126,7 +126,9 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
   // First, so the server's own headers never land on a project's answer: the project app sets
   // its own, with the nonce of its own page.
   app.all(`${PROJECTS_PREFIX}*`, async c => {
-    // A page on another site never gets a project built for it; the project app checks the rest.
+    // A rebinding domain that resolves to this machine never gets a project built for it. A page
+    // on another site can still make a plain GET here, which at most builds a saved project from
+    // its own checkout; the project app refuses its writes.
     if (!isAllowedHost(c.req.header('host'))) {
       throw new AppError('FORBIDDEN_HOST', 'this server only answers to localhost', 403)
     }

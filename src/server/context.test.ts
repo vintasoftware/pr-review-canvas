@@ -55,6 +55,7 @@ describe('context', () => {
           dataDir,
           repo: TEST_REPO,
           host: GITHUB_HOST,
+          worktree: null,
           slug: 'acme/widgets',
           basePath: '/r/acme/widgets/',
           fixtureCanvasPath: null,
@@ -88,6 +89,7 @@ describe('context', () => {
           dataDir,
           repo: TEST_REPO,
           host: GITHUB_HOST,
+          worktree: null,
           slug: 'acme/widgets',
           basePath: '/r/acme/widgets/',
           fixtureCanvasPath: null,
@@ -122,6 +124,7 @@ describe('context', () => {
       dataDir: path.join(dir, 'data'),
       repo: TEST_REPO,
       host,
+      worktree: null,
       slug: 'acme/widgets',
       basePath: '/r/acme/widgets/',
       fixtureCanvasPath: null,
@@ -203,11 +206,12 @@ describe('context', () => {
       )
       const [a, b] = contexts as [AppContext, AppContext]
       expect(a.clone).toBe(clone)
-      expect(b.checkouts).toBe(a.checkouts)
+      expect(b.checkouts.root).toBe(a.checkouts.root)
       const first = a.chat.send(target(), { message: 'x', context: { kind: 'pr' } })
       const turn = first[Symbol.asyncIterator]()
       await turn.next()
-      expect([...clone.chatTurns]).toEqual([42])
+      // The shared set holds review folders: a pull request's is its number.
+      expect([...clone.chatTurns]).toEqual(['42'])
       const second = b.chat.send(target(), { message: 'y', context: { kind: 'pr' } })
       await expect(second[Symbol.asyncIterator]().next()).rejects.toBeInstanceOf(ChatBusyError)
       await turn.return?.(undefined)
@@ -227,7 +231,7 @@ describe('context', () => {
       const a = build()
       const b = build()
       expect(a.clone).not.toBe(b.clone)
-      expect(a.checkouts).toBe(a.clone.checkouts)
+      expect(a.checkouts.root).toBe(a.clone.checkouts.root)
       expect(a.checkouts.root).toBe(path.join(dir, 'data', 'repos', 'acme__widgets', 'checkouts'))
     })
 

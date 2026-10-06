@@ -580,6 +580,7 @@ describe('the settings tabs', () => {
           checkouts: [
             {
               key: 42,
+              worktree: null,
               sha: 'a'.repeat(40),
               lastUsedAt: '2026-09-20T12:30:00.000Z',
               locked: true,
@@ -637,20 +638,28 @@ describe('checkoutListHtml', () => {
     expect(checkoutListHtml({ root: '/x', checkouts: [] })).toContain('No review checkouts yet')
   })
 
-  it('names local reviews by what they are', () => {
+  it("names local reviews by what they are, and a linked worktree's by its label", () => {
+    const row = {
+      key: /** @type {'branch'} */ ('branch'),
+      sha: 'b'.repeat(40),
+      lastUsedAt: '2026-09-20T12:00:00.000Z',
+      locked: false,
+      bytes: 10,
+    }
     const html = checkoutListHtml({
       root: '/x',
       checkouts: [
-        {
-          key: 'branch',
-          sha: 'b'.repeat(40),
-          lastUsedAt: '2026-09-20T12:00:00.000Z',
-          locked: false,
-          bytes: 10,
-        },
+        { ...row, worktree: null },
+        { ...row, worktree: 'fix<1>' },
       ],
     })
-    expect(html).toContain('Branch review')
+    const holder = document.createElement('div')
+    holder.innerHTML = html
+    expect([...holder.querySelectorAll('tr td:first-child')].map(td => td.textContent)).toEqual([
+      'Branch review',
+      'Branch review (fix<1>)',
+    ])
+    expect(html).toContain('Branch review (fix&lt;1&gt;)')
     expect(formatBytes(3 * 1024 * 1024 * 1024)).toBe('3 GB')
   })
 })

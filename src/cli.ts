@@ -117,7 +117,7 @@ async function startServer(opts: {
   const version = readPackageVersion()
   let port = opts.port
   const hub = await createHub({
-    home,
+    registry: opts.advertise ? home : null,
     load: (registration, hooks) =>
       loadContext({
         repoDir: registration.repoRoot,

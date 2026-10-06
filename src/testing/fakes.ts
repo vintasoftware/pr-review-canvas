@@ -13,7 +13,7 @@ import type { ReviewArtifact } from '../contract/review-artifact.js'
 import { type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
-import { basePathOf, projectSlug } from '../hub/slug.js'
+import { basePathOf, projectSlug, worktreeOf } from '../hub/slug.js'
 import { DEFAULT_PROJECT_CONFIG, type LoadedProjectConfig } from '../project-config.js'
 import {
   type AppContext,
@@ -420,7 +420,8 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
   const dataDir = opts.dataDir ?? (await makeTempDir())
   const repoRoot = opts.repoRoot ?? '/repo'
   const commonDir = '/repo/.git'
-  const slug = projectSlug(TEST_REPO, repoRoot, commonDir)
+  const worktree = worktreeOf(repoRoot, commonDir)
+  const slug = projectSlug(TEST_REPO, worktree)
   const config: RuntimeConfig = {
     port: 3010,
     repoRoot,
@@ -428,6 +429,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
     dataDir,
     repo: TEST_REPO,
     host: opts.host ?? GITHUB_HOST,
+    worktree,
     slug,
     basePath: basePathOf(slug),
     fixtureCanvasPath: null,

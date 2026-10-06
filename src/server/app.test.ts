@@ -15,6 +15,7 @@ import {
   type TestContext,
 } from '../testing/fakes.js'
 import { BASE_SHA, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
+import { headerBarHtml } from '../../static/js/header-bar.js'
 import { createApp } from './app.js'
 import { rekeyFixture } from './bundle.js'
 import { jsonForScript } from './html.js'
@@ -245,6 +246,21 @@ describe('createApp', () => {
       const found = await createApp(t.ctx).request('/start', { headers: LOCAL })
       expect(found.headers.get('location')).toBe('/r/acme/widgets/review/42')
       expect(logs).toEqual(['opening PR #42, the open review of this branch'])
+    })
+
+    it('draws the same header bar the review page draws in the browser', async () => {
+      const app = createApp(t.ctx)
+      const project = { slug: 'acme/widgets', home: '/r/acme/widgets/' }
+      const look = { theme: 'auto', skin: 'github' } as const
+      const home = await (await app.request('/', { headers: LOCAL })).text()
+      expect(home).toContain(
+        headerBarHtml(
+          { project, ...look },
+          '<a class="cmd" id="health" href="/r/acme/widgets/api/health" title="Check git, the host login, and the chat agent for this project">health</a>'
+        )
+      )
+      const error = await (await app.request('/review/abc', { headers: LOCAL })).text()
+      expect(error).toContain(headerBarHtml({ project, ...look }))
     })
 
     it("links every page under the project's base path", async () => {

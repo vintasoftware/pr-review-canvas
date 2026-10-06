@@ -7,6 +7,7 @@ import { chmod, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/p
 import path from 'node:path'
 import { ChatBusyError } from '../chat/chat-manager.js'
 import type { CheckoutSweeper } from '../chat/checkout-sweep.js'
+import type { CheckoutStore } from '../chat/checkouts.js'
 import { ConfigError } from '../config.js'
 import type { ErrorEnvelope } from '../contract/api.js'
 import type { ChatEvent } from '../contract/chat.js'
@@ -33,7 +34,8 @@ vi.mock('../chat/checkout-sweep.js', async importOriginal => {
     ...real,
     startCheckoutSweep: (opts: Parameters<typeof real.startCheckoutSweep>[0]): CheckoutSweeper => {
       const sweeper = real.startCheckoutSweep(opts)
-      const record = { root: opts.checkouts.root, stopped: false }
+      // The hub hands each sweep its clone's whole checkout store.
+      const record = { root: (opts.checkouts as CheckoutStore).root, stopped: false }
       sweeps.push(record)
       return {
         runOnce: () => sweeper.runOnce(),
@@ -151,7 +153,7 @@ async function servedAt(h: Hub, pathname: string): Promise<Project | null> {
 }
 
 async function startHub(): Promise<Hub> {
-  const hub = await createHub({ home, load, log: line => logs.push(line) })
+  const hub = await createHub({ registry: home, load, log: line => logs.push(line) })
   hubs.push(hub)
   return hub
 }
@@ -254,6 +256,22 @@ describe('createHub', () => {
     expect(await h.resolve('/r/acme/widgets/')).toMatchObject({ rest: '/' })
     expect(await h.projects()).toEqual([{ slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: {} }])
     expect(await readRegistry(home)).toEqual(await h.projects())
+  })
+
+  it('keeps its list in memory when another server owns the saved one, and never writes it', async () => {
+    const saved = [{ slug: 'acme/gadgets', repoRoot: at('/src/gadgets'), flags: {} }]
+    await writeRegistry(home, saved)
+    const before = await readFile(path.join(home, 'projects.json'), 'utf8')
+    const second = await createHub({ registry: null, load, log: line => logs.push(line) })
+    hubs.push(second)
+    // It starts from an empty list, not from the other server's.
+    expect(await second.projects()).toEqual([])
+    await second.register({ repoRoot: at('/src/widgets'), flags: { chatModel: 'opus' } })
+    expect(await second.projects()).toEqual([
+      { slug: 'acme/widgets', repoRoot: at('/src/widgets'), flags: { chatModel: 'opus' } },
+    ])
+    expect(await second.remove('acme/widgets')).toBe(true)
+    expect(await readFile(path.join(home, 'projects.json'), 'utf8')).toBe(before)
   })
 
   it('redirects a base path without its trailing slash, and knows no other path', async () => {
@@ -471,7 +489,8 @@ describe('createHub', () => {
         dataDir: at('/src/widgets/.pr-review'),
       })
       expect(worktree.ctx.clone).toBe(main.ctx.clone)
-      expect(worktree.ctx.checkouts).toBe(main.ctx.checkouts)
+      expect(worktree.ctx.clone.checkouts).toBe(main.ctx.clone.checkouts)
+      expect(worktree.ctx.checkouts.root).toBe(main.ctx.checkouts.root)
       const { project: gadgets } = await h.register({ repoRoot: at('/src/gadgets') })
       expect(gadgets.ctx.clone).not.toBe(main.ctx.clone)
       expect(liveSweeps()).toEqual(['/src/gadgets', '/src/widgets'])

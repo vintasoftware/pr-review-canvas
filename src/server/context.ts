@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { type AgentRunner, createAgentRunner } from '../acpx/acpx.js'
 import { type AgentDirectory, createAgentDirectory } from '../acpx/agents.js'
 import { createPreflightProbe, type PreflightProbe } from '../acpx/preflight.js'
-import { type ChatManager, createChatManager } from '../chat/chat-manager.js'
+import { type ChatManager, createChatManager, type TurnSet } from '../chat/chat-manager.js'
 import {
   type CheckoutGit,
+  type CheckoutStore,
+  checkoutsFor,
   createCheckoutGit,
   createReviewCheckouts,
   type ReviewCheckouts,
@@ -16,7 +18,7 @@ import { loadSeedTemplate } from '../chat/seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
-import type { ReviewKey } from '../contract/review-key.js'
+import { reviewFolder } from '../contract/review-key.js'
 import {
   createGenerationManager,
   type GenerationLane,
@@ -121,8 +123,8 @@ export interface StoreSet {
 /** The four stores over one repo directory. Shared by the real context and by tests. */
 export function createStores(dataDir: string, config: RuntimeConfig, git: Git, now: () => Date): StoreSet {
   const root = repoDir(dataDir, config.repo)
-  const canvases = createCanvasStore(root, git)
-  const prs = createPrStore(root)
+  const canvases = createCanvasStore(root, git, config.worktree)
+  const prs = createPrStore(root, config.worktree)
   return {
     canvases,
     derived: createDerivedStore(canvases, git, now),
@@ -157,10 +159,22 @@ export interface CreateAppContextOptions {
  */
 export interface CloneShared {
   /** Run from the clone's common git dir, so no one worktree's folder has to stay. */
-  checkouts: ReviewCheckouts
-  /** The reviews with a chat turn running. */
-  chatTurns: Set<ReviewKey>
+  checkouts: CheckoutStore
+  /**
+   * The reviews with a chat turn running, by review folder: a pull request is one review for every
+   * worktree, a local review is its own checkout's.
+   */
+  chatTurns: Set<string>
   generationLane: GenerationLane
+}
+
+/** The clone's chat turns as one checkout sees them, the same way it sees the clone's checkouts. */
+function turnsFor(folders: Set<string>, worktree: string | null): TurnSet {
+  return {
+    has: key => folders.has(reviewFolder(key, worktree)),
+    add: key => void folders.add(reviewFolder(key, worktree)),
+    delete: key => void folders.delete(reviewFolder(key, worktree)),
+  }
 }
 
 /**
@@ -207,7 +221,7 @@ export function createChatSet(
   prompts?: PromptOverrides
 ): ChatSet {
   const settings = createSettingsStore(config.dataDir)
-  const { checkouts } = clone
+  const checkouts = checkoutsFor(clone.checkouts, config.worktree)
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
@@ -229,7 +243,7 @@ export function createChatSet(
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,
-      turns: clone.chatTurns,
+      turns: turnsFor(clone.chatTurns, config.worktree),
     }),
   }
 }
