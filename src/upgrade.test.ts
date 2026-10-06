@@ -3,7 +3,7 @@ import { appendFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type CliIo, outputMode, splitCommonFlags } from './commands.js'
-import { findSkillCopies } from './review/doctor.js'
+import { findSkillCopies } from './review/install-skill.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill } from './review/install-skill.js'
 import { makeTempDir } from './testing/fakes.js'
 import { type CommandResult, isNewer, planUpgrade, runUpgrade, type UpgradeDeps } from './upgrade.js'
@@ -221,7 +221,7 @@ describe('runUpgrade', () => {
 
     expect(await runUpgrade(deps, [], io)).toBe(0)
     expect(calls).toContain('install -g acpx@0.19.1')
-    expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
+    expect((await findSkillCopies(repo)).every(copy => copy.state === 'current')).toBe(true)
     expect(err.join('\n')).toContain(
       `Commit and push ${CLAUDE_SKILLS_DIR}/pr-review-canvas so your team gets it.`
     )
@@ -236,7 +236,7 @@ describe('runUpgrade', () => {
 
     expect(await runUpgrade(deps, [], io)).toBe(0)
     expect(calls).toContain(`pr-review 0.6.0 upgrade --yes --json --only acpx,skill --repo ${repo}`)
-    expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
+    expect((await findSkillCopies(repo)).every(copy => copy.state === 'current')).toBe(true)
     expect(JSON.parse(out[0] ?? '').steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0', status: 'done' },
       { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1', status: 'done' },
@@ -255,7 +255,7 @@ describe('runUpgrade', () => {
 
     expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
     expect(calls.some(call => call.startsWith('pr-review '))).toBe(false)
-    expect((await findSkillCopies(repo)).every(copy => !copy.stale)).toBe(true)
+    expect((await findSkillCopies(repo)).every(copy => copy.state === 'current')).toBe(true)
     expect(JSON.parse(out[0] ?? '').steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0', status: 'failed', detail: 'EACCES' },
       { kind: 'skill', paths: [`${CODEX_SKILLS_DIR}/pr-review-canvas`], status: 'done' },

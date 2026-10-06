@@ -13,6 +13,8 @@ export interface FakeRunnerOptions {
   availability?: Record<string, { installed: boolean; authenticated: boolean; reason?: string }>
   /** Waits before each event, so a test can cancel in the middle of a run. */
   delayMs?: number
+  /** Runs before each event is sent, so a test can look at the state the events before it left. */
+  beforeEvent?: (event: AgentEvent) => void
   /** Holds `ensureSession` until it resolves, so a test can act while a turn is still setting up. */
   ensureGate?: Promise<void>
   /** What `modelUpgrades` answers, per agent. */
@@ -67,6 +69,7 @@ export function createFakeRunner(options: FakeRunnerOptions = {}): FakeRunner {
           if (stopped) {
             break
           }
+          options.beforeEvent?.(event)
           runOptions.onRawLine?.(
             JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { event } })
           )

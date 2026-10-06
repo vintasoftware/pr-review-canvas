@@ -27,6 +27,8 @@ test('generates the first canvas from the empty screen and loads it', async ({ p
   await expect(dialog.locator('h2')).toHaveText('Generate the canvas')
   await expect(dialog).toContainText('shares the canvas as a comment on the pull request')
   await expect(dialog.locator('[data-copy]')).toHaveAttribute('data-copy', '/pr-review-canvas 42')
+  // The test server's checkout has no skill installed, so the run follows the one the server ships.
+  await expect(dialog.locator('.gen-skill')).toContainText('default skill of pr-review 0.0.0-test')
   await dialog.locator('[data-gen="start"]').click()
 
   await expect(page.locator('#regenerate')).toContainText('generating')
@@ -58,6 +60,10 @@ test('shows a running generation on the header command and stops it', async ({ p
   const dialog = page.locator('#generate-dialog')
   await dialog.locator('[data-gen="start"]').click()
   await expect(dialog.locator('h2')).toHaveText('The agent is writing the canvas')
+  // Before the agent says anything, the dialog says it waits for it, and how long it has.
+  await expect(dialog.locator('.gen-pulse')).toContainText('Waiting for the agent to start · last activity')
+  // The running job names the skill it was given.
+  await expect(dialog.locator('.gen-skill')).toContainText('default skill')
   await dialog.locator('button[value="close"]').click()
   await expect(dialog).not.toBeVisible()
 
