@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
+
+Changes since 0.7.0.
 
 ### One server for every project
 
@@ -61,6 +63,18 @@
 
 - A merged pull request whose base branch was deleted since, as a stacked PR's is once the PR
   below it merges, failed to load with a git error. Its review now loads from its merge commit.
+
+### Upgrade from 0.7.0
+
+1. Stop every running `pr-review serve`. Then run `pr-review upgrade` in each project: the skill
+   now points at the project's path on the server. The canvas format did not change, so
+   teammates on 0.7.0 can still open the canvases.
+2. Start one `pr-review serve` and run `pr-review open` in each project to add it. Drop the
+   `--port` that gave each project its own server; `--port` now starts a separate server.
+3. Review pages moved under `/r/<owner>/<repo>/`. Old bookmarks such as
+   `http://localhost:3010/review/123` no longer open; reopen the review with `pr-review open 123`.
+4. Local `branch` and `uncommitted` reviews prepared in a linked worktree before this version
+   belong to the main checkout now. Prepare them again in the worktree.
 
 ## 0.7.0
 
