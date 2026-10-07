@@ -90,7 +90,7 @@ Adding a lint rule, tightening typing, or adding a script counts as a fix and ne
 
 **Verify.** Run the repository's build and test commands, plus focused checks the affected code warrants (sanitizers, concurrency checks, format and lint). Separate environment-only failures from regressions; report both.
 
-**Commit.** One commit per iteration on the current branch, message naming the iteration and the findings it addresses, so each cycle stays reviewable. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
+**Commit.** One commit per iteration on the current branch, so each cycle stays reviewable. Write the message for a reader of `git log` who never saw the review. The subject follows the repository's own convention (type and scope where it uses them) and says what the code does differently now; the body gives each change with the behavior it alters and why, in the project's words, and records a settled decision by the trade-off it settles and its date. The iteration number, the pass, and the reviewer's finding numbers belong to the iteration report, so they stay out of the message. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
 
 **Iteration report** (to the user, every iteration): findings fixed, gated, rejected with counter-evidence; the reason for each new file; verification results.
 
