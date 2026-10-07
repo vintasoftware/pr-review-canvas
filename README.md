@@ -120,7 +120,7 @@ for details.
 ### Reviewing PRs
 
 Run `pr-review serve` from your clone of the project. It starts the server and opens the project's
-home page in the browser. Enter the PR or MR number to load the shared canvas, read the diffs and
+home page in the browser. Enter the PR or MR number to load the shared canvas, read the diffs, and
 leave comments. Keep the terminal running while you review; stop the server with **Ctrl+C**.
 
 One server serves all your projects:
@@ -128,7 +128,7 @@ One server serves all your projects:
 - `pr-review serve` in another project's folder adds that project to the running server and opens
   it. `pr-review open` does the same, and `pr-review open 123` opens one PR or MR.
 - **http://localhost:3010** lists the projects. Click on the logo to get back to that page.
-  **remove** button takes a project off the list; its canvases and review state stay on disk.
+  The **remove** button takes a project off the list; its canvases and review state stay on disk.
 - Each project has its own path, `http://localhost:3010/r/<owner>/<repo>/`. A linked worktree
   gets `/r/<owner>/<repo>~<worktree>/`, since its branch and working tree differ from the main
   checkout's.
