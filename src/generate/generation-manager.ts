@@ -12,6 +12,7 @@ import type { PrepareTargetInput } from '../contract/generation-context.js'
 import type { ErrorEnvelope } from '../contract/api.js'
 import {
   type AgentPulse,
+  type GenerateInput,
   type GenerationJob,
   type GenerationSkill,
   isRunning,
@@ -85,25 +86,29 @@ export interface GenerationManagerDeps {
   worktree?: string | null | undefined
 }
 
-/** The generations of one data dir: the job it ran last, running or ended. */
+/**
+ * The generations of one data dir: the last job of each review folder, running or ended. At most
+ * one of them has not settled, and that one holds the lane.
+ */
 export interface GenerationLane {
-  last: GenerationSlot | null
+  jobs: Map<string, GenerationSlot>
 }
 
 export function createGenerationLane(): GenerationLane {
-  return { last: null }
+  return { jobs: new Map() }
 }
 
 export interface GenerationManager {
   /**
    * Starts a job for `key`; throws GenerationBusyError when any job is running. One runs at a
    * time: two reviews can share a head (a PR and the branch review of its branch), and the jobs
-   * of one head write the same canvas folder.
+   * of one head write the same canvas folder. `opts` may name the agent and model and turn sharing
+   * off for this job only.
    */
-  start(key: ReviewKey, opts: { force: boolean }): Promise<GenerationJob>
+  start(key: ReviewKey, opts: GenerateInput): Promise<GenerationJob>
   /**
-   * The job the data dir ran last, when it is `key`'s in this checkout; null otherwise. A pull
-   * request's job is every worktree's, a local review's is its own checkout's.
+   * The last job of `key`'s review, running or ended; null when it ran none. A pull request's job
+   * is every worktree's, a local review's is its own checkout's.
    */
   status(key: ReviewKey): GenerationJob | null
   /** True when a running job was asked to stop. */
@@ -114,7 +119,7 @@ export interface GenerationManager {
   nextSkill(): Promise<GenerationSkill>
 }
 
-/** A job with its running side, which the status never shows. The lane holds the last one. */
+/** A job with its running side, which the status never shows. The lane keeps each review's last one. */
 export interface GenerationSlot {
   job: GenerationJob
   /** The review's folder in the data dir (`reviewFolder`), which says whose job it is. */
@@ -130,6 +135,10 @@ export interface GenerationSlot {
   shortPaths: string[]
   /** The skill the first turn sends; `job.skill` is its `info`. */
   skill: LoadedSkill
+  /** False when the job was started with sharing off, whatever the settings say. */
+  share: boolean
+  /** The ref a local review is compared against, when the start named one. */
+  base: string | undefined
 }
 
 type Slot = GenerationSlot
@@ -177,8 +186,11 @@ const AGENT_HINTS: Readonly<Record<string, string>> = {
   AGENT_TIMEOUT: `the agent ran past ${GENERATION_TURN_TIMEOUT_SEC / 60} minutes; try again, or run the skill from a terminal`,
 }
 
-function targetOf(key: ReviewKey): PrepareTargetInput {
-  return isLocalKey(key) ? { kind: 'local', source: key } : { kind: 'pr', number: key }
+function targetOf(key: ReviewKey, base: string | undefined): PrepareTargetInput {
+  if (!isLocalKey(key)) {
+    return { kind: 'pr', number: key }
+  }
+  return base === undefined ? { kind: 'local', source: key } : { kind: 'local', source: key, base }
 }
 
 /** What the agent is told about its working directory, for each place `readCodeAt` can pick. */
@@ -291,10 +303,9 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
   const worktree = deps.worktree ?? null
   const folderOf = (key: ReviewKey): string => reviewFolder(key, worktree)
   /** The job holding the lane: started, and not done letting go of its checkout. */
-  const holding = (): Slot | null => (lane.last !== null && !lane.last.settled ? lane.last : null)
-  /** The last job, when it is `key`'s in this checkout. */
-  const of = (key: ReviewKey): Slot | null =>
-    lane.last !== null && lane.last.folder === folderOf(key) ? lane.last : null
+  const holding = (): Slot | null => [...lane.jobs.values()].find(slot => !slot.settled) ?? null
+  /** The last job of `key`'s review in this checkout. */
+  const of = (key: ReviewKey): Slot | null => lane.jobs.get(folderOf(key)) ?? null
   const maxRounds = deps.generation.maxRepairRounds + 1
 
   const label = (key: ReviewKey): string => (isLocalKey(key) ? key : `#${key}`)
@@ -414,7 +425,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     const { job } = slot
     // `force` is the reader's "start from a blank page". A canvas that already exists for the
     // head can only be written again from one, so prepare says so and is asked again with force.
-    const target = targetOf(key)
+    const target = targetOf(key, slot.base)
     const first = await deps.steps.prepare(target, { force: job.force, log: () => undefined })
     const prepared =
       first.status === 'exists'
@@ -454,6 +465,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
           model: job.model ?? undefined,
           harness: 'other',
           allowStale: false,
+          share: slot.share,
         })
         end(slot, 'done', { sharing: result.sharing })
         deps.log(`generation ${label(key)}: published ${prepared.headSha.slice(0, 7)}`)
@@ -501,9 +513,10 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         throw new GenerationBusyError(busy.job.key)
       }
       const settings = await deps.settings()
-      const agent = settings.chatAgent
+      const agent = opts.agent ?? settings.chatAgent
       const skill = await deps.skill(agent)
-      const named = deps.generation.models[agent]
+      // A model the start names reads as the project's would.
+      const named = opts.model ?? deps.generation.models[agent]
       const model =
         named === undefined ? null : latestModel(agent, named, await deps.runner.modelUpgrades(agent))
       // Checked again after the awaits: two clicks that both got past the first check start one job.
@@ -532,8 +545,10 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         activityIds: [],
         shortPaths: [],
         skill,
+        share: opts.share !== false,
+        base: opts.base,
       }
-      lane.last = slot
+      lane.jobs.set(slot.folder, slot)
       deps.log(`generation ${label(key)}: started with ${agent}${model === null ? '' : ` (${model})`}`)
       void runJob(slot, key).then(
         () => finish(slot, key, undefined),

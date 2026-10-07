@@ -6,7 +6,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { type CliIo, EXIT, printJson, splitCommonFlags, UsageError } from '../commands.js'
 import { ConfigError, DEFAULT_PORT, parsePort, readEnv } from '../config.js'
-import { parseReviewKey } from '../contract/review-key.js'
+import { parseReviewKey, type ReviewKey } from '../contract/review-key.js'
 import { AppError } from '../server/errors.js'
 import type { RunningServer } from './client.js'
 import type { ServerInfo } from './home.js'
@@ -61,7 +61,7 @@ function projectFlags(cwd: string, values: ProjectFlags): ProjectFlags {
   return flags
 }
 
-function shouldOpen(env: NodeJS.ProcessEnv, noOpen: boolean | undefined): boolean {
+export function shouldOpen(env: NodeJS.ProcessEnv, noOpen: boolean | undefined): boolean {
   return noOpen !== true && readEnv(env, 'CI') === undefined
 }
 
@@ -74,17 +74,22 @@ function warnVersion(io: CliIo, server: RunningServer, version: string): void {
 }
 
 /**
- * Registers the checkout. When its flags moved the project to another data dir, says so: the
- * canvases and review state until now stay where they were, and look gone otherwise.
+ * Registers the checkout, with `flags` in place of the saved ones, or keeping those when it sends
+ * none. When its flags moved the project to another data dir, says so: the canvases and review
+ * state until now stay where they were, and look gone otherwise.
  */
 async function addTo(
   deps: HubCommandDeps,
   io: CliIo,
   server: RunningServer,
   repoRoot: string,
-  flags: ProjectFlags
+  flags: ProjectFlags | undefined
 ): Promise<RegisterResponse> {
-  const added = await deps.register(server, { repoRoot, env: shellEnv(deps.env), flags })
+  const env = shellEnv(deps.env)
+  const added = await deps.register(
+    server,
+    flags === undefined ? { repoRoot, env } : { repoRoot, env, flags }
+  )
   if (added.dataDirBefore !== undefined) {
     io.stderr(
       `pr-review: ${added.slug} now reads ${added.dataDir}; its canvases and review state until now are in ${added.dataDirBefore}`
@@ -93,25 +98,33 @@ async function addTo(
   return added
 }
 
-export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): Promise<number> {
-  const { repo, dataDir, rest } = splitCommonFlags(argv)
-  const { values, positionals } = parseArgs({
-    args: rest,
-    options: {
-      'chat-agent': { type: 'string' },
-      'chat-model': { type: 'string' },
-      'no-open': { type: 'boolean' },
-    },
-    allowPositionals: true,
-    strict: true,
-  })
+/** The one review a command names, if any: a number, `branch`, or `uncommitted`. */
+export function reviewTarget(command: string, positionals: string[]): ReviewKey | undefined {
   if (positionals.length > 1) {
-    throw new UsageError('open takes one review at most: a number, branch, or uncommitted')
+    throw new UsageError(`${command} takes one review at most: a number, branch, or uncommitted`)
   }
   const target = positionals[0]
-  if (target !== undefined && parseReviewKey(target) === null) {
+  if (target === undefined) {
+    return undefined
+  }
+  const key = parseReviewKey(target)
+  if (key === null) {
     throw new UsageError(`"${target}" is not a review: use a number, branch, or uncommitted`)
   }
+  return key
+}
+
+/**
+ * Adds the checkout `--repo` names, or the one the command runs in, to the running server, with
+ * the shell's environment, and with `flags` in place of its saved ones when they are given.
+ * `open` and `generate` start here.
+ */
+export async function addToRunningServer(
+  deps: HubCommandDeps,
+  io: CliIo,
+  repo: string | undefined,
+  flags: ProjectFlags | undefined
+): Promise<{ server: RunningServer; added: RegisterResponse }> {
   const repoRoot = await deps.repoRoot(repo === undefined ? deps.cwd : path.resolve(deps.cwd, repo))
   if (repoRoot === null) {
     throw new ConfigError(
@@ -135,8 +148,29 @@ export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): 
     io,
     server,
     repoRoot,
-    projectFlags(deps.cwd, { dataDir, chatAgent: values['chat-agent'], chatModel: values['chat-model'] })
+    flags === undefined ? undefined : projectFlags(deps.cwd, flags)
   )
+  return { server, added }
+}
+
+export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): Promise<number> {
+  const { repo, dataDir, rest } = splitCommonFlags(argv)
+  const { values, positionals } = parseArgs({
+    args: rest,
+    options: {
+      'chat-agent': { type: 'string' },
+      'chat-model': { type: 'string' },
+      'no-open': { type: 'boolean' },
+    },
+    allowPositionals: true,
+    strict: true,
+  })
+  const target = reviewTarget('open', positionals)
+  const { server, added } = await addToRunningServer(deps, io, repo, {
+    dataDir,
+    chatAgent: values['chat-agent'],
+    chatModel: values['chat-model'],
+  })
   const url = `${server.origin}${added.basePath}${target === undefined ? 'start' : `review/${target}`}`
   if (shouldOpen(deps.env, values['no-open'])) {
     deps.openBrowser(url)

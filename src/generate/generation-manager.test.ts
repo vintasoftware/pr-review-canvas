@@ -300,6 +300,7 @@ describe('createGenerationManager', () => {
       model: 'opus',
       harness: 'other',
       allowStale: false,
+      share: true,
     })
     expect(h.logs.at(-1)).toBe('generation #7: published aaaaaaa')
   })
@@ -380,6 +381,45 @@ describe('createGenerationManager', () => {
     expect(started.model).toBeNull()
     await settled(h.manager, 7)
     expect(h.runner.runs[0]?.model).toBeUndefined()
+  })
+
+  it('runs the agent and model a start names, over the settings and the project', async () => {
+    const h = harness()
+    const started = await h.manager.start(7, { force: false, agent: 'codex', model: 'gpt-x' })
+    expect(started).toMatchObject({ agent: 'codex', model: 'gpt-x' })
+    // As the project's model does, a Claude model names its family, and `pin:` keeps it as written.
+    const claude = harness()
+    expect((await claude.manager.start(7, { force: false, model: 'claude-sonnet-5' })).model).toBe('sonnet')
+    const pinned = harness()
+    expect((await pinned.manager.start(7, { force: false, model: 'pin:claude-sonnet-5' })).model).toBe(
+      'claude-sonnet-5'
+    )
+    await settled(claude.manager, 7)
+    await settled(pinned.manager, 7)
+    expect(h.skillAgents).toEqual(['codex'])
+    await settled(h.manager, 7)
+    expect(h.runner.runs[0]).toMatchObject({ agent: 'codex', model: 'gpt-x' })
+    expect(h.steps.publish).toHaveBeenCalledWith(
+      dir,
+      expect.objectContaining({ agent: 'codex', model: 'gpt-x' })
+    )
+  })
+
+  it('publishes with sharing off when the start turns it off', async () => {
+    const h = harness()
+    await h.manager.start(7, { force: false, share: false })
+    await settled(h.manager, 7)
+    expect(h.steps.publish).toHaveBeenCalledWith(dir, expect.objectContaining({ share: false }))
+  })
+
+  it('prepares a local review against the base the start names', async () => {
+    const h = harness()
+    await h.manager.start('branch', { force: false, base: 'release' })
+    await settled(h.manager, 'branch')
+    expect(h.steps.prepare).toHaveBeenCalledWith(
+      { kind: 'local', source: 'branch', base: 'release' },
+      expect.objectContaining({ force: false })
+    )
   })
 
   it('writes a head that already has a canvas again from a blank page', async () => {
@@ -482,9 +522,14 @@ describe('createGenerationManager', () => {
     expect(await h.manager.cancel('branch')).toBe(false)
     await settled(h.manager, 42)
     await expect(h.manager.start('branch', { force: true })).resolves.toMatchObject({ key: 'branch' })
-    // The job the server ran last is the one a page can read; the earlier review's is gone.
-    expect(h.manager.status(42)).toBeNull()
+    // Each review keeps its own last job: another review's start does not take #42's result away.
+    expect(h.manager.status(42)).toMatchObject({ key: 42, phase: 'done' })
     await settled(h.manager, 'branch')
+    expect(h.manager.status(42)).toMatchObject({ key: 42, phase: 'done' })
+    // A review's next job takes the place of its last one.
+    const again = await h.manager.start(42, { force: true })
+    expect(h.manager.status(42)).toMatchObject({ startedAt: again.startedAt, force: true })
+    await settled(h.manager, 42)
   })
 
   it('names the review whose job is running, and none once it ends', async () => {

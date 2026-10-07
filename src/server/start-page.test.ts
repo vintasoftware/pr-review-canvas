@@ -10,7 +10,7 @@ import {
   makeTestContext,
   type TestContext,
 } from '../testing/fakes.js'
-import { startPage } from './start-page.js'
+import { branchPr, startPage } from './start-page.js'
 
 const PULLS = 'repos/acme/widgets/pulls'
 const MRS = 'projects/acme%2Fwidgets/merge_requests'
@@ -127,7 +127,41 @@ describe('startPage', () => {
     expect(await startPage(t.ctx, line => log.push(line))).toBe('/r/acme/widgets/')
     expect(log).toHaveLength(1)
     expect(log[0]).toMatch(
-      /^could not find the open PR of feature \(.*not logged in.*\); opening the home page$/
+      /^could not find the open PR of the checked-out branch \(.*not logged in.*\); opening the home page$/
     )
+  })
+})
+
+describe('branchPr', () => {
+  it('answers the open PR of the checked-out branch, or null', async () => {
+    const pulls = ghHandler(params => (params['head'] === 'acme:feature' ? [{ number: 42 }] : []))
+    t = await makeTestContext({
+      gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    expect(await branchPr(t.ctx)).toBe(42)
+    await t.cleanup()
+    t = await makeTestContext({
+      gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+      git: createFakeGit({ branch: 'main' }),
+    })
+    expect(await branchPr(t.ctx)).toBeNull()
+  })
+
+  it('answers null without asking the forge when git names no branch', async () => {
+    const gh = createFakeGh()
+    t = await makeTestContext({ gh, git: createFakeGit({ branch: null }) })
+    expect(await branchPr(t.ctx)).toBeNull()
+    t.ctx.git = { ...t.ctx.git, currentBranch: () => Promise.reject(new Error('not a repo')) }
+    expect(await branchPr(t.ctx)).toBeNull()
+    expect(gh.calls).toEqual([])
+  })
+
+  it('throws when the lookup fails, so the caller can say why', async () => {
+    t = await makeTestContext({
+      gh: createFakeGh({ routes: { [PULLS]: ghError(new Error('offline')) } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    await expect(branchPr(t.ctx)).rejects.toThrow('offline')
   })
 })

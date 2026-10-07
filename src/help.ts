@@ -51,6 +51,24 @@ const COMMANDS: CommandHelp[] = [
     ],
   },
   {
+    name: 'generate [<n>|branch|uncommitted]',
+    summary: 'Generate a canvas in the running server, as the review app does, and wait for it.',
+    flags: [
+      { form: '--force', detail: 'start from a blank page, not from the earlier canvas' },
+      { form: '--base <ref>', detail: 'with branch or uncommitted, another base' },
+      { form: '--agent claude|codex', detail: 'the agent for this run; default: the chat agent' },
+      { form: '--model <id>', detail: 'the model for this run; default: generation.models' },
+      { form: '--out <file|dir>', detail: 'write the canvas zip there and post nothing' },
+      { form: '--open', detail: 'open the review in the browser when the canvas is published' },
+      { form: '--json', detail: 'one JSON line, as on a pipe' },
+    ],
+    notes: [
+      'Without a review, generates for the open pull request of the current branch. Needs a running server (`pr-review serve`) and acpx; it adds the project to the server, as open does.',
+      'Publishing shares the canvas on the pull request unless sharing is off. With --out it keeps the canvas local for that run and writes the zip, for `pr-review import` on another machine; resolving a point on the review page later shares it, unless sharing is off.',
+      'Progress goes to stderr. Ctrl+C stops the wait, not the generation: stop that from the review page.',
+    ],
+  },
+  {
     name: 'prepare',
     summary: 'Collect a pull request, the current branch, or the working tree.',
     flags: [

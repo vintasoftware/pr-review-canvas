@@ -33,8 +33,8 @@ pr-review doctor --all-checks
 `doctor --all-checks` checks your repository, host CLI login, local storage, the project's
 skill, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
 If only `acpx` is missing, you can still review canvases; install it below to enable chat.
-If only the skill is missing, you can still generate from the review app, which uses the skill
-pr-review ships.
+If only the skill is missing, you can still generate from the review app or with
+`pr-review generate`, which use the skill pr-review ships.
 
 ### Optional: install the skill
 
@@ -101,6 +101,19 @@ click **generate canvas** on the home page or on a review with no canvas, or
 **generate for current head** on an outdated one. See
 [generating from the review app](docs/reference.md#generating-from-the-review-app).
 
+The same generation runs from a terminal while `pr-review serve` runs:
+
+```bash
+pr-review generate 123                 # generate or update the canvas of PR 123, and share it
+pr-review generate                     # the open PR of the current branch
+pr-review generate 123 --out ~/Desktop # post nothing; write the canvas zip to send to someone
+```
+
+The reviewer loads that zip with `pr-review import <zip>`. `--out` keeps that run local only:
+resolving a point on the review page later shares the canvas unless
+[sharing is off](docs/reference.md#turning-sharing-off). See
+[generating from the terminal](docs/reference.md#generating-from-the-terminal) for the other flags.
+
 See [self-review](docs/reference.md#self-review) for resolution details and
 [manual sharing](docs/reference.md#automatic-sharing-and-zip-fallback) if automatic sharing fails.
 
@@ -110,6 +123,8 @@ Before opening a PR, you can generate a canvas for your local work:
 /pr-review-canvas branch          # the current branch against the default branch
 /pr-review-canvas uncommitted     # includes working-tree edits and new files
 ```
+
+From a terminal, `pr-review generate branch` and `pr-review generate uncommitted` do the same.
 
 Run `pr-review serve` in the project to open its home page, and find these local work canvases
 under the **Before the pull request** panel. These reviews stay local, and you can resolve

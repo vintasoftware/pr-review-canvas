@@ -1,7 +1,7 @@
 // How a command finds the running server and registers a checkout with it.
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ErrorEnvelope } from '../contract/api.js'
-import { AppError } from '../server/errors.js'
+import { AppError, fromEnvelope } from '../server/errors.js'
 import type { HubInfoResponse, RegisterInput, RegisterResponse } from './hub-app.js'
 import { processAlive, readServerInfo, type ServerInfo } from './home.js'
 
@@ -28,27 +28,36 @@ function callAddress(port: number): string {
   return `http://127.0.0.1:${port}`
 }
 
+/** The server's answer; one that is not ok throws its error envelope. */
+async function request(
+  server: ServerInfo,
+  path: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const res = await fetch(`${callAddress(server.port)}${path}`, {
+    ...init,
+    headers: { authorization: `Bearer ${server.token}`, 'content-type': 'application/json' },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) {
+    const error = ((await res.json().catch(() => null)) as ErrorEnvelope | null)?.error
+    const status = res.status as ContentfulStatusCode
+    throw error === undefined
+      ? new AppError('INTERNAL', `the server answered ${res.status}`, status)
+      : fromEnvelope(error, status)
+  }
+  return res
+}
+
 async function call<T>(
   server: ServerInfo,
   path: string,
   init: RequestInit = {},
   timeoutMs = ANSWER_TIMEOUT_MS
 ): Promise<T> {
-  const res = await fetch(`${callAddress(server.port)}${path}`, {
-    ...init,
-    headers: { authorization: `Bearer ${server.token}`, 'content-type': 'application/json' },
-    signal: AbortSignal.timeout(timeoutMs),
-  })
+  const res = await request(server, path, init, timeoutMs)
   const body = (await res.json().catch(() => null)) as unknown
-  if (!res.ok) {
-    const error = (body as ErrorEnvelope | null)?.error
-    throw new AppError(
-      error?.code ?? 'INTERNAL',
-      error?.message ?? `the server answered ${res.status}`,
-      res.status as ContentfulStatusCode,
-      error?.hint
-    )
-  }
   if (body === null) {
     throw new AppError('INTERNAL', `the server answered ${res.status} with no JSON`, 502)
   }
@@ -85,4 +94,32 @@ export function registerProject(server: ServerInfo, input: RegisterInput): Promi
     { method: 'POST', body: JSON.stringify(input) },
     REGISTER_TIMEOUT_MS
   )
+}
+
+/**
+ * A call to one project's API on the server: `path` is under its `/api/`, as `prs/42/generate`.
+ * Starting a generation reads the settings, the agent's models, and the host login, so a call
+ * gets as long as registering does.
+ */
+export function callProject<T>(
+  server: ServerInfo,
+  basePath: string,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  return call<T>(server, `${basePath}api/${path}`, init, REGISTER_TIMEOUT_MS)
+}
+
+/** The file a project's API answers with, by the name its `content-disposition` gives. */
+export async function downloadFromProject(
+  server: ServerInfo,
+  basePath: string,
+  path: string
+): Promise<{ name: string; bytes: Uint8Array }> {
+  const res = await request(server, `${basePath}api/${path}`, {}, REGISTER_TIMEOUT_MS)
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1]
+  if (name === undefined) {
+    throw new AppError('INTERNAL', 'the server answered with no file name', 502)
+  }
+  return { name, bytes: new Uint8Array(await res.arrayBuffer()) }
 }
