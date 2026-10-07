@@ -9,44 +9,11 @@ import {
 } from '../../contract/generation.js'
 import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
 import { resolveSharing } from '../../contract/settings.js'
-import {
-  createGenerationManager,
-  GenerationBusyError,
-  type GenerationManager,
-} from '../../generate/generation-manager.js'
-import { loadGenerationSkill } from '../../generate/skill.js'
-import { describeFixes, fixModel } from '../../review/fix-model.js'
-import { prepare } from '../../review/prepare.js'
-import { publish, readContext } from '../../review/publish.js'
+import { GenerationBusyError } from '../../generate/generation-manager.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { parseTargetKey } from './api.js'
 import { readBody, requirePosting } from './review-routes.js'
-
-/** The generation manager over the real pipeline: the same prepare and publish the CLI runs. */
-export function createContextGeneration(ctx: AppContext): GenerationManager {
-  return createGenerationManager({
-    runner: ctx.runner,
-    checkouts: ctx.checkouts,
-    steps: {
-      prepare: (input, opts) => prepare(ctx, input, opts),
-      publish: (canvasDir, opts) => publish(ctx, canvasDir, opts),
-      fix: async (canvasDir, modelPath, text) => {
-        const context = await readContext(canvasDir)
-        const { patches } = await ctx.derived.ensure(context.headSha, context.mergeBaseSha)
-        return describeFixes(await fixModel(modelPath, text, context, patches))
-      },
-    },
-    settings: () => ctx.chat.effectiveSettings(),
-    skill: agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version),
-    generation: ctx.projectConfig.config.generation,
-    repo: ctx.config.repo,
-    repoRoot: ctx.config.repoRoot,
-    currentBranch: () => ctx.git.currentBranch(),
-    log: ctx.log,
-    now: ctx.now,
-  })
-}
 
 /**
  * Refuses a generation whose canvas could not be shared, before minutes of agent time go into
@@ -67,11 +34,9 @@ export async function requireSharingLogin(ctx: AppContext, key: ReviewKey): Prom
   })
 }
 
-export function generateRoutes(
-  ctx: AppContext,
-  generation: GenerationManager = createContextGeneration(ctx)
-): Hono {
+export function generateRoutes(ctx: AppContext): Hono {
   const api = new Hono()
+  const { generation } = ctx
 
   const requireAgent: MiddlewareHandler = async (_c, next) => {
     if (!ctx.projectConfig.config.chat.enabled) {
@@ -119,7 +84,7 @@ export function generateRoutes(
           'GENERATION_BUSY',
           err.message,
           409,
-          'stop it from its review page, or wait for it to finish'
+          'wait for it to finish, or stop it from the review page that started it'
         )
       }
       throw err

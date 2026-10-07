@@ -121,8 +121,8 @@ into a data directory may be refused by write guards.
 If your file-writing tool cannot write to `canvasDir`, for example because you are isolated to a
 worktree, do not copy the file in with the shell. Run prepare again with
 `--data-dir <a directory you can write>/.pr-review` and use the `canvasDir` it prints: validate
-and publish find that data dir from it. Tell the user that `pr-review serve` shows this canvas
-only when started with that same `--data-dir`.
+and publish find that data dir from it. Tell the user that the review server shows this canvas
+only when the project is opened with that same `--data-dir` (`pr-review open --data-dir <dir>`).
 
 ### 4. Check before publishing
 
@@ -172,7 +172,8 @@ pr-review publish <canvasDir> --agent <your agent id> --model <model id if you k
 
 On success the last line is `{ "status": "published", "sharing", "headSha", "reviewJsonPath",
 "attempts", "reviewUrl" }` (`reviewUrl` is absent only for a `--base/--head` run; a local run
-points at `/review/branch` or `/review/uncommitted`).
+points at `<project>/review/branch` or `<project>/review/uncommitted`, where `<project>` is the
+project's path on the server, such as `/r/acme/widgets/`).
 For PR/MR runs, publish creates or updates your canvas comment using the host CLI login, unless
 `sharing.canvasComment` is off in `pr-review.config.yml` or `canvasComment: false` is set in
 `.pr-review/settings.yml` (the personal file wins). Publish reads the config itself; do not post
@@ -180,7 +181,8 @@ the canvas any other way. Always inspect `sharing.status`: local validation succ
 remote sharing succeeded.
 
 For a local run there is nothing to share: `sharing.status` is `"local"`. Report `reviewUrl` and
-tell the user to start `pr-review serve` to read the canvas.
+tell the user to run `pr-review serve` in the project to read the canvas (or `pr-review open`,
+when a server already runs for another project).
 
 On failure the command prints one line per problem, then an error line, and exits 5:
 
@@ -199,7 +201,8 @@ prepare again; pass `--allow-stale` only when the user asks for the canvas of th
 
 ### 6. Report the sharing result
 
-For a PR/MR run, report the local `reviewUrl` (start it with `pr-review serve`) and inspect `sharing`:
+For a PR/MR run, report the local `reviewUrl` (`pr-review serve` in the project starts the server
+and opens it, or adds the project when one already runs) and inspect `sharing`:
 
 - `status: "shared"`: link to `sharing.url` and say the canvas was shared automatically.
 - `status: "off"`: the config keeps canvases local, so nothing was posted. Say so, give the local
@@ -211,8 +214,9 @@ For a PR/MR run, report the local `reviewUrl` (start it with `pr-review serve`) 
   but reviewers still need the upload. Do not regenerate the model to repair a sharing failure.
 
 For a local run, `sharing.status` is `"local"` and there is nothing to share. Give the user
-`reviewUrl` (`http://localhost:<port>/review/branch` or `.../review/uncommitted`) and tell them to
-start `pr-review serve` if it is not running. Say which base was compared and whether uncommitted
+`reviewUrl` (`http://localhost:<port>/r/<owner>/<repo>/review/branch` or `.../review/uncommitted`)
+and tell them to run `pr-review serve` in the project and open that URL, or `pr-review open branch`
+or `pr-review open uncommitted` when a server already runs. Say which base was compared and whether uncommitted
 work was included, both from the `local` object prepare printed.
 
 For a `--base/--head` run, `sharing.status` is `"local"` too, but the canvas has no page of its
@@ -232,8 +236,8 @@ its commit is on no branch, so generate a fresh one for the PR.
 ### 7. Hand over the self-review
 
 The canvas is ready for its author before it is ready for reviewers. End your report of a PR/MR or
-local run by asking the user to self-review before requesting review: start `pr-review serve`,
-open `reviewUrl`, and resolve each attention point marked **yours** with a one-line reason. A
+local run by asking the user to self-review before requesting review: run `pr-review serve` in the
+project, open `reviewUrl`, and resolve each attention point marked **yours** with a one-line reason. A
 reviewer point that does not apply, such as a false positive, can be resolved the same way.
 Resolving updates the canvas comment for a PR/MR run, so reviewers see only what is left; when
 `sharing.status` was `"off"`, the resolutions stay in the local canvas. Say how many points

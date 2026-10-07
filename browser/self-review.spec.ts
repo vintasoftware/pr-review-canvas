@@ -49,10 +49,10 @@ test('completed self-review leaves only the done sentence and reviewer count', a
 }) => {
   await page.goto(selfReviewUrl)
   await page.evaluate(async () => {
-    const bundle = await (await fetch('/api/prs/42')).json()
+    const bundle = await (await fetch('../api/prs/42')).json()
     for (const point of bundle.artifact.points) {
       if (point.audience !== 'author') continue
-      const answer = await fetch(`/api/prs/42/points/${point.fingerprint}/settled`, {
+      const answer = await fetch(`../api/prs/42/points/${point.fingerprint}/settled`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ settled: true, reason: 'Verified locally.', comment: false }),

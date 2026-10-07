@@ -29,7 +29,7 @@ it('preserves writes, revisions, and PR associations from separate processes', a
     import { createCanvasStore } from ${JSON.stringify(new URL('./canvas-store.ts', import.meta.url).href)};
     import { createFakeGit } from ${JSON.stringify(new URL('../testing/fakes.ts', import.meta.url).href)};
     import { syntheticArtifact } from ${JSON.stringify(new URL('../testing/synthetic.ts', import.meta.url).href)};
-    const store = createCanvasStore(process.argv[2], createFakeGit());
+    const store = createCanvasStore(process.argv[2], createFakeGit(), null);
     const number = Number(process.argv[3]);
     const sha = String(number).padStart(40, '0');
     const artifact = syntheticArtifact();
@@ -75,7 +75,7 @@ it('preserves writes, revisions, and PR associations from separate processes', a
     await release()
   }
   await Promise.all(exits)
-  const index = await createCanvasStore(root, createFakeGit()).readIndex()
+  const index = await createCanvasStore(root, createFakeGit(), null).readIndex()
   expect(Object.keys(index.canvases)).toHaveLength(numbers.length)
   for (const number of numbers) {
     const sha = String(number).padStart(40, '0')
@@ -87,7 +87,7 @@ it('preserves writes, revisions, and PR associations from separate processes', a
 
 it('releases the index lock after a failed update', async () => {
   root = await makeTempDir('canvas-concurrency-')
-  const store = createCanvasStore(root, createFakeGit())
+  const store = createCanvasStore(root, createFakeGit(), null)
   await expect(store.attachPrNumber('0'.repeat(40), 42)).resolves.toBeUndefined()
   await writeFile(path.join(root, 'index.json'), '{broken')
   await expect(store.attachPrNumber('0'.repeat(40), 42)).rejects.toThrow()

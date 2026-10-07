@@ -19,7 +19,6 @@ import { lookupCanvas, samePatches } from '../../review/carry-over.js'
 import { marksForCanvas } from '../../review/carry-marks.js'
 import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
-import { canvasBelongsTo } from '../../store/canvas-store.js'
 import { isReviewedId } from '../../store/state-store.js'
 import type { Derived } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
@@ -80,7 +79,7 @@ export async function readBody<T>(request: Request, schema: z.ZodType<T>, expect
 async function requireCanvasOf(ctx: AppContext, key: ReviewKey, canvasSha: string): Promise<void> {
   const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
   // The same rule the lookups use, so a mark can only be keyed to a canvas this target shows.
-  if (entry === undefined || !canvasBelongsTo(entry, key)) {
+  if (entry === undefined || !ctx.canvases.belongsTo(entry, key)) {
     throw new AppError(
       'CANVAS_NOT_FOUND',
       `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,

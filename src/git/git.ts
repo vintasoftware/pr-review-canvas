@@ -31,6 +31,8 @@ export interface Git {
   commitAuthor(ref: string): Promise<string>
   topLevel(): Promise<string>
   commonDir(): Promise<string>
+  /** This checkout's own git dir: the common dir for the main checkout, `<common>/worktrees/<name>` for a linked one. */
+  gitDir(): Promise<string>
   remoteUrl(name: string): Promise<string | null>
   /** The checked-out branch, or null on a detached HEAD. */
   currentBranch(): Promise<string | null>
@@ -114,17 +116,18 @@ interface ExecResult {
 }
 
 /** Runs git with an argument array; never a shell. `extra` puts back the few repo variables a
- * command needs, such as the snapshot index. */
+ * command needs, such as the snapshot index. `base` is the environment it runs under. */
 export function execGit(
   cwd: string,
   args: string[],
-  extra: Readonly<Record<string, string>> = {}
+  extra: Readonly<Record<string, string>> = {},
+  base: NodeJS.ProcessEnv = process.env
 ): Promise<ExecResult> {
   return new Promise(resolve => {
     execFile(
       'git',
       args,
-      { cwd, env: { ...envWithoutRepo(), ...extra }, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
+      { cwd, env: { ...envWithoutRepo(base), ...extra }, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
         resolve({ stdout, stderr: stderr.toString('utf8'), code })
@@ -133,7 +136,16 @@ export function execGit(
   })
 }
 
-export type GitExec = typeof execGit
+export type GitExec = (
+  cwd: string,
+  args: string[],
+  extra?: Readonly<Record<string, string>>
+) => Promise<ExecResult>
+
+/** git under `env` instead of this process's: the shell a project was opened from. */
+export function execGitIn(env: NodeJS.ProcessEnv): GitExec {
+  return (cwd, args, extra) => execGit(cwd, args, extra, env)
+}
 
 export function createGit(cwd: string, exec: GitExec = execGit): Git {
   async function run(args: string[], env: Readonly<Record<string, string>> = {}): Promise<string> {
@@ -181,6 +193,7 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
     commitAuthor: ref => run(['log', '-1', '--format=%an', ref]),
     topLevel: () => run(['rev-parse', '--show-toplevel']),
     commonDir: () => run(['rev-parse', '--path-format=absolute', '--git-common-dir']),
+    gitDir: () => run(['rev-parse', '--path-format=absolute', '--git-dir']),
     remoteUrl: async name => {
       const r = await exec(cwd, ['remote', 'get-url', name])
       return r.code === 0 ? r.stdout.toString('utf8').trim() : null

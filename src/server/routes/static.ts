@@ -82,7 +82,8 @@ export async function resolveVendor(roots: VendorRoots, rel: string): Promise<st
   return null
 }
 
-export function staticRoutes(ctx: AppContext): Hono {
+/** The page's own files and the vendored modules. Every project serves the same ones. */
+export function staticRoutes(ctx: Pick<AppContext, 'staticDir' | 'vendorRoots'>): Hono {
   const app = new Hono()
 
   async function send(file: string, cache: string): Promise<Response> {

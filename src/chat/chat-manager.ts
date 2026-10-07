@@ -6,7 +6,7 @@ import { latestModel } from '../acpx/models.js'
 import type { ChatContext, ChatEvent, ChatThreadsResponse, ChatTurn } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
-import type { ReviewKey } from '../contract/review-key.js'
+import { parseReviewFolder, type ReviewKey, reviewFolder } from '../contract/review-key.js'
 import type { ChatThread } from '../contract/state.js'
 import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
@@ -42,7 +42,19 @@ export interface ChatManagerDeps {
   /** The branch the reader's checkout is on, for the warning when a turn falls back to it. */
   currentBranch: () => Promise<string | null>
   now: () => Date
+  /**
+   * The turns running over this data dir, in this manager or any other over it. The worktrees of
+   * one clone share a pull request's threads and review checkout, and so its turn: each of their
+   * managers sees and stops it. Each worktree's local reviews are its own. A manager of its own
+   * has turns of its own.
+   */
+  turns?: RunningTurns | undefined
+  /** The linked worktree the manager's checkout is, null for the main checkout: it names which local reviews are its own. */
+  worktree?: string | null | undefined
 }
+
+/** The turns running over one data dir, by review folder (`reviewFolder`). */
+export type RunningTurns = Map<string, RunningTurn>
 
 /** Everything about the review target one turn needs, resolved by the route. */
 export interface ChatTarget {
@@ -70,11 +82,16 @@ export interface ChatManager {
   send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent>
   /** True when a turn was running and has been asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
-  busy(key: ReviewKey): boolean
+  /**
+   * The reviews with a turn running that are this checkout's: a pull request's, which every
+   * worktree of the clone shares, or one of its own local reviews. The server checks it before it
+   * removes the project.
+   */
+  running(): ReviewKey[]
 }
 
 /** The slot a turn holds while it runs. The handle is filled in once the agent has started. */
-interface RunningTurn {
+export interface RunningTurn {
   run: { cancel: () => Promise<void> } | null
   /** The review checkout this turn holds, released when the turn ends. */
   lease: CheckoutLease | null
@@ -106,7 +123,9 @@ async function modelForTurn(
 }
 
 export function createChatManager(deps: ChatManagerDeps): ChatManager {
-  const running = new Map<ReviewKey, RunningTurn>()
+  const turns: RunningTurns = deps.turns ?? new Map()
+  const worktree = deps.worktree ?? null
+  const folderOf = (key: ReviewKey): string => reviewFolder(key, worktree)
 
   const effectiveSettings = async (): Promise<Settings> => {
     const saved = await deps.settings.read()
@@ -213,19 +232,20 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
-    if (running.has(target.key)) {
+    const folder = folderOf(target.key)
+    if (turns.has(folder)) {
       throw new ChatBusyError()
     }
     // The slot is taken before the first await, so a second request that arrives while this one
     // is still reading the settings sees a busy chat rather than starting a second agent.
     const slot: RunningTurn = { run: null, stopped: false, lease: null }
-    running.set(target.key, slot)
+    turns.set(folder, slot)
     try {
       yield* runTurn(target, input, slot)
     } finally {
       // The lock goes first, so a slot that looks free always has a free checkout behind it.
       await slot.lease?.release().catch(() => undefined)
-      running.delete(target.key)
+      turns.delete(folder)
     }
   }
 
@@ -457,7 +477,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     },
     send,
     async cancel(key) {
-      const slot = running.get(key)
+      const slot = turns.get(folderOf(key))
       if (slot === undefined) {
         return false
       }
@@ -467,7 +487,11 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       await slot.run?.cancel()
       return true
     },
-    busy: key => running.has(key),
+    running: () =>
+      [...turns.keys()].flatMap(folder => {
+        const review = parseReviewFolder(folder)
+        return review !== null && folderOf(review.key) === folder ? [review.key] : []
+      }),
   }
 }
 

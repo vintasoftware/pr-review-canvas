@@ -120,12 +120,12 @@ describe('POST /api/prs/:n/chat', () => {
     t = await context({ runner: createFakeRunner({ delayMs: 20 }) })
     await warmDerived()
     const first = sendChat({ message: 'one', context: { kind: 'pr' } })
-    await expect.poll(() => t.ctx.chat.busy(42)).toBe(true)
+    await expect.poll(() => t.ctx.chat.running().includes(42)).toBe(true)
     const second = await sendChat({ message: 'two', context: { kind: 'pr' } })
     expect(second.status).toBe(409)
     const envelope = await json<ErrorEnvelope>(second)
     expect(envelope.error.code).toBe('CHAT_BUSY')
-    expect(envelope.error.hint).toContain('stop the running answer')
+    expect(envelope.error.hint).toBe('wait for it to finish, or stop it from the page that asked')
     await (await first).text()
   })
 
@@ -147,7 +147,7 @@ describe('POST /api/prs/:n/chat', () => {
     }
     await reader.cancel()
     expect(runner.cancelled).toEqual([T1])
-    await expect.poll(() => t.ctx.chat.busy(42)).toBe(false)
+    await expect.poll(() => t.ctx.chat.running().includes(42)).toBe(false)
   })
 
   it('refuses a context the canvas does not have, with a status rather than a stream', async () => {
@@ -227,7 +227,14 @@ describe('GET /api/checkouts', () => {
     const body = await json<CheckoutsResponse>(res)
     expect(body.root).toBe(t.ctx.checkouts.root)
     expect(body.checkouts).toEqual([
-      { key: 42, sha: HEAD_SHA, lastUsedAt: '2026-09-10T12:00:00.000Z', locked: false, bytes: 40 },
+      {
+        key: 42,
+        worktree: null,
+        sha: HEAD_SHA,
+        lastUsedAt: '2026-09-10T12:00:00.000Z',
+        locked: false,
+        bytes: 40,
+      },
     ])
   })
 })
@@ -524,10 +531,10 @@ describe('toChatError', () => {
   it('maps every way a turn can be refused', () => {
     expect(toChatError(new ChatBusyError()).code).toBe('CHAT_BUSY')
     // Another process's answer cannot be stopped from this page, so the hint does not say to.
-    expect(toChatError(new CheckoutBusyError(42, null))).toMatchObject({ code: 'CHAT_BUSY', status: 409 })
-    expect(toChatError(new CheckoutBusyError(42, null)).hint).toContain('another pr-review serve')
+    expect(toChatError(new CheckoutBusyError('42', null))).toMatchObject({ code: 'CHAT_BUSY', status: 409 })
+    expect(toChatError(new CheckoutBusyError('42', null)).hint).toContain('another pr-review serve')
     // A generation of this server holds the checkout: the refusal says so, not another serve.
-    const byGeneration = toChatError(new CheckoutBusyError(42, 'generation'))
+    const byGeneration = toChatError(new CheckoutBusyError('42', 'generation'))
     expect(byGeneration.message).toBe('a canvas generation is using the review checkout of 42')
     expect(byGeneration.hint).toBe('ask again once the canvas generation of this review ends, or stop it')
     expect(toChatError(new ChatContextError('no such file')).status).toBe(400)

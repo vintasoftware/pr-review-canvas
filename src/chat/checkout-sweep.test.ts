@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, type Settings } from '../contract/settings.js'
-import type { ReviewCheckouts, SweepOptions } from './checkouts.js'
+import type { CheckoutStore, SweepOptions } from './checkouts.js'
 import { startCheckoutSweep } from './checkout-sweep.js'
 
-function fakeCheckouts(opts: { fail?: boolean } = {}): ReviewCheckouts & { sweeps: SweepOptions[] } {
+function fakeCheckouts(opts: { fail?: boolean } = {}): CheckoutStore & { sweeps: SweepOptions[] } {
   const sweeps: SweepOptions[] = []
   return {
     sweeps,
@@ -18,7 +18,17 @@ function fakeCheckouts(opts: { fail?: boolean } = {}): ReviewCheckouts & { sweep
         throw new Error('disk gone')
       }
       return {
-        removed: [{ key: 42, dir: '/data/checkouts/42', sha: 'a', lastUsedAt: 'then', locked: false }],
+        removed: [
+          {
+            key: 'branch',
+            worktree: 'fix',
+            folder: 'branch~fix',
+            dir: '/data/checkouts/branch~fix',
+            sha: 'a',
+            lastUsedAt: 'then',
+            locked: false,
+          },
+        ],
         skipped: [],
       }
     },
@@ -45,7 +55,7 @@ describe('startCheckoutSweep', () => {
     })
     await vi.advanceTimersByTimeAsync(0)
     expect(checkouts.sweeps).toEqual([{ olderThanDays: 3 }])
-    expect(lines).toEqual(['removed the idle review checkout of 42 (last used then)'])
+    expect(lines).toEqual(['removed the idle review checkout of branch~fix (last used then)'])
     // A change in the settings applies from the next sweep.
     settings = { ...settings, checkoutIdleDays: 1 }
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000 - 1)

@@ -10,7 +10,7 @@ import {
   fetchSharedCanvas,
   importCanvas,
   pollBundle,
-  saveAppearance,
+  setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
 import { setMentionCanvas } from './points.js'
@@ -29,7 +29,8 @@ import {
   staleBarHtml,
 } from './empty-state.js'
 import { errorCardHtml } from './errors.js'
-import { renderHeader } from './header.js'
+import { bareHeaderHtml, renderHeader } from './header.js'
+import { wireEnvBadge } from './header-bar.js'
 import { wireDropZone } from './import-zone.js'
 import { wireReview } from './interactions.js'
 import {
@@ -49,8 +50,9 @@ import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
 import { setSelfReview } from './self-review.js'
 import { openSettingsDialog } from './settings.js'
-import { applySkin, DEFAULT_SKIN, nextSkin, readSkin, skinLabel } from './skin.js'
-import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
+import { wireAppearanceCommands } from './appearance-commands.js'
+import { readSkin } from './skin.js'
+import { readTheme } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
@@ -67,6 +69,15 @@ function readBootstrap() {
   } catch {
     return null
   }
+}
+
+/**
+ * The project as the header names it.
+ * @param {Bootstrap} bootstrap
+ * @returns {import('./header-bar.js').ProjectLink}
+ */
+function projectLinkOf(bootstrap) {
+  return { slug: bootstrap.project, home: bootstrap.base, reopenIn: bootstrap.reopenIn }
 }
 
 /**
@@ -124,10 +135,6 @@ export class PrAppElement extends HTMLElement {
   poller = null
   /** @type {Bootstrap | null} */
   bootstrap = null
-  /** @type {import('./theme.js').Theme} */
-  theme = 'auto'
-  /** @type {import('./skin.js').Skin} */
-  skin = DEFAULT_SKIN
   /** @type {{ stop: () => void } | null} */
   diagrams = null
   /** @type {{ stop: () => void } | null} */
@@ -159,6 +166,7 @@ export class PrAppElement extends HTMLElement {
   connectedCallback() {
     // Once per element: the content is re-rendered on every flip, the element itself is not.
     wireCopyCommands(this)
+    wireEnvBadge(this)
     void this.boot()
   }
 
@@ -193,8 +201,7 @@ export class PrAppElement extends HTMLElement {
       return
     }
     setHost(this.bootstrap.host)
-    this.theme = readTheme(document.documentElement)
-    this.skin = readSkin(document.documentElement)
+    setApiBase(this.bootstrap.base)
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
@@ -209,8 +216,17 @@ export class PrAppElement extends HTMLElement {
     try {
       bundle = await fetchBundle(this.bootstrap.prNumber)
     } catch (err) {
-      this.innerHTML = errorCardHtml(toEnvelopeError(err)) + footerHtml(this.bootstrap.version)
+      this.innerHTML =
+        bareHeaderHtml({
+          host: location.host,
+          project: projectLinkOf(this.bootstrap),
+          theme: readTheme(document.documentElement),
+          skin: readSkin(document.documentElement),
+        }) +
+        errorCardHtml(toEnvelopeError(err)) +
+        footerHtml(this.bootstrap.version)
       qs('#retry', this)?.addEventListener('click', () => void this.boot())
+      this.wireAppearance()
       return
     }
     await this.render(bundle, patchesPromise)
@@ -265,7 +281,13 @@ export class PrAppElement extends HTMLElement {
     this.interactions = null
     this.stopChat()
     const now = new Date()
-    const header = renderHeader(bundle, { host: location.host, theme: this.theme, skin: this.skin, now })
+    const header = renderHeader(bundle, {
+      host: location.host,
+      theme: readTheme(document.documentElement),
+      skin: readSkin(document.documentElement),
+      now,
+      project: this.bootstrap ? projectLinkOf(this.bootstrap) : undefined,
+    })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
     const chatMinimized = chatEnabled && readChatMinimized(storage)
@@ -380,12 +402,13 @@ export class PrAppElement extends HTMLElement {
   }
 
   /**
-   * Writes the skin or the theme to `.pr-review/settings.yml`.
-   * @param {import('./contract-types.js').AppearanceInput} input
-   * @param {string} what the word the failure message names
+   * The header's skin and theme commands, on every screen and on the error screen too. A failed
+   * save says so in a toast, since the next load would come back in the old look.
    */
-  save(input, what) {
-    void saveAppearance(input).catch(() => toast(this, `could not save the ${what} to settings.yml`))
+  wireAppearance() {
+    wireAppearanceCommands(this, (what, saved) => {
+      if (!saved) toast(this, `could not save the ${what} to settings.yml`)
+    })
   }
 
   /** @param {PrBundle} bundle */
@@ -396,22 +419,7 @@ export class PrAppElement extends HTMLElement {
     if (settings instanceof HTMLElement && this.interactions === null) {
       settings.addEventListener('click', () => void openSettingsDialog(this, settings))
     }
-    // Both repaint the page under the click; the settings file catches up after the round trip,
-    // and each says so when it cannot, because the next load would come back in the old one.
-    const toggle = qs('#theme-toggle', this)
-    toggle?.addEventListener('click', () => {
-      this.theme = nextTheme(this.theme)
-      applyTheme(this.theme, document.documentElement)
-      toggle.textContent = themeLabel(this.theme)
-      this.save({ theme: this.theme }, 'theme')
-    })
-    const skinToggle = qs('#skin-toggle', this)
-    skinToggle?.addEventListener('click', () => {
-      this.skin = nextSkin(this.skin)
-      applySkin(this.skin, document.documentElement)
-      skinToggle.textContent = skinLabel(this.skin)
-      this.save({ skin: this.skin }, 'skin')
-    })
+    this.wireAppearance()
     const boot = this.bootstrap
     if (!boot) {
       return

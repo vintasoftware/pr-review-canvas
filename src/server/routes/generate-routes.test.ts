@@ -65,6 +65,7 @@ function fakeManager(over: Partial<GenerationManager> = {}) {
     ),
     status: vi.fn<GenerationManager['status']>(over.status ?? (() => null)),
     cancel: vi.fn<GenerationManager['cancel']>(over.cancel ?? (async () => false)),
+    running: vi.fn<GenerationManager['running']>(() => null),
     nextSkill: vi.fn<GenerationManager['nextSkill']>(
       over.nextSkill ?? (async () => ({ source: 'default', version: '0.0.0-test' }))
     ),
@@ -78,7 +79,8 @@ function appWith(manager: ReturnType<typeof fakeManager>): Hono {
     const mapped = toAppError(err)
     return c.json(mapped.toEnvelope(), mapped.status)
   })
-  app.route('/api', generateRoutes(t.ctx, manager))
+  t.ctx.generation = manager
+  app.route('/api', generateRoutes(t.ctx))
   return app
 }
 
@@ -142,7 +144,7 @@ describe('generate routes', () => {
     expect(((await res.json()) as ErrorEnvelope).error).toEqual({
       code: 'GENERATION_BUSY',
       message: 'a canvas is already being generated for #43, and one runs at a time',
-      hint: 'stop it from its review page, or wait for it to finish',
+      hint: 'wait for it to finish, or stop it from the review page that started it',
     })
   })
 

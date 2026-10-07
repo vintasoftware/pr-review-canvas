@@ -4,13 +4,14 @@ import { isChatAgent, type SettingsOverrides } from './contract/settings.js'
 import { type Git, GitError } from './git/git.js'
 import type { Host } from './host/host.js'
 import { type OriginRemote, parseOriginRemote } from './host/remote.js'
+import { basePathOf, projectSlug, worktreeOf } from './hub/slug.js'
 import { resolveDataDir } from './store/data-dir.js'
 
 export const DEFAULT_PORT = 3010
 
+/** What a command's flags set for one checkout. */
 export interface ServeFlags {
   port?: number | undefined
-  repo?: string | undefined
   dataDir?: string | undefined
   /** The canvas validate or publish names; without `dataDir` or `PR_REVIEW_DATA_DIR`, its data dir is used. */
   canvasDir?: string | undefined
@@ -18,7 +19,8 @@ export interface ServeFlags {
   /** Wins over `.pr-review/settings.yml` for this run; the settings dialog reports it. */
   chatAgent?: string | undefined
   chatModel?: string | undefined
-  noOpen?: boolean | undefined
+  /** The `PR_REVIEW_HOST` of the shell that opened the project, saved with it; wins over the environment's. */
+  host?: string | undefined
 }
 
 export interface RuntimeConfig {
@@ -29,15 +31,16 @@ export interface RuntimeConfig {
   repo: Repo
   /** The forge origin points at, which owns every request or answer that differs between them. */
   host: Host
+  /** The linked worktree's label; null for the clone's main checkout. */
+  worktree: string | null
+  /** The checkout's name on the shared server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
+  slug: string
+  /** Where its pages and API live on the server, with a trailing slash: `/r/<slug>/`. */
+  basePath: string
   /** Dev only: every PR reports `ready` with this artifact re-keyed to the live head. */
   fixtureCanvasPath: string | null
   /** Chat agent and model the flags force for this run, if any. */
   chatOverrides: SettingsOverrides
-  /**
-   * Open the start page in the default browser once the port is bound: the review of the checked-out
-   * branch's open PR or MR, or the home page. Off with `--no-open` or in CI.
-   */
-  openBrowser: boolean
 }
 
 export type ConfigErrorCode = 'NOT_A_REPO' | 'NO_ORIGIN' | 'BAD_REQUEST'
@@ -76,12 +79,17 @@ export async function resolveCommonDir(git: Git): Promise<string> {
 export const ORIGIN_HINT =
   'add a github.com or GitLab origin, or set PR_REVIEW_HOST=gitlab for self-hosted GitLab'
 
-export async function resolveOrigin(git: Git, env: NodeJS.ProcessEnv = {}): Promise<OriginRemote> {
+/** `host` is the `PR_REVIEW_HOST` to classify origin with; the environment's when not given. */
+export async function resolveOrigin(
+  git: Git,
+  env: NodeJS.ProcessEnv = {},
+  host: string | undefined = readEnv(env, 'PR_REVIEW_HOST')
+): Promise<OriginRemote> {
   const url = await git.remoteUrl('origin')
   if (url === null) {
     throw new ConfigError('NO_ORIGIN', 'the repository has no "origin" remote', ORIGIN_HINT)
   }
-  const parsed = parseOriginRemote(url, env)
+  const parsed = parseOriginRemote(url, host)
   if (parsed === null) {
     throw new ConfigError('NO_ORIGIN', `origin is not a GitHub or GitLab URL: ${url}`, ORIGIN_HINT)
   }
@@ -134,13 +142,16 @@ export async function loadRuntimeConfig(
 ): Promise<RuntimeConfig> {
   const repoRoot = await resolveRepoRoot(git)
   const commonDir = await resolveCommonDir(git)
-  const { repo, host } = await resolveOrigin(git, env)
+  const gitDir = await git.gitDir()
+  const { repo, host } = await resolveOrigin(git, env, flags.host)
   const port = flags.port ?? parsePort(readEnv(env, 'PR_REVIEW_PORT'), DEFAULT_PORT)
   const dataDir = resolveDataDir({
     override: flags.dataDir ?? readEnv(env, 'PR_REVIEW_DATA_DIR'),
     canvasDir: flags.canvasDir === undefined ? undefined : path.resolve(cwd, flags.canvasDir),
     commonDir,
   })
+  const worktree = worktreeOf(gitDir, commonDir)
+  const slug = projectSlug(repo, worktree)
   return {
     port,
     repoRoot,
@@ -148,8 +159,10 @@ export async function loadRuntimeConfig(
     dataDir,
     repo,
     host,
+    worktree,
+    slug,
+    basePath: basePathOf(slug),
     fixtureCanvasPath: flags.fixtureCanvas === undefined ? null : path.resolve(cwd, flags.fixtureCanvas),
     chatOverrides: parseChatOverrides(flags),
-    openBrowser: flags.noOpen !== true && readEnv(env, 'CI') === undefined,
   }
 }

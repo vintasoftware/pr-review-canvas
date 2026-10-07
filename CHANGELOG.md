@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### One server for every project
+
+- One `pr-review serve` now serves every project. Start it once, in any folder, and run
+  `pr-review open` in a project to add it and open its review: the open PR or MR of the current
+  branch, or the project's home page. `pr-review open 123`, `open branch`, and `open uncommitted`
+  open that review.
+- Each project answers under `/r/<owner>/<repo>/`, and a linked worktree under
+  `/r/<owner>/<repo>~<worktree>/`, with git's name for the worktree, because its branch and
+  uncommitted work differ. The pages and features under that path are unchanged.
+- `http://localhost:3010/` lists the projects. **remove** takes one off the list; its canvases and
+  review state stay, and `pr-review open` adds it again. A project whose folder is gone leaves the
+  list by itself.
+- The logo leads to the project list. Next to it, the project's name leads to its home page.
+- The project list and each project's home page have the **skin** and **theme** commands of the
+  review page.
+- `pr-review serve` inside a project still adds and opens it. When a server already runs, it adds
+  the project to that server and exits, unless `--port` names another port.
+- The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
+  shell that ran `open` for it, kept in memory only. `--data-dir`, `--chat-agent`, and
+  `--chat-model` also work on `open`, per project, and are saved with it.
+- After a restart, a project opened from a bookmark runs with the server's environment, with the
+  data dir and `PR_REVIEW_HOST` it was opened with, which are saved with it. The server logs this,
+  and a **server env** badge next to the project's name opens a dialog: what may fail when the
+  project's shell sets its own token or `PATH`, and the command to give it the shell's again.
+- Each worktree of a clone has its own `branch` and `uncommitted` reviews: review progress,
+  chat threads, review checkout, and the earlier canvases they fall back on. A linked worktree's
+  go by `branch~<worktree>` in the clone's `.pr-review/`; local reviews a linked worktree prepared
+  before now are the main checkout's, so prepare them again there. A pull request's review stays shared by every worktree,
+  which run one generation at a time and one chat turn per pull request.
+- `publish` prints a `reviewUrl` under the project's path and on the running server's port.
+- The server keeps `server.json` (readable by its owner only), `projects.json`, and the project
+  list's look in `~/.pr-review`, or in `PR_REVIEW_HOME`. Only a command that can read
+  `server.json` can add a project.
+
 ### Reading
 
 - Every code block in rendered text has a `copy` command: chat answers, proposed and pending
@@ -22,6 +56,11 @@
   writing the answer (with how many characters so far), or running a tool, and how long ago it
   last showed it was working. A run that writes the canvas for minutes without a tool call no
   longer looks stuck; after three minutes with nothing from the agent, the dialog says it may be.
+
+### Fixes
+
+- A merged pull request whose base branch was deleted since, as a stacked PR's is once the PR
+  below it merges, failed to load with a git error. Its review now loads from its merge commit.
 
 ## 0.7.0
 

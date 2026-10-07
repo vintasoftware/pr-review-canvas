@@ -111,6 +111,33 @@
   border-bottom: 1px solid var(--ink);
   font-size: 13px;
 }
+/* The badge next to a project's name that runs under the server's environment; it opens a dialog. */
+.env-badge {
+  align-self: center;
+  background: var(--warn-bg);
+  font-family: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+/* Each block is a paragraph and what it leads to: the list, or the command. */
+dialog.env p {
+  margin: 0;
+}
+dialog.env ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+dialog.env .cmdbox {
+  margin-top: 8px;
+  flex-wrap: nowrap;
+}
+/* A long folder wraps inside the box, so the copy command stays beside it. */
+dialog.env .cmdbox code {
+  flex: 1;
+  min-width: 0;
+}
 .error-card .body p {
   overflow-wrap: anywhere;
 }

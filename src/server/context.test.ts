@@ -1,11 +1,24 @@
 // @vitest-environment node
-import { rm, stat } from 'node:fs/promises'
+import { chmod, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { GITHUB_HOST } from '../host/host.js'
+import { ChatBusyError, type ChatTarget } from '../chat/chat-manager.js'
+import type { RuntimeConfig } from '../config.js'
+import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
+import { GITHUB_HOST, gitlabHost } from '../host/host.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
-import { createFakeGh, createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
+import { createFakeRunner } from '../testing/fake-runner.js'
 import {
+  createFakeCheckoutGit,
+  createFakeGh,
+  createFakeGit,
+  makeTempDir,
+  TEST_REPO,
+} from '../testing/fakes.js'
+import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
+import {
+  type AppContext,
   createAppContext,
+  createCloneShared,
   PACKAGE_ROOT,
   readPackageVersion,
   resolveVendorRoots,
@@ -42,9 +55,11 @@ describe('context', () => {
           dataDir,
           repo: TEST_REPO,
           host: GITHUB_HOST,
+          worktree: null,
+          slug: 'acme/widgets',
+          basePath: '/r/acme/widgets/',
           fixtureCanvasPath: null,
           chatOverrides: {},
-          openBrowser: false,
         },
         projectConfig: { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
         fixtureArtifact: null,
@@ -74,9 +89,11 @@ describe('context', () => {
           dataDir,
           repo: TEST_REPO,
           host: GITHUB_HOST,
+          worktree: null,
+          slug: 'acme/widgets',
+          basePath: '/r/acme/widgets/',
           fixtureCanvasPath: null,
           chatOverrides: {},
-          openBrowser: false,
         },
         projectConfig: { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null },
         fixtureArtifact: null,
@@ -84,8 +101,150 @@ describe('context', () => {
       expect(typeof ctx.git.topLevel).toBe('function')
       expect(typeof ctx.gh.authStatus).toBe('function')
       expect(ctx.now()).toBeInstanceOf(Date)
+      // The log goes to stderr, and fetch is the platform's.
+      const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      try {
+        ctx.log('hello')
+        expect(write).toHaveBeenCalledWith('hello\n')
+      } finally {
+        write.mockRestore()
+      }
+      expect(await (await ctx.fetch('data:text/plain,fetched')).text()).toBe('fetched')
     } finally {
       await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
+  describe('for a project the shared server opened', () => {
+    let dir: string
+    const config = (host = GITHUB_HOST): RuntimeConfig => ({
+      port: 1,
+      repoRoot: dir,
+      commonDir: path.join(dir, '.git'),
+      dataDir: path.join(dir, 'data'),
+      repo: TEST_REPO,
+      host,
+      worktree: null,
+      slug: 'acme/widgets',
+      basePath: '/r/acme/widgets/',
+      fixtureCanvasPath: null,
+      chatOverrides: {},
+    })
+    const projectConfig = { config: DEFAULT_PROJECT_CONFIG, warnings: [], source: null }
+
+    beforeEach(async () => {
+      dir = await makeTempDir()
+    })
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true })
+    })
+
+    /** A command on the shell's PATH that prints what it was run with. */
+    async function onPath(name: string, script: string): Promise<string> {
+      const bin = path.join(dir, 'bin')
+      await mkdir(bin, { recursive: true })
+      await writeFile(path.join(bin, name), `#!/bin/sh\n${script}\n`)
+      await chmod(path.join(bin, name), 0o755)
+      return bin
+    }
+
+    it("runs git, the host CLI, and the agent under the shell's environment, with the host's own variables on top", async () => {
+      const print = 'echo "$PR_REVIEW_MARK/${PR_REVIEW_PROCESS_ONLY:-unset}"'
+      await onPath('git', print)
+      await onPath('glab', 'echo "{\\"mark\\":\\"$PR_REVIEW_MARK\\",\\"host\\":\\"$GITLAB_HOST\\"}"')
+      const bin = await onPath('acpx', `echo "acpx $(${print})"`)
+      // Set in this process only: a child of a project opened from another shell does not see it.
+      process.env['PR_REVIEW_PROCESS_ONLY'] = 'leaked'
+      try {
+        const ctx = createAppContext({
+          config: config(gitlabHost('gitlab.example.com')),
+          projectConfig,
+          fixtureArtifact: null,
+          env: {
+            PATH: `${bin}:/usr/bin:/bin`,
+            PR_REVIEW_MARK: 'from-shell',
+            GITLAB_HOST: 'gitlab.other.example',
+            UNSET: undefined,
+          },
+        })
+        expect(await ctx.git.topLevel()).toBe('from-shell/unset')
+        expect(await ctx.gh.api('user')).toEqual({ mark: 'from-shell', host: 'gitlab.example.com' })
+        expect(await ctx.runner.acpxVersion()).toBe('acpx from-shell/unset')
+      } finally {
+        delete process.env['PR_REVIEW_PROCESS_ONLY']
+      }
+    })
+
+    it('logs through the log it is given', () => {
+      const logs: string[] = []
+      const ctx = createAppContext({
+        config: config(),
+        projectConfig,
+        fixtureArtifact: null,
+        git: createFakeGit(),
+        gh: createFakeGh(),
+        log: line => logs.push(line),
+      })
+      ctx.log('hello')
+      expect(logs).toEqual(['hello'])
+    })
+
+    it('shares the clone part it is given, so a sibling context refuses a chat turn, and sees it', async () => {
+      const now = () => new Date(0)
+      const clone = createCloneShared(config(), now, createFakeCheckoutGit())
+      const contexts = ['a', 'b'].map(name =>
+        createAppContext({
+          config: { ...config(), repoRoot: path.join(dir, name) },
+          projectConfig,
+          fixtureArtifact: null,
+          git: createFakeGit(),
+          gh: createFakeGh(),
+          runner: createFakeRunner({ delayMs: 5 }),
+          now,
+          clone,
+        })
+      )
+      const [a, b] = contexts as [AppContext, AppContext]
+      expect(a.clone).toBe(clone)
+      expect(b.checkouts.root).toBe(a.checkouts.root)
+      const first = a.chat.send(target(), { message: 'x', context: { kind: 'pr' } })
+      const turn = first[Symbol.asyncIterator]()
+      await turn.next()
+      // The shared turns go by review folder: a pull request's is its number.
+      expect([...clone.chatTurns.keys()]).toEqual(['42'])
+      const second = b.chat.send(target(), { message: 'y', context: { kind: 'pr' } })
+      await expect(second[Symbol.asyncIterator]().next()).rejects.toBeInstanceOf(ChatBusyError)
+      expect(b.chat.running()).toEqual([42])
+      await turn.return?.(undefined)
+      expect(b.generation.running()).toBeNull()
+    })
+
+    it('gives a context a clone part of its own when none is given', () => {
+      const build = () =>
+        createAppContext({
+          config: config(),
+          projectConfig,
+          fixtureArtifact: null,
+          git: createFakeGit(),
+          gh: createFakeGh(),
+        })
+      const a = build()
+      const b = build()
+      expect(a.clone).not.toBe(b.clone)
+      expect(a.checkouts.root).toBe(a.clone.checkouts.root)
+      expect(a.checkouts.root).toBe(path.join(dir, 'data', 'repos', 'acme__widgets', 'checkouts'))
+    })
+
+    function target(): ChatTarget {
+      return {
+        key: 42,
+        headSha: HEAD_SHA,
+        artifact: syntheticArtifact(),
+        files: SYNTHETIC_FILES.map(toFileEntry),
+        patches: toPatchMap(SYNTHETIC_FILES),
+        derivedDir: path.join(dir, 'derived'),
+        readLines: async () => [],
+      }
     }
   })
 })

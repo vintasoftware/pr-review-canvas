@@ -40,7 +40,7 @@ async function readLook(page: Page) {
 async function clickAppearance(page: Page, selector: string) {
   const saved = page.waitForResponse(
     response =>
-      new URL(response.url()).pathname === '/api/appearance' && response.request().method() === 'PUT'
+      new URL(response.url()).pathname.endsWith('/api/appearance') && response.request().method() === 'PUT'
   )
   await page.locator(selector).click()
   expect((await saved).ok()).toBe(true)
@@ -121,17 +121,18 @@ test('lets the query pick the look for one load of a page that runs no app modul
   page,
   reviewUrl,
 }) => {
-  const { origin } = new URL(reviewUrl)
+  // The project's home page, one level above the review.
+  const home = new URL('../', reviewUrl).href
   const root = page.locator('html')
   const panel = page.locator('main.home .panel').first()
-  await page.goto(`${origin}/?skin=terminal&theme=dark`)
+  await page.goto(`${home}?skin=terminal&theme=dark`)
   await expect(root).toHaveAttribute('data-skin', 'terminal')
   await expect(root).toHaveAttribute('data-theme', 'dark')
   await expect(panel).toHaveCSS('border-top-left-radius', '0px')
   await expect(panel).toHaveCSS('background-color', 'rgb(40, 42, 58)')
 
   // Nothing was saved, so the next load is the default again.
-  await page.goto(`${origin}/`)
+  await page.goto(home)
   await expect(root).toHaveAttribute('data-skin', 'github')
   await expect(root).toHaveAttribute('data-theme', 'auto')
   await expect(panel).toHaveCSS('border-top-left-radius', '6px')

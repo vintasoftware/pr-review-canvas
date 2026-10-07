@@ -33,7 +33,7 @@ function manifest(headSha: string, prNumber?: number): CanvasManifest {
 }
 
 async function store(git: FakeGitOptions): Promise<CanvasStore> {
-  return createCanvasStore(dir, createFakeGit(git))
+  return createCanvasStore(dir, createFakeGit(git), null)
 }
 
 async function put(s: CanvasStore, headSha: string, generatedAt: string, prNumber?: number): Promise<void> {

@@ -155,14 +155,14 @@ describe('content security policy', () => {
   it('carries no inline event handler on the home page, whose form posts to a redirect', async () => {
     const app = createApp(t.ctx)
     const home = await (await app.request('/', { headers: LOCAL })).text()
-    expect(home).toContain('<form class="body home-form" method="get" action="/review">')
+    expect(home).toContain('<form class="body home-form" method="get" action="/r/acme/widgets/review">')
     expect(/\son[a-z]+=/.test(home)).toBe(false)
     const redirect = await app.request('/review?n=42', { headers: LOCAL })
     expect(redirect.status).toBe(303)
-    expect(redirect.headers.get('location')).toBe('/review/42')
+    expect(redirect.headers.get('location')).toBe('/r/acme/widgets/review/42')
     // An empty form lands on /review/ , which the number check turns into a 400 with the hint.
     const empty = await app.request('/review', { headers: LOCAL })
-    expect(empty.headers.get('location')).toBe('/review/')
+    expect(empty.headers.get('location')).toBe('/r/acme/widgets/review/')
   })
 
   it('sends the header set with an error page and an error envelope too', async () => {

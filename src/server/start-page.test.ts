@@ -32,11 +32,35 @@ describe('startPage', () => {
     t = await makeTestContext({ gh, git: createFakeGit({ branch: 'feature' }) })
     const log: string[] = []
 
-    expect(await startPage(t.ctx, line => log.push(line))).toBe('/review/42')
+    expect(await startPage(t.ctx, line => log.push(line))).toBe('/r/acme/widgets/review/42')
     expect(gh.calls).toEqual([
       { kind: 'api', path: PULLS, params: { state: 'open', head: 'acme:feature', per_page: '1' } },
     ])
     expect(log).toEqual(['opening PR #42, the open review of this branch'])
+  })
+
+  it("answers paths under the project's base path", async () => {
+    const pulls = ghHandler(params => (params['head'] === 'acme:feature' ? [{ number: 42 }] : []))
+    t = await makeTestContext({
+      repoRoot: '/trees/feature',
+      gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets~feature/review/42')
+    for (const branch of ['main', null]) {
+      await t.cleanup()
+      t = await makeTestContext({
+        gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+        git: createFakeGit({ branch }),
+      })
+      expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets/')
+    }
+    await t.cleanup()
+    t = await makeTestContext({
+      gh: createFakeGh({ routes: { [PULLS]: ghError(new Error('offline')) } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets/')
   })
 
   describe('on GitLab', () => {
@@ -59,7 +83,7 @@ describe('startPage', () => {
       t = await gitlabContext('feature')
       const log: string[] = []
 
-      expect(await startPage(t.ctx, line => log.push(line))).toBe('/review/7')
+      expect(await startPage(t.ctx, line => log.push(line))).toBe('/r/acme/widgets/review/7')
       expect(gh.calls.at(-1)?.params).toEqual({ state: 'opened', source_branch: 'feature', per_page: '100' })
       expect(log).toEqual(['opening MR #7, the open review of this branch'])
     })
@@ -67,7 +91,7 @@ describe('startPage', () => {
     it('opens the home page when only a fork has an open MR from a branch of that name', async () => {
       t = await gitlabContext('main')
 
-      expect(await startPage(t.ctx, () => {})).toBe('/')
+      expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets/')
     })
   })
 
@@ -79,7 +103,7 @@ describe('startPage', () => {
     })
     const log: string[] = []
 
-    expect(await startPage(t.ctx, line => log.push(line))).toBe('/')
+    expect(await startPage(t.ctx, line => log.push(line))).toBe('/r/acme/widgets/')
     expect(log).toEqual([])
   })
 
@@ -87,7 +111,7 @@ describe('startPage', () => {
     const gh = createFakeGh()
     t = await makeTestContext({ gh, git: createFakeGit({ branch: null }) })
 
-    expect(await startPage(t.ctx, () => {})).toBe('/')
+    expect(await startPage(t.ctx, () => {})).toBe('/r/acme/widgets/')
     expect(gh.calls).toEqual([])
   })
 
@@ -100,7 +124,7 @@ describe('startPage', () => {
     })
     const log: string[] = []
 
-    expect(await startPage(t.ctx, line => log.push(line))).toBe('/')
+    expect(await startPage(t.ctx, line => log.push(line))).toBe('/r/acme/widgets/')
     expect(log).toHaveLength(1)
     expect(log[0]).toMatch(
       /^could not find the open PR of feature \(.*not logged in.*\); opening the home page$/

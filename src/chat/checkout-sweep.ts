@@ -1,7 +1,7 @@
 // The idle sweep `serve` runs: at startup, then every `checkoutSweepMinutes`. The settings are read
 // again on each run, so a change in the dialog applies from the next one without a restart.
 import { CHECKOUT_IDLE_NEVER, DEFAULT_SETTINGS, type Settings } from '../contract/settings.js'
-import type { ReviewCheckouts, SweepResult } from './checkouts.js'
+import type { CheckoutStore, SweepResult } from './checkouts.js'
 
 export interface CheckoutSweeper {
   /** Runs one sweep now; resolves to null when idle cleanup is off. */
@@ -10,7 +10,7 @@ export interface CheckoutSweeper {
 }
 
 export function startCheckoutSweep(opts: {
-  checkouts: ReviewCheckouts
+  checkouts: Pick<CheckoutStore, 'sweep'>
   readSettings: () => Promise<Settings>
   log: (line: string) => void
 }): CheckoutSweeper {
@@ -23,7 +23,7 @@ export function startCheckoutSweep(opts: {
     }
     const result = await opts.checkouts.sweep({ olderThanDays: settings.checkoutIdleDays })
     for (const removed of result.removed) {
-      opts.log(`removed the idle review checkout of ${String(removed.key)} (last used ${removed.lastUsedAt})`)
+      opts.log(`removed the idle review checkout of ${removed.folder} (last used ${removed.lastUsedAt})`)
     }
     return result
   }

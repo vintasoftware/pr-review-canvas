@@ -17,7 +17,7 @@ import {
   isRunning,
 } from '../contract/generation.js'
 import type { Repo } from '../contract/review-artifact.js'
-import { isLocalKey, keyLabel, keyToString, type ReviewKey } from '../contract/review-key.js'
+import { isLocalKey, keyLabel, keyToString, type ReviewKey, reviewFolder } from '../contract/review-key.js'
 import type { ChatAgent, Settings } from '../contract/settings.js'
 import { formatValidationError } from '../contract/validation.js'
 import type { GenerationModels } from '../project-config.js'
@@ -75,6 +75,23 @@ export interface GenerationManagerDeps {
   currentBranch: () => Promise<string | null>
   log: (line: string) => void
   now: () => Date
+  /**
+   * The generations of this data dir. The worktrees of one clone write the same canvas folders,
+   * so their managers share one lane: one job runs at a time across them, and each manager sees
+   * and stops the job in it, whichever started it. A manager of its own has a lane of its own.
+   */
+  lane?: GenerationLane | undefined
+  /** The linked worktree the manager's checkout is, null for the main checkout: it names which local reviews are its own. */
+  worktree?: string | null | undefined
+}
+
+/** The generations of one data dir: the job it ran last, running or ended. */
+export interface GenerationLane {
+  last: GenerationSlot | null
+}
+
+export function createGenerationLane(): GenerationLane {
+  return { last: null }
 }
 
 export interface GenerationManager {
@@ -84,17 +101,26 @@ export interface GenerationManager {
    * of one head write the same canvas folder.
    */
   start(key: ReviewKey, opts: { force: boolean }): Promise<GenerationJob>
-  /** The job the server ran last, when it was for `key`; null otherwise. */
+  /**
+   * The job the data dir ran last, when it is `key`'s in this checkout; null otherwise. A pull
+   * request's job is every worktree's, a local review's is its own checkout's.
+   */
   status(key: ReviewKey): GenerationJob | null
   /** True when a running job was asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
+  /** The review whose job is running now, when it is this checkout's (as for `status`). */
+  running(): ReviewKey | null
   /** The skill a job started now would follow, with the agent the settings name. */
   nextSkill(): Promise<GenerationSkill>
 }
 
-/** The running side of a job, which the status never shows. */
-interface Slot {
+/** A job with its running side, which the status never shows. The lane holds the last one. */
+export interface GenerationSlot {
   job: GenerationJob
+  /** The review's folder in the data dir (`reviewFolder`), which says whose job it is. */
+  folder: string
+  /** True once the job has ended and let go of its checkout; until then it holds the lane. */
+  settled: boolean
   run: AgentRun | null
   lease: CheckoutLease | null
   stopped: boolean
@@ -105,6 +131,8 @@ interface Slot {
   /** The skill the first turn sends; `job.skill` is its `info`. */
   skill: LoadedSkill
 }
+
+type Slot = GenerationSlot
 
 /** The title acpx gives a tool update that names neither a title nor a kind. */
 const UNTITLED_TOOL = 'tool'
@@ -259,10 +287,14 @@ export function jobError(err: unknown): ErrorEnvelope['error'] {
 }
 
 export function createGenerationManager(deps: GenerationManagerDeps): GenerationManager {
-  /** The job the server ran last, running or ended. */
-  let last: Slot | null = null
-  const running = (): Slot | null => (last !== null && isRunning(last.job) ? last : null)
-  const of = (key: ReviewKey): Slot | null => (last !== null && last.job.key === key ? last : null)
+  const lane = deps.lane ?? createGenerationLane()
+  const worktree = deps.worktree ?? null
+  const folderOf = (key: ReviewKey): string => reviewFolder(key, worktree)
+  /** The job holding the lane: started, and not done letting go of its checkout. */
+  const holding = (): Slot | null => (lane.last !== null && !lane.last.settled ? lane.last : null)
+  /** The last job, when it is `key`'s in this checkout. */
+  const of = (key: ReviewKey): Slot | null =>
+    lane.last !== null && lane.last.folder === folderOf(key) ? lane.last : null
   const maxRounds = deps.generation.maxRepairRounds + 1
 
   const label = (key: ReviewKey): string => (isLocalKey(key) ? key : `#${key}`)
@@ -459,13 +491,14 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     }
     await slot.lease?.release().catch(() => undefined)
     slot.lease = null
+    slot.settled = true
   }
 
   return {
     async start(key, opts) {
-      const current = running()
-      if (current !== null) {
-        throw new GenerationBusyError(current.job.key)
+      const busy = holding()
+      if (busy !== null) {
+        throw new GenerationBusyError(busy.job.key)
       }
       const settings = await deps.settings()
       const agent = settings.chatAgent
@@ -474,9 +507,9 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       const model =
         named === undefined ? null : latestModel(agent, named, await deps.runner.modelUpgrades(agent))
       // Checked again after the awaits: two clicks that both got past the first check start one job.
-      const again = running()
-      if (again !== null) {
-        throw new GenerationBusyError(again.job.key)
+      const started = holding()
+      if (started !== null) {
+        throw new GenerationBusyError(started.job.key)
       }
       const slot: Slot = {
         job: {
@@ -491,6 +524,8 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
           startedAt: deps.now().toISOString(),
           activity: [],
         },
+        folder: folderOf(key),
+        settled: false,
         run: null,
         lease: null,
         stopped: false,
@@ -498,7 +533,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         shortPaths: [],
         skill,
       }
-      last = slot
+      lane.last = slot
       deps.log(`generation ${label(key)}: started with ${agent}${model === null ? '' : ` (${model})`}`)
       void runJob(slot, key).then(
         () => finish(slot, key, undefined),
@@ -524,6 +559,10 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       return true
     },
 
+    running: () => {
+      const slot = holding()
+      return slot !== null && slot.folder === folderOf(slot.job.key) ? slot.job.key : null
+    },
     async nextSkill() {
       const { chatAgent } = await deps.settings()
       return (await deps.skill(chatAgent)).info

@@ -99,3 +99,19 @@ test('offers the default reading level in the settings dialog and saves it', asy
   expect(saved).toHaveLength(1)
   expect(saved[0]).toMatchObject({ foldLevel: 'aggressive' })
 })
+
+test('keeps the header when the review fails to load, so the reader can leave for another', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.route('**/api/prs/42', route =>
+    route.fulfill({
+      status: 404,
+      json: { error: { code: 'PR_NOT_FOUND', message: 'pull request #42 not found' } },
+    })
+  )
+  await page.goto(reviewUrl)
+  await expect(page.locator('.error-card')).toBeVisible()
+  await expect(page.locator('.hdr a.brand-wordmark')).toHaveAttribute('href', '/')
+  await expect(page.locator('.hdr .brand a.mono')).toHaveText('acme/widgets')
+})

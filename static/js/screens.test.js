@@ -8,6 +8,7 @@ import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../
 import { renderChatShell } from './chat.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
 import {
+  bareHeaderHtml,
   generateCommand,
   progressHtml,
   refreshProgress,
@@ -145,6 +146,66 @@ describe('review history', () => {
 })
 
 describe('header', () => {
+  it('links the wordmark to the project list, and names the project next to it with a link home', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: { slug: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
+    })
+    const wordmark = document.querySelector('a.brand-wordmark')
+    expect(wordmark?.getAttribute('href')).toBe('/')
+    expect(wordmark?.getAttribute('title')).toBe('All projects')
+    const project = document.querySelector('.brand a.mono.muted')
+    expect(project?.getAttribute('href')).toBe('/r/acme/widgets~fix/')
+    expect(project?.textContent).toBe('acme/widgets~fix')
+    expect(document.querySelector('.brand span.mono.muted')).toBeNull()
+  })
+
+  it('shows the host next to the wordmark when the page has no project', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: undefined,
+    })
+    expect(document.querySelector('.brand span.mono.muted')?.textContent).toBe('localhost:3010')
+    expect(document.querySelector('.brand a.mono.muted')).toBeNull()
+    document.body.innerHTML = bareHeaderHtml({ host: 'localhost:3010', theme: 'dark', skin: 'olive' })
+    expect(document.querySelector('.brand span.mono.muted')?.textContent).toBe('localhost:3010')
+  })
+
+  it('escapes the project name and its link', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: { slug: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
+    })
+    const project = document.querySelector('.brand a.mono.muted')
+    expect(project?.textContent).toBe('acme/<b>"x')
+    expect(project?.getAttribute('href')).toBe('/r/acme/<b>"x/')
+    expect(document.querySelector('.brand b')).toBeNull()
+  })
+
+  it('keeps the wordmark and the project link on a page whose review did not load', () => {
+    document.body.innerHTML = bareHeaderHtml({
+      host: 'localhost:3010',
+      project: { slug: 'acme/widgets', home: '/r/acme/widgets/' },
+      theme: 'dark',
+      skin: 'olive',
+    })
+    expect(document.querySelector('a.brand-wordmark')?.getAttribute('href')).toBe('/')
+    expect(document.querySelector('.brand a.mono.muted')?.getAttribute('href')).toBe('/r/acme/widgets/')
+    expect([...document.querySelectorAll('.hdr button')].map(b => b.textContent)).toEqual([
+      'skin: olive',
+      'theme: dark',
+    ])
+  })
+
   it('renders brand, commands, title, meta, risk line, progress, and the sign-off gate for a ready bundle', () => {
     document.body.innerHTML = renderHeader(bundle(), {
       host: 'localhost:3010',

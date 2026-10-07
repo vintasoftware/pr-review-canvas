@@ -3,6 +3,7 @@ import {
   type CliExec,
   createHostClient,
   execCli,
+  execCliIn,
   GH_CLI,
   glabCli,
   HostCliError,
@@ -253,4 +254,26 @@ it('runs the real exec wrapper: a missing binary is reported, a real one answers
     env: { PR_REVIEW_TEST_VAR: 'from env' },
   })
   expect(withEnv).toMatchObject({ code: 0, stdout: 'from env' })
+})
+
+it("runs the host CLI under the given environment, not this process's, with the spec's variables on top", async () => {
+  process.env['PR_REVIEW_PROCESS_ONLY'] = 'leaked'
+  try {
+    const exec = execCliIn({ PR_REVIEW_MARK: 'from-shell', GITLAB_HOST: 'gitlab.other.example' })
+    const print =
+      'process.stdout.write([process.env.PR_REVIEW_MARK, process.env.GITLAB_HOST, process.env.PR_REVIEW_PROCESS_ONLY ?? "unset"].join("/"))'
+    expect(await exec(['-e', print], { binary: process.execPath })).toMatchObject({
+      code: 0,
+      stdout: 'from-shell/gitlab.other.example/unset',
+    })
+    expect(
+      await exec(['-e', print], { binary: process.execPath, env: { GITLAB_HOST: 'gitlab.example.com' } })
+    ).toMatchObject({ stdout: 'from-shell/gitlab.example.com/unset' })
+    // Without a given environment, the child takes this process's.
+    expect(await execCli(['-e', print], { binary: process.execPath })).toMatchObject({
+      stdout: expect.stringMatching(/\/leaked$/),
+    })
+  } finally {
+    delete process.env['PR_REVIEW_PROCESS_ONLY']
+  }
 })

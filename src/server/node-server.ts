@@ -1,40 +1,49 @@
+import type { AddressInfo } from 'node:net'
 import { serve } from '@hono/node-server'
-import { startCheckoutSweep } from '../chat/checkout-sweep.js'
-import { createApp } from './app.js'
-import type { AppContext } from './context.js'
-import { openBrowser } from './open-browser.js'
-import { startPage } from './start-page.js'
+import { removeServerInfo, type ServerInfo, writeServerInfo } from '../hub/home.js'
+import type { Hub } from '../hub/hub.js'
 
-/** Binds 127.0.0.1 only. The Host allowlist in security.ts covers the rest. */
-export function startServer(ctx: AppContext, log: (line: string) => void): { close: () => void } {
-  const app = createApp({ ...ctx, log })
-  const server = serve({ fetch: app.fetch, port: ctx.config.port, hostname: '127.0.0.1' }, info => {
-    const url = `http://localhost:${info.port}/`
-    log(`pr-review ${ctx.version} · ${url} · ${ctx.config.repo.owner}/${ctx.config.repo.name}`)
-    if (ctx.config.openBrowser) {
-      void startPage(ctx, log).then(path => openBrowser(new URL(path, url).href, log))
-    }
-    log(`data dir ${ctx.config.dataDir}`)
-    if (ctx.fixtureArtifact !== null) {
-      log(`fixture canvas ${ctx.config.fixtureCanvasPath ?? ''} (dev only): every PR reports ready`)
-    }
-    for (const w of ctx.projectConfig.warnings) {
-      log(`warning: ${w}`)
-    }
+export interface HubServerOptions {
+  fetch: (request: Request) => Response | Promise<Response>
+  port: number
+  hub: Hub
+  /** Where `server.json` goes, so commands find this server; written once it listens. */
+  home: string
+  /** False when another server already owns `server.json`, which then stays as it is. */
+  advertise: boolean
+  info: Omit<ServerInfo, 'port' | 'pid'>
+  log: (line: string) => void
+}
+
+export interface HubServer {
+  port: number
+  close: () => Promise<void>
+}
+
+/**
+ * Binds 127.0.0.1 only; the Host allowlist in security.ts covers the rest. Resolves once the port
+ * is bound, and rejects when it cannot be, such as when another program holds it.
+ */
+export async function startHubServer(opts: HubServerOptions): Promise<HubServer> {
+  const server = serve({ fetch: opts.fetch, port: opts.port, hostname: '127.0.0.1' })
+  await new Promise<void>((resolve, reject) => {
+    server.once('listening', resolve)
+    server.once('error', reject)
   })
-  // With chat off nothing creates review checkouts, but old ones are still cleaned up.
-  const sweeper = startCheckoutSweep({
-    checkouts: ctx.checkouts,
-    readSettings: () => ctx.settings.read(),
-    log,
-  })
+  const port = (server.address() as AddressInfo).port
+  if (opts.advertise) {
+    await writeServerInfo(opts.home, { ...opts.info, pid: process.pid, port })
+  }
+
   let closed = false
-  const close = (): void => {
+  const close = async (): Promise<void> => {
     if (closed) {
       return
     }
     closed = true
-    sweeper.stop()
+    process.off('SIGINT', onSignal)
+    process.off('SIGTERM', onSignal)
+    opts.hub.close()
     // A browser holds its keep-alive socket open, and `close()` alone waits for it, so Ctrl-C
     // would look like a hung process. Dropping the sockets ends the wait. HTTP/2 servers have no
     // such method, and this one never is one.
@@ -42,15 +51,18 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
       server.closeAllConnections()
     }
     server.close()
-    process.off('SIGINT', onSignal)
-    process.off('SIGTERM', onSignal)
+    if (opts.advertise) {
+      await removeServerInfo(opts.home, process.pid)
+    }
   }
+
   const onSignal = (): void => {
-    close()
-    log('stopped')
-    process.exit(0)
+    void close().then(() => {
+      opts.log('stopped')
+      process.exit(0)
+    })
   }
   process.once('SIGINT', onSignal)
   process.once('SIGTERM', onSignal)
-  return { close }
+  return { port, close }
 }

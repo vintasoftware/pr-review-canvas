@@ -86,7 +86,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
-      reviewUrl: 'http://localhost:3010/review/42',
+      reviewUrl: 'http://localhost:3010/r/acme/widgets/review/42',
     })
     // validate also reads a stored review.json, converting it back to the model's shape.
     const reviewIo = fakeIo()
@@ -669,6 +669,19 @@ describe('clean', () => {
     const off = fakeIo(false)
     expect(await runClean(t.ctx, [], off)).toBe(EXIT.ok)
     expect(off.out).toEqual([])
+  })
+
+  it("names a linked worktree's branch checkout by its folder, so it reads apart from the main one", async () => {
+    t = await makeTestContext({ repoRoot: '/trees/fix' })
+    const lease = await t.ctx.checkouts.lease('branch', 'chat')
+    await lease.moveTo(HEAD_SHA)
+    await lease.release()
+    const text = fakeIo(false)
+    expect(await runClean(t.ctx, ['--all', '--dry-run'], text)).toBe(EXIT.ok)
+    expect(text.out[1]).toMatch(new RegExp(`^  branch~fix at ${HEAD_SHA.slice(0, 7)}, last used .+: /`))
+    const json = fakeIo()
+    expect(await runClean(t.ctx, ['--all'], json)).toBe(EXIT.ok)
+    expect(lastJson(json)).toMatchObject({ removed: [{ key: 'branch', worktree: 'fix' }] })
   })
 
   it('removes nothing with idle cleanup off, and says to use --all', async () => {

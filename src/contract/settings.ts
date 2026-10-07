@@ -216,6 +216,8 @@ export interface CheckoutsResponse {
   root: string
   checkouts: Array<{
     key: ReviewKey
+    /** The linked worktree whose local review it is; null for a pull request's or the main checkout's. */
+    worktree: string | null
     sha: string
     lastUsedAt: string
     /** True while a chat turn holds it. */

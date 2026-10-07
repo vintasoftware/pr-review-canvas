@@ -122,3 +122,42 @@ main.home > * {
   display: grid;
   gap: 4px;
 }
+/* The project list: one panel per repository, one row per checkout, its remove command on the
+   right. */
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.project-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 12px 16px;
+}
+.project-row + .project-row {
+  border-top: 1px solid var(--line);
+}
+.project-main {
+  flex: 1;
+  min-width: 0;
+}
+.project-name {
+  font-weight: 600;
+}
+.project-path {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.project-error {
+  flex-basis: 100%;
+  color: var(--bad);
+  font-size: 12px;
+}
+.project-note {
+  font-size: 12px;
+  text-align: center;
+}

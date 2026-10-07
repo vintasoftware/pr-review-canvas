@@ -631,12 +631,13 @@ export async function runClean(ctx: AppContext, argv: string[], io: CliIo): Prom
   const dryRun = values['dry-run'] === true
   if (io.json) {
     const brief = (list: CheckoutInfo[]) =>
-      list.map(({ key, sha, lastUsedAt, dir }) => ({ key, sha, lastUsedAt, dir }))
+      list.map(({ key, worktree, sha, lastUsedAt, dir }) => ({ key, worktree, sha, lastUsedAt, dir }))
     printJson(io, { removed: brief(result.removed), skipped: brief(result.skipped), dryRun })
     return EXIT.ok
   }
-  const checkoutLine = ({ key, sha, lastUsedAt, dir }: CheckoutInfo) =>
-    `  ${typeof key === 'number' ? `#${key}` : key} at ${shortSha(sha)}, last used ${lastUsedAt}: ${dir}`
+  // A linked worktree's branch review is named by its folder, `branch~<worktree>`.
+  const checkoutLine = ({ key, folder, sha, lastUsedAt, dir }: CheckoutInfo) =>
+    `  ${typeof key === 'number' ? `#${key}` : folder} at ${shortSha(sha)}, last used ${lastUsedAt}: ${dir}`
   if (result.removed.length === 0) {
     io.stdout('No review checkouts to remove.')
   } else {
