@@ -111,26 +111,29 @@ Before opening a PR, you can generate a canvas for your local work:
 /pr-review-canvas uncommitted     # includes working-tree edits and new files
 ```
 
-With `pr-review serve` running, the project's home page, where `serve` opens, links to them under
-**Before the pull request**; **http://localhost:3010** lists every project. These reviews stay
-local, and you can resolve attention points before sharing your work. Use `--base <ref>` to compare against another branch.
+Run `pr-review serve` in the project to open its home page, and find them under
+**Before the pull request**. These reviews stay local, and you can resolve attention points before
+sharing your work. Use `--base <ref>` to compare against another branch.
 See [local branch and uncommitted reviews](docs/reference.md#reviewing-before-the-pull-request-exists)
 for details.
 
 ### Reviewing PRs
 
-Run `pr-review serve` from your clone of the project. It opens the project in the browser: enter
-the PR or MR number to load the shared canvas, read the grouped diffs, and leave comments. When the
-checked-out branch is the head of an open PR or MR, as in a worktree made for that review, the
-project opens on that review directly. Keep the terminal running while you review; stop the server
-with **Ctrl+C**.
+Run `pr-review serve` from your clone of the project. It starts the server and opens the project's
+home page in the browser. Enter the PR or MR number to load the shared canvas, read the grouped
+diffs, and leave comments. When the checked-out branch is the head of an open PR or MR, as in a
+worktree made for that review, the review opens directly. Keep the terminal running while you
+review; stop the server with **Ctrl+C**.
 
-One server serves every project. With it running, `pr-review serve` or `pr-review open` in
-another project's folder adds that project to it, and `pr-review open 123` opens one PR or MR.
-Each project answers at `http://localhost:3010/r/<owner>/<repo>/`, and a linked worktree at
-`/r/<owner>/<repo>~<worktree>/`, because its branch and working tree differ.
-**http://localhost:3010** lists them, and the logo on every page leads there; **remove** takes a
-project off the list without touching its data.
+One server serves all your projects:
+
+- `pr-review serve` in another project's folder adds that project to the running server and opens
+  it. `pr-review open` does the same, and `pr-review open 123` opens one PR or MR.
+- **http://localhost:3010** lists the projects, and the logo on every page leads there.
+  **remove** takes a project off the list; its canvases and review state stay on disk.
+- Each project has its own path, `http://localhost:3010/r/<owner>/<repo>/`. A linked worktree
+  gets `/r/<owner>/<repo>~<worktree>/`, since its branch and working tree differ from the main
+  checkout's.
 
 ## Documentation
 
