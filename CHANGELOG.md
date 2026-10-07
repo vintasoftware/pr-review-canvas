@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Reading
+
+- The rail shows the lines each layer adds and removes next to its file count. A file split across
+  layers counts only the chunks of each layer.
+- Under the totals of the rail and the header, a thin bar shows how much of the change is tests.
+  Hover the totals for the split, as in `code +3 −2 · tests +2 −1`.
+
 ## 0.8.0
 
 Changes since 0.7.0.

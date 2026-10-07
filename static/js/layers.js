@@ -17,10 +17,11 @@ import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
+import { diffstatHtml, layerChanges } from './diffstat.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
-import { fileAnchorId, hunkId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
+import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { pendingForPath } from './pending.js'
 import { openPoints, pointCardHtml, postedUrls } from './points.js'
@@ -119,61 +120,6 @@ export function dotColor(index) {
 }
 
 /**
- * Lines added and removed by each hunk of a patch, by hunk id.
- * @param {string} key
- * @param {string} patch
- * @returns {Map<string, { additions: number, deletions: number }>}
- */
-function hunkChanges(key, patch) {
-  /** @type {Map<string, { additions: number, deletions: number }>} */
-  const out = new Map()
-  /** @type {{ additions: number, deletions: number } | null} */
-  let cur = null
-  for (const line of patch.split('\n')) {
-    if (line.startsWith('@@')) {
-      cur = { additions: 0, deletions: 0 }
-      out.set(hunkId(key, out.size + 1), cur)
-    } else if (cur !== null && line.startsWith('+')) {
-      cur.additions++
-    } else if (cur !== null && line.startsWith('-')) {
-      cur.deletions++
-    }
-  }
-  return out
-}
-
-/**
- * Lines a layer adds and removes. A file split across layers counts only the hunks of this
- * layer; without its patch, the file counts whole.
- * @param {Layer} layer
- * @param {ReadonlyArray<FileEntry>} files
- * @param {Record<string, string> | null} patches
- * @returns {{ additions: number, deletions: number }}
- */
-export function layerChanges(layer, files, patches) {
-  let additions = 0
-  let deletions = 0
-  for (const lf of layer.files) {
-    const entry = files.find(f => f.path === lf.path)
-    if (!entry) {
-      continue
-    }
-    const patch = patches?.[entry.key]
-    if (patch === undefined) {
-      additions += entry.additions
-      deletions += entry.deletions
-      continue
-    }
-    const byHunk = hunkChanges(entry.key, patch)
-    for (const id of lf.hunks) {
-      additions += byHunk.get(id)?.additions ?? 0
-      deletions += byHunk.get(id)?.deletions ?? 0
-    }
-  }
-  return { additions, deletions }
-}
-
-/**
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @param {{ activeId?: string, files?: ReadonlyArray<FileEntry>, patches?: Record<string, string> | null }} [opts]
@@ -195,9 +141,7 @@ export function railInnerHtml(artifact, state, opts = {}) {
       const files = layer.files.length
       const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
       const changes = opts.files ? layerChanges(layer, opts.files, opts.patches ?? null) : null
-      const stat = changes
-        ? ` · <span class="diffstat"><span class="ok">+${changes.additions}</span> <span class="bad">&minus;${changes.deletions}</span></span>`
-        : ''
+      const stat = changes ? ` · ${diffstatHtml(changes.total, changes.tests)}` : ''
       const risk = layer.risk.length > 0 ? ` · ${layer.risk.map(r => esc(r.label)).join(' · ')}` : ''
       const id = layerAnchorId(layer.key)
       return (

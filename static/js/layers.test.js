@@ -29,7 +29,6 @@ import {
   hunkIdForPoint,
   canvasHiddenLines,
   hunkLayerIndex,
-  layerChanges,
   layerHiddenLines,
   hydrateAll,
   hydrateFileCard,
@@ -127,24 +126,15 @@ describe('rail', () => {
     expect(document.querySelector('a[href="#overview"] .m')?.textContent).toBe('1 attention point')
   })
 
-  it('shows the lines each layer adds and removes next to its file count', () => {
+  it('shows the lines each layer adds and removes next to its file count, with the test split', () => {
     document.body.innerHTML = renderRail(artifact, state, { files, patches })
+    const stat = document.querySelector('a[href="#layer-run-path"] .diffstat')
+    expect(stat?.className).toBe('diffstat split')
+    expect(stat?.getAttribute('title')).toBe('code +3 −2 · tests +2 −1')
     expect(document.querySelector('a[href="#layer-run-path"] .m')?.textContent).toBe(
-      '3 files · +5 −3 · schema'
+      '3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema'
     )
     expect(document.querySelector('li.other .m')?.textContent).toBe('3 files, ignored')
-  })
-
-  it('counts only the hunks of the layer, and whole files without patches', () => {
-    const layer = artifact.layers[0]
-    if (!layer) {
-      throw new Error('fixture has no layer')
-    }
-    // The layer holds the first of the two hunks of src/app.ts; the second adds one line.
-    expect(layerChanges(layer, files, patches)).toEqual({ additions: 5, deletions: 3 })
-    expect(layerChanges(layer, files, null)).toEqual({ additions: 6, deletions: 3 })
-    const noHunks = { ...layer, files: layer.files.map(lf => ({ ...lf, hunks: [] })) }
-    expect(layerChanges(noHunks, files, patches)).toEqual({ additions: 0, deletions: 0 })
   })
 })
 
