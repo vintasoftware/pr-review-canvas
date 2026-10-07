@@ -2,10 +2,10 @@
 name: thermo-nuclear-review-loop
 description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer explicitly approves it under a strict code-quality standard. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without growing defensive code.
 metadata:
-  version: "3"
+  version: "4"
 ---
 
-# Thermo-Nuclear Review Loop v3
+# Thermo-Nuclear Review Loop v4
 
 You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, independently verify its findings, fix the justified ones, and repeat until it explicitly approves. There is no separate fixer agent.
 
