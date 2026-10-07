@@ -326,7 +326,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, headSha)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { files, patches })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, headSha)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
         footerHtml(boot.version, bundle)
       // A bar the reader dismissed goes before the review wiring measures the outdated bar.
       wireBarDismissal(this, storage)
