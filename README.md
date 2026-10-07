@@ -111,8 +111,8 @@ Before opening a PR, you can generate a canvas for your local work:
 /pr-review-canvas uncommitted     # includes working-tree edits and new files
 ```
 
-Run `pr-review serve` in the project to open its home page, and find them under
-**Before the pull request**. These reviews stay local, and you can resolve attention points before
+Run `pr-review serve` in the project to open its home page, and find the canvas.
+These reviews stay local, and you can resolve attention points before
 sharing your work. Use `--base <ref>` to compare against another branch.
 See [local branch and uncommitted reviews](docs/reference.md#reviewing-before-the-pull-request-exists)
 for details.
@@ -120,17 +120,15 @@ for details.
 ### Reviewing PRs
 
 Run `pr-review serve` from your clone of the project. It starts the server and opens the project's
-home page in the browser. Enter the PR or MR number to load the shared canvas, read the grouped
-diffs, and leave comments. When the checked-out branch is the head of an open PR or MR, as in a
-worktree made for that review, the review opens directly. Keep the terminal running while you
-review; stop the server with **Ctrl+C**.
+home page in the browser. Enter the PR or MR number to load the shared canvas, read the diffs and
+leave comments. Keep the terminal running while you review; stop the server with **Ctrl+C**.
 
 One server serves all your projects:
 
 - `pr-review serve` in another project's folder adds that project to the running server and opens
   it. `pr-review open` does the same, and `pr-review open 123` opens one PR or MR.
-- **http://localhost:3010** lists the projects, and the logo on every page leads there.
-  **remove** takes a project off the list; its canvases and review state stay on disk.
+- **http://localhost:3010** lists the projects. Click on the logo to get back to that page.
+  **remove** button takes a project off the list; its canvases and review state stay on disk.
 - Each project has its own path, `http://localhost:3010/r/<owner>/<repo>/`. A linked worktree
   gets `/r/<owner>/<repo>~<worktree>/`, since its branch and working tree differ from the main
   checkout's.
