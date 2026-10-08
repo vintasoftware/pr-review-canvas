@@ -129,7 +129,6 @@ describe('rail', () => {
   it('shows the lines each layer adds and removes next to its file count, with the test split', () => {
     document.body.innerHTML = renderRail(artifact, state, { files, patches })
     const stat = document.querySelector('a[href="#layer-run-path"] .diffstat')
-    expect(stat?.className).toBe('diffstat split')
     expect(stat?.getAttribute('title')).toBe('code +3 −2 · tests +2 −1')
     expect(document.querySelector('a[href="#layer-run-path"] .m')?.textContent).toBe(
       '3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema'

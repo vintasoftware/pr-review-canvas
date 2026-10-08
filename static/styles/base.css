@@ -212,14 +212,6 @@ strong {
 .bad {
   color: var(--bad);
 }
-/* The split bar under a diffstat: code solid, the `--tests` share light at the end. diffstat.js
-   sets `--tests` inline. */
-.diffstat.split {
-  --tests: 0%;
-  padding-bottom: 3px;
-  background: linear-gradient(to right, var(--fg-muted) calc(100% - var(--tests)), var(--line) 0) left bottom
-    / 100% 2px no-repeat;
-}
 .small {
   font-size: 11px;
 }

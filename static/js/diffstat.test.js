@@ -32,15 +32,13 @@ describe('testChanges', () => {
 })
 
 describe('diffstatHtml', () => {
-  it('draws the split bar only when tests changed', () => {
+  it('gives the code and test split only when tests changed', () => {
     document.body.innerHTML = diffstatHtml({ additions: 7, deletions: 3 })
-    expect(document.querySelector('.diffstat')?.className).toBe('diffstat')
+    expect(document.querySelector('.diffstat')?.textContent).toBe('+7 −3')
     document.body.innerHTML = diffstatHtml({ additions: 7, deletions: 3 }, { additions: 0, deletions: 0 })
-    expect(document.querySelector('.diffstat')?.className).toBe('diffstat')
+    expect(document.querySelector('.diffstat')?.hasAttribute('title')).toBe(false)
     document.body.innerHTML = diffstatHtml({ additions: 7, deletions: 3 }, { additions: 2, deletions: 0 })
     const stat = document.querySelector('.diffstat')
-    expect(stat?.className).toBe('diffstat split')
-    expect(stat?.getAttribute('style')).toBe('--tests:20%')
     expect(stat?.getAttribute('title')).toBe('code +5 −3 · tests +2 −0')
     expect(stat?.textContent).toBe('+7 −3 (code +5 −3 · tests +2 −0)')
   })
