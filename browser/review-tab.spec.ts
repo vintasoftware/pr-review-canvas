@@ -52,6 +52,26 @@ test('lists the review being written in the side pane, edits a draft there, and 
   await expect(point).toHaveAttribute('data-status', 'open')
 })
 
+test('a wheel over a review list too short to scroll moves the page', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  const { url } = await chatServer()
+  await page.goto(url)
+  await page
+    .locator('aside.chat')
+    .getByRole('tab', { name: /Your review/ })
+    .click()
+  const panel = page.locator('#review-panel')
+  await expect(panel.locator('.review-empty')).toBeVisible()
+  expect(await panel.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(false)
+  const box = await panel.boundingBox()
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + 40)
+  await page.mouse.wheel(0, 400)
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+})
+
 test('asking AI Chat about a point brings its tab back from the review', async ({
   page,
   chatServer,
