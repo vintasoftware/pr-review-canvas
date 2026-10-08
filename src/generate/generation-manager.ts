@@ -187,10 +187,7 @@ const AGENT_HINTS: Readonly<Record<string, string>> = {
 }
 
 function targetOf(key: ReviewKey, base: string | undefined): PrepareTargetInput {
-  if (!isLocalKey(key)) {
-    return { kind: 'pr', number: key }
-  }
-  return base === undefined ? { kind: 'local', source: key } : { kind: 'local', source: key, base }
+  return isLocalKey(key) ? { kind: 'local', source: key, base } : { kind: 'pr', number: key }
 }
 
 /** What the agent is told about its working directory, for each place `readCodeAt` can pick. */

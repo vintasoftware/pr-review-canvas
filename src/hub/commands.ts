@@ -86,10 +86,7 @@ async function addTo(
   flags: ProjectFlags | undefined
 ): Promise<RegisterResponse> {
   const env = shellEnv(deps.env)
-  const added = await deps.register(
-    server,
-    flags === undefined ? { repoRoot, env } : { repoRoot, env, flags }
-  )
+  const added = await deps.register(server, { repoRoot, env, flags })
   if (added.dataDirBefore !== undefined) {
     io.stderr(
       `pr-review: ${added.slug} now reads ${added.dataDir}; its canvases and review state until now are in ${added.dataDirBefore}`
