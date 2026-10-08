@@ -261,6 +261,29 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect(body.unreviewed).toEqual([])
   })
 
+  it('reads a push made since the last load as outdated on reload, while polls answer from cache', async () => {
+    await withOldCanvas()
+    // One app is one server process: its loader remembers which pull requests it has read.
+    const app = createApp(t.ctx)
+    const load = async (q = ''): Promise<PrBundle> =>
+      json<PrBundle>(await app.request(`/api/prs/42${q}`, { headers: LOCAL }))
+    expect((await load()).status).toBe('ready')
+    const pushed = 'c'.repeat(40)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: pushed,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF_MOVED_BY_BASE,
+      ahead: { [OLD_SHA]: 5 },
+    })
+    prNowAt(pushed)
+    expect((await load('?poll=1')).pr.headSha).toBe(HEAD_SHA)
+    const reloaded = await load()
+    expect(reloaded.status).toBe('stale')
+    expect(reloaded.stale?.currentHeadSha).toBe(pushed)
+  })
+
   it('shows the marks made on an outdated canvas with it, and never credits them to a later canvas', async () => {
     await withOldCanvas({ keepForIdenticalDiff: false })
     // The outdated view shows the older canvas and its diff, so a mark made there is the older canvas's.
