@@ -281,6 +281,8 @@ test('self-review offers dismiss as a personal hide that leaves every point unre
   await card.locator('[data-act="point-dismiss"]').click()
   await expect(card).toHaveAttribute('data-status', 'dismissed')
   await expect(page.locator('.point-statuses')).toContainText('1 dismissed')
+  // The page shows the dismissal before the server saves it, so the reload waits for the save.
+  await expect(page.locator('.toast')).toHaveText('attention point dismissed')
   await page.reload()
   await expect(card).toHaveAttribute('data-status', 'dismissed')
   await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
