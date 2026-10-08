@@ -16,7 +16,15 @@ import { DEFAULT_PROJECT_CONFIG } from '../../project-config.js'
 import { SKILL_SOURCE_DIR } from '../../review/install-skill.js'
 import { artifactToModelOutput } from '../../review/normalize.js'
 import { createFakeRunner } from '../../testing/fake-runner.js'
-import { makeTempDir, makeTestContext, type TestContext } from '../../testing/fakes.js'
+import {
+  createFakeGh,
+  createFakeGit,
+  ghError,
+  ghHandler,
+  makeTempDir,
+  makeTestContext,
+  type TestContext,
+} from '../../testing/fakes.js'
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../../testing/synthetic.js'
 import { createApp } from '../app.js'
 import { AppError, toAppError } from '../errors.js'
@@ -110,6 +118,33 @@ describe('generate routes', () => {
     expect(manager.start).toHaveBeenLastCalledWith('branch', { force: false })
   })
 
+  it('passes on the base, agent, model, and sharing a terminal run names', async () => {
+    await context()
+    const manager = fakeManager()
+    const app = appWith(manager)
+    const input = { force: false, base: 'release', agent: 'codex', model: 'gpt-x', share: false }
+    const res = await app.request('/api/prs/branch/generate', {
+      method: 'POST',
+      headers: POST,
+      body: JSON.stringify(input),
+    })
+    expect(res.status).toBe(202)
+    expect(manager.start).toHaveBeenCalledWith('branch', input)
+  })
+
+  it('refuses a base for a pull request, which has its own', async () => {
+    await context()
+    const manager = fakeManager()
+    const res = await appWith(manager).request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: JSON.stringify({ force: false, base: 'release' }),
+    })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as ErrorEnvelope).error.message).toMatch(/branch and uncommitted/)
+    expect(manager.start).not.toHaveBeenCalled()
+  })
+
   it('refuses a body that is not the one it reads', async () => {
     await context()
     const app = appWith(fakeManager())
@@ -119,6 +154,9 @@ describe('generate routes', () => {
       'not json',
       JSON.stringify({ force: 'yes' }),
       JSON.stringify({ force: true, x: 1 }),
+      JSON.stringify({ force: true, agent: 'gemini' }),
+      JSON.stringify({ force: true, model: ' ' }),
+      JSON.stringify({ force: true, share: 'no' }),
     ]) {
       const res = await app.request('/api/prs/42/generate', { method: 'POST', headers: POST, body })
       expect(res.status).toBe(400)
@@ -223,6 +261,12 @@ describe('generate routes', () => {
       await context()
       const seen = probe({ canComment: false, tokenKind: 'unknown', login: null })
       expect((await start(appWith(fakeManager()), 'uncommitted')).status).toBe(202)
+      const quiet = await appWith(fakeManager()).request('/api/prs/42/generate', {
+        method: 'POST',
+        headers: POST,
+        body: '{"force":false,"share":false}',
+      })
+      expect(quiet.status).toBe(202)
       await writeFile(t.ctx.settings.file, 'canvasComment: false\n')
       expect((await start(appWith(fakeManager()), 42)).status).toBe(202)
       expect(seen.refreshes).toBe(0)
@@ -247,6 +291,48 @@ describe('generate routes', () => {
     const manager = fakeManager()
     expect((await appWith(manager).request('/api/generate/skill', { headers: LOCAL })).status).toBe(404)
     expect(manager.nextSkill).not.toHaveBeenCalled()
+    expect((await app.request('/api/generate/target', { headers: LOCAL })).status).toBe(404)
+  })
+
+  describe('the review a run with no target generates', () => {
+    const PULLS = 'repos/acme/widgets/pulls'
+    const target = async (gh: ReturnType<typeof createFakeGh>, branch: string | null) => {
+      t = await makeTestContext({
+        gh,
+        git: createFakeGit({ branch }),
+        projectConfig: {
+          config: { ...DEFAULT_PROJECT_CONFIG, chat: { enabled: true } },
+          warnings: [],
+          source: null,
+        },
+      })
+      return createApp(t.ctx).request('/api/generate/target', { headers: LOCAL })
+    }
+
+    it('answers the open PR of the checked-out branch, or none', async () => {
+      const gh = () =>
+        createFakeGh({
+          routes: {
+            [PULLS]: ghHandler(params => (params['head'] === 'acme:feature' ? [{ number: 42 }] : [])),
+          },
+        })
+      expect(await (await target(gh(), 'feature')).json()).toEqual({ prNumber: 42 })
+      await t.cleanup()
+      expect(await (await target(gh(), 'main')).json()).toEqual({ prNumber: null })
+      await t.cleanup()
+      const detached = gh()
+      expect(await (await target(detached, null)).json()).toEqual({ prNumber: null })
+      expect(detached.calls).toEqual([])
+    })
+
+    it('answers why when the lookup fails', async () => {
+      const res = await target(
+        createFakeGh({ routes: { [PULLS]: ghError(new Error('offline')) } }),
+        'feature'
+      )
+      expect(res.status).toBeGreaterThanOrEqual(400)
+      expect(((await res.json()) as ErrorEnvelope).error.message).toContain('offline')
+    })
   })
 
   describe('the skill a run would follow', () => {

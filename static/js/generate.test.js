@@ -12,11 +12,11 @@ import {
   generationMode,
   generationStartHtml,
   generationStatusHtml,
-  isRunning,
   QUIET_MS,
   runningLabel,
   skillHtml,
 } from './generate.js'
+import { isRunning } from './generation-phases.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').GenerationJob} GenerationJob */

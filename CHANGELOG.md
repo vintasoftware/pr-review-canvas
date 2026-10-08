@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Generating from the terminal
+
+- `pr-review generate [<n>|branch|uncommitted]` generates a canvas from a terminal, with no skill
+  installed. The job runs in the running server, as one started from the review app does, so one
+  generation still runs at a time in a clone and the review page shows it. The command prints each
+  phase and waits for the end; **Ctrl+C** stops the wait, not the job. Without a review, it
+  generates for the open PR or MR of the current branch.
+- `--force` starts from a blank page, `--base <ref>` compares the branch or uncommitted review
+  against another ref, and `--agent` and `--model` choose the agent and model for that run.
+- `--out <file|dir>` posts nothing on the PR or MR for that run and writes the canvas zip, to send
+  to a reviewer, who loads it with `pr-review import`. Resolving a point on the review page later
+  shares the canvas, unless sharing is off.
+- `--open` opens the review when the canvas is published, and `--json` prints one JSON line. A
+  failed job exits as any other failure: `5` when publish rejected the model on every repair
+  attempt.
+- `generate` keeps the flags the project was opened with, such as `--chat-agent`, and takes the
+  shell's environment, as `open` does.
+
 ## 0.8.0
 
 Changes since 0.7.0.

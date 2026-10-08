@@ -134,6 +134,9 @@ export function reportFailure(io: CliIo, err: unknown): number {
   }
   const appErr = toAppError(err)
   printErrorEnvelope(io, appErr.code, appErr.message, appErr.hint)
+  if (appErr.code === 'MODEL_INVALID') {
+    return EXIT.invalid
+  }
   return CLI_SETUP_CODES.has(appErr.code) ? EXIT.gh : EXIT.error
 }
 

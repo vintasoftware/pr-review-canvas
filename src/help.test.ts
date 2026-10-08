@@ -55,6 +55,7 @@ describe('pr-review <command> --help', () => {
   it('names the positional argument of a command that takes one', () => {
     expect(renderFor('validate')).toContain('pr-review validate <model.json|review.json> [flags]')
     expect(renderFor('open')).toContain('pr-review open [<n>|branch|uncommitted] [flags]')
+    expect(renderFor('generate')).toContain('pr-review generate [<n>|branch|uncommitted] [flags]')
   })
 
   it('prints the whole page for a word that names no command', () => {

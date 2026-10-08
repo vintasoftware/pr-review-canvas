@@ -11,6 +11,7 @@
 /** @typedef {import('./contract-types.js').GenerationSkill} GenerationSkill */
 import { ApiError, fetchJson } from './api.js'
 import { esc } from './dom.js'
+import { isRunning, PHASE_LABELS } from './generation-phases.js'
 import { hostLabel } from './host.js'
 
 export const GENERATE_DIALOG_ID = 'generate-dialog'
@@ -27,23 +28,6 @@ const DOING_LABELS = {
   thinking: 'Thinking',
   writing: 'Writing the answer',
   tool: 'Running a tool',
-}
-
-/** @type {Record<GenerationJob['phase'], string>} */
-const PHASE_LABELS = {
-  preparing: 'Preparing the diff',
-  checkout: 'Checking out the head',
-  generating: 'The agent is writing the canvas',
-  publishing: 'Validating and publishing',
-  repairing: 'The agent is fixing what publish rejected',
-  done: 'Done',
-  failed: 'Generation failed',
-  cancelled: 'Generation stopped',
-}
-
-/** @param {Pick<GenerationJob, 'phase'>} job */
-export function isRunning(job) {
-  return job.phase !== 'done' && job.phase !== 'failed' && job.phase !== 'cancelled'
 }
 
 /**
