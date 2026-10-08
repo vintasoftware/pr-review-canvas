@@ -441,11 +441,16 @@ describe('createApp', () => {
       expect(bundle.capabilities).toEqual({ canComment: true, tokenKind: 'classic', login: 'octocat' })
       expect(bundle.chat).toEqual({ enabled: true, acpx: true, agent: 'claude', model: null })
       expect(bundle.warnings).toEqual([])
-      // Second call: served from the cache, no new GitHub call, no new fetch.
+      // Second call: served from the cache once the head has not moved; one read of the pull, no
+      // comments, no fetch. A poll does not even ask for the head.
       const ghCalls = gh.calls.length
       const fetches = git.calls.filter(c => c[0] === 'fetch').length
       await app.request('/api/prs/42', { headers: LOCAL })
-      expect(gh.calls.length).toBe(ghCalls)
+      expect(gh.calls.slice(ghCalls)).toEqual([
+        { kind: 'api', path: 'repos/acme/widgets/pulls/42', params: {} },
+      ])
+      await app.request('/api/prs/42?poll=1', { headers: LOCAL })
+      expect(gh.calls.length).toBe(ghCalls + 1)
       expect(git.calls.filter(c => c[0] === 'fetch').length).toBe(fetches)
       await app.request('/api/prs/42?refresh=1', { headers: LOCAL })
       expect(gh.calls.length).toBeGreaterThan(ghCalls)

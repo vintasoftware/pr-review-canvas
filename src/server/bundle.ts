@@ -14,7 +14,7 @@ import { resolveSharing } from '../contract/settings.js'
 import { isLocalKey, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import { describeLocalWork, resolveLocalBase } from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
-import { toPr } from '../host/pr.js'
+import { type PrMeta, toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
 import { marksForCanvas } from '../review/carry-marks.js'
 import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
@@ -29,10 +29,11 @@ import { postedFromPending } from '../review/posted-comments.js'
 export interface BundleOptions {
   refresh: boolean
   /**
-   * The background poller asked, rather than a reader opening or refreshing the page. A local
-   * review answers a poll from the head it last resolved: snapshotting the working tree every few
-   * seconds would stat the whole tree again and again, and every edit in between would leave
-   * another commit and another `derived/` tree behind it.
+   * The background poller asked, rather than a reader opening or refreshing the page. A poll is
+   * answered from the head last resolved: a PR's from `prs/<n>/`, at no forge call, and a local
+   * review's from memory, since snapshotting the working tree every few seconds would stat the
+   * whole tree again and again, and every edit in between would leave another commit and another
+   * `derived/` tree behind it.
    */
   poll?: boolean
 }
@@ -76,7 +77,9 @@ export async function runDiscovery(
 
 /**
  * Live PR meta and comments. The first request for a PR in this process always asks GitHub;
- * later ones answer from `prs/<n>/` unless `refresh` is set, so polling stays cheap.
+ * later ones answer from `prs/<n>/` unless `refresh` is set, so polling stays cheap. Opening or
+ * reloading the page still asks for the PR's head, one call, and reads everything again when it
+ * moved, so a push made since the last load shows the canvas as outdated.
  */
 export function createPrLoader(ctx: AppContext) {
   const refreshed = new Set<number>()
@@ -103,10 +106,11 @@ export function createPrLoader(ctx: AppContext) {
   }
 
   async function refreshPr(
-    number: number
+    number: number,
+    fetched?: PrMeta
   ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
     const { host, repo } = ctx.config
-    const meta = await host.fetchPrMeta(ctx.gh, repo, number)
+    const meta = fetched ?? (await host.fetchPrMeta(ctx.gh, repo, number))
     const shas = await fetchPrRefs(ctx.git, host, meta)
     const pr = toPr(meta, repo, shas)
     await ctx.prs.writePr(number, pr)
@@ -136,7 +140,14 @@ export function createPrLoader(ctx: AppContext) {
       if (!opts.refresh && refreshed.has(number)) {
         const [pr, comments] = await Promise.all([ctx.prs.readPr(number), ctx.prs.readComments(number)])
         if (pr !== null && comments !== null) {
-          return { pr, comments, warnings: [] }
+          if (opts.poll === true) {
+            return { pr, comments, warnings: [] }
+          }
+          const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
+          if (meta.headSha === pr.headSha) {
+            return { pr, comments, warnings: [] }
+          }
+          return refreshPr(number, meta)
         }
       }
       return refreshPr(number)
