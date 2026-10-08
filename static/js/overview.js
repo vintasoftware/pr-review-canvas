@@ -5,8 +5,8 @@
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
 import { renderMarkdown } from './markdown.js'
-import { dismissedListHtml, openPoints, postedUrls, sevsumHtml } from './points.js'
-import { selfReviewNoteHtml, settledListHtml } from './self-review.js'
+import { openPoints, pointStatusesHtml, sevsumHtml } from './points.js'
+import { selfReviewNoteHtml } from './self-review.js'
 import { buildThreads } from './threads.js'
 
 /**
@@ -94,20 +94,13 @@ export function renderOverview(bundle, ctx) {
   return (
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
     `<div class="panel-h"><h2 id="ov-h">Overview</h2>${artifact ? sevsumHtml(active, artifact.layers) : ''}</div>` +
-    `<div class="body">${artifact ? selfReviewNoteHtml(artifact.points) : ''}${summary}</div>` +
+    `<div class="body">${artifact ? selfReviewNoteHtml(artifact.points) + pointStatusesHtml(artifact.points, bundle.state) : ''}${summary}</div>` +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
     (reviews.length
       ? `<details class="review-history">${detailsSummaryHtml(`<span>Review history · ${reviews.length}</span>`, 'Toggle review history')}${reviews.map(review => `<div class="body review-entry"><span class="pill">${esc(review.state.toLowerCase().replaceAll('_', ' '))}</span>${issueCommentHtml(review, ctx.now)}</div>`).join('')}</details>`
       : '') +
     outdatedCommentsHtml(bundle.comments.reviewComments, ctx.now) +
-    (artifact
-      ? settledListHtml(artifact.points, { paths: ctx.paths }) +
-        dismissedListHtml(artifact.points, bundle.state, {
-          paths: ctx.paths,
-          posted: postedUrls(bundle.state, bundle.comments.reviewComments),
-        })
-      : '') +
     '</section>'
   )
 }

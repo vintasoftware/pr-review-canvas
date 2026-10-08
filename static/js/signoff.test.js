@@ -2,9 +2,9 @@
 // @vitest-environment happy-dom
 import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
+import { externalLink } from './dom.js'
 import {
   approveBlockedReason,
-  externalLink,
   FAILED_REASON,
   fillSignoffDialog,
   openSignoffDialog,

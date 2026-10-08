@@ -707,6 +707,35 @@ refused.
 When automatic download fails, download the archive in GitHub or GitLab and use the page's drop
 zone or `pr-review import <zip> --pr <n>`.
 
+### Attention point status
+
+Each attention point shows where it stands for you. A point you have not acted on is **open**.
+Acting on it changes its status:
+
+- **in your review**: you added it, or a comment AI Chat tied to it, to the pending review. It goes
+  out when you submit. A point can hold more than one draft; the card lists them all.
+- **posted**: you posted it (or a comment AI Chat tied to it), or it went out with a submitted
+  review. Drafts for it that still wait show on its card too.
+- **resolved**: the author answered it with a reason. Every reader sees this status.
+- **dismissed**: you took it off your own list. Other readers still see it open.
+
+When more than one applies, the point shows the first one in this order: resolved, posted, in your
+review, dismissed.
+
+A point you acted on stays in its layer and on its line in the diff. It collapses to its title, its
+status, and one line: the start of the reason, the comment link, or a note that the draft waits.
+**show** expands it. You then see the point's text, what was done with it (the author's reason, or
+in the layer, your draft with **edit** and **delete**; in the diff the draft has its own row right
+under the point), and the commands that undo it: **reopen**, **restore**, or
+deleting the draft. The point collapses again when its status changes. A reload also collapses it.
+
+The counts in the rail, the layer headings, and the overview squares include only open points. The
+overview line **Attention points: 2 open · 1 in your review · …** counts each status. Its
+**hide the N acted on** command removes the collapsed points from the page until you click it
+again; **edit** on an AI Chat proposed resolution brings its point back while the reason box is
+open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
+it again.
+
 ### Self-review
 
 The author reads the canvas before asking for review. Every attention point names its audience:
@@ -723,23 +752,33 @@ reviewer decision and click **resolve**. On a pull request, **also post the reas
 this line** is checked by default; the reason then also appears as a review comment on the point's
 line.
 
-**Dismiss** is available to every reader, the author too. It hides the point from your own page
+**Dismiss** is available to every reader, the author too. It collapses the point on your own page
 only. It does not resolve the point: reviewers still see it, and the self-review note still counts
 it. To resolve a point you dismissed, **restore** it first.
 
 A resolution is written into the canvas itself:
 
-- The point leaves every reader's list. The overview lists it under **N resolved by the author**
-  with its reason and, when posted, a link to the comment.
+- The point leaves every reader's open list and collapses where it is, with the author's reason
+  and, when posted, a link to the comment. A reason posted as a comment does not mark the point
+  posted, so a reopened point is open again.
 - The canvas comment is shared again at once, with the new counts. Reviewers click **refresh** to
   load it. The author's Conversation card updates immediately and stays current after reload.
   When sharing fails, the resolution stays in your local canvas and the message says why.
   With [`canvasComment` off](#turning-sharing-off), nothing is shared and reviewers do not see it.
-- **reopen** in that list takes a resolution back and shares the canvas again. A posted comment
+- **reopen** on the expanded point takes a resolution back and shares the canvas again. A posted comment
   stays on the forge.
 - Regenerating the canvas for the same commit keeps each resolution whose point comes back with the
   same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the
   resolutions of the points it carries.
+- When you tell AI Chat how you decided a point, it can propose a resolution instead of a comment:
+  a **proposed resolution** card names the point and the reason. **resolve** saves that reason as
+  it stands and does not post it as a comment; **edit** opens the point's own reason box with it,
+  where you can change it and choose to post it. The card offers these where the point itself
+  offers **resolve**: on a resolved point it says so, and on a dismissed one it asks you to restore
+  the point first. AI Chat proposes this only to a reader who may resolve: the author, on the
+  canvas of the current head. A thread learns this from its first message, and again when it
+  changes, as when a push leaves the canvas outdated. The page shows the card only to that reader
+  and only for a point of this canvas.
 
 Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
 offers no **resolve**:
@@ -766,8 +805,9 @@ A pending review holds comments on your machine until you submit them together.
   publishes ahead of the review. Replies and pull-request comments are not part of a forge review,
   so they still post at once.
 - An attention point keeps both **post to github** and **add to review**, since its text is written
-  in advance. A point in the review shows **in your review**; edit or remove it as the draft on its
-  line. After submission, the point shows the comment it became.
+  in advance. A point in the review collapses with **in your review**. Edit or delete its draft on the
+  expanded point in its layer, on its line, or in the review tab. After submission, the point collapses with
+  the comment it became.
 - A comment the AI Chat proposes works the same way: it offers **post to github** and **add to
   review**, and shows **in your review** once it is queued. After submission it shows **view
   comment** when the comment link is known, or **submitted** when the receipt could not be loaded.
@@ -778,13 +818,28 @@ A pending review holds comments on your machine until you submit them together.
   other turns share the same status. The fingerprint follows its draft and identifies the posted
   comment, so its link survives draft edits, GitHub edits, and later commits moving the lines.
   Delayed receipts and older records use GitHub's complete original range to find the comment.
+- AI Chat can tie a proposed comment to an attention point when the comment acts on it, for
+  example when it answers what the point asks you to decide. The card then says **about the
+  point "…"**. AI Chat decides this from the conversation: the context chip names where the talk
+  started, so when it has moved to another topic, the comment is not tied even if the chip still
+  names a point. The page ties a comment only to a point of this canvas. **unlink** on the card
+  takes the tie off before you send the comment. A tied comment acts on its point like the point's
+  own text: once you add it to the review, the point collapses as **in your review** and lists it
+  among its drafts, even when it sits on another line; once it is posted, the point shows
+  **posted**. The review tab says **proposed by AI Chat about the point "…"**.
 - A bar under the progress line shows how many drafts are waiting. Each draft appears on its line
   with a **pending** badge and edit and delete commands. Drafts are saved in the local review state
   and survive a reload. **discard** drops the whole review; nothing was sent to the forge.
-- Drafts from an earlier commit are listed separately in the bar with their original location and
-  commit. They are submitted only when the stored diff is identical to the current one and
-  `canvas.keepForIdenticalDiff` is on. Otherwise, copy the text, delete the draft, and comment on
-  the current code.
+- **see the list** in the bar opens the **Your review** tab of the side pane, next to **AI Chat**.
+  The tab lists the drafts of the current commit by file. Each draft shows its lines, where it
+  came from (an attention point, AI Chat, or you), and the same **edit** and **delete** commands.
+  The tab also has **finish your review** and **discard**. Its count shows how many drafts wait.
+  With AI Chat off, the pane holds the review alone. It stays minimized until you open it, and its
+  launcher shows only while drafts wait.
+- Drafts from an earlier commit are listed after them in the tab, with their original location,
+  commit, origin, and **copy** and **delete** commands; the bar counts them. They are submitted
+  only when the stored diff is identical to the current one and `canvas.keepForIdenticalDiff` is
+  on. Otherwise, copy the text, delete the draft, and comment on the current code.
 - A draft added or edited during submission stays pending.
 
 **finish your review** opens the sign-off dialog, which shows how many drafts go out with the
@@ -804,6 +859,10 @@ review with no verdict. Each opens a
 dialog previewing an editable review body summarizing reviewed layers, dismissed attention points,
 and comments posted from the canvas, so an approval or a rejection always carries a comment.
 With `sharing.mentionCanvas` off, the dialog opens with an empty body for you to write.
+
+Once the review is posted, the dialog closes and a message links to the review on the forge; the
+page already shows what it changed. When the forge answered with a warning, such as comments it
+could not load back, the dialog stays open with it.
 
 Approval requires every layer except **Other changes** to be reviewed for the current head.
 Requesting changes and a comment-only review do not require that completion. On GitLab,

@@ -3,16 +3,18 @@
 /** @typedef {import('./contract-types.js').Point} Point */
 /** @typedef {import('./contract-types.js').PrState} PrState */
 import { askButtonHtml } from './ask.js'
-import { sendCommandsHtml } from './comment-link.js'
+import { sendCommandsHtml, viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
-import { pendingForPoint } from './pending.js'
+import { hostLabel } from './host.js'
+import { pendingCommentHtml, pendingForPoint, pendingRange } from './pending.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import {
   audiencePillHtml,
+  canSettle,
+  reopenButtonHtml,
   selfReviewNoteHtml,
   settleButtonHtml,
-  settledListHtml,
   settlementOf,
 } from './self-review.js'
 
@@ -32,21 +34,70 @@ export function pointsByLevel(points) {
 }
 
 /**
- * Whether the point is off the reader's list: they dismissed it, or the author settled it.
- * @param {Point} p
- * @param {PrState | undefined} state
+ * Where a point stands for this reader. Every point starts `open`. `queued` waits in the pending
+ * review, `posted` reached the forge (on its own or with a submitted review), `resolved` is the
+ * author's answer for every reader, and `dismissed` is this reader's own mark. When more than one
+ * applies, the one that says most wins: an answer for everyone, then what the forge holds, then
+ * what waits to go there, then the reader's private mark.
+ * @typedef {'open' | 'queued' | 'posted' | 'resolved' | 'dismissed'} PointStatus
  */
-export function isSetAside(p, state) {
-  return state?.dismissed[p.fingerprint] !== undefined || settlementOf(p) !== undefined
+
+/**
+ * @param {Pick<Point, 'fingerprint'>} p
+ * @param {PrState | null | undefined} state
+ * @returns {PointStatus}
+ */
+export function pointStatus(p, state) {
+  const fp = p.fingerprint
+  if (settlementOf(p) !== undefined) {
+    return 'resolved'
+  }
+  if (
+    state?.posted.some(e => e.pointFingerprint === fp) === true ||
+    (state?.submitted ?? []).some(d => d.pointFingerprint === fp)
+  ) {
+    return 'posted'
+  }
+  if (pendingForPoint(state, fp).length > 0) {
+    return 'queued'
+  }
+  if (state?.dismissed[fp] !== undefined) {
+    return 'dismissed'
+  }
+  return 'open'
 }
 
 /**
- * The points still on the reader's list.
+ * The statuses the author resolves a point from. A resolved point is done, and a dismissed one is
+ * restored first: dismissing says the point is not for this reader, who takes that back before
+ * answering it for everyone.
+ */
+const RESOLVABLE = new Set(['open', 'queued', 'posted'])
+
+/**
+ * Whether the reader may resolve a point in this status now. The point's own resolve and a
+ * resolution AI Chat proposes both ask this, so the two never disagree.
+ * @param {PointStatus} status
+ */
+export function resolvable(status) {
+  return canSettle() && RESOLVABLE.has(status)
+}
+
+/** What each status but `open` is called, on its pill and in the overview's count. */
+export const STATUS_LABELS = /** @type {const} */ ({
+  queued: 'in your review',
+  posted: 'posted',
+  resolved: 'resolved',
+  dismissed: 'dismissed',
+})
+
+/**
+ * The points still on the reader's list: nothing has been done with them yet.
  * @param {ReadonlyArray<Point>} points
- * @param {PrState} state
+ * @param {PrState | null | undefined} state
  */
 export function openPoints(points, state) {
-  return points.filter(p => !isSetAside(p, state))
+  return points.filter(p => pointStatus(p, state) === 'open')
 }
 
 /**
@@ -103,39 +154,41 @@ export function pointContext(p) {
 }
 
 /**
- * The commands every point carries. `copy` puts the markdown on the clipboard, `post to github`
- * opens nothing and posts it at the anchor, `add to review` holds it as a draft instead, `settle`
- * lets the author answer it for every reviewer, and `dismiss` takes it off this reader's page.
+ * The commands a point carries, by where it stands. An open point offers every way to act on it:
+ * `copy` puts the markdown on the clipboard, `post to github` posts it at the anchor, `add to
+ * review` holds it as a draft instead, `resolve` lets the author answer it for every reviewer, and
+ * `dismiss` takes it off this reader's list. A point already acted on keeps `copy` and `ask`, and
+ * offers the way back from what was done to it: its draft carries its own edit and delete,
+ * `reopen` takes back a resolution, and `restore` a dismissal.
  * @param {Point} p
- * @param {{ dismissed?: boolean, postedUrl?: string | undefined, queued?: boolean }} [opts]
+ * @param {{ status?: PointStatus, postedUrl?: string | undefined }} [opts]
  * @returns {string}
  */
 export function pointCommandsHtml(p, opts = {}) {
+  const status = opts.status ?? 'open'
   const fp = esc(p.fingerprint)
-  const toggle = opts.dismissed
-    ? `<button class="cmd" type="button" data-act="point-restore" data-fingerprint="${fp}">restore</button>`
-    : `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`
-  const settle = settleButtonHtml(p)
+  const settle = resolvable(status) ? settleButtonHtml(p) : ''
+  const ask = askButtonHtml(pointContext(p))
+  const commentUrl = settlementOf(p)?.commentUrl
+  /** @type {Record<PointStatus, string>} */
+  const byStatus = {
+    open:
+      sendCommandsHtml({ kind: 'point', id: p.id }) +
+      ask +
+      settle +
+      `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`,
+    queued: ask + settle,
+    posted: (opts.postedUrl === undefined ? '' : viewCommentHtml(opts.postedUrl)) + ask + settle,
+    resolved: (commentUrl === undefined ? '' : viewCommentHtml(commentUrl)) + ask + reopenButtonHtml(p),
+    dismissed:
+      ask +
+      `<button class="cmd" type="button" data-act="point-restore" data-fingerprint="${fp}">restore</button>`,
+  }
   return (
-    `<span class="tbtns" data-queued="${opts.queued === true ? '1' : '0'}" data-settleable="${settle === '' ? '0' : '1'}">` +
+    `<span class="tbtns">` +
     `<button class="cmd" type="button" data-copy="${esc(pointToMarkdown(p))}" title="Copy as Markdown">copy</button>` +
-    sendCommandsHtml({ kind: 'point', id: p.id, postedUrl: opts.postedUrl, queued: opts.queued }) +
-    askButtonHtml(pointContext(p)) +
-    // The dismissed list is drawn again on every change, which would drop a reason being written
-    // there, so the author restores a dismissed point before resolving it.
-    (opts.dismissed ? '' : settle) +
-    toggle +
-    '</span>'
+    `${byStatus[status]}</span>`
   )
-}
-
-/**
- * Whether this point is waiting in the review, read from the state the renderer was given.
- * @param {Point} p
- * @param {{ state?: PrState }} ctx
- */
-export function queuedFor(p, ctx) {
-  return pendingForPoint(ctx.state, p.fingerprint) !== undefined
 }
 
 /**
@@ -166,60 +219,227 @@ export function postedUrls(state, comments) {
   return out
 }
 
+/** @typedef {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string>, now?: Date }} PointContext */
+
+/**
+ * Where one of a point's drafts came from: a comment AI Chat proposed about it, the point's own
+ * text as added to the review, or that text after the reader edited it.
+ * @param {Point} p
+ * @param {import('./contract-types.js').PendingComment} draft
+ */
+function draftOrigin(p, draft) {
+  if (draft.proposalFingerprint !== undefined) {
+    return 'proposed by AI Chat'
+  }
+  return draft.body === pointToMarkdown(p) ? 'the point’s text' : 'your edit of the point’s text'
+}
+
+/**
+ * The drafts that wait for a point, each with its lines, where it came from, and its own edit and
+ * delete; nothing when none waits.
+ * @param {Point} p
+ * @param {PointContext} ctx
+ */
+function draftsHtml(p, ctx) {
+  const drafts = pendingForPoint(ctx.state, p.fingerprint)
+  if (drafts.length === 0) {
+    return ''
+  }
+  const now = ctx.now ?? new Date()
+  return (
+    `<div class="p-outcome"><h4 class="lbl">${drafts.length === 1 ? 'Your draft' : 'Your drafts'}</h4>` +
+    drafts
+      .map(
+        d =>
+          `<p class="p-draft-where muted small">${esc(pendingRange(d))} · ${draftOrigin(p, d)}</p>` +
+          pendingCommentHtml(d, now)
+      )
+      .join('') +
+    '</div>'
+  )
+}
+
+/**
+ * The parts of a point that say where it stands, for every status but `open`: the pill next to the
+ * title, the one line that stands for the point while it is collapsed, and what was done with it,
+ * shown once the reader expands it.
+ * @param {Point} p
+ * @param {Exclude<PointStatus, 'open'>} status
+ * @param {PointContext} ctx
+ * @param {{ card: boolean }} opts
+ * @returns {{ pill: string, summary: string, outcome: string }}
+ */
+function statusPartsHtml(p, status, ctx, opts) {
+  const pill =
+    status === 'queued'
+      ? `<span class="pill pending queued">${STATUS_LABELS.queued}</span>`
+      : `<span class="pill status ${status}">${STATUS_LABELS[status]}</span>`
+  const line = /** @param {string} text */ text => `<p class="p-summary muted">${text}</p>`
+  const host = esc(hostLabel())
+  switch (status) {
+    case 'queued': {
+      const drafts = pendingForPoint(ctx.state, p.fingerprint)
+      const only = drafts.length === 1 ? drafts[0] : undefined
+      // A draft on another line than the point's (a comment AI Chat proposed about it) says where.
+      const elsewhere = only !== undefined && (only.path !== p.path || only.line !== p.line)
+      const what =
+        only === undefined
+          ? `${drafts.length} drafts wait in your review`
+          : `Waits in your review${elsewhere ? ` at ${esc(pendingRange(only))}` : ''}`
+      return {
+        pill,
+        summary: line(`${what} · not on ${host} yet`),
+        outcome: opts.card ? draftsHtml(p, ctx) : '',
+      }
+    }
+    case 'posted': {
+      const url = postedFor(p, ctx)
+      return {
+        pill,
+        summary: line(
+          url === undefined
+            ? `Sent to ${host} with your review`
+            : `Posted to ${host} · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">view comment</a>`
+        ),
+        // A posted point can still hold drafts that wait, such as a later comment AI Chat proposed.
+        outcome: opts.card ? draftsHtml(p, ctx) : '',
+      }
+    }
+    case 'resolved': {
+      const reason = settlementOf(p)?.reason ?? ''
+      return {
+        pill,
+        summary: line(`Resolved by the author: ${esc(reason.split('\n')[0] ?? '')}`),
+        outcome:
+          '<div class="p-outcome"><h4 class="lbl">Author’s reason</h4>' +
+          `<div class="prose settled-reason">${renderMarkdown(reason, { paths: ctx.paths })}</div></div>`,
+      }
+    }
+    case 'dismissed':
+      return { pill, summary: line('You dismissed this point; other readers still see it'), outcome: '' }
+  }
+}
+
+/**
+ * What decides how a point is drawn, short of the clock. A point is drawn again only when this
+ * changes, so a reason being written under it or a command mid-request is left alone otherwise.
+ * @param {Point} p
+ * @param {PointStatus} status
+ * @param {PointContext} ctx
+ */
+function pointSignature(p, status, ctx) {
+  const settlement = settlementOf(p)
+  return JSON.stringify([
+    status,
+    postedFor(p, ctx) ?? null,
+    pendingForPoint(ctx.state, p.fingerprint).map(d => [d.id, d.body]),
+    settlement?.reason ?? null,
+    settlement?.commentUrl ?? null,
+    canSettle(),
+  ])
+}
+
+/**
+ * The attributes and the inside of a point, shared by its card and its row in the diff. A point
+ * that was acted on is drawn collapsed to its title and one line, with a toggle that shows the
+ * rest; an open point is always drawn whole.
+ * @param {Point} p
+ * @param {PointContext} ctx
+ * @param {{ card: boolean }} opts `card` adds the link to the point's line and a queued point's draft:
+ *   a row sits on that line, with the draft's own row right under it
+ */
+function pointPartsHtml(p, ctx, opts) {
+  const status = pointStatus(p, ctx.state)
+  const parts =
+    status === 'open' ? { pill: '', summary: '', outcome: '' } : statusPartsHtml(p, status, ctx, opts)
+  const toggle =
+    status === 'open'
+      ? ''
+      : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
+  const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
+  return {
+    attrs:
+      `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +
+      `data-sig="${esc(pointSignature(p, status, ctx))}"`,
+    handled: status === 'open' ? '' : ' is-handled',
+    title: `<span class="p-title">${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
+    rest:
+      parts.summary +
+      `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
+      parts.outcome +
+      pointCommandsHtml(p, { status, postedUrl: postedFor(p, ctx) }),
+  }
+}
+
 /**
  * One attention point card, shown in the layer that owns the point.
  * @param {Point} p
- * @param {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string> }} ctx
+ * @param {PointContext} ctx
  */
 export function pointCardHtml(p, ctx) {
-  const posted = postedFor(p, ctx)
+  const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: true })
   return (
-    `<li class="finding" id="${esc(pointAnchorId(p.id))}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${isSetAside(p, ctx.state) ? ' hidden' : ''}>${squareHtml(p)}<div>` +
-    `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}` +
-    `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
-    `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
-    `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</div></li>`
+    `<li class="finding${handled}" id="${esc(pointAnchorId(p.id))}" ${attrs}>${squareHtml(p)}<div>` +
+    `<div class="f-title">${title}</div>${rest}</div></li>`
   )
 }
 
 /**
- * The muted line under the overview that holds the points the reader set aside.
- * @param {ReadonlyArray<Point>} points
- * @param {PrState} state
- * @param {{ paths: ReadonlySet<string>, posted?: ReadonlyMap<string, string> }} ctx
- * @param {boolean} [expanded]
+ * The inline row under a diff line.
+ * @param {Point} p
+ * @param {PointContext} ctx
  */
-export function dismissedListHtml(points, state, ctx, expanded = false) {
-  // A point the author settled is listed with its reason instead.
-  const dismissed = points.filter(
-    p => state.dismissed[p.fingerprint] !== undefined && settlementOf(p) === undefined
-  )
-  if (dismissed.length === 0) {
-    return '<div class="dismissed-list" hidden></div>'
-  }
-  const rows = dismissed
-    .map(p => {
-      const posted = postedFor(p, ctx)
-      return (
-        `<li class="finding" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}">${squareHtml(p)}<div>` +
-        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}` +
-        `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a></div>` +
-        `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
-        `${pointCommandsHtml(p, { dismissed: true, postedUrl: posted, queued: queuedFor(p, { state }) })}</div></li>`
-      )
-    })
-    .join('')
+export function pointRowHtml(p, ctx) {
+  const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: false })
   return (
-    '<div class="dismissed-list">' +
-    `<p class="muted dismissed-line">${dismissed.length} dismissed <button class="cmd" type="button" data-act="show-dismissed" aria-expanded="${expanded}">${expanded ? 'hide' : 'show'}</button></p>` +
-    `<ol class="findings dismissed"${expanded ? '' : ' hidden'}>${rows}</ol></div>`
+    `<tr class="ifind ${p.level}${handled}" ${attrs}><td class="code x" colspan="4">` +
+    `<div class="f-title">${squareHtml(p)}${title}</div>${rest}</td></tr>`
   )
 }
 
 /**
- * Shows the points still on the reader's list and hides the ones they dismissed or the author
- * settled, wherever they are on the page, and rebuilds the counts and the two lists of set-aside
- * points. Calling it again with the same state changes nothing.
+ * The overview's line that counts the points by where they stand, with the switch that takes the
+ * ones already acted on off the page. Nothing is drawn for a canvas without points.
+ * @param {ReadonlyArray<Point>} points
+ * @param {PrState | null | undefined} state
+ * @param {boolean} [hiding] whether the points acted on are hidden now
+ */
+export function pointStatusesHtml(points, state, hiding = false) {
+  if (points.length === 0) {
+    return '<p class="point-statuses" hidden></p>'
+  }
+  /** @type {Record<PointStatus, number>} */
+  const counts = { open: 0, queued: 0, posted: 0, resolved: 0, dismissed: 0 }
+  for (const p of points) {
+    counts[pointStatus(p, state)] += 1
+  }
+  const handled = points.length - counts.open
+  const parts = [`<b>${counts.open} open</b>`]
+  for (const status of /** @type {const} */ (['queued', 'posted', 'resolved', 'dismissed'])) {
+    if (counts[status] > 0) {
+      parts.push(`${counts[status]} ${STATUS_LABELS[status]}`)
+    }
+  }
+  const toggle =
+    handled === 0
+      ? ''
+      : ` <button class="cmd" type="button" data-act="toggle-handled" aria-pressed="${hiding}">${hiding ? 'show' : 'hide'} the ${handled} acted on</button>`
+  return `<p class="point-statuses muted">Attention points: ${parts.join(' · ')}${toggle}</p>`
+}
+
+/**
+ * Whether the page hides the points already acted on, read from the overview's switch.
+ * @param {ParentNode} root
+ */
+export function hidingHandled(root) {
+  return root.querySelector('[data-act="toggle-handled"]')?.getAttribute('aria-pressed') === 'true'
+}
+
+/**
+ * Draws every point again where it changed, wherever it is on the page, and rebuilds the counts,
+ * the overview's status line, and the author's note. A point keeps the reader's expanded view
+ * while its status holds, and collapses when it changes. Calling it again with the same state
+ * changes nothing.
  * @param {ParentNode} root
  * @param {ReadonlyArray<Point>} points
  * @param {PrState} state
@@ -227,26 +447,19 @@ export function dismissedListHtml(points, state, ctx, expanded = false) {
  */
 export function applyPointStates(root, points, state, ctx) {
   const byId = new Map(points.map(p => [p.id, p]))
-  for (const el of Array.from(root.querySelectorAll('[data-point]'))) {
+  for (const el of Array.from(root.querySelectorAll('[data-point][data-status]'))) {
     const point = byId.get(el.getAttribute('data-point') ?? '')
-    if (point === undefined || el.closest('.dismissed-list') !== null) {
-      continue
+    if (point !== undefined) {
+      refreshPoint(el, point, { state, ...ctx })
     }
-    el.toggleAttribute('hidden', isSetAside(point, state))
-    refreshPointCommands(el, point, { state, ...ctx })
   }
   const open = openPoints(points, state)
   for (const counter of Array.from(root.querySelectorAll('.point-count'))) {
     const layerId = counter.closest('[data-layer]')?.getAttribute('data-layer')
     counter.textContent = String(open.filter(p => p.layerId === layerId).length)
   }
-  const expandedIn = /** @param {Element} host @param {string} act */ (host, act) =>
-    host.querySelector(`[data-act="${act}"]`)?.getAttribute('aria-expanded') === 'true'
-  replaceWithHtml(root.querySelector('.dismissed-list'), host =>
-    dismissedListHtml(points, state, ctx, expandedIn(host, 'show-dismissed'))
-  )
-  replaceWithHtml(root.querySelector('.settled-list'), host =>
-    settledListHtml(points, ctx, expandedIn(host, 'show-settled'))
+  replaceWithHtml(root.querySelector('.point-statuses'), host =>
+    pointStatusesHtml(points, state, hidingHandled(host))
   )
   replaceWithHtml(root.querySelector('.sevsum'), () => sevsumHtml(open, ctx.layers ?? []))
   replaceWithHtml(root.querySelector('.self-review-note'), () => selfReviewNoteHtml(points))
@@ -270,54 +483,58 @@ function replaceWithHtml(host, html) {
 }
 
 /**
- * Draws a point's commands again when it has just joined the review or just left it, or when the
- * author reopened it and it can be settled again, wherever the point is on the page. Nothing else
- * is touched: a command that is mid-request keeps its state, because neither posting nor
- * dismissing changes whether the point is waiting in the review. The commands are always the ones
- * of a point on the reader's list: the point is hidden while it is dismissed and shows again only
- * once restored, and the dismissed list draws its own rows.
- * @param {Element} el the element that carries `data-point`
+ * Draws one point again in place when what it shows changed: it joined the review or left it,
+ * reached the forge, was resolved, reopened, dismissed or restored, or its draft was edited. The
+ * element stays the same one, so the focus ring on it stays too.
+ * @param {Element} el the card or row that carries `data-point`
  * @param {Point} p
- * @param {{ state: PrState, posted?: ReadonlyMap<string, string> }} ctx
- * @returns {boolean} true when the commands were drawn again
+ * @param {PointContext & { state: PrState }} ctx
+ * @returns {boolean} true when the point was drawn again
  */
-export function refreshPointCommands(el, p, ctx) {
-  const tbtns = el.querySelector('.tbtns')
-  const queued = queuedFor(p, ctx)
-  const settleable = settleButtonHtml(p) !== ''
-  if (
-    tbtns === null ||
-    ((tbtns.getAttribute('data-queued') === '1') === queued &&
-      (tbtns.getAttribute('data-settleable') === '1') === settleable)
-  ) {
+export function refreshPoint(el, p, ctx) {
+  // The signature is compared before anything is drawn: most state changes leave most points as
+  // they are, and drawing one renders its markdown.
+  if (pointSignature(p, pointStatus(p, ctx.state), ctx) === el.getAttribute('data-sig')) {
     return false
   }
+  const row = el.tagName === 'TR'
   const template = document.createElement('template')
-  template.innerHTML = pointCommandsHtml(p, {
-    queued,
-    ...(postedFor(p, ctx) === undefined ? {} : { postedUrl: postedFor(p, ctx) }),
-  })
-  const next = template.content.firstElementChild
+  template.innerHTML = row ? `<table><tbody>${pointRowHtml(p, ctx)}</tbody></table>` : pointCardHtml(p, ctx)
+  const next = row ? template.content.querySelector('tr') : template.content.firstElementChild
   if (next === null) {
     return false
   }
-  tbtns.replaceWith(next)
+  const expanded =
+    next.getAttribute('data-status') === el.getAttribute('data-status') && el.hasAttribute('data-expanded')
+  const focused = el !== el.ownerDocument.activeElement && el.contains(el.ownerDocument.activeElement)
+  for (const name of ['class', 'data-status', 'data-sig']) {
+    el.setAttribute(name, next.getAttribute(name) ?? '')
+  }
+  el.replaceChildren(...Array.from(next.childNodes))
+  setPointExpanded(el, expanded)
+  // The command the reader used is gone; the focus goes to what now stands for the point.
+  const target = focused ? el.querySelector('[data-act="point-expand"], .tbtns button') : null
+  if (target instanceof HTMLElement) {
+    target.focus()
+  }
   return true
 }
 
 /**
- * The inline row under a diff line.
- * @param {Point} p
- * @param {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string> }} ctx
+ * Shows or hides the rest of a point that was acted on. An open point is always shown whole.
+ * @param {Element} el the card or row that carries `data-point`
+ * @param {boolean} [expanded] omitted flips it
  */
-export function pointRowHtml(p, ctx) {
-  const posted = postedFor(p, ctx)
-  return (
-    `<tr class="ifind ${p.level}" data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}"${isSetAside(p, ctx.state) ? ' hidden' : ''}><td class="code x" colspan="4">` +
-    `<div class="f-title">${squareHtml(p)}<span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}</div>` +
-    `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
-    `${pointCommandsHtml(p, { postedUrl: posted, queued: queuedFor(p, ctx) })}</td></tr>`
-  )
+export function setPointExpanded(el, expanded = !el.hasAttribute('data-expanded')) {
+  const on = expanded && el.classList.contains('is-handled')
+  el.toggleAttribute('data-expanded', on)
+  const toggle = el.querySelector('[data-act="point-expand"]')
+  if (toggle !== null) {
+    const title = el.querySelector('.p-title')?.textContent ?? ''
+    toggle.setAttribute('aria-expanded', String(on))
+    toggle.setAttribute('aria-label', `${on ? 'Hide' : 'Show'} the point: ${title}`)
+    toggle.textContent = on ? 'hide' : 'show'
+  }
 }
 
 /**

@@ -40,14 +40,14 @@ export function pendingForPath(state, path) {
 }
 
 /**
- * The draft an attention point was added to the review as, when it was. A point is queued at most
- * once: its fingerprint is what ties the two together.
+ * The drafts that act on an attention point, oldest first: its own text added to the review, and
+ * the comments AI Chat proposed about it. The point's fingerprint is what ties them together.
  * @param {PrState | null | undefined} state
  * @param {string} fingerprint
- * @returns {PendingComment | undefined}
+ * @returns {ReadonlyArray<PendingComment>}
  */
 export function pendingForPoint(state, fingerprint) {
-  return pendingComments(state).find(p => p.pointFingerprint === fingerprint)
+  return pendingComments(state).filter(p => p.pointFingerprint === fingerprint)
 }
 
 /** @param {number} count */
@@ -100,39 +100,42 @@ export function pendingRowHtml(drafts, now) {
 }
 
 /**
- * The bar that says a review is being written. It is drawn only while something is waiting, and
- * carries the two ways out: submit the review, or throw the drafts away.
+ * The bar that says a review is being written. It is drawn only while something is waiting, opens
+ * the list of the drafts in the side pane, and carries the two ways out: submit the review, or
+ * throw the drafts away. The drafts of earlier commits are only counted here; the list shows them.
  * @param {number} count
- * @param {ReadonlyArray<PendingComment>} [earlier]
+ * @param {number} [earlier] how many of them were written on an earlier commit
  */
-export function pendingBarHtml(count, earlier = []) {
+export function pendingBarHtml(count, earlier = 0) {
   if (count === 0) {
     return ''
   }
   return (
     `<div class="pending-bar" id="${PENDING_BAR_ID}" role="status">` +
     `<span class="pending-mark" aria-hidden="true"></span>` +
-    `<span class="pending-text"><b>${esc(pendingLabel(count))}</b> waiting in your review. ` +
+    `<span class="pending-text"><b>${esc(pendingLabel(count))}</b> waiting in your review` +
+    `${earlier === 0 ? '' : `, ${earlier} written on an earlier commit`}. ` +
     `Nothing is on ${esc(hostLabel())} until you submit it.</span>` +
     '<span class="pending-actions">' +
+    '<button class="cmd" type="button" data-act="show-review">see the list</button>' +
     '<button class="cmd fill" type="button" data-act="pending-finish" data-needs-post>finish your review</button>' +
     '<button class="cmd" type="button" data-act="pending-discard">discard</button>' +
-    '</span></div>' +
-    (earlier.length === 0
-      ? ''
-      : '<details class="earlier-pending"><summary>Comments written on earlier commits</summary>' +
-        '<p>These drafts are kept at their original locations. They can be submitted only if the diff is unchanged. Otherwise copy the text, delete the draft, and comment on the current code.</p>' +
-        earlier
-          .map(
-            p =>
-              `<div class="earlier-draft"><p>${esc(pendingRange(p))} · commit ${esc(p.headSha.slice(0, 7))}</p>` +
-              `<div class="prose">${renderMarkdown(p.body, { github: true })}</div>` +
-              `<button class="cmd" type="button" data-copy="${esc(p.body)}">copy</button>` +
-              `<button class="cmd" type="button" data-act="pending-delete" data-pending-id="${esc(p.id)}">delete</button></div>`
-          )
-          .join('') +
-        '</details>')
+    '</span></div>'
   )
+}
+
+/**
+ * The drafts of the commit on screen and the ones written on an earlier commit. Without a commit to
+ * compare with, every draft is current.
+ * @param {PrState | null | undefined} state
+ * @param {string} [headSha]
+ * @returns {{ current: ReadonlyArray<PendingComment>, earlier: ReadonlyArray<PendingComment> }}
+ */
+export function draftsByCommit(state, headSha) {
+  const all = pendingComments(state)
+  return headSha === undefined
+    ? { current: all, earlier: [] }
+    : { current: all.filter(p => p.headSha === headSha), earlier: all.filter(p => p.headSha !== headSha) }
 }
 
 /**
@@ -147,13 +150,11 @@ export function refreshPendingBar(root, state, headSha) {
   const count = pendingCount(state)
   const host = root.querySelector('.pending-bar-host')
   if (host !== null) {
-    const earlier = headSha === undefined ? [] : state.pending.filter(p => p.headSha !== headSha)
+    const earlier = draftsByCommit(state, headSha).earlier.length
     const signature = JSON.stringify([count, earlier])
     if (host.getAttribute('data-pending-state') !== signature) {
-      const open = host.querySelector('details')?.open ?? false
       host.innerHTML = pendingBarHtml(count, earlier)
       host.setAttribute('data-pending-state', signature)
-      if (open) host.querySelector('details')?.setAttribute('open', '')
     }
     host.classList.toggle('has-pending', count > 0)
   }

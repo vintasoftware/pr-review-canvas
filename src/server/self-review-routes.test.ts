@@ -167,9 +167,9 @@ describe('settling an attention point', () => {
       })
     )
     expect(body.settled['fp-2']?.commentUrl).toBe(INLINE.html_url)
-    expect(body.state.posted).toEqual([
-      expect.objectContaining({ commentId: 5001, pointFingerprint: 'fp-2' }),
-    ])
+    expect(body.state.posted).toEqual([expect.objectContaining({ commentId: 5001 })])
+    // The receipt does not name the point, which stays unposted once it is reopened.
+    expect(body.state.posted[0]).not.toHaveProperty('pointFingerprint')
     const inline = forge.calls.find(
       c => c.kind === 'post' && c.path === 'repos/acme/widgets/pulls/42/comments'
     )
@@ -389,6 +389,21 @@ describe('the bundle', () => {
     t = await withCanvas(gh({ routes: { user: ghJson({ login }) } }))
     const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
     expect(((await res.json()) as { selfReview: boolean }).selfReview).toBe(selfReview)
+  })
+
+  it('offers no self-review on a canvas of another commit, which the settle route refuses', async () => {
+    const git = gitFor42()
+    t = await makeTestContext({ git, gh: gh({ routes: { user: ghJson({ login: 'octocat' }) } }) })
+    await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: 'c'.repeat(40),
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF.replace('a() + b()', 'a() * c()'),
+    })
+    const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
+    expect(await res.json()).toMatchObject({ status: 'stale', selfReview: false })
   })
 
   it('says whether settling shares the canvas comment again', async () => {

@@ -150,3 +150,20 @@ export function avatarHtml(comment) {
   }
   return `<span class="av" aria-hidden="true">${esc(initials(comment.author))}</span>`
 }
+
+/**
+ * An anchor built as a node, with an href only when the target is an http(s) address. A link
+ * that comes from an API is still untrusted input.
+ * @param {string} url
+ * @param {string} text
+ */
+export function externalLink(url, text) {
+  const a = document.createElement('a')
+  a.textContent = text
+  if (/^https?:\/\//i.test(url)) {
+    a.href = url
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+  }
+  return a
+}

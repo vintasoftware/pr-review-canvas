@@ -7,7 +7,7 @@ import { esc, timeAgo } from './dom.js'
 import { generationMode } from './generate.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
 import { canvasHiddenLines, getFoldLevel, refreshRail } from './layers.js'
-import { pendingBarHtml, pendingCount } from './pending.js'
+import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { approveBlockedReason } from './signoff.js'
@@ -179,7 +179,7 @@ export function progressHtml(artifact, state, headSha = artifact.pr.headSha) {
     `<span class="ptext">${p.done} of ${p.total} layers reviewed</span></div>` +
     `<div class="pending-bar-host${pendingCount(state) > 0 ? ' has-pending' : ''}">${pendingBarHtml(
       pendingCount(state),
-      state.pending.filter(draft => draft.headSha !== headSha)
+      draftsByCommit(state, headSha).earlier.length
     )}</div>` +
     `<div class="signoff">${approve}` +
     `<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on ${esc(hostLabel())}" title="Write and preview a review requesting changes on ${esc(hostLabel())}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>` +

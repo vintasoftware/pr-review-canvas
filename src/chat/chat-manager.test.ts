@@ -45,6 +45,7 @@ function target(): ChatTarget {
     patches,
     derivedDir: '/data/derived',
     readLines: async () => ['a line'],
+    readerResolves: false,
   }
 }
 
@@ -78,7 +79,7 @@ function build(
     repo: REPO,
     repoRoot: '/repo',
     overrides: opts.overrides ?? {},
-    loadSeedTemplate: async () => 'SEED for {{PR_META}}',
+    loadSeedTemplate: async () => 'SEED for {{PR_META}}\n{{READER}}',
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -147,6 +148,19 @@ describe('createChatManager().send', () => {
       seeded: true,
     })
     expect(runner.runs[2]?.prompt).toContain('SEED for')
+  })
+
+  it('seeds again when the reader gains or loses the right to resolve on the same commit', async () => {
+    const author = { ...target(), readerResolves: true }
+    await collect(manager.send(author, { message: 'one', context: { kind: 'pr' } }))
+    expect(runner.runs[0]?.prompt).toContain('may resolve its attention points')
+
+    // The author pushed, and the canvas on screen is now outdated: same commit, no resolving.
+    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    expect(runner.runs[1]?.prompt).toContain('may not resolve attention points here')
+
+    await collect(manager.send(target(), { message: 'three', context: { kind: 'pr' } }))
+    expect(runner.runs[2]?.prompt).not.toContain('SEED for')
   })
 
   it.each([

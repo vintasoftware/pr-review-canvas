@@ -4,17 +4,20 @@ import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   applyPointStates,
-  dismissedListHtml,
+  hidingHandled,
+  openPoints,
   pointCardHtml,
   pointLink,
   pointLocation,
   pointRowHtml,
+  pointStatus,
+  pointStatusesHtml,
   pointsByLevel,
   pointToMarkdown,
   setMentionCanvas,
+  setPointExpanded,
   postedUrls,
-  queuedFor,
-  refreshPointCommands,
+  refreshPoint,
   sevsumHtml,
 } from './points.js'
 
@@ -92,17 +95,17 @@ describe('points', () => {
   })
 })
 
-describe('dismissed points', () => {
+describe('where a point stands', () => {
   const artifact = syntheticArtifact()
   const BASE = emptyState('2026-09-10T12:00:00.000Z')
   const dismissed = { ...BASE, dismissed: { 'fp-1': { at: BASE.updatedAt } } }
+  const first = points[0]
+  if (first === undefined) {
+    throw new Error('no point')
+  }
 
   it('writes the point as a comment a human can read', () => {
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
-    expect(pointToMarkdown(p)).toBe(
+    expect(pointToMarkdown(first)).toBe(
       '**Sum instead of product**\n\n' +
         'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.\n\n' +
         '_src/app.ts:4 · decision · decide · from the pr-review canvas_'
@@ -110,29 +113,51 @@ describe('dismissed points', () => {
   })
 
   it('leaves the canvas out of the comment when mentionCanvas is off', () => {
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
     setMentionCanvas(false)
     try {
-      expect(pointToMarkdown(p)).toMatch(/_src\/app\.ts:4 · decision · decide_$/)
-      expect(pointToMarkdown(p).toLowerCase()).not.toContain('canvas')
+      expect(pointToMarkdown(first)).toMatch(/_src\/app\.ts:4 · decision · decide_$/)
+      expect(pointToMarkdown(first).toLowerCase()).not.toContain('canvas')
     } finally {
       setMentionCanvas(true)
     }
   })
 
-  it('hides the list while nothing is dismissed and names the count when something is', () => {
-    document.body.innerHTML = dismissedListHtml(artifact.points, BASE, ctx)
-    expect(document.querySelector('.dismissed-list')?.hasAttribute('hidden')).toBe(true)
-    document.body.innerHTML = dismissedListHtml(artifact.points, dismissed, ctx)
-    expect(document.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
-    expect(document.querySelector('.findings.dismissed li')?.getAttribute('data-fingerprint')).toBe('fp-1')
-    expect(document.querySelector('.findings.dismissed [data-act="point-restore"]')).not.toBeNull()
+  it('reads the status from the state, the one that says most winning', () => {
+    const fp = first.fingerprint
+    const at = BASE.updatedAt
+    expect(pointStatus(first, undefined)).toBe('open')
+    expect(pointStatus(first, BASE)).toBe('open')
+    expect(pointStatus(first, dismissed)).toBe('dismissed')
+    const queued = { ...dismissed, pending: [draftFor(first)] }
+    expect(pointStatus(first, queued)).toBe('queued')
+    expect(pointStatus(first, { ...queued, posted: [{ commentId: 1, pointFingerprint: fp, at }] })).toBe(
+      'posted'
+    )
+    // A review submitted while its comment list could not be read still sent the point.
+    expect(pointStatus(first, { ...BASE, submitted: [draftFor(first)] })).toBe('posted')
+    expect(openPoints(points, queued).map(p => p.id)).toEqual(['p-2', 'p-3'])
   })
 
-  it('links a point to the comment it was posted as, and skips one whose comment is unknown', () => {
+  it('counts the points by status in the overview, and offers to hide the ones acted on', () => {
+    document.body.innerHTML = pointStatusesHtml([], BASE)
+    expect(document.querySelector('.point-statuses')?.hasAttribute('hidden')).toBe(true)
+    document.body.innerHTML = pointStatusesHtml(points, BASE)
+    expect(document.querySelector('.point-statuses')?.textContent).toBe('Attention points: 3 open')
+    expect(document.querySelector('[data-act="toggle-handled"]')).toBeNull()
+    const second = points[1]
+    if (second === undefined) throw new Error('no point')
+    const state = { ...dismissed, pending: [{ ...draftFor(second), id: 'p2' }] }
+    document.body.innerHTML = pointStatusesHtml(points, state)
+    expect(document.querySelector('.point-statuses')?.textContent).toBe(
+      'Attention points: 1 open · 1 in your review · 1 dismissed hide the 2 acted on'
+    )
+    expect(hidingHandled(document)).toBe(false)
+    document.body.innerHTML = pointStatusesHtml(points, state, true)
+    expect(document.querySelector('[data-act="toggle-handled"]')?.textContent).toBe('show the 2 acted on')
+    expect(hidingHandled(document)).toBe(true)
+  })
+
+  it('links a posted point to its comment, and says it was sent when the comment is unknown', () => {
     const state = {
       ...BASE,
       posted: [
@@ -143,66 +168,95 @@ describe('dismissed points', () => {
     }
     const posted = postedUrls(state, [{ id: 1001, url: 'https://github.com/x#r1001' }])
     expect([...posted]).toEqual([['fp-1', 'https://github.com/x#r1001']])
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
-    document.body.innerHTML = pointCardHtml(p, { ...ctx, posted })
-    expect(document.querySelector('.tbtns a')?.getAttribute('href')).toBe('https://github.com/x#r1001')
+    document.body.innerHTML = pointCardHtml(first, { ...ctx, state, posted })
+    expect(document.querySelector('.pill.status.posted')?.textContent).toBe('posted')
+    expect(document.querySelector('.p-summary a')?.getAttribute('href')).toBe('https://github.com/x#r1001')
     expect(document.querySelector('.tbtns a')?.textContent).toBe('view comment')
     expect(document.querySelector('[data-act="point-post"]')).toBeNull()
-    document.body.innerHTML = pointCardHtml(p, ctx)
+    const second = points[1]
+    if (second === undefined) throw new Error('no point')
+    document.body.innerHTML = pointCardHtml(second, { ...ctx, state, posted })
+    expect(document.querySelector('.p-summary')?.textContent).toBe('Sent to GitHub with your review')
+    expect(document.querySelector('.tbtns a')).toBeNull()
+    document.body.innerHTML = pointCardHtml(first, ctx)
     expect(document.querySelector('.tbtns a')).toBeNull()
     expect(document.querySelector('[data-act="point-post"]')?.textContent).toBe('post to github')
   })
 
-  it('leaves a page that holds none of its parts alone', () => {
-    document.body.innerHTML = '<div data-point="unknown"></div>'
-    applyPointStates(document, artifact.points, dismissed, ctx)
-    expect(document.querySelector('[data-point="unknown"]')?.hasAttribute('hidden')).toBe(false)
-  })
-
-  it.each([true, false])('preserves the dismissed list expanded state (%s) when state updates', expanded => {
-    document.body.innerHTML = dismissedListHtml(artifact.points, dismissed, ctx)
-    const toggle = document.querySelector('[data-act="show-dismissed"]')
-    toggle?.setAttribute('aria-expanded', String(expanded))
-    if (toggle) {
-      toggle.textContent = expanded ? 'hide' : 'show'
+  it('keeps a dismissed point in place, collapsed, with the way to restore it', () => {
+    document.body.innerHTML =
+      `<ol>${pointCardHtml(first, { ...ctx, state: dismissed })}</ol>` +
+      `<table><tbody>${pointRowHtml(first, { ...ctx, state: dismissed })}</tbody></table>`
+    for (const el of document.querySelectorAll('[data-point]')) {
+      expect(el.hasAttribute('hidden')).toBe(false)
+      expect(el.getAttribute('data-status')).toBe('dismissed')
+      expect(el.classList.contains('is-handled')).toBe(true)
+      expect(el.hasAttribute('data-expanded')).toBe(false)
+      expect(el.querySelector('.p-summary')?.textContent).toContain('You dismissed this point')
+      expect([...el.querySelectorAll('.tbtns button')].map(b => b.getAttribute('data-act'))).toEqual([
+        null,
+        'point-restore',
+      ])
     }
-    document.querySelector('ol.dismissed')?.toggleAttribute('hidden', !expanded)
-
-    applyPointStates(document, artifact.points, dismissed, ctx)
-
-    expect(document.querySelector('[data-act="show-dismissed"]')?.getAttribute('aria-expanded')).toBe(
-      String(expanded)
-    )
-    expect(document.querySelector('[data-act="show-dismissed"]')?.textContent).toBe(
-      expanded ? 'hide' : 'show'
-    )
-    expect(document.querySelector('ol.dismissed')?.hasAttribute('hidden')).toBe(!expanded)
-    expect(document.querySelector('ol.dismissed li')?.getAttribute('data-fingerprint')).toBe('fp-1')
+    // An open point is drawn whole and has nothing to expand.
+    document.body.innerHTML = `<ol>${pointCardHtml(first, ctx)}</ol>`
+    expect(document.querySelector('.is-handled, [data-act="point-expand"], .p-summary')).toBeNull()
   })
 
-  it('counts the active points of each layer and redraws the summary', () => {
-    const first = points[0]
+  it('expands and collapses a point acted on, never an open one', () => {
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: dismissed })}</ol>`
+    const el = document.querySelector('li.finding')
+    const toggle = el?.querySelector('[data-act="point-expand"]')
+    if (el === null || toggle === null || toggle === undefined) throw new Error('no point')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    setPointExpanded(el)
+    expect(el.hasAttribute('data-expanded')).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.textContent).toBe('hide')
+    expect(toggle.getAttribute('aria-label')).toBe(`Hide the point: ${first.title}`)
+    setPointExpanded(el)
+    expect(el.hasAttribute('data-expanded')).toBe(false)
+    expect(toggle.textContent).toBe('show')
+    document.body.innerHTML = `<ol>${pointCardHtml(first, ctx)}</ol>`
+    const open = document.querySelector('li.finding')
+    if (open === null) throw new Error('no point')
+    setPointExpanded(open, true)
+    expect(open.hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('leaves a page that holds none of its parts alone', () => {
+    document.body.innerHTML = '<div data-point="unknown" data-status="open"></div>'
+    applyPointStates(document, artifact.points, dismissed, ctx)
+    expect(document.querySelector('[data-point="unknown"]')?.getAttribute('data-status')).toBe('open')
+  })
+
+  it.each([true, false])(
+    'keeps the switch that hides the points acted on (%s) when state updates',
+    hiding => {
+      document.body.innerHTML = pointStatusesHtml(artifact.points, dismissed, hiding)
+      applyPointStates(document, artifact.points, dismissed, ctx)
+      expect(hidingHandled(document)).toBe(hiding)
+      expect(document.querySelector('.point-statuses')?.textContent).toContain('1 dismissed')
+    }
+  )
+
+  it('counts the open points of each layer and collapses a point once it is acted on', () => {
     document.body.innerHTML =
       `<span class="sevsum">${sevsumHtml(artifact.points, artifact.layers)}</span>` +
       '<section data-layer="run-path"><span class="point-count">1</span>' +
-      `<ol>${first === undefined ? '' : pointCardHtml(first, ctx)}</ol></section>` +
-      dismissedListHtml(artifact.points, BASE, ctx)
+      `<ol>${pointCardHtml(first, ctx)}</ol></section>` +
+      pointStatusesHtml(artifact.points, BASE)
     applyPointStates(document, artifact.points, dismissed, ctx)
     expect(document.querySelector('.point-count')?.textContent).toBe('0')
-    expect(document.querySelector('li.finding')?.hasAttribute('hidden')).toBe(true)
-    expect(document.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
+    const card = document.querySelector('li.finding')
+    expect(card?.hasAttribute('hidden')).toBe(false)
+    expect(card?.getAttribute('data-status')).toBe('dismissed')
+    expect(document.querySelector('.point-statuses')?.textContent).toContain('1 dismissed')
   })
 
-  it('offers both ways to send a point, and says so once it is waiting in the review', () => {
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
+  it('offers both ways to send a point, and shows its draft once it is waiting in the review', () => {
     const state = emptyState('2026-09-10T12:00:00.000Z')
-    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state })}</ol>`
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state })}</ol>`
     // A point's text is written in advance, so it keeps both ways out even with a review open.
     expect([...document.querySelectorAll('li.finding button.cmd')].map(b => b.textContent)).toEqual([
       'copy',
@@ -210,50 +264,100 @@ describe('dismissed points', () => {
       'add to review',
       'dismiss',
     ])
-    expect(queuedFor(p, { state })).toBe(false)
 
-    const queued = { ...state, pending: [draftFor(p)] }
-    expect(queuedFor(p, { state: queued })).toBe(true)
-    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state: queued })}</ol>`
-    const marker = document.querySelector('li.finding .pill.pending')
-    expect(marker?.textContent).toBe('in your review')
-    // Neither way out is offered again while it waits: the draft itself is edited on the diff.
+    const queued = { ...state, pending: [draftFor(first)] }
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: queued })}</ol>`
+    expect(document.querySelector('li.finding .f-title .pill.pending.queued')?.textContent).toBe(
+      'in your review'
+    )
+    expect(document.querySelector('.p-summary')?.textContent).toBe('Waits in your review · not on GitHub yet')
+    // The draft itself is shown under the point, with its own edit and delete.
+    const draft = document.querySelector('.p-outcome .pending-cmt')
+    expect(draft?.getAttribute('data-pending-id')).toBe('p1')
+    expect([...(draft?.querySelectorAll('button') ?? [])].map(b => b.getAttribute('data-act'))).toEqual([
+      'pending-edit',
+      'pending-delete',
+    ])
+    // Neither way out is offered again while it waits.
     expect(document.querySelector('[data-act="point-post"]')).toBeNull()
     expect(document.querySelector('[data-act="point-queue"]')).toBeNull()
+
+    expect(document.querySelector('.p-draft-where')?.textContent).toBe('src/app.ts:4 · the point’s text')
   })
 
-  it('draws a point that is already posted as its link, whatever the review holds', () => {
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
-    const state = { ...emptyState('2026-09-10T12:00:00.000Z'), pending: [draftFor(p)] }
-    const posted = new Map([[p.fingerprint, 'https://github.com/x#r1001']])
-    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state, posted })}</ol>`
-    expect(document.querySelector('.tbtns a')?.textContent).toBe('view comment')
-  })
-
-  it('redraws a point only when it joins the review or leaves it', () => {
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
+  it('lists every draft that acts on a point, a comment AI Chat proposed about it too', () => {
     const state = emptyState('2026-09-10T12:00:00.000Z')
-    document.body.innerHTML = `<ol>${pointCardHtml(p, { ...ctx, state })}</ol>`
+    // The agent's comment sits on another line than the point's, and keeps its own identity.
+    const proposal = {
+      ...draftFor(first),
+      id: 'p2',
+      path: 'src/new.ts',
+      line: 2,
+      body: 'Cap the range.',
+      proposalFingerprint: 'proposal:1',
+    }
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: { ...state, pending: [proposal] } })}</ol>`
+    expect(pointStatus(first, { ...state, pending: [proposal] })).toBe('queued')
+    expect(document.querySelector('.p-summary')?.textContent).toBe(
+      'Waits in your review at src/new.ts:2 · not on GitHub yet'
+    )
+    expect(document.querySelector('.p-draft-where')?.textContent).toBe('src/new.ts:2 · proposed by AI Chat')
+
+    const both = { ...state, pending: [draftFor(first), proposal] }
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: both })}</ol>`
+    expect(document.querySelector('.p-summary')?.textContent).toBe(
+      '2 drafts wait in your review · not on GitHub yet'
+    )
+    expect(document.querySelector('.p-outcome .lbl')?.textContent).toBe('Your drafts')
+    expect(
+      [...document.querySelectorAll('.p-outcome .pending-cmt')].map(d => d.getAttribute('data-pending-id'))
+    ).toEqual(['p1', 'p2'])
+  })
+
+  it('draws a point that is already posted as its link, with the drafts that still wait', () => {
+    const state = {
+      ...emptyState('2026-09-10T12:00:00.000Z'),
+      pending: [draftFor(first)],
+      posted: [{ commentId: 1001, pointFingerprint: first.fingerprint, at: BASE.updatedAt }],
+    }
+    const posted = new Map([[first.fingerprint, 'https://github.com/x#r1001']])
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state, posted })}</ol>`
+    expect(document.querySelector('li.finding')?.getAttribute('data-status')).toBe('posted')
+    expect(document.querySelector('.tbtns a')?.textContent).toBe('view comment')
+    expect(document.querySelector('.p-outcome .pending-cmt')?.getAttribute('data-pending-id')).toBe('p1')
+    // The row in the diff leaves the draft to its own row, as for a queued point.
+    document.body.innerHTML = `<table><tbody>${pointRowHtml(first, { ...ctx, state, posted })}</tbody></table>`
+    expect(document.querySelector('.p-outcome')).toBeNull()
+  })
+
+  it('redraws a point only when what it shows changes, keeping it expanded while its status holds', () => {
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state })}</ol>`
     const el = document.querySelector('li.finding')
     if (el === null) {
       throw new Error('no point element')
     }
-    // Nothing changed, so the commands are left exactly as they are.
-    expect(refreshPointCommands(el, p, { state })).toBe(false)
+    // Nothing changed, so the point is left exactly as it is.
+    expect(refreshPoint(el, first, { ...ctx, state })).toBe(false)
 
-    const queued = { ...state, pending: [draftFor(p)] }
-    expect(refreshPointCommands(el, p, { state: queued })).toBe(true)
-    expect(el.querySelector('.pill.pending')?.textContent).toBe('in your review')
-    expect(refreshPointCommands(el, p, { state: queued })).toBe(false)
+    const queued = { ...state, pending: [draftFor(first)] }
+    expect(refreshPoint(el, first, { ...ctx, state: queued })).toBe(true)
+    expect(el.getAttribute('data-status')).toBe('queued')
+    expect(el.hasAttribute('data-expanded')).toBe(false)
+    expect(refreshPoint(el, first, { ...ctx, state: queued })).toBe(false)
 
-    // Taking the draft away puts both commands back.
-    expect(refreshPointCommands(el, p, { state })).toBe(true)
+    // An edit to the draft redraws it, and the reader's expanded view stays.
+    setPointExpanded(el, true)
+    const edited = { ...state, pending: [{ ...draftFor(first), body: 'my words' }] }
+    expect(refreshPoint(el, first, { ...ctx, state: edited })).toBe(true)
+    expect(el.hasAttribute('data-expanded')).toBe(true)
+    expect(el.querySelector('[data-act="point-expand"]')?.textContent).toBe('hide')
+    expect(el.querySelector('.pending-cmt .prose')?.textContent).toContain('my words')
+
+    // Taking the draft away opens the point again, with every command back.
+    expect(refreshPoint(el, first, { ...ctx, state })).toBe(true)
+    expect(el.classList.contains('is-handled')).toBe(false)
+    expect(el.hasAttribute('data-expanded')).toBe(false)
     expect([...el.querySelectorAll('button.cmd')].map(b => b.getAttribute('data-act'))).toEqual([
       null,
       'point-post',
@@ -262,18 +366,39 @@ describe('dismissed points', () => {
     ])
   })
 
+  it('moves the focus from the command used to the toggle that now stands for the point', () => {
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state })}</ol>`
+    const el = document.querySelector('li.finding')
+    const dismiss = el?.querySelector('[data-act="point-dismiss"]')
+    if (el === null || !(dismiss instanceof HTMLElement)) throw new Error('no point')
+    dismiss.focus()
+    refreshPoint(el, first, { ...ctx, state: dismissed })
+    expect(document.activeElement?.getAttribute('data-act')).toBe('point-expand')
+  })
+
+  it('redraws a row in the diff in place', () => {
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    document.body.innerHTML = `<table><tbody>${pointRowHtml(first, { ...ctx, state })}</tbody></table>`
+    const row = document.querySelector('tr.ifind')
+    if (row === null) throw new Error('no row')
+    expect(refreshPoint(row, first, { ...ctx, state: dismissed })).toBe(true)
+    expect(document.querySelector('tr.ifind')).toBe(row)
+    expect(row.classList.contains('decide')).toBe(true)
+    expect(row.getAttribute('data-status')).toBe('dismissed')
+  })
+
   it('puts a point into and out of the review wherever it is drawn', () => {
-    const p = points[0]
-    if (!p) {
-      throw new Error('no point')
-    }
     const state = emptyState('2026-09-10T12:00:00.000Z')
     document.body.innerHTML =
-      `<ol class="findings">${pointCardHtml(p, { ...ctx, state })}</ol>` +
-      `<table><tbody>${pointRowHtml(p, { ...ctx, state })}</tbody></table>`
-    const queued = { ...state, pending: [draftFor(p)] }
+      `<ol class="findings">${pointCardHtml(first, { ...ctx, state })}</ol>` +
+      `<table><tbody>${pointRowHtml(first, { ...ctx, state })}</tbody></table>`
+    const queued = { ...state, pending: [draftFor(first)] }
     applyPointStates(document.body, points, queued, ctx)
     expect(document.querySelectorAll('.pill.pending.queued').length).toBe(2)
+    // The card shows the draft; the row leaves it to the draft's own row right under it.
+    expect(document.querySelector('li.finding .p-outcome .pending-cmt')).not.toBeNull()
+    expect(document.querySelector('tr.ifind .pending-cmt')).toBeNull()
     applyPointStates(document.body, points, state, ctx)
     expect(document.querySelectorAll('.pill.pending.queued').length).toBe(0)
     expect(document.querySelectorAll('[data-act="point-queue"]').length).toBe(2)

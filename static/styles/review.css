@@ -354,6 +354,63 @@
 .findings .tbtns {
   margin-top: 6px;
 }
+/* A point already acted on stays where it is, collapsed to its title and one line, until the
+   reader shows the rest. `[data-point]` outweighs the skins' own `.tbtns` display. */
+[data-point].is-handled:not([data-expanded]) :is(.prose, .p-outcome, .tbtns, .settle-box),
+.is-handled[data-expanded] .p-summary {
+  display: none;
+}
+.findings li.is-handled:not([data-expanded]) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.is-handled:not([data-expanded]) .f-title {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.is-handled:not([data-expanded]) .p-title {
+  color: var(--fg-muted);
+}
+.f-title .p-toggle {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+}
+.p-summary {
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.p-outcome {
+  margin-top: 8px;
+}
+.p-draft-where {
+  margin: 6px 0 4px;
+}
+.pill.status {
+  border-color: currentcolor;
+}
+.pill.status.posted {
+  color: var(--ok);
+}
+.pill.status.resolved {
+  color: var(--accent);
+}
+.pill.status.dismissed {
+  color: var(--fg-muted);
+}
+/* The overview's switch takes every point acted on off the page, wherever it is drawn, except one
+   whose reason box is open. */
+body:has(.point-statuses [aria-pressed='true']) .is-handled:not(:has(.settle-box)) {
+  display: none;
+}
+.point-statuses {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
 .pr-desc {
   border-top: 1px solid var(--ink);
 }

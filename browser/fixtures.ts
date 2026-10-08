@@ -50,6 +50,7 @@ const POSTED_INLINE = ghPost(body => ({
 export const test = base.extend<{
   reviewUrl: string
   selfReviewUrl: string
+  noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
   chatServer: async ({ page }, use) => {
@@ -71,6 +72,21 @@ export const test = base.extend<{
     })
     for (const stop of stops) {
       await stop()
+    }
+  },
+  /** PR #42 with AI Chat turned off, so the side pane holds the review alone. */
+  noChatUrl: async ({ page }, use) => {
+    const server = await startServer(page, {
+      projectConfig: {
+        config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
+        warnings: [],
+        source: null,
+      },
+    })
+    try {
+      await use(server.url)
+    } finally {
+      await server.stop()
     }
   },
   reviewUrl: async ({ page }, use) => {

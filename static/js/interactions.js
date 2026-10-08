@@ -13,7 +13,6 @@ import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
 import { runCommand, runControl, showCommandError, toast } from './commands.js'
-import { replacePostButton } from './comment-link.js'
 import {
   applyCapabilityGating,
   closeComposers,
@@ -30,6 +29,7 @@ import {
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
 import { conversationHtml } from './overview.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
+import { hostLabel } from './host.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
@@ -53,8 +53,16 @@ import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
 import { inHiddenSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
-import { applyPointStates, openPoints, pointToMarkdown, postedUrls } from './points.js'
-import { selfReviewActions, setSettled, toggleList } from './self-review.js'
+import { refreshReviewPanel } from './review-panel.js'
+import {
+  applyPointStates,
+  openPoints,
+  pointStatusesHtml,
+  pointToMarkdown,
+  postedUrls,
+  setPointExpanded,
+} from './points.js'
+import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -233,6 +241,7 @@ export function padUnderStickyBar(doc, bar) {
  *   chat?: () => ChatHandle | null,
  *   quickQuestions?: () => { openFor: (el: HTMLElement) => void } | null,
  *   openSettings?: (el: HTMLElement) => void,
+ *   openReview?: () => void,
  * }} [opts]
  */
 export function wireReview(root, session, opts = {}) {
@@ -353,11 +362,14 @@ export function wireReview(root, session, opts = {}) {
       }
     }
     refreshPendingBar(root, state, session.headSha)
+    refreshReviewPanel(root, state, { headSha: session.headSha, points: session.artifact.points })
     refreshComposerCommands(root, state.pending.length > 0)
     opts.chat?.()?.refreshProposed()
     applyCapabilityGating(root, session.capabilities)
   }
   const unsubscribe = session.subscribe(onState)
+  // The review tab is drawn from the state too; the rest of the page came drawn with it.
+  refreshReviewPanel(root, session.state, { headSha: session.headSha, points: session.artifact.points })
 
   /** @param {import('./contract-types.js').PostCommentInput} input */
   const postComment = async input => {
@@ -659,7 +671,8 @@ export function wireReview(root, session, opts = {}) {
     void runCommand(
       button,
       async () => {
-        const answer = await postComment({
+        // The answer's state marks the point posted, so it collapses with its link wherever it is.
+        await postComment({
           kind: 'inline',
           path: point.path,
           line: point.line,
@@ -667,13 +680,6 @@ export function wireReview(root, session, opts = {}) {
           body: pointToMarkdown(point),
           pointFingerprint: point.fingerprint,
         })
-        for (const control of Array.from(
-          root.querySelectorAll(`[data-act="point-post"][data-point="${cssEscape(point.id)}"]`)
-        )) {
-          if (control instanceof HTMLElement) {
-            replacePostButton(control, answer.comment.url)
-          }
-        }
         toast(root, 'attention point posted to github')
       },
       { pendingLabel: 'posting…' }
@@ -710,10 +716,20 @@ export function wireReview(root, session, opts = {}) {
 
   /** @param {HTMLElement} button @param {string} fingerprint @param {boolean} dismissed */
   const setDismissed = (button, fingerprint, dismissed) => {
+    const point = button.closest('[data-point]')
     void runCommand(
       button,
       async () => {
-        await session.setDismissed(fingerprint, dismissed)
+        try {
+          await session.setDismissed(fingerprint, dismissed)
+        } catch (err) {
+          // The page showed the change before the server answered, which drew the point again:
+          // the reason goes next to the command as it is drawn now.
+          const now = point?.querySelector(`[data-act="${button.getAttribute('data-act')}"]`)
+          if (!(now instanceof HTMLElement) || now === button) throw err
+          showCommandError(now, err instanceof Error ? err.message : String(err))
+          return
+        }
         toast(root, dismissed ? 'attention point dismissed' : 'attention point restored')
       },
       { pendingLabel: dismissed ? 'dismissing…' : 'restoring…' }
@@ -768,10 +784,6 @@ export function wireReview(root, session, opts = {}) {
           body === '' ? undefined : body
         )
         if (editor) editor.defaultValue = submittedText
-        showSignoffResult(dialog, review)
-        for (const warning of warnings) {
-          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
-        }
         const verdict =
           review.state === 'APPROVED'
             ? 'approved'
@@ -780,8 +792,19 @@ export function wireReview(root, session, opts = {}) {
               : 'review posted'
         toast(
           root,
-          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
+          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
+          { link: { url: review.url, text: `see it on ${hostLabel()}` } }
         )
+        // The page behind already shows what the review changed, so the dialog gets out of the way.
+        // A warning is the one thing still to read there.
+        if (warnings.length === 0) {
+          dialog.close()
+          return
+        }
+        showSignoffResult(dialog, review)
+        for (const warning of warnings) {
+          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
+        }
       },
       { pendingLabel: 'posting…' }
     )
@@ -918,7 +941,23 @@ export function wireReview(root, session, opts = {}) {
     },
     'point-dismiss': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', true),
     'point-restore': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', false),
-    'show-dismissed': el => toggleList(el, '.dismissed-list'),
+    'point-expand': el => {
+      const point = el.closest('[data-point]')
+      if (point !== null) {
+        setPointExpanded(point)
+      }
+    },
+    'toggle-handled': el => {
+      // The page hides the points acted on while this switch is pressed; see `.is-handled` in CSS.
+      const line = el.closest('.point-statuses')
+      const hiding = el.getAttribute('aria-pressed') !== 'true'
+      const next = nodeFrom(doc, pointStatusesHtml(session.artifact.points, session.state, hiding))
+      if (line !== null && next !== null) {
+        line.replaceWith(next)
+        const toggle = next.querySelector('[data-act="toggle-handled"]')
+        if (toggle instanceof HTMLElement) toggle.focus()
+      }
+    },
     ...selfReviewActions(session, message => toast(root, message)),
     'point-post': el => {
       const point = pointById(el.getAttribute('data-point') ?? '')
@@ -993,6 +1032,9 @@ export function wireReview(root, session, opts = {}) {
       if (id !== null) {
         deletePending(el, id)
       }
+    },
+    'show-review': () => {
+      opts.openReview?.()
     },
     'pending-finish': el => {
       // Finishing a review is the same dialog the sign-off commands open; a review being written
@@ -1220,7 +1262,13 @@ export function wireReview(root, session, opts = {}) {
         stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
         break
       case 'toggle': {
-        // A point in focus stands for the file card that holds its line, not the layer it is listed in.
+        // A point already acted on opens or collapses itself.
+        const handled = focused()?.closest('[data-point].is-handled')
+        if (handled !== null && handled !== undefined) {
+          setPointExpanded(handled)
+          break
+        }
+        // An open point in focus stands for the file card that holds its line, not the layer it is listed in.
         const point = focusedPoint(points)
         const el = point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
         if (el !== null) {
@@ -1322,6 +1370,41 @@ export function wireReview(root, session, opts = {}) {
 
   return {
     /**
+     * What the chat's proposed-resolution card does: resolve the point with the agent's reason as
+     * it stands, posting nothing, or open the point's own reason box with it, where the reason can
+     * change and also go out as a comment on the point's line. The card offers both only where the
+     * point itself offers resolve, so the box opens under the point's own resolve command.
+     * @param {'save' | 'edit'} what
+     * @param {import('./proposed-comment.js').ProposedResolution} resolution
+     * @param {HTMLElement} el
+     */
+    onProposedResolution(what, resolution, el) {
+      const { fingerprint } = resolution.point
+      if (what === 'save') {
+        const notify = /** @param {string} message */ message => toast(root, message)
+        void resolvePoint(session, el, fingerprint, { reason: resolution.reason, comment: false }, notify)
+        return
+      }
+      const fp = cssEscape(fingerprint)
+      const command =
+        root.querySelector(`li.finding[data-fingerprint="${fp}"] [data-act="point-settle"]`) ??
+        root.querySelector(`tr.ifind[data-fingerprint="${fp}"] [data-act="point-settle"]`)
+      const point = session.artifact.points.find(p => p.fingerprint === fingerprint)
+      if (command === null || point === undefined) {
+        // A point of the Other layer whose diff is not drawn yet has no commands on the page.
+        showCommandError(el, 'that point is not on this page')
+        return
+      }
+      const holder = command.closest('[data-point]')
+      if (holder !== null) {
+        setPointExpanded(holder, true)
+      }
+      // Scrolling first opens a collapsed card or a hidden layer around the point, so the box can
+      // take the focus.
+      scrollIntoViewSafe(command)
+      openSettleBox(command, point, session, resolution.reason)
+    },
+    /**
      * What the chat's proposed-comment card does: post it straight away, add it to the pending
      * review, or open the same composer the rest of the page uses, prefilled.
      * @param {import('./chat.js').ProposedAct} what
@@ -1348,6 +1431,7 @@ export function wireReview(root, session, opts = {}) {
           ...(comment.proposalFingerprint === undefined
             ? {}
             : { proposalFingerprint: comment.proposalFingerprint }),
+          ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
         }
         if (comment.startLine !== undefined && comment.startLine !== comment.line) {
           options.startLine = comment.startLine
@@ -1368,6 +1452,8 @@ export function wireReview(root, session, opts = {}) {
         ...(comment.proposalFingerprint === undefined
           ? {}
           : { proposalFingerprint: comment.proposalFingerprint }),
+        // A comment the agent tied to an attention point acts on it, as the point's own text would.
+        ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
         ...(comment.startLine === undefined || comment.startLine === comment.line
           ? {}
           : { startLine: comment.startLine }),

@@ -103,6 +103,8 @@ export function createReviewSession(options) {
   /** @type {PrState | null} */
   let newestState = null
   let newestRev = 0
+  /** The commit the marks on this page are keyed to, which the server keys every mark write to. */
+  const marksSha = options.canvasSha ?? options.headSha
   /** The write count of the last answer this page took. */
   let takenRev = 0
 
@@ -145,12 +147,22 @@ export function createReviewSession(options) {
     }
   }
 
-  /** Takes the newest answer once every change has come back, unless an older one arrived. */
+  /**
+   * Takes the newest answer once every change has come back, unless an older one arrived.
+   *
+   * Every write answers with the marks as stored. Stored marks keyed to another commit describe
+   * an earlier canvas: the page was drawn with the marks fitted to its own (`stateForCanvas` and
+   * `marksForCanvas` on the server), so it keeps those until a mark write keys the stored ones to
+   * its canvas. Taking them would mark, and collapse, a layer the page shows as unread.
+   */
   const settle = () => {
     if (inFlight > 0 || newestState === null) {
       return
     }
-    const next = newestState
+    const next =
+      newestState.reviewedCanvasSha === marksSha
+        ? newestState
+        : { ...newestState, reviewed: state.reviewed, reviewedCanvasSha: state.reviewedCanvasSha }
     newestState = null
     newestRev = 0
     if ((next.rev ?? 0) >= takenRev) {

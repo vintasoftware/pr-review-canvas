@@ -72,7 +72,7 @@ for (const receipt of ['available', 'unavailable']) {
     await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
     await closeChat()
     await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
-    await page.locator('[data-act="pending-delete"]').click()
+    await page.locator('tr.pending-row [data-act="pending-delete"]').click()
     await openChat()
     await expect(card.locator('[data-act="proposed-queue"]')).toBeVisible()
     await card.locator('[data-act="proposed-queue"]').click()
@@ -83,10 +83,16 @@ for (const receipt of ['available', 'unavailable']) {
     await expect(page.locator('.proposed').nth(2)).toContainText('in your review')
     await expect(page.locator('.proposed').nth(3)).toContainText('in your review')
     await closeChat()
-    await page.locator('[data-act="pending-finish"]').click()
+    await page.locator('.pending-bar [data-act="pending-finish"]').click()
     await page.locator('[data-act="signoff-post"]').click()
-    await expect(page.locator('.signoff-result')).toContainText('Posted')
-    await page.locator('[data-act="signoff-close"]').click()
+    await expect(page.locator('.toast')).toContainText('review posted with 2 comments')
+    if (receipt === 'available') {
+      await expect(page.locator('#signoff-dialog')).toBeHidden()
+    } else {
+      // The receipt could not be read: the dialog stays open with the warning.
+      await expect(page.locator('.signoff-result')).toContainText('could not be loaded')
+      await page.locator('[data-act="signoff-close"]').click()
+    }
     await openChat()
     if (receipt === 'available') {
       await expect(card.locator('a[href$="discussion_r8001"]')).toHaveCount(1)
@@ -162,7 +168,7 @@ test('settling with sharing disabled and the reason unchecked stays local across
   await point.locator('[data-act="settle-save"]').click()
   await expect(page.locator('.toast')).toContainText('canvas comment is off')
   await page.reload()
-  await expect(point).toBeHidden()
+  await expect(point).toHaveAttribute('data-status', 'resolved')
   expect((await ctx.canvases.readArtifact(syntheticArtifact().pr.headSha))?.settled?.['fp-1']?.reason).toBe(
     'This decision stays in the local canvas.'
   )
@@ -262,7 +268,7 @@ test('a failed settlement preserves the reason for retry', async ({ page, selfRe
   await expect(point.locator('[data-act="settle-save"]')).toBeEnabled()
   await page.unroute('**/api/prs/42/points/fp-1/settled')
   await point.locator('[data-act="settle-save"]').click()
-  await expect(point).toBeHidden()
+  await expect(point).toHaveAttribute('data-status', 'resolved')
 })
 
 test('self-review offers dismiss as a personal hide that leaves every point unresolved', async ({
@@ -273,16 +279,18 @@ test('self-review offers dismiss as a personal hide that leaves every point unre
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await expect(card.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
   await card.locator('[data-act="point-dismiss"]').click()
-  await expect(card).toBeHidden()
-  const dismissed = page.locator('.dismissed-list')
-  await expect(dismissed.locator('.dismissed-line')).toContainText('1 dismissed')
+  await expect(card).toHaveAttribute('data-status', 'dismissed')
+  await expect(page.locator('.point-statuses')).toContainText('1 dismissed')
+  // The page shows the dismissal before the server saves it, so the reload waits for the save.
+  await expect(page.locator('.toast')).toHaveText('attention point dismissed')
   await page.reload()
-  await expect(card).toBeHidden()
+  await expect(card).toHaveAttribute('data-status', 'dismissed')
   await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
   await expect(page.locator('.self-review-note')).toContainText('1 point goes to the reviewer')
-  await dismissed.locator('[data-act="show-dismissed"]').click()
-  await dismissed.locator('[data-act="point-restore"]').click()
-  await expect(card).toBeVisible()
+  await card.locator('[data-act="point-expand"]').click()
+  await expect(card.getByRole('button', { name: 'resolve', exact: true })).toHaveCount(0)
+  await card.locator('[data-act="point-restore"]').click()
+  await expect(card).toHaveAttribute('data-status', 'open')
   await expect(card.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
 })
 

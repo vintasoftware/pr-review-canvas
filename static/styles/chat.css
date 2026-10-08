@@ -145,3 +145,105 @@ textarea {
   padding: 4px 10px;
   box-shadow: 2px 2px 0 var(--shadow);
 }
+
+/* ---- The side pane's tabs: AI Chat and the review being written ---- */
+.side-tabs {
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  padding: 0 14px 0 4px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--panel-2);
+}
+.side-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.side-tab[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--fg);
+}
+.side-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.side-tabs .chat-minimize {
+  align-self: center;
+}
+.review-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--warn);
+  color: var(--bg);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.review-count[data-empty] {
+  background: var(--line);
+  color: var(--fg-muted);
+}
+/* The review tab hides the chat's parts without unmounting them, so a draft message survives. */
+.chat[data-tab='review'] > :is(.chat-h, .transcript, .chat-composer) {
+  display: none;
+}
+/* No `overscroll-behavior: contain` here: a short list has nothing to scroll, and containing it
+   would swallow the wheel, so the page under the pane would not move either. */
+.review-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 16px;
+}
+.review-panel[hidden] {
+  display: none;
+}
+.review-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.review-head p {
+  margin: 0;
+  font-size: 13px;
+}
+.review-path {
+  margin: 14px 0 6px;
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+.review-drafts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.review-where {
+  margin: 0 0 4px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.review-empty {
+  font-size: 13px;
+}
+/* Without AI Chat the launcher stands for the review alone, and only while there is one. */
+.review-launcher::before {
+  display: none;
+}
+.review-launcher[data-empty] {
+  display: none;
+}

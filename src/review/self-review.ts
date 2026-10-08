@@ -4,6 +4,7 @@
 import type { GenerationContext } from '../contract/generation-context.js'
 import type { Point, Pr, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
+import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
 import { fingerprint } from './normalize.js'
 
 type Level = (typeof POINT_LEVELS)[number]
@@ -91,6 +92,21 @@ export function settlementCommentBody(
  */
 export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean {
   return login !== null && login.toLowerCase() === pr.author.toLowerCase()
+}
+
+/**
+ * Whether the reader may resolve the attention points of the canvas on screen: it is their own
+ * work (local work always is, a pull request when they wrote it), and the canvas describes the
+ * current head, as the settle route requires. The page offers resolve to this reader, and AI Chat
+ * proposes resolutions to them; neither does for anyone else.
+ */
+export function readerResolves(
+  key: ReviewKey,
+  login: string | null,
+  pr: Pick<Pr, 'author'>,
+  canvasCurrent: boolean
+): boolean {
+  return canvasCurrent && (isLocalKey(key) || isAuthor(login, pr))
 }
 
 /**

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures.js'
 
-test('keeps the dismissed list open when a pending save completes', async ({ page, reviewUrl }) => {
+test('keeps a dismissed point expanded when its save completes', async ({ page, reviewUrl }) => {
   let releaseSave = () => {}
   const saveReleased = new Promise<void>(resolve => {
     releaseSave = resolve
@@ -11,19 +11,21 @@ test('keeps the dismissed list open when a pending save completes', async ({ pag
   })
   try {
     await page.goto(reviewUrl)
-    await page.locator('section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-dismiss"]').click()
-    const dismissed = page.locator('.dismissed-list')
-    const toggle = dismissed.locator('[data-act="show-dismissed"]')
+    const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+    await card.locator('[data-act="point-dismiss"]').click()
+    // The page shows the dismissal before the server answers.
+    await expect(card).toHaveAttribute('data-status', 'dismissed')
+    const toggle = card.locator('[data-act="point-expand"]')
     await toggle.click()
-    await expect(dismissed.locator('li.finding')).toBeVisible()
+    await expect(card.locator('.prose')).toBeVisible()
 
     releaseSave()
     await expect(page.locator('.toast')).toHaveText('attention point dismissed')
-    await expect(dismissed.locator('li.finding')).toBeVisible()
+    await expect(card.locator('.prose')).toBeVisible()
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await expect(toggle).toHaveText('hide')
     await toggle.click()
-    await expect(dismissed.locator('li.finding')).toBeHidden()
+    await expect(card.locator('.prose')).toBeHidden()
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   } finally {
     releaseSave()
@@ -41,25 +43,36 @@ test('dismisses a point everywhere, keeps it dismissed after reload, and restore
   await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
   await expect(inline).toBeVisible()
   await card.locator('[data-act="point-dismiss"]').click()
-  await expect(card).toBeHidden()
-  await expect(inline).toBeHidden()
+  // Both stay where they are, collapsed to the title and one line.
+  for (const el of [card, inline]) {
+    await expect(el).toHaveAttribute('data-status', 'dismissed')
+    await expect(el.locator('.prose')).toBeHidden()
+    await expect(el.locator('.p-summary')).toContainText('You dismissed this point')
+  }
   await expect(page.locator('.toast')).toHaveText('attention point dismissed')
   await expect(page.locator('.toast')).toBeHidden({ timeout: 7000 })
 
   await page.reload()
-  await expect(page.locator('.dismissed-line')).toContainText('1 dismissed')
+  await expect(page.locator('.point-statuses')).toContainText('1 dismissed')
+  await expect(card).toHaveAttribute('data-status', 'dismissed')
+  await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
+  await expect(inline).toHaveAttribute('data-status', 'dismissed')
+
+  // The overview's switch takes the points acted on off the page, and brings them back.
+  const hide = page.locator('[data-act="toggle-handled"]')
+  await hide.click()
   await expect(card).toBeHidden()
-  await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
-  await expect(inline).toHaveCount(1)
   await expect(inline).toBeHidden()
-  const dismissed = page.locator('.dismissed-list')
-  await dismissed.locator('[data-act="show-dismissed"]').click()
-  await expect(dismissed.locator('li.finding')).toBeVisible()
-  await dismissed.locator('[data-act="point-restore"]').click()
+  await hide.click()
   await expect(card).toBeVisible()
+
+  await card.locator('[data-act="point-expand"]').click()
+  await card.locator('[data-act="point-restore"]').click()
+  await expect(card).toHaveAttribute('data-status', 'open')
+  await expect(card.locator('.prose')).toBeVisible()
   await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
-  await expect(inline).toBeVisible()
-  await expect(dismissed).toBeHidden()
+  await expect(inline.locator('.prose')).toBeVisible()
+  await expect(page.locator('[data-act="toggle-handled"]')).toHaveCount(0)
 })
 
 test('collapses and reopens file and layer bodies', async ({ page, reviewUrl }) => {

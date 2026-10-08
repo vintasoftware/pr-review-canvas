@@ -3,6 +3,7 @@
 import type { Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
+import { pointRef } from '../../static/js/proposed-comment.js'
 
 /**
  * The agent's working directory for this turn: a review checkout at the reviewed commit, the
@@ -58,7 +59,7 @@ export function pointsMarkdown(artifact: ReviewArtifact): string {
     .map(p => {
       const settled = artifact.settled?.[p.fingerprint]
       const answer = settled === undefined ? '' : ` — settled by the author: ${settled.reason}`
-      return `- ${p.level} · ${p.kind} · for the ${p.audience} · ${p.title} (\`${p.path}:${p.line}\`)${answer}`
+      return `- ${p.level} · ${p.kind} · for the ${p.audience} · ${p.title} (\`${p.path}:${p.line}\`) · point \`${pointRef(p.fingerprint)}\`${answer}`
     })
     .join('\n')
 }
@@ -118,9 +119,26 @@ export function codeLocationMarkdown(paths: SeedPaths): string {
   }
 }
 
+/**
+ * Whether the reader may resolve attention points here, which decides the proposal that fits: the
+ * author on the current head's canvas resolves, everyone else comments. It claims nothing about
+ * who wrote the pull request when the answer is no, since an outdated canvas says no to its author.
+ */
+export function readerMarkdown(reader: { readerResolves: boolean }): string {
+  return reader.readerResolves
+    ? 'The reader wrote this pull request and may resolve its attention points: they answer them; they do not review them.'
+    : 'The reader may not resolve attention points here.'
+}
+
 /** Fills the template. Every token is replaced, so a template typo shows up as a missing section. */
-export function renderSeed(template: string, artifact: ReviewArtifact, paths: SeedPaths): string {
+export function renderSeed(
+  template: string,
+  artifact: ReviewArtifact,
+  paths: SeedPaths,
+  reader: { readerResolves: boolean }
+): string {
   const values: Record<string, string> = {
+    READER: readerMarkdown(reader),
     PR_META: prMetaMarkdown(artifact.pr),
     LAYERS: layersMarkdown(artifact),
     POINTS: pointsMarkdown(artifact),

@@ -7,12 +7,8 @@
 /** @typedef {import('./contract-types.js').Point} Point */
 /** @typedef {import('./contract-types.js').Settlement} Settlement */
 import { runCommand, showCommandError } from './commands.js'
-import { viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
-import { renderMarkdown } from './markdown.js'
-
-/** Mirrors SETTLEMENT_REASON_MAX in the contract. */
-export const REASON_MAX = 600
+import { SETTLEMENT_REASON_MAX } from './proposed-comment.js'
 
 let selfReview = false
 /** Whether a settlement also updates the canvas comment reviewers load. */
@@ -41,6 +37,11 @@ export function settlementOf(p) {
   return settled[p.fingerprint]
 }
 
+/** Whether the reader wrote the change, and so may resolve its points. */
+export function canSettle() {
+  return selfReview
+}
+
 /**
  * Who the point asks, as a pill. The author reads "yours" where a reviewer reads "author".
  * @param {Point} p
@@ -53,13 +54,11 @@ export function audiencePillHtml(p) {
 }
 
 /**
- * The settle command: for the author, on any point that is not settled yet.
+ * The settle command. `resolvable` in points.js decides which points carry it.
  * @param {Point} p
  */
 export function settleButtonHtml(p) {
-  return selfReview && settlementOf(p) === undefined
-    ? `<button class="cmd" type="button" data-act="point-settle" data-fingerprint="${esc(p.fingerprint)}">resolve</button>`
-    : ''
+  return `<button class="cmd" type="button" data-act="point-settle" data-fingerprint="${esc(p.fingerprint)}">resolve</button>`
 }
 
 /**
@@ -75,45 +74,21 @@ export function settleFormHtml(p, opts) {
   return (
     '<div class="composer-box settle-box">' +
     `<label class="lbl" for="settle-${esc(p.id)}">Why this needs no reviewer decision</label>` +
-    `<textarea id="settle-${esc(p.id)}" name="settle-reason" rows="3" maxlength="${REASON_MAX}" placeholder="e.g. nothing uses this API yet, so breaking it is fine"></textarea>` +
+    `<textarea id="settle-${esc(p.id)}" name="settle-reason" rows="3" maxlength="${SETTLEMENT_REASON_MAX}" placeholder="e.g. nothing uses this API yet, so breaking it is fine"></textarea>` +
     `${post}<span class="tbtns"><button class="cmd" type="button" data-act="settle-save" data-fingerprint="${esc(p.fingerprint)}">resolve</button>` +
     '<button class="cmd" type="button" data-act="settle-cancel">cancel</button></span></div>'
   )
 }
 
 /**
- * The settled points with their reasons, under the overview. Everyone sees it; the author can reopen
- * a point from it.
- * @param {ReadonlyArray<Point>} points
- * @param {{ paths: ReadonlySet<string> }} ctx
- * @param {boolean} [expanded]
+ * The reopen command: for the author, on a point they settled. Every reader sees the reason where
+ * the point stands; only the author can take it back.
+ * @param {Point} p
  */
-export function settledListHtml(points, ctx, expanded = false) {
-  const rows = points.flatMap(p => {
-    const settlement = settlementOf(p)
-    if (settlement === undefined) {
-      return []
-    }
-    const link = settlement.commentUrl === undefined ? '' : viewCommentHtml(settlement.commentUrl)
-    const reopen = selfReview
-      ? `<button class="cmd" type="button" data-act="point-unsettle" data-fingerprint="${esc(p.fingerprint)}">reopen</button>`
-      : ''
-    return [
-      `<li class="finding"><span class="sq ${p.level}" role="img" aria-label="${p.level}"></span><div>` +
-        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
-        '<h4 class="lbl">Author’s reason</h4>' +
-        `<div class="prose settled-reason">${renderMarkdown(settlement.reason, { paths: ctx.paths })}</div>` +
-        `<span class="tbtns">${link}${reopen}</span></div></li>`,
-    ]
-  })
-  if (rows.length === 0) {
-    return '<div class="settled-list" hidden></div>'
-  }
-  return (
-    '<div class="settled-list">' +
-    `<p class="muted dismissed-line">${rows.length} resolved by the author <button class="cmd" type="button" data-act="show-settled" aria-expanded="${expanded}">${expanded ? 'hide' : 'show'}</button></p>` +
-    `<ol class="findings settled"${expanded ? '' : ' hidden'}>${rows.join('')}</ol></div>`
-  )
+export function reopenButtonHtml(p) {
+  return selfReview && settlementOf(p) !== undefined
+    ? `<button class="cmd" type="button" data-act="point-unsettle" data-fingerprint="${esc(p.fingerprint)}">reopen</button>`
+    : ''
 }
 
 /**
@@ -164,8 +139,60 @@ export function sharingNote(sharing, done) {
 }
 
 /**
+ * Resolves a point with a reason, from the point's own box or from a reason AI Chat proposed, and
+ * says whether the shared canvas followed.
+ * @param {import('./review-session.js').ReviewSession} session
+ * @param {HTMLElement} el the command, which shows the request and its error
+ * @param {string} fingerprint
+ * @param {{ reason: string, comment: boolean }} input `comment` also posts the reason on the line
+ * @param {(message: string) => void} notify
+ * @returns {Promise<true | undefined>} true once the point is resolved
+ */
+export function resolvePoint(session, el, fingerprint, input, notify) {
+  return runCommand(
+    el,
+    async () => {
+      const answer = await session.settle(fingerprint, { settled: true, ...input })
+      notify(sharingNote(answer.sharing, 'point resolved'))
+      return /** @type {const} */ (true)
+    },
+    { pendingLabel: 'resolving…' }
+  )
+}
+
+/**
+ * Opens the reason box under the commands that hold `command`, or keeps the one open, fills it
+ * with `reason` when given, and puts the cursor in it. Posting the reason on the line is offered
+ * where a comment can go: a pull request, with a token that may comment.
+ * @param {Element} command an element inside the point's commands, its resolve command
+ * @param {Point} point
+ * @param {import('./review-session.js').ReviewSession} session
+ * @param {string} [reason]
+ * @returns {HTMLTextAreaElement | null}
+ */
+export function openSettleBox(command, point, session, reason) {
+  const commands = command.closest('.tbtns')
+  if (commands === null) {
+    return null
+  }
+  if (commands.nextElementSibling?.classList.contains('settle-box') !== true) {
+    const canPost = typeof session.prNumber === 'number' && session.capabilities.canComment !== false
+    commands.insertAdjacentHTML('afterend', settleFormHtml(point, { canPost }))
+  }
+  const text = commands.nextElementSibling?.querySelector('textarea')
+  if (!(text instanceof HTMLTextAreaElement)) {
+    return null
+  }
+  if (reason !== undefined) {
+    text.value = reason
+  }
+  text.focus()
+  return text
+}
+
+/**
  * The commands of self-review, for the page's one click handler: open the reason box, write the
- * settlement, close the box, reopen a settled point, and show the settled list.
+ * settlement, close the box, and reopen a settled point.
  * @param {import('./review-session.js').ReviewSession} session
  * @param {(message: string) => void} notify
  * @returns {Record<string, (el: HTMLElement) => void>}
@@ -179,15 +206,9 @@ export function selfReviewActions(session, notify) {
   return {
     'point-settle': el => {
       const point = pointOf(el)
-      const commands = el.closest('.tbtns')
-      if (point === undefined || commands === null) {
-        return
+      if (point !== undefined) {
+        openSettleBox(el, point, session)
       }
-      if (commands.nextElementSibling?.classList.contains('settle-box') !== true) {
-        const canPost = typeof session.prNumber === 'number' && session.capabilities.canComment !== false
-        commands.insertAdjacentHTML('afterend', settleFormHtml(point, { canPost }))
-      }
-      commands.nextElementSibling?.querySelector('textarea')?.focus()
     },
     'settle-cancel': el => {
       el.closest('.settle-box')?.remove()
@@ -200,16 +221,11 @@ export function selfReviewActions(session, notify) {
         showCommandError(el, 'write the reason first')
         return
       }
-      const input = { settled: true, reason, comment: box.querySelector('input')?.checked === true }
-      void runCommand(
-        el,
-        async () => {
-          const answer = await session.settle(point.fingerprint, input)
-          box.remove()
-          notify(sharingNote(answer.sharing, 'point resolved'))
-        },
-        { pendingLabel: 'resolving…' }
-      )
+      const comment = box.querySelector('input')?.checked === true
+      void resolvePoint(session, el, point.fingerprint, { reason, comment }, notify).then(done => {
+        if (done === true) box.remove()
+        return done
+      })
     },
     'point-unsettle': el => {
       const point = pointOf(el)
@@ -225,22 +241,5 @@ export function selfReviewActions(session, notify) {
         { pendingLabel: 'reopening…' }
       )
     },
-    'show-settled': el => toggleList(el, '.settled-list'),
   }
-}
-
-/**
- * Shows or hides the list under a "N settled" or "N dismissed" line.
- * @param {HTMLElement} button
- * @param {string} host the list's container
- */
-export function toggleList(button, host) {
-  const list = button.closest(host)?.querySelector('ol.findings')
-  if (list === null || list === undefined) {
-    return
-  }
-  const open = list.hasAttribute('hidden')
-  list.toggleAttribute('hidden', !open)
-  button.setAttribute('aria-expanded', open ? 'true' : 'false')
-  button.textContent = open ? 'hide' : 'show'
 }

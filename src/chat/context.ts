@@ -2,6 +2,7 @@
 // Every value is checked against the canvas first, so a made-up path never reaches a file read.
 import type { ChatContext } from '../contract/chat.js'
 import { chatContextLabel } from '../contract/chat.js'
+import { pointRef } from '../../static/js/proposed-comment.js'
 import type { FileEntry, Hunk, Layer, ReviewArtifact } from '../contract/review-artifact.js'
 
 /** A file's patch goes into the message up to this many lines; past it the agent reads the file. */
@@ -124,7 +125,7 @@ async function renderPoint(
   return [
     `## Context: attention point — ${point.title}`,
     '',
-    `${point.kind} · ${point.level}`,
+    `${point.kind} · ${point.level} · point \`${pointRef(point.fingerprint)}\``,
     '',
     point.body,
     '',
