@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { ACPX_BIN, createAgentRunner, findOnPath } from './acpx/acpx.js'
 import {
   type CliIo,
@@ -25,8 +26,16 @@ import { readEnv, resolveRepoRoot } from './config.js'
 import { createGit, GitError } from './git/git.js'
 import { printUsage } from './help.js'
 import { createHostClient } from './host/client.js'
-import { findServer, originOf, registerProject, runningPort } from './hub/client.js'
+import {
+  callProject,
+  downloadFromProject,
+  findServer,
+  originOf,
+  registerProject,
+  runningPort,
+} from './hub/client.js'
 import { type HubCommandDeps, runOpen, runServe, type StartedServer } from './hub/commands.js'
+import { runGenerate } from './hub/generate.js'
 import { hubHome } from './hub/home.js'
 import { createHubApp } from './hub/hub-app.js'
 import { createHub, type ProjectRegistration } from './hub/hub.js'
@@ -41,6 +50,7 @@ import { type CommandResult, runUpgrade } from './upgrade.js'
 const SUBCOMMANDS = [
   'serve',
   'open',
+  'generate',
   'prepare',
   'validate',
   'publish',
@@ -262,6 +272,17 @@ export async function main(argv: string[]): Promise<number> {
         return await runServe({ ...hubDeps(), startServer, checkSkill }, rest, io)
       case 'open':
         return await runOpen(hubDeps(), rest, io)
+      case 'generate':
+        return await runGenerate(
+          {
+            ...hubDeps(),
+            callProject,
+            download: downloadFromProject,
+            sleep: ms => sleep(ms),
+          },
+          rest,
+          io
+        )
       case 'install-skill':
         return await installSkillCommand(rest)
       case 'doctor':

@@ -5,7 +5,14 @@ import type { AddressInfo } from 'node:net'
 import { rm } from 'node:fs/promises'
 import { AppError } from '../server/errors.js'
 import { makeTempDir } from '../testing/fakes.js'
-import { findServer, originOf, registerProject, runningPort } from './client.js'
+import {
+  callProject,
+  downloadFromProject,
+  findServer,
+  originOf,
+  registerProject,
+  runningPort,
+} from './client.js'
 import { type ServerInfo, writeServerInfo } from './home.js'
 
 interface Seen {
@@ -199,5 +206,60 @@ describe('registerProject', () => {
     const err = await registerProject(infoFor(port), input).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(AppError)
     expect(err).toMatchObject({ code: 'INTERNAL', message: 'the server answered 503', hint: undefined })
+  })
+})
+
+describe('callProject', () => {
+  it("calls the project's API under its base path, with the token", async () => {
+    const port = await listen(json(202, { job: null }))
+    const answer = await callProject(infoFor(port), '/r/acme/widgets/', 'prs/42/generate', {
+      method: 'POST',
+      body: '{"force":false}',
+    })
+    expect(answer).toEqual({ job: null })
+    expect(seen).toEqual([
+      expect.objectContaining({
+        method: 'POST',
+        url: '/r/acme/widgets/api/prs/42/generate',
+        authorization: 'Bearer tok',
+        host: `127.0.0.1:${port}`,
+        body: '{"force":false}',
+      }),
+    ])
+  })
+
+  it('throws the error envelope as an AppError', async () => {
+    const port = await listen(
+      json(409, { error: { code: 'GENERATION_BUSY', message: 'busy', hint: 'wait' } })
+    )
+    const err = await callProject(infoFor(port), '/r/a/b/', 'prs/1/generate').catch((e: unknown) => e)
+    expect(err).toMatchObject({ code: 'GENERATION_BUSY', message: 'busy', hint: 'wait', status: 409 })
+  })
+})
+
+describe('downloadFromProject', () => {
+  it('returns the bytes and the name the server gives the file', async () => {
+    const port = await listen((_req, res) => {
+      res.writeHead(200, {
+        'content-type': 'application/zip',
+        'content-disposition': 'attachment; filename="acme-widgets-pr42.zip"',
+      })
+      res.end(Buffer.from([1, 2, 3]))
+    })
+    const file = await downloadFromProject(infoFor(port), '/r/acme/widgets/', 'prs/42/export?headSha=abc')
+    expect(file).toEqual({ name: 'acme-widgets-pr42.zip', bytes: new Uint8Array([1, 2, 3]) })
+    expect(seen[0]?.url).toBe('/r/acme/widgets/api/prs/42/export?headSha=abc')
+  })
+
+  it('throws when the answer names no file', async () => {
+    const port = await listen(text(200, 'zip'))
+    const err = await downloadFromProject(infoFor(port), '/r/a/b/', 'prs/1/export').catch((e: unknown) => e)
+    expect(err).toMatchObject({ code: 'INTERNAL', message: 'the server answered with no file name' })
+  })
+
+  it('throws the error envelope as an AppError', async () => {
+    const port = await listen(json(404, { error: { code: 'CANVAS_NOT_FOUND', message: 'no canvas' } }))
+    const err = await downloadFromProject(infoFor(port), '/r/a/b/', 'prs/1/export').catch((e: unknown) => e)
+    expect(err).toMatchObject({ code: 'CANVAS_NOT_FOUND', status: 404 })
   })
 })

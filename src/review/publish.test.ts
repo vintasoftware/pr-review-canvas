@@ -258,6 +258,18 @@ describe('publish', () => {
     expect(shareCanvas).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the canvas local when the run turns sharing off, whatever the settings say', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    const shareCanvas = vi.fn()
+    t.ctx.config.host = { ...t.ctx.config.host, shareCanvas }
+
+    const result = await publish(t.ctx, canvasDir, { ...OPTS, share: false })
+    expect(result.sharing).toEqual({ status: 'off' })
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(true)
+    expect(shareCanvas).not.toHaveBeenCalled()
+  })
+
   it('refuses an invalid model with the report, logs the attempt, and writes no review.json', async () => {
     const canvasDir = await prepared()
     const output = artifactToModelOutput(syntheticArtifact())

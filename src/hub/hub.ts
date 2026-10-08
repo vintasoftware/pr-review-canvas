@@ -32,6 +32,11 @@ export interface ProjectRegistration {
    * server's own until it is opened again.
    */
   env?: NodeJS.ProcessEnv | undefined
+  /**
+   * The flags to build the project with, which replace the ones saved with it. Without them, a
+   * checkout already on the list keeps its saved flags: `generate` takes the shell's environment
+   * but leaves what `open` or `serve` set alone.
+   */
   flags?: ProjectFlags | undefined
 }
 
@@ -205,7 +210,9 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     }
   }
 
-  const registerNow = async (registration: ProjectRegistration): Promise<Registered> => {
+  const registerNow = async (sent: ProjectRegistration): Promise<Registered> => {
+    const saved = [...slots.values()].find(s => s.entry.repoRoot === sent.repoRoot)?.entry.flags
+    const registration = sent.flags === undefined && saved !== undefined ? { ...sent, flags: saved } : sent
     const project = await build(registration)
     const { slug, repoRoot, dataDir } = project.ctx.config
     const slot = slots.get(slug)

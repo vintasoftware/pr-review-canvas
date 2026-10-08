@@ -395,7 +395,17 @@ describe('createHub', () => {
       repoRoot: at('/src/widgets'),
       flags: { chatAgent: 'codex' },
     })
-    const { project: second } = await h.register({ repoRoot: at('/src/widgets') })
+    // A registration with no flags, as `generate` sends, keeps the saved ones, time after time.
+    for (let i = 0; i < 2; i++) {
+      const { project: kept } = await h.register({ repoRoot: at('/src/widgets'), env: { HOME: '/home/me' } })
+      expect(kept.ctx.config.chatOverrides).toEqual({ chatAgent: 'codex' })
+      expect((await h.projects())[0]?.flags).toEqual({
+        chatAgent: 'codex',
+        dataDir: at('/src/widgets/.pr-review'),
+      })
+    }
+    // Flags sent, even none set, as `open` sends them, replace the saved ones.
+    const { project: second } = await h.register({ repoRoot: at('/src/widgets'), flags: {} })
     expect(second).not.toBe(first)
     expect(second.ctx.config.chatOverrides).toEqual({})
     expect(await servedAt(h, '/r/acme/widgets/')).toBe(second)

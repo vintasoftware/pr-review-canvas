@@ -2,12 +2,25 @@ import { z } from 'zod'
 import type { ErrorEnvelope } from './api.js'
 import type { ReviewKey } from './review-key.js'
 import type { CanvasSharing } from './self-review.js'
+import { CHAT_AGENTS } from './settings.js'
 
 /**
  * What the generate button sends: `force` starts from a blank page instead of updating the
  * earlier canvas. A head that already has a canvas is written again from one whatever it says.
+ * `pr-review generate` can also send the rest, for this job only: `base` compares a local review
+ * against another ref, `share: false` keeps the canvas off the pull request whatever the sharing
+ * settings say, and `agent` and `model` win over the chat agent and `generation.models`.
  */
-export const GenerateInputSchema = z.object({ force: z.boolean() }).strict()
+export const GenerateInputSchema = z
+  .object({
+    force: z.boolean(),
+    base: z.string().trim().min(1).optional(),
+    share: z.boolean().optional(),
+    agent: z.enum(CHAT_AGENTS).optional(),
+    model: z.string().trim().min(1).optional(),
+  })
+  .strict()
+export type GenerateInput = z.infer<typeof GenerateInputSchema>
 
 /**
  * Where a generation the server runs is. `checkout` puts the review checkout at the head,
@@ -90,12 +103,15 @@ export interface GenerationJob {
   error?: ErrorEnvelope['error']
 }
 
+/** The open PR of the checked-out branch, which `pr-review generate` with no target generates for. */
+export interface GenerationTargetResponse {
+  prNumber: number | null
+}
+
 export interface GenerationResponse {
   /** The job of this review the server ran last, running or ended; null when it ran none. */
   job: GenerationJob | null
 }
 
-/** True while the job can still change. */
-export function isRunning(job: Pick<GenerationJob, 'phase'>): boolean {
-  return job.phase !== 'done' && job.phase !== 'failed' && job.phase !== 'cancelled'
-}
+// The page's dialog and `pr-review generate` name the phases in the same words.
+export { isRunning, PHASE_LABELS } from '../../static/js/generation-phases.js'

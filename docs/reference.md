@@ -63,7 +63,7 @@ have the **skin** and **theme** commands of the review page; a project saves its
   `branch`, or `uncommitted`, it opens that review. With no server running it fails with
   `SERVER_NOT_RUNNING`. With `--json`, or on a pipe, it prints `{ url, project, dataDir, server }`.
 - The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
-  shell that last ran `open` or `serve` for it, such as a project's own `GH_TOKEN`, ssh agent, or
+  shell that last ran `open`, `serve`, or `generate` for it, such as a project's own `GH_TOKEN`, ssh agent, or
   `PATH`. It keeps that environment in memory only. After a restart, a project opened from a
   bookmark runs with the server's own environment until you run `open` in it again. Its flags
   (`--data-dir`, `--chat-agent`, `--chat-model`), the data dir it resolved, and the shell's
@@ -77,6 +77,8 @@ have the **skin** and **theme** commands of the review page; a project saves its
   chat turn or a generation that is running finishes under the settings it started with, and its
   page keeps showing it. The flags given now replace the ones before; when that moves the project
   to another data dir, `open` says where its canvases and review state until then are.
+  `generate` also takes the shell's environment again, but keeps the saved flags unless you pass
+  `--data-dir`, which replaces them as `open` does.
 - The worktrees of one clone share its `.pr-review/` data dir. One generation runs at a time across
   them, and one chat turn per pull request; each worktree's `branch` and `uncommitted` reviews are
   its own (see [worktrees](#reviewing-before-the-pull-request-exists)).
@@ -218,7 +220,8 @@ Check the `sharing` result even when the process exits successfully:
   Upload that ZIP into the PR/MR description in the browser and save; replace an older attachment
   link if present. A host failure can have an uncertain outcome, so check the comment before retrying.
 - `{ "status": "local" }`: a refs-only target has no PR/MR to publish to.
-- `{ "status": "off" }`: `sharing.canvasComment` is off, so nothing was posted. The canvas is
+- `{ "status": "off" }`: `sharing.canvasComment` is off, or `generate --out` turned sharing off for
+  the run, so nothing was posted. The canvas is
   saved locally and opens with `pr-review serve`; `pr-review export` makes a ZIP when you want to
   hand it over another way.
 
@@ -240,7 +243,9 @@ Set them for everyone in `pr-review.config.yml`, or for yourself as `canvasComme
 project's; `null` follows it.
 
 A scratch `--data-dir` or `PR_REVIEW_DATA_DIR` changes storage, not sharing. Disable
-`sharing.canvasComment` or personal `canvasComment` to keep a PR test run local.
+`sharing.canvasComment` or personal `canvasComment` to keep a PR test run local. For one run only,
+[`pr-review generate <n> --out <file|dir>`](#generating-from-the-terminal) posts nothing and writes
+the canvas zip.
 
 The entire comment must fit the host limit: 65,536 characters on GitHub and 1,000,000 on GitLab.
 Base64 uses roughly four characters per three compressed bytes, leaving slightly under 48 KiB
@@ -355,8 +360,8 @@ Preparation progress goes to stderr. `validate --human` prints text, and a faile
 validation diagnostics before its JSON error. `serve` stays running and writes its startup message
 to stderr.
 
-`install-skill`, `export`, `import`, `clean`, and `upgrade` print text at a terminal. With
-`--json`, or when stdout is a pipe, they print the JSON result instead, so scripts and agents
+`install-skill`, `generate`, `export`, `import`, `clean`, and `upgrade` print text at a terminal.
+With `--json`, or when stdout is a pipe, they print the JSON result instead, so scripts and agents
 read the same fields as before.
 
 `doctor` prints a checklist. Each check is `ok` or `failed`, and a failed check includes its
@@ -376,7 +381,7 @@ Validation failures from `validate` use its report format instead.
 | `1`       | Error, including a failed `doctor` check                                 |
 | `2`       | Command usage error, such as an unknown command or missing required flag |
 | `4`       | GitHub CLI (`gh`) or GitLab CLI (`glab`) missing or unauthenticated      |
-| `5`       | Validation failed in `validate` or `publish`                             |
+| `5`       | Validation failed in `validate`, `publish`, or `generate`                |
 
 `doctor` reports failed checks with exit `1`, including authentication failures.
 
@@ -1017,6 +1022,54 @@ answer `CHAT_BUSY`. Each agent turn can run for 30 minutes.
 
 With `chat.enabled: false`, or without `acpx`, the review app shows the skill command to copy
 instead.
+
+### Generating from the terminal
+
+`pr-review generate` starts the same generation from a terminal, with no skill installed:
+
+```text
+pr-review generate [<n>|branch|uncommitted] [--force] [--base <ref>]
+                   [--agent claude|codex] [--model <id>] [--out <file|dir>] [--open] [--json]
+```
+
+- Without a review, it generates for the open PR or MR of the current branch, found as
+  [`open`](#one-server-for-every-project) finds it. When the branch has none, it fails and asks
+  for a number, `branch`, or `uncommitted`.
+- It needs what the review app needs (`acpx`, the agent, and `chat.enabled`) and a running server
+  (`pr-review serve`). Like `open`, it adds the checkout to the server with the shell's
+  environment, then starts the job there. Unlike `open`, it keeps the flags the project was opened
+  with, such as `--chat-agent` and `--data-dir`, unless you pass `--data-dir`. The job is the one
+  the review page shows: one runs at a time across the worktrees of a clone, and a second fails
+  with `GENERATION_BUSY`.
+- `--force` starts from a blank page, as **Start from a blank page** does. Without it, an
+  outdated canvas is updated as an [incremental canvas](#incremental-canvases).
+- `--base <ref>` compares the `branch` or `uncommitted` review against another ref, as
+  `prepare --base` does. A PR or MR has its own base, so `--base` with a number is a usage error.
+- `--agent` and `--model` choose the agent and the model for this run only. Without them, the run
+  uses the chat agent from **settings** and the model that `generation.models` names for it.
+  The server reads a `--model` ID as it reads the one in `generation.models`.
+- `--out <file|dir>` keeps the canvas off the PR or MR for this run, whatever the
+  [sharing settings](#turning-sharing-off) say, and writes the canvas zip there. A path that ends in
+  `.zip`, or that is not a folder, is the file; a folder gets the zip under its own name. Send the
+  file to a reviewer, who loads it with [`pr-review import`](#export-and-import-options). The
+  canvas is also published locally, so its review page works on your machine. This holds for the
+  run only: [resolving](#self-review) a point on the review page later shares the canvas, unless
+  sharing is off.
+- `--open` opens the review in the browser when the canvas is published, except when `CI` is set.
+
+The command waits for the job to end and writes each phase to stderr: preparing, the review
+checkout, the agent writing, publishing, and each repair attempt with the number of problems.
+**Ctrl+C** stops the wait, not the job: the job runs in the server, and you stop it from the
+review page.
+
+At a terminal, it prints the review URL and what publishing did with the canvas: the comment link,
+`kept local` when sharing is off, the path of the fallback zip when sharing failed, or the path of
+the `--out` zip. With `--json`, or on a pipe, it prints one line:
+`{ status, review, headSha, url, agent, model, attempts, sharing, zipPath? }`. A job that fails
+reports its error and exits as any other failure does (see
+[output and exit codes](#output-and-exit-codes)): `5` with `MODEL_INVALID` after publish rejected
+the model on every repair attempt, with the problems of the last attempt on stderr, and `4` when
+`gh` or `glab` is missing or logged out.
 
 ## Network access and permissions
 

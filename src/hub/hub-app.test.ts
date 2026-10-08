@@ -310,14 +310,15 @@ describe('createHubApp', () => {
 
     it('names the data dir the project read until now, when the flags moved it', async () => {
       await register({ repoRoot: at('/src/widgets'), flags: { dataDir: at('/data') } })
-      const moved = await register({ repoRoot: at('/src/widgets') })
+      // No data dir among the flags sent, as `open` sends them, is the default one.
+      const moved = await register({ repoRoot: at('/src/widgets'), flags: {} })
       expect(await json(moved)).toEqual({
         slug: 'acme/widgets',
         basePath: '/r/acme/widgets/',
         dataDir: at('/src/widgets/.pr-review'),
         dataDirBefore: at('/data'),
       })
-      // The same data dir again is no move.
+      // The same data dir again is no move, nor is a registration that keeps the saved flags.
       const same = await register({ repoRoot: at('/src/widgets') })
       expect(await json(same)).toEqual({
         slug: 'acme/widgets',

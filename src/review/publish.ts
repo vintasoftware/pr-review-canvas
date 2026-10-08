@@ -22,6 +22,8 @@ export interface PublishOptions {
   model?: string | undefined
   harness: Generator['harness']
   allowStale: boolean
+  /** False keeps the canvas off the pull request whatever the sharing settings say. */
+  share?: boolean | undefined
 }
 
 export interface PublishResult {
@@ -290,7 +292,10 @@ export async function publish(
   }
   if (context.target.kind === 'pr') {
     published.reviewUrl = `http://localhost:${ctx.config.port}${ctx.config.basePath}review/${context.target.number}`
-    published.sharing = await shareCanvasOnPr(ctx, context.headSha, context.target.number)
+    published.sharing =
+      opts.share === false
+        ? { status: 'off' }
+        : await shareCanvasOnPr(ctx, context.headSha, context.target.number)
   }
   return published
 }
