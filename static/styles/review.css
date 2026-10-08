@@ -402,8 +402,9 @@
 .pill.status.dismissed {
   color: var(--fg-muted);
 }
-/* The overview's switch takes every point acted on off the page, wherever it is drawn. */
-body:has(.point-statuses [aria-pressed='true']) .is-handled {
+/* The overview's switch takes every point acted on off the page, wherever it is drawn, except one
+   whose reason box is open. */
+body:has(.point-statuses [aria-pressed='true']) .is-handled:not(:has(.settle-box)) {
   display: none;
 }
 .point-statuses {

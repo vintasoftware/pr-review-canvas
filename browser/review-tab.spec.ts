@@ -1,5 +1,5 @@
 import { syntheticArtifact } from '../src/testing/synthetic.js'
-import { expect, test } from './fixtures.js'
+import { expect, test, type ChatServerOptions } from './fixtures.js'
 
 test('lists the review being written in the side pane, edits a draft there, and drops it', async ({
   page,
@@ -161,6 +161,33 @@ test('a comment AI Chat ties to a point acts on that point once it joins the rev
   await expect(card.locator('[data-act="proposed-unlink"]')).toHaveCount(1)
 })
 
+/** The author's own canvas, with the canvas comment off so nothing goes to the forge. */
+async function authorCanvas(t: Parameters<NonNullable<ChatServerOptions['setup']>>[0]) {
+  t.ctx.fixtureArtifact = null
+  t.ctx.projectConfig = {
+    ...t.ctx.projectConfig,
+    config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+  }
+  const artifact = syntheticArtifact()
+  await t.ctx.canvases.write(
+    artifact.pr.headSha,
+    artifact,
+    {
+      formatVersion: 1,
+      tool: { name: 'pr-review', version: '0.5.0' },
+      repo: artifact.pr.repo,
+      prNumber: 42,
+      headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
+      generatedAt: artifact.generatedAt,
+      generator: artifact.generator,
+      baseRef: 'main',
+      headRef: 'feat/b',
+    },
+    42
+  )
+}
+
 test('the author resolves a point with the reason AI Chat proposed', async ({
   page,
   chatServer,
@@ -174,32 +201,7 @@ test('the author resolves a point with the reason AI Chat proposed', async ({
         { type: 'done', stopReason: 'end_turn' },
       ],
     },
-    // The author's own canvas, with the canvas comment off so nothing goes to the forge.
-    setup: async t => {
-      t.ctx.fixtureArtifact = null
-      t.ctx.projectConfig = {
-        ...t.ctx.projectConfig,
-        config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
-      }
-      const artifact = syntheticArtifact()
-      await t.ctx.canvases.write(
-        artifact.pr.headSha,
-        artifact,
-        {
-          formatVersion: 1,
-          tool: { name: 'pr-review', version: '0.5.0' },
-          repo: artifact.pr.repo,
-          prNumber: 42,
-          headSha: artifact.pr.headSha,
-          mergeBaseSha: artifact.pr.mergeBaseSha,
-          generatedAt: artifact.generatedAt,
-          generator: artifact.generator,
-          baseRef: 'main',
-          headRef: 'feat/b',
-        },
-        42
-      )
-    },
+    setup: authorCanvas,
   })
   await page.goto(url)
   const point = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
@@ -214,4 +216,43 @@ test('the author resolves a point with the reason AI Chat proposed', async ({
     'Resolved by the author: We keep the sum; the spec says so.'
   )
   await expect(card.locator('.pill.status.resolved')).toHaveText('resolved')
+})
+
+test('edit on a proposed resolution shows its point while the acted-on points are hidden', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  const proposal = { point: 'fp-1', reason: 'We keep the sum; the spec says so.' }
+  const { url } = await chatServer({
+    runner: {
+      script: [
+        { type: 'chunk', text: 'Then resolve it.\n```resolve\n' + JSON.stringify(proposal) + '\n```' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    },
+    setup: authorCanvas,
+  })
+  await page.goto(url)
+  const point = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  await point.locator('[data-act="ask"]').click()
+  await page.locator('#msg').fill('We decided to keep the sum.')
+  await page.locator('#chat-send').click()
+  const card = page.locator('.proposed.resolution')
+  await expect(card.locator('[data-act="resolution-edit"]')).toBeVisible()
+
+  // A point in the review can still be resolved, but the switch takes it off the page.
+  await point.locator('[data-act="point-queue"]').click()
+  await expect(point).toHaveAttribute('data-status', 'queued')
+  await page.locator('[data-act="toggle-handled"]').click()
+  await expect(point).toBeHidden()
+
+  // Editing the reason brings the point back with its box, and it leaves again once the box closes.
+  await card.locator('[data-act="resolution-edit"]').click()
+  const reason = point.locator('.settle-box textarea')
+  await expect(reason).toBeVisible()
+  await expect(reason).toHaveValue(proposal.reason)
+  await expect(reason).toBeFocused()
+  await point.locator('[data-act="settle-cancel"]').click()
+  await expect(point).toBeHidden()
 })

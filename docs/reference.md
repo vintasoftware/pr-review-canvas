@@ -732,7 +732,8 @@ deleting the draft. The point collapses again when its status changes. A reload 
 The counts in the rail, the layer headings, and the overview squares include only open points. The
 overview line **Attention points: 2 open · 1 in your review · …** counts each status. Its
 **hide the N acted on** command removes the collapsed points from the page until you click it
-again. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
+again; **edit** on an AI Chat proposed resolution brings its point back while the reason box is
+open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
 it again.
 
 ### Self-review
