@@ -72,6 +72,9 @@
   font-size: 11px;
   color: var(--fg-muted);
 }
+.tree .diffstat {
+  font-family: var(--mono);
+}
 /* `--dc` is the layer's color; layers.js sets it inline on each dot. */
 .tree .dot {
   --dc: var(--fg-dim);

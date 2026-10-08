@@ -250,7 +250,7 @@ describe('header', () => {
       'https://github.com/acme/widgets/pull/42'
     )
     expect(hdr?.querySelector('.meta .pill.open')?.textContent).toBe('open')
-    expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5')
+    expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5 (code +5 −4 · tests +2 −1)')
     expect(hdr?.querySelector('.pill.agent')?.textContent).toBe(
       'canvas by claude · claude-opus-4-1 · claude-code'
     )

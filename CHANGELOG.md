@@ -20,6 +20,13 @@
 - `generate` keeps the flags the project was opened with, such as `--chat-agent`, and takes the
   shell's environment, as `open` does.
 
+### Reading
+
+- The rail shows the lines each layer adds and removes next to its file count. A file split across
+  layers counts only the chunks of each layer.
+- Hover the totals of the rail and the header for the split between code and tests, as in
+  `code +3 −2 · tests +2 −1`.
+
 ## 0.8.0
 
 Changes since 0.7.0.

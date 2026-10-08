@@ -2,6 +2,7 @@
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').RiskTag} RiskTag */
 import { setDisabledReason } from './composer.js'
+import { diffstatHtml, testChanges } from './diffstat.js'
 import { esc, timeAgo } from './dom.js'
 import { generationMode } from './generate.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
@@ -152,7 +153,7 @@ export function renderHeader(bundle, opts) {
     `<div class="title"><h1>${number}${esc(pr.title)}</h1>${forgeLink}</div>` +
     `<p class="meta"><span>by ${authorHtml(pr.author, local)}</span>` +
     `<span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>${statePill(pr)}` +
-    `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
+    `${diffstatHtml(pr, ready ? testChanges(artifact, bundle.files) : undefined)}${agent}</p>` +
     `${largePrNoticeHtml(bundle)}${risk}${reading}${progress}</div></header>`
   )
 }

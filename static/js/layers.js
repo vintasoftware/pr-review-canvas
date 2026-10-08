@@ -17,6 +17,7 @@ import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
+import { diffstatHtml, layerChanges } from './diffstat.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
@@ -119,6 +120,7 @@ export function dotColor(index) {
 }
 
 /**
+ * With a render context, each layer shows the lines it adds and removes.
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @param {{ activeId?: string }} [opts]
@@ -126,6 +128,7 @@ export function dotColor(index) {
  */
 export function railInnerHtml(artifact, state, opts = {}) {
   const active = opts.activeId ?? 'overview'
+  const ctx = renderContext
   const current = /** @param {string} id */ id => (id === active ? ' aria-current="location"' : '')
   const semantic = artifact.layers.filter(l => l.kind !== 'other')
   const other = artifact.layers.find(l => l.kind === 'other')
@@ -138,11 +141,13 @@ export function railInnerHtml(artifact, state, opts = {}) {
       const reviewed = filesReviewed(layer, state)
       const files = layer.files.length
       const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
+      const changes = ctx === null ? null : layerChanges(layer, ctx.files, ctx.patches)
+      const stat = changes === null ? '' : ` · ${diffstatHtml(changes.total, changes.tests)}`
       const risk = layer.risk.length > 0 ? ` · ${layer.risk.map(r => esc(r.label)).join(' · ')}` : ''
       const id = layerAnchorId(layer.key)
       return (
         `<li><a href="#${esc(id)}"${current(id)}><span class="${dotClass}" style="--dc:${dotColor(i)}" role="img" aria-label="${dotLabel}"></span>` +
-        `<span class="n">${i + 1}</span><span class="t">${esc(layer.title)}</span><span class="m">${meta}${risk}</span></a></li>`
+        `<span class="n">${i + 1}</span><span class="t">${esc(layer.title)}</span><span class="m">${meta}${stat}${risk}</span></a></li>`
       )
     })
     .join('')
