@@ -5,30 +5,42 @@
 /** @typedef {import('./contract-types.js').Layer} Layer */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {{ additions: number, deletions: number }} Changes */
+import { splitHunks } from './hunks.js'
 import { hunkId } from './keys.js'
 
 /**
- * Lines added and removed by each hunk of a patch, by hunk id.
+ * Lines each hunk adds and removes, by file key and hunk id. Kept per patch map, so redrawing the
+ * rail on a state change sums counts instead of splitting the patches again.
+ * @type {WeakMap<Record<string, string>, Map<string, Map<string, Changes>>>}
+ */
+const counted = new WeakMap()
+
+/**
+ * @param {Record<string, string>} patches
  * @param {string} key
  * @param {string} patch
  * @returns {Map<string, Changes>}
  */
-function hunkChanges(key, patch) {
-  /** @type {Map<string, Changes>} */
-  const out = new Map()
-  /** @type {Changes | null} */
-  let cur = null
-  for (const line of patch.split('\n')) {
-    if (line.startsWith('@@')) {
-      cur = { additions: 0, deletions: 0 }
-      out.set(hunkId(key, out.size + 1), cur)
-    } else if (cur !== null && line.startsWith('+')) {
-      cur.additions++
-    } else if (cur !== null && line.startsWith('-')) {
-      cur.deletions++
-    }
+function hunkChanges(patches, key, patch) {
+  let byFile = counted.get(patches)
+  if (byFile === undefined) {
+    byFile = new Map()
+    counted.set(patches, byFile)
   }
-  return out
+  let byHunk = byFile.get(key)
+  if (byHunk === undefined) {
+    byHunk = new Map(
+      splitHunks(patch).map((h, i) => [
+        hunkId(key, i + 1),
+        {
+          additions: h.lines.filter(l => l.startsWith('+')).length,
+          deletions: h.lines.filter(l => l.startsWith('-')).length,
+        },
+      ])
+    )
+    byFile.set(key, byHunk)
+  }
+  return byHunk
 }
 
 /**
@@ -48,7 +60,7 @@ export function layerChanges(layer, files, patches) {
       continue
     }
     const patch = patches?.[entry.key]
-    const byHunk = patch === undefined ? null : hunkChanges(entry.key, patch)
+    const byHunk = patches === null || patch === undefined ? null : hunkChanges(patches, entry.key, patch)
     const file = byHunk
       ? lf.hunks.reduce((sum, id) => add(sum, byHunk.get(id)), { additions: 0, deletions: 0 })
       : entry
@@ -93,10 +105,7 @@ export function diffstatHtml(total, tests) {
   if (!tests || tests.additions + tests.deletions === 0) {
     return `<span class="diffstat">${numbers}</span>`
   }
-  const code = {
-    additions: Math.max(total.additions - tests.additions, 0),
-    deletions: Math.max(total.deletions - tests.deletions, 0),
-  }
+  const code = { additions: total.additions - tests.additions, deletions: total.deletions - tests.deletions }
   const split = `code +${code.additions} &minus;${code.deletions} · tests +${tests.additions} &minus;${tests.deletions}`
   return `<span class="diffstat" title="${split}">${numbers}<span class="sr"> (${split})</span></span>`
 }

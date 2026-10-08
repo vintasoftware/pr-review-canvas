@@ -120,14 +120,15 @@ export function dotColor(index) {
 }
 
 /**
+ * With a render context, each layer shows the lines it adds and removes.
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
- * @param {{ activeId?: string, files?: ReadonlyArray<FileEntry>, patches?: Record<string, string> | null }} [opts]
- *   with `files`, each layer shows the lines it adds and removes
+ * @param {{ activeId?: string }} [opts]
  * @returns {string}
  */
 export function railInnerHtml(artifact, state, opts = {}) {
   const active = opts.activeId ?? 'overview'
+  const ctx = renderContext
   const current = /** @param {string} id */ id => (id === active ? ' aria-current="location"' : '')
   const semantic = artifact.layers.filter(l => l.kind !== 'other')
   const other = artifact.layers.find(l => l.kind === 'other')
@@ -140,8 +141,8 @@ export function railInnerHtml(artifact, state, opts = {}) {
       const reviewed = filesReviewed(layer, state)
       const files = layer.files.length
       const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
-      const changes = opts.files ? layerChanges(layer, opts.files, opts.patches ?? null) : null
-      const stat = changes ? ` · ${diffstatHtml(changes.total, changes.tests)}` : ''
+      const changes = ctx === null ? null : layerChanges(layer, ctx.files, ctx.patches)
+      const stat = changes === null ? '' : ` · ${diffstatHtml(changes.total, changes.tests)}`
       const risk = layer.risk.length > 0 ? ` · ${layer.risk.map(r => esc(r.label)).join(' · ')}` : ''
       const id = layerAnchorId(layer.key)
       return (
@@ -164,7 +165,7 @@ export function railInnerHtml(artifact, state, opts = {}) {
 /**
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
- * @param {Parameters<typeof railInnerHtml>[2]} [opts]
+ * @param {{ activeId?: string }} [opts]
  * @returns {string}
  */
 export function renderRail(artifact, state, opts = {}) {
@@ -172,8 +173,7 @@ export function renderRail(artifact, state, opts = {}) {
 }
 
 /**
- * Draws the rail again from the current state, keeping the item the scrollspy marked. The change
- * totals come from the render context.
+ * Draws the rail again from the current state, keeping the item the scrollspy marked.
  * @param {ParentNode} root
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
@@ -184,12 +184,7 @@ export function refreshRail(root, artifact, state) {
     return false
   }
   const active = rail.querySelector('a[aria-current]')?.getAttribute('href')?.slice(1)
-  const changes = renderContext === null ? {} : { files: renderContext.files, patches: renderContext.patches }
-  rail.innerHTML = railInnerHtml(
-    artifact,
-    state,
-    active === undefined ? changes : { ...changes, activeId: active }
-  )
+  rail.innerHTML = railInnerHtml(artifact, state, active === undefined ? {} : { activeId: active })
   return true
 }
 

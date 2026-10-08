@@ -40,6 +40,7 @@ import {
   renderLayerSection,
   renderLayers,
   refreshFolds,
+  refreshRail,
   renderRail,
   setCardRenderedHook,
   setFoldLevel,
@@ -126,14 +127,21 @@ describe('rail', () => {
     expect(document.querySelector('a[href="#overview"] .m')?.textContent).toBe('1 attention point')
   })
 
-  it('shows the lines each layer adds and removes next to its file count, with the test split', () => {
-    document.body.innerHTML = renderRail(artifact, state, { files, patches })
+  it('shows the lines each layer adds and removes next to its file count, after a state change too', () => {
+    setRenderContext(ctx())
+    document.body.innerHTML = renderRail(artifact, state)
     const stat = document.querySelector('a[href="#layer-run-path"] .diffstat')
     expect(stat?.getAttribute('title')).toBe('code +3 −2 · tests +2 −1')
     expect(document.querySelector('a[href="#layer-run-path"] .m')?.textContent).toBe(
       '3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema'
     )
     expect(document.querySelector('li.other .m')?.textContent).toBe('3 files, ignored')
+    const partial = { ...state, reviewed: { 'layer:run-path/file:src_app_ts': /** @type {const} */ (true) } }
+    expect(refreshRail(document, artifact, partial)).toBe(true)
+    expect(document.querySelector('a[href="#layer-run-path"] .m')?.textContent).toBe(
+      '1 of 3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema'
+    )
+    setRenderContext(null)
   })
 })
 
