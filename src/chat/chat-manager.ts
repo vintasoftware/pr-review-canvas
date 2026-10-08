@@ -192,6 +192,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     assistant: ChatTurn,
     seededHeadSha: string,
     seededCwd: string,
+    seededReaderResolves: boolean,
     reached: boolean
   ): Promise<void> => {
     await deps.transcripts.append(key, thread.name, assistant)
@@ -209,6 +210,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
                 rev: t.rev + 1,
                 seededHeadSha,
                 seededCwd,
+                seededReaderResolves,
                 // The first turn of a thread gives it its title.
                 title: t.rev === 0 ? threadTitle(userText) : t.title,
               }
@@ -302,7 +304,10 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       code.kind === 'fallback' ? { fallback: { message: code.message, branch: code.branch } } : {}
     // acpx scopes a session by its folder, so a thread whose session ran elsewhere starts over.
     const sameSession = thread.seededHeadSha !== '' && (thread.seededCwd ?? deps.repoRoot) === cwd
-    const seeded = !sameSession || thread.seededHeadSha !== target.headSha
+    const seeded =
+      !sameSession ||
+      thread.seededHeadSha !== target.headSha ||
+      thread.seededReaderResolves !== target.readerResolves
     const seed = seeded
       ? `${renderSeed(await deps.loadSeedTemplate(), target.artifact, seedPaths(deps, target, code), {
           readerResolves: target.readerResolves,
@@ -337,6 +342,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         { role: 'assistant', text: '', at: deps.now().toISOString(), incomplete: 'cancelled', ...fallback },
         target.headSha,
         cwd,
+        target.readerResolves,
         // The seed never went anywhere, so the thread stays where it was.
         false
       )
@@ -439,6 +445,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         },
         target.headSha,
         cwd,
+        target.readerResolves,
         // An error before the agent said anything means the turn never reached it.
         answer !== '' || incomplete === undefined || incomplete === 'cancelled'
       )

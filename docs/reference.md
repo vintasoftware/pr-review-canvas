@@ -775,8 +775,9 @@ A resolution is written into the canvas itself:
   where you can change it and choose to post it. The card offers these where the point itself
   offers **resolve**: on a resolved point it says so, and on a dismissed one it asks you to restore
   the point first. AI Chat proposes this only to a reader who may resolve: the author, on the
-  canvas of the current head. A new thread knows this from its first message, and the page shows
-  the card only to that reader and only for a point of this canvas.
+  canvas of the current head. A thread learns this from its first message, and again when it
+  changes, as when a push leaves the canvas outdated. The page shows the card only to that reader
+  and only for a point of this canvas.
 
 Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
 offers no **resolve**:
