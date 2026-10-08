@@ -140,7 +140,32 @@ describe('createReviewSession', () => {
     })
     const answer = await s.postComment({ kind: 'issue', body: 'x' })
     expect(answer.comment.id).toBe(5001)
-    expect(s.state).toBe(posted)
+    expect(s.state).toEqual(posted)
+  })
+
+  it('keeps its own marks over the stored ones every write but a mark answers with', async () => {
+    // The page was drawn with the marks fitted to its canvas: none, since the stored mark was made
+    // on another one. A draft's answer carries the stored mark all the same.
+    /** @type {import('./contract-types.js').PrState} */
+    const stored = {
+      ...BASE,
+      rev: 1,
+      reviewed: { 'layer:run-path': true },
+      reviewedCanvasSha: 'f'.repeat(40),
+    }
+    /** @type {import('./contract-types.js').PrState} */
+    const marked = { ...stored, rev: 3, reviewed: { 'layer:other': true }, reviewedCanvasSha: 'c'.repeat(40) }
+    const s = session({
+      addPending: async () => answers({ ...stored, rev: 2 }),
+      putReviewed: async () => answers(marked),
+    })
+    await s.addPending({ path: 'src/app.ts', line: 4, side: 'new', body: 'x' })
+    expect(s.state.rev).toBe(2)
+    expect(s.state.reviewed).toEqual({})
+    // A mark write keys the stored marks to this canvas, so its answer is the page's marks now.
+    await s.setReviewed('layer:other', true)
+    expect(s.state.reviewed).toEqual({ 'layer:other': true })
+    expect(s.state.reviewedCanvasSha).toBe('c'.repeat(40))
   })
 
   it('posts a review with and without an edited body', async () => {

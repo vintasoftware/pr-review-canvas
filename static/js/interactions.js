@@ -13,7 +13,6 @@ import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
 import { runCommand, runControl, showCommandError, toast } from './commands.js'
-import { replacePostButton } from './comment-link.js'
 import {
   applyCapabilityGating,
   closeComposers,
@@ -53,8 +52,9 @@ import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
 import { inHiddenSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
-import { applyPointStates, openPoints, pointToMarkdown, postedUrls } from './points.js'
-import { selfReviewActions, setSettled, toggleList } from './self-review.js'
+import { refreshReviewPanel } from './review-panel.js'
+import { applyPointStates, openPoints, pointToMarkdown, postedUrls, setPointExpanded } from './points.js'
+import { selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -233,6 +233,7 @@ export function padUnderStickyBar(doc, bar) {
  *   chat?: () => ChatHandle | null,
  *   quickQuestions?: () => { openFor: (el: HTMLElement) => void } | null,
  *   openSettings?: (el: HTMLElement) => void,
+ *   openReview?: () => void,
  * }} [opts]
  */
 export function wireReview(root, session, opts = {}) {
@@ -353,11 +354,14 @@ export function wireReview(root, session, opts = {}) {
       }
     }
     refreshPendingBar(root, state, session.headSha)
+    refreshReviewPanel(root, state, { headSha: session.headSha, points: session.artifact.points })
     refreshComposerCommands(root, state.pending.length > 0)
     opts.chat?.()?.refreshProposed()
     applyCapabilityGating(root, session.capabilities)
   }
   const unsubscribe = session.subscribe(onState)
+  // The review tab is drawn from the state too; the rest of the page came drawn with it.
+  refreshReviewPanel(root, session.state, { headSha: session.headSha, points: session.artifact.points })
 
   /** @param {import('./contract-types.js').PostCommentInput} input */
   const postComment = async input => {
@@ -659,7 +663,8 @@ export function wireReview(root, session, opts = {}) {
     void runCommand(
       button,
       async () => {
-        const answer = await postComment({
+        // The answer's state marks the point posted, so it collapses with its link wherever it is.
+        await postComment({
           kind: 'inline',
           path: point.path,
           line: point.line,
@@ -667,13 +672,6 @@ export function wireReview(root, session, opts = {}) {
           body: pointToMarkdown(point),
           pointFingerprint: point.fingerprint,
         })
-        for (const control of Array.from(
-          root.querySelectorAll(`[data-act="point-post"][data-point="${cssEscape(point.id)}"]`)
-        )) {
-          if (control instanceof HTMLElement) {
-            replacePostButton(control, answer.comment.url)
-          }
-        }
         toast(root, 'attention point posted to github')
       },
       { pendingLabel: 'posting…' }
@@ -710,10 +708,20 @@ export function wireReview(root, session, opts = {}) {
 
   /** @param {HTMLElement} button @param {string} fingerprint @param {boolean} dismissed */
   const setDismissed = (button, fingerprint, dismissed) => {
+    const point = button.closest('[data-point]')
     void runCommand(
       button,
       async () => {
-        await session.setDismissed(fingerprint, dismissed)
+        try {
+          await session.setDismissed(fingerprint, dismissed)
+        } catch (err) {
+          // The page showed the change before the server answered, which drew the point again:
+          // the reason goes next to the command as it is drawn now.
+          const now = point?.querySelector(`[data-act="${button.getAttribute('data-act')}"]`)
+          if (!(now instanceof HTMLElement) || now === button) throw err
+          showCommandError(now, err instanceof Error ? err.message : String(err))
+          return
+        }
         toast(root, dismissed ? 'attention point dismissed' : 'attention point restored')
       },
       { pendingLabel: dismissed ? 'dismissing…' : 'restoring…' }
@@ -918,7 +926,18 @@ export function wireReview(root, session, opts = {}) {
     },
     'point-dismiss': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', true),
     'point-restore': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', false),
-    'show-dismissed': el => toggleList(el, '.dismissed-list'),
+    'point-expand': el => {
+      const point = el.closest('[data-point]')
+      if (point !== null) {
+        setPointExpanded(point)
+      }
+    },
+    'toggle-handled': el => {
+      // The page hides the points acted on while this switch is pressed; see `.is-handled` in CSS.
+      const hiding = el.getAttribute('aria-pressed') !== 'true'
+      el.setAttribute('aria-pressed', String(hiding))
+      el.textContent = el.textContent?.replace(/^(show|hide)/, hiding ? 'show' : 'hide') ?? ''
+    },
     ...selfReviewActions(session, message => toast(root, message)),
     'point-post': el => {
       const point = pointById(el.getAttribute('data-point') ?? '')
@@ -993,6 +1012,9 @@ export function wireReview(root, session, opts = {}) {
       if (id !== null) {
         deletePending(el, id)
       }
+    },
+    'show-review': () => {
+      opts.openReview?.()
     },
     'pending-finish': el => {
       // Finishing a review is the same dialog the sign-off commands open; a review being written
@@ -1220,7 +1242,13 @@ export function wireReview(root, session, opts = {}) {
         stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
         break
       case 'toggle': {
-        // A point in focus stands for the file card that holds its line, not the layer it is listed in.
+        // A point already acted on opens or collapses itself.
+        const handled = focused()?.closest('[data-point].is-handled')
+        if (handled !== null && handled !== undefined) {
+          setPointExpanded(handled)
+          break
+        }
+        // An open point in focus stands for the file card that holds its line, not the layer it is listed in.
         const point = focusedPoint(points)
         const el = point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
         if (el !== null) {

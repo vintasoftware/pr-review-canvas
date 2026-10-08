@@ -2,7 +2,7 @@
 // @vitest-environment happy-dom
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_REVIEW_COMMENTS } from '../../src/testing/synthetic.js'
-import { isQueuedComment, postedCommentUrl, replacePostButton, viewCommentHtml } from './comment-link.js'
+import { isQueuedComment, postedCommentUrl, viewCommentHtml } from './comment-link.js'
 
 const proposed = {
   path: 'src/app.ts',
@@ -15,21 +15,14 @@ const posted = { ...mapReviewComment(GH_REVIEW_COMMENTS[0], new Set()), body: pr
 
 afterEach(() => document.body.replaceChildren())
 
-it('replaces a focused posting button with a focused comment link', () => {
-  const button = document.createElement('button')
-  button.className = 'cmd'
-  button.textContent = 'post to github'
-  document.body.appendChild(button)
-  button.focus()
-  replacePostButton(button, posted.url)
+it('links to the comment in a new tab', () => {
+  document.body.innerHTML = viewCommentHtml(posted.url)
   const link = document.querySelector('a')
   expect(link?.textContent).toBe('view comment')
   expect(link?.getAttribute('href')).toBe(posted.url)
   expect(link?.className).toBe('cmd')
   expect(link?.target).toBe('_blank')
   expect(link?.rel).toBe('noopener noreferrer')
-  expect(document.activeElement).toBe(link)
-  expect(document.querySelector('button')).toBeNull()
 })
 
 it('escapes the comment URL', () => {

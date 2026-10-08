@@ -1,4 +1,4 @@
-/* Selection, comments, sign-off, dismissed points, and notifications. */
+/* Selection, comments, sign-off, and notifications. */
 tr.is-selected td {
   background: var(--accent-bg);
 }
@@ -46,16 +46,6 @@ tr.composer .x {
 }
 .cmt.pending {
   opacity: 0.6;
-}
-.dismissed-list {
-  padding: 0 20px 16px;
-}
-.dismissed-line {
-  margin: 0;
-  font-size: 12px;
-}
-.findings.dismissed li {
-  opacity: 0.75;
 }
 .is-focused {
   outline: 2px solid var(--focus);
@@ -127,7 +117,7 @@ table.keys td:first-child {
     transition: none !important;
   }
 }
-/* Self-review: the author's reason box under a point, the settled list, and the author's note. */
+/* Self-review: the author's reason box under a point, and the author's note. */
 .settle-box {
   margin-top: 8px;
   display: grid;
@@ -136,13 +126,7 @@ table.keys td:first-child {
 .settle-box .chk {
   font-weight: 400;
 }
-.settled-list {
-  padding: 0 20px 16px;
-}
-.findings.settled li {
-  opacity: 0.85;
-}
-.findings.settled .lbl {
+.p-outcome .lbl {
   margin: 4px 0 0;
 }
 .self-review-note {

@@ -167,9 +167,9 @@ describe('settling an attention point', () => {
       })
     )
     expect(body.settled['fp-2']?.commentUrl).toBe(INLINE.html_url)
-    expect(body.state.posted).toEqual([
-      expect.objectContaining({ commentId: 5001, pointFingerprint: 'fp-2' }),
-    ])
+    expect(body.state.posted).toEqual([expect.objectContaining({ commentId: 5001 })])
+    // The receipt does not name the point, which stays unposted once it is reopened.
+    expect(body.state.posted[0]).not.toHaveProperty('pointFingerprint')
     const inline = forge.calls.find(
       c => c.kind === 'post' && c.path === 'repos/acme/widgets/pulls/42/comments'
     )

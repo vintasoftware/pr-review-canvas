@@ -234,7 +234,7 @@ describe('minimizing a docked chat', () => {
 
   it('renders a minimized shell without the pane', () => {
     expect(renderChatShell({ enabled: true, minimized: true })).toContain(
-      'class="chat" aria-labelledby="chat-h" hidden'
+      'class="chat" aria-label="AI Chat and your review" data-tab="chat" hidden'
     )
   })
 })
@@ -986,6 +986,35 @@ describe('the wheel over the pane', () => {
 
     const event = wheel(log)
     expect(event.defaultPrevented).toBe(false)
+    expect(log.scrollTop).toBe(0)
+  })
+
+  it('gives the wheel to the review list while its tab is shown, not to the hidden transcript', async () => {
+    const { root } = mount()
+    await flush()
+    const log = el(root, '#chat-log')
+    const list = el(root, '#review-panel')
+    fakeLayout(log)
+    fakeLayout(list)
+    log.scrollTop = 0
+    list.scrollTop = 0
+    const pane = root.querySelector('.chat')
+    if (!(pane instanceof HTMLElement)) {
+      throw new Error('no pane')
+    }
+    pane.style.position = 'sticky'
+    el(root, '#side-tab-review').click()
+
+    // A turn inside the list is the browser's to scroll.
+    list.innerHTML = '<p>a draft</p>'
+    const inside = wheel(el(list, 'p'))
+    expect(inside.defaultPrevented).toBe(false)
+    expect(log.scrollTop).toBe(0)
+
+    // A turn on the tabs moves the list, the one scroller on screen.
+    const onTabs = wheel(el(root, '#side-tab-review'))
+    expect(onTabs.defaultPrevented).toBe(true)
+    expect(list.scrollTop).toBe(120)
     expect(log.scrollTop).toBe(0)
   })
 

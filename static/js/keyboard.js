@@ -12,8 +12,11 @@ import { esc } from './dom.js'
 export const KEY_HELP = [
   { keys: 'j / k', what: 'next / previous layer' },
   { keys: 'n / p', what: 'next / previous file' },
-  { keys: '] / [', what: 'next / previous attention point' },
-  { keys: 'o', what: "open or collapse the card in focus, or the point's file card" },
+  { keys: '] / [', what: 'next / previous open attention point' },
+  {
+    keys: 'o',
+    what: "open or collapse the card in focus, the point's file card, or a point already acted on",
+  },
   { keys: 'r', what: 'mark the file in focus reviewed' },
   { keys: 'R', what: 'mark the layer in focus reviewed and move on to the next open layer on screen' },
   { keys: 'c', what: 'comment on the line in focus or on the selection' },

@@ -100,8 +100,9 @@ export function pendingRowHtml(drafts, now) {
 }
 
 /**
- * The bar that says a review is being written. It is drawn only while something is waiting, and
- * carries the two ways out: submit the review, or throw the drafts away.
+ * The bar that says a review is being written. It is drawn only while something is waiting, opens
+ * the list of the drafts in the side pane, and carries the two ways out: submit the review, or
+ * throw the drafts away.
  * @param {number} count
  * @param {ReadonlyArray<PendingComment>} [earlier]
  */
@@ -115,6 +116,7 @@ export function pendingBarHtml(count, earlier = []) {
     `<span class="pending-text"><b>${esc(pendingLabel(count))}</b> waiting in your review. ` +
     `Nothing is on ${esc(hostLabel())} until you submit it.</span>` +
     '<span class="pending-actions">' +
+    '<button class="cmd" type="button" data-act="show-review">see the list</button>' +
     '<button class="cmd fill" type="button" data-act="pending-finish" data-needs-post>finish your review</button>' +
     '<button class="cmd" type="button" data-act="pending-discard">discard</button>' +
     '</span></div>' +

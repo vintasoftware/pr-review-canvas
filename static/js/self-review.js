@@ -7,9 +7,7 @@
 /** @typedef {import('./contract-types.js').Point} Point */
 /** @typedef {import('./contract-types.js').Settlement} Settlement */
 import { runCommand, showCommandError } from './commands.js'
-import { viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
-import { renderMarkdown } from './markdown.js'
 
 /** Mirrors SETTLEMENT_REASON_MAX in the contract. */
 export const REASON_MAX = 600
@@ -82,38 +80,14 @@ export function settleFormHtml(p, opts) {
 }
 
 /**
- * The settled points with their reasons, under the overview. Everyone sees it; the author can reopen
- * a point from it.
- * @param {ReadonlyArray<Point>} points
- * @param {{ paths: ReadonlySet<string> }} ctx
- * @param {boolean} [expanded]
+ * The reopen command: for the author, on a point they settled. Every reader sees the reason where
+ * the point stands; only the author can take it back.
+ * @param {Point} p
  */
-export function settledListHtml(points, ctx, expanded = false) {
-  const rows = points.flatMap(p => {
-    const settlement = settlementOf(p)
-    if (settlement === undefined) {
-      return []
-    }
-    const link = settlement.commentUrl === undefined ? '' : viewCommentHtml(settlement.commentUrl)
-    const reopen = selfReview
-      ? `<button class="cmd" type="button" data-act="point-unsettle" data-fingerprint="${esc(p.fingerprint)}">reopen</button>`
-      : ''
-    return [
-      `<li class="finding"><span class="sq ${p.level}" role="img" aria-label="${p.level}"></span><div>` +
-        `<div class="f-title"><span>${esc(p.title)}</span><span class="pill kind">${esc(p.kind)}</span></div>` +
-        '<h4 class="lbl">Author’s reason</h4>' +
-        `<div class="prose settled-reason">${renderMarkdown(settlement.reason, { paths: ctx.paths })}</div>` +
-        `<span class="tbtns">${link}${reopen}</span></div></li>`,
-    ]
-  })
-  if (rows.length === 0) {
-    return '<div class="settled-list" hidden></div>'
-  }
-  return (
-    '<div class="settled-list">' +
-    `<p class="muted dismissed-line">${rows.length} resolved by the author <button class="cmd" type="button" data-act="show-settled" aria-expanded="${expanded}">${expanded ? 'hide' : 'show'}</button></p>` +
-    `<ol class="findings settled"${expanded ? '' : ' hidden'}>${rows.join('')}</ol></div>`
-  )
+export function reopenButtonHtml(p) {
+  return selfReview && settlementOf(p) !== undefined
+    ? `<button class="cmd" type="button" data-act="point-unsettle" data-fingerprint="${esc(p.fingerprint)}">reopen</button>`
+    : ''
 }
 
 /**
@@ -165,7 +139,7 @@ export function sharingNote(sharing, done) {
 
 /**
  * The commands of self-review, for the page's one click handler: open the reason box, write the
- * settlement, close the box, reopen a settled point, and show the settled list.
+ * settlement, close the box, and reopen a settled point.
  * @param {import('./review-session.js').ReviewSession} session
  * @param {(message: string) => void} notify
  * @returns {Record<string, (el: HTMLElement) => void>}
@@ -225,22 +199,5 @@ export function selfReviewActions(session, notify) {
         { pendingLabel: 'reopening…' }
       )
     },
-    'show-settled': el => toggleList(el, '.settled-list'),
   }
-}
-
-/**
- * Shows or hides the list under a "N settled" or "N dismissed" line.
- * @param {HTMLElement} button
- * @param {string} host the list's container
- */
-export function toggleList(button, host) {
-  const list = button.closest(host)?.querySelector('ol.findings')
-  if (list === null || list === undefined) {
-    return
-  }
-  const open = list.hasAttribute('hidden')
-  list.toggleAttribute('hidden', !open)
-  button.setAttribute('aria-expanded', open ? 'true' : 'false')
-  button.textContent = open ? 'hide' : 'show'
 }

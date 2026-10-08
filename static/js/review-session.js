@@ -103,6 +103,8 @@ export function createReviewSession(options) {
   /** @type {PrState | null} */
   let newestState = null
   let newestRev = 0
+  /** Whether that answer came from a mark write, the only one whose marks fit the page's canvas. */
+  let newestMarks = false
   /** The write count of the last answer this page took. */
   let takenRev = 0
 
@@ -116,14 +118,15 @@ export function createReviewSession(options) {
    * @param {(state: PrState) => PrState} apply
    * @param {(state: PrState) => PrState} undo
    * @param {() => Promise<{ state: PrState }>} request
+   * @param {{ marks?: boolean }} [opts] `marks` for a mark write, whose answer carries the marks
    */
-  const change = async (apply, undo, request) => {
+  const change = async (apply, undo, request, opts = {}) => {
     inFlight += 1
     publish(apply(state))
     try {
       const answer = await request()
       inFlight -= 1
-      takeAnswer(answer.state)
+      takeAnswer(answer.state, opts.marks === true)
       settle()
       return state
     } catch (err) {
@@ -136,21 +139,34 @@ export function createReviewSession(options) {
     }
   }
 
-  /** @param {PrState} answered */
-  const takeAnswer = answered => {
+  /**
+   * @param {PrState} answered
+   * @param {boolean} [marks] whether it answers a mark write
+   */
+  const takeAnswer = (answered, marks = false) => {
     const rev = answered.rev ?? 0
     if (rev >= newestRev) {
       newestRev = rev
       newestState = answered
+      newestMarks = marks
     }
   }
 
-  /** Takes the newest answer once every change has come back, unless an older one arrived. */
+  /**
+   * Takes the newest answer once every change has come back, unless an older one arrived.
+   *
+   * The marks stay the page's own unless the answer is to a mark write. Every other write answers
+   * with the marks as stored, which may describe an earlier canvas; the page was drawn with the
+   * marks fitted to the canvas on screen, and only a mark write keys the stored ones to it.
+   * Taking stored marks there would mark, and collapse, a layer the page shows as unread.
+   */
   const settle = () => {
     if (inFlight > 0 || newestState === null) {
       return
     }
-    const next = newestState
+    const next = newestMarks
+      ? newestState
+      : { ...newestState, reviewed: state.reviewed, reviewedCanvasSha: state.reviewedCanvasSha }
     newestState = null
     newestRev = 0
     if ((next.rev ?? 0) >= takenRev) {
@@ -251,7 +267,8 @@ export function createReviewSession(options) {
           api.putReviewed(options.prNumber, id, reviewed, {
             headSha: options.headSha,
             ...(options.canvasSha === undefined ? {} : { canvasSha: options.canvasSha }),
-          })
+          }),
+        { marks: true }
       )
     },
     /**

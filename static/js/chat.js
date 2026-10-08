@@ -25,6 +25,8 @@ import { getRenderContext } from './layers.js'
 import { renderMarkdown } from './markdown.js'
 import { pendingComments } from './pending.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
+import { REVIEW_PANEL_ID } from './review-panel.js'
+import { openReviewTab, selectSideTab, sideTabsHtml, wireSideTabs } from './side-pane.js'
 
 export const CHAT_WIDTH_KEY = 'pr-review.chat-width'
 export const CHAT_MINIMIZED_KEY = 'pr-review.chat-minimized'
@@ -44,12 +46,13 @@ export function renderChatShell(opts) {
   // The launcher starts hidden and `wireChatPanel` reveals it where it belongs, so a docked
   // chat never paints a launcher over itself on the first frame.
   return (
-    `<aside class="chat" aria-labelledby="chat-h"${opts.minimized ? ' hidden' : ''}>` +
+    `<aside class="chat" aria-label="AI Chat and your review" data-tab="chat"${opts.minimized ? ' hidden' : ''}>` +
     `<button class="handle" type="button" id="chat-handle" role="separator" aria-orientation="vertical" aria-label="Resize AI Chat" aria-valuenow="${width}" aria-valuemin="${CHAT_WIDTH_MIN}" aria-valuemax="${CHAT_WIDTH_MAX}"></button>` +
-    '<div class="chat-h"><h2 id="chat-h">AI Chat</h2><label class="sr" for="thread">Thread</label>' +
+    sideTabsHtml({ chat: true }) +
+    // The tab names the pane on screen; the heading stays for screen readers and the dialog's name.
+    '<div class="chat-h"><h2 class="sr" id="chat-h">AI Chat</h2><label class="sr" for="thread">Thread</label>' +
     '<select id="thread"></select>' +
-    '<button class="cmd" type="button" id="new-thread">new thread</button>' +
-    '<button class="cmd chat-minimize" type="button" id="chat-minimize" aria-label="Minimize AI Chat">minimize</button></div>' +
+    '<button class="cmd" type="button" id="new-thread">new thread</button></div>' +
     '<div class="transcript" id="chat-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0">' +
     '<p class="empty">Ask AI Chat about a layer, a file, or a selection. Answers come with a verdict first, then evidence.</p>' +
     '</div>' +
@@ -64,6 +67,7 @@ export function renderChatShell(opts) {
     '<div class="tbtns"><button class="cmd fill" type="submit" id="chat-send">send</button>' +
     '<button class="cmd" type="button" id="chat-stop" hidden>stop</button>' +
     '<span class="muted small">enter to send</span></div></form>' +
+    `<section class="review-panel" id="${REVIEW_PANEL_ID}" role="tabpanel" aria-labelledby="side-tab-review" hidden></section>` +
     '</aside>' +
     '<dialog class="chat-dialog" id="chat-dialog" aria-labelledby="chat-h"></dialog>' +
     '<button class="chat-launcher" id="chat-launcher" type="button" hidden aria-controls="chat-dialog" aria-expanded="false">AI Chat</button>'
@@ -383,6 +387,7 @@ export function wireChat(options) {
   const bubble = mustFind(root, '#chat-unseen', HTMLElement)
   const sendButton = mustFind(root, '#chat-send', HTMLElement)
   const stopButton = mustFind(root, '#chat-stop', HTMLElement)
+  const reviewPanel = qs(`#${REVIEW_PANEL_ID}`, pane)
 
   /** @type {ChatContext} */
   let context = WHOLE_PR
@@ -873,6 +878,8 @@ export function wireChat(options) {
    */
   const onPaneWheel = event => {
     const target = event.target instanceof Element ? event.target : null
+    // The tab on screen owns the wheel: the transcript, or the list of the review being written.
+    const scroller = (pane.getAttribute('data-tab') === 'review' ? reviewPanel : null) ?? log
     const insideOwnScroller =
       target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
         ? canScrollBy(target, event.deltaY)
@@ -880,16 +887,16 @@ export function wireChat(options) {
     const at = {
       // The narrow layout drops the pin and the pane scrolls with the page like any other column.
       pinned: getComputedStyle(pane).position === 'sticky',
-      insideTranscript: target?.closest('.transcript') !== null && target !== null,
+      insideTranscript: target !== null && scroller.contains(target),
       zooming: event.ctrlKey,
       insideOwnScroller,
     }
     if (!redirectsWheelToTranscript(at)) {
       return
     }
-    // Consumed whether or not the transcript can move, so the page stays put under the pointer.
+    // Consumed whether or not the list can move, so the page stays put under the pointer.
     event.preventDefault()
-    log.scrollTop += event.deltaY
+    scroller.scrollTop += event.deltaY
   }
 
   /** @param {Event} event */
@@ -925,6 +932,12 @@ export function wireChat(options) {
     minimized: readChatMinimized(storage),
     onMinimizedChange: minimized => writeChatMinimized(storage, minimized),
   })
+  const stopTabs = wireSideTabs(pane)
+  // Whatever asks the chat for something shows its tab first.
+  const openChat = () => {
+    selectSideTab(pane, 'chat')
+    panel.open()
+  }
 
   form.addEventListener('submit', onSubmit)
   root.addEventListener('click', onClick)
@@ -941,12 +954,16 @@ export function wireChat(options) {
     },
     setContext,
     focusInput() {
-      panel.open()
+      openChat()
+    },
+    /** Shows the review being written, in its tab of the pane. */
+    openReview() {
+      openReviewTab(pane, panel)
     },
     /** @param {ChatContext} next */
     ask(next) {
       setContext(next)
-      panel.open()
+      openChat()
     },
     /**
      * Draws each card's commands again when its comment was just posted, joined the review, or
@@ -982,7 +999,7 @@ export function wireChat(options) {
      */
     askQuestion(next, question) {
       setContext(next)
-      panel.open()
+      openChat()
       box.value = question
       void runCommand(sendButton, send, { pendingLabel: 'sending…' })
     },
@@ -1001,6 +1018,7 @@ export function wireChat(options) {
       box.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
       stopResize()
       panel.stop()
+      stopTabs()
     },
   }
 }

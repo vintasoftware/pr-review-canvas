@@ -94,7 +94,7 @@ describe('pendingBarHtml', () => {
     expect(pendingBarHtml(0)).toBe('')
   })
 
-  it('says how many are waiting and offers both ways out', () => {
+  it('says how many are waiting, opens the list, and offers both ways out', () => {
     document.body.innerHTML = pendingBarHtml(2)
     const bar = document.querySelector('.pending-bar')
     expect(bar?.getAttribute('role')).toBe('status')
@@ -102,6 +102,7 @@ describe('pendingBarHtml', () => {
     // The reviewer is told plainly that nothing has left the machine yet.
     expect(bar?.textContent).toContain('until you submit it')
     expect([...(bar?.querySelectorAll('button') ?? [])].map(b => b.getAttribute('data-act'))).toEqual([
+      'show-review',
       'pending-finish',
       'pending-discard',
     ])

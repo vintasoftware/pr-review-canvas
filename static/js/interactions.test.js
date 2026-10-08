@@ -631,21 +631,47 @@ describe('reviewed state', () => {
 })
 
 describe('attention points', () => {
-  it('dismisses a point everywhere it shows, and counts only the active ones', async () => {
+  const layerCard = (/** @type {HTMLElement} */ root, /** @type {string} */ fp) =>
+    root.querySelector(`section.layer li.finding[data-fingerprint="${fp}"]`)
+
+  it('dismisses a point everywhere it shows, collapses it in place, and counts only the open ones', async () => {
     const { root, calls } = setup()
     expect(root.querySelector('.sevsum')?.textContent).toContain('1')
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
     await flush()
     expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: true }]])
-    expect(
-      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
-    ).toBe(true)
-    expect(root.querySelector('tr.ifind[data-fingerprint="fp-1"]')?.hasAttribute('hidden')).toBe(true)
+    for (const el of [layerCard(root, 'fp-1'), root.querySelector('tr.ifind[data-fingerprint="fp-1"]')]) {
+      expect(el?.hasAttribute('hidden')).toBe(false)
+      expect(el?.getAttribute('data-status')).toBe('dismissed')
+      expect(el?.hasAttribute('data-expanded')).toBe(false)
+    }
     expect(root.querySelector('.point-count')?.textContent).toBe('0')
-    expect(root.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
+    expect(root.querySelector('.point-statuses')?.textContent).toContain('1 dismissed')
   })
 
-  it('lets the author settle a point with a reason, and hides it with the reason listed', async () => {
+  it('expands a collapsed point and collapses it again', async () => {
+    const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
+    const card = layerCard(root, 'fp-1')
+    const toggle = click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-expand"]')
+    expect(card?.hasAttribute('data-expanded')).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    // The row in the diff keeps its own view.
+    expect(root.querySelector('tr.ifind[data-fingerprint="fp-1"]')?.hasAttribute('data-expanded')).toBe(false)
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-expand"]')
+    expect(card?.hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('switches the points acted on off the page and back from the overview', () => {
+    const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
+    const toggle = click(root, '[data-act="toggle-handled"]')
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(toggle.textContent).toBe('show the 1 acted on')
+    click(root, '[data-act="toggle-handled"]')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(toggle.textContent).toBe('hide the 1 acted on')
+  })
+
+  it('lets the author settle a point with a reason, and collapses it with the reason', async () => {
     const { root, calls } = setup({ selfReview: true, artifact: authored })
     expect(root.querySelector('.self-review-note')?.textContent).toContain('3 points are marked yours')
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
@@ -676,13 +702,11 @@ describe('attention points', () => {
       ],
     ])
     expect(root.querySelector('.settle-box')).toBeNull()
-    expect(
-      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
-    ).toBe(true)
-    expect(root.querySelector('.settled-list .dismissed-line')?.textContent).toContain(
-      '1 resolved by the author'
-    )
-    expect(root.querySelector('.settled-reason')?.textContent).toContain('Covered by the e2e suite.')
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('resolved')
+    expect(card?.querySelector('.p-summary')?.textContent).toContain('Covered by the e2e suite.')
+    expect(card?.querySelector('.settled-reason')?.textContent).toContain('Covered by the e2e suite.')
+    expect(root.querySelector('.point-statuses')?.textContent).toContain('1 resolved')
     expect(root.querySelector('.self-review-note')?.textContent).toContain('2 points are marked yours')
     expect(root.querySelector('.toast')?.textContent).toContain('canvas comment is updated')
   })
@@ -690,20 +714,16 @@ describe('attention points', () => {
   it('reopens a settled point for the author, and offers settle on it again', async () => {
     const settled = { 'fp-1': { reason: 'Covered.', at: NOW.toISOString() } }
     const { root, calls } = setup({ selfReview: true, artifact: { ...authored, settled } })
-    expect(
-      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
-    ).toBe(true)
-    click(root, '[data-act="show-settled"]')
-    expect(root.querySelector('.findings.settled')?.hasAttribute('hidden')).toBe(false)
-    click(root, '[data-act="point-unsettle"]')
+    expect(layerCard(root, 'fp-1')?.getAttribute('data-status')).toBe('resolved')
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-unsettle"]')
     await flush()
     expect(calls).toEqual([
       ['settled', { fingerprint: 'fp-1', settled: false, headSha: artifact.pr.headSha }],
     ])
-    const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
-    expect(card?.hasAttribute('hidden')).toBe(false)
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('open')
     expect(card?.querySelector('[data-act="point-settle"]')).not.toBeNull()
-    expect(root.querySelector('.settled-list')?.hasAttribute('hidden')).toBe(true)
+    expect(root.querySelector('.point-statuses')?.textContent).not.toContain('resolved')
   })
 
   it('shows a reviewer what the author settled, with no way to settle or reopen', () => {
@@ -718,34 +738,32 @@ describe('attention points', () => {
     expect(root.querySelector('[data-act="point-settle"]')).toBeNull()
     expect(root.querySelector('[data-act="point-unsettle"]')).toBeNull()
     expect(root.querySelector('.self-review-note')?.hasAttribute('hidden')).toBe(true)
-    expect(root.querySelector('.settled-list a')?.getAttribute('href')).toBe(settled['fp-1'].commentUrl)
-    expect(root.querySelector('.findings [data-fingerprint="fp-1"] .pill.audience')?.textContent).toBe(
-      'author'
-    )
+    const card = layerCard(root, 'fp-1')
+    expect(card?.querySelector('.tbtns a')?.getAttribute('href')).toBe(settled['fp-1'].commentUrl)
+    expect(card?.querySelector('.pill.audience')?.textContent).toBe('author')
   })
 
   it('offers resolve on a point the author dismissed only after it is restored', async () => {
     const { root, calls } = setup({ selfReview: true, artifact })
-    const card = () => root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
-    expect(card()?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    expect(layerCard(root, 'fp-1')?.querySelector('[data-act="point-settle"]')).not.toBeNull()
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
     await flush()
-    expect(card()?.hasAttribute('hidden')).toBe(true)
-    const row = root.querySelector('.dismissed-list [data-fingerprint="fp-1"]')
-    expect(row?.querySelector('[data-act="point-settle"]')).toBeNull()
-    click(root, '.dismissed-list [data-act="point-restore"]')
+    expect(layerCard(root, 'fp-1')?.getAttribute('data-status')).toBe('dismissed')
+    expect(layerCard(root, 'fp-1')?.querySelector('[data-act="point-settle"]')).toBeNull()
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-restore"]')
     await flush()
     expect(calls).toEqual([
       ['dismissed', { fingerprint: 'fp-1', dismissed: true }],
       ['dismissed', { fingerprint: 'fp-1', dismissed: false }],
     ])
-    expect(card()?.hasAttribute('hidden')).toBe(false)
-    expect(card()?.querySelector('[data-act="point-settle"]')).not.toBeNull()
-    expect(card()?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('open')
+    expect(card?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    expect(card?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
   })
 
   it.each([false, true])(
-    'keeps the card and shows why when the server refuses a dismissal (self-review %s)',
+    'keeps the card open and shows why when the server refuses a dismissal (self-review %s)',
     async selfReview => {
       const { root } = setup({
         selfReview,
@@ -754,24 +772,34 @@ describe('attention points', () => {
       })
       click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
       await flush()
-      const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
-      expect(card?.hasAttribute('hidden')).toBe(false)
+      const card = layerCard(root, 'fp-1')
+      expect(card?.getAttribute('data-status')).toBe('open')
       expect(card?.querySelector('.cmd-err')?.textContent).toBe('offline')
     }
   )
 
+  it('shows why a restore failed next to the restore command', async () => {
+    const { root } = setup({
+      state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } },
+      api: { putDismissed: () => Promise.reject(new Error('offline')) },
+    })
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-restore"]')
+    await flush()
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('dismissed')
+    expect(card?.querySelector('[data-act="point-restore"] + .cmd-err')?.textContent).toBe('offline')
+  })
+
   it.each([false, true])(
-    'restores a point queued from the dismissed list with its usual commands (self-review %s)',
+    'restores a dismissed point with its usual commands (self-review %s)',
     async selfReview => {
       const { root } = setup({ selfReview, artifact })
       click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
       await flush()
-      click(root, '.dismissed-list [data-fingerprint="fp-1"] [data-act="point-queue"]')
+      click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-restore"]')
       await flush()
-      click(root, '.dismissed-list [data-act="point-restore"]')
-      await flush()
-      const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
-      expect(card?.hasAttribute('hidden')).toBe(false)
+      const card = layerCard(root, 'fp-1')
+      expect(card?.classList.contains('is-handled')).toBe(false)
       expect(card?.querySelector('[data-act="point-restore"]')).toBeNull()
       expect(card?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
       expect(card?.querySelector('[data-act="point-settle"]') !== null).toBe(selfReview)
@@ -785,15 +813,7 @@ describe('attention points', () => {
     expect(root.querySelector('.settle-box')).toBeNull()
   })
 
-  it('closes the dismissed list again on a second click', () => {
-    const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
-    const show = click(root, '[data-act="show-dismissed"]')
-    click(root, '[data-act="show-dismissed"]')
-    expect(show.textContent).toBe('show')
-    expect(root.querySelector('.findings.dismissed')?.hasAttribute('hidden')).toBe(true)
-  })
-
-  it('keeps the link of a point that was posted before it was dismissed', () => {
+  it('shows a point that was posted before it was dismissed as posted, with its link', () => {
     const { root } = setup({
       state: {
         ...BASE,
@@ -801,22 +821,11 @@ describe('attention points', () => {
         posted: [{ commentId: 1001, pointFingerprint: 'fp-1', at: NOW.toISOString() }],
       },
     })
-    click(root, '[data-act="show-dismissed"]')
-    expect(root.querySelector('.findings.dismissed .tbtns a')?.getAttribute('href')).toBe(
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('posted')
+    expect(card?.querySelector('.tbtns a')?.getAttribute('href')).toBe(
       'https://github.com/acme/widgets/pull/42#discussion_r1001'
     )
-  })
-
-  it('shows the dismissed list and restores a point from it', async () => {
-    const { root, calls } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
-    expect(root.querySelector('.findings.dismissed')?.hasAttribute('hidden')).toBe(true)
-    const show = click(root, '[data-act="show-dismissed"]')
-    expect(root.querySelector('.findings.dismissed')?.hasAttribute('hidden')).toBe(false)
-    expect(show.textContent).toBe('hide')
-    click(root, '.findings.dismissed [data-act="point-restore"]')
-    await flush()
-    expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: false }]])
-    expect(root.querySelector('.dismissed-list')?.hasAttribute('hidden')).toBe(true)
   })
 
   it('posts a point anchored on the old side', async () => {
@@ -1301,6 +1310,22 @@ describe('keyboard', () => {
     // The focus moved to a file, so there is no point to dismiss any more.
     expect(calls).toEqual([])
     expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_ts')
+  })
+
+  it('dismisses the point in focus with d, then opens and collapses it with o', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key('d')
+    await flush()
+    expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: true }]])
+    const card = root.querySelector('#point-p-1')
+    expect(card?.getAttribute('data-status')).toBe('dismissed')
+    key('o')
+    expect(card?.hasAttribute('data-expanded')).toBe(true)
+    // The point's file card stays as it was.
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(false)
+    key('o')
+    expect(card?.hasAttribute('data-expanded')).toBe(false)
   })
 
   it('moves the keyboard focus with the ring', () => {

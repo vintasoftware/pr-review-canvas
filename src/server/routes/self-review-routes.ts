@@ -86,7 +86,8 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
             ...(point.endLine !== undefined && point.endLine !== point.line ? { startLine: point.line } : {}),
             side: point.side ?? 'new',
             body: settlementCommentBody(point, input.reason, await mentionsCanvas(ctx)),
-            pointFingerprint: point.fingerprint,
+            // The reason is not the point: the settlement links it, and a point reopened later
+            // reads as open, not as posted.
             headSha: pr.headSha,
           })
           settlement.commentUrl = posted.comment.url

@@ -707,6 +707,31 @@ refused.
 When automatic download fails, download the archive in GitHub or GitLab and use the page's drop
 zone or `pr-review import <zip> --pr <n>`.
 
+### Attention point status
+
+Each attention point shows where it stands for you. A point you have not acted on is **open**.
+Acting on it changes its status:
+
+- **in your review**: you added it to the pending review. It goes out when you submit.
+- **posted**: you posted it, or it went out with a submitted review.
+- **resolved**: the author answered it with a reason. Every reader sees this status.
+- **dismissed**: you took it off your own list. Other readers still see it open.
+
+When more than one applies, the point shows the first one in this order: resolved, posted, in your
+review, dismissed.
+
+A point you acted on stays in its layer and on its line in the diff. It collapses to its title, its
+status, and one line: the start of the reason, the comment link, or a note that the draft waits.
+**show** expands it. You then see the point's text, what was done with it (the author's reason, or
+your draft with **edit** and **delete**), and the commands that undo it: **reopen**, **restore**, or
+deleting the draft. The point collapses again when its status changes. A reload also collapses it.
+
+The counts in the rail, the layer headings, and the overview squares include only open points. The
+overview line **Attention points: 2 open · 1 in your review · …** counts each status. Its
+**hide the N acted on** command removes the collapsed points from the page until you click it
+again. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
+it again.
+
 ### Self-review
 
 The author reads the canvas before asking for review. Every attention point names its audience:
@@ -723,19 +748,20 @@ reviewer decision and click **resolve**. On a pull request, **also post the reas
 this line** is checked by default; the reason then also appears as a review comment on the point's
 line.
 
-**Dismiss** is available to every reader, the author too. It hides the point from your own page
+**Dismiss** is available to every reader, the author too. It collapses the point on your own page
 only. It does not resolve the point: reviewers still see it, and the self-review note still counts
 it. To resolve a point you dismissed, **restore** it first.
 
 A resolution is written into the canvas itself:
 
-- The point leaves every reader's list. The overview lists it under **N resolved by the author**
-  with its reason and, when posted, a link to the comment.
+- The point leaves every reader's open list and collapses where it is, with the author's reason
+  and, when posted, a link to the comment. A reason posted as a comment does not mark the point
+  posted, so a reopened point is open again.
 - The canvas comment is shared again at once, with the new counts. Reviewers click **refresh** to
   load it. The author's Conversation card updates immediately and stays current after reload.
   When sharing fails, the resolution stays in your local canvas and the message says why.
   With [`canvasComment` off](#turning-sharing-off), nothing is shared and reviewers do not see it.
-- **reopen** in that list takes a resolution back and shares the canvas again. A posted comment
+- **reopen** on the expanded point takes a resolution back and shares the canvas again. A posted comment
   stays on the forge.
 - Regenerating the canvas for the same commit keeps each resolution whose point comes back with the
   same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the
@@ -766,8 +792,9 @@ A pending review holds comments on your machine until you submit them together.
   publishes ahead of the review. Replies and pull-request comments are not part of a forge review,
   so they still post at once.
 - An attention point keeps both **post to github** and **add to review**, since its text is written
-  in advance. A point in the review shows **in your review**; edit or remove it as the draft on its
-  line. After submission, the point shows the comment it became.
+  in advance. A point in the review collapses with **in your review**. Expand it to edit or delete
+  its draft there, on its line, or in the review tab. After submission, the point collapses with
+  the comment it became.
 - A comment the AI Chat proposes works the same way: it offers **post to github** and **add to
   review**, and shows **in your review** once it is queued. After submission it shows **view
   comment** when the comment link is known, or **submitted** when the receipt could not be loaded.
@@ -781,6 +808,12 @@ A pending review holds comments on your machine until you submit them together.
 - A bar under the progress line shows how many drafts are waiting. Each draft appears on its line
   with a **pending** badge and edit and delete commands. Drafts are saved in the local review state
   and survive a reload. **discard** drops the whole review; nothing was sent to the forge.
+- **see the list** in the bar opens the **Your review** tab of the side pane, next to **AI Chat**.
+  The tab lists every draft by file. Each draft shows its lines, where it came from (an attention
+  point, AI Chat, or you), and the same **edit** and **delete** commands. The tab also has
+  **finish your review** and **discard**. Its count shows how many drafts wait. With AI Chat off,
+  the pane holds the review alone. It stays minimized until you open it, and its launcher shows
+  only while drafts wait.
 - Drafts from an earlier commit are listed separately in the bar with their original location and
   commit. They are submitted only when the stored diff is identical to the current one and
   `canvas.keepForIdenticalDiff` is on. Otherwise, copy the text, delete the draft, and comment on

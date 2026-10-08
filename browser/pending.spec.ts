@@ -159,11 +159,26 @@ test('adds an attention point to the review and gives it back on delete', async 
   await expect(point.locator('[data-act="point-post"]')).toHaveCount(1)
   await point.locator('[data-act="point-queue"]').click()
 
-  await expect(point.locator('.pill.pending')).toHaveText('in your review')
+  await expect(point.locator('.f-title .pill.pending')).toHaveText('in your review')
   await expect(point.locator('[data-act="point-queue"]')).toHaveCount(0)
+  // The point stays where it was, collapsed to its title and the line that says it waits.
+  await expect(point).toHaveAttribute('data-status', 'queued')
+  await expect(point.locator('.p-summary')).toHaveText('Waits in your review · not on GitHub yet')
+  await expect(point.locator('.prose').first()).toBeHidden()
   await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
   // The point's own text is what waits, drawn on the line it is anchored to.
   await expect(page.locator('tr.pending-row .pending-cmt')).toContainText('Sum instead of product')
+
+  // Expanded, the point shows its draft, which is edited right there.
+  await point.locator('[data-act="point-expand"]').click()
+  const draft = point.locator('.p-outcome .pending-cmt')
+  await expect(draft).toContainText('Sum instead of product')
+  await draft.locator('[data-act="pending-edit"]').click()
+  await point.locator('.composer-box textarea').fill('Is the sum what the spec wants?')
+  await point.locator('.composer-box [data-act="pending-save"]').click()
+  await expect(point.locator('.p-outcome .pending-cmt')).toContainText('Is the sum what the spec wants?')
+  await expect(point).toHaveAttribute('data-expanded', '')
+  await expect(page.locator('tr.pending-row .pending-cmt')).toContainText('Is the sum what the spec wants?')
 
   await page.locator('tr.pending-row [data-act="pending-delete"]').click()
   await expect(point.locator('.pill.pending')).toHaveCount(0)
@@ -176,7 +191,7 @@ test('turns a submitted attention point into a posted thread and link', async ({
   const point = page.locator('li[data-point="p-1"]')
   await point.locator('[data-act="point-queue"]').click()
   await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
-  await page.locator('[data-act="pending-finish"]').click()
+  await page.locator('.pending-bar [data-act="pending-finish"]').click()
   const dialog = page.locator('#signoff-dialog')
   await expect(dialog.locator('[data-act="signoff-post"]')).toBeEnabled()
   await dialog.locator('[data-act="signoff-post"]').click()
@@ -185,4 +200,29 @@ test('turns a submitted attention point into a posted thread and link', async ({
   await expect(page.locator('tr.thread[data-thread="8001"]')).toContainText('Sum instead of product')
   await expect(point.locator('.tbtns a')).toHaveAttribute('href', /discussion_r8001$/)
   await expect(point.locator('[data-act="point-queue"]')).toHaveCount(0)
+})
+
+test('keeps a layer open when a draft is added or deleted, whatever marks an older canvas left', async ({
+  page,
+  chatServer,
+}) => {
+  // A mark made on another canvas does not count for this one, so the layer is drawn unread.
+  const { url } = await chatServer({
+    setup: async t => {
+      await t.ctx.state.setReviewed(42, 'layer:run-path', true, { canvasSha: 'f'.repeat(40) })
+    },
+  })
+  await page.goto(url)
+  const layer = page.locator('section.layer[data-layer="run-path"]')
+  const body = layer.locator(':scope > .layer-body')
+  await expect(body).toBeVisible()
+  const point = layer.locator('li.finding[data-fingerprint="fp-1"]')
+  await point.locator('[data-act="point-queue"]').click()
+  await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
+  await expect(body).toBeVisible()
+  await expect(layer).not.toHaveClass(/is-reviewed/)
+  await page.locator('tr.pending-row [data-act="pending-delete"]').click()
+  await expect(point).toHaveAttribute('data-status', 'open')
+  await expect(body).toBeVisible()
+  await expect(layer).not.toHaveClass(/is-reviewed/)
 })

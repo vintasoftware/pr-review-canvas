@@ -227,15 +227,16 @@ for (const skin of ['terminal', 'github', 'olive'] as const) {
     await expect(card).toBeVisible()
     await expect(inline).toBeVisible()
     await card.locator('[data-act="point-dismiss"]').click()
-    await expect(card).toBeHidden()
-    await expect(inline).toBeHidden()
+    await expect(card.locator('.prose')).toBeHidden()
+    await expect(card.locator('.p-summary')).toBeVisible()
+    await expect(inline.locator('.prose')).toBeHidden()
     await expect(page.locator('.toast')).toHaveText('attention point dismissed')
 
-    const dismissed = page.locator('.dismissed-list')
-    await dismissed.locator('[data-act="show-dismissed"]').click()
-    await expect(dismissed.locator('li.finding')).toBeVisible()
-    await dismissed.locator('[data-act="point-restore"]').click()
-    await expect(card).toBeVisible()
+    await card.locator('[data-act="point-expand"]').click()
+    await expect(card.locator('.prose')).toBeVisible()
+    await card.locator('[data-act="point-restore"]').click()
+    await expect(card).toHaveAttribute('data-status', 'open')
+    await expect(card.locator('[data-act="point-dismiss"]')).toBeVisible()
   })
 }
 
