@@ -115,3 +115,18 @@ test('keeps the header when the review fails to load, so the reader can leave fo
   await expect(page.locator('.hdr a.brand-wordmark')).toHaveAttribute('href', '/')
   await expect(page.locator('.hdr .brand a.mono')).toHaveText('acme/widgets')
 })
+
+test('shows the change totals of the header and each layer, and keeps them as review progresses', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.goto(reviewUrl)
+  await expect(page.locator('.hdr .diffstat')).toHaveAttribute('title', 'code +5 −4 · tests +2 −1')
+  const layer = page.locator('nav.rail a[href="#layer-run-path"]')
+  await expect(layer.locator('.diffstat')).toHaveAttribute('title', 'code +3 −2 · tests +2 −1')
+  await expect(layer.locator('.m')).toHaveText('3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema')
+  // Marking the layer redraws the rail, which keeps the totals counted from the patches.
+  await page.locator('section.layer[data-layer="run-path"] [data-act="mark-layer"]').click()
+  await expect(layer.locator('.dot')).toHaveClass('dot on')
+  await expect(layer.locator('.m')).toHaveText('3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema')
+})
