@@ -50,13 +50,16 @@ export function renderChatShell(opts) {
     '<select id="thread"></select>' +
     '<button class="cmd" type="button" id="new-thread">new thread</button>' +
     '<button class="cmd chat-minimize" type="button" id="chat-minimize" aria-label="Minimize AI Chat">minimize</button></div>' +
-    '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
-    ' <button class="cmd" type="button" id="chat-clear" hidden>clear</button></p>' +
     '<div class="transcript" id="chat-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0">' +
     '<p class="empty">Ask AI Chat about a layer, a file, or a selection. Answers come with a verdict first, then evidence.</p>' +
     '</div>' +
+    // The context is what the next message is about, so it sits on the composer, not over the
+    // thread. The bubble sits on the composer too, so it clears it at any height.
+    '<form class="chat-composer" id="chat-form">' +
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
-    '<form class="chat-composer" id="chat-form"><label class="sr" for="msg">Message</label>' +
+    '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
+    ' <button class="cmd" type="button" id="chat-clear" hidden>clear</button></p>' +
+    '<label class="sr" for="msg">Message</label>' +
     '<textarea id="msg" rows="3" placeholder="Ask AI Chat about this PR…"></textarea>' +
     '<div class="tbtns"><button class="cmd fill" type="submit" id="chat-send">send</button>' +
     '<button class="cmd" type="button" id="chat-stop" hidden>stop</button>' +
@@ -165,9 +168,15 @@ function withDefaults(overrides) {
 }
 
 /**
+ * What a turn carries besides its text. `context` is the label of what a message was about; a
+ * message about the whole PR has none, so only a narrower target is named.
+ * @typedef {{ incomplete?: string, fallback?: ChatTurn['fallback'], context?: string }} TurnOpts
+ */
+
+/**
  * @param {ChatTurn['role']} role
  * @param {string} bodyHtml
- * @param {{ incomplete?: string, fallback?: ChatTurn['fallback'] }} [opts]
+ * @param {TurnOpts} [opts]
  */
 function turnHtml(role, bodyHtml, opts = {}) {
   return `<div class="turn ${role === 'assistant' ? 'a' : 'u'}">${turnInnerHtml(role, bodyHtml, opts)}</div>`
@@ -176,7 +185,7 @@ function turnHtml(role, bodyHtml, opts = {}) {
 /**
  * @param {ChatTurn['role']} role
  * @param {string} bodyHtml
- * @param {{ incomplete?: string, fallback?: ChatTurn['fallback'] }} [opts]
+ * @param {TurnOpts} [opts]
  */
 function turnInnerHtml(role, bodyHtml, opts = {}) {
   const note =
@@ -185,6 +194,9 @@ function turnInnerHtml(role, bodyHtml, opts = {}) {
       : `<p class="muted small">the answer stopped early (${esc(opts.incomplete)})</p>`
   return (
     `<span class="role">${role === 'assistant' ? 'AI Chat' : 'You'}</span>` +
+    (opts.context === undefined
+      ? ''
+      : `<p class="turn-ctx">about <span class="ctx-chip">${esc(opts.context)}</span></p>`) +
     (opts.fallback === undefined ? '' : checkoutWarningHtml(opts.fallback)) +
     `<div class="prose">${bodyHtml}</div>${note}`
   )
@@ -424,6 +436,15 @@ export function wireChat(options) {
   const layerTitle = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)?.title
   const pointTitle = /** @param {string} fp */ fp =>
     session.artifact.points.find(p => p.fingerprint === fp)?.title
+  /**
+   * What a sent message names above its text, so a reader scrolling back sees what each question
+   * was about. A message about the whole PR, or one saved before turns kept a context, names none.
+   * @param {ChatContext | undefined} about
+   */
+  const turnContext = about =>
+    about === undefined || about.kind === 'pr'
+      ? {}
+      : { context: chatContextLabel(about, layerTitle, pointTitle) }
 
   const drawContext = () => {
     chip.textContent = chatContextLabel(context, layerTitle, pointTitle)
@@ -479,7 +500,7 @@ export function wireChat(options) {
    * redrawn without looking it up again.
    * @param {ChatTurn['role']} role
    * @param {string} html
-   * @param {{ incomplete?: string, fallback?: ChatTurn['fallback'] }} [opts]
+   * @param {TurnOpts} [opts]
    * @returns {{ turn: HTMLElement, body: HTMLElement }}
    */
   const appendTurn = (role, html, opts = {}) => {
@@ -581,6 +602,7 @@ export function wireChat(options) {
                 {
                   ...(turn.incomplete === undefined ? {} : { incomplete: turn.incomplete }),
                   ...(turn.fallback === undefined ? {} : { fallback: turn.fallback }),
+                  ...(turn.role === 'user' ? turnContext(turn.context) : {}),
                 }
               )
             )
@@ -640,7 +662,7 @@ export function wireChat(options) {
     box.value = ''
     // The turn owns the log from here on, so a history load still on its way lands nowhere.
     claimLog()
-    appendTurn('user', renderMarkdown(message, { paths }))
+    appendTurn('user', renderMarkdown(message, { paths }), turnContext(context))
     dispatch({ type: 'send' })
     scrollToBottom('follow')
     const answer = appendTurn('assistant', '')

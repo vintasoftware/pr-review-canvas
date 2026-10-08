@@ -78,12 +78,14 @@ textarea:disabled {
   border-color: var(--line);
   cursor: not-allowed;
 }
-.ctx-line {
-  padding: 8px 14px;
+.ctx-line,
+.turn-ctx {
   font-size: 12px;
   color: var(--fg-muted);
-  border-bottom: 1px solid var(--line);
   margin: 0;
+}
+.turn-ctx {
+  margin-bottom: 4px;
 }
 .transcript {
   padding: 14px;
@@ -127,6 +129,7 @@ textarea:disabled {
   color: var(--accent);
 }
 .chat-composer {
+  position: relative;
   padding: 12px 14px;
   border-top: 1px solid var(--ink);
   background: var(--panel-2);
