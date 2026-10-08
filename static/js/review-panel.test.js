@@ -51,24 +51,26 @@ describe('the review tab', () => {
         }),
         draft({ id: 'd3', line: 6 }),
         draft({ id: 'd4', line: 7, pointFingerprint: 'fp-unknown' }),
+        draft({ id: 'd5', line: 8, pointFingerprint: 'fp-1', proposalFingerprint: 'y' }),
       ],
     }
     document.body.innerHTML = reviewPanelHtml(state, { headSha: HEAD, points: artifact.points, now: NOW })
-    expect(document.querySelector('.review-head')?.textContent).toContain('4 pending comments')
+    expect(document.querySelector('.review-head')?.textContent).toContain('5 pending comments')
     expect(document.querySelector('[data-act="pending-finish"]')?.hasAttribute('data-needs-post')).toBe(true)
     expect([...document.querySelectorAll('.review-path')].map(h => h.textContent)).toEqual([
       'src/app.ts',
       'src/gone.ts',
     ])
     const rows = [...document.querySelectorAll('.review-draft')]
-    expect(rows.map(r => r.getAttribute('data-pending-id'))).toEqual(['d1', 'd3', 'd4', 'd2'])
+    expect(rows.map(r => r.getAttribute('data-pending-id'))).toEqual(['d1', 'd3', 'd4', 'd5', 'd2'])
     expect(rows.map(r => r.querySelector('.review-where .muted')?.textContent)).toEqual([
       '· from the point “Sum instead of product”',
       '· your comment',
       '· from an attention point',
+      '· proposed by AI Chat about the point “Sum instead of product”',
       '· proposed by AI Chat',
     ])
-    expect(rows[3]?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/gone.ts:1-3:old')
+    expect(rows[4]?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/gone.ts:1-3:old')
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
     // Each draft keeps the commands it has on the diff.
     expect([...(rows[0]?.querySelectorAll('.pending-cmt button') ?? [])].map(b => b.textContent)).toEqual([

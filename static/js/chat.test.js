@@ -767,6 +767,73 @@ describe('the proposed-comment commands', () => {
       ['edit', 'Rename.', fingerprint],
     ])
   })
+
+  it('shows the point the agent tied a comment to, and lets the reader untie it before sending', async () => {
+    /** @type {Array<[string, string | undefined]>} */
+    const seen = []
+    const { root } = mount(
+      {
+        streamChat: async (_pr, _input, opts) => {
+          opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+          opts.onEvent({
+            event: 'chunk',
+            data: {
+              text: '```comment\n{"path":"src/app.ts","line":3,"body":"Rename.","point":"fp-1"}\n```\n',
+            },
+          })
+        },
+      },
+      { onProposed: (what, comment) => seen.push([what, comment.point?.fingerprint]) }
+    )
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    expect(el(root, '.proposed-point').textContent).toBe('about the point “Sum instead of product” unlink')
+    el(root, '[data-act="proposed-queue"]').click()
+    el(root, '[data-act="proposed-unlink"]').click()
+    expect(root.querySelector('.proposed-point')).toBeNull()
+    el(root, '[data-act="proposed-queue"]').click()
+    expect(seen).toEqual([
+      ['queue', 'fp-1'],
+      ['queue', undefined],
+    ])
+  })
+
+  it('draws the link from what was sent once the comment went out', () => {
+    const withPoints = targetsFromFiles(artifact.files, artifact.points)
+    const text = '```comment\n{"path":"src/app.ts","line":3,"body":"Rename this.","point":"fp-1"}\n```'
+    const fingerprint = proposalFingerprint({
+      path: 'src/app.ts',
+      line: 3,
+      side: 'new',
+      body: 'Rename this.',
+    })
+    /** @param {string | undefined} pointFingerprint */
+    const queued = pointFingerprint => ({
+      id: 'p1',
+      path: 'src/app.ts',
+      line: 3,
+      side: /** @type {const} */ ('new'),
+      body: 'Rename this.',
+      proposalFingerprint: fingerprint,
+      ...(pointFingerprint === undefined ? {} : { pointFingerprint }),
+      headSha: '',
+      createdAt: '',
+      updatedAt: '',
+    })
+    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths)
+    expect(document.querySelector('[data-act="proposed-unlink"]')).not.toBeNull()
+    // Sent with its link: the line stays, with nothing left to untie.
+    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, 'h', [], [queued('fp-1')])
+    expect(document.querySelector('.proposed-point')?.textContent).toBe(
+      'about the point “Sum instead of product”'
+    )
+    // Untied before it went out: the agent's text links it again on a redraw, the draft does not.
+    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, 'h', [], [queued(undefined)])
+    expect(document.querySelector('.proposed-point')).toBeNull()
+  })
 })
 
 describe('QUICK_QUESTIONS', () => {

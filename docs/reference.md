@@ -712,8 +712,10 @@ zone or `pr-review import <zip> --pr <n>`.
 Each attention point shows where it stands for you. A point you have not acted on is **open**.
 Acting on it changes its status:
 
-- **in your review**: you added it to the pending review. It goes out when you submit.
-- **posted**: you posted it, or it went out with a submitted review.
+- **in your review**: you added it, or a comment AI Chat tied to it, to the pending review. It goes
+  out when you submit. A point can hold more than one draft; the card lists them all.
+- **posted**: you posted it (or a comment AI Chat tied to it), or it went out with a submitted
+  review.
 - **resolved**: the author answered it with a reason. Every reader sees this status.
 - **dismissed**: you took it off your own list. Other readers still see it open.
 
@@ -806,6 +808,15 @@ A pending review holds comments on your machine until you submit them together.
   other turns share the same status. The fingerprint follows its draft and identifies the posted
   comment, so its link survives draft edits, GitHub edits, and later commits moving the lines.
   Delayed receipts and older records use GitHub's complete original range to find the comment.
+- AI Chat can tie a proposed comment to an attention point when the comment acts on it, for
+  example when it answers what the point asks you to decide. The card then says **about the
+  point "…"**. AI Chat decides this from the conversation: the context chip names where the talk
+  started, so when it has moved to another topic, the comment is not tied even if the chip still
+  names a point. The page ties a comment only to a point of this canvas. **unlink** on the card
+  takes the tie off before you send the comment. A tied comment acts on its point like the point's
+  own text: once you add it to the review, the point collapses as **in your review** and lists it
+  among its drafts, even when it sits on another line; once it is posted, the point shows
+  **posted**. The review tab says **proposed by AI Chat about the point "…"**.
 - A bar under the progress line shows how many drafts are waiting. Each draft appears on its line
   with a **pending** badge and edit and delete commands. Drafts are saved in the local review state
   and survive a reload. **discard** drops the whole review; nothing was sent to the forge.

@@ -4,6 +4,7 @@ import { splitFences } from './fences.js'
 import {
   PROPOSED_BODY_MAX,
   parseProposedComment,
+  pointRef,
   proposalFingerprint,
   splitChatAnswer,
   targetsFromFiles,
@@ -111,6 +112,50 @@ describe('parseProposedComment', () => {
     ).toEqual({
       reason: 'src/app.ts:900 is not a line the diff shows',
     })
+  })
+})
+
+describe('the attention point a comment names', () => {
+  const points = [
+    { fingerprint: 'b3504e80c8807cbe1a024f6d291a913352d8e253', title: 'One engine decides Save' },
+    { fingerprint: '87bcc68b0656fc8259d85f4b99bab4bbd3831fb9', title: 'Lookups match text' },
+    // Two points that share the start of their fingerprints: the short name names neither.
+    { fingerprint: 'aaaaaaaa11111111111111111111111111111111', title: 'First twin' },
+    { fingerprint: 'aaaaaaaa22222222222222222222222222222222', title: 'Second twin' },
+  ]
+  const withPoints = targetsFromFiles(FILES, points)
+  /** @param {unknown} point */
+  const parse = point =>
+    parseProposedComment(JSON.stringify({ path: 'src/app.ts', line: 3, body: 'Cap it.', point }), withPoints)
+
+  it('names a point by the start of its fingerprint', () => {
+    expect(pointRef(points[0]?.fingerprint ?? '')).toBe('b3504e80')
+    expect(parse('b3504e80')).toEqual({
+      comment: {
+        path: 'src/app.ts',
+        line: 3,
+        side: 'new',
+        body: 'Cap it.',
+        point: { fingerprint: points[0]?.fingerprint, title: 'One engine decides Save' },
+      },
+    })
+  })
+
+  it.each([
+    ['a point the canvas does not have', 'deadbeef'],
+    ['a name two points share', 'aaaaaaaa'],
+    ['a value that is not a string', 3],
+  ])('links nothing for %s, and keeps the comment', (_why, point) => {
+    expect(parse(point)).toEqual({ comment: { path: 'src/app.ts', line: 3, side: 'new', body: 'Cap it.' } })
+  })
+
+  it('links nothing where the page gave no points', () => {
+    expect(
+      parseProposedComment(
+        JSON.stringify({ path: 'src/app.ts', line: 3, body: 'x', point: 'b3504e80' }),
+        targets
+      )
+    ).toEqual({ comment: { path: 'src/app.ts', line: 3, side: 'new', body: 'x' } })
   })
 })
 

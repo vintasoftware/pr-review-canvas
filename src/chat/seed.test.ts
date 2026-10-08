@@ -87,9 +87,9 @@ describe('the seed sections', () => {
   it('lists the attention points with their level, kind, audience, anchor, and the author’s answer', () => {
     const settled = { ...artifact, settled: { 'fp-1': { reason: 'The spec says sum.', at: 'now' } } }
     expect(pointsMarkdown(settled).split('\n')).toEqual([
-      '- decide · decision · for the reviewer · Sum instead of product (`src/app.ts:4`) — settled by the author: The spec says sum.',
-      '- check · tests · for the author · other() has no test (`src/app.ts:13`)',
-      '- fyi · debt · for the author · Deleted file had no owner (`src/gone.ts:1`)',
+      '- decide · decision · for the reviewer · Sum instead of product (`src/app.ts:4`) · point `fp-1` — settled by the author: The spec says sum.',
+      '- check · tests · for the author · other() has no test (`src/app.ts:13`) · point `fp-2`',
+      '- fyi · debt · for the author · Deleted file had no owner (`src/gone.ts:1`) · point `fp-3`',
     ])
   })
 

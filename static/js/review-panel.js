@@ -35,11 +35,13 @@ function draftAttrs(p) {
  * @param {ReadonlyArray<Point>} points
  */
 function draftOrigin(p, points) {
+  const chat = p.proposalFingerprint !== undefined
   if (p.pointFingerprint !== undefined) {
     const point = points.find(q => q.fingerprint === p.pointFingerprint)
-    return point === undefined ? 'from an attention point' : `from the point “${esc(point.title)}”`
+    const about = point === undefined ? 'an attention point' : `the point “${esc(point.title)}”`
+    return chat ? `proposed by AI Chat about ${about}` : `from ${about}`
   }
-  return p.proposalFingerprint === undefined ? 'your comment' : 'proposed by AI Chat'
+  return chat ? 'proposed by AI Chat' : 'your comment'
 }
 
 /**

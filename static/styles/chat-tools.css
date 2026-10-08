@@ -86,6 +86,10 @@
   color: var(--fg-muted);
   overflow-wrap: anywhere;
 }
+/* Which attention point the agent tied the comment to, with the command that unties it. */
+.proposed-point {
+  margin: 0 0 6px;
+}
 .proposed .tbtns {
   margin-top: 8px;
   display: flex;

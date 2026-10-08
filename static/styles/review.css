@@ -387,6 +387,9 @@
 .p-outcome {
   margin-top: 8px;
 }
+.p-draft-where {
+  margin: 6px 0 4px;
+}
 .pill.status {
   border-color: currentcolor;
 }

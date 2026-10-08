@@ -37,7 +37,9 @@ test('lists the review being written in the side pane, edits a draft there, and 
   )
   // The edit shows on the diff and on the point too: there is one draft.
   await expect(page.locator('tr.pending-row .pending-cmt')).toContainText('Is the sum what the spec wants?')
-  await expect(point.locator('.p-summary')).toContainText('Your edited draft waits')
+  await expect(point.locator('.p-outcome .pending-cmt > .prose')).toContainText(
+    'Is the sum what the spec wants?'
+  )
 
   // Back on AI Chat, the half-written question is still there.
   await pane.getByRole('tab', { name: 'AI Chat' }).click()
@@ -112,4 +114,47 @@ test('without AI Chat, the review has a pane of its own that opens on demand', a
   await expect(launcher).toBeVisible()
   await launcher.click()
   await expect(panel).toBeVisible()
+})
+
+test('a comment AI Chat ties to a point acts on that point once it joins the review', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  const proposal = { path: 'src/app.ts', line: 3, body: 'Cap the peer range.', point: 'fp-1' }
+  const { url } = await chatServer({
+    runner: {
+      script: [
+        { type: 'chunk', text: '```comment\n' + JSON.stringify(proposal) + '\n```' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    },
+  })
+  await page.goto(url)
+  const point = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  await point.locator('[data-act="ask"]').click()
+  await page.locator('#msg').fill('Should we cap it?')
+  await page.locator('#chat-send').click()
+  const card = page.locator('.proposed').first()
+  await expect(card.locator('.proposed-point')).toHaveText('about the point “Sum instead of product” unlink')
+
+  await card.locator('[data-act="proposed-queue"]').click()
+  // The point shows the comment as its draft, though the comment sits on another line.
+  await expect(point).toHaveAttribute('data-status', 'queued')
+  await expect(point.locator('.p-summary')).toHaveText(
+    'Waits in your review at src/app.ts:3 · not on GitHub yet'
+  )
+  await expect(card.locator('[data-act="proposed-unlink"]')).toHaveCount(0)
+  await page
+    .locator('aside.chat')
+    .getByRole('tab', { name: /Your review/ })
+    .click()
+  await expect(page.locator('#review-panel .review-where')).toContainText(
+    'proposed by AI Chat about the point “Sum instead of product”'
+  )
+  // Taking the draft away opens the point again, and the card can be untied once more.
+  await page.locator('#review-panel [data-act="pending-delete"]').click()
+  await expect(point).toHaveAttribute('data-status', 'open')
+  await page.locator('aside.chat').getByRole('tab', { name: 'AI Chat' }).click()
+  await expect(card.locator('[data-act="proposed-unlink"]')).toHaveCount(1)
 })

@@ -6,7 +6,7 @@ import { askButtonHtml } from './ask.js'
 import { sendCommandsHtml, viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
-import { pendingCommentHtml, pendingForPoint } from './pending.js'
+import { pendingCommentHtml, pendingForPoint, pendingRange } from './pending.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import {
@@ -57,7 +57,7 @@ export function pointStatus(p, state) {
   ) {
     return 'posted'
   }
-  if (pendingForPoint(state, fp) !== undefined) {
+  if (pendingForPoint(state, fp).length > 0) {
     return 'queued'
   }
   if (state?.dismissed[fp] !== undefined) {
@@ -223,15 +223,29 @@ function statusPartsHtml(p, status, ctx, opts) {
   const host = esc(hostLabel())
   switch (status) {
     case 'queued': {
-      const draft = pendingForPoint(ctx.state, p.fingerprint)
-      const edited = draft !== undefined && draft.body !== pointToMarkdown(p)
+      const drafts = pendingForPoint(ctx.state, p.fingerprint)
+      const only = drafts.length === 1 ? drafts[0] : undefined
+      // A draft on another line than the point's (a comment AI Chat proposed about it) says where.
+      const elsewhere = only !== undefined && (only.path !== p.path || only.line !== p.line)
+      const what =
+        only === undefined
+          ? `${drafts.length} drafts wait in your review`
+          : `Waits in your review${elsewhere ? ` at ${esc(pendingRange(only))}` : ''}`
+      const now = ctx.now ?? new Date()
       return {
         pill,
-        summary: line(`${edited ? 'Your edited draft waits' : 'Waits'} in your review · not on ${host} yet`),
-        outcome:
-          draft === undefined || !opts.card
-            ? ''
-            : `<div class="p-outcome"><h4 class="lbl">Your draft</h4>${pendingCommentHtml(draft, ctx.now ?? new Date())}</div>`,
+        summary: line(`${what} · not on ${host} yet`),
+        outcome: opts.card
+          ? `<div class="p-outcome"><h4 class="lbl">${drafts.length === 1 ? 'Your draft' : 'Your drafts'}</h4>` +
+            drafts
+              .map(
+                d =>
+                  `<p class="p-draft-where muted small">${esc(pendingRange(d))} · ${d.proposalFingerprint === undefined ? 'the point’s text' : 'proposed by AI Chat'}</p>` +
+                  pendingCommentHtml(d, now)
+              )
+              .join('') +
+            '</div>'
+          : '',
       }
     }
     case 'posted': {
@@ -269,13 +283,11 @@ function statusPartsHtml(p, status, ctx, opts) {
  * @param {PointContext} ctx
  */
 function pointSignature(p, status, ctx) {
-  const draft = pendingForPoint(ctx.state, p.fingerprint)
   const settlement = settlementOf(p)
   return JSON.stringify([
     status,
     postedFor(p, ctx) ?? null,
-    draft?.id ?? null,
-    draft?.body ?? null,
+    pendingForPoint(ctx.state, p.fingerprint).map(d => [d.id, d.body]),
     settlement?.reason ?? null,
     settlement?.commentUrl ?? null,
     settleButtonHtml(p) !== '',

@@ -5,8 +5,21 @@
 import { splitFences } from './fences.js'
 
 /**
- * @typedef {{ path: string, line: number, side: 'new' | 'old', startLine?: number, body: string, proposalFingerprint?: string }} ProposedComment
+ * `point` is the attention point the comment acts on, when the agent named one this canvas has.
+ * @typedef {{ path: string, line: number, side: 'new' | 'old', startLine?: number, body: string, proposalFingerprint?: string, point?: ProposalPoint }} ProposedComment
  */
+
+/** @typedef {{ fingerprint: string, title: string }} ProposalPoint */
+
+/**
+ * How the agent names an attention point in a proposed comment: the start of its fingerprint.
+ * A fingerprint follows the point's kind, path, and title, so the name holds across the canvases
+ * one chat thread sees, where a point's position in the list does not.
+ * @param {string} fingerprint
+ */
+export function pointRef(fingerprint) {
+  return fingerprint.slice(0, 8)
+}
 
 /**
  * @typedef {{ type: 'markdown', text: string }
@@ -44,8 +57,12 @@ export function proposalFingerprint(comment) {
 
 /**
  * What a target has to satisfy to be postable: the file is in this pull request, and the line is
- * one the diff shows on that side.
- * @typedef {{ hasPath: (path: string) => boolean, hasLine: (path: string, side: 'new' | 'old', line: number) => boolean }} CommentTargets
+ * one the diff shows on that side. `pointFor` finds the attention point a `point` field names.
+ * @typedef {{
+ *   hasPath: (path: string) => boolean,
+ *   hasLine: (path: string, side: 'new' | 'old', line: number) => boolean,
+ *   pointFor?: (ref: string) => ProposalPoint | undefined,
+ * }} CommentTargets
  */
 
 /**
@@ -114,6 +131,12 @@ export function parseProposedComment(source, targets) {
   if (startLine !== undefined) {
     comment.startLine = startLine
   }
+  // A point the canvas does not have links nothing; the comment itself is still good to post.
+  const ref = field('point')
+  const point = typeof ref === 'string' ? targets?.pointFor?.(ref) : undefined
+  if (point !== undefined) {
+    comment.point = point
+  }
   return { comment }
 }
 
@@ -137,13 +160,20 @@ export function splitChatAnswer(markdown, targets) {
 }
 
 /**
- * The lines a diff shows, as the card's check needs them: every hunk's line numbers per side.
+ * The lines a diff shows, as the card's check needs them: every hunk's line numbers per side, and
+ * the attention points a comment may name. A name two points share names neither.
  * @param {ReadonlyArray<import('./contract-types.js').FileEntry>} files
+ * @param {ReadonlyArray<Pick<import('./contract-types.js').Point, 'fingerprint' | 'title'>>} [points]
  * @returns {CommentTargets}
  */
-export function targetsFromFiles(files) {
+export function targetsFromFiles(files, points = []) {
   const byPath = new Map(files.map(f => [f.path, f]))
   return {
+    pointFor: ref => {
+      const named = points.filter(p => pointRef(p.fingerprint) === ref)
+      const only = named.length === 1 ? named[0] : undefined
+      return only === undefined ? undefined : { fingerprint: only.fingerprint, title: only.title }
+    },
     hasPath: path => byPath.has(path),
     hasLine: (path, side, line) => {
       const entry = byPath.get(path)

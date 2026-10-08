@@ -282,9 +282,36 @@ describe('where a point stands', () => {
     expect(document.querySelector('[data-act="point-post"]')).toBeNull()
     expect(document.querySelector('[data-act="point-queue"]')).toBeNull()
 
-    const edited = { ...state, pending: [{ ...draftFor(first), body: 'my words' }] }
-    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: edited })}</ol>`
-    expect(document.querySelector('.p-summary')?.textContent).toContain('Your edited draft waits')
+    expect(document.querySelector('.p-draft-where')?.textContent).toBe('src/app.ts:4 · the point’s text')
+  })
+
+  it('lists every draft that acts on a point, a comment AI Chat proposed about it too', () => {
+    const state = emptyState('2026-09-10T12:00:00.000Z')
+    // The agent's comment sits on another line than the point's, and keeps its own identity.
+    const proposal = {
+      ...draftFor(first),
+      id: 'p2',
+      path: 'src/new.ts',
+      line: 2,
+      body: 'Cap the range.',
+      proposalFingerprint: 'proposal:1',
+    }
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: { ...state, pending: [proposal] } })}</ol>`
+    expect(pointStatus(first, { ...state, pending: [proposal] })).toBe('queued')
+    expect(document.querySelector('.p-summary')?.textContent).toBe(
+      'Waits in your review at src/new.ts:2 · not on GitHub yet'
+    )
+    expect(document.querySelector('.p-draft-where')?.textContent).toBe('src/new.ts:2 · proposed by AI Chat')
+
+    const both = { ...state, pending: [draftFor(first), proposal] }
+    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: both })}</ol>`
+    expect(document.querySelector('.p-summary')?.textContent).toBe(
+      '2 drafts wait in your review · not on GitHub yet'
+    )
+    expect(document.querySelector('.p-outcome .lbl')?.textContent).toBe('Your drafts')
+    expect(
+      [...document.querySelectorAll('.p-outcome .pending-cmt')].map(d => d.getAttribute('data-pending-id'))
+    ).toEqual(['p1', 'p2'])
   })
 
   it('draws a point that is already posted as its link, whatever the review holds', () => {

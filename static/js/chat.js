@@ -230,7 +230,10 @@ export function checkoutWarningHtml(event) {
   )
 }
 
-/** @typedef {{ postedUrl?: string | undefined, queued?: boolean, submitted?: boolean }} SendState */
+/**
+ * `pointLinked` says, once the comment was sent, whether what went out names an attention point.
+ * @typedef {{ postedUrl?: string | undefined, queued?: boolean, submitted?: boolean, pointLinked?: boolean }} SendState
+ */
 
 /**
  * The commands under a card. `add to review` leads, as it does on a diff-line comment, and both
@@ -260,6 +263,25 @@ function proposedCommandsHtml(comment, id, send) {
 }
 
 /**
+ * The line that says which attention point the agent tied the comment to. Sending the comment
+ * carries the link to the point, which then shows the comment as its draft or its posted reply;
+ * until then the reader can take the link off when the agent judged wrong.
+ * @param {ProposedComment} comment
+ * @param {string} id
+ * @param {SendState} send
+ */
+function proposedPointHtml(comment, id, send) {
+  if (comment.point === undefined || send.pointLinked === false) {
+    return ''
+  }
+  const open = send.postedUrl === undefined && send.submitted !== true && send.queued !== true
+  const unlink = open
+    ? ` <button class="cmd" type="button" data-act="proposed-unlink" data-proposed="${esc(id)}">unlink</button>`
+    : ''
+  return `<p class="proposed-point muted small">about the point “${esc(comment.point.title)}”${unlink}</p>`
+}
+
+/**
  * The card a proposed comment renders as.
  * @param {ProposedComment} comment
  * @param {string} id the key the pane stores this card's comment under
@@ -272,6 +294,7 @@ export function proposedCommentHtml(comment, id, send = {}) {
     `<div class="proposed" data-proposed="${esc(id)}">` +
     `<div class="proposed-h"><span class="lbl">proposed comment</span>` +
     `<span class="mono">${esc(comment.path)}:${esc(range)}${side}</span></div>` +
+    proposedPointHtml(comment, id, send) +
     `<div class="prose">${renderMarkdown(comment.body)}</div>` +
     proposedCommandsHtml(comment, id, send) +
     '</div>'
@@ -281,16 +304,24 @@ export function proposedCommentHtml(comment, id, send = {}) {
 /**
  * Where a proposed comment stands against the posted comments and the pending review.
  * @param {ProposedComment} comment
- * @param {ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined }>} posted
+ * @param {ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined, pointFingerprint?: string | undefined }>} posted
  * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} pending
  * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} submitted
  * @returns {SendState}
  */
 function sendStateOf(comment, posted, pending, submitted) {
+  // What went out decides the link from then on, whatever the agent's text says on a redraw.
+  const fp = comment.proposalFingerprint
+  const sent =
+    fp === undefined
+      ? undefined
+      : ([...pending, ...submitted].find(d => d.proposalFingerprint === fp) ??
+        posted.find(c => c.proposalFingerprint === fp))
   return {
     postedUrl: postedCommentUrl(comment, posted),
     queued: isQueuedComment(comment, pending),
     submitted: isQueuedComment(comment, submitted),
+    ...(sent === undefined ? {} : { pointLinked: sent.pointFingerprint !== undefined }),
   }
 }
 
@@ -304,7 +335,7 @@ function sendStateOf(comment, posted, pending, submitted) {
  * @param {Map<string, ProposedComment>} sink cards found, by key
  * @param {ReadonlySet<string>} paths
  * @param {string} [turnKey] the prefix of this turn's card keys
- * @param {ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined }>} [posted]
+ * @param {ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined, pointFingerprint?: string | undefined }>} [posted]
  * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} [pending]
  * @param {ReadonlyArray<import('./contract-types.js').PendingComment>} [submitted]
  */
@@ -367,7 +398,7 @@ export function wireChat(options) {
         : localStorage
       : options.storage
   const paths = new Set(session.artifact.files.map(f => f.path))
-  const targets = targetsFromFiles(session.artifact.files)
+  const targets = targetsFromFiles(session.artifact.files, session.artifact.points)
   const reducedMotion =
     options.reducedMotion ??
     (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -403,7 +434,11 @@ export function wireChat(options) {
     return (
       getRenderContext()
         ?.comments.filter(c => receipts.has(c.id))
-        .map(c => ({ ...c, proposalFingerprint: receipts.get(c.id)?.proposalFingerprint })) ?? []
+        .map(c => ({
+          ...c,
+          proposalFingerprint: receipts.get(c.id)?.proposalFingerprint,
+          pointFingerprint: receipts.get(c.id)?.pointFingerprint,
+        })) ?? []
     )
   }
   /** @type {string | null} */
@@ -851,6 +886,15 @@ export function wireChat(options) {
       return
     }
     const act = el.getAttribute('data-act')
+    if (act === 'proposed-unlink') {
+      // The reader overrides the agent: the comment goes out on its own, tied to no point.
+      const comment = proposed.get(el.getAttribute('data-proposed') ?? '')
+      if (comment !== undefined) {
+        delete comment.point
+        el.closest('.proposed-point')?.remove()
+      }
+      return
+    }
     const what = act === null ? undefined : PROPOSED_ACTS[act]
     if (what !== undefined) {
       const comment = proposed.get(el.getAttribute('data-proposed') ?? '')
@@ -980,15 +1024,17 @@ export function wireChat(options) {
         if (comment === undefined || tbtns === null) {
           continue
         }
+        const sendState = sendStateOf(comment, posted, pending, session.state.submitted)
         const template = document.createElement('template')
-        template.innerHTML = proposedCommandsHtml(
-          comment,
-          id,
-          sendStateOf(comment, posted, pending, session.state.submitted)
-        )
+        template.innerHTML = proposedCommandsHtml(comment, id, sendState)
         const next = template.content.firstElementChild
         if (next !== null && next.getAttribute('data-send') !== tbtns.getAttribute('data-send')) {
           tbtns.replaceWith(next)
+          // Once sent, the draft or the posted comment holds the link; until then it can come off.
+          template.innerHTML = proposedPointHtml(comment, id, sendState)
+          const line = template.content.firstElementChild
+          const drawn = card.querySelector(':scope > .proposed-point')
+          if (drawn !== null && line !== null) drawn.replaceWith(line)
         }
       }
     },

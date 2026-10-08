@@ -1388,6 +1388,7 @@ export function wireReview(root, session, opts = {}) {
           ...(comment.proposalFingerprint === undefined
             ? {}
             : { proposalFingerprint: comment.proposalFingerprint }),
+          ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
         }
         if (comment.startLine !== undefined && comment.startLine !== comment.line) {
           options.startLine = comment.startLine
@@ -1408,6 +1409,8 @@ export function wireReview(root, session, opts = {}) {
         ...(comment.proposalFingerprint === undefined
           ? {}
           : { proposalFingerprint: comment.proposalFingerprint }),
+        // A comment the agent tied to an attention point acts on it, as the point's own text would.
+        ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
         ...(comment.startLine === undefined || comment.startLine === comment.line
           ? {}
           : { startLine: comment.startLine }),

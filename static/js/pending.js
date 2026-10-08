@@ -40,14 +40,14 @@ export function pendingForPath(state, path) {
 }
 
 /**
- * The draft an attention point was added to the review as, when it was. A point is queued at most
- * once: its fingerprint is what ties the two together.
+ * The drafts that act on an attention point, oldest first: its own text added to the review, and
+ * the comments AI Chat proposed about it. The point's fingerprint is what ties them together.
  * @param {PrState | null | undefined} state
  * @param {string} fingerprint
- * @returns {PendingComment | undefined}
+ * @returns {ReadonlyArray<PendingComment>}
  */
 export function pendingForPoint(state, fingerprint) {
-  return pendingComments(state).find(p => p.pointFingerprint === fingerprint)
+  return pendingComments(state).filter(p => p.pointFingerprint === fingerprint)
 }
 
 /** @param {number} count */

@@ -3,6 +3,7 @@
 import type { Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
+import { pointRef } from '../../static/js/proposed-comment.js'
 
 /**
  * The agent's working directory for this turn: a review checkout at the reviewed commit, the
@@ -58,7 +59,7 @@ export function pointsMarkdown(artifact: ReviewArtifact): string {
     .map(p => {
       const settled = artifact.settled?.[p.fingerprint]
       const answer = settled === undefined ? '' : ` — settled by the author: ${settled.reason}`
-      return `- ${p.level} · ${p.kind} · for the ${p.audience} · ${p.title} (\`${p.path}:${p.line}\`)${answer}`
+      return `- ${p.level} · ${p.kind} · for the ${p.audience} · ${p.title} (\`${p.path}:${p.line}\`) · point \`${pointRef(p.fingerprint)}\`${answer}`
     })
     .join('\n')
 }
