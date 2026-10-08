@@ -2,6 +2,7 @@
 // @vitest-environment happy-dom
 import { emptyState } from '../../src/contract/state.js'
 import {
+  draftsByCommit,
   pendingBarHtml,
   pendingComments,
   pendingCount,
@@ -127,22 +128,28 @@ describe('refreshPendingBar', () => {
     expect(root.querySelector('.pending-bar')).toBeNull()
   })
 
-  it('keeps earlier-commit drafts separate and preserves the expanded list on other state changes', () => {
+  it('counts the drafts of earlier commits, which the review tab lists, and redraws only on a change', () => {
     document.body.innerHTML = '<div class="pending-bar-host"></div>'
     const state = { ...BASE, pending: [draft()] }
     const head = 'f'.repeat(40)
     refreshPendingBar(document.body, state, head)
-    const details = document.querySelector('details')
-    expect(details?.textContent).toContain('Comments written on earlier commits')
-    expect(details?.textContent).toContain('src/app.ts:4')
-    expect(details?.querySelector('[data-act="pending-delete"]')).not.toBeNull()
-    expect(details?.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe(draft().body)
-    details?.setAttribute('open', '')
+    const bar = document.querySelector('.pending-bar')
+    expect(bar?.textContent).toContain(
+      '1 pending comment waiting in your review, 1 written on an earlier commit.'
+    )
+    expect(bar?.querySelector('[data-act="pending-delete"]')).toBeNull()
     refreshPendingBar(document.body, { ...state, reviewed: { 'layer:x': true } }, head)
-    expect(document.querySelector('details')).toBe(details)
-    expect(details?.open).toBe(true)
-    refreshPendingBar(document.body, { ...state, pending: [...state.pending, draft({ id: 'p2' })] }, head)
-    expect(document.querySelector('details')?.open).toBe(true)
+    expect(document.querySelector('.pending-bar')).toBe(bar)
+    refreshPendingBar(document.body, state, draft().headSha)
+    expect(document.querySelector('.pending-bar')?.textContent).not.toContain('earlier commit')
+  })
+
+  it('splits the drafts by the commit they were written on', () => {
+    const state = { ...BASE, pending: [draft(), draft({ id: 'p2', headSha: 'f'.repeat(40) })] }
+    const split = draftsByCommit(state, draft().headSha)
+    expect(split.current.map(d => d.id)).toEqual([draft().id])
+    expect(split.earlier.map(d => d.id)).toEqual(['p2'])
+    expect(draftsByCommit(state).earlier).toEqual([])
   })
 
   it('does nothing when the page has no place for the bar', () => {

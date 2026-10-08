@@ -53,7 +53,14 @@ import { inHiddenSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar } from './pending.js'
 import { refreshReviewPanel } from './review-panel.js'
-import { applyPointStates, openPoints, pointToMarkdown, postedUrls, setPointExpanded } from './points.js'
+import {
+  applyPointStates,
+  openPoints,
+  pointStatusesHtml,
+  pointToMarkdown,
+  postedUrls,
+  setPointExpanded,
+} from './points.js'
 import { selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
@@ -934,9 +941,14 @@ export function wireReview(root, session, opts = {}) {
     },
     'toggle-handled': el => {
       // The page hides the points acted on while this switch is pressed; see `.is-handled` in CSS.
+      const line = el.closest('.point-statuses')
       const hiding = el.getAttribute('aria-pressed') !== 'true'
-      el.setAttribute('aria-pressed', String(hiding))
-      el.textContent = el.textContent?.replace(/^(show|hide)/, hiding ? 'show' : 'hide') ?? ''
+      const next = nodeFrom(doc, pointStatusesHtml(session.artifact.points, session.state, hiding))
+      if (line !== null && next !== null) {
+        line.replaceWith(next)
+        const toggle = next.querySelector('[data-act="toggle-handled"]')
+        if (toggle instanceof HTMLElement) toggle.focus()
+      }
     },
     ...selfReviewActions(session, message => toast(root, message)),
     'point-post': el => {

@@ -115,6 +115,26 @@ describe('the review tab', () => {
     expect(launcher?.hasAttribute('data-empty')).toBe(true)
   })
 
+  it('keeps the row of a draft being edited while other drafts come and go', () => {
+    document.body.innerHTML = '<section id="review-panel"></section>'
+    const ctx = { headSha: HEAD, points: artifact.points }
+    // Two drafts with the same text on the same commit are still two rows.
+    const first = draft({ id: 'd1' })
+    const twin = draft({ id: 'd2' })
+    refreshReviewPanel(document, { ...BASE, pending: [first, twin] }, ctx)
+    const row = document.querySelector('.review-draft[data-pending-id="d1"]')
+    row?.insertAdjacentHTML('beforeend', '<div class="composer-box"><textarea>half an edit</textarea></div>')
+
+    refreshReviewPanel(document, { ...BASE, pending: [first, twin, draft({ id: 'd3', line: 9 })] }, ctx)
+    expect(document.querySelector('.review-draft[data-pending-id="d1"]')).toBe(row)
+    expect(row?.querySelector('textarea')?.value).toBe('half an edit')
+    expect(document.querySelectorAll('.review-draft')).toHaveLength(3)
+
+    refreshReviewPanel(document, { ...BASE, pending: [first] }, ctx)
+    expect(document.querySelector('.review-draft[data-pending-id="d1"]')).toBe(row)
+    expect(document.querySelectorAll('.review-draft')).toHaveLength(1)
+  })
+
   it('updates the counts on a page without the tab', () => {
     document.body.innerHTML = '<span class="review-count">0</span>'
     refreshReviewPanel(document, { ...BASE, pending: [draft({})] }, { points: [] })

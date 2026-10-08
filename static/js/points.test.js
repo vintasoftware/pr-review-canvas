@@ -17,7 +17,6 @@ import {
   setMentionCanvas,
   setPointExpanded,
   postedUrls,
-  queuedFor,
   refreshPoint,
   sevsumHtml,
 } from './points.js'
@@ -265,10 +264,8 @@ describe('where a point stands', () => {
       'add to review',
       'dismiss',
     ])
-    expect(queuedFor(first, { state })).toBe(false)
 
     const queued = { ...state, pending: [draftFor(first)] }
-    expect(queuedFor(first, { state: queued })).toBe(true)
     document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: queued })}</ol>`
     expect(document.querySelector('li.finding .f-title .pill.pending.queued')?.textContent).toBe(
       'in your review'
@@ -367,6 +364,9 @@ describe('where a point stands', () => {
     const queued = { ...state, pending: [draftFor(first)] }
     applyPointStates(document.body, points, queued, ctx)
     expect(document.querySelectorAll('.pill.pending.queued').length).toBe(2)
+    // The card shows the draft; the row leaves it to the draft's own row right under it.
+    expect(document.querySelector('li.finding .p-outcome .pending-cmt')).not.toBeNull()
+    expect(document.querySelector('tr.ifind .pending-cmt')).toBeNull()
     applyPointStates(document.body, points, state, ctx)
     expect(document.querySelectorAll('.pill.pending.queued').length).toBe(0)
     expect(document.querySelectorAll('[data-act="point-queue"]').length).toBe(2)

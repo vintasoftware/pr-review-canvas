@@ -514,6 +514,7 @@ describe('reviewed state', () => {
   it('opens the file cards the server reopened with their layer', async () => {
     const reviewed = {
       ...BASE,
+      reviewedCanvasSha: artifact.pr.headSha,
       reviewed: {
         'layer:run-path': /** @type {const} */ (true),
         'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
@@ -663,12 +664,15 @@ describe('attention points', () => {
 
   it('switches the points acted on off the page and back from the overview', () => {
     const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
-    const toggle = click(root, '[data-act="toggle-handled"]')
-    expect(toggle.getAttribute('aria-pressed')).toBe('true')
-    expect(toggle.textContent).toBe('show the 1 acted on')
+    const toggle = () => root.querySelector('[data-act="toggle-handled"]')
     click(root, '[data-act="toggle-handled"]')
-    expect(toggle.getAttribute('aria-pressed')).toBe('false')
-    expect(toggle.textContent).toBe('hide the 1 acted on')
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('true')
+    expect(toggle()?.textContent).toBe('show the 1 acted on')
+    // The switch is drawn again from the state, and keeps the focus.
+    expect(document.activeElement).toBe(toggle())
+    click(root, '[data-act="toggle-handled"]')
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('false')
+    expect(toggle()?.textContent).toBe('hide the 1 acted on')
   })
 
   it('lets the author settle a point with a reason, and collapses it with the reason', async () => {
@@ -1875,7 +1879,7 @@ describe('a page that lost the elements a command expects', () => {
         '<button data-act="point-restore">restore</button>' +
         '<button data-act="mark-layer">mark</button>' +
         '<button data-act="comment-line" data-key="src_app_ts" data-side="new" data-line="4">+</button>' +
-        '<button data-act="show-dismissed">show</button>' +
+        '<button data-act="point-expand">show</button>' +
         '<button data-act="comment-line" data-key="nope" data-line="0">+</button>' +
         '<button data-act="comment-selection">comment</button>' +
         '<button data-act="composer-post">post</button>' +

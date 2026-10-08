@@ -175,15 +175,6 @@ export function pointCommandsHtml(p, opts = {}) {
 }
 
 /**
- * Whether this point is waiting in the review, read from the state the renderer was given.
- * @param {Point} p
- * @param {{ state?: PrState }} ctx
- */
-export function queuedFor(p, ctx) {
-  return pendingForPoint(ctx.state, p.fingerprint) !== undefined
-}
-
-/**
  * The comment this point was posted as, when it was.
  * @param {Point} p
  * @param {{ posted?: ReadonlyMap<string, string> }} ctx
@@ -220,9 +211,10 @@ export function postedUrls(state, comments) {
  * @param {Point} p
  * @param {Exclude<PointStatus, 'open'>} status
  * @param {PointContext} ctx
+ * @param {{ card: boolean }} opts
  * @returns {{ pill: string, summary: string, outcome: string }}
  */
-function statusPartsHtml(p, status, ctx) {
+function statusPartsHtml(p, status, ctx, opts) {
   const pill =
     status === 'queued'
       ? `<span class="pill pending queued">${STATUS_LABELS.queued}</span>`
@@ -237,7 +229,7 @@ function statusPartsHtml(p, status, ctx) {
         pill,
         summary: line(`${edited ? 'Your edited draft waits' : 'Waits'} in your review · not on ${host} yet`),
         outcome:
-          draft === undefined
+          draft === undefined || !opts.card
             ? ''
             : `<div class="p-outcome"><h4 class="lbl">Your draft</h4>${pendingCommentHtml(draft, ctx.now ?? new Date())}</div>`,
       }
@@ -297,16 +289,18 @@ function pointSignature(p, status, ctx) {
  * rest; an open point is always drawn whole.
  * @param {Point} p
  * @param {PointContext} ctx
- * @param {{ loc: boolean }} opts `loc` adds the link to the point's line, which a row sits on already
+ * @param {{ card: boolean }} opts `card` adds the link to the point's line and a queued point's draft:
+ *   a row sits on that line, with the draft's own row right under it
  */
 function pointPartsHtml(p, ctx, opts) {
   const status = pointStatus(p, ctx.state)
-  const parts = status === 'open' ? { pill: '', summary: '', outcome: '' } : statusPartsHtml(p, status, ctx)
+  const parts =
+    status === 'open' ? { pill: '', summary: '', outcome: '' } : statusPartsHtml(p, status, ctx, opts)
   const toggle =
     status === 'open'
       ? ''
       : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
-  const loc = opts.loc ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
+  const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
   return {
     attrs:
       `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +
@@ -327,7 +321,7 @@ function pointPartsHtml(p, ctx, opts) {
  * @param {PointContext} ctx
  */
 export function pointCardHtml(p, ctx) {
-  const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { loc: true })
+  const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: true })
   return (
     `<li class="finding${handled}" id="${esc(pointAnchorId(p.id))}" ${attrs}>${squareHtml(p)}<div>` +
     `<div class="f-title">${title}</div>${rest}</div></li>`
@@ -340,7 +334,7 @@ export function pointCardHtml(p, ctx) {
  * @param {PointContext} ctx
  */
 export function pointRowHtml(p, ctx) {
-  const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { loc: false })
+  const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: false })
   return (
     `<tr class="ifind ${p.level}${handled}" ${attrs}><td class="code x" colspan="4">` +
     `<div class="f-title">${squareHtml(p)}${title}</div>${rest}</td></tr>`
@@ -442,11 +436,16 @@ function replaceWithHtml(host, html) {
  * @returns {boolean} true when the point was drawn again
  */
 export function refreshPoint(el, p, ctx) {
+  // The signature is compared before anything is drawn: most state changes leave most points as
+  // they are, and drawing one renders its markdown.
+  if (pointSignature(p, pointStatus(p, ctx.state), ctx) === el.getAttribute('data-sig')) {
+    return false
+  }
   const row = el.tagName === 'TR'
   const template = document.createElement('template')
   template.innerHTML = row ? `<table><tbody>${pointRowHtml(p, ctx)}</tbody></table>` : pointCardHtml(p, ctx)
   const next = row ? template.content.querySelector('tr') : template.content.firstElementChild
-  if (next === null || next.getAttribute('data-sig') === el.getAttribute('data-sig')) {
+  if (next === null) {
     return false
   }
   const expanded =

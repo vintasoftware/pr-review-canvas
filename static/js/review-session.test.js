@@ -55,6 +55,8 @@ describe('createReviewSession', () => {
     const served = {
       ...BASE,
       reviewed: { 'layer:run-path': /** @type {const} */ (true) },
+      // The route keys every mark it writes to the commit the page sent.
+      reviewedCanvasSha: artifact.pr.headSha,
       updatedAt: 'server',
     }
     const s = session(
@@ -143,8 +145,8 @@ describe('createReviewSession', () => {
     expect(s.state).toEqual(posted)
   })
 
-  it('keeps its own marks over the stored ones every write but a mark answers with', async () => {
-    // The page was drawn with the marks fitted to its canvas: none, since the stored mark was made
+  it('takes the marks of an answer only when they are keyed to its own commit', async () => {
+    // The page was drawn with the marks fitted to its commit: none, since the stored mark was made
     // on another one. A draft's answer carries the stored mark all the same.
     /** @type {import('./contract-types.js').PrState} */
     const stored = {
@@ -153,19 +155,28 @@ describe('createReviewSession', () => {
       reviewed: { 'layer:run-path': true },
       reviewedCanvasSha: 'f'.repeat(40),
     }
+    // A mark write keys the stored marks to the commit the page sent, the head without a canvas.
     /** @type {import('./contract-types.js').PrState} */
-    const marked = { ...stored, rev: 3, reviewed: { 'layer:other': true }, reviewedCanvasSha: 'c'.repeat(40) }
+    const marked = {
+      ...stored,
+      rev: 3,
+      reviewed: { 'layer:other': true },
+      reviewedCanvasSha: artifact.pr.headSha,
+    }
     const s = session({
       addPending: async () => answers({ ...stored, rev: 2 }),
       putReviewed: async () => answers(marked),
+      deletePending: async () => answers({ ...marked, rev: 4, reviewed: {} }),
     })
     await s.addPending({ path: 'src/app.ts', line: 4, side: 'new', body: 'x' })
     expect(s.state.rev).toBe(2)
     expect(s.state.reviewed).toEqual({})
-    // A mark write keys the stored marks to this canvas, so its answer is the page's marks now.
     await s.setReviewed('layer:other', true)
     expect(s.state.reviewed).toEqual({ 'layer:other': true })
-    expect(s.state.reviewedCanvasSha).toBe('c'.repeat(40))
+    // From then on every answer is keyed to this commit, so its marks are taken whatever the
+    // write: here the marks a cascade on the server cleared.
+    await s.deletePending('d1')
+    expect(s.state.reviewed).toEqual({})
   })
 
   it('posts a review with and without an edited body', async () => {
@@ -274,7 +285,7 @@ describe('changes that overlap', () => {
     /** @type {Array<() => void>} */
     const finish = []
     // The server clears the file marks with the layer, and answers with what it wrote.
-    const cleared = { ...BASE, rev: 9, reviewed: {} }
+    const cleared = { ...BASE, rev: 9, reviewed: {}, reviewedCanvasSha: artifact.pr.headSha }
     const s = createReviewSession({
       prNumber: 42,
       artifact,
@@ -283,6 +294,7 @@ describe('changes that overlap', () => {
         ...BASE,
         rev: 7,
         reviewed: { 'layer:run-path': true, 'layer:run-path/file:src_app_ts': true },
+        reviewedCanvasSha: artifact.pr.headSha,
       },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,

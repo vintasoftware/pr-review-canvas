@@ -723,7 +723,8 @@ review, dismissed.
 A point you acted on stays in its layer and on its line in the diff. It collapses to its title, its
 status, and one line: the start of the reason, the comment link, or a note that the draft waits.
 **show** expands it. You then see the point's text, what was done with it (the author's reason, or
-your draft with **edit** and **delete**), and the commands that undo it: **reopen**, **restore**, or
+in the layer, your draft with **edit** and **delete**; in the diff the draft has its own row right
+under the point), and the commands that undo it: **reopen**, **restore**, or
 deleting the draft. The point collapses again when its status changes. A reload also collapses it.
 
 The counts in the rail, the layer headings, and the overview squares include only open points. The
@@ -792,8 +793,8 @@ A pending review holds comments on your machine until you submit them together.
   publishes ahead of the review. Replies and pull-request comments are not part of a forge review,
   so they still post at once.
 - An attention point keeps both **post to github** and **add to review**, since its text is written
-  in advance. A point in the review collapses with **in your review**. Expand it to edit or delete
-  its draft there, on its line, or in the review tab. After submission, the point collapses with
+  in advance. A point in the review collapses with **in your review**. Edit or delete its draft on the
+  expanded point in its layer, on its line, or in the review tab. After submission, the point collapses with
   the comment it became.
 - A comment the AI Chat proposes works the same way: it offers **post to github** and **add to
   review**, and shows **in your review** once it is queued. After submission it shows **view
@@ -809,15 +810,15 @@ A pending review holds comments on your machine until you submit them together.
   with a **pending** badge and edit and delete commands. Drafts are saved in the local review state
   and survive a reload. **discard** drops the whole review; nothing was sent to the forge.
 - **see the list** in the bar opens the **Your review** tab of the side pane, next to **AI Chat**.
-  The tab lists every draft by file. Each draft shows its lines, where it came from (an attention
-  point, AI Chat, or you), and the same **edit** and **delete** commands. The tab also has
-  **finish your review** and **discard**. Its count shows how many drafts wait. With AI Chat off,
-  the pane holds the review alone. It stays minimized until you open it, and its launcher shows
-  only while drafts wait.
-- Drafts from an earlier commit are listed separately in the bar with their original location and
-  commit. They are submitted only when the stored diff is identical to the current one and
-  `canvas.keepForIdenticalDiff` is on. Otherwise, copy the text, delete the draft, and comment on
-  the current code.
+  The tab lists the drafts of the current commit by file. Each draft shows its lines, where it
+  came from (an attention point, AI Chat, or you), and the same **edit** and **delete** commands.
+  The tab also has **finish your review** and **discard**. Its count shows how many drafts wait.
+  With AI Chat off, the pane holds the review alone. It stays minimized until you open it, and its
+  launcher shows only while drafts wait.
+- Drafts from an earlier commit are listed after them in the tab, with their original location,
+  commit, origin, and **copy** and **delete** commands; the bar counts them. They are submitted
+  only when the stored diff is identical to the current one and `canvas.keepForIdenticalDiff` is
+  on. Otherwise, copy the text, delete the draft, and comment on the current code.
 - A draft added or edited during submission stays pending.
 
 **finish your review** opens the sign-off dialog, which shows how many drafts go out with the

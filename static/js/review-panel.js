@@ -7,7 +7,7 @@
 /** @typedef {import('./contract-types.js').PrState} PrState */
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
-import { pendingCommentHtml, pendingComments, pendingLabel, pendingRange } from './pending.js'
+import { draftsByCommit, pendingCommentHtml, pendingComments, pendingLabel, pendingRange } from './pending.js'
 import { renderMarkdown } from './markdown.js'
 
 export const REVIEW_PANEL_ID = 'review-panel'
@@ -19,6 +19,14 @@ export const REVIEW_PANEL_ID = 'review-panel'
 function draftLink(p) {
   const range = p.startLine !== undefined && p.startLine !== p.line ? `${p.startLine}-${p.line}` : `${p.line}`
   return `#line:${p.path}:${range}${p.side === 'old' ? ':old' : ''}`
+}
+
+/**
+ * What keys a draft's row, and what it shows that can change: its text and its commit.
+ * @param {PendingComment} p
+ */
+function draftAttrs(p) {
+  return `data-pending-id="${esc(p.id)}" data-sig="${esc(JSON.stringify([p.body, p.headSha]))}"`
 }
 
 /**
@@ -41,8 +49,7 @@ function draftOrigin(p, points) {
  */
 export function reviewPanelHtml(state, ctx) {
   const all = pendingComments(state)
-  const current = ctx.headSha === undefined ? all : all.filter(p => p.headSha === ctx.headSha)
-  const earlier = ctx.headSha === undefined ? [] : all.filter(p => p.headSha !== ctx.headSha)
+  const { current, earlier } = draftsByCommit(state, ctx.headSha)
   if (all.length === 0) {
     return (
       '<p class="muted review-empty">Nothing waits in your review. Use <b>add to review</b> on an attention ' +
@@ -61,7 +68,7 @@ export function reviewPanelHtml(state, ctx) {
         drafts
           .map(
             p =>
-              `<li class="review-draft" data-pending-id="${esc(p.id)}">` +
+              `<li class="review-draft" ${draftAttrs(p)}>` +
               `<p class="review-where"><a class="loc" href="${esc(draftLink(p))}">${esc(pendingRange(p))}</a>` +
               ` <span class="muted">· ${draftOrigin(p, ctx.points)}</span></p>` +
               pendingCommentHtml(p, ctx.now) +
@@ -80,7 +87,7 @@ export function reviewPanelHtml(state, ctx) {
         earlier
           .map(
             p =>
-              `<li class="review-draft earlier" data-pending-id="${esc(p.id)}">` +
+              `<li class="review-draft earlier" ${draftAttrs(p)}>` +
               `<p class="review-where">${esc(pendingRange(p))} <span class="muted">· commit ${esc(p.headSha.slice(0, 7))} · ${draftOrigin(p, ctx.points)}</span></p>` +
               `<div class="prose">${renderMarkdown(p.body, { github: true })}</div>` +
               '<span class="tbtns">' +
@@ -100,8 +107,9 @@ export function reviewPanelHtml(state, ctx) {
 }
 
 /**
- * Draws the review tab again when the drafts changed, and the counts on its tab and launcher.
- * The tab is left alone otherwise, so an edit being written in it survives an unrelated change.
+ * Draws the review tab again when the drafts changed, and the counts on its tab and launcher. A
+ * draft whose text and commit did not change keeps its row, so an edit being written in it
+ * survives a change to any other draft.
  * @param {ParentNode} root
  * @param {PrState} state
  * @param {{ headSha?: string | undefined, points: ReadonlyArray<Point> }} ctx
@@ -123,8 +131,20 @@ export function refreshReviewPanel(root, state, ctx) {
     return
   }
   const signature = JSON.stringify([ctx.headSha ?? null, drafts.map(d => [d.id, d.body, d.headSha])])
-  if (panel.getAttribute('data-drafts') !== signature) {
-    panel.innerHTML = reviewPanelHtml(state, { ...ctx, now: new Date() })
-    panel.setAttribute('data-drafts', signature)
+  if (panel.getAttribute('data-drafts') === signature) {
+    return
   }
+  const template = document.createElement('template')
+  template.innerHTML = reviewPanelHtml(state, { ...ctx, now: new Date() })
+  const drawn = new Map(
+    Array.from(panel.querySelectorAll('li.review-draft')).map(li => [li.getAttribute('data-pending-id'), li])
+  )
+  for (const row of Array.from(template.content.querySelectorAll('li.review-draft'))) {
+    const old = drawn.get(row.getAttribute('data-pending-id'))
+    if (old !== undefined && old.getAttribute('data-sig') === row.getAttribute('data-sig')) {
+      row.replaceWith(old)
+    }
+  }
+  panel.replaceChildren(template.content)
+  panel.setAttribute('data-drafts', signature)
 }

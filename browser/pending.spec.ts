@@ -226,3 +226,35 @@ test('keeps a layer open when a draft is added or deleted, whatever marks an old
   await expect(body).toBeVisible()
   await expect(layer).not.toHaveClass(/is-reviewed/)
 })
+
+test('opens a layer the reader unchecks while a point is still posting', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  const layer = page.locator('section.layer[data-layer="run-path"]')
+  const body = layer.locator(':scope > .layer-body')
+  // Every file ticked reads the layer as reviewed; unticking the layer reopens its files on the
+  // server, which the page learns only from an answer.
+  const boxes = layer.locator('article.file input[data-reviewed-id]')
+  await expect(boxes).toHaveCount(3)
+  for (const box of await boxes.all()) {
+    await box.check()
+  }
+  await expect(layer).toHaveClass(/is-reviewed/)
+  await layer.locator('.layer-h [data-act="toggle-card"]').click()
+  await expect(body).toBeVisible()
+
+  let releasePost = () => {}
+  const postReleased = new Promise<void>(resolve => {
+    releasePost = resolve
+  })
+  await page.route('**/api/prs/42/comments', async route => {
+    await postReleased
+    await route.continue()
+  })
+  await layer.locator('li.finding[data-fingerprint="fp-1"] [data-act="point-post"]').click()
+  await layer.locator('.layer-ctl input[data-reviewed-id="layer:run-path"]').click()
+  releasePost()
+  await expect(layer.locator('li.finding[data-fingerprint="fp-1"]')).toHaveAttribute('data-status', 'posted')
+  await expect(layer).not.toHaveClass(/is-reviewed/)
+  await expect(layer.locator('article.file input[data-reviewed-id]:checked')).toHaveCount(0)
+  await expect(body).toBeVisible()
+})
