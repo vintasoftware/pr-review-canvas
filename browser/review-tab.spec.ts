@@ -1,3 +1,4 @@
+import { syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 test('lists the review being written in the side pane, edits a draft there, and drops it', async ({
@@ -157,4 +158,59 @@ test('a comment AI Chat ties to a point acts on that point once it joins the rev
   await expect(point).toHaveAttribute('data-status', 'open')
   await page.locator('aside.chat').getByRole('tab', { name: 'AI Chat' }).click()
   await expect(card.locator('[data-act="proposed-unlink"]')).toHaveCount(1)
+})
+
+test('the author resolves a point with the reason AI Chat proposed', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  const proposal = { point: 'fp-1', reason: 'We keep the sum; the spec says so.' }
+  const { url } = await chatServer({
+    runner: {
+      script: [
+        { type: 'chunk', text: 'Then resolve it.\n```resolve\n' + JSON.stringify(proposal) + '\n```' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    },
+    // The author's own canvas, with the canvas comment off so nothing goes to the forge.
+    setup: async t => {
+      t.ctx.fixtureArtifact = null
+      t.ctx.projectConfig = {
+        ...t.ctx.projectConfig,
+        config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+      }
+      const artifact = syntheticArtifact()
+      await t.ctx.canvases.write(
+        artifact.pr.headSha,
+        artifact,
+        {
+          formatVersion: 1,
+          tool: { name: 'pr-review', version: '0.5.0' },
+          repo: artifact.pr.repo,
+          prNumber: 42,
+          headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
+          generatedAt: artifact.generatedAt,
+          generator: artifact.generator,
+          baseRef: 'main',
+          headRef: 'feat/b',
+        },
+        42
+      )
+    },
+  })
+  await page.goto(url)
+  const point = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  await point.locator('[data-act="ask"]').click()
+  await page.locator('#msg').fill('We decided to keep the sum.')
+  await page.locator('#chat-send').click()
+  const card = page.locator('.proposed[data-resolution="fp-1"]')
+  await expect(card.locator('.proposed-point')).toHaveText('about the point “Sum instead of product”')
+  await card.locator('[data-act="resolution-save"]').click()
+  await expect(point).toHaveAttribute('data-status', 'resolved')
+  await expect(point.locator('.p-summary')).toHaveText(
+    'Resolved by the author: We keep the sum; the spec says so.'
+  )
+  await expect(card.locator('.pill.status.resolved')).toHaveText('resolved')
 })

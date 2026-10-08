@@ -39,6 +39,11 @@ export function settlementOf(p) {
   return settled[p.fingerprint]
 }
 
+/** Whether the reader wrote the change, and so may resolve its points. */
+export function canSettle() {
+  return selfReview
+}
+
 /**
  * Who the point asks, as a pill. The author reads "yours" where a reviewer reads "author".
  * @param {Point} p

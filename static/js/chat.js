@@ -26,6 +26,7 @@ import { renderMarkdown } from './markdown.js'
 import { pendingComments } from './pending.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
 import { REVIEW_PANEL_ID } from './review-panel.js'
+import { canSettle, REASON_MAX, settlementOf } from './self-review.js'
 import { openReviewTab, selectSideTab, sideTabsHtml, wireSideTabs } from './side-pane.js'
 
 export const CHAT_WIDTH_KEY = 'pr-review.chat-width'
@@ -153,6 +154,7 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
  *   api?: Partial<ChatApi>,
  *   reducedMotion?: boolean,
  *   onProposed?: (what: ProposedAct, comment: ProposedComment, el: HTMLElement) => void,
+ *   onResolution?: (what: 'save' | 'edit', resolution: { fingerprint: string, reason: string }, el: HTMLElement) => void,
  * }} ChatOptions
  */
 
@@ -302,6 +304,41 @@ export function proposedCommentHtml(comment, id, send = {}) {
 }
 
 /**
+ * The commands of a proposed resolution: save it as it stands, or open the point's own reason box
+ * with it, where the reason can be changed and also posted as a comment. A point already resolved
+ * says so instead. `data-resolved` names which, so a resolution redraws only the cards it changed.
+ * @param {import('./proposed-comment.js').ProposedResolution} resolution
+ */
+function resolutionCommandsHtml(resolution) {
+  const done = settlementOf(resolution.point) !== undefined
+  const target = `data-fingerprint="${esc(resolution.point.fingerprint)}" data-reason="${esc(resolution.reason)}"`
+  return (
+    `<span class="tbtns" data-resolved="${done ? '1' : '0'}">` +
+    (done
+      ? '<span class="pill status resolved">resolved</span>'
+      : `<button class="cmd fill" type="button" data-act="resolution-save" ${target}>resolve</button>` +
+        `<button class="cmd" type="button" data-act="resolution-edit" ${target}>edit</button>`) +
+    `<button class="cmd" type="button" data-copy="${esc(resolution.reason)}">copy</button>` +
+    '</span>'
+  )
+}
+
+/**
+ * The card a proposed resolution renders as: the point it answers and the reason.
+ * @param {import('./proposed-comment.js').ProposedResolution} resolution
+ */
+export function proposedResolutionHtml(resolution) {
+  return (
+    `<div class="proposed resolution" data-resolution="${esc(resolution.point.fingerprint)}">` +
+    '<div class="proposed-h"><span class="lbl">proposed resolution</span></div>' +
+    `<p class="proposed-point muted small">about the point “${esc(resolution.point.title)}”</p>` +
+    `<div class="prose">${renderMarkdown(resolution.reason)}</div>` +
+    resolutionCommandsHtml(resolution) +
+    '</div>'
+  )
+}
+
+/**
  * Where a proposed comment stands against the posted comments and the pending review.
  * @param {ProposedComment} comment
  * @param {ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined, pointFingerprint?: string | undefined }>} posted
@@ -362,7 +399,21 @@ export function answerHtml(
         sink.set(id, comment)
         return proposedCommentHtml(comment, id, sendStateOf(comment, posted, pending, submitted))
       }
-      return `<pre class="proposed-invalid"><code>${esc(segment.text)}</code></pre><p class="muted small">${esc(segment.reason)}</p>`
+      // Only the author resolves a point, and the server keeps a reason to a set length: a block
+      // that cannot be acted on here stays a block, with the reason why.
+      const refused =
+        segment.type === 'invalid'
+          ? segment.reason
+          : !canSettle()
+            ? 'only the author of this pull request resolves attention points'
+            : segment.resolution.reason.length > REASON_MAX
+              ? 'the reason is too long to save'
+              : null
+      if (segment.type === 'resolution' && refused === null) {
+        return proposedResolutionHtml(segment.resolution)
+      }
+      const block = segment.type === 'invalid' ? segment.text : JSON.stringify(segment.resolution)
+      return `<pre class="proposed-invalid"><code>${esc(block)}</code></pre><p class="muted small">${esc(refused ?? '')}</p>`
     })
     .join('')
 }
@@ -886,6 +937,14 @@ export function wireChat(options) {
       return
     }
     const act = el.getAttribute('data-act')
+    if (act === 'resolution-save' || act === 'resolution-edit') {
+      const fingerprint = el.getAttribute('data-fingerprint')
+      const reason = el.getAttribute('data-reason')
+      if (fingerprint !== null && reason !== null) {
+        options.onResolution?.(act === 'resolution-save' ? 'save' : 'edit', { fingerprint, reason }, el)
+      }
+      return
+    }
     if (act === 'proposed-unlink') {
       // The reader overrides the agent: the comment goes out on its own, tied to no point.
       const comment = proposed.get(el.getAttribute('data-proposed') ?? '')
@@ -1036,6 +1095,24 @@ export function wireChat(options) {
           const drawn = card.querySelector(':scope > .proposed-point')
           if (drawn !== null && line !== null) drawn.replaceWith(line)
         }
+      }
+      // A resolution card follows its point: resolved, by its own command or anywhere else, or reopened.
+      for (const card of Array.from(log.querySelectorAll('.proposed[data-resolution]'))) {
+        const fingerprint = card.getAttribute('data-resolution') ?? ''
+        const tbtns = card.querySelector(':scope > .tbtns')
+        const reason = tbtns?.querySelector('[data-copy]')?.getAttribute('data-copy')
+        const done = settlementOf({ fingerprint }) !== undefined
+        if (
+          tbtns === null ||
+          typeof reason !== 'string' ||
+          (tbtns.getAttribute('data-resolved') === '1') === done
+        ) {
+          continue
+        }
+        const template = document.createElement('template')
+        template.innerHTML = resolutionCommandsHtml({ point: { fingerprint, title: '' }, reason })
+        const next = template.content.firstElementChild
+        if (next !== null) tbtns.replaceWith(next)
       }
     },
     /**

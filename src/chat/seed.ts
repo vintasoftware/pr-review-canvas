@@ -119,9 +119,25 @@ export function codeLocationMarkdown(paths: SeedPaths): string {
   }
 }
 
+/**
+ * Who reads the answers: the author, who resolves attention points, or a reviewer, who comments on
+ * them. The protocol tells the agent which proposal fits which reader.
+ */
+export function readerMarkdown(reader: { readerIsAuthor: boolean }): string {
+  return reader.readerIsAuthor
+    ? 'The reader wrote this pull request. They answer attention points; they do not review them.'
+    : 'The reader reviews this pull request; someone else wrote it.'
+}
+
 /** Fills the template. Every token is replaced, so a template typo shows up as a missing section. */
-export function renderSeed(template: string, artifact: ReviewArtifact, paths: SeedPaths): string {
+export function renderSeed(
+  template: string,
+  artifact: ReviewArtifact,
+  paths: SeedPaths,
+  reader: { readerIsAuthor: boolean }
+): string {
   const values: Record<string, string> = {
+    READER: readerMarkdown(reader),
     PR_META: prMetaMarkdown(artifact.pr),
     LAYERS: layersMarkdown(artifact),
     POINTS: pointsMarkdown(artifact),

@@ -181,6 +181,7 @@ function chatTurn(ctx: AppContext, key: ReviewKey): Promise<ChatEvent[]> {
       patches: toPatchMap(SYNTHETIC_FILES),
       derivedDir: path.join(root, 'derived'),
       readLines: async () => [],
+      readerIsAuthor: false,
     },
     { message: 'is this covered?', context: { kind: 'pr' } }
   )

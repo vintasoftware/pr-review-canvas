@@ -4,6 +4,7 @@ import { splitFences } from './fences.js'
 import {
   PROPOSED_BODY_MAX,
   parseProposedComment,
+  parseProposedResolution,
   pointRef,
   proposalFingerprint,
   splitChatAnswer,
@@ -149,6 +150,35 @@ describe('the attention point a comment names', () => {
     expect(parse(point)).toEqual({ comment: { path: 'src/app.ts', line: 3, side: 'new', body: 'Cap it.' } })
   })
 
+  it('reads a resolution as the point it answers and the reason', () => {
+    expect(
+      parseProposedResolution(JSON.stringify({ point: 'b3504e80', reason: ' We keep it. ' }), withPoints)
+    ).toEqual({
+      resolution: {
+        point: { fingerprint: points[0]?.fingerprint, title: 'One engine decides Save' },
+        reason: 'We keep it.',
+      },
+    })
+    const segments = splitChatAnswer(
+      'Keep it.\n```resolve\n' + JSON.stringify({ point: 'b3504e80', reason: 'We keep it.' }) + '\n```\n',
+      withPoints
+    )
+    expect(segments.map(s => s.type)).toEqual(['markdown', 'resolution', 'markdown'])
+  })
+
+  it.each([
+    ['is not JSON', 'nope', 'the block is not JSON'],
+    ['is not an object', '[]', 'the block is not a JSON object'],
+    [
+      'names no point of this canvas',
+      JSON.stringify({ point: 'deadbeef', reason: 'x' }),
+      'the block names no attention point of this canvas',
+    ],
+    ['has no reason', JSON.stringify({ point: 'b3504e80', reason: ' ' }), 'the block has no reason'],
+  ])('refuses a resolution that %s', (_why, source, reason) => {
+    expect(parseProposedResolution(source, withPoints)).toEqual({ reason })
+  })
+
   it('links nothing where the page gave no points', () => {
     expect(
       parseProposedComment(
@@ -199,14 +229,30 @@ describe('splitFences', () => {
     const text = '```js\ncode\n```\n\n```comment\n{}\n```\n'
     expect(splitFences(text, 'comment')).toEqual([
       { type: 'markdown', text: '```js\ncode\n```\n' },
-      { type: 'block', text: '{}' },
+      { type: 'block', text: '{}', info: 'comment' },
       { type: 'markdown', text: '' },
     ])
   })
 
+  it('picks out several info strings and says which each block had', () => {
+    const text = '```comment\n{}\n```\n```Resolve\n[]\n```\n'
+    expect(splitFences(text, ['comment', 'resolve']).filter(s => s.type === 'block')).toEqual([
+      { type: 'block', text: '{}', info: 'comment' },
+      { type: 'block', text: '[]', info: 'resolve' },
+    ])
+  })
+
   it('reads a tilde fence and a longer backtick fence', () => {
-    expect(splitFences('~~~comment\n{}\n~~~\n', 'comment')[0]).toEqual({ type: 'block', text: '{}' })
-    expect(splitFences('````comment\n```\n````\n', 'comment')[0]).toEqual({ type: 'block', text: '```' })
+    expect(splitFences('~~~comment\n{}\n~~~\n', 'comment')[0]).toEqual({
+      type: 'block',
+      text: '{}',
+      info: 'comment',
+    })
+    expect(splitFences('````comment\n```\n````\n', 'comment')[0]).toEqual({
+      type: 'block',
+      text: '```',
+      info: 'comment',
+    })
   })
 
   it('leaves an unclosed block as prose, its opening line included', () => {
@@ -219,6 +265,7 @@ describe('splitFences', () => {
     expect(splitFences('a\r\n```comment\r\n{}\r\n```\r\n', 'comment')[1]).toEqual({
       type: 'block',
       text: '{}',
+      info: 'comment',
     })
   })
 

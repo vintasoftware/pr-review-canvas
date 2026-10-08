@@ -810,6 +810,76 @@ describe('attention points', () => {
     }
   )
 
+  it('resolves a point with the reason AI Chat proposed, posting nothing', async () => {
+    const { root, calls, wiring } = setup({ selfReview: true, artifact: authored })
+    const button = document.createElement('button')
+    root.append(button)
+    wiring.onProposedResolution('save', { fingerprint: 'fp-1', reason: 'We keep it.' }, button)
+    await flush()
+    expect(calls).toEqual([
+      [
+        'settled',
+        {
+          fingerprint: 'fp-1',
+          settled: true,
+          reason: 'We keep it.',
+          comment: false,
+          headSha: artifact.pr.headSha,
+        },
+      ],
+    ])
+    expect(layerCard(root, 'fp-1')?.getAttribute('data-status')).toBe('resolved')
+  })
+
+  it("opens the point's own reason box with the reason AI Chat proposed", () => {
+    // The point waits in the review, so it is collapsed; the box opens on the expanded point.
+    const { root, calls, wiring } = setup({
+      selfReview: true,
+      artifact: authored,
+      state: {
+        ...BASE,
+        pending: [
+          {
+            id: 'd1',
+            path: 'src/app.ts',
+            line: 4,
+            side: 'new',
+            body: 'x',
+            pointFingerprint: 'fp-1',
+            headSha: artifact.pr.headSha,
+            createdAt: NOW.toISOString(),
+            updatedAt: NOW.toISOString(),
+          },
+        ],
+      },
+    })
+    const button = document.createElement('button')
+    root.append(button)
+    wiring.onProposedResolution('edit', { fingerprint: 'fp-1', reason: 'We keep it.' }, button)
+    const card = layerCard(root, 'fp-1')
+    expect(card?.hasAttribute('data-expanded')).toBe(true)
+    const reason = card?.querySelector('.settle-box textarea')
+    if (!(reason instanceof HTMLTextAreaElement)) throw new Error('no reason box')
+    expect(reason.value).toBe('We keep it.')
+    expect(card?.querySelector('input[name="settle-comment"]')).not.toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it.each([
+    ['dismissed', 'fp-1', 'restore the point first; a dismissed point is not resolved'],
+    ['not on the page', 'fp-unknown', 'that point is not on this page'],
+  ])('says why it cannot open the reason box of a point %s', (_why, fingerprint, message) => {
+    const { root, wiring } = setup({
+      selfReview: true,
+      artifact: authored,
+      state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } },
+    })
+    const button = document.createElement('button')
+    root.append(button)
+    wiring.onProposedResolution('edit', { fingerprint, reason: 'x' }, button)
+    expect(root.querySelector('.cmd-err')?.textContent).toBe(message)
+  })
+
   it('closes the reason box on cancel', () => {
     const { root } = setup({ selfReview: true, artifact: authored })
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')

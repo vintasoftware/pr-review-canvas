@@ -29,6 +29,7 @@ import {
 import { proposalFingerprint, targetsFromFiles } from './proposed-comment.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createReviewSession } from './review-session.js'
+import { REASON_MAX, setSelfReview, setSettled } from './self-review.js'
 
 const artifact = syntheticArtifact()
 const targets = targetsFromFiles(artifact.files)
@@ -833,6 +834,81 @@ describe('the proposed-comment commands', () => {
     // Untied before it went out: the agent's text links it again on a redraw, the draft does not.
     document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, 'h', [], [queued(undefined)])
     expect(document.querySelector('.proposed-point')).toBeNull()
+  })
+})
+
+describe('a proposed resolution', () => {
+  afterEach(() => setSelfReview(false, {}))
+  const withPoints = targetsFromFiles(artifact.files, artifact.points)
+  /** @param {string} reason */
+  const answer = reason => '```resolve\n' + JSON.stringify({ point: 'fp-1', reason }) + '\n```'
+
+  it('is a card for the author, with resolve, edit, and copy', () => {
+    setSelfReview(true, {})
+    document.body.innerHTML = answerHtml(answer('We keep it.'), withPoints, new Map(), paths)
+    const card = document.querySelector('.proposed[data-resolution="fp-1"]')
+    expect(card?.querySelector('.proposed-point')?.textContent).toBe(
+      'about the point “Sum instead of product”'
+    )
+    expect([...(card?.querySelectorAll('.tbtns button') ?? [])].map(b => b.textContent)).toEqual([
+      'resolve',
+      'edit',
+      'copy',
+    ])
+  })
+
+  it('says the point is resolved once it is', () => {
+    setSelfReview(true, { 'fp-1': { reason: 'Done.', at: 'x' } })
+    document.body.innerHTML = answerHtml(answer('We keep it.'), withPoints, new Map(), paths)
+    expect(document.querySelector('.proposed .pill.status.resolved')?.textContent).toBe('resolved')
+    expect(document.querySelector('[data-act="resolution-save"]')).toBeNull()
+  })
+
+  it.each([
+    [
+      'to a reader who did not write the change',
+      false,
+      'We keep it.',
+      'only the author of this pull request resolves attention points',
+    ],
+    ['with a reason too long to save', true, 'x'.repeat(REASON_MAX + 1), 'the reason is too long to save'],
+  ])('stays a block %s', (_why, author, reason, why) => {
+    setSelfReview(author, {})
+    document.body.innerHTML = answerHtml(answer(reason), withPoints, new Map(), paths)
+    expect(document.querySelector('.proposed')).toBeNull()
+    expect(document.querySelector('.proposed-invalid + p')?.textContent).toBe(why)
+  })
+
+  it('hands the page the point and the reason, and follows the point once it is resolved', async () => {
+    setSelfReview(true, {})
+    /** @type {Array<[string, { fingerprint: string, reason: string }]>} */
+    const seen = []
+    const { root, chat } = mount(
+      {
+        streamChat: async (_pr, _input, opts) => {
+          opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+          opts.onEvent({ event: 'chunk', data: { text: answer('We keep it.') } })
+        },
+      },
+      { onResolution: (what, resolution) => seen.push([what, resolution]) }
+    )
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    el(root, '[data-act="resolution-save"]').click()
+    el(root, '[data-act="resolution-edit"]').click()
+    expect(seen).toEqual([
+      ['save', { fingerprint: 'fp-1', reason: 'We keep it.' }],
+      ['edit', { fingerprint: 'fp-1', reason: 'We keep it.' }],
+    ])
+    setSettled({ 'fp-1': { reason: 'We keep it.', at: 'x' } })
+    chat.refreshProposed()
+    expect(el(root, '.proposed[data-resolution] .pill.status.resolved').textContent).toBe('resolved')
+    setSettled({})
+    chat.refreshProposed()
+    expect(root.querySelector('[data-act="resolution-save"]')).not.toBeNull()
   })
 })
 

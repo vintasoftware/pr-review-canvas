@@ -373,6 +373,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
+          onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })
         this.quickQuestions = wireQuickQuestions(this, {
           onPick: (context, question) => {

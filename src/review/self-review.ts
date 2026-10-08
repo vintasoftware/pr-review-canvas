@@ -4,6 +4,7 @@
 import type { GenerationContext } from '../contract/generation-context.js'
 import type { Point, Pr, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
+import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
 import { fingerprint } from './normalize.js'
 
 type Level = (typeof POINT_LEVELS)[number]
@@ -91,6 +92,14 @@ export function settlementCommentBody(
  */
 export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean {
   return login !== null && login.toLowerCase() === pr.author.toLowerCase()
+}
+
+/**
+ * Whether the reader reviews their own work: local work is always theirs, a pull request when
+ * they wrote it. The page offers resolve to this reader, and AI Chat may propose resolutions to them.
+ */
+export function readerIsAuthor(key: ReviewKey, login: string | null, pr: Pick<Pr, 'author'>): boolean {
+  return isLocalKey(key) || isAuthor(login, pr)
 }
 
 /**

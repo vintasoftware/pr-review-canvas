@@ -769,6 +769,12 @@ A resolution is written into the canvas itself:
 - Regenerating the canvas for the same commit keeps each resolution whose point comes back with the
   same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the
   resolutions of the points it carries.
+- When you tell AI Chat how you decided a point, it can propose a resolution instead of a comment:
+  a **proposed resolution** card names the point and the reason. **resolve** saves that reason as
+  it stands and does not post it as a comment; **edit** opens the point's own reason box with it,
+  where you can change it and choose to post it. AI Chat proposes this only to the author, a new
+  thread knows who you are from its first message, and the page shows the card only to the author
+  and only for a point of this canvas.
 
 Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
 offers no **resolve**:

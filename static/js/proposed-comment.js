@@ -1,7 +1,8 @@
 // @ts-check
-// A ```comment block in an assistant turn is a comment the agent thinks a human should post.
-// It is model output, so every field is checked against the pull request's own files before the
-// card offers to post it; a block that does not check out stays a code block.
+// A ```comment block in an assistant turn is a comment the agent thinks a human should post, and
+// a ```resolve block is a reason it thinks the author could resolve an attention point with. Both
+// are model output, so every field is checked against the pull request's own files and points
+// before a card offers to act on it; a block that does not check out stays a code block.
 import { splitFences } from './fences.js'
 
 /**
@@ -22,8 +23,15 @@ export function pointRef(fingerprint) {
 }
 
 /**
+ * A ```resolve block: the agent's proposal that the author resolve an attention point with this
+ * reason. Only the author can act on it; the page decides who sees it as a card.
+ * @typedef {{ point: ProposalPoint, reason: string }} ProposedResolution
+ */
+
+/**
  * @typedef {{ type: 'markdown', text: string }
  *   | { type: 'comment', comment: ProposedComment }
+ *   | { type: 'resolution', resolution: ProposedResolution }
  *   | { type: 'invalid', text: string, reason: string }} ChatSegment
  */
 
@@ -141,16 +149,53 @@ export function parseProposedComment(source, targets) {
 }
 
 /**
- * One assistant turn split into what to render: prose, comment cards, and blocks that claimed to
- * be comments but are not.
+ * Reads one ```resolve block. Unlike a comment, a resolution is about its point and nothing else,
+ * so a block that names no attention point of this canvas is not one.
+ * @param {string} source the text inside the fence
+ * @param {CommentTargets} [targets]
+ * @returns {{ resolution: ProposedResolution } | { reason: string }}
+ */
+export function parseProposedResolution(source, targets) {
+  /** @type {unknown} */
+  let raw
+  try {
+    raw = JSON.parse(source)
+  } catch {
+    return { reason: 'the block is not JSON' }
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { reason: 'the block is not a JSON object' }
+  }
+  const record = /** @type {Record<string, unknown>} */ (raw)
+  const ref = record['point']
+  const reason = record['reason']
+  const point = typeof ref === 'string' ? targets?.pointFor?.(ref) : undefined
+  if (point === undefined) {
+    return { reason: 'the block names no attention point of this canvas' }
+  }
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    return { reason: 'the block has no reason' }
+  }
+  return { resolution: { point, reason: reason.trim() } }
+}
+
+/**
+ * One assistant turn split into what to render: prose, comment cards, resolution cards, and
+ * blocks that claimed to be one of those but are not.
  * @param {string} markdown
  * @param {CommentTargets} [targets]
  * @returns {ChatSegment[]}
  */
 export function splitChatAnswer(markdown, targets) {
-  return splitFences(markdown, 'comment').map(segment => {
+  return splitFences(markdown, ['comment', 'resolve']).map(segment => {
     if (segment.type === 'markdown') {
       return /** @type {ChatSegment} */ ({ type: 'markdown', text: segment.text })
+    }
+    if (segment.info === 'resolve') {
+      const parsed = parseProposedResolution(segment.text, targets)
+      return 'resolution' in parsed
+        ? /** @type {ChatSegment} */ ({ type: 'resolution', resolution: parsed.resolution })
+        : /** @type {ChatSegment} */ ({ type: 'invalid', text: segment.text, reason: parsed.reason })
     }
     const parsed = parseProposedComment(segment.text, targets)
     return 'comment' in parsed

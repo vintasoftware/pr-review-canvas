@@ -61,7 +61,7 @@ import {
   postedUrls,
   setPointExpanded,
 } from './points.js'
-import { selfReviewActions, setSettled } from './self-review.js'
+import { selfReviewActions, setSettled, sharingNote } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -1361,6 +1361,55 @@ export function wireReview(root, session, opts = {}) {
   applyCapabilityGating(root, session.capabilities)
 
   return {
+    /**
+     * What the chat's proposed-resolution card does: resolve the point with the agent's reason as
+     * it stands, or open the point's own reason box with it, where the reason can change and also
+     * go out as a comment on the point's line.
+     * @param {'save' | 'edit'} what
+     * @param {{ fingerprint: string, reason: string }} resolution
+     * @param {HTMLElement} el
+     */
+    onProposedResolution(what, resolution, el) {
+      if (what === 'save') {
+        // One click resolves with the reason as it stands; posting it on the line is the reason
+        // box's choice, which `edit` opens.
+        void runCommand(
+          el,
+          async () => {
+            const answer = await session.settle(resolution.fingerprint, {
+              settled: true,
+              reason: resolution.reason,
+              comment: false,
+            })
+            toast(root, sharingNote(answer.sharing, 'point resolved'))
+          },
+          { pendingLabel: 'resolving…' }
+        )
+        return
+      }
+      const fp = cssEscape(resolution.fingerprint)
+      const point =
+        root.querySelector(`li.finding[data-fingerprint="${fp}"]`) ??
+        root.querySelector(`tr.ifind[data-fingerprint="${fp}"]`)
+      const settle = point?.querySelector('[data-act="point-settle"]')
+      if (point === null || point === undefined || !(settle instanceof HTMLElement)) {
+        showCommandError(
+          el,
+          point === null
+            ? 'that point is not on this page'
+            : 'restore the point first; a dismissed point is not resolved'
+        )
+        return
+      }
+      setPointExpanded(point, true)
+      settle.click()
+      const text = settle.closest('.tbtns')?.nextElementSibling?.querySelector('textarea')
+      if (text instanceof HTMLTextAreaElement) {
+        text.value = resolution.reason
+        scrollIntoViewSafe(text)
+        text.focus({ preventScroll: true })
+      }
+    },
     /**
      * What the chat's proposed-comment card does: post it straight away, add it to the pending
      * review, or open the same composer the rest of the page uses, prefilled.
