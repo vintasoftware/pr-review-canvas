@@ -27,7 +27,8 @@
   margin: 4px 0;
   overflow-wrap: anywhere;
 }
-.ctx-line {
+.ctx-line,
+.turn-ctx {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -57,7 +58,8 @@
 .cmd.unseen {
   position: absolute;
   left: 50%;
-  bottom: 128px;
+  /* Just above the composer, whatever height the context line and the textarea give it. */
+  bottom: calc(100% + 12px);
   transform: translateX(-50%);
   background: var(--panel-2);
   border: 2px solid var(--ink);
@@ -209,10 +211,5 @@ dialog.settings .probe-result:empty {
   }
   dialog.settings .dialog-actions {
     flex-wrap: wrap;
-  }
-}
-@media (width <= 1360px) {
-  .cmd.unseen {
-    bottom: 160px;
   }
 }

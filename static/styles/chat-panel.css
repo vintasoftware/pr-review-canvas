@@ -61,7 +61,6 @@
     padding: 0;
   }
   .chat-dialog .chat-h,
-  .chat-dialog .ctx-line,
   .chat-dialog .chat-composer {
     flex-shrink: 0;
   }

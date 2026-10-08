@@ -105,6 +105,14 @@ describe('renderChatShell', () => {
     expect(html).toContain('aria-valuenow="400"')
     expect(html).not.toContain('disabled')
   })
+
+  it('puts the context line in the composer, above the message box', () => {
+    const root = document.createElement('div')
+    root.innerHTML = renderChatShell({ enabled: true })
+    const line = el(root, '#chat-ctx-line')
+    expect(line.parentElement?.id).toBe('chat-form')
+    expect(line.compareDocumentPosition(el(root, '#msg')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 })
 
 describe('the chat width', () => {
@@ -314,6 +322,45 @@ describe('sending a message', () => {
     expect(turns[0]?.textContent).toContain('is this covered?')
     expect(turns[1]?.textContent).toContain('Covered at src/app.ts:3')
     expect(box.value).toBe('')
+  })
+
+  it('names what a sent message was about on its turn, and keeps the context for the next one', async () => {
+    const { root, chat } = mount()
+    chat.setContext({ kind: 'layer', layerId: 'run-path' })
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) {
+      throw new Error('no box')
+    }
+    box.value = 'why this order?'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    expect(el(root, '.turn.u .turn-ctx').textContent).toBe('about layer · Run path')
+    expect(chat.context).toEqual({ kind: 'layer', layerId: 'run-path' })
+  })
+
+  it('names the context of each saved question, and none for the whole PR', async () => {
+    const thread = 'pr-review-a-b-42-claude-t1'
+    const { root } = mount({
+      fetchThreads: async () => ({
+        threads: [{ name: thread, agent: 'claude', title: 't1', createdAt: '' }],
+        activeThread: thread,
+        agent: 'claude',
+      }),
+      fetchThreadHistory: async (_pr, name) => ({
+        name,
+        turns: [
+          { role: 'user', text: 'a', at: '', context: { kind: 'file', path: 'src/app.ts' } },
+          { role: 'assistant', text: 'b', at: '' },
+          { role: 'user', text: 'c', at: '', context: { kind: 'pr' } },
+          { role: 'user', text: 'd', at: '' },
+        ],
+      }),
+    })
+    await flush()
+    const labels = Array.from(root.querySelectorAll('.turn')).map(
+      turn => turn.querySelector('.turn-ctx')?.textContent ?? null
+    )
+    expect(labels).toEqual(['about src/app.ts', null, null, null])
   })
 
   it('sends nothing for an empty box', async () => {
