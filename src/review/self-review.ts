@@ -95,11 +95,18 @@ export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean 
 }
 
 /**
- * Whether the reader reviews their own work: local work is always theirs, a pull request when
- * they wrote it. The page offers resolve to this reader, and AI Chat may propose resolutions to them.
+ * Whether the reader may resolve the attention points of the canvas on screen: it is their own
+ * work (local work always is, a pull request when they wrote it), and the canvas describes the
+ * current head, as the settle route requires. The page offers resolve to this reader, and AI Chat
+ * proposes resolutions to them; neither does for anyone else.
  */
-export function readerIsAuthor(key: ReviewKey, login: string | null, pr: Pick<Pr, 'author'>): boolean {
-  return isLocalKey(key) || isAuthor(login, pr)
+export function readerResolves(
+  key: ReviewKey,
+  login: string | null,
+  pr: Pick<Pr, 'author'>,
+  canvasCurrent: boolean
+): boolean {
+  return canvasCurrent && (isLocalKey(key) || isAuthor(login, pr))
 }
 
 /**

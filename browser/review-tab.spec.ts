@@ -41,6 +41,7 @@ test('lists the review being written in the side pane, edits a draft there, and 
   await expect(point.locator('.p-outcome .pending-cmt > .prose')).toContainText(
     'Is the sum what the spec wants?'
   )
+  await expect(point.locator('.p-draft-where')).toHaveText('src/app.ts:4 · your edit of the point’s text')
 
   // Back on AI Chat, the half-written question is still there.
   await pane.getByRole('tab', { name: 'AI Chat' }).click()
@@ -205,7 +206,7 @@ test('the author resolves a point with the reason AI Chat proposed', async ({
   await point.locator('[data-act="ask"]').click()
   await page.locator('#msg').fill('We decided to keep the sum.')
   await page.locator('#chat-send').click()
-  const card = page.locator('.proposed[data-resolution="fp-1"]')
+  const card = page.locator('.proposed.resolution')
   await expect(card.locator('.proposed-point')).toHaveText('about the point “Sum instead of product”')
   await card.locator('[data-act="resolution-save"]').click()
   await expect(point).toHaveAttribute('data-status', 'resolved')

@@ -814,7 +814,11 @@ describe('attention points', () => {
     const { root, calls, wiring } = setup({ selfReview: true, artifact: authored })
     const button = document.createElement('button')
     root.append(button)
-    wiring.onProposedResolution('save', { fingerprint: 'fp-1', reason: 'We keep it.' }, button)
+    wiring.onProposedResolution(
+      'save',
+      { point: { fingerprint: 'fp-1', title: 't' }, reason: 'We keep it.' },
+      button
+    )
     await flush()
     expect(calls).toEqual([
       [
@@ -855,7 +859,11 @@ describe('attention points', () => {
     })
     const button = document.createElement('button')
     root.append(button)
-    wiring.onProposedResolution('edit', { fingerprint: 'fp-1', reason: 'We keep it.' }, button)
+    wiring.onProposedResolution(
+      'edit',
+      { point: { fingerprint: 'fp-1', title: 't' }, reason: 'We keep it.' },
+      button
+    )
     const card = layerCard(root, 'fp-1')
     expect(card?.hasAttribute('data-expanded')).toBe(true)
     const reason = card?.querySelector('.settle-box textarea')
@@ -865,19 +873,13 @@ describe('attention points', () => {
     expect(calls).toEqual([])
   })
 
-  it.each([
-    ['dismissed', 'fp-1', 'restore the point first; a dismissed point is not resolved'],
-    ['not on the page', 'fp-unknown', 'that point is not on this page'],
-  ])('says why it cannot open the reason box of a point %s', (_why, fingerprint, message) => {
-    const { root, wiring } = setup({
-      selfReview: true,
-      artifact: authored,
-      state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } },
-    })
+  it('says so when the point has no commands on the page to open the reason box under', () => {
+    const { root, wiring } = setup({ selfReview: true, artifact: authored })
     const button = document.createElement('button')
     root.append(button)
-    wiring.onProposedResolution('edit', { fingerprint, reason: 'x' }, button)
-    expect(root.querySelector('.cmd-err')?.textContent).toBe(message)
+    const resolution = { point: { fingerprint: 'fp-unknown', title: 'x' }, reason: 'x' }
+    wiring.onProposedResolution('edit', resolution, button)
+    expect(root.querySelector('.cmd-err')?.textContent).toBe('that point is not on this page')
   })
 
   it('closes the reason box on cancel', () => {
@@ -1741,11 +1743,10 @@ describe('capability gating and sign-off', () => {
     click(root, '[data-act="signoff-post"]')
     await flush()
     expect(calls).toEqual([['review', { event: 'APPROVE', body: 'Reviewed 1 of 1 layer.', headSha: HEAD }]])
-    expect(dialog?.querySelector('.signoff-result a')?.getAttribute('href')).toContain(
-      'pullrequestreview-7001'
-    )
-    click(root, '[data-act="signoff-close"]')
+    // Posted with nothing to warn about: the dialog closes, and the toast links to the review.
     expect(dialog instanceof HTMLDialogElement && dialog.open).toBe(false)
+    expect(root.querySelector('.toast')?.textContent).toBe('approved · see it on GitHub')
+    expect(root.querySelector('.toast a')?.getAttribute('href')).toContain('pullrequestreview-7001')
   })
 
   it('announces the returned outcome when comments publish but approval fails', async () => {
@@ -1775,7 +1776,9 @@ describe('capability gating and sign-off', () => {
     await flush()
     click(root, '[data-act="signoff-post"]')
     await flush()
-    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment')
+    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
+    // A warning is still to read, so the dialog stays open with it.
+    expect(root.querySelector('#signoff-dialog')?.hasAttribute('open')).toBe(true)
     expect(root.querySelector('.signoff-result')?.textContent).toContain(warning)
   })
 
@@ -1798,7 +1801,7 @@ describe('capability gating and sign-off', () => {
     click(root, '[data-act="signoff-post"]')
     await flush()
     expect(calls).toEqual([['review', { event: 'REQUEST_CHANGES', headSha: HEAD }]])
-    expect(root.querySelector('.toast')?.textContent).toBe('changes requested')
+    expect(root.querySelector('.toast')?.textContent).toBe('changes requested · see it on GitHub')
   })
 
   it('says inside the dialog when the body could not be read', async () => {
@@ -2715,7 +2718,7 @@ describe('the pending review', () => {
     expect(session.pending).toEqual([])
     expect(root.querySelector('tr.pending-row')).toBeNull()
     expect(root.querySelector('.pending-bar')).toBeNull()
-    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment')
+    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
   })
 
   it('keeps the draft on the page when the server refuses to take it', async () => {

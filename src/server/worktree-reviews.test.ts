@@ -96,7 +96,7 @@ function chatTurn(t: TestContext, key: ReviewKey): Promise<ChatEvent[]> {
       patches: toPatchMap(SYNTHETIC_FILES),
       derivedDir: path.join(shared, 'derived'),
       readLines: async () => [],
-      readerIsAuthor: false,
+      readerResolves: false,
     },
     { message: 'is this covered?', context: { kind: 'pr' } }
   )

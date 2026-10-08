@@ -38,6 +38,9 @@ export function pointRef(fingerprint) {
 /** The comment body a card will show; longer than this is not a review comment. */
 export const PROPOSED_BODY_MAX = 4000
 
+/** The longest reason a settlement takes. The contract and the reason box read it from here too. */
+export const SETTLEMENT_REASON_MAX = 600
+
 /** @param {string} body */
 export function normalizedCommentBody(body) {
   return body.replace(/\r\n/g, '\n').trimEnd()
@@ -65,11 +68,13 @@ export function proposalFingerprint(comment) {
 
 /**
  * What a target has to satisfy to be postable: the file is in this pull request, and the line is
- * one the diff shows on that side. `pointFor` finds the attention point a `point` field names.
+ * one the diff shows on that side. `pointFor` finds the attention point a `point` field names, and
+ * `resolves` says whether this reader may resolve points here, which a resolution needs.
  * @typedef {{
  *   hasPath: (path: string) => boolean,
  *   hasLine: (path: string, side: 'new' | 'old', line: number) => boolean,
  *   pointFor?: (ref: string) => ProposalPoint | undefined,
+ *   resolves?: boolean,
  * }} CommentTargets
  */
 
@@ -150,12 +155,16 @@ export function parseProposedComment(source, targets) {
 
 /**
  * Reads one ```resolve block. Unlike a comment, a resolution is about its point and nothing else,
- * so a block that names no attention point of this canvas is not one.
+ * so a block that names no attention point of this canvas is not one. Only a reader who may resolve
+ * points here gets one, and only with a reason the route will take.
  * @param {string} source the text inside the fence
  * @param {CommentTargets} [targets]
  * @returns {{ resolution: ProposedResolution } | { reason: string }}
  */
 export function parseProposedResolution(source, targets) {
+  if (targets?.resolves !== true) {
+    return { reason: 'attention points cannot be resolved here' }
+  }
   /** @type {unknown} */
   let raw
   try {
@@ -175,6 +184,9 @@ export function parseProposedResolution(source, targets) {
   }
   if (typeof reason !== 'string' || reason.trim() === '') {
     return { reason: 'the block has no reason' }
+  }
+  if (reason.trim().length > SETTLEMENT_REASON_MAX) {
+    return { reason: 'the reason is too long to save' }
   }
   return { resolution: { point, reason: reason.trim() } }
 }
@@ -209,11 +221,13 @@ export function splitChatAnswer(markdown, targets) {
  * the attention points a comment may name. A name two points share names neither.
  * @param {ReadonlyArray<import('./contract-types.js').FileEntry>} files
  * @param {ReadonlyArray<Pick<import('./contract-types.js').Point, 'fingerprint' | 'title'>>} [points]
+ * @param {boolean} [resolves] whether this reader may resolve points here
  * @returns {CommentTargets}
  */
-export function targetsFromFiles(files, points = []) {
+export function targetsFromFiles(files, points = [], resolves = false) {
   const byPath = new Map(files.map(f => [f.path, f]))
   return {
+    resolves,
     pointFor: ref => {
       const named = points.filter(p => pointRef(p.fingerprint) === ref)
       const only = named.length === 1 ? named[0] : undefined

@@ -391,6 +391,21 @@ describe('the bundle', () => {
     expect(((await res.json()) as { selfReview: boolean }).selfReview).toBe(selfReview)
   })
 
+  it('offers no self-review on a canvas of another commit, which the settle route refuses', async () => {
+    const git = gitFor42()
+    t = await makeTestContext({ git, gh: gh({ routes: { user: ghJson({ login: 'octocat' }) } }) })
+    await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: 'c'.repeat(40),
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF.replace('a() + b()', 'a() * c()'),
+    })
+    const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
+    expect(await res.json()).toMatchObject({ status: 'stale', selfReview: false })
+  })
+
   it('says whether settling shares the canvas comment again', async () => {
     const canvasComment = async (key: string): Promise<boolean> => {
       const res = await createApp(t.ctx).request(`/api/prs/${key}`, { headers: { host: 'localhost:3010' } })

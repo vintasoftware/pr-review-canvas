@@ -715,7 +715,7 @@ Acting on it changes its status:
 - **in your review**: you added it, or a comment AI Chat tied to it, to the pending review. It goes
   out when you submit. A point can hold more than one draft; the card lists them all.
 - **posted**: you posted it (or a comment AI Chat tied to it), or it went out with a submitted
-  review.
+  review. Drafts for it that still wait show on its card too.
 - **resolved**: the author answered it with a reason. Every reader sees this status.
 - **dismissed**: you took it off your own list. Other readers still see it open.
 
@@ -772,9 +772,11 @@ A resolution is written into the canvas itself:
 - When you tell AI Chat how you decided a point, it can propose a resolution instead of a comment:
   a **proposed resolution** card names the point and the reason. **resolve** saves that reason as
   it stands and does not post it as a comment; **edit** opens the point's own reason box with it,
-  where you can change it and choose to post it. AI Chat proposes this only to the author, a new
-  thread knows who you are from its first message, and the page shows the card only to the author
-  and only for a point of this canvas.
+  where you can change it and choose to post it. The card offers these where the point itself
+  offers **resolve**: on a resolved point it says so, and on a dismissed one it asks you to restore
+  the point first. AI Chat proposes this only to a reader who may resolve: the author, on the
+  canvas of the current head. A new thread knows this from its first message, and the page shows
+  the card only to that reader and only for a point of this canvas.
 
 Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
 offers no **resolve**:
@@ -855,6 +857,10 @@ review with no verdict. Each opens a
 dialog previewing an editable review body summarizing reviewed layers, dismissed attention points,
 and comments posted from the canvas, so an approval or a rejection always carries a comment.
 With `sharing.mentionCanvas` off, the dialog opens with an empty body for you to write.
+
+Once the review is posted, the dialog closes and a message links to the review on the forge; the
+page already shows what it changed. When the forge answered with a warning, such as comments it
+could not load back, the dialog stays open with it.
 
 Approval requires every layer except **Other changes** to be reviewed for the current head.
 Requesting changes and a comment-only review do not require that completion. On GitLab,

@@ -139,8 +139,9 @@ export interface PrBundle {
   sharedCanvas?: SharedCanvasInfo
   skillCommand: string
   /**
-   * True when the reader wrote the change: the login that runs the server is the pull request's
-   * author, or the review is of local work. The page then offers to settle attention points.
+   * True when the reader may resolve the points on screen: they wrote the change (the login that
+   * runs the server is the pull request's author, or the review is of local work) and the canvas
+   * describes the current head. The page then offers to settle attention points.
    */
   selfReview: boolean
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */

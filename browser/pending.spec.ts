@@ -195,7 +195,9 @@ test('turns a submitted attention point into a posted thread and link', async ({
   const dialog = page.locator('#signoff-dialog')
   await expect(dialog.locator('[data-act="signoff-post"]')).toBeEnabled()
   await dialog.locator('[data-act="signoff-post"]').click()
-  await expect(dialog.locator('.signoff-result')).toContainText('Posted')
+  // Posted with nothing to warn about: the dialog closes on the page that now shows the review.
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.toast a')).toHaveAttribute('href', /pullrequestreview-7001/)
   await expect(page.locator('tr.pending-row')).toHaveCount(0)
   await expect(page.locator('tr.thread[data-thread="8001"]')).toContainText('Sum instead of product')
   await expect(point.locator('.tbtns a')).toHaveAttribute('href', /discussion_r8001$/)

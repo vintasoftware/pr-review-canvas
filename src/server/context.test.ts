@@ -244,7 +244,7 @@ describe('context', () => {
         patches: toPatchMap(SYNTHETIC_FILES),
         derivedDir: path.join(dir, 'derived'),
         readLines: async () => [],
-        readerIsAuthor: false,
+        readerResolves: false,
       }
     }
   })

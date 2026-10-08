@@ -48,8 +48,8 @@ still names one, and whenever you are not sure.
 
 {{READER}}
 
-Only when the reader wrote this pull request, and they have just decided an attention point (for
-example "we keep it this way"), propose a resolution instead of a comment: the point's id and the
+Only when the reader may resolve attention points, and they have just decided one (for example
+"we keep it this way"), propose a resolution instead of a comment: the point's id and the
 reason, in their words, that it needs no reviewer decision. A follow-up change they agreed to
 stays in your answer's prose; they make it in the code, not in a comment to themselves.
 
@@ -59,7 +59,7 @@ stays in your answer's prose; they make it in the code, not in a comment to them
 ```
 ````
 
-Never propose a resolution to a reader who did not write the pull request. Write at most one
+Never propose a resolution to a reader who may not resolve attention points. Write at most one
 proposal, comment or resolution, per answer.
 
 Defend code that is already good. Do not invent problems to look useful. When the answer is

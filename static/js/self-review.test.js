@@ -2,7 +2,7 @@
 // @vitest-environment happy-dom
 import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
-import { openPoints, pointCardHtml, pointCommandsHtml, pointStatus } from './points.js'
+import { openPoints, pointCardHtml, pointCommandsHtml, pointStatus, resolvable } from './points.js'
 import { createReviewSession } from './review-session.js'
 import {
   audiencePillHtml,
@@ -34,13 +34,20 @@ describe('what a reader sees', () => {
     expect(audiencePillHtml(tests)).toContain('>yours<')
   })
 
-  it('offers settle only to the author, on any unsettled point, a reviewer point too', () => {
-    expect(settleButtonHtml(tests)).toBe('')
-    expect(settleButtonHtml(decide)).toBe('')
+  it('offers settle only to the author, on any point not resolved or dismissed, a reviewer point too', () => {
+    const offers = /** @param {import('./contract-types.js').Point} p @param {typeof state} s */ (p, s) =>
+      pointCommandsHtml(p, { status: pointStatus(p, s) }).includes('data-act="point-settle"')
+    expect(offers(tests, state)).toBe(false)
+    expect(offers(decide, state)).toBe(false)
     setSelfReview(true, { [tests.fingerprint]: settlement })
-    expect(settleButtonHtml(tests)).toBe('')
+    expect(offers(tests, state)).toBe(false)
+    expect(offers(debt, state)).toBe(true)
+    expect(offers(decide, state)).toBe(true)
+    expect(offers(decide, { ...state, dismissed: { [decide.fingerprint]: { at: 'x' } } })).toBe(false)
+    expect(
+      /** @type {const} */ (['open', 'queued', 'posted', 'resolved', 'dismissed']).map(resolvable)
+    ).toEqual([true, true, true, false, false])
     expect(settleButtonHtml(debt)).toContain('data-act="point-settle"')
-    expect(settleButtonHtml(decide)).toContain('data-act="point-settle"')
   })
 
   it('lets the author reopen any settled point, a reviewer point too', () => {

@@ -120,13 +120,14 @@ export function codeLocationMarkdown(paths: SeedPaths): string {
 }
 
 /**
- * Who reads the answers: the author, who resolves attention points, or a reviewer, who comments on
- * them. The protocol tells the agent which proposal fits which reader.
+ * Whether the reader may resolve attention points here, which decides the proposal that fits: the
+ * author on the current head's canvas resolves, everyone else comments. It claims nothing about
+ * who wrote the pull request when the answer is no, since an outdated canvas says no to its author.
  */
-export function readerMarkdown(reader: { readerIsAuthor: boolean }): string {
-  return reader.readerIsAuthor
-    ? 'The reader wrote this pull request. They answer attention points; they do not review them.'
-    : 'The reader reviews this pull request; someone else wrote it.'
+export function readerMarkdown(reader: { readerResolves: boolean }): string {
+  return reader.readerResolves
+    ? 'The reader wrote this pull request and may resolve its attention points: they answer them; they do not review them.'
+    : 'The reader may not resolve attention points here.'
 }
 
 /** Fills the template. Every token is replaced, so a template typo shows up as a missing section. */
@@ -134,7 +135,7 @@ export function renderSeed(
   template: string,
   artifact: ReviewArtifact,
   paths: SeedPaths,
-  reader: { readerIsAuthor: boolean }
+  reader: { readerResolves: boolean }
 ): string {
   const values: Record<string, string> = {
     READER: readerMarkdown(reader),

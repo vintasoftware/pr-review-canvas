@@ -1,7 +1,7 @@
 // @ts-check
 // Every command that triggers a request goes through runCommand, so the click always shows a
 // pending state and a failure always shows its message next to the command.
-import { copyToClipboard } from './dom.js'
+import { copyToClipboard, externalLink } from './dom.js'
 
 /**
  * @template T
@@ -93,7 +93,8 @@ const toastTimers = new WeakMap()
  * inside the page.
  * @param {HTMLElement} root
  * @param {string} message
- * @param {{ failed?: boolean }} [opts] `failed` draws it as a failure
+ * @param {{ failed?: boolean, link?: { url: string, text: string } }} [opts] `failed` draws it as a
+ *   failure; `link` follows the message, to what just happened on the forge
  */
 export function toast(root, message, opts = {}) {
   let box = root.querySelector(':scope > .toast')
@@ -106,6 +107,9 @@ export function toast(root, message, opts = {}) {
   }
   clearTimeout(toastTimers.get(box))
   box.textContent = message
+  if (opts.link !== undefined) {
+    box.append(' · ', externalLink(opts.link.url, opts.link.text))
+  }
   box.classList.toggle('failed', opts.failed === true)
   const region = box
   toastTimers.set(

@@ -26,10 +26,10 @@ import {
   writeChatMinimized,
   writeChatWidth,
 } from './chat.js'
-import { proposalFingerprint, targetsFromFiles } from './proposed-comment.js'
+import { proposalFingerprint, SETTLEMENT_REASON_MAX, targetsFromFiles } from './proposed-comment.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createReviewSession } from './review-session.js'
-import { REASON_MAX, setSelfReview, setSettled } from './self-review.js'
+import { setSelfReview, setSettled } from './self-review.js'
 
 const artifact = syntheticArtifact()
 const targets = targetsFromFiles(artifact.files)
@@ -630,7 +630,7 @@ describe('answerHtml', () => {
         { hasPath: path => present.includes(path), hasLine: () => true },
         sink,
         new Set(present),
-        'turn'
+        { turnKey: 'turn' }
       )
       return [...sink.values()]
     }
@@ -647,8 +647,8 @@ describe('answerHtml', () => {
     const text = '```comment\n{"path":"src/app.ts","line":3,"body":"Rename this."}\n```'
     const first = new Map()
     const second = new Map()
-    answerHtml(text, targets, first, paths, 'first')
-    answerHtml(text, targets, second, paths, 'second')
+    answerHtml(text, targets, first, paths, { turnKey: 'first' })
+    answerHtml(text, targets, second, paths, { turnKey: 'second' })
     expect([...first.values()][0].proposalFingerprint).toBe([...second.values()][0].proposalFingerprint)
   })
 
@@ -659,8 +659,7 @@ describe('answerHtml', () => {
       targets,
       new Map(),
       paths,
-      'history-0',
-      [posted]
+      { turnKey: 'history-0', posted: [posted] }
     )
     expect(document.querySelector('.proposed .tbtns a')?.textContent).toBe('view comment')
     expect(document.querySelector('.proposed .tbtns a')?.getAttribute('href')).toBe(posted.url)
@@ -682,9 +681,7 @@ describe('answerHtml', () => {
       targets,
       new Map(),
       paths,
-      'history-0',
-      [],
-      [queued]
+      { turnKey: 'history-0', pending: [queued] }
     )
     expect(document.querySelector('.proposed .tbtns .pill')?.textContent).toBe('in your review')
     expect(document.querySelector('[data-act="proposed-post"]')).toBeNull()
@@ -827,26 +824,29 @@ describe('the proposed-comment commands', () => {
     document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths)
     expect(document.querySelector('[data-act="proposed-unlink"]')).not.toBeNull()
     // Sent with its link: the line stays, with nothing left to untie.
-    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, 'h', [], [queued('fp-1')])
+    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, { pending: [queued('fp-1')] })
     expect(document.querySelector('.proposed-point')?.textContent).toBe(
       'about the point “Sum instead of product”'
     )
     // Untied before it went out: the agent's text links it again on a redraw, the draft does not.
-    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, 'h', [], [queued(undefined)])
+    document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, { pending: [queued(undefined)] })
     expect(document.querySelector('.proposed-point')).toBeNull()
   })
 })
 
 describe('a proposed resolution', () => {
+  const BASE = emptyState('2026-09-10T12:00:00.000Z')
   afterEach(() => setSelfReview(false, {}))
-  const withPoints = targetsFromFiles(artifact.files, artifact.points)
+  const author = targetsFromFiles(artifact.files, artifact.points, true)
   /** @param {string} reason */
   const answer = reason => '```resolve\n' + JSON.stringify({ point: 'fp-1', reason }) + '\n```'
 
-  it('is a card for the author, with resolve, edit, and copy', () => {
+  it('is a card for a reader who may resolve, with resolve, edit, and copy', () => {
     setSelfReview(true, {})
-    document.body.innerHTML = answerHtml(answer('We keep it.'), withPoints, new Map(), paths)
-    const card = document.querySelector('.proposed[data-resolution="fp-1"]')
+    document.body.innerHTML = answerHtml(answer('We keep it.'), author, new Map(), paths, {
+      state: BASE,
+    })
+    const card = document.querySelector('.proposed.resolution')
     expect(card?.querySelector('.proposed-point')?.textContent).toBe(
       'about the point “Sum instead of product”'
     )
@@ -857,31 +857,47 @@ describe('a proposed resolution', () => {
     ])
   })
 
-  it('says the point is resolved once it is', () => {
+  it('offers resolve exactly where the point does: not once resolved, nor while dismissed', () => {
     setSelfReview(true, { 'fp-1': { reason: 'Done.', at: 'x' } })
-    document.body.innerHTML = answerHtml(answer('We keep it.'), withPoints, new Map(), paths)
+    document.body.innerHTML = answerHtml(answer('We keep it.'), author, new Map(), paths, { state: BASE })
     expect(document.querySelector('.proposed .pill.status.resolved')?.textContent).toBe('resolved')
+    expect(document.querySelector('[data-act="resolution-save"]')).toBeNull()
+    setSelfReview(true, {})
+    const dismissed = { ...BASE, dismissed: { 'fp-1': { at: 'x' } } }
+    document.body.innerHTML = answerHtml(answer('We keep it.'), author, new Map(), paths, {
+      state: dismissed,
+    })
+    expect(document.querySelector('.proposed .tbtns')?.textContent).toContain(
+      'restore the point to resolve it'
+    )
     expect(document.querySelector('[data-act="resolution-save"]')).toBeNull()
   })
 
   it.each([
     [
-      'to a reader who did not write the change',
-      false,
+      'to a reader who may not resolve here',
+      targets,
       'We keep it.',
-      'only the author of this pull request resolves attention points',
+      'attention points cannot be resolved here',
     ],
-    ['with a reason too long to save', true, 'x'.repeat(REASON_MAX + 1), 'the reason is too long to save'],
-  ])('stays a block %s', (_why, author, reason, why) => {
-    setSelfReview(author, {})
-    document.body.innerHTML = answerHtml(answer(reason), withPoints, new Map(), paths)
+    [
+      'with a reason too long to save',
+      author,
+      'x'.repeat(SETTLEMENT_REASON_MAX + 1),
+      'the reason is too long to save',
+    ],
+  ])('stays the agent’s own block %s', (_why, given, reason, why) => {
+    document.body.innerHTML = answerHtml(answer(reason), given, new Map(), paths)
     expect(document.querySelector('.proposed')).toBeNull()
+    expect(document.querySelector('.proposed-invalid code')?.textContent).toBe(
+      JSON.stringify({ point: 'fp-1', reason })
+    )
     expect(document.querySelector('.proposed-invalid + p')?.textContent).toBe(why)
   })
 
-  it('hands the page the point and the reason, and follows the point once it is resolved', async () => {
+  it('hands the page the resolution, and follows its point as the state changes', async () => {
     setSelfReview(true, {})
-    /** @type {Array<[string, { fingerprint: string, reason: string }]>} */
+    /** @type {Array<[string, import('./proposed-comment.js').ProposedResolution]>} */
     const seen = []
     const { root, chat } = mount(
       {
@@ -899,16 +915,60 @@ describe('a proposed resolution', () => {
     await flush()
     el(root, '[data-act="resolution-save"]').click()
     el(root, '[data-act="resolution-edit"]').click()
+    const resolution = {
+      point: { fingerprint: 'fp-1', title: 'Sum instead of product' },
+      reason: 'We keep it.',
+    }
     expect(seen).toEqual([
-      ['save', { fingerprint: 'fp-1', reason: 'We keep it.' }],
-      ['edit', { fingerprint: 'fp-1', reason: 'We keep it.' }],
+      ['save', resolution],
+      ['edit', resolution],
     ])
     setSettled({ 'fp-1': { reason: 'We keep it.', at: 'x' } })
     chat.refreshProposed()
-    expect(el(root, '.proposed[data-resolution] .pill.status.resolved').textContent).toBe('resolved')
+    expect(el(root, '.proposed.resolution .pill.status.resolved').textContent).toBe('resolved')
     setSettled({})
     chat.refreshProposed()
     expect(root.querySelector('[data-act="resolution-save"]')).not.toBeNull()
+  })
+})
+
+describe('the tie a reader takes off', () => {
+  afterEach(() => setSelfReview(false, {}))
+
+  it('stays off while the answer is still being drawn, and the comment goes out untied', async () => {
+    /** @type {Array<string | undefined>} */
+    const seen = []
+    const text = '```comment\n{"path":"src/app.ts","line":3,"body":"Rename.","point":"fp-1"}\n```\n'
+    let more = () => {}
+    const next = new Promise(resolve => {
+      more = () => resolve(undefined)
+    })
+    const { root, chat } = mount(
+      {
+        streamChat: async (_pr, _input, opts) => {
+          opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+          opts.onEvent({ event: 'chunk', data: { text } })
+          await next
+          // A later chunk draws the whole answer again, from the agent's text.
+          opts.onEvent({ event: 'chunk', data: { text: 'More.' } })
+        },
+      },
+      { onProposed: (_what, comment) => seen.push(comment.point?.fingerprint) }
+    )
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    el(root, '[data-act="proposed-unlink"]').click()
+    more()
+    await flush()
+    expect(root.textContent).toContain('More.')
+    expect(root.querySelector('.proposed-point')).toBeNull()
+    chat.refreshProposed()
+    expect(root.querySelector('.proposed-point')).toBeNull()
+    el(root, '[data-act="proposed-queue"]').click()
+    expect(seen).toEqual([undefined])
   })
 })
 
@@ -1830,10 +1890,17 @@ it('upgrades a submitted proposal to its link when a normalized receipt arrives'
     updatedAt: '',
   }
   const text = '```comment\n{"path":"src/app.ts","line":3,"body":"Rename this."}\n```'
-  document.body.innerHTML = answerHtml(text, targets, new Map(), paths, 'history-0', [], [], [draft])
+  document.body.innerHTML = answerHtml(text, targets, new Map(), paths, {
+    turnKey: 'history-0',
+    submitted: [draft],
+  })
   expect(document.querySelector('.proposed .tbtns .pill')?.textContent).toBe('submitted')
   const posted = { ...mapReviewComment(GH_REVIEW_COMMENTS[0], new Set()), body: 'Rename this.\r\n', line: 3 }
-  document.body.innerHTML = answerHtml(text, targets, new Map(), paths, 'history-0', [posted], [], [draft])
+  document.body.innerHTML = answerHtml(text, targets, new Map(), paths, {
+    turnKey: 'history-0',
+    posted: [posted],
+    submitted: [draft],
+  })
   expect(document.querySelector('.proposed .tbtns a')?.getAttribute('href')).toBe(posted.url)
 })
 

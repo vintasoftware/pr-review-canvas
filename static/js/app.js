@@ -302,8 +302,8 @@ export class PrAppElement extends HTMLElement {
     setMentionCanvas(bundle.mentionCanvas)
     if (bundle.artifact && showsCanvas) {
       const { artifact } = bundle
-      // Only the author settles, and only on the canvas of the current head.
-      setSelfReview(bundle.selfReview && bundle.status === 'ready', artifact.settled, bundle.canvasComment)
+      // The server says whether this reader resolves points here: the author, on the current head's canvas.
+      setSelfReview(bundle.selfReview, artifact.settled, bundle.canvasComment)
       // A stale canvas describes its own commit, so its files and diffs come from that sha.
       const files = staleSha === undefined ? bundle.files : artifact.files
       const paths = pathSet(files)

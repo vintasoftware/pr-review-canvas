@@ -85,8 +85,14 @@ for (const receipt of ['available', 'unavailable']) {
     await closeChat()
     await page.locator('.pending-bar [data-act="pending-finish"]').click()
     await page.locator('[data-act="signoff-post"]').click()
-    await expect(page.locator('.signoff-result')).toContainText('Posted')
-    await page.locator('[data-act="signoff-close"]').click()
+    await expect(page.locator('.toast')).toContainText('review posted with 2 comments')
+    if (receipt === 'available') {
+      await expect(page.locator('#signoff-dialog')).toBeHidden()
+    } else {
+      // The receipt could not be read: the dialog stays open with the warning.
+      await expect(page.locator('.signoff-result')).toContainText('could not be loaded')
+      await page.locator('[data-act="signoff-close"]').click()
+    }
     await openChat()
     if (receipt === 'available') {
       await expect(card.locator('a[href$="discussion_r8001"]')).toHaveCount(1)

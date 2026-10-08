@@ -18,7 +18,7 @@ import { type PrMeta, toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
 import { marksForCanvas } from '../review/carry-marks.js'
 import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
-import { readerIsAuthor } from '../review/self-review.js'
+import { readerResolves } from '../review/self-review.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -355,6 +355,8 @@ async function bundleBase(
     canvasSha: string
     /** The canvas on screen, when there is one: marks may follow the line of descent onto it. */
     artifact: ReviewArtifact | null
+    /** Whether that canvas describes the current head, the only one whose points are resolved. */
+    canvasCurrent: boolean
     warnings: string[]
   }
 ): Promise<Omit<PrBundle, 'status' | 'skillCommand'>> {
@@ -384,7 +386,7 @@ async function bundleBase(
     state: marks.state,
     ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
     capabilities,
-    selfReview: readerIsAuthor(key, capabilities.login, input.pr),
+    selfReview: readerResolves(key, capabilities.login, input.pr, input.canvasCurrent),
     chat: {
       enabled: chatEnabled && acpx.installed,
       acpx: acpx.installed,
@@ -447,6 +449,7 @@ export async function resolveLocalBundle(
     diff,
     canvasSha: reviewedCommit(found, pr),
     artifact: loaded?.artifact ?? null,
+    canvasCurrent: screen.status === 'ready',
     warnings,
   })
   const { warning: _screenWarning, ...screenFields } = screen
@@ -478,6 +481,7 @@ export async function resolveBundle(
       diff,
       canvasSha: pr.headSha,
       artifact: null,
+      canvasCurrent: true,
       warnings,
     })
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
@@ -523,6 +527,7 @@ export async function resolveBundle(
     diff,
     canvasSha: reviewedCommit(found, pr),
     artifact: loaded?.artifact ?? null,
+    canvasCurrent: screen.status === 'ready',
     warnings,
   })
   const shared = sharedCanvas === null ? {} : { sharedCanvas }

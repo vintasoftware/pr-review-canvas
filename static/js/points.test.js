@@ -314,7 +314,7 @@ describe('where a point stands', () => {
     ).toEqual(['p1', 'p2'])
   })
 
-  it('draws a point that is already posted as its link, whatever the review holds', () => {
+  it('draws a point that is already posted as its link, with the drafts that still wait', () => {
     const state = {
       ...emptyState('2026-09-10T12:00:00.000Z'),
       pending: [draftFor(first)],
@@ -322,7 +322,12 @@ describe('where a point stands', () => {
     }
     const posted = new Map([[first.fingerprint, 'https://github.com/x#r1001']])
     document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state, posted })}</ol>`
+    expect(document.querySelector('li.finding')?.getAttribute('data-status')).toBe('posted')
     expect(document.querySelector('.tbtns a')?.textContent).toBe('view comment')
+    expect(document.querySelector('.p-outcome .pending-cmt')?.getAttribute('data-pending-id')).toBe('p1')
+    // The row in the diff leaves the draft to its own row, as for a queued point.
+    document.body.innerHTML = `<table><tbody>${pointRowHtml(first, { ...ctx, state, posted })}</tbody></table>`
+    expect(document.querySelector('.p-outcome')).toBeNull()
   })
 
   it('redraws a point only when what it shows changes, keeping it expanded while its status holds', () => {

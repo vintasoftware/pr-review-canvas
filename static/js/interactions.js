@@ -29,6 +29,7 @@ import {
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
 import { conversationHtml } from './overview.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
+import { hostLabel } from './host.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
@@ -61,7 +62,7 @@ import {
   postedUrls,
   setPointExpanded,
 } from './points.js'
-import { selfReviewActions, setSettled, sharingNote } from './self-review.js'
+import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -783,10 +784,6 @@ export function wireReview(root, session, opts = {}) {
           body === '' ? undefined : body
         )
         if (editor) editor.defaultValue = submittedText
-        showSignoffResult(dialog, review)
-        for (const warning of warnings) {
-          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
-        }
         const verdict =
           review.state === 'APPROVED'
             ? 'approved'
@@ -795,8 +792,19 @@ export function wireReview(root, session, opts = {}) {
               : 'review posted'
         toast(
           root,
-          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
+          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
+          { link: { url: review.url, text: `see it on ${hostLabel()}` } }
         )
+        // The page behind already shows what the review changed, so the dialog gets out of the way.
+        // A warning is the one thing still to read there.
+        if (warnings.length === 0) {
+          dialog.close()
+          return
+        }
+        showSignoffResult(dialog, review)
+        for (const warning of warnings) {
+          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
+        }
       },
       { pendingLabel: 'posting…' }
     )
@@ -1363,52 +1371,38 @@ export function wireReview(root, session, opts = {}) {
   return {
     /**
      * What the chat's proposed-resolution card does: resolve the point with the agent's reason as
-     * it stands, or open the point's own reason box with it, where the reason can change and also
-     * go out as a comment on the point's line.
+     * it stands, posting nothing, or open the point's own reason box with it, where the reason can
+     * change and also go out as a comment on the point's line. The card offers both only where the
+     * point itself offers resolve, so the box opens under the point's own resolve command.
      * @param {'save' | 'edit'} what
-     * @param {{ fingerprint: string, reason: string }} resolution
+     * @param {import('./proposed-comment.js').ProposedResolution} resolution
      * @param {HTMLElement} el
      */
     onProposedResolution(what, resolution, el) {
+      const { fingerprint } = resolution.point
       if (what === 'save') {
-        // One click resolves with the reason as it stands; posting it on the line is the reason
-        // box's choice, which `edit` opens.
-        void runCommand(
-          el,
-          async () => {
-            const answer = await session.settle(resolution.fingerprint, {
-              settled: true,
-              reason: resolution.reason,
-              comment: false,
-            })
-            toast(root, sharingNote(answer.sharing, 'point resolved'))
-          },
-          { pendingLabel: 'resolving…' }
-        )
+        const notify = /** @param {string} message */ message => toast(root, message)
+        void resolvePoint(session, el, fingerprint, { reason: resolution.reason, comment: false }, notify)
         return
       }
-      const fp = cssEscape(resolution.fingerprint)
-      const point =
-        root.querySelector(`li.finding[data-fingerprint="${fp}"]`) ??
-        root.querySelector(`tr.ifind[data-fingerprint="${fp}"]`)
-      const settle = point?.querySelector('[data-act="point-settle"]')
-      if (point === null || point === undefined || !(settle instanceof HTMLElement)) {
-        showCommandError(
-          el,
-          point === null
-            ? 'that point is not on this page'
-            : 'restore the point first; a dismissed point is not resolved'
-        )
+      const fp = cssEscape(fingerprint)
+      const command =
+        root.querySelector(`li.finding[data-fingerprint="${fp}"] [data-act="point-settle"]`) ??
+        root.querySelector(`tr.ifind[data-fingerprint="${fp}"] [data-act="point-settle"]`)
+      const point = session.artifact.points.find(p => p.fingerprint === fingerprint)
+      if (command === null || point === undefined) {
+        // A point of the Other layer whose diff is not drawn yet has no commands on the page.
+        showCommandError(el, 'that point is not on this page')
         return
       }
-      setPointExpanded(point, true)
-      settle.click()
-      const text = settle.closest('.tbtns')?.nextElementSibling?.querySelector('textarea')
-      if (text instanceof HTMLTextAreaElement) {
-        text.value = resolution.reason
-        scrollIntoViewSafe(text)
-        text.focus({ preventScroll: true })
+      const holder = command.closest('[data-point]')
+      if (holder !== null) {
+        setPointExpanded(holder, true)
       }
+      // Scrolling first opens a collapsed card or a hidden layer around the point, so the box can
+      // take the focus.
+      scrollIntoViewSafe(command)
+      openSettleBox(command, point, session, resolution.reason)
     },
     /**
      * What the chat's proposed-comment card does: post it straight away, add it to the pending

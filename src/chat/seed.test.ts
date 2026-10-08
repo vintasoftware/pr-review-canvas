@@ -19,7 +19,7 @@ const PATHS = {
   repoRoot: '/repo',
   code: { kind: 'reader-checkout', cwd: '/repo' },
 } as const
-const REVIEWER = { readerIsAuthor: false }
+const REVIEWER = { readerResolves: false }
 
 describe('renderSeed', () => {
   it('fills every token of the shipped template', async () => {
@@ -40,13 +40,13 @@ describe('renderSeed', () => {
     expect(seed).toContain('Do not invent problems')
   })
 
-  it('tells the agent whether the reader wrote the pull request', async () => {
+  it('tells the agent whether the reader may resolve attention points', async () => {
     const template = await loadSeedTemplate()
     expect(renderSeed(template, artifact, PATHS, REVIEWER)).toContain(
-      'The reader reviews this pull request; someone else wrote it.'
+      'The reader may not resolve attention points here.'
     )
-    expect(renderSeed(template, artifact, PATHS, { readerIsAuthor: true })).toContain(
-      'The reader wrote this pull request. They answer attention points; they do not review them.'
+    expect(renderSeed(template, artifact, PATHS, { readerResolves: true })).toContain(
+      'The reader wrote this pull request and may resolve its attention points: they answer them; they do not review them.'
     )
   })
 

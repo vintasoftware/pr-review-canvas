@@ -66,8 +66,8 @@ export interface ChatTarget {
   /** `<canvas>/derived`, which holds head/, base/ and patches/. */
   derivedDir: string
   readLines: ContextSources['readLines']
-  /** Whether the reader wrote the change, so the agent may propose resolving its points. */
-  readerIsAuthor: boolean
+  /** Whether the reader may resolve the points of this canvas, so the agent may propose it. */
+  readerResolves: boolean
 }
 
 export interface ChatSendInput {
@@ -305,7 +305,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     const seeded = !sameSession || thread.seededHeadSha !== target.headSha
     const seed = seeded
       ? `${renderSeed(await deps.loadSeedTemplate(), target.artifact, seedPaths(deps, target, code), {
-          readerIsAuthor: target.readerIsAuthor,
+          readerResolves: target.readerResolves,
         })}\n\n`
       : ''
     const prompt = `${seed}${contextBlock}\n\n## Question\n\n${input.message}\n`

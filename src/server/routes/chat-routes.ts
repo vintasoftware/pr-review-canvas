@@ -12,7 +12,7 @@ import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { CheckoutsResponse, SettingsResponse } from '../../contract/settings.js'
 import { isChatAgent, SettingsInputSchema } from '../../contract/settings.js'
 import { lookupCanvas } from '../../review/carry-over.js'
-import { readerIsAuthor } from '../../review/self-review.js'
+import { readerResolves } from '../../review/self-review.js'
 import type { Derived } from '../../store/derived-store.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
@@ -245,8 +245,9 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
         patches,
         derivedDir: ctx.derived.derivedDir(headSha),
         readLines: (side, filePath, from, to) => ctx.derived.readLines(headSha, side, filePath, from, to),
-        // The same reader the page offers resolve to; the probe answers from its cache.
-        readerIsAuthor: readerIsAuthor(key, (await ctx.capabilities.get()).login, pr),
+        // The same reader the page offers resolve to: an outdated canvas is read with its own
+        // commit, so its points are not resolved here. The probe answers from its cache.
+        readerResolves: readerResolves(key, (await ctx.capabilities.get()).login, pr, headSha === pr.headSha),
       },
       { message: input.message, context: input.context, thread: input.thread }
     )

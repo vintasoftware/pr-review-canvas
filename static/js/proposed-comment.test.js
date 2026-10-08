@@ -5,6 +5,7 @@ import {
   PROPOSED_BODY_MAX,
   parseProposedComment,
   parseProposedResolution,
+  SETTLEMENT_REASON_MAX,
   pointRef,
   proposalFingerprint,
   splitChatAnswer,
@@ -125,6 +126,8 @@ describe('the attention point a comment names', () => {
     { fingerprint: 'aaaaaaaa22222222222222222222222222222222', title: 'Second twin' },
   ]
   const withPoints = targetsFromFiles(FILES, points)
+  // The same canvas, read by a reader who may resolve its points.
+  const resolving = targetsFromFiles(FILES, points, true)
   /** @param {unknown} point */
   const parse = point =>
     parseProposedComment(JSON.stringify({ path: 'src/app.ts', line: 3, body: 'Cap it.', point }), withPoints)
@@ -152,7 +155,7 @@ describe('the attention point a comment names', () => {
 
   it('reads a resolution as the point it answers and the reason', () => {
     expect(
-      parseProposedResolution(JSON.stringify({ point: 'b3504e80', reason: ' We keep it. ' }), withPoints)
+      parseProposedResolution(JSON.stringify({ point: 'b3504e80', reason: ' We keep it. ' }), resolving)
     ).toEqual({
       resolution: {
         point: { fingerprint: points[0]?.fingerprint, title: 'One engine decides Save' },
@@ -161,7 +164,7 @@ describe('the attention point a comment names', () => {
     })
     const segments = splitChatAnswer(
       'Keep it.\n```resolve\n' + JSON.stringify({ point: 'b3504e80', reason: 'We keep it.' }) + '\n```\n',
-      withPoints
+      resolving
     )
     expect(segments.map(s => s.type)).toEqual(['markdown', 'resolution', 'markdown'])
   })
@@ -175,8 +178,19 @@ describe('the attention point a comment names', () => {
       'the block names no attention point of this canvas',
     ],
     ['has no reason', JSON.stringify({ point: 'b3504e80', reason: ' ' }), 'the block has no reason'],
+    [
+      'has a reason too long to save',
+      JSON.stringify({ point: 'b3504e80', reason: 'x'.repeat(SETTLEMENT_REASON_MAX + 1) }),
+      'the reason is too long to save',
+    ],
   ])('refuses a resolution that %s', (_why, source, reason) => {
-    expect(parseProposedResolution(source, withPoints)).toEqual({ reason })
+    expect(parseProposedResolution(source, resolving)).toEqual({ reason })
+  })
+
+  it('refuses any resolution to a reader who may not resolve points here', () => {
+    expect(parseProposedResolution(JSON.stringify({ point: 'b3504e80', reason: 'x' }), withPoints)).toEqual({
+      reason: 'attention points cannot be resolved here',
+    })
   })
 
   it('links nothing where the page gave no points', () => {

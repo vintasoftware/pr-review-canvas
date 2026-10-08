@@ -217,7 +217,8 @@ for (const bodyState of ['generated', 'edited', 'posted'] as const) {
     }
     if (bodyState === 'posted') {
       await post.click()
-      await expect(dialog.locator('.signoff-result')).toContainText('Posted')
+      await expect(page.locator('.toast')).toContainText('review posted')
+      await expect(dialog).toBeHidden()
     }
     let confirmations = 0
     page.on('dialog', async prompt => {

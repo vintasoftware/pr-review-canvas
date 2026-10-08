@@ -11,6 +11,7 @@ import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import {
   audiencePillHtml,
+  canSettle,
   reopenButtonHtml,
   selfReviewNoteHtml,
   settleButtonHtml,
@@ -42,7 +43,7 @@ export function pointsByLevel(points) {
  */
 
 /**
- * @param {Point} p
+ * @param {Pick<Point, 'fingerprint'>} p
  * @param {PrState | null | undefined} state
  * @returns {PointStatus}
  */
@@ -64,6 +65,22 @@ export function pointStatus(p, state) {
     return 'dismissed'
   }
   return 'open'
+}
+
+/**
+ * The statuses the author resolves a point from. A resolved point is done, and a dismissed one is
+ * restored first: dismissing says the point is not for this reader, who takes that back before
+ * answering it for everyone.
+ */
+const RESOLVABLE = new Set(['open', 'queued', 'posted'])
+
+/**
+ * Whether the reader may resolve a point in this status now. The point's own resolve and a
+ * resolution AI Chat proposes both ask this, so the two never disagree.
+ * @param {PointStatus} status
+ */
+export function resolvable(status) {
+  return canSettle() && RESOLVABLE.has(status)
 }
 
 /** What each status but `open` is called, on its pill and in the overview's count. */
@@ -150,7 +167,7 @@ export function pointContext(p) {
 export function pointCommandsHtml(p, opts = {}) {
   const status = opts.status ?? 'open'
   const fp = esc(p.fingerprint)
-  const settle = settleButtonHtml(p)
+  const settle = resolvable(status) ? settleButtonHtml(p) : ''
   const ask = askButtonHtml(pointContext(p))
   const commentUrl = settlementOf(p)?.commentUrl
   /** @type {Record<PointStatus, string>} */
@@ -205,6 +222,44 @@ export function postedUrls(state, comments) {
 /** @typedef {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string>, now?: Date }} PointContext */
 
 /**
+ * Where one of a point's drafts came from: a comment AI Chat proposed about it, the point's own
+ * text as added to the review, or that text after the reader edited it.
+ * @param {Point} p
+ * @param {import('./contract-types.js').PendingComment} draft
+ */
+function draftOrigin(p, draft) {
+  if (draft.proposalFingerprint !== undefined) {
+    return 'proposed by AI Chat'
+  }
+  return draft.body === pointToMarkdown(p) ? 'the point’s text' : 'your edit of the point’s text'
+}
+
+/**
+ * The drafts that wait for a point, each with its lines, where it came from, and its own edit and
+ * delete; nothing when none waits.
+ * @param {Point} p
+ * @param {PointContext} ctx
+ */
+function draftsHtml(p, ctx) {
+  const drafts = pendingForPoint(ctx.state, p.fingerprint)
+  if (drafts.length === 0) {
+    return ''
+  }
+  const now = ctx.now ?? new Date()
+  return (
+    `<div class="p-outcome"><h4 class="lbl">${drafts.length === 1 ? 'Your draft' : 'Your drafts'}</h4>` +
+    drafts
+      .map(
+        d =>
+          `<p class="p-draft-where muted small">${esc(pendingRange(d))} · ${draftOrigin(p, d)}</p>` +
+          pendingCommentHtml(d, now)
+      )
+      .join('') +
+    '</div>'
+  )
+}
+
+/**
  * The parts of a point that say where it stands, for every status but `open`: the pill next to the
  * title, the one line that stands for the point while it is collapsed, and what was done with it,
  * shown once the reader expands it.
@@ -231,21 +286,10 @@ function statusPartsHtml(p, status, ctx, opts) {
         only === undefined
           ? `${drafts.length} drafts wait in your review`
           : `Waits in your review${elsewhere ? ` at ${esc(pendingRange(only))}` : ''}`
-      const now = ctx.now ?? new Date()
       return {
         pill,
         summary: line(`${what} · not on ${host} yet`),
-        outcome: opts.card
-          ? `<div class="p-outcome"><h4 class="lbl">${drafts.length === 1 ? 'Your draft' : 'Your drafts'}</h4>` +
-            drafts
-              .map(
-                d =>
-                  `<p class="p-draft-where muted small">${esc(pendingRange(d))} · ${d.proposalFingerprint === undefined ? 'the point’s text' : 'proposed by AI Chat'}</p>` +
-                  pendingCommentHtml(d, now)
-              )
-              .join('') +
-            '</div>'
-          : '',
+        outcome: opts.card ? draftsHtml(p, ctx) : '',
       }
     }
     case 'posted': {
@@ -257,7 +301,8 @@ function statusPartsHtml(p, status, ctx, opts) {
             ? `Sent to ${host} with your review`
             : `Posted to ${host} · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">view comment</a>`
         ),
-        outcome: '',
+        // A posted point can still hold drafts that wait, such as a later comment AI Chat proposed.
+        outcome: opts.card ? draftsHtml(p, ctx) : '',
       }
     }
     case 'resolved': {
@@ -290,8 +335,7 @@ function pointSignature(p, status, ctx) {
     pendingForPoint(ctx.state, p.fingerprint).map(d => [d.id, d.body]),
     settlement?.reason ?? null,
     settlement?.commentUrl ?? null,
-    settleButtonHtml(p) !== '',
-    reopenButtonHtml(p) !== '',
+    canSettle(),
   ])
 }
 

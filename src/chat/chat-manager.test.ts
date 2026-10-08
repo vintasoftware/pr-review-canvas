@@ -45,7 +45,7 @@ function target(): ChatTarget {
     patches,
     derivedDir: '/data/derived',
     readLines: async () => ['a line'],
-    readerIsAuthor: false,
+    readerResolves: false,
   }
 }
 
