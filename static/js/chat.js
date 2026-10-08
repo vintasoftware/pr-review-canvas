@@ -255,7 +255,7 @@ export function checkoutWarningHtml(event) {
 /**
  * The commands under a card. `add to review` leads, as it does on a diff-line comment, and both
  * ways of sending go through the same paths as every other post and draft, so capability gating
- * and the pending state apply here too. `data-send` names what the send commands show, so a
+ * and the pending state apply here too. `data-key` names what the send commands show, so a
  * change of state redraws only the cards it changed.
  * @param {ProposedComment} comment
  * @param {string} id the key the pane stores this card's comment under
@@ -271,7 +271,7 @@ function proposedCommandsHtml(comment, id, send) {
           ? 'queued'
           : 'open'
   return (
-    `<span class="tbtns" data-send="${shown}">` +
+    `<span class="tbtns" data-key="${shown}">` +
     sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true }) +
     `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post>edit</button>` +
     `<button class="cmd" type="button" data-copy="${esc(comment.body)}">copy</button>` +
@@ -294,7 +294,9 @@ function proposedPointHtml(id, send) {
   const unlink = open
     ? ` <button class="cmd" type="button" data-act="proposed-unlink" data-proposed="${esc(id)}">unlink</button>`
     : ''
-  return `<p class="proposed-point muted small">about the point “${esc(send.point.title)}”${unlink}</p>`
+  // The key is what the line shows: the point, and whether it can still come off.
+  const key = `${send.point.fingerprint}:${open ? 'open' : 'sent'}`
+  return `<p class="proposed-point muted small" data-key="${esc(key)}">about the point “${esc(send.point.title)}”${unlink}</p>`
 }
 
 /**
@@ -323,18 +325,20 @@ function isResolution(entry) {
 }
 
 /**
- * Replaces `el` with what `html` draws when that differs, or takes it out when `html` is empty, so
- * a command that did not change keeps its focus and its state.
+ * Replaces `el` with what `html` draws when its `data-key` names something else, or takes it out
+ * when `html` is empty. The key names what the element shows; the live element also carries what
+ * the page added since (an error after a command, a request in flight, the posting gate), which
+ * the HTML does not, so it is compared by key and a command whose key held keeps all of that.
  * @param {Element} el
  * @param {string} html
  */
-function redrawIfChanged(el, html) {
+function redrawOnKey(el, html) {
   const template = document.createElement('template')
   template.innerHTML = html
   const next = template.content.firstElementChild
   if (next === null) {
     el.remove()
-  } else if (!next.isEqualNode(el)) {
+  } else if (next.getAttribute('data-key') !== el.getAttribute('data-key')) {
     el.replaceWith(next)
   }
 }
@@ -343,7 +347,7 @@ function redrawIfChanged(el, html) {
  * The commands of a proposed resolution, by where its point stands: save the reason as it stands,
  * or open the point's own reason box with it, where it can change and also go out as a comment.
  * The rule is the point's own (`resolvable`), so the card offers resolve exactly where the point
- * does; a point resolved, or dismissed and waiting to be restored, says so instead. `data-shown`
+ * does; a point resolved, or dismissed and waiting to be restored, says so instead. `data-key`
  * names which, so a change of state redraws only the cards it changed.
  * @param {ProposedResolution} resolution
  * @param {string} id the key the pane stores this card's resolution under
@@ -363,7 +367,7 @@ function resolutionCommandsHtml(resolution, id, state) {
           ? '<span class="muted small">dismissed: restore the point to resolve it</span>'
           : ''
   return (
-    `<span class="tbtns" data-shown="${shown}">${acts}` +
+    `<span class="tbtns" data-key="${shown}">${acts}` +
     `<button class="cmd" type="button" data-copy="${esc(resolution.reason)}">copy</button></span>`
   )
 }
@@ -1120,16 +1124,16 @@ export function wireChat(options) {
           continue
         }
         if (isResolution(entry)) {
-          redrawIfChanged(tbtns, resolutionCommandsHtml(entry, id, now.state))
+          redrawOnKey(tbtns, resolutionCommandsHtml(entry, id, now.state))
           continue
         }
         const sendState = sendStateOf(entry, now)
-        redrawIfChanged(tbtns, proposedCommandsHtml(entry, id, sendState))
+        redrawOnKey(tbtns, proposedCommandsHtml(entry, id, sendState))
         // The point line follows the same state: put in, changed, or taken out.
         const line = proposedPointHtml(id, sendState)
         const drawn = card.querySelector(':scope > .proposed-point')
         if (drawn !== null) {
-          redrawIfChanged(drawn, line)
+          redrawOnKey(drawn, line)
         } else if (line !== '') {
           card.querySelector(':scope > .proposed-h')?.insertAdjacentHTML('afterend', line)
         }

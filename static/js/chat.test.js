@@ -932,6 +932,37 @@ describe('a proposed resolution', () => {
   })
 })
 
+describe('a refresh the cards did not ask for', () => {
+  it('leaves a card whose state held as the page left it: its error, its gate, its focus', async () => {
+    const { root, chat } = mount({
+      streamChat: async (_pr, _input, opts) => {
+        opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+        opts.onEvent({
+          event: 'chunk',
+          data: { text: '```comment\n{"path":"src/app.ts","line":3,"body":"Rename.","point":"fp-1"}\n```\n' },
+        })
+      },
+    })
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    const queue = el(root, '[data-act="proposed-queue"]')
+    const post = el(root, '[data-act="proposed-post"]')
+    const line = el(root, '.proposed-point')
+    queue.insertAdjacentHTML('afterend', '<span class="cmd-err" role="alert">offline</span>')
+    post.setAttribute('disabled', '')
+    queue.focus()
+    chat.refreshProposed()
+    expect(el(root, '.proposed .cmd-err').textContent).toBe('offline')
+    expect(el(root, '[data-act="proposed-post"]')).toBe(post)
+    expect(post.hasAttribute('disabled')).toBe(true)
+    expect(document.activeElement).toBe(queue)
+    expect(el(root, '.proposed-point')).toBe(line)
+  })
+})
+
 describe('the tie a reader takes off', () => {
   afterEach(() => setSelfReview(false, {}))
 
