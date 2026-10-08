@@ -30,10 +30,10 @@ export interface BundleOptions {
   refresh: boolean
   /**
    * The background poller asked, rather than a reader opening or refreshing the page. A poll is
-   * answered from the head last resolved: a PR's from `prs/<n>/`, at no forge call, and a local
-   * review's from memory, since snapshotting the working tree every few seconds would stat the
-   * whole tree again and again, and every edit in between would leave another commit and another
-   * `derived/` tree behind it.
+   * answered from the head last resolved: a PR's from `prs/<n>/` once this process has read it, at
+   * no forge call, and a local review's from memory, since snapshotting the working tree every few
+   * seconds would stat the whole tree again and again, and every edit in between would leave another
+   * commit and another `derived/` tree behind it.
    */
   poll?: boolean
 }
@@ -105,12 +105,24 @@ export function createPrLoader(ctx: AppContext) {
     return stored
   }
 
+  async function fetchMeta(number: number): Promise<PrMeta> {
+    return ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
+  }
+
+  /** What this process last read for a PR, or null when it has not read it or a file is gone. */
+  async function readCached(
+    number: number
+  ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] } | null> {
+    if (!refreshed.has(number)) return null
+    const [pr, comments] = await Promise.all([ctx.prs.readPr(number), ctx.prs.readComments(number)])
+    return pr !== null && comments !== null ? { pr, comments, warnings: [] } : null
+  }
+
   async function refreshPr(
     number: number,
-    fetched?: PrMeta
+    meta: PrMeta
   ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
     const { host, repo } = ctx.config
-    const meta = fetched ?? (await host.fetchPrMeta(ctx.gh, repo, number))
     const shas = await fetchPrRefs(ctx.git, host, meta)
     const pr = toPr(meta, repo, shas)
     await ctx.prs.writePr(number, pr)
@@ -137,23 +149,14 @@ export function createPrLoader(ctx: AppContext) {
       number: number,
       opts: BundleOptions
     ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
-      if (!opts.refresh && refreshed.has(number)) {
-        const [pr, comments] = await Promise.all([ctx.prs.readPr(number), ctx.prs.readComments(number)])
-        if (pr !== null && comments !== null) {
-          if (opts.poll === true) {
-            return { pr, comments, warnings: [] }
-          }
-          const meta = await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
-          if (meta.headSha === pr.headSha) {
-            return { pr, comments, warnings: [] }
-          }
-          return refreshPr(number, meta)
-        }
-      }
-      return refreshPr(number)
+      const cached = opts.refresh ? null : await readCached(number)
+      if (cached !== null && opts.poll === true) return cached
+      const meta = await fetchMeta(number)
+      if (cached !== null && meta.headSha === cached.pr.headSha) return cached
+      return refreshPr(number, meta)
     },
     async refreshComments(number: number): Promise<{ comments: CommentsPayload; warnings: string[] }> {
-      const pr = (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
+      const pr = (await ctx.prs.readPr(number)) ?? (await refreshPr(number, await fetchMeta(number))).pr
       const { host, repo } = ctx.config
       const { payload, warnings } = await ctx.prs.refreshComments(number, () =>
         host.fetchComments(ctx.gh, repo, number, pr.headSha, ctx.now)
@@ -161,7 +164,7 @@ export function createPrLoader(ctx: AppContext) {
       return { comments: payload, warnings }
     },
     async currentPr(number: number): Promise<Pr> {
-      return (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
+      return (await ctx.prs.readPr(number)) ?? (await refreshPr(number, await fetchMeta(number))).pr
     },
     /**
      * The head a local review describes. Every request but a poll reads the work again, so opening
@@ -182,7 +185,9 @@ export function createPrLoader(ctx: AppContext) {
     },
     /** The head of either kind of target, so the routes both kinds serve need no branch. */
     async currentTarget(key: ReviewKey): Promise<Pr> {
-      return isLocalKey(key) ? localPr(key) : ((await ctx.prs.readPr(key)) ?? (await refreshPr(key)).pr)
+      return isLocalKey(key)
+        ? localPr(key)
+        : ((await ctx.prs.readPr(key)) ?? (await refreshPr(key, await fetchMeta(key))).pr)
     },
   }
 }
