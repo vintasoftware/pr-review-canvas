@@ -8,7 +8,7 @@ import { toggleMarkdownPreview } from './composer.js'
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 /** @typedef {import('./selection.js').Selection} Selection */
-import { cssEscape, drawCardOf, fileCardOf, findRow } from './anchors.js'
+import { cssEscape, drawCardOf, drawCardsOf, fileCardOf, findRow } from './anchors.js'
 import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
@@ -242,6 +242,7 @@ export function padUnderStickyBar(doc, bar) {
  *   quickQuestions?: () => { openFor: (el: HTMLElement) => void } | null,
  *   openSettings?: (el: HTMLElement) => void,
  *   openReview?: () => void,
+ *   uncover?: () => void,
  * }} [opts]
  */
 export function wireReview(root, session, opts = {}) {
@@ -795,10 +796,12 @@ export function wireReview(root, session, opts = {}) {
           `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
           { link: { url: review.url, text: `see it on ${hostLabel()}` } }
         )
-        // The page behind already shows what the review changed, so the dialog gets out of the way.
-        // A warning is the one thing still to read there.
+        // The page behind already shows what the review changed, so the dialog gets out of the way,
+        // and so does a pane floating over the page, which would cover the receipt. A warning is the
+        // one thing still to read there.
         if (warnings.length === 0) {
           dialog.close()
+          opts.uncover?.()
           return
         }
         showSignoffResult(dialog, review)
@@ -1386,15 +1389,20 @@ export function wireReview(root, session, opts = {}) {
         return
       }
       const fp = cssEscape(fingerprint)
+      const point = session.artifact.points.find(p => p.fingerprint === fingerprint)
+      if (point !== undefined) {
+        // A point of the Other layer sits in its file's diff, which may not be drawn yet.
+        drawCardOf(root, point.path, point.layerId)
+      }
       const command =
         root.querySelector(`li.finding[data-fingerprint="${fp}"] [data-act="point-settle"]`) ??
         root.querySelector(`tr.ifind[data-fingerprint="${fp}"] [data-act="point-settle"]`)
-      const point = session.artifact.points.find(p => p.fingerprint === fingerprint)
       if (command === null || point === undefined) {
-        // A point of the Other layer whose diff is not drawn yet has no commands on the page.
         showCommandError(el, 'that point is not on this page')
         return
       }
+      // The box opens on the canvas, which a floating pane would cover.
+      opts.uncover?.()
       const holder = command.closest('[data-point]')
       if (holder !== null) {
         setPointExpanded(holder, true)
@@ -1436,11 +1444,14 @@ export function wireReview(root, session, opts = {}) {
         if (comment.startLine !== undefined && comment.startLine !== comment.line) {
           options.startLine = comment.startLine
         }
+        // The line's diff may not be drawn yet, as in a collapsed Other layer.
+        drawCardsOf(root, comment.path)
         const row = findRow(root, key, comment.side, comment.line)
         if (row === null) {
           showCommandError(el, 'that line is not on screen; open the file card first')
           return
         }
+        opts.uncover?.()
         openComposer(row, options, 'row')
         return
       }

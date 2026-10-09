@@ -84,7 +84,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -289,6 +289,7 @@ function setup(opts = {}) {
     ...(opts.fetchReviewBody ? { fetchReviewBody: opts.fetchReviewBody } : {}),
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
+    ...(opts.uncover ? { uncover: opts.uncover } : {}),
   })
   wirings.push(wiring)
   return { root, session, calls, wiring }
@@ -1698,6 +1699,27 @@ describe('keyboard', () => {
       key(']')
       expect(root.querySelector('.is-focused')?.getAttribute('data-point')).toBe('p-2')
       expect(root.querySelector('#file-src_gone_ts .loading')).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('draws the diff of a point not drawn yet and opens its box on the canvas, past a floating pane', () => {
+    const uncover = vi.fn()
+    try {
+      const { root, wiring } = setup({ selfReview: true, drawn: false, uncover })
+      expect(root.querySelector('tr.ifind[data-fingerprint="fp-3"]')).toBeNull()
+      const button = document.createElement('button')
+      root.append(button)
+      wiring.onProposedResolution(
+        'edit',
+        { point: { fingerprint: 'fp-3', title: 't' }, reason: 'Unused.' },
+        button
+      )
+      const reason = root.querySelector('tr.ifind[data-fingerprint="fp-3"] .settle-box textarea')
+      expect(reason instanceof HTMLTextAreaElement && reason.value).toBe('Unused.')
+      expect(root.querySelector('.cmd-err')).toBeNull()
+      expect(uncover).toHaveBeenCalledOnce()
     } finally {
       vi.unstubAllGlobals()
     }

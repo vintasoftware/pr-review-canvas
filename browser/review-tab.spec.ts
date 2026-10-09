@@ -257,6 +257,88 @@ test('edit on a proposed resolution shows its point while the acted-on points ar
   await expect(point).toBeHidden()
 })
 
+/** A chat that answers with a resolution proposal for `point`. */
+function resolutionScript(point: string, reason: string) {
+  return {
+    script: [
+      {
+        type: 'chunk' as const,
+        text: 'Then resolve it.\n```resolve\n' + JSON.stringify({ point, reason }) + '\n```',
+      },
+      { type: 'done' as const, stopReason: 'end_turn' },
+    ],
+  }
+}
+
+test('edit on a proposed resolution steps the phone modal aside and focuses the reason', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  await page.setViewportSize({ width: 390, height: 900 })
+  const { url } = await chatServer({
+    runner: resolutionScript('fp-1', 'The spec requires a sum.'),
+    setup: authorCanvas,
+  })
+  await page.goto(url)
+  const point = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  await point.locator('[data-act="ask"]').click()
+  await page.locator('#msg').fill('Resolve this with a reason.')
+  await page.locator('#chat-send').click()
+  await page.locator('[data-act="resolution-edit"]').click()
+  await expect(page.locator('#chat-dialog')).not.toHaveAttribute('open')
+  const reason = point.locator('.settle-box textarea')
+  await expect(reason).toHaveValue('The spec requires a sum.')
+  await expect(reason).toBeFocused()
+})
+
+test('edit on a proposed resolution draws a point of the collapsed Other layer', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  const { url } = await chatServer({
+    runner: resolutionScript('fp-3', 'Nothing imports this file.'),
+    setup: authorCanvas,
+  })
+  await page.goto(url)
+  await page.locator('#msg').fill('Resolve the deleted file point.')
+  await page.locator('#chat-send').click()
+  await page.locator('[data-act="resolution-edit"]').click()
+  const reason = page.locator('[data-fingerprint="fp-3"] .settle-box textarea').first()
+  await expect(reason).toBeVisible()
+  await expect(reason).toHaveValue('Nothing imports this file.')
+  await expect(reason).toBeFocused()
+})
+
+for (const width of [390, 800]) {
+  test(`a draft's line link minimizes the floating review over it at width ${width}`, async ({
+    page,
+    noChatUrl,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop')
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(noChatUrl)
+    await page.locator('section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]').click()
+    await page.locator('.pending-bar [data-act="show-review"]').click()
+    await expect(page.locator('#chat-dialog')).toHaveAttribute('open')
+    await page.locator('#review-panel .review-where a').click()
+    await expect(page.locator('#chat-dialog')).not.toHaveAttribute('open')
+    const row = page.locator('tr.pending-row').first()
+    await expect(row).toBeInViewport()
+    // The row is what a pointer reaches at its middle, not a pane over it.
+    const reached = await row.evaluate(el => {
+      const b = el.getBoundingClientRect()
+      const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)
+      return hit !== null && el.contains(hit)
+    })
+    expect(reached).toBe(true)
+    // The launcher brings the review back as it was.
+    await page.locator('#chat-launcher').click()
+    await expect(page.locator('#review-panel .review-draft')).toHaveCount(1)
+  })
+}
+
 test('a draft being edited keeps the focus and caret when another draft finishes saving', async ({
   page,
   reviewUrl,
@@ -287,4 +369,23 @@ test('a draft being edited keeps the focus and caret when another draft finishes
   expect(await input.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([
     3, 8,
   ])
+})
+
+test('a review submitted from the phone modal leaves its receipt on top', async ({
+  page,
+  noChatUrl,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(noChatUrl)
+  await page.locator('section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]').click()
+  await page.locator('.pending-bar [data-act="show-review"]').click()
+  await page.locator('#review-panel [data-act="pending-finish"]').click()
+  await page.locator('#signoff-dialog [data-act="signoff-post"]').click()
+  await expect(page.locator('#signoff-dialog')).toBeHidden()
+  await expect(page.locator('#chat-dialog')).not.toHaveAttribute('open')
+  const receipt = page.locator('.toast a[href$="pullrequestreview-7001"]')
+  await expect(receipt).toBeVisible()
+  // Nothing covers it: a click would land on the link.
+  await receipt.click({ trial: true, timeout: 2000 })
 })
