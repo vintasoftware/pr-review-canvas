@@ -385,6 +385,79 @@ async function sendChat(): Promise<Response> {
   })
 }
 
+describe('a pull request moved to another base under the same head', () => {
+  const RELEASE = '9'.repeat(40)
+
+  /** The head's own canvas, generated against BASE_SHA, and one app: one server process. */
+  async function withHeadCanvas() {
+    await withOldCanvas()
+    await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), manifest(HEAD_SHA), 42)
+    const app = createApp(t.ctx)
+    const load = async (q = ''): Promise<PrBundle> =>
+      json<PrBundle>(await app.request(`/api/prs/42${q}`, { headers: LOCAL }))
+    return { app, load }
+  }
+
+  /** GitHub now says the pull request merges into `release`, whose merge base with the head is RELEASE. */
+  function retargeted(): void {
+    git.options.refs = { ...git.options.refs, 'refs/heads/release': RELEASE }
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: HEAD_SHA,
+      mergeBaseSha: RELEASE,
+      diff: SYNTHETIC_DIFF_MOVED_BY_BASE,
+    })
+    t.ctx.gh = ghFor42({
+      routes: {
+        'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, base: { ...GH_PULL.base, ref: 'release' } }),
+      },
+    })
+  }
+
+  it('reads the head canvas as outdated on reload, with the merge base it was generated against', async () => {
+    const { load } = await withHeadCanvas()
+    expect((await load()).status).toBe('ready')
+    retargeted()
+    // A poll answers about what the page shows; the next load asks GitHub and sees the new base.
+    expect((await load('?poll=1')).status).toBe('ready')
+    const reloaded = await load()
+    expect(reloaded.pr.baseRef).toBe('release')
+    expect(reloaded.pr.mergeBaseSha).toBe(RELEASE)
+    expect(reloaded.status).toBe('stale')
+    expect(reloaded.stale).toEqual({
+      canvasHeadSha: HEAD_SHA,
+      currentHeadSha: HEAD_SHA,
+      relation: 'other-base',
+      canvasMergeBaseSha: BASE_SHA,
+      currentMergeBaseSha: RELEASE,
+    })
+    // Regenerating the same commit replaces its canvas.
+    expect(reloaded.skillCommand).toBe('/pr-review-canvas 42 --force')
+    // The outdated canvas is shown with the diff it was generated from.
+    expect(reloaded.files.map(f => f.path)).toEqual(artifactFor(HEAD_SHA).files.map(f => f.path))
+    expect((await load('?refresh=1')).status).toBe('stale')
+  })
+
+  it('serves the outdated canvas its own patches and refuses a sign-off on it', async () => {
+    const { app, load } = await withHeadCanvas()
+    await load()
+    retargeted()
+    await load()
+    const res = await app.request(`/api/prs/42/patches?headSha=${HEAD_SHA}`, { headers: LOCAL })
+    const own = Object.values((await json<{ patches: Record<string, string> }>(res)).patches).join('\n')
+    // Built from BASE_SHA, as the canvas was: the hunks sit where the canvas says they do.
+    const moved: string[] = SYNTHETIC_DIFF_MOVED_BY_BASE.match(/^@@ .* @@/gm) ?? []
+    const kept: string[] = SYNTHETIC_DIFF.match(/^@@ .* @@/gm) ?? []
+    expect(moved.filter(h => !kept.includes(h))).not.toEqual([])
+    for (const header of kept) expect(own).toContain(header)
+    for (const header of moved.filter(h => !kept.includes(h))) expect(own).not.toContain(header)
+    const signoff = await app.request('/api/prs/42/review/body', { headers: LOCAL })
+    expect(signoff.status).toBe(409)
+    expect((await json<ErrorEnvelope>(signoff)).error.code).toBe('SIGNOFF_INCOMPLETE')
+  })
+})
+
 describe('the chat after the head moved', () => {
   it('talks about the canvas with the diff of the head when only merges came in', async () => {
     await withOldCanvas()

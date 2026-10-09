@@ -85,6 +85,20 @@ describe('standsForHead and lookupCanvas', () => {
     expect(git.calls).toEqual([])
   })
 
+  it('does not stand the head for itself from another merge base, as after the base branch changed', async () => {
+    await context(history(SYNTHETIC_DIFF))
+    expect(await standsForHead(t.ctx, PR, { headSha: HEAD_SHA, mergeBaseSha: '9'.repeat(40) })).toBe(false)
+    expect(git.calls).toEqual([])
+    await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), manifestOf(HEAD_SHA), 42)
+    expect(await lookupCanvas(t.ctx, 42, { ...PR, mergeBaseSha: '9'.repeat(40) })).toEqual({
+      status: 'stale',
+      headSha: HEAD_SHA,
+      relation: 'other-base',
+      mergeBaseSha: BASE_SHA,
+    })
+    expect(await lookupCanvas(t.ctx, 42, PR)).toEqual({ status: 'ready', headSha: HEAD_SHA })
+  })
+
   it('another commit stands for the head when the diffs are identical, whatever lies between them', async () => {
     await context(history(SYNTHETIC_DIFF))
     expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(true)

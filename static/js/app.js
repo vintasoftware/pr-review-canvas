@@ -361,6 +361,7 @@ export class PrAppElement extends HTMLElement {
       const interactions = wireReview(this, session, {
         chat: () => this.chat,
         openReview: () => (this.chat ?? this.reviewPane)?.openReview(),
+        uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
         openSettings: el =>
           void openSettingsDialog(this, el, {
             onSaved: data => this.layerView?.setView(data.settings.layerView),

@@ -122,7 +122,7 @@ export function openReviewTab(pane, panel) {
  * Wires the pane that holds the review alone, on a page without AI Chat. It always starts
  * minimized: nothing of the canvas's width is taken until the reader asks for the list.
  * @param {HTMLElement} root
- * @returns {{ openReview: () => void, stop: () => void } | null} null when the page has no such pane
+ * @returns {{ openReview: () => void, uncover: () => void, stop: () => void } | null} null when the page has no such pane
  */
 export function wireReviewPane(root) {
   const pane = root.querySelector('aside.review-only')
@@ -132,6 +132,7 @@ export function wireReviewPane(root) {
   const panel = wireChatPanel(root, pane, { minimized: true })
   return {
     openReview: () => openReviewTab(pane, panel),
+    uncover: () => panel.uncover(),
     stop: () => panel.stop(),
   }
 }

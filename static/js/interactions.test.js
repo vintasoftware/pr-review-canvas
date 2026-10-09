@@ -84,7 +84,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -289,6 +289,7 @@ function setup(opts = {}) {
     ...(opts.fetchReviewBody ? { fetchReviewBody: opts.fetchReviewBody } : {}),
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
+    ...(opts.uncover ? { uncover: opts.uncover } : {}),
   })
   wirings.push(wiring)
   return { root, session, calls, wiring }
@@ -1703,6 +1704,27 @@ describe('keyboard', () => {
     }
   })
 
+  it('draws the diff of a point not drawn yet and opens its box on the canvas, past a floating pane', () => {
+    const uncover = vi.fn()
+    try {
+      const { root, wiring } = setup({ selfReview: true, drawn: false, uncover })
+      expect(root.querySelector('tr.ifind[data-fingerprint="fp-3"]')).toBeNull()
+      const button = document.createElement('button')
+      root.append(button)
+      wiring.onProposedResolution(
+        'edit',
+        { point: { fingerprint: 'fp-3', title: 't' }, reason: 'Unused.' },
+        button
+      )
+      const reason = root.querySelector('tr.ifind[data-fingerprint="fp-3"] .settle-box textarea')
+      expect(reason instanceof HTMLTextAreaElement && reason.value).toBe('Unused.')
+      expect(root.querySelector('.cmd-err')).toBeNull()
+      expect(uncover).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('stops listening once the screen is torn down', () => {
     const { root, wiring } = setup()
     wiring.stop()
@@ -2719,6 +2741,46 @@ describe('the pending review', () => {
     expect(root.querySelector('tr.pending-row')).toBeNull()
     expect(root.querySelector('.pending-bar')).toBeNull()
     expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
+  })
+
+  it('holds the review until a draft edit on screen is saved, and steps a floating pane aside after', async () => {
+    const uncover = vi.fn()
+    const { root, calls } = setup({
+      uncover,
+      fetchReviewBody: async () => ({ headSha: HEAD, body: '', unreviewed: [], pending: 1 }),
+    })
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '[data-act="pending-edit"]')
+    const area = root.querySelector('.pending-cmt textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    const dialog = () => root.querySelector('#signoff-dialog[open]')
+    // An edit that changes nothing loses nothing.
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    expect(dialog()).not.toBeNull()
+    click(root, '[data-act="signoff-close"]')
+
+    area.value = 'one, revised'
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    expect(dialog()).toBeNull()
+    expect(root.querySelector('.pending-bar .cmd-err')?.textContent).toBe(
+      'save or cancel the draft you are editing first'
+    )
+    expect(document.activeElement).toBe(area)
+
+    click(root, '[data-act="pending-save"]')
+    await flush()
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(calls.at(-1)?.[0]).toBe('review')
+    expect(uncover).toHaveBeenCalledOnce()
   })
 
   it('keeps the draft on the page when the server refuses to take it', async () => {

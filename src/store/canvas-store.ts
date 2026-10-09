@@ -25,8 +25,14 @@ export type CanvasLookup =
   /** `headSha` is the canvas's own commit: the head, or another commit with an identical diff. */
   { status: 'ready'; headSha: string; carriedOver?: CarriedOverInfo } | StaleCanvas | { status: 'missing' }
 
-/** A canvas of another commit: one the head was built on, or one from a line the head no longer contains. */
-export type StaleCanvas = AncestorCanvas | { status: 'stale'; headSha: string; relation: 'unrelated' }
+/**
+ * A canvas of another diff: of a commit the head was built on, of one from a line the head no
+ * longer contains, or of the head itself against the merge base `mergeBaseSha` it no longer has.
+ */
+export type StaleCanvas =
+  | AncestorCanvas
+  | { status: 'stale'; headSha: string; relation: 'unrelated' }
+  | { status: 'stale'; headSha: string; relation: 'other-base'; mergeBaseSha: string }
 
 /** One canvas as `index.json` lists it. */
 export type CanvasEntry = CanvasIndex['canvases'][string]

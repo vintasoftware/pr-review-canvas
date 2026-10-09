@@ -123,6 +123,20 @@ export function plainClick(event) {
 }
 
 /**
+ * The canvas link a plain click landed on, as the string to follow, or null for any other click.
+ * @param {MouseEvent} event
+ * @returns {string | null}
+ */
+export function clickedCanvasLink(event) {
+  const el = event.target instanceof Element ? event.target.closest('a[data-link], a[href^="#"]') : null
+  if (el === null || !plainClick(event)) {
+    return null
+  }
+  const href = el.getAttribute('data-link') ?? el.getAttribute('href') ?? ''
+  return parseLink(href) === null ? null : href
+}
+
+/**
  * Wires canvas links for one screen: clicks on the anchors the renderers wrote, the fragment the
  * page was opened with, and every later `hashchange`. `stop` removes all of it, so a re-render
  * never leaves two sets of listeners behind.
@@ -139,13 +153,8 @@ export function initDeepLinks(root, opts = {}) {
   root.addEventListener(
     'click',
     event => {
-      const mouse = /** @type {MouseEvent} */ (event)
-      const el = event.target instanceof Element ? event.target.closest('a[data-link], a[href^="#"]') : null
-      if (el === null || !plainClick(mouse)) {
-        return
-      }
-      const href = el.getAttribute('data-link') ?? el.getAttribute('href') ?? ''
-      if (parseLink(href) === null) {
+      const href = clickedCanvasLink(/** @type {MouseEvent} */ (event))
+      if (href === null) {
         return
       }
       event.preventDefault()

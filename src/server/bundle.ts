@@ -78,8 +78,8 @@ export async function runDiscovery(
 /**
  * Live PR meta and comments. The first request for a PR in this process always asks GitHub;
  * later ones answer from `prs/<n>/` unless `refresh` is set, so polling stays cheap. Opening or
- * reloading the page still asks for the PR's head, one call, and reads everything again when it
- * moved, so a push made since the last load shows the canvas as outdated.
+ * reloading the page still asks for the PR's head and base, one call, and reads everything again
+ * when either moved, so a push or a new base made since the last load shows the canvas as outdated.
  */
 export function createPrLoader(ctx: AppContext) {
   const refreshed = new Set<number>()
@@ -152,7 +152,10 @@ export function createPrLoader(ctx: AppContext) {
       const cached = opts.refresh ? null : await readCached(number)
       if (cached !== null && opts.poll === true) return cached
       const meta = await fetchMeta(number)
-      if (cached !== null && meta.headSha === cached.pr.headSha) return cached
+      // A pull request moved to another base reviews another diff of the same head.
+      if (cached !== null && meta.headSha === cached.pr.headSha && meta.baseRef === cached.pr.baseRef) {
+        return cached
+      }
       return refreshPr(number, meta)
     },
     async refreshComments(number: number): Promise<{ comments: CommentsPayload; warnings: string[] }> {
@@ -337,6 +340,9 @@ function canvasScreen(
   }
   if (found.relation === 'ancestor') {
     stale.commitsBehind = found.commitsBehind
+  } else if (found.relation === 'other-base') {
+    stale.canvasMergeBaseSha = found.mergeBaseSha
+    stale.currentMergeBaseSha = pr.mergeBaseSha
   }
   return { status: 'stale', skillCommand, stale }
 }

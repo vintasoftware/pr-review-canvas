@@ -136,6 +136,13 @@ export function refreshReviewPanel(root, state, ctx) {
   if (panel.getAttribute('data-drafts') === signature) {
     return
   }
+  // Moving a kept row out of the page and back drops the focus, so the box being typed in takes
+  // it back, with the caret and the selection where they were.
+  const focused = panel.contains(document.activeElement) ? document.activeElement : null
+  const caret =
+    focused instanceof HTMLTextAreaElement
+      ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection }
+      : null
   const template = document.createElement('template')
   template.innerHTML = reviewPanelHtml(state, { ...ctx, now: new Date() })
   const drawn = new Map(
@@ -149,4 +156,10 @@ export function refreshReviewPanel(root, state, ctx) {
   }
   panel.replaceChildren(template.content)
   panel.setAttribute('data-drafts', signature)
+  if (focused instanceof HTMLElement && focused !== document.activeElement && panel.contains(focused)) {
+    focused.focus({ preventScroll: true })
+    if (caret !== null && focused instanceof HTMLTextAreaElement) {
+      focused.setSelectionRange(caret.start, caret.end, caret.direction)
+    }
+  }
 }
