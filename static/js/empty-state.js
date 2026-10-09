@@ -172,6 +172,11 @@ export function staleSummary(stale, local) {
   if (local !== undefined) {
     return `The canvas is for ${canvas}; your work has moved on to ${head} since it was generated.`
   }
+  if (stale.relation === 'other-base') {
+    const from = (stale.canvasMergeBaseSha ?? '').slice(0, 7)
+    const now = (stale.currentMergeBaseSha ?? '').slice(0, 7)
+    return `The canvas is for ${canvas} diffed from ${from}; the pull request changed its base, and the diff now runs from ${now}.`
+  }
   if (stale.relation === 'unrelated') {
     return `The canvas is for ${canvas}, which is not in this branch any more; the head is ${head}.`
   }
@@ -200,8 +205,8 @@ function barHtml(kind, name, text) {
 export function staleBarHtml(stale, local) {
   return barHtml(
     'outdated-bar',
-    `outdated:${stale.canvasHeadSha}:${stale.currentHeadSha}`,
-    `<strong>Canvas is outdated.</strong> You are reading an older commit. ${esc(staleSummary(stale, local))} ` +
+    `outdated:${stale.canvasHeadSha}:${stale.currentHeadSha}${stale.relation === 'other-base' ? `:${stale.currentMergeBaseSha}` : ''}`,
+    `<strong>Canvas is outdated.</strong> You are reading ${stale.relation === 'other-base' ? 'an older diff' : 'an older commit'}. ${esc(staleSummary(stale, local))} ` +
       '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button>'
   )
 }

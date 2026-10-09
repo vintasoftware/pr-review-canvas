@@ -1,3 +1,11 @@
+import { ghJson, moveFakeHead, type FakeGit } from '../src/testing/fakes.js'
+import {
+  GH_PULL,
+  ghFor42,
+  HEAD_SHA,
+  SYNTHETIC_DIFF_MOVED_BY_BASE,
+  syntheticArtifact,
+} from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 test('notes a canvas carried over to a head with the identical diff, without disabling posting', async ({
@@ -186,4 +194,59 @@ test('dismisses each carried-over note on its own, and keeps it dismissed after 
   await marks.getByRole('button', { name: 'dismiss' }).click()
   await expect(marks).toHaveCount(0)
   await expect(page.locator('#main > :first-child')).toHaveAttribute('id', 'overview')
+})
+
+test('reads the canvas as outdated after the pull request moved to another base under the same head', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  const { url, ctx } = await chatServer({
+    setup: async t => {
+      t.ctx.fixtureArtifact = null
+      const artifact = syntheticArtifact()
+      await t.ctx.canvases.write(
+        artifact.pr.headSha,
+        artifact,
+        {
+          formatVersion: 1,
+          tool: { name: 'pr-review', version: '0.8.0' },
+          repo: artifact.pr.repo,
+          prNumber: 42,
+          headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
+          baseRef: 'main',
+          headRef: 'feat/b',
+          generatedAt: artifact.generatedAt,
+          generator: artifact.generator,
+        },
+        42
+      )
+    },
+  })
+  await page.goto(url)
+  await expect(page.locator('section.layer').first()).toBeVisible()
+  const release = '9'.repeat(40)
+  const git = ctx.git as FakeGit
+  git.options.refs = { ...git.options.refs, 'refs/heads/release': release }
+  moveFakeHead(git, {
+    headRef: 'pull/42/head',
+    baseRef: 'refs/pr/42/base',
+    headSha: HEAD_SHA,
+    mergeBaseSha: release,
+    diff: SYNTHETIC_DIFF_MOVED_BY_BASE,
+  })
+  ctx.gh = ghFor42({
+    routes: { 'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, base: { ref: 'release' } }) },
+  })
+  await page.reload()
+  await expect(page.locator('#es-h')).toHaveText('Canvas is outdated')
+  await expect(page.locator('#empty-state .hint').first()).toContainText('the pull request changed its base')
+  await page.locator('#view-stale').click()
+  await expect(page.locator('#main > .outdated-bar')).toContainText('You are reading an older diff.')
+  // Refresh reads the new base again and keeps the canvas marked outdated.
+  const refreshed = page.waitForResponse(/\/api\/prs\/42\?refresh=1/)
+  await page.locator('#refresh').click()
+  expect((await (await refreshed).json()).status).toBe('stale')
+  await expect(page.locator('#main > .outdated-bar')).toContainText('You are reading an older diff.')
 })

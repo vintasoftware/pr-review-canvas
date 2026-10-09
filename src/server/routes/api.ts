@@ -208,12 +208,16 @@ export function apiRoutes(ctx: AppContext): Hono {
   api.get('/prs/:n/patches', async c => {
     const key = parseTargetKey(c.req.param('n'))
     const pr = await loader.currentTarget(key)
-    const headSha = parseHeadShaQuery(c.req.query('headSha')) ?? pr.headSha
-    // Only the target's own head has a merge base to build from; any other sha the page names is
-    // an older canvas, whose diffs were written when that canvas was drawn.
+    const named = parseHeadShaQuery(c.req.query('headSha'))
+    const headSha = named ?? pr.headSha
+    // A sha the page names is an outdated canvas, whose diff runs from the merge base it was
+    // generated against: the head's own canvas too, once the pull request moved to another base.
+    // Any other older canvas's diffs were written when that canvas was drawn.
+    const canvasBase =
+      named === undefined ? undefined : (await ctx.canvases.readManifest(named))?.mergeBaseSha
     const derived = await ctx.derived.readOrBuild(
       headSha,
-      headSha === pr.headSha ? pr.mergeBaseSha : undefined
+      canvasBase ?? (headSha === pr.headSha ? pr.mergeBaseSha : undefined)
     )
     if (derived === null) {
       throw new AppError(

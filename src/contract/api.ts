@@ -73,8 +73,12 @@ export type CanvasRelation = 'ancestor' | 'unrelated'
 export interface StaleInfo {
   canvasHeadSha: string
   currentHeadSha: string
-  relation: CanvasRelation
+  /** `other-base`: the canvas is of the head, diffed from a merge base the pull request no longer has. */
+  relation: CanvasRelation | 'other-base'
   commitsBehind?: number
+  /** With `other-base`: the merge base the canvas was generated against, and the current one. */
+  canvasMergeBaseSha?: string
+  currentMergeBaseSha?: string
 }
 
 /**

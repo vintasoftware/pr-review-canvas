@@ -292,6 +292,24 @@ describe('stale screen', () => {
     )
   })
 
+  it('names both merge bases when the pull request moved to another base under the same head', () => {
+    const stale = /** @type {const} */ ({
+      canvasHeadSha: HEAD,
+      currentHeadSha: HEAD,
+      relation: 'other-base',
+      canvasMergeBaseSha: 'b'.repeat(40),
+      currentMergeBaseSha: '9'.repeat(40),
+    })
+    expect(staleSummary(stale)).toBe(
+      'The canvas is for aaaaaaa diffed from bbbbbbb; the pull request changed its base, and the diff now runs from 9999999.'
+    )
+    document.body.innerHTML = staleBarHtml(stale)
+    const bar = document.querySelector('.stale-bar')
+    expect(bar?.textContent).toContain('You are reading an older diff.')
+    // A dismissal holds for this base only: moving the pull request again shows the bar again.
+    expect(bar?.getAttribute('data-bar')).toBe(`outdated:${HEAD}:${HEAD}:${'9'.repeat(40)}`)
+  })
+
   it('offers both ways forward, the skill command, and the drop zone', () => {
     document.body.innerHTML = renderStaleState(
       bundle({

@@ -13,13 +13,13 @@ export interface DiffedCommit {
 }
 
 /**
- * True when `commit` stands for the head: it is the head, or the head's diff against its merge
- * base is identical to `commit`'s diff against its own, file by file and byte for byte. Layers,
- * hunk ids, folds, and attention points all assume the diff on screen is the one the canvas was
- * generated from, and identity is what guarantees that; a base merge that only moves a hunk down
- * already breaks it. How the head reached that diff does not matter. A diff missing on this
- * machine, and a change set that is empty on both sides, keep the strict reading. Off when the
- * project marks the canvas outdated on any commit.
+ * True when `commit` stands for the head: it is the head diffed from the same merge base, or the
+ * head's diff against its merge base is identical to `commit`'s diff against its own, file by file
+ * and byte for byte. Layers, hunk ids, folds, and attention points all assume the diff on screen is
+ * the one the canvas was generated from, and identity is what guarantees that; a base merge that
+ * only moves a hunk down already breaks it. How the head reached that diff does not matter. A diff
+ * missing on this machine, and a change set that is empty on both sides, keep the strict reading.
+ * Off when the project marks the canvas outdated on any commit.
  */
 export async function standsForHead(
   ctx: AppContext,
@@ -27,7 +27,9 @@ export async function standsForHead(
   commit: DiffedCommit
 ): Promise<boolean> {
   if (commit.headSha === pr.headSha) {
-    return true
+    // A pull request moved to another base reviews another diff of the same commit. derived/ holds
+    // one diff per commit, so the two are not compared: the canvas is outdated.
+    return commit.mergeBaseSha === pr.mergeBaseSha
   }
   if (!ctx.projectConfig.config.canvas.keepForIdenticalDiff) {
     return false
@@ -57,15 +59,26 @@ export function samePatches(a: Derived, b: Derived): boolean {
 
 /**
  * The canvas for this pull request: the store's answer, with a canvas of another commit read as
- * ready when that commit stands for the head. A canvas has a manifest naming its merge base;
- * one whose manifest is gone cannot be compared.
+ * ready when that commit stands for the head, and the head's own canvas read as stale when it was
+ * generated against another merge base, as after the pull request moved to another base branch. A
+ * canvas has a manifest naming its merge base; one whose manifest is gone cannot be compared.
  */
 export async function lookupCanvas(ctx: AppContext, number: number, pr: Pr): Promise<CanvasLookup> {
   const found = await ctx.canvases.findForPr(number, pr.headSha)
-  if (found.status !== 'stale') {
+  if (found.status === 'missing') {
     return found
   }
   const manifest = await ctx.canvases.readManifest(found.headSha)
+  if (found.status === 'ready') {
+    return manifest === null || (await standsForHead(ctx, pr, manifest))
+      ? found
+      : {
+          status: 'stale',
+          headSha: found.headSha,
+          relation: 'other-base',
+          mergeBaseSha: manifest.mergeBaseSha,
+        }
+  }
   if (manifest !== null && (await standsForHead(ctx, pr, manifest))) {
     const carriedOver: CarriedOverInfo = { canvasHeadSha: found.headSha, currentHeadSha: pr.headSha }
     // How far the head moved, when the head was built on the canvas's commit. A head that
