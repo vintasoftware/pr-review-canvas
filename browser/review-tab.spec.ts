@@ -339,6 +339,40 @@ for (const width of [390, 800]) {
   })
 }
 
+test('finishing the review waits for a draft edit on screen to be saved or cancelled', async ({
+  page,
+  reviewUrl,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  await page.goto(reviewUrl)
+  await page.locator('section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]').click()
+  await page.locator('.pending-bar [data-act="show-review"]').click()
+  const panel = page.locator('#review-panel')
+  await panel.locator('[data-act="pending-edit"]').click()
+  const input = panel.locator('textarea')
+  // An edit that changes nothing does not hold the review up.
+  await panel.locator('[data-act="pending-finish"]').click()
+  await expect(page.locator('#signoff-dialog')).toBeVisible()
+  await page.locator('#signoff-dialog [data-act="signoff-close"]').click()
+
+  await input.fill('Replacement comment that must be posted.')
+  await panel.locator('[data-act="pending-finish"]').click()
+  await expect(panel).toContainText('save or cancel the draft you are editing first')
+  await expect(page.locator('#signoff-dialog')).toBeHidden()
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue('Replacement comment that must be posted.')
+  // The header's sign-off commands post the same drafts, so they wait too.
+  await page.locator('#comment-review').click()
+  await expect(page.locator('#signoff-dialog')).toBeHidden()
+
+  await panel.locator('[data-act="pending-save"]').click()
+  await expect(input).toHaveCount(0)
+  await panel.locator('[data-act="pending-finish"]').click()
+  await page.locator('#signoff-dialog [data-act="signoff-post"]').click()
+  await expect(page.locator('#signoff-dialog')).toBeHidden()
+  await expect(page.locator('#main')).toContainText('Replacement comment that must be posted.')
+})
+
 test('a draft being edited keeps the focus and caret when another draft finishes saving', async ({
   page,
   reviewUrl,

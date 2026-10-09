@@ -737,8 +737,30 @@ export function wireReview(root, session, opts = {}) {
     )
   }
 
+  /**
+   * The text box of a draft being edited whose text is not the draft's as saved. A submission
+   * posts the saved text and closes the box, so the edit would be gone without a word.
+   * @returns {HTMLTextAreaElement | null}
+   */
+  const unsavedDraftEdit = () => {
+    for (const box of Array.from(root.querySelectorAll('.composer-box[data-pending-id]'))) {
+      const draft = session.pending.find(p => p.id === box.getAttribute('data-pending-id'))
+      const input = box.querySelector('textarea')
+      if (draft !== undefined && input !== null && composerBody(box) !== draft.body) {
+        return input
+      }
+    }
+    return null
+  }
+
   /** @param {HTMLElement} button @param {import('./contract-types.js').ReviewEvent} event */
   const openSignoff = (button, event) => {
+    const unsaved = unsavedDraftEdit()
+    if (unsaved !== null) {
+      showCommandError(button, 'save or cancel the draft you are editing first')
+      unsaved.focus()
+      return
+    }
     const dialog = openSignoffDialog(root, { event })
     const level = getFoldLevel()
     const counts = hiddenAt(level)

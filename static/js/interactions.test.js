@@ -2743,6 +2743,46 @@ describe('the pending review', () => {
     expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
   })
 
+  it('holds the review until a draft edit on screen is saved, and steps a floating pane aside after', async () => {
+    const uncover = vi.fn()
+    const { root, calls } = setup({
+      uncover,
+      fetchReviewBody: async () => ({ headSha: HEAD, body: '', unreviewed: [], pending: 1 }),
+    })
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '[data-act="pending-edit"]')
+    const area = root.querySelector('.pending-cmt textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    const dialog = () => root.querySelector('#signoff-dialog[open]')
+    // An edit that changes nothing loses nothing.
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    expect(dialog()).not.toBeNull()
+    click(root, '[data-act="signoff-close"]')
+
+    area.value = 'one, revised'
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    expect(dialog()).toBeNull()
+    expect(root.querySelector('.pending-bar .cmd-err')?.textContent).toBe(
+      'save or cancel the draft you are editing first'
+    )
+    expect(document.activeElement).toBe(area)
+
+    click(root, '[data-act="pending-save"]')
+    await flush()
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(calls.at(-1)?.[0]).toBe('review')
+    expect(uncover).toHaveBeenCalledOnce()
+  })
+
   it('keeps the draft on the page when the server refuses to take it', async () => {
     const { root, session } = setup({
       api: { addPending: () => Promise.reject(new Error('422 line not in diff')) },
