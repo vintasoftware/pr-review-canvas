@@ -137,6 +137,30 @@ describe('the review tab', () => {
     expect(document.querySelectorAll('.review-draft')).toHaveLength(1)
   })
 
+  it('gives the focus and the selection back to a draft being edited when another draft changes', () => {
+    document.body.innerHTML = '<section id="review-panel"></section>'
+    const ctx = { headSha: HEAD, points: artifact.points }
+    const first = draft({ id: 'd1' })
+    refreshReviewPanel(document, { ...BASE, pending: [first] }, ctx)
+    const row = document.querySelector('.review-draft[data-pending-id="d1"]')
+    row?.insertAdjacentHTML('beforeend', '<div class="composer-box"><textarea>half an edit</textarea></div>')
+    const input = /** @type {HTMLTextAreaElement} */ (row?.querySelector('textarea'))
+    input.focus()
+    input.setSelectionRange(2, 6)
+
+    refreshReviewPanel(document, { ...BASE, pending: [first, draft({ id: 'd2', line: 9 })] }, ctx)
+    expect(document.activeElement).toBe(input)
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 6])
+
+    // A focused command keeps the focus too; a row that is gone takes its focus with it.
+    const command = /** @type {HTMLButtonElement} */ (row?.querySelector('[data-act="pending-delete"]'))
+    command.focus()
+    refreshReviewPanel(document, { ...BASE, pending: [first] }, ctx)
+    expect(document.activeElement).toBe(command)
+    refreshReviewPanel(document, BASE, ctx)
+    expect(document.activeElement).not.toBe(command)
+  })
+
   it('updates the counts on a page without the tab', () => {
     document.body.innerHTML = '<span class="review-count">0</span>'
     refreshReviewPanel(document, { ...BASE, pending: [draft({})] }, { points: [] })

@@ -256,3 +256,35 @@ test('edit on a proposed resolution shows its point while the acted-on points ar
   await point.locator('[data-act="settle-cancel"]').click()
   await expect(point).toBeHidden()
 })
+
+test('a draft being edited keeps the focus and caret when another draft finishes saving', async ({
+  page,
+  reviewUrl,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  await page.goto(reviewUrl)
+  await page.locator('section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]').click()
+  await page.locator('.pending-bar [data-act="show-review"]').click()
+  await page.locator('#review-panel [data-act="pending-edit"]').click()
+  const input = page.locator('#review-panel textarea')
+  await input.fill('In progress')
+  await page.locator('#layer-other summary').click()
+  let release!: () => void
+  const gate = new Promise<void>(resolve => {
+    release = resolve
+  })
+  await page.route('**/pending', async route => {
+    if (route.request().method() === 'POST') await gate
+    await route.continue()
+  })
+  await page.locator('#layer-other tr.ifind[data-fingerprint="fp-2"] [data-act="point-queue"]').click()
+  await input.focus()
+  await input.evaluate((el: HTMLTextAreaElement) => el.setSelectionRange(3, 8))
+  release()
+  await expect(page.locator('#review-panel .review-draft')).toHaveCount(2)
+  await expect(input).toHaveValue('In progress')
+  await expect(input).toBeFocused()
+  expect(await input.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([
+    3, 8,
+  ])
+})
