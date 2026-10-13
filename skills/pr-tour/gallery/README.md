@@ -314,9 +314,9 @@ Copy the craft, never the content: your tour draws its own change.
 - **Draw the states inside the structure that holds them.** Zones for the `clients` map, the `closed_txs` LRU, and "neither map" make `get_client`'s lookup order the layout itself. The changed type sits in the hero zone's header: `LruCache<TxId, ~~()~~ Option<ClosedTx>>`. The removed `Aborted` variant stays visible, drawn dashed, faded, and struck through.
 - **Model what the message depends on, and start from the PR's test.** The default state replays `tx_expiration_cycle` (timeout 1000 ms, commit at 1500 ms), so the refusal is already drawn. A simulated clock plus "wait 500 ms" shows that the elapsed time is measured at the refused call. The wires are computed from the laid-out boxes with a ResizeObserver: curves on a desktop, a side bus on a phone.
 
-### `data-playground`
+### `record-bench`
 
-`data-playground.micro.html`
+`record-bench.micro.html`
 
 **PR:** [rails/rails#43945](https://github.com/rails/rails/pull/43945), "Add `ActiveRecord::Base::normalizes`" (MIT, 292 added lines)
 

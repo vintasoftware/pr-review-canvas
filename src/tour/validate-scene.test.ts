@@ -136,6 +136,13 @@ describe('sceneProblems', () => {
     ])
     // Words that only contain those names are fine.
     expect(script('const prefetched = myFunction(1); node.parentElement')).toEqual([])
+    // A method named fetch and a comment about the change are the scene's own; the global is not.
+    expect(
+      script('// ky calls this.#fetch() per attempt\nclient.fetch(1); this.#fetch(2) /* fetch() */')
+    ).toEqual([])
+    expect(script('globalThis.fetch("/x")')).toHaveLength(1)
+    expect(script('const f = window.fetch')).toHaveLength(1)
+    expect(script('const url = "https://x"; await fetch(url)')).toHaveLength(1)
   })
 
   it('names icons that do not exist, and a scene with no words in its markup', () => {

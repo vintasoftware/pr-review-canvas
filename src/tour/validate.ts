@@ -68,6 +68,16 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     if (n > cap)
       errors.push({ code: 'TEXT_TOO_LONG', where, message: `${where}: ${n} visible chars, cap ${cap}` })
   }
+  // Titles, side labels, guard lines, and not-toured lines are drawn as written: backticks there
+  // show as backticks.
+  const plain = (where: string, text: string) => {
+    if (text.includes('`'))
+      errors.push({
+        code: 'MARKUP_IN_PLAIN_TEXT',
+        where,
+        message: `${where}: backticks show as written here; this text is plain, so name the code without them`,
+      })
+  }
   const byPath = new Map(input.files.map(f => [f.path, f]))
   const ids = new Set<string>()
   const dup = (kind: string, id: string, where: string) => {
@@ -122,6 +132,7 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     const where = `landmarks.${i}`
     dup('landmark', l.id, where)
     tooLong(`${where}.title`, l.title, caps.landmarkTitle)
+    plain(`${where}.title`, l.title)
     tooLong(`${where}.lead`, l.lead, caps.lead)
     l.body.forEach((p, j) => tooLong(`${where}.body.${j}`, p, caps.paragraph))
     if (l.body.length > TOUR_LIMITS.bodyParagraphsWritten)
@@ -163,6 +174,7 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     })
     l.guards.forEach((g, j) => {
       tooLong(`${where}.guards.${j}.behavior`, g.behavior, caps.guardBehavior)
+      plain(`${where}.guards.${j}.behavior`, g.behavior)
       if (!byPath.has(g.testPath) && !input.headPaths.has(g.testPath)) {
         errors.push({
           code: 'GUARD_PATH_UNKNOWN',
@@ -230,9 +242,11 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     const where = `decisions.${i}`
     dup('decision', d.key, where)
     tooLong(`${where}.title`, d.title, caps.decisionTitle)
+    plain(`${where}.title`, d.title)
     tooLong(`${where}.context`, d.context, caps.context)
     for (const side of ['keep', 'change'] as const) {
       tooLong(`${where}.${side}.label`, d[side].label, caps.sideLabel)
+      plain(`${where}.${side}.label`, d[side].label)
       tooLong(`${where}.${side}.consequence`, d[side].consequence, caps.consequence)
     }
     tooLong(`${where}.reason.text`, d.reason.text, caps.reason)
@@ -314,7 +328,10 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
       })
     }
   })
-  model.notToured.forEach((n, i) => tooLong(`notToured.${i}.title`, n.title, caps.notToured))
+  model.notToured.forEach((n, i) => {
+    tooLong(`notToured.${i}.title`, n.title, caps.notToured)
+    plain(`notToured.${i}.title`, n.title)
+  })
 
   return { ok: errors.length === 0, errors, output: errors.length === 0 ? model : null }
 }

@@ -76,7 +76,7 @@ Every tour draws change the same way, so a reader learns it once:
   version on purpose under `@media (max-width: 40rem)`: stack each source above its destination
   with a labeled arrow down, turn a matrix into a compact table, keep before and after as two
   stacked copies of the same small picture, and drop the nodes the picture's question does not
-  need. Then check the phone preview: every relationship the desktop picture shows must still be
+  need. Then check its `-phone` preview: every relationship the desktop picture shows must still be
   readable there.
 - **A stage that persists**, when the tour returns to the same system: the background landmark
   may draw a map of the part of the system the change touches (its components and how they talk,
@@ -235,7 +235,7 @@ Micro-worlds:
 - `before-after`: date-fns#2616, end-of-month durations: old and new code side by side on one input.
 - `race-lab`: swr#1970, two optimistic updates racing: sliders for the timing, the stale value found.
 - `state-explorer`: prisma-engines#3391, a closed transaction's error: fire events, see refusals.
-- `data-playground`: rails#43945, `normalizes`: edit a record, watch each stage change it.
+- `record-bench`: rails#43945, `normalizes`: edit a record, watch each stage change it.
 
 ## Micro-worlds
 
@@ -261,7 +261,7 @@ Patterns:
   the user sees.
 - **A state explorer.** The reader fires events at the state machine; a transition the code
   refuses is refused inside the world, with the code's own error where it happens.
-- **A data playground.** The reader edits one record (two to four fields) and sees each stage of
+- **A record bench.** The reader edits one record (two to four fields) and sees each stage of
   the changed pipeline transform it, with the stage that rejects or changes it marked.
 - **A layout switchboard.** Each move of a UI change (a size, a box, a gap, a color) as a switch
   over the same content, so the reader sees each move on its own and all of them together, and
@@ -349,7 +349,8 @@ Rules:
   `<link>`, `<meta>`, forms, `<video>`, `<audio>`, event handler attributes (write code in a
   `<script>`), `url()` of anything but `#id` or `data:`, links, and scripts that use `fetch`,
   `XMLHttpRequest`, `WebSocket`, storage, `eval`, or workers; for a scene, it refuses inputs,
-  buttons, and selects too, and a scene with no `data-technique`.
+  buttons, and selects too, and a scene with no `data-technique` (a micro-world may name its
+  pattern the same way; it is not counted).
 - **Size.** At most 12,000 characters per scene; most need far fewer.
 - **If a script throws,** what the markup shows is what the reader sees.
 - **No secrets, credentials, or protected health information,** even as sample data.

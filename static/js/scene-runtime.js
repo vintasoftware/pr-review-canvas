@@ -61,16 +61,17 @@
   })
 
   // Text wraps with the frame's width and scripts may build the scene after it loads: fit on load
-  // and whenever the scene changes size. Fitting can change the frame, so it waits for the next
-  // frame instead of running inside the observer.
+  // and whenever the scene changes size. Fitting can change the frame, so it runs after the
+  // observer returns, on a timer: an animation frame never comes in a background tab or under a
+  // headless screenshot's virtual time, and the frame would keep the height of a wider layout.
   let queued = false
   const refit = () => {
     if (queued) return
     queued = true
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       queued = false
       fit()
-    })
+    }, 0)
   }
   window.addEventListener('load', () => {
     // The kit's CSS stops CSS motion for reduced motion; SVG's own animations it cannot, so they

@@ -43,6 +43,11 @@ describe('excerptHunk', () => {
   it('keeps nothing for a range outside the hunk', () => {
     expect(excerptHunk(hunk, { from: 40, to: 50 })).toBeNull()
   })
+
+  it('starts the old side of an added file at 0, not before it', () => {
+    const added = splitHunks('@@ -0,0 +1,4 @@\n+one\n+two\n+three\n+four')[0]!
+    expect(excerptHunk(added, { from: 2, to: 3 })).toBe('@@ -0,0 +2,2 @@\n+two\n+three')
+  })
 })
 
 describe('tourChunk', () => {

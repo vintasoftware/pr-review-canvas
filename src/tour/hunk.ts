@@ -56,7 +56,10 @@ export function excerptHunk(hunk: ParsedHunk, range?: ChunkRange): string | null
   if (first === null) return null
   // The text after a header's second `@@` names the enclosing function; it still does.
   const section = /^@@ [^@]* @@(.*)$/.exec(hunk.header)?.[1] ?? ''
-  const header = `@@ -${oldCount === 0 ? first.old - 1 : first.old},${oldCount} +${newCount === 0 ? first.new - 1 : first.new},${newCount} @@${section}`
+  // A side that keeps no line names the line before the excerpt, as diff does; an added or a
+  // deleted file has no line before, so its side starts at 0.
+  const start = (line: number, count: number) => (count === 0 ? Math.max(0, line - 1) : line)
+  const header = `@@ -${start(first.old, oldCount)},${oldCount} +${start(first.new, newCount)},${newCount} @@${section}`
   return [header, ...kept].join('\n')
 }
 

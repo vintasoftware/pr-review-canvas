@@ -101,11 +101,23 @@ One idea of a tour, told in order: first the world before the change and why the
 _Avoid_: Beat, Semantic layer, Slide, File
 
 **Scene**:
-A picture, drawn for this change, of what a landmark or a decision's side does.
+A picture, drawn for this change, of what a landmark or a decision's side does. It comes right under the landmark's lead, wider than the prose, and carries the landmark's idea.
 _Avoid_: Screenshot, Illustration
 
+**Technique**:
+The kind of picture a scene draws for its idea, named on the scene: a sequence, a lineage map, a scenario matrix, a code-map. A tour draws no technique more than twice.
+_Avoid_: Template, Chart type, Style
+
+**Change grammar**:
+How every scene draws change: added in green, changed in amber, removed in red and struck through, unchanged context in gray, and one hero emphasized.
+_Avoid_: Legend, Color scheme, Diff colors
+
+**Gallery**:
+Real pull requests from open-source projects, each drawn with one technique at its best, shipped with the generation skill for a generator to look at before it draws.
+_Avoid_: Examples, Templates, Showcase
+
 **Micro-world**:
-A landmark the reader plays with: inputs of the changed behavior go in, outcomes come out. A tour has one only when the change has behavior worth playing with.
+A landmark the reader plays with: inputs of the changed behavior go in, outcomes come out. A tour has up to two, only where the change has behavior worth playing with, and one may stand in for its landmark's scene.
 _Avoid_: Demo, Sandbox, Playground
 
 **Decision**:

@@ -122,7 +122,7 @@ few words and never retold.
    counts as zero, a fallback that hides a failure), each checked against the code.
 
 **The state landmark.** When the change touches a schema, a migration, or the shape of stored
-data, one landmark is the state landmark, marked `"state": true`: the shape before and after, what
+data, one `why` landmark is the state landmark, marked `"state": true`: the shape before and after, what
 happens to existing rows, and how it is undone. Stored data is the one part of a system that
 cannot be regenerated, so this landmark is never cut by the budget, and it always carries a
 `trade-off` decision on reversibility.
@@ -188,8 +188,8 @@ remember a sentence. Prefer a prediction: a concrete situation the landmarks pre
 for, and what the code does in it ("a user whose session expired presses Save: what do they see?"),
 or what a later change must do ("a new payment provider is added: which list must name it?"). Never a gotcha, an edge case the landmarks did not cover, a detail only the code shows, or a
 UI value nobody needs to remember (a pixel size, a color hex, a class name). Each question names the
-landmark a wrong answer reopens and is answerable from it. Three options, one right, and a
-one-sentence `why`.
+landmark a wrong answer reopens and is answerable from it. Three options of about the same length,
+one right, and a one-sentence `why`; spread the right answers across the three positions.
 
 ## Caps
 

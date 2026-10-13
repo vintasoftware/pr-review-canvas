@@ -402,20 +402,20 @@ pr-tour {
 /* The cover's route: the landmarks by title, numbered, each with its stage. */
 .tour-agenda {
   margin: 0 0 18px;
-  padding: 0 0 0 1.6em;
+  padding: 0;
+  list-style: none;
   display: grid;
   gap: 6px;
   font-size: 16px;
   line-height: 1.35;
 }
-.tour-agenda li::marker {
-  color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
+.tour-agenda li {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+  align-items: baseline;
 }
 .tour-agenda-stage {
-  display: inline-block;
-  min-width: 8.5em;
-  margin-right: 10px;
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1046,6 +1046,10 @@ pr-tour {
   }
   .tour-lead {
     font-size: 16px;
+  }
+  .tour-agenda li {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
   .tour-options {
     grid-template-columns: 1fr;

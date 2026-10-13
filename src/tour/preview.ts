@@ -24,6 +24,11 @@ export const PREVIEW_VIEWPORT: Viewport = { width: 1280, height: 1400 }
 export const PHONE_VIEWPORT: Viewport = { width: 390, height: 1600 }
 /** A picture alone, at the width the desktop page gives it, so a tall one is seen whole. */
 export const FIGURE_VIEWPORT: Viewport = { width: 1120, height: 1400 }
+/**
+ * A picture alone at the width a phone page gives it: a phone page is taller than any window, so
+ * this is where the phone composition of a picture is seen whole.
+ */
+export const FIGURE_PHONE_VIEWPORT: Viewport = { width: 350, height: 2400 }
 
 /** A running copy of the review server that the browser loads the preview from. */
 export interface PreviewServer {
@@ -100,8 +105,8 @@ export interface PreviewTourResult {
   landmarks: number
   /**
    * Per landmark in tour order: the page on a desktop and on a phone, then each picture alone at
-   * its desktop width (the scene, then the micro-world). For the whole tour, then each decision and
-   * each question on a desktop. Empty without a browser.
+   * the width a desktop and a phone give it (the scene, then the micro-world). For the whole tour,
+   * then each decision and each question on a desktop. Empty without a browser.
    */
   screenshots: string[]
   /** The same preview on a running `pr-review serve`, for a browser tool; absent for a refs run. */
@@ -181,12 +186,12 @@ export async function previewTour(
       const shots: Array<readonly [string, string, Viewport]> = [
         ['desktop', page, PREVIEW_VIEWPORT],
         ['phone', page, PHONE_VIEWPORT],
-        ...(typeof landmark.scene === 'string'
-          ? [['scene', picture('scene'), FIGURE_VIEWPORT] as const]
-          : []),
-        ...(typeof landmark.micro === 'string'
-          ? [['micro', picture('micro'), FIGURE_VIEWPORT] as const]
-          : []),
+        ...(['scene', 'micro'] as const)
+          .filter(kind => typeof landmark[kind] === 'string')
+          .flatMap(kind => [
+            [kind, picture(kind), FIGURE_VIEWPORT] as const,
+            [`${kind}-phone`, picture(kind), FIGURE_PHONE_VIEWPORT] as const,
+          ]),
       ]
       for (const [name, url, viewport] of shots) {
         const file = path.join(dir, `${n}-${landmark.id}-${name}.png`)

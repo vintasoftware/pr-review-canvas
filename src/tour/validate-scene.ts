@@ -18,7 +18,9 @@ const SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi
  * eval, workers, and storage. The frame is the boundary; naming these catches the attempt early.
  */
 const BLOCKED_APIS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\bfetch\s*\(/, 'fetch'],
+  // The global, called bare or through a global object; a method of that name (`client.fetch()`,
+  // a transcribed `this.#fetch()`) is the scene's own code.
+  [/(?<![\w$.#])fetch\s*\(|\b(?:window|self|globalThis)\s*\.\s*fetch\b/, 'fetch'],
   [/\bXMLHttpRequest\b/, 'XMLHttpRequest'],
   [/\bWebSocket\b/, 'WebSocket'],
   [/\bEventSource\b/, 'EventSource'],
@@ -91,7 +93,11 @@ export function sceneProblems(html: string, checks: SceneChecks = {}): string[] 
   }
   const blocked = [
     ...new Set(
-      scripts.flatMap(m => BLOCKED_APIS.filter(([re]) => re.test(m[2] as string)).map(([, name]) => name))
+      scripts.flatMap(m => {
+        // Comments are words about the code, not calls in it.
+        const code = (m[2] as string).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
+        return BLOCKED_APIS.filter(([re]) => re.test(code)).map(([, name]) => name)
+      })
     ),
   ]
   if (blocked.length > 0) {

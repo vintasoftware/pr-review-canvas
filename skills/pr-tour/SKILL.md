@@ -130,8 +130,10 @@ pr-review tour publish <tourDir> --agent <your agent id> --model <model id if yo
 
 Validate prints `ok: …` or one line per problem, `CODE where: message`; fix exactly what it names
 and run it again. Preview writes, under `<tourDir>/preview/`, each landmark's page on a desktop and
-on a phone, each scene and micro-world alone at the width the page gives it (`-scene.png`,
-`-micro.png`), and each decision and question; it prints their paths. Look at every one and fix
+on a phone, each scene and micro-world alone at the widths a desktop and a phone give it
+(`-scene.png`, `-scene-phone.png`, `-micro.png`, `-micro-phone.png`), and each decision and
+question; it prints their paths. A phone page is taller than the phone shot, so judge a picture's
+phone composition from its `-phone` picture, not from the page. Look at every one and fix
 what reads badly: text that collides, a scene that says nothing at rest, a picture too small to
 read, a picture that is the same as the last. `--landmark <id>` retakes one landmark. Without a
 browser it prints a `previewUrl` to open in a browser tool instead. Then publish. On failure the

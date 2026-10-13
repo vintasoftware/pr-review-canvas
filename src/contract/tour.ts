@@ -356,6 +356,7 @@ export type TourContext = z.infer<typeof TourContextSchema>
 export const TOUR_VALIDATION_CODES = [
   'SCHEMA',
   'TEXT_TOO_LONG',
+  'MARKUP_IN_PLAIN_TEXT',
   'LANDMARK_ORDER',
   'LANDMARK_BUDGET',
   'DECISION_BUDGET',

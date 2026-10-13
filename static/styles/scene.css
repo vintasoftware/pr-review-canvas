@@ -202,6 +202,9 @@ body {
 :where(code):not(.term *, .file *) {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
+  /* As a flex item (a column's child) it keeps its own width instead of stretching across. */
+  width: max-content;
+  max-width: 100%;
   padding: 0.15rem 0.4rem;
   border-radius: 0.3rem;
   background: color-mix(in srgb, var(--fg) 8%, var(--paper));
@@ -240,9 +243,11 @@ body {
 }
 
 /* Arrows: a line that points right (or down), optionally with a word on it. */
+/* Sized by width and height, never by flex-basis, so an arrow keeps its shape in a row or a column. */
 .arrow {
   position: relative;
-  flex: 0 0 var(--len, 2.4rem);
+  flex: none;
+  width: var(--len, 2.4rem);
   height: 0.16rem;
   background: var(--c, var(--muted));
   border-radius: 1rem;
@@ -258,7 +263,6 @@ body {
   transform: translateY(-50%);
 }
 .arrow.down {
-  flex-basis: auto;
   width: 0.16rem;
   height: var(--len, 1.4rem);
 }

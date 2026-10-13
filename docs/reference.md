@@ -853,8 +853,8 @@ the landmark order (background, world, whys, respect), the budget, the caps meas
 text, every path and anchor against the diff, every guard against the head, every scene against
 the frame's rules, that no technique draws more than two scenes, and the categories the project
 keeps. `tour preview` validates, then screenshots, through a quiet copy of the server, every
-landmark on a desktop and a phone, every scene and micro-world alone at its desktop width, and
-every decision and question, using Chrome, Chromium, or Edge from the PATH or
+landmark on a desktop and a phone, every scene and micro-world alone at its desktop and phone
+widths, and every decision and question, using Chrome, Chromium, or Edge from the PATH or
 `PR_REVIEW_BROWSER`; without one it prints a `previewUrl` to open in a browser tool.
 `tour publish` validates, stores `tours/<headSha>/tour.json`, and shares.
 

@@ -313,11 +313,13 @@ describe('tour preview', () => {
       '02-world-desktop.png',
       '02-world-phone.png',
       '02-world-scene.png',
+      '02-world-scene-phone.png',
     ])
     expect(shots).toEqual([
       { url: 'http://127.0.0.1:9/tour/42?preview&landmark=world&theme=light', width: 1280 },
       { url: 'http://127.0.0.1:9/tour/42?preview&landmark=world&theme=light', width: 390 },
       { url: 'http://127.0.0.1:9/tour-scene/42/world/scene?preview&theme=light', width: 1120 },
+      { url: 'http://127.0.0.1:9/tour-scene/42/world/scene?preview&theme=light', width: 350 },
     ])
     // The whole tour adds each decision and each question, on a desktop.
     const whole = await previewTour(t.ctx, result.tourDir, {
@@ -330,7 +332,7 @@ describe('tour preview', () => {
       'd1-sum-over-product.png',
       'q1-q-run.png',
     ])
-    expect(whole.screenshots).toHaveLength(4 * 3 + 2)
+    expect(whole.screenshots).toHaveLength(4 * 4 + 2)
     // A retake of one landmark replaces only its own pictures; the rest of the run stays.
     await previewTour(
       t.ctx,
@@ -344,7 +346,7 @@ describe('tour preview', () => {
       { landmark: 'world' }
     )
     const kept = await readdir(path.join(result.tourDir, 'preview'))
-    expect(kept).toHaveLength(4 * 3 + 2)
+    expect(kept).toHaveLength(4 * 4 + 2)
     expect(await readFile(path.join(result.tourDir, 'preview', '02-world-scene.png'), 'utf8')).toBe('retake')
     expect(await readFile(path.join(result.tourDir, 'preview', '01-before-scene.png'), 'utf8')).toBe('png')
     const none = await previewTour(t.ctx, result.tourDir, {

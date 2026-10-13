@@ -93,6 +93,14 @@ describe('validateTourModel', () => {
       input()
     ).errors
     expect(errors.map(e => e.where)).toEqual(['landmarks.1.literate.0'])
+    // Backticks in a plain-text field show as written, so they are refused there.
+    const ticked = validateTourModel(
+      withLandmark(model, 2, { title: 'Sum, not `a() * b()`' }),
+      input()
+    ).errors
+    expect(ticked.map(e => [e.code, e.where])).toEqual([['MARKUP_IN_PLAIN_TEXT', 'landmarks.2.title']])
+    const decision = { ...model.decisions[0]!, title: '`sum` over product?' }
+    expect(codes({ ...model, decisions: [decision] })).toEqual(['MARKUP_IN_PLAIN_TEXT'])
     // A body has at most two paragraphs: the picture carries the rest.
     const three = validateTourModel(withLandmark(model, 2, { body: ['one', 'two', 'three'] }), input()).errors
     expect(three.map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'landmarks.2.body']])
