@@ -16,6 +16,9 @@
   --good: light-dark(#1a7f37, #57ab5a);
   --bad: light-dark(#d1242f, #e5534b);
   --warn: light-dark(#9a6700, #c69026);
+  /* Two more hues for drawing a real screen: a link, an open state, a merged state. */
+  --blue: light-dark(#0969da, #478be6);
+  --purple: light-dark(#8250df, #986ee2);
   font-size: clamp(12px, 2vw, 15px);
 }
 :root[data-skin='olive'] {
@@ -27,6 +30,8 @@
   --good: light-dark(#4a6a2e, #a8c97f);
   --bad: light-dark(#a8432c, #e98a6f);
   --warn: light-dark(#86681a, #d4b25a);
+  --blue: light-dark(#3d6a8a, #8fb4cf);
+  --purple: light-dark(#6e4f8a, #b69ad0);
 }
 :root[data-theme='light'] {
   color-scheme: light;
@@ -107,13 +112,19 @@ body {
 .warn {
   --c: var(--warn);
 }
+.blue {
+  --c: var(--blue);
+}
+.purple {
+  --c: var(--purple);
+}
 .muted {
   --c: var(--muted);
   color: var(--muted);
 }
 /* Toned words: a toned span, strong, em, list item, or cell takes its tone's color. Zero
    specificity, so the things below that color themselves keep their own rule. */
-:where(span, b, strong, em, li, td, th):where(.ink, .good, .bad, .warn) {
+:where(span, b, strong, em, li, td, th):where(.ink, .good, .bad, .warn, .blue, .purple) {
   color: var(--c);
 }
 

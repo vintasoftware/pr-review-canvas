@@ -117,7 +117,7 @@ const PartialTourConfigSchema = z.object({
 })
 
 export const DEFAULT_TOUR_CONFIG: TourConfig = {
-  budget: { landmarks: 8, decisions: 5, quiz: 5, linesPerLandmark: 150 },
+  budget: { landmarks: 6, decisions: 5, quiz: 5, linesPerLandmark: 500 },
   finalQuiz: 'on',
   reverseQuiz: 'on',
   grill: 'change',

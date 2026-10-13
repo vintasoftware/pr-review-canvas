@@ -32,8 +32,8 @@ export type TourPick = (typeof PICKS)[number]
 export const TOUR_CAPS = {
   landmarkTitle: 60,
   lead: 140,
-  /** One paragraph of a landmark's body, or of a literate diff: about 60 words. */
-  paragraph: 400,
+  /** One paragraph of a landmark's body, or of a literate diff: about 90 words. */
+  paragraph: 600,
   decisionTitle: 70,
   context: 300,
   sideLabel: 60,
@@ -426,8 +426,8 @@ export function computeBudget(
       ceilings.landmarks,
       Math.max(TOUR_LIMITS.minLandmarks, TOUR_LIMITS.minLandmarks + why + risky)
     ),
-    decisions: Math.min(ceilings.decisions, Math.max(1, Math.ceil(why / 2) + 1 + risky)),
-    quiz: Math.min(ceilings.quiz, Math.max(2, Math.ceil(why / 2) + 1)),
+    decisions: Math.min(ceilings.decisions, why + 1 + risky),
+    quiz: Math.min(ceilings.quiz, Math.max(2, why + 1)),
   }
 }
 

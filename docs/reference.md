@@ -937,10 +937,10 @@ Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-r
 
 | Key                            | Default           | Details                                                                                                      |
 | ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tour.budget.landmarks`        | `8`               | Ceiling on landmarks; the state landmark does not count                                                      |
+| `tour.budget.landmarks`        | `6`               | Ceiling on landmarks; the state landmark does not count                                                      |
 | `tour.budget.decisions`        | `5`               | Ceiling on decisions                                                                                         |
 | `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                    |
-| `tour.budget.linesPerLandmark` | `150`             | About one why landmark per this many changed lines                                                           |
+| `tour.budget.linesPerLandmark` | `500`             | About one why landmark per this many changed lines                                                           |
 | `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                      |
 | `tour.reverseQuiz`             | `on`              | `on` or `off`: the reader may ask the agent how it would carry the plan out                                  |
 | `tour.grill`                   | `change`          | `change` grills on change picks, `always` on every pick, `off` never                                         |

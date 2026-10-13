@@ -7,6 +7,12 @@ having read the diff. The tour is landmarks that explain, decisions the reader k
 and a quiz. Everything in it comes from the real diff, the description, the tests, and the guide.
 Invent nothing.
 
+A tour is for understanding and for the few decisions that matter, not for coverage. Write it the
+way a good textbook explains a mechanism: background a newcomer can follow, the core intuition on a
+concrete example with toy data, then the parts. An edge case belongs in the tour only when a reader
+who missed it would misunderstand the change or decide badly; the rest is left to the code and its
+tests.
+
 ## Paths
 
 {{PATHS}}
@@ -22,15 +28,16 @@ Invent nothing.
   tool over a shell heredoc: the tour directory may sit where shell write guards block heredocs.
 - The guide below is an allowlist of what you may run. An action it does not name is asked first.
 - No secrets, credentials, or protected health information, even as sample data.
-- **Say exactly what the code does, no more.** Each behavior has an edge: name what it covers and
-  what it does not (a cache cleared on logout but not on a password change; a limit counted per
-  request, not per batch). Write "always", "every", "all", "only", "never", "guarantees", or "the
-  compiler forces" only when the code makes it so, and name the members of a set ("`email` and
-  `phone` may be empty") rather than claim something of all of them. The author's code comments and
-  the description are claims to check against the code, not facts to repeat. Before you validate,
-  list the tour's ten strongest claims, titles, labels, and pictures included, check each against
-  the code, and soften or cut the ones the code does not prove. A wrong claim teaches the wrong
-  theory, and it costs more than a missing one.
+- **Say exactly what the code does, no more.** When you state a behavior, state its edge: what it
+  covers and what it does not (a cache cleared on logout but not on a password change; a limit
+  counted per request, not per batch). Write "always", "every", "all", "only", "never",
+  "guarantees", or "the compiler forces" only when the code makes it so, and name the members of a
+  set ("`email` and `phone` may be empty") rather than claim something of all of them. The author's
+  code comments and the description are claims to check against the code, not facts to repeat.
+  Before you validate, list the tour's ten strongest claims, titles, labels, and pictures included,
+  check each against the code, and soften or cut the ones the code does not prove. A wrong claim
+  teaches the wrong theory, and it costs more than a missing one. Precision is about the claims you
+  make: it is no reason to list every edge the code has.
 - **One word per mechanism.** Name each mechanism once and keep the name in the prose, the
   pictures, the decisions, and the quiz: if "timer" is what interrupts work, a check that only
   compares elapsed time is never called a timer.
@@ -75,9 +82,11 @@ Every changed file with its hunk ids and headers.
 
 {{BUDGET}}
 
-The budget is the most a tour gets. Prefer fewer, sharper landmarks: reading all of them takes
-under eight minutes. What the budget leaves out is listed as `notToured`, one line each with the
-path, so the reader knows what they did not see.
+The budget is a ceiling, not a target; most tours should stay under it. A why landmark is one idea a
+reviewer must hold to judge the change, not one file, one function, or one edge case: two ideas a
+reader would sum up in one sentence are one landmark. Prefer fewer, sharper landmarks: reading all
+of them takes under eight minutes. What the budget leaves out is listed as `notToured`, one line
+each with the path, so the reader knows what they did not see.
 
 ## Landmarks
 
@@ -94,9 +103,10 @@ few words and never retold.
 - **Title**: the thing and what happened to it, in words a reader already has. For a why
   landmark, if the title could have been true before the {{TARGET_WORD}}, it names no change:
   rewrite it.
-- **Body**: one or two short paragraphs of about 60 words, each saying what the picture cannot;
-  validation refuses a third. Inline `code` allowed. Short common words, one idea per sentence,
-  active voice, things named as the code and the scene name them.
+- **Body**: one or two paragraphs of up to about 90 words, each saying what the picture cannot;
+  validation refuses a third. The details a simple picture leaves out go here, in sentences.
+  Inline `code` allowed. Short common words, one idea per sentence, active voice, things named as
+  the code and the scene name them.
 - **One picture**: a landmark shows one picture, a scene or a micro-world. It shows both only when
   the micro-world opens on a case the scene does not draw; a landmark that wants two pictures for
   two ideas is two landmarks.
@@ -117,10 +127,11 @@ few words and never retold.
 3. `why`, one or more: why each part is the way it is. One idea per landmark, told in the order
    that explains the change: the rule before its uses, the bug before its fix, the shared path
    before the cases. Decisions anchor here.
-4. `respect`, exactly one, last: what a later change must respect. Extension points, invariants,
-   the one place a new case is added, the pokayoke in the change, and above all what fails
-   silently: the cases where nothing errors and the result is still wrong (a missing entry that
-   counts as zero, a fallback that hides a failure), each checked against the code.
+4. `respect`, exactly one, last: the one or two things a later change must respect. The one place
+   a new case is added, the invariant, the pokayoke in the change, and above all what fails
+   silently: a case where nothing errors and the result is still wrong (a missing entry that counts
+   as zero, a fallback that hides a failure), checked against the code. Pick the ones a maintainer
+   is most likely to break; it is not an inventory of every gap.
 
 **The state landmark.** When the change touches a schema, a migration, or the shape of stored
 data, one `why` landmark is the state landmark, marked `"state": true`: the shape before and
@@ -132,10 +143,13 @@ no decision on it.
 
 **Scenes.** Each landmark has a scene: a picture drawn for this change, an HTML fragment for a
 sandboxed frame, written to `<scenes>/<landmark id>.scene.html`. Read `{{SCENE_GUIDE}}` in full
-before drawing: how to pick a technique for each idea, the change grammar every tour shares, the
-catalog, the gallery of real pull requests drawn well (look at its pictures), the frame, and the
-kit. Each scene names its technique, and no technique draws more than two scenes of a tour: pick
-the picture for the idea, not the one you drew last. {{MICRO_WORLD}}
+before drawing: which kind of picture to reach for, how to keep a diagram simple, the change grammar
+every tour shares, the catalog, the gallery of real pull requests drawn well (look at its pictures),
+the frame, and the kit. Reach first for the thing itself as the reader would meet it (the screen,
+the terminal, the file, the markup), or a micro-world when the behavior turns on inputs. Draw an
+abstract diagram only when those cannot show a detail that truly matters to understanding the change
+or deciding on it, and then draw it simply. Each scene names its technique, and no technique draws
+more than two scenes of a tour. {{MICRO_WORLD}}
 
 **Code.** `code` holds the chunks of the diff behind the landmark, zero to three, each a file path
 and a unified-diff excerpt starting with its `@@` header, copied from the patch. A long hunk may be

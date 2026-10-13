@@ -17,11 +17,12 @@ import {
 describe('the tour budget', () => {
   const ceilings = DEFAULT_PROJECT_CONFIG.tour.budget
 
-  it('gives every change three landmarks, one more per 150 lines, and more with a blast radius', () => {
+  it('gives every change three landmarks, one more per 500 lines, and more with a blast radius', () => {
     expect(computeBudget(0, [], ceilings)).toEqual({ landmarks: 3, decisions: 1, quiz: 2 })
-    expect(computeBudget(300, [], ceilings)).toEqual({ landmarks: 5, decisions: 2, quiz: 2 })
-    expect(computeBudget(300, ['auth'], ceilings)).toEqual({ landmarks: 6, decisions: 3, quiz: 2 })
-    expect(computeBudget(5000, ['auth', 'schema'], ceilings)).toEqual({ landmarks: 8, decisions: 5, quiz: 5 })
+    expect(computeBudget(300, [], ceilings)).toEqual({ landmarks: 4, decisions: 2, quiz: 2 })
+    expect(computeBudget(1000, [], ceilings)).toEqual({ landmarks: 5, decisions: 3, quiz: 3 })
+    expect(computeBudget(300, ['auth'], ceilings)).toEqual({ landmarks: 5, decisions: 3, quiz: 2 })
+    expect(computeBudget(5000, ['auth', 'schema'], ceilings)).toEqual({ landmarks: 6, decisions: 5, quiz: 5 })
   })
 
   it('names the high-risk labels the changed paths touch, once each, in config order', () => {

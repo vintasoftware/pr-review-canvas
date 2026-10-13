@@ -10,7 +10,7 @@
   /**
    * A kit color as the scene draws it now, such as `rgb(31, 136, 61)`: the tokens are CSS, and a
    * canvas or a script needs the value the skin and the theme resolve them to.
-   * @param {string} name `ink`, `good`, `bad`, `warn`, `muted`, `fg`, `paper`, `line`, or `tint`
+   * @param {string} name `ink`, `good`, `bad`, `warn`, `blue`, `purple`, `muted`, `fg`, `paper`, `line`, or `tint`
    */
   function color(name) {
     const probe = document.createElement('span')

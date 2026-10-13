@@ -8,10 +8,32 @@ the shape of the change.
 
 A scene is HTML laid out by the kit below, and it may bring its own styles, SVG, canvas, and
 scripts to draw, chart, or animate what markup alone cannot. You have the full range of a browser
-inside a sandbox: use it. Be inventive with the picture and exact with the facts.
+inside a sandbox, but the best picture is usually the plainest one that shows the idea: be exact
+with the facts and sparing with the ink.
 
 A micro-world is a scene the reader drives: a faithful model of the changed behavior with a few
 controls in front of it. See [Micro-worlds](#micro-worlds).
+
+## Which picture
+
+Pick the most concrete picture that shows the idea, in this order:
+
+1. **The thing itself, as the reader meets it.** A simplified version of the real screen, the
+   terminal and what it prints, the config file, the markup the browser builds, the JSON a caller
+   gets back, with the change marked on it. A reader recognizes it at once and learns nothing new
+   to read it. When the change is about what a user or a caller sees, this is the picture. A
+   visual change (a color, a spacing, an icon, a button) is drawn as the UI itself, before and
+   after, in its real colors and shapes; a table or a legend that names the colors in words is a
+   diagram of it, and the reader has to imagine what the picture could have shown.
+2. **A micro-world**, when the behavior turns on a few inputs and the reader learns it best by
+   trying them: the same real-looking output, driven by controls.
+3. **A diagram**, only when neither of those can show a detail that truly matters to understanding
+   the change or deciding on it: an order of events, a structure nobody sees on a screen, code
+   moving between modules. A diagram for its own sake costs the reader time and teaches less than
+   the real thing would.
+
+A tour is about understanding the change and deciding what matters, not about covering every case.
+A picture that tries to show every branch, every caller, and every gap shows none of them well.
 
 ## How to draw one
 
@@ -48,6 +70,26 @@ Every tour draws change the same way, so a reader learns it once:
 - **Before and after** are the same picture twice, with the same layout, actors, labels, and
   scale, so the eye goes straight to what differs. Side by side on a desktop; stacked on a phone.
 
+## Diagrams like a textbook
+
+When a diagram is the right picture, draw it the way a good textbook does: a few shapes, short
+labels, one thing that stands out, and the explanation in the prose beside it.
+
+- **Few parts.** Three to five boxes and as many arrows is plenty. Leave out every part the idea
+  does not need, even a real one.
+- **Labels, not sentences.** A box or an arrow carries a name and at most a few words: `retryPolicy`,
+  `enqueue`, "429", "one row per tenant". A sentence in a box, a list of caveats under the diagram, or a
+  verdict banner is prose in the wrong place: move it to the body, where it reads better.
+- **Toy data.** Show one concrete example flowing through: three file cards, one request, the row
+  `id 7`. An example makes the rule obvious where an abstract label does not.
+- **Reuse a family.** When two landmarks are about the same system, draw them with the same kind of
+  picture and the same positions, so the second one costs the reader nothing to read.
+
+A comparison: a respect landmark on where a new webhook event goes can draw a five-column flow
+(the senders, the router, two queues, four handlers) with a sentence in most boxes, a dashed detour,
+and three warnings under it. Or it can draw three stacked boxes, each a file name, the one line to
+write there, and four words on why. The second teaches the same rule in a glance.
+
 ## What every scene does
 
 - **Real names and numbers.** The function, the file, the error code, the status, the count, the
@@ -67,10 +109,10 @@ Every tour draws change the same way, so a reader learns it once:
   glance; the same six crammed into a column do not. Leave white space between groups; let one
   thing be big. Start a tour with a light picture: the first scene is met before the reader holds
   any of the change, so it shows the few parts the change touches, not every wire.
-- **A budget for busy pictures.** At most three columns or eight wires in one picture, and no
-  label under 0.75 rem. A picture that needs more is two pictures, or it builds up: two parts at a
-  time in motion, all of them at rest. A moved function, its callers, and its cache are three
-  ideas: draw the one the landmark is about.
+- **A budget for busy pictures.** At most three columns, about five boxes, and about five wires in
+  one picture, labels of a few words, and no label under 0.75 rem. A picture that needs more is two
+  landmarks, or the extra parts go in the prose. A moved function, its callers, and its cache are
+  three ideas: draw the one the landmark is about.
 - **A phone composition of its own.** On a phone the frame is about 320 px wide, and a diagram
   whose meaning is in its wires loses it when its columns stack and the wires go. Draw the phone
   version on purpose under `@media (max-width: 40rem)`: stack each source above its destination
@@ -95,14 +137,17 @@ Every tour draws change the same way, so a reader learns it once:
   screen, the terminal, the response, the config file, the email.
 - **Why**: the part the landmark explains, and why it is shaped that way: the sequence it orders,
   the state it adds, the branch it takes, the code it moved, the cases it handles.
-- **Respect**: what a later change must keep true: the one place a new case goes, the invariant,
-  the boundary, the check that guards it, and what nothing checks yet.
+- **Respect**: what a later change must keep true: the one place a new case goes, or the
+  invariant, drawn where a maintainer would meet it (the file they edit, the list they add to). The
+  gaps nothing checks go in the prose or a decision, not in a list under the picture.
 - **State**: the stored data before and after, what happens to existing rows, and the way back.
 
 ## The catalog
 
 Starting points, grouped by the kind of idea. Combine them, bend them, and invent your own; the
-slug in `code` is what goes in `data-technique`.
+slug in `code` is what goes in `data-technique`. Look at
+[Where a person meets it](#where-a-person-meets-it) first: a picture of the real thing beats a
+diagram of it whenever it can show the idea.
 
 ### Code that moves or changes shape
 
@@ -160,8 +205,8 @@ slug in `code` is what goes in `data-technique`.
   picture of a behavior change, and often the best world landmark.
 - `decision-table`: the rule as a grid of conditions and the branch each combination takes, with
   the combination the change adds or fixes marked.
-- `checks`: the cases handled or tested (the kit's `checks`), with the one gap open: the guards a
-  landmark names.
+- `checks`: the cases handled or tested (the kit's `checks`), with the one gap open. Use it as the
+  picture itself, never as a list appended under another picture.
 - `test-flips`: the existing tests whose expectations the change rewrote, each assertion before
   and after (`status` 500 → 401, `calls` 1 → 3). A behavior change in the project's own
   numbers, and the best evidence of what a caller will notice.
@@ -346,6 +391,10 @@ Rules:
   about 700 px on a desktop pushes the prose out of sight: prefer wide to tall. On a phone, a
   `grid` of three columns becomes cramped; prefer two, or a `row` that wraps, or stack the before
   and the after.
+- **Narrow by default.** A `window`, a `term`, a `file`, `bars`, a `timeline`, and a `thread` are
+  at most 26 to 28 rem wide and centered, about a third of a desktop frame, so two sit side by side.
+  One that should fill the frame, or a long line of code or output, takes
+  `style="max-width: none"`; check it in the preview.
 - **What scripts get.** `window.scene` has `reducedMotion` and `color(name)` (a kit token resolved
   for the current skin and theme, such as `scene.color('good')` → `rgb(26, 127, 55)`).
 - **What the frame lacks.** It has no origin, network, storage, eval, or workers; it loads nothing,
@@ -396,14 +445,16 @@ Rules:
 - **Coverage**: `checks`, a `<ul>` whose items are marked by tone: `good` ✓, `bad` ✕, `warn` !,
   none open.
 - **Tones**, on any element: `ink` (the tour's accent, as the skin paints it), `good`, `bad`,
-  `warn`, `muted`. A tone sets `--c` on its element, and each thing uses it its own way: `chip`,
+  `warn`, `muted`, and `blue` and `purple` for a real screen that has them (a link, an open or a
+  merged state). A tone sets `--c` on its element, and each thing uses it its own way: `chip`,
   `banner`, `box solid`, `btn solid`, `toast`, `msg me`, and a `bar`'s fill are filled with it, and
   the text and icons in them turn to the paper color; `box`, `field`, `btn`, and a toned `tr` or
   `td` take it as their border or a pale wash; `big`, `label`, `small`, a toned span, `strong`,
   `em`, list item, or cell color their text with it.
 - **Tokens** for your own CSS: `--c` (the element's tone, where one is set), `--ink`, `--good`,
-  `--bad`, `--warn`, `--muted`, `--fg` (text), `--paper` (background), `--line` (borders), and
-  `--tint` (a pale wash of the element's tone; gray for an element with no tone).
+  `--bad`, `--warn`, `--blue`, `--purple`, `--muted`, `--fg` (text), `--paper` (background),
+  `--line` (borders), and `--tint` (a pale wash of the element's tone; gray for an element with no
+  tone).
 - **Icons**: `<i data-icon="database" class="lg"></i>`, by [Lucide](https://lucide.dev/icons) name:
   `user`, `users`, `message-square`, `git-pull-request`, `git-commit-horizontal`, `file-code`,
   `database`, `server`, `cloud`, `hard-drive`, `lock`, `lock-open`, `key-round`, `shield-check`,
@@ -430,16 +481,16 @@ A terminal, for a world landmark on what a typo now prints:
 <div class="scene" data-technique="terminal">
   <div class="grid" style="--cols: 2">
     <div class="term" data-title="before">
-      <span class="cmd">pr-review insall-skill</span>
-      <span class="muted">{"error":{"code":"BAD_REQUEST","hint":"run pr-review --help"}}</span>
+      <span class="cmd">acme deploy --region us-est-1</span>
+      <span class="muted">Deploying web@4.2.0 to us-east-1…</span>
+      <span class="good">Deployed in 41 s</span>
     </div>
     <div class="term" data-title="after">
-      <span class="cmd">pr-review insall-skill</span>
-      <span class="bad">error: unknown command: insall-skill (BAD_REQUEST)</span>
-      <span class="bad">hint: run pr-review --help</span>
+      <span class="cmd">acme deploy --region us-est-1</span>
+      <span class="bad">error: unknown region us-est-1 (did you mean us-east-1?)</span>
     </div>
   </div>
-  <p class="small">A person at a terminal reads a sentence; a script piping stdout still gets JSON.</p>
+  <p class="small">A mistyped region used to fall back to the default; now nothing ships.</p>
 </div>
 ```
 
@@ -549,47 +600,57 @@ A unit chart built by a script, for a state landmark on how many tenants a clean
 </div>
 ```
 
-A micro-world, a simulator of the rule that picks text or JSON for a command: the reader picks the
-inputs, and the model, the code's own branches, prints what the command prints.
+A micro-world, a simulator of the rule that decides whether a failed request is retried: the
+reader picks the inputs, and the model, the code's own branches, prints what the client does.
 
 ```html micro-world
 <div class="scene">
   <div class="controls">
-    <fieldset><legend>command</legend>
-      <label><input type="radio" name="cmd" value="install-skill" checked> install-skill</label>
-      <label><input type="radio" name="cmd" value="validate"> validate</label>
+    <fieldset><legend>method</legend>
+      <label><input type="radio" name="method" value="GET" checked> GET</label>
+      <label><input type="radio" name="method" value="POST"> POST</label>
     </fieldset>
-    <fieldset><legend>stdout is</legend>
-      <label><input type="radio" name="out" value="tty" checked> a terminal</label>
-      <label><input type="radio" name="out" value="pipe"> a pipe</label>
+    <fieldset><legend>server answers</legend>
+      <label><input type="radio" name="status" value="503" checked> 503</label>
+      <label><input type="radio" name="status" value="429"> 429</label>
+      <label><input type="radio" name="status" value="400"> 400</label>
     </fieldset>
-    <fieldset><legend>flag</legend>
-      <label><input type="checkbox" name="json"> --json</label>
+    <fieldset><legend>attempt</legend>
+      <select name="attempt"><option>1</option><option>2</option><option>3</option></select>
     </fieldset>
   </div>
-  <div class="term" data-title="what prints"><span class="cmd sim-cmd"></span><span class="sim-out"></span></div>
+  <div class="term" data-title="what the client does"><span class="cmd sim-req"></span><span class="sim-out"></span></div>
   <p class="small sim-why">The rule, in words.</p>
   <script>
-    // The model: outputMode as src/commands.ts has it after this change.
-    const AGENT_COMMANDS = new Set(['prepare', 'validate', 'publish'])
-    function outputMode(command, flag, stdoutIsTTY) {
-      return command === 'doctor' ? flag : flag || !stdoutIsTTY || AGENT_COMMANDS.has(command)
+    // The model: shouldRetry and backoff as src/http/retry.ts has them after this change.
+    const MAX_ATTEMPTS = 3
+    const IDEMPOTENT = new Set(['GET', 'PUT', 'DELETE'])
+    function shouldRetry(method, status, attempt) {
+      if (attempt >= MAX_ATTEMPTS) return false
+      if (status === 429) return true
+      return status >= 500 && IDEMPOTENT.has(method)
     }
+    const backoff = attempt => 200 * 2 ** (attempt - 1)
     const picked = name => document.querySelector(`input[name="${name}"]:checked`)
     function render() {
-      const command = picked('cmd').value
-      const pipe = picked('out').value === 'pipe'
-      const flag = picked('json') !== null
-      const json = outputMode(command, flag, !pipe)
-      document.querySelector('.sim-cmd').textContent = `pr-review ${command}${flag ? ' --json' : ''}${pipe ? ' | cat' : ''}`
-      document.querySelector('.sim-out').textContent = json ? '{"skill":"pr-review-canvas","targets":[…]}' : 'Copied the pr-review-canvas skill to:'
-      document.querySelector('.sim-why').textContent = flag
-        ? '--json is on the command line, so JSON.'
-        : pipe
-          ? 'stdout is a pipe, so JSON: a script or an agent is reading.'
-          : AGENT_COMMANDS.has(command)
-            ? `${command} is an agent command, so JSON even at a terminal.`
-            : 'A terminal, no flag, not an agent command, so text.'
+      const method = picked('method').value
+      const status = Number(picked('status').value)
+      const attempt = Number(document.querySelector('select[name="attempt"]').value)
+      const retry = shouldRetry(method, status, attempt)
+      document.querySelector('.sim-req').textContent = `${method} /orders  →  ${status}`
+      const out = document.querySelector('.sim-out')
+      out.className = `sim-out ${retry ? 'warn' : 'bad'}`
+      out.textContent = retry ? `retry ${attempt + 1} in ${backoff(attempt)} ms` : 'gives up: the caller gets the error'
+      document.querySelector('.sim-why').textContent =
+        attempt >= MAX_ATTEMPTS
+          ? `Attempt ${attempt} is the last one.`
+          : status === 429
+            ? 'A 429 always retries: the server asked the client to slow down.'
+            : status >= 500
+              ? IDEMPOTENT.has(method)
+                ? `${method} is safe to repeat, so a 5xx retries.`
+                : `${method} might run twice, so a 5xx does not retry.`
+              : 'A 4xx other than 429 is the caller\'s mistake: no retry.'
     }
     document.addEventListener('change', render)
     render()
