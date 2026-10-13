@@ -137,14 +137,20 @@ describe('validateTourModel', () => {
     ])
   })
 
-  it('checks scenes and micro-worlds against the frame, and allows one micro-world', () => {
+  it('checks scenes and micro-worlds against the frame, and allows two micro-worlds', () => {
     const model = syntheticTourModel()
     expect(
-      codes(withLandmark(model, 0, { scene: '<div class="scene"><img src="x.png"><p>t</p></div>' }))
+      codes(
+        withLandmark(model, 0, {
+          scene: '<div class="scene" data-technique="screen"><img src="x.png"><p>t</p></div>',
+        })
+      )
     ).toEqual(['SCENE_INVALID', 'SCENE_INVALID'])
     const micro = '<div class="scene"><label><input type="radio" name="a"> a</label><p>t</p></div>'
     expect(codes(withLandmark(model, 1, { micro }))).toEqual([])
-    expect(codes(withLandmark(withLandmark(model, 1, { micro }), 2, { micro }))).toEqual(['MICRO_LIMIT'])
+    const two = withLandmark(withLandmark(model, 1, { micro }), 2, { micro })
+    expect(codes(two)).toEqual([])
+    expect(codes(withLandmark(two, 3, { micro }))).toEqual(['MICRO_LIMIT'])
     expect(
       codes(withLandmark(model, 1, { micro }), {
         options: { microWorld: false, tryIt: true, finalQuiz: 'on' },
@@ -152,6 +158,21 @@ describe('validateTourModel', () => {
     ).toEqual(['MICRO_LIMIT'])
     expect(codes(withLandmark(model, 1, { micro: '<div class="scene"><form><input></form></div>' }))).toEqual(
       ['MICRO_INVALID', 'MICRO_INVALID']
+    )
+  })
+
+  it('names each scene technique, and refuses a third scene of one technique', () => {
+    const model = syntheticTourModel()
+    expect(codes(withLandmark(model, 0, { scene: '<div class="scene"><p>no technique</p></div>' }))).toEqual([
+      'SCENE_INVALID',
+    ])
+    const sequence = '<div class="scene" data-technique="sequence"><p>a then b</p></div>'
+    const twice = withLandmark(withLandmark(model, 0, { scene: sequence }), 1, { scene: sequence })
+    expect(codes(twice)).toEqual([])
+    const thrice = validateTourModel(withLandmark(twice, 2, { scene: sequence }), input())
+    expect(thrice.errors.map(e => e.code)).toEqual(['SCENE_REPEATED'])
+    expect(thrice.errors[0]?.message).toMatch(
+      /^landmarks\.0, landmarks\.1, landmarks\.2: 3 scenes draw "sequence"/
     )
   })
 

@@ -56,7 +56,7 @@ for arg in "$@"; do case "$arg" in --screenshot=*) printf png > "\${arg#--screen
     const args = (await readFile(log, 'utf8')).trim().split('\n')
     expect(args).toContain('--headless')
     expect(args).toContain('--force-prefers-reduced-motion')
-    expect(args).toContain('--window-size=1280,1000')
+    expect(args).toContain('--window-size=1280,1400')
     expect(args).toContain(`--screenshot=${file}`)
     expect(args.at(-1)).toBe('http://127.0.0.1:9/tour/42?preview')
     const profile = args.find(arg => arg.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length)
@@ -69,7 +69,7 @@ for arg in "$@"; do case "$arg" in --screenshot=*) printf png > "\${arg#--screen
     const log = path.join(dir, 'args.txt')
     const browser = await fakeBrowser(dir, log)
     await headlessScreenshot(browser, 'http://127.0.0.1:9/', path.join(dir, 'phone.png'), PHONE_VIEWPORT)
-    expect((await readFile(log, 'utf8')).split('\n')).toContain('--window-size=390,844')
+    expect((await readFile(log, 'utf8')).split('\n')).toContain('--window-size=390,1600')
   })
 
   it('fails when the browser does, and still removes its profile', async () => {

@@ -1,0 +1,210 @@
+<div class="scene" data-technique="schema">
+<style>
+.sx{position:relative;width:100%;display:flex;flex-direction:column;gap:1.6rem}
+.sx-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.sx-svg path{fill:none;stroke:var(--c);stroke-width:1.6;stroke-linecap:round}
+.sx-svg .hero{stroke-width:3.2}
+.sx-svg .tip{fill:var(--c);stroke:none}
+.sx-svg .glow{stroke-width:9;opacity:.18}
+.sx-er{display:grid;grid-template-columns:minmax(0,13rem) minmax(0,19rem) minmax(0,8rem) minmax(0,23rem);justify-content:space-between;align-items:center;gap:1rem 2.5rem}
+.sx-has{align-self:start;margin-top:1.1rem;text-align:center;font:.75rem ui-monospace,monospace}
+.sx-sibs{display:flex;flex-direction:column;gap:.7rem;align-items:flex-start}
+.sx-sibs span{padding:.25rem .55rem;border:.1rem solid var(--line);border-radius:.4rem;font:.75rem ui-monospace,monospace;color:var(--muted)}
+.sx-ent{border:.14rem solid var(--c,var(--line));border-radius:.6rem;background:var(--paper);font:.78rem/1.55 ui-monospace,monospace;overflow:hidden;text-align:left}
+.sx-ent>b{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;flex-wrap:wrap;padding:.35rem .6rem;border-bottom:.1rem solid var(--c,var(--line));background:var(--tint);font:700 .9rem ui-sans-serif,system-ui,sans-serif}
+.sx-ent>b small{font-weight:500;font-size:.72rem;color:var(--muted)}
+.sx-ent>span{display:flex;justify-content:space-between;gap:.8rem;padding:0 .6rem}
+.sx-ent>span i{font-style:normal;color:var(--muted)}
+.sx-ent .k{color:var(--fg);font-weight:700}
+.sx-old>b{background:color-mix(in srgb,var(--fg) 5%,var(--paper))}
+.sx-old>span{color:var(--muted)}
+.sx-new{box-shadow:0 0 0 .35rem color-mix(in srgb,var(--good) 16%,transparent)}
+.sx-gone{--c:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 9%,var(--paper));outline:.1rem dashed var(--bad);outline-offset:-.1rem;text-decoration:line-through;opacity:.8}
+.sx-gone i{color:inherit!important}
+.sx-mig{display:grid;grid-template-columns:auto auto auto;justify-content:center;align-items:start;gap:1rem 0}
+.sx-mid{width:12rem;align-self:start;text-align:center;padding-top:.2rem}
+.sx-mig table{font-size:.78rem}
+.sx-mig td{vertical-align:middle;font-family:ui-monospace,monospace}
+.sx-js{display:flex;flex-direction:column;gap:.3rem;align-items:flex-start}
+.sx-j{display:inline-block;padding:.05rem .4rem;border:.1rem dashed var(--bad);border-radius:.35rem;background:color-mix(in srgb,var(--bad) 8%,var(--paper));color:var(--fg);white-space:nowrap}
+.sx-gh{color:var(--bad)!important;text-decoration:line-through}
+.sx-map{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;justify-content:center;font-size:.8rem;color:var(--muted)}
+.sx-map b{font-family:ui-monospace,monospace;font-weight:600;color:var(--fg)}
+.sx-q{display:grid;grid-template-columns:1fr auto;gap:.6rem 1.5rem;align-items:center;width:100%}
+.sx-q .file{max-width:none}
+@media (max-width:640px){
+.sx-mid{display:none}
+.sx-er{grid-template-columns:1fr;gap:2.2rem}
+.sx-sibs{flex-direction:row;flex-wrap:wrap;justify-content:center;order:-1}
+.sx-sibs .small{flex-basis:100%;text-align:center}
+.sx-has{display:none}
+.sx-mig{grid-template-columns:1fr;gap:2rem;padding-left:1.6rem}
+.sx-q{grid-template-columns:1fr}
+}
+</style>
+<div class="sx">
+<svg class="sx-svg" aria-hidden="true"></svg>
+<div class="row spread"><span class="label">1 · the tables</span><span class="small">db/schema.rb · 2026_08_20_142255 → 2026_09_25_094651</span></div>
+<div class="sx-er">
+<div class="sx-sibs">
+<span class="small" style="border:0;padding:0">existing has_many, dependent: :delete_all</span>
+<span id="s1">fasp_backfill_requests</span>
+<span id="s2">fasp_debug_callbacks</span>
+<span id="s3">fasp_subscriptions</span>
+</div>
+<div class="sx-ent sx-old" id="prov">
+<b>fasp_providers <small>Fasp::Provider</small></b>
+<span id="pid"><span class="k">id</span><i>bigint PK</i></span>
+<span>base_url<i>string</i></span>
+<span class="sx-gone">capabilities<i>jsonb, default []</i></span>
+<span>confirmed<i>boolean</i></span>
+<span>name<i>string</i></span>
+<span><span class="k">updated_at</span><i>datetime</i></span>
+<span><i>… 9 more columns</i></span>
+</div>
+<span class="sx-has good">has_many<br>:fasp_capabilities</span>
+<div class="sx-ent good sx-new" id="cap">
+<b>fasp_capabilities <small>new table</small></b>
+<span><span class="k">id</span><i>bigint PK</i></span>
+<span id="cfk"><span class="k">fasp_provider_id</span><i>bigint FK, not null</i></span>
+<span>name<i>string, not null</i></span>
+<span>version<i>string, not null</i></span>
+<span>enabled<i>boolean, default false</i></span>
+<span>created_at, updated_at<i>datetime</i></span>
+<span class="good" style="background:var(--tint)"><i>unique (fasp_provider_id, name, version)</i></span>
+</div>
+</div>
+<div class="row"><span class="chip warn">Fasp::Capability</span><span class="small"><s>include ActiveModel::Model</s>, a hash in the array → <b class="warn">&lt; ApplicationRecord</b>, a row that <b>belongs_to :fasp_provider</b></span></div>
+
+<div class="row spread"><span class="label">2 · the rows, as the migration moves them</span><span class="small">e.g. providers like the spec's confirmed_fasp and debug_fasp</span></div>
+<div class="sx-mig">
+<div class="col" style="align-items:flex-start">
+<span class="small">fasp_providers, before</span>
+<table>
+<tr><th>id</th><th class="sx-gh">capabilities jsonb</th></tr>
+<tr><td>1</td><td><span class="sx-js"><span class="sx-j" id="j1">{"id":"callback","version":"0.1"}</span><span class="sx-j" id="j2">{"id":"data_sharing","version":"0.1"}</span></span></td></tr>
+<tr><td>2</td><td><span class="sx-js"><span class="sx-j" id="j3">{"id":"callback","version":"0.1","enabled":true}</span></span></td></tr>
+</table>
+</div>
+<span class="sx-mid small">one row per element</span>
+<div class="col" style="align-items:flex-start">
+<span class="small">fasp_capabilities, after</span>
+<table>
+<tr><th>id</th><th>fasp_provider_id</th><th>name</th><th>version</th><th>enabled</th></tr>
+<tr class="good" id="r1"><td>1</td><td>1</td><td>callback</td><td>0.1</td><td class="warn">false</td></tr>
+<tr class="good" id="r2"><td>2</td><td>1</td><td>data_sharing</td><td>0.1</td><td class="warn">false</td></tr>
+<tr class="good" id="r3"><td>3</td><td>2</td><td>callback</td><td>0.1</td><td>true</td></tr>
+</table>
+</div>
+</div>
+<div class="sx-map">
+<span><b>jsonb_array_elements(capabilities)</b></span>
+<span><b>'id'</b> → <b>name</b></span>
+<span><b>'version'</b> → <b>version</b></span>
+<span class="warn">no <b>'enabled'</b> key → <b class="warn">false</b> (COALESCE)</span>
+<span>both timestamps ← the provider's <b>updated_at</b></span>
+</div>
+<div class="row">
+<span class="chip bad"><i data-icon="trash-2"></i> remove_column :fasp_providers, :capabilities</span>
+<span class="small"><i data-icon="undo-2"></i> down: <b>jsonb_agg</b> folds the rows back into each array, now with "enabled" written out</span>
+</div>
+
+<div class="row spread"><span class="label">3 · the same question, asked of the new shape</span><span class="small">scope :with_capability, in app/models/fasp/provider.rb</span></div>
+<div class="sx-q">
+<div class="file" data-title="Fasp::Provider.with_capability('callback')">
+<span class="del">where('fasp_providers.capabilities @&gt; ?::jsonb', '[{"id": "callback", "enabled": true}]')</span>
+<span class="add">joins(:fasp_capabilities).where(fasp_capabilities: { name: 'callback', enabled: true })</span>
+</div>
+<div class="col"><span class="big good">provider 2</span><span class="small">only its callback row has enabled = true</span></div>
+</div>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg'
+const root = document.querySelector('.sx')
+const svg = root.querySelector('.sx-svg')
+// [from, to, tone, kind]: er draws a crow's foot at the many end, row draws an arrow.
+const LINKS = [
+  ['#pid', '#cfk', 'good', 'er'],
+  ['#pid', '#s1', 'muted', 'er'],
+  ['#pid', '#s2', 'muted', 'er'],
+  ['#pid', '#s3', 'muted', 'er'],
+  ['#j1', '#r1', 'good', 'row', true],
+  ['#j2', '#r2', 'good', 'row', true],
+  ['#j3', '#r3', 'good', 'row', true],
+]
+let first = true
+function el(name, attrs) {
+  const e = document.createElementNS(NS, name)
+  for (const k in attrs) e.setAttribute(k, attrs[k])
+  svg.append(e)
+  return e
+}
+function draw() {
+  const o = root.getBoundingClientRect()
+  svg.replaceChildren()
+  svg.setAttribute('viewBox', `0 0 ${o.width} ${o.height}`)
+  LINKS.forEach(([a, b, tone, kind, hero], i) => {
+    let ea = root.querySelector(a), eb = root.querySelector(b)
+    let A = ea.getBoundingClientRect(), B = eb.getBoundingClientRect()
+    const side = B.left >= A.right - 2 || B.right <= A.left + 2
+    if (!side && tone === 'muted') return
+    if (!side && kind === 'er') {
+      A = (ea.closest('.sx-ent') ?? ea).getBoundingClientRect(); B = (eb.closest('.sx-ent') ?? eb).getBoundingClientRect()
+    }
+    let x1, y1, x2, y2, d, dx = 0, dy = 0
+    if (side) {
+      dx = B.left >= A.right - 2 ? 1 : -1
+      x1 = (dx > 0 ? A.right : A.left) - o.left; x2 = (dx > 0 ? B.left : B.right) - o.left
+      y1 = A.top + A.height / 2 - o.top; y2 = B.top + B.height / 2 - o.top
+      const m = (x1 + x2) / 2
+      d = `M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}`
+    } else if (kind === 'row') {
+      dx = 1
+      x1 = ea.closest('table').getBoundingClientRect().left - o.left; x2 = B.left - o.left
+      y1 = A.top + A.height / 2 - o.top; y2 = B.top + B.height / 2 - o.top
+      const m = Math.min(x1, x2) - 22
+      d = `M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}`
+    } else {
+      dy = B.top >= A.bottom - 2 ? 1 : -1
+      x1 = A.left + A.width / 2 - o.left; x2 = B.left + B.width / 2 - o.left
+      y1 = (dy > 0 ? A.bottom : A.top) - o.top; y2 = (dy > 0 ? B.top : B.bottom) - o.top
+      const m = (y1 + y2) / 2
+      d = `M${x1},${y1} C${x1},${m} ${x2},${m} ${x2},${y2}`
+    }
+    const g = el('g', { class: tone })
+    const add = (n, at) => { const e = document.createElementNS(NS, n); for (const k in at) e.setAttribute(k, at[k]); g.append(e); return e }
+    if (hero) add('path', { d, class: 'glow' })
+    const p = add('path', { d, class: hero ? 'hero' : '' })
+    const px = -dy, py = dx
+    if (kind === 'er') {
+      const s = 13, w = 8
+      const bx = x2 - dx * s, by = y2 - dy * s
+      add('path', { d: `M${bx},${by} L${x2 + px * w},${y2 + py * w} M${bx},${by} L${x2},${y2} M${bx},${by} L${x2 - px * w},${y2 - py * w}`, class: hero ? 'hero' : '' })
+      const ax = x1 + dx * 9, ay = y1 + dy * 9
+      add('path', { d: `M${ax + px * 7},${ay + py * 7} L${ax - px * 7},${ay - py * 7}`, class: hero ? 'hero' : '' })
+    } else {
+      add('path', { d: `M${x2},${y2} L${x2 - dx * 10 + px * 6},${y2 - dy * 10 + py * 6} L${x2 - dx * 10 - px * 6},${y2 - dy * 10 - py * 6}Z`, class: 'tip' })
+      add('circle', { cx: x1, cy: y1, r: 3, class: 'tip' })
+    }
+    if (!scene.reducedMotion && kind === 'row') {
+      if (first) {
+        const len = p.getTotalLength()
+        p.style.strokeDasharray = len
+        p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 900, delay: 300 + i * 260, easing: 'ease-in-out', fill: 'backwards' })
+      }
+      const dot = add('circle', { r: 4.5, class: 'tip', visibility: 'hidden' })
+      dot.innerHTML = `<set attributeName="visibility" to="visible" begin="${1.4 + i * 0.3}s" fill="freeze"/><animateMotion dur="2.4s" repeatCount="indefinite" begin="${1.4 + i * 0.3}s" path="${d}"/>`
+    }
+  })
+  first = false
+}
+let size = ''
+new ResizeObserver(() => {
+  const r = root.getBoundingClientRect(), now = `${Math.round(r.width)}x${Math.round(r.height)}`
+  if (now !== size) { size = now; draw() }
+}).observe(root)
+if (!scene.reducedMotion) {
+  document.querySelectorAll('#r1,#r2,#r3').forEach((r, i) => r.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 1000 + i * 260, fill: 'backwards' }))
+}
+</script>
+</div>

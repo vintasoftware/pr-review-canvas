@@ -36,6 +36,17 @@ export interface SceneChecks {
   interactive?: boolean
 }
 
+/**
+ * The technique a scene says it draws, from `data-technique` on its root, or null when it names
+ * none. The tour counts them, so the same picture is not dealt over and over.
+ */
+export function sceneTechnique(html: string): string | null {
+  const markup = html.replace(SCRIPT_RE, '')
+  const m = /\bdata-technique\s*=\s*["']([^"']*)["']/i.exec(markup)
+  const name = m?.[1]?.trim().toLowerCase() ?? ''
+  return /^[a-z0-9][a-z0-9-]*$/.test(name) ? name : null
+}
+
 /** The icons a scene names, as `<i data-icon="name"></i>`. */
 export function sceneIcons(html: string): string[] {
   return [...html.matchAll(/<i\b[^>]*\bdata-icon\s*=\s*["']([^"']*)["'][^>]*>/gi)].map(m => m[1] as string)

@@ -1,0 +1,130 @@
+<div class="scene" data-technique="architecture">
+  <div class="ar">
+    <svg class="ar-wires" aria-hidden="true"><defs>
+      <marker id="ar-g" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse"><polygon points="0,0 10,5 0,10"/></marker>
+      <marker id="ar-m" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><polygon points="0,0 10,5 0,10"/></marker>
+    </defs></svg>
+    <div class="ar-zone ar-zb"><span class="label">browser tab</span></div>
+    <div class="ar-zone ar-zs"><span class="label">vite dev server · Node</span></div>
+    <div class="ar-n chg" id="client"><b>changed · /@vite/client</b><code>client/client.ts</code>
+      <div class="file"><span class="add">import { setupForwardConsoleHandler } from '../shared/forwardConsole'</span><span class="add">const forwardConsole = __SERVER_FORWARD_CONSOLE__</span><span class="add">setupForwardConsoleHandler(transport, forwardConsole)</span></div></div>
+    <div class="ar-via small" id="via">resolved at startup, then written into the client's source</div>
+    <div class="ar-n chg" id="inject"><b>changed</b><code>plugins/<wbr>clientInjections.ts</code><span>replaces <code>__SERVER_FORWARD_CONSOLE__</code> with the resolved options</span></div>
+    <div class="ar-n chg" id="opt"><b>changed</b><code>server.forwardConsole</code><span>unset: <code>(await determineAgent()).isAgent</code></span><span><code>true</code>: unhandled errors + console.error, .warn</span><i class="ar-dep">new dep · @vercel/detect-agent</i></div>
+    <div class="ar-n" id="app"><b>unchanged</b><code>src/main.ts</code><span><code>throw new Error('this is test error')</code></span></div>
+    <div class="ar-n" id="hooks"><b>browser</b><code>window</code><span>'error', 'unhandledrejection'</span><code>console</code><span>.error, .warn, wrapped</span></div>
+    <div class="ar-n new" id="fwd"><b>new · 210 lines</b><code>shared/<wbr>forwardConsole.ts</code><span>wraps <code>console[level]</code>, listens for errors, <code>formatConsoleArgs</code>, then <code>transport.send()</code></span></div>
+    <div class="ar-ws" id="ws">
+      <span class="label">HMR WebSocket · unchanged</span>
+      <span class="ar-lane ar-in">update · full-reload</span>
+      <span class="ar-lane ar-out" id="out">vite:forward-console</span>
+    </div>
+    <div class="ar-n new hero" id="plugin"><b>new · 140 lines</b><code>plugins/<wbr>forwardConsole.ts</code><span><code>hot.on('vite:forward-console')</code>, client environment only, added when enabled</span></div>
+    <div class="ar-n" id="stack"><b>maps the stack</b><span class="ar-dep">new dep · @vitest/utils/source-map <code>parseErrorStacktrace</code></span><span><code>moduleGraph</code> · <code>generateCodeFrame</code></span><span class="ar-c">sourcemap.ts: <code>extractSourcemapFromFile</code> is now sync</span></div>
+    <div class="term" data-title="the terminal running vite" id="term">
+      <span class="bad">1:18:38 AM [vite] (client) [Unhandled error] Error: this is test error</span>
+      <span> &gt; testError src/main.ts:20:8</span>
+      <span class="muted">     18|</span>
+      <span class="muted">     19| function testError() {</span>
+      <span>     20|   throw new Error('this is test error')</span>
+      <span class="bad">       |        ^</span>
+      <span class="muted">     21| }</span>
+      <span class="muted">     22|</span>
+      <span> &gt; HTMLButtonElement.&lt;anonymous&gt; src/main.ts:6:2</span>
+    </div>
+  </div>
+  <style>
+    .ar { position: relative; width: 100%; display: grid; gap: 0.9rem 1rem; align-items: center;
+      grid-template-columns: 0.65fr 0.7fr 0.95fr 0.65fr 1.1fr 1fr; grid-template-rows: 1.3rem auto auto auto; }
+    .ar-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 1; }
+    .ar-wires path { fill: none; stroke: var(--good); stroke-width: 2.2; }
+    .ar-wires polygon { fill: var(--good); } #ar-m polygon { fill: var(--muted); }
+    .ar-wires path.muted { stroke: color-mix(in srgb, var(--muted) 60%, transparent); stroke-width: 1.5; }
+    .ar-wires path.hero { stroke-width: 4; stroke-dasharray: 8 6; animation: ar-flow 0.8s linear infinite; }
+    @keyframes ar-flow { to { stroke-dashoffset: -14; } }
+    .ar-zone { align-self: stretch; margin: -0.5rem; padding: 0.35rem 0.6rem; border-radius: 0.9rem; border: 0.1rem solid var(--line); background: color-mix(in srgb, var(--muted) 6%, var(--paper)); }
+    .ar-zb { grid-area: 1 / 1 / 4 / 4; } .ar-zs { grid-area: 1 / 5 / 4 / 7; }
+    .ar-n { position: relative; z-index: 2; align-self: stretch; display: flex; flex-direction: column; gap: 0.2rem; padding: 0.4rem 0.55rem;
+      border: 0.12rem solid color-mix(in srgb, var(--muted) 50%, transparent); border-radius: 0.55rem; background: var(--paper); font-size: 0.74rem; color: var(--muted); min-width: 0; }
+    .ar-n > b { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ar-n > code { font: 700 0.78rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); overflow-wrap: anywhere; }
+    .ar code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .ar-n.new { border-color: var(--good); background: color-mix(in srgb, var(--good) 9%, var(--paper)); }
+    .ar-n.new > b { color: var(--good); }
+    .ar-n.chg { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--paper)); }
+    .ar-n.chg > b, .ar-c { color: var(--warn); }
+    .ar-n.hero { border-width: 0.22rem; box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--good) 15%, transparent), 0 0 1.5rem color-mix(in srgb, var(--good) 35%, transparent); }
+    .ar-dep { font-style: normal; font-weight: 650; color: var(--good); }
+    #client { grid-area: 2 / 1 / 3 / 4; } #via { grid-area: 2 / 4; align-self: end; text-align: center; z-index: 2; }
+    #client .file { max-width: none; font-size: 0.7rem; margin-top: 0.2rem; }
+    #inject { grid-area: 2 / 5; } #opt { grid-area: 2 / 6; }
+    #app { grid-area: 3 / 1; } #hooks { grid-area: 3 / 2; } #fwd { grid-area: 3 / 3; } #ws { grid-area: 3 / 4; }
+    #plugin { grid-area: 3 / 5; } #stack { grid-area: 3 / 6; }
+    #term { grid-area: 4 / 1 / 5 / 7; max-width: none; margin-top: 0.6rem; z-index: 2; }
+    .ar-ws { z-index: 2; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0.3rem; border-block: 0.14rem solid var(--line); text-align: center; }
+    .ar-ws .label { font-size: 0.62rem; }
+    .ar-lane { position: relative; display: block; padding-bottom: 0.45rem; font: 600 0.66rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+    .ar-lane::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 0.16rem; background: var(--c, color-mix(in srgb, var(--muted) 60%, transparent)); }
+    .ar-in::before { content: '◀'; position: absolute; left: -0.3rem; bottom: -0.32rem; font-size: 0.6rem; color: var(--muted); }
+    .ar-out { --c: var(--good); color: var(--good); font-weight: 800; }
+    .ar-out::after { height: 0.3rem; background: repeating-linear-gradient(90deg, var(--good) 0 0.5rem, transparent 0.5rem 0.8rem); animation: flow 0.6s linear infinite; background-size: 0.8rem 100%; }
+    .ar-out::before { content: '▶'; position: absolute; right: -0.35rem; bottom: -0.3rem; font-size: 0.7rem; color: var(--good); }
+    @media (max-width: 760px) {
+      .ar { grid-template-columns: 1fr 1fr; grid-template-rows: 1.1rem repeat(4, auto) 1.1rem auto auto auto; gap: 0.8rem; padding: 0 0.9rem; }
+      .ar-zone { margin: -0.4rem -0.55rem; }
+      .ar-zb { grid-area: 1 / 1 / 5 / 3; } .ar-zs { grid-area: 6 / 1 / 9 / 3; }
+      #client { grid-area: 2 / 1 / 3 / 3; } #app { grid-area: 3 / 1; } #hooks { grid-area: 3 / 2; } #fwd { grid-area: 4 / 1 / 5 / 3; }
+      #ws { grid-area: 5 / 1 / 6 / 3; margin: 0.4rem 0; } #via { display: none; }
+      #stack { grid-area: 7 / 1; } #plugin { grid-area: 7 / 2; } #inject { grid-area: 8 / 1; } #opt { grid-area: 8 / 2; }
+      #term { grid-area: 9 / 1 / 10 / 3; }
+      .ar-n, .ar-lane { font-size: 0.8rem; } .ar-n > code { font-size: 0.85rem; }
+    }
+  </style>
+  <script>
+    // The connections: [from, to, tone, way around on a phone]. Green is a connection this PR adds.
+    const WIRES = [
+      ['opt', 'inject'], ['inject', 'client', '', 'L'], ['client', 'fwd', '', 'R'],
+      ['app', 'hooks', 'muted'], ['hooks', 'fwd'], ['fwd', 'out', 'hero'], ['out', 'plugin', 'hero'],
+      ['plugin', 'stack'], ['plugin', 'term', '', 'R'],
+    ]
+    const box = document.querySelector('.ar')
+    const svg = box.querySelector('.ar-wires')
+    const at = id => document.getElementById(id).getBoundingClientRect()
+    function d(A, B, via) {
+      // A wire meets the forward-console lane on its line, not on its words.
+      const mid = r => (r.id === 'out' ? r.bottom - 1 : r.top + r.height / 2)
+      if (via) {
+        const s = via === 'R' ? 1 : -1, ax = via === 'R' ? A.right : A.left, bx = via === 'R' ? B.right : B.left
+        const x = (via === 'R' ? Math.max(ax, bx) : Math.min(ax, bx)) + s * 10
+        return `M${ax} ${mid(A)} C${x} ${mid(A)} ${x} ${mid(B)} ${bx} ${mid(B)}`
+      }
+      if (B.left >= A.right - 2 || B.right <= A.left + 2) {
+        const [ax, bx] = B.left >= A.right - 2 ? [A.right, B.left] : [A.left, B.right]
+        // Into and out of the lane, one straight line across the boundary.
+        const [ay, by] = A.id === 'out' || B.id === 'out' ? Array(2).fill(mid(A.id === 'out' ? A : B)) : [mid(A), mid(B)]
+        const k = (bx - ax) / 2
+        return `M${ax} ${ay} C${ax + k} ${ay} ${bx - k} ${by} ${bx} ${by}`
+      }
+      // One above the other: drop straight down where they overlap.
+      const x = (Math.max(A.left, B.left) + Math.min(A.right, B.right)) / 2
+      return `M${x} ${A.bottom} L${x} ${B.top}`
+    }
+    function draw() {
+      const R = box.getBoundingClientRect()
+      const phone = getComputedStyle(box).gridTemplateColumns.split(' ').length === 2
+      const rel = (r, id) => ({ id, left: r.left - R.left, right: r.right - R.left, top: r.top - R.top, bottom: r.bottom - R.top, width: r.width, height: r.height })
+      svg.querySelectorAll('path').forEach(p => p.remove())
+      // On a phone the lanes run across the screen, so wires meet the whole socket box instead.
+      const pick = id => (phone && id === 'out' ? 'ws' : id)
+      for (const [from, to, tone = '', via] of WIRES) {
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+        p.setAttribute('d', d(rel(at(pick(from)), pick(from)), rel(at(pick(to)), pick(to)), phone ? via : undefined))
+        p.setAttribute('class', tone)
+        if (to !== 'out' || phone) p.setAttribute('marker-end', tone === 'muted' ? 'url(#ar-m)' : 'url(#ar-g)')
+        svg.append(p)
+      }
+    }
+    draw()
+    new ResizeObserver(draw).observe(box)
+  </script>
+</div>

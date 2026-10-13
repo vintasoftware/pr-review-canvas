@@ -13,7 +13,7 @@ import {
 } from '../contract/tour.js'
 import { hunkForLine } from '../git/patch-lines.js'
 import { visibleLength } from '../review/text-length.js'
-import { sceneProblems } from './validate-scene.js'
+import { sceneProblems, sceneTechnique } from './validate-scene.js'
 
 export interface TourValidationInput {
   files: readonly FileEntry[]
@@ -117,6 +117,7 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     })
   }
   let micros = 0
+  const techniques = new Map<string, number[]>()
   model.landmarks.forEach((l, i) => {
     const where = `landmarks.${i}`
     dup('landmark', l.id, where)
@@ -168,6 +169,16 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
       for (const problem of sceneProblems(l.scene)) {
         errors.push({ code: 'SCENE_INVALID', where: `${where}.scene`, message: `${where}.scene: ${problem}` })
       }
+      const technique = sceneTechnique(l.scene)
+      if (technique === null) {
+        errors.push({
+          code: 'SCENE_INVALID',
+          where: `${where}.scene`,
+          message: `${where}.scene: names no technique; put data-technique on its root, such as <div class="scene" data-technique="sequence"> (a slug: the scene guide lists them, and a new one is fine)`,
+        })
+      } else {
+        techniques.set(technique, [...(techniques.get(technique) ?? []), i])
+      }
     }
     if (typeof l.micro === 'string') {
       micros += 1
@@ -183,12 +194,20 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
       }
     }
   })
-  if (micros > 1)
+  if (micros > TOUR_LIMITS.microWorlds)
     errors.push({
       code: 'MICRO_LIMIT',
       where: 'landmarks',
-      message: `landmarks: ${micros} micro-worlds; a tour has at most one`,
+      message: `landmarks: ${micros} micro-worlds; a tour has at most ${TOUR_LIMITS.microWorlds}`,
     })
+  for (const [technique, at] of techniques) {
+    if (at.length > TOUR_LIMITS.sceneTechniqueRepeats)
+      errors.push({
+        code: 'SCENE_REPEATED',
+        where: 'landmarks',
+        message: `${at.map(i => `landmarks.${i}`).join(', ')}: ${at.length} scenes draw "${technique}"; at most ${TOUR_LIMITS.sceneTechniqueRepeats} share a technique, so pick another picture for the idea`,
+      })
+  }
 
   // Decisions.
   if (model.decisions.length > input.budget.decisions) {

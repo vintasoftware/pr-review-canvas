@@ -1,0 +1,166 @@
+<div class="scene" data-technique="trace-player">
+<style>
+.t-stage{position:relative;display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:.5rem 7.5rem;width:100%;align-items:center}
+.t-col,.t-runs{display:grid;gap:.45rem}
+.t-a,.t-card,.t-at,.t-say{font:600 .8rem ui-monospace,monospace;border-radius:.45rem;border:.12rem solid var(--c,var(--line))}
+.t-a{position:relative;z-index:1;padding:.3rem .55rem;background:var(--paper)}
+.t-a small{display:block;font:500 .68rem system-ui;color:var(--muted)}
+.t-a.good{border-width:.18rem}
+#t-m.good{font:700 .8rem ui-monospace,monospace;color:var(--good)}
+.t-a.on{box-shadow:0 0 0 .25rem color-mix(in srgb,var(--fg) 25%,transparent)}
+.t-c{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-top:.35rem}
+.t-card{padding:.2rem .4rem;font-size:.66rem;color:var(--muted)}
+.t-card b{display:block;font-size:1.05rem;color:var(--fg)}
+.t-card.hot{background:var(--tint);border-color:var(--fg)}
+.t-g{position:absolute;inset:0;width:100%;height:100%;overflow:visible;fill:none;stroke:var(--c,var(--fg));stroke-width:2}
+.t-g.good{stroke-width:3.5}
+#t-hp{fill:var(--c,var(--fg));stroke:none}
+.t-say{position:absolute;z-index:2;left:0;top:0;color:var(--c,var(--fg));padding:0 .3rem;border:0;background:var(--paper);font-size:.72rem;font-weight:700;white-space:nowrap}
+.t-main{display:grid;grid-template-columns:1.3fr 1fr;gap:1rem;width:100%;align-items:start}
+.t-k>span{padding-left:2.6rem;color:var(--muted)}
+.t-k>span::before{content:attr(data-l);position:absolute;left:.3rem;width:1.6rem;text-align:right;color:var(--c)}
+.t-k>.good,.t-k>.warn{color:var(--fg);box-shadow:inset .22rem 0 var(--c)}
+.t-k>.del{opacity:.6;color:var(--bad);background:none;border:dashed var(--bad);border-width:.06rem 0;box-shadow:none}
+.t-k>.del::before{content:'−'}
+.t-k>.now{background:color-mix(in srgb,var(--fg) 12%,var(--paper));font-weight:700}
+.t-w{font-size:1rem;line-height:1.4;margin:0 0 .5rem;min-height:4.2em}
+.t-strip{display:flex;flex-wrap:wrap;align-items:center;row-gap:.3rem}
+.t-at{text-align:center;min-width:2.8rem;padding:.15rem .3rem;font-size:.75rem;color:var(--c,var(--fg))}
+.t-at.cur{box-shadow:0 0 0 .2rem color-mix(in srgb,var(--fg) 35%,transparent)}
+.t-gap{flex-basis:0;min-width:2.8rem;height:.12rem;background:var(--line);position:relative}
+.t-gap span{position:absolute;left:50%;bottom:.25rem;translate:-50%;font-size:.62rem;color:var(--muted);white-space:nowrap}
+.t-strip b+span{margin-left:.4rem;font-size:.78rem;font-weight:700;color:var(--bad)}
+.t-old{opacity:.65}.t-old b{border-style:dashed}
+@media (max-width:640px){.t-stage{grid-template-columns:1fr 1fr;gap:.5rem 1rem}.t-core{grid-column:1/-1;order:-1}.t-main{grid-template-columns:1fr}}
+</style>
+<div class="controls"><fieldset><legend>step through the PR's test run</legend><div class="row"><button type="button" id="t-back">◀</button><button type="button" id="t-fwd">▶|</button><input type="range" id="t-s" min="0"></div></fieldset></div>
+<div class="t-stage">
+<div class="t-col"><span class="label">your code, in options</span>
+<div class="t-a" data-a="run">input(attemptNumber)<small>throws Error('skip'), then Error('fail')</small></div>
+<div class="t-a" data-a="ofa">onFailedAttempt(context)<small>on each failure</small></div>
+<div class="t-a good" data-a="scr">shouldConsumeRetry(context)<small><b class="good">new in #96</b> · error.message !== 'skip'</small></div>
+<div class="t-a" data-a="sr">shouldRetry(context)<small>default () =&gt; true</small></div></div>
+<div class="t-a t-core" data-a="core">pRetry(input, {retries: 3, minTimeout: 100, factor: 2})<small id="t-m"></small><div class="t-c" id="t-c"></div></div>
+<div class="t-col">
+<div class="t-a" data-a="timer">setTimeout(finalDelay)<small>the backoff wait</small></div>
+<div class="t-a" data-a="caller">await pRetry(…)<small id="t-r"></small></div></div>
+<svg class="t-g" id="t-g"><marker id="t-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path id="t-hp" d="M0,0L10,5L0,10z"/></marker><path id="t-p" marker-end="url(#t-h)"/></svg>
+<span class="t-say" id="t-say"></span>
+</div>
+<div class="t-main">
+<div class="file t-k" data-title="index.js after #96 · bars: added, changed · struck: removed" id="t-k" style="max-width:none">
+<span class="del">while (attemptNumber &lt; options.retries + 1) {</span>
+<span class="warn" data-l="189">while (retriesConsumed &lt;= options.retries) {</span>
+<span data-l="195">  const result = await input(++attemptNumber);</span>
+<span class="warn" data-l="201">  if (await onAttemptFailure({…, retriesConsumed}))</span>
+<span class="good" data-l="208">    retriesConsumed++;</span>
+<span class="del">const retriesLeft = options.retries - (attemptNumber - 1);</span>
+<span class="warn" data-l="80">const retriesLeft = Math.max(0, options.retries - retriesConsumed);</span>
+<span data-l="92">await options.onFailedAttempt(context);</span>
+<span class="good" data-l="98">const consumeRetry = await options.shouldConsumeRetry(context);</span>
+<span class="warn" data-l="102">if (remainingTime &lt;= 0 || retriesLeft &lt;= 0) throw error;</span>
+<span data-l="115">if (!await options.shouldRetry(context)) throw error;</span>
+<span class="good" data-l="119">if (!consumeRetry) return false;</span>
+<span class="warn" data-l="124">const delayTime = calculateDelay(retriesConsumed, options);</span>
+<span data-l="128">await new Promise(… setTimeout(resolve, finalDelay) …); return true;</span>
+</div>
+<div class="t-runs">
+<p class="t-w" id="t-w"></p>
+<span class="label">the run after #96</span><div class="t-strip" id="t-A"></div>
+<span class="label">the run before #96</span><div class="t-strip t-old" id="t-B"></div>
+</div>
+</div>
+<script>
+// The model: p-retry's loop and onAttemptFailure at the head of #96 (index.js @ 7a8a83e), on
+// virtual time, for the run in the PR's test. Each emit() is one step: the line, who calls whom.
+const o = { retries: 3, minTimeout: 100, factor: 2, maxTimeout: Infinity }
+const input = n => ({ message: n === 1 ? 'skip' : 'fail' })
+const shouldConsumeRetry = ({ error }) => error.message !== 'skip'
+const calculateDelay = (retriesConsumed, o) => Math.min(Math.round(o.minTimeout * o.factor ** (Math.max(1, retriesConsumed + 1) - 1)), o.maxTimeout)
+const steps = [], runs = []
+const S = { attemptNumber: 0, retriesConsumed: 0, retriesLeft: '—', consumeRetry: '—' }
+function emit(line, from, to, say, why, set = {}, hero = false) {
+  Object.assign(S, set)
+  steps.push({ line, from, to, say, why, hero, set, S: { ...S }, run: runs.length - 1 })
+}
+function onAttemptFailure({ error, attemptNumber, retriesConsumed }, run) {
+  const retriesLeft = Math.max(0, o.retries - retriesConsumed)
+  const context = { error, attemptNumber, retriesLeft, retriesConsumed }
+  emit(92, 'core', 'ofa', 'context', `retriesLeft = retries − retriesConsumed = ${o.retries} − ${retriesConsumed} = ${retriesLeft}.`, { retriesLeft })
+  const consumeRetry = shouldConsumeRetry(context)
+  emit(98, 'core', 'scr', `→ ${consumeRetry}`, consumeRetry ? `'fail' counts: this failure uses a retry.` : `'skip' does not count: shouldConsumeRetry says false, so no retry is used.`, { consumeRetry }, true)
+  if (retriesLeft <= 0) throw emit(102, 'core', 'caller', `✕ Error('fail')`, 'retriesLeft is 0: no budget left, so pRetry rejects.')
+  emit(115, 'core', 'sr', '→ true', 'Then shouldRetry, which says yes.')
+  if (!consumeRetry) {
+    run.wait = 0
+    emit(119, 'core', 'core', '↻ return false', 'No wait and no retry used: attempt 2 starts at once, and the backoff stays put.', {}, true)
+    return false
+  }
+  const finalDelay = (run.wait = calculateDelay(retriesConsumed, o))
+  emit('124 128', 'core', 'timer', `${finalDelay} ms`, `The wait follows retriesConsumed, not attemptNumber: ${o.minTimeout} × ${o.factor}^${retriesConsumed} = ${finalDelay} ms.`)
+  return true
+}
+emit(189, 'caller', 'core', 'pRetry()', 'Start: attemptNumber 0, retriesConsumed 0.')
+try {
+  while (S.retriesConsumed <= o.retries) {
+    const attemptNumber = S.attemptNumber + 1, run = { n: attemptNumber }
+    runs.push(run)
+    emit(195, 'core', 'run', `input(${attemptNumber})`, `Attempt ${attemptNumber}.`, { attemptNumber, consumeRetry: '—' })
+    const error = (run.error = input(attemptNumber))
+    emit(201, 'run', 'core', `✕ '${error.message}'`, `It throws Error('${error.message}').`)
+    if (onAttemptFailure({ error, attemptNumber, retriesConsumed: S.retriesConsumed }, run))
+      emit(208, 'core', 'core', '↻ retriesConsumed++', `One retry used.`, { retriesConsumed: S.retriesConsumed + 1 }, true)
+  }
+} catch { runs.at(-1).end = 1 }
+// Before #96 (the struck lines): every failure uses a retry; the wait follows attemptNumber.
+const before = []
+for (let n = 1; n <= o.retries + 1; n++) before.push({ n, error: input(n), wait: o.minTimeout * o.factor ** (n - 1), end: n > o.retries })
+
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s)
+const CARDS = { attemptNumber: '', retriesConsumed: 'good', retriesLeft: 'warn', consumeRetry: 'good' }
+let i
+const strip = (el, runs, cur) => el.innerHTML = runs.map((r, k) => {
+  const free = !r.wait && !r.end
+  return `<b class="t-at${free ? ' good' : ''}${k === cur ? ' cur' : ''}">#${r.n}<br>${r.error.message}${free ? ' · free' : ''}</b>` +
+    (r.end ? `<span>✕ Error('fail')</span>` : `<i class="t-gap" style="flex-grow:${r.wait}"><span>${r.wait} ms</span></i>`)
+}).join('')
+function draw(anim = 1) {
+  const s = steps[i], self = s.from === s.to, B = $('.t-stage').getBoundingClientRect(), p = $('#t-p'), say = $('#t-say')
+  $('#t-s').value = i
+  $('#t-w').textContent = s.why
+  $('#t-r').textContent = i === steps.length - 1 ? `rejects Error('fail')` : 'pending'
+  $('#t-m').textContent = self ? s.say : ''
+  $('#t-m').className = self ? 'good' : ''
+  $('#t-c').innerHTML = Object.entries(CARDS).map(([k, tone]) => `<span class="t-card ${tone}${k in s.set ? ' hot' : ''}">${k}<b>${s.S[k]}</b></span>`).join('')
+  $$('#t-k>span').forEach(l => l.classList.toggle('now', String(s.line).split(' ').includes(l.dataset.l)))
+  $$('.t-a').forEach(a => a.classList.toggle('on', a.dataset.a === s.from || a.dataset.a === s.to))
+  strip($('#t-A'), runs, s.run)
+  // The message: an arrow from caller to callee, drawn from its start, and its label.
+  const box = n => { const r = $(`[data-a="${n}"]`).getBoundingClientRect(); return [r.left - B.left, r.top - B.top, r.width, r.height] }
+  const [ax, ay, aw, ah] = box(s.from), [bx, by, bw, bh] = box(s.to), right = bx > ax + aw / 2
+  const v = by > ay + ah ? 1 : ay > by + bh ? -1 : 0 // callee below, above, beside
+  const tone = s.hero ? 'good' : s.say[0] === '✕' ? 'bad' : ''
+  $('#t-g').setAttribute('class', `t-g ${tone}`)
+  say.className = `t-say ${tone}`
+  say.textContent = self ? '' : s.say
+  if (self) return p.setAttribute('d', '')
+  const [x1, y1] = v ? [ax + aw / 2, v > 0 ? ay + ah : ay] : [right ? ax + aw : ax, ay + ah / 2]
+  const [x2, y2] = v ? [bx + bw / 2, v > 0 ? by : by + bh] : [right ? bx : bx + bw, by + bh / 2]
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+  p.setAttribute('d', `M${x1},${y1} C${v ? `${x1},${my} ${x2},${my}` : `${mx},${y1} ${mx},${y2}`} ${x2},${y2}`)
+  // label over the arrow, or on the lower box's corner
+  const [lx, ly] = v > 0 ? [bx + bw, by] : [ax + aw, ay]
+  say.style.transform = v ? `translate(calc(${lx - 6}px - 100%), calc(${ly}px - 50%))` : `translate(calc(${mx}px - 50%), calc(${my}px - 135%))`
+  const L = (p.style.strokeDasharray = p.getTotalLength())
+  if (anim && !scene.reducedMotion) p.animate({ strokeDashoffset: [L, 0] }, { duration: 500 })
+}
+const go = k => { i = Math.max(0, Math.min(steps.length - 1, k)); draw() }
+$('#t-back').addEventListener('click', () => go(i - 1))
+$('#t-fwd').addEventListener('click', () => go(i + 1))
+$('#t-s').addEventListener('input', e => go(+e.target.value))
+addEventListener('resize', () => draw(0))
+$('#t-s').max = steps.length - 1
+strip($('#t-B'), before, -1)
+go(steps.findIndex(s => s.line === 98 && !s.S.consumeRetry))
+</script>
+</div>

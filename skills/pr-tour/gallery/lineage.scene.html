@@ -1,0 +1,148 @@
+<div class="scene" data-technique="lineage">
+  <div class="ln">
+    <div class="ln-col ln-old">
+      <div class="ln-file bad"><span class="ln-path ln-x">httpx/_content_streams.py</span><span>deleted · 395 lines</span></div>
+      <div class="ln-sym" id="o-pbs" data-k="class" data-n="19"><b>PlainByteStream</b></div>
+      <div class="ln-sub ln-x" id="o-pbs-h"><b>get_headers(): Content-Length</b></div>
+      <div class="ln-sym" id="o-gen" data-k="class" data-n="15"><b>GeneratorStream</b></div>
+      <div class="ln-sym" id="o-agen" data-k="class" data-n="15"><b>Async<wbr>GeneratorStream</b></div>
+      <div class="ln-sym bad ln-x" id="o-json" data-k="class" data-n="18"><b>JSONStream</b></div>
+      <div class="ln-sym bad ln-x" id="o-url" data-k="class" data-n="18"><b>URLEncoded<wbr>Stream</b></div>
+      <div class="ln-sym" id="o-ms" data-k="class" data-n="186"><b>MultipartStream</b></div>
+      <div class="ln-sym ln-in" id="o-df" data-k="class" data-n="40"><b>DataField</b></div>
+      <div class="ln-sym ln-in" id="o-ff" data-k="class" data-n="80"><b>FileField</b></div>
+      <div class="ln-sym warn" id="o-req" data-k="def" data-n="63"><b>encode_request</b></div>
+      <div class="ln-sub" id="o-req-c">content: str, bytes, iterators</div>
+      <div class="ln-sub" id="o-req-df">data + files → MultipartStream</div>
+      <div class="ln-sub" id="o-req-d">data → URLEncodedStream</div>
+      <div class="ln-sub" id="o-req-f">files → MultipartStream</div>
+      <div class="ln-sub" id="o-req-j">json → JSONStream</div>
+      <div class="ln-sym warn" id="o-resp" data-k="def" data-n="21"><b>encode_response</b></div>
+      <div class="ln-sub" id="o-resp-c">content: bytes, iterators</div>
+      <div class="ln-file ln-gap"><span class="ln-path">tests/</span></div>
+      <div class="ln-sym" id="o-test"><b>test_content_<wbr>streams.py</b></div>
+    </div>
+    <div class="ln-col ln-new">
+      <div class="ln-file good"><span class="ln-path">httpx/_content.py</span><span>new · 166 lines</span></div>
+      <div class="ln-sym warn" id="n-pbs" data-k="class" data-n="13"><b>PlainByteStream</b><i>moved · lost get_headers() and str encoding</i></div>
+      <div class="ln-sym" id="n-gen" data-k="class" data-n="16"><b>GeneratorStream</b><i>moved</i></div>
+      <div class="ln-sym" id="n-agen" data-k="class" data-n="16"><b>Async<wbr>GeneratorStream</b><i>moved</i></div>
+      <div class="ln-sym good ln-hero" id="n-enc" data-k="def" data-n="27"><b>encode_content</b><i>new · 3 copies merged into one</i></div>
+      <div class="ln-sym good" id="n-url" data-k="def" data-n="8"><b>encode_<wbr>urlencoded_data</b><i>new · was a class</i></div>
+      <div class="ln-sym good" id="n-mp" data-k="def" data-n="6"><b>encode_<wbr>multipart_data</b><i>new · 2 branches merged</i></div>
+      <div class="ln-sym good" id="n-json" data-k="def" data-n="6"><b>encode_json</b><i>new · was a class</i></div>
+      <div class="ln-sym warn" id="n-req" data-k="def" data-n="31"><b>encode_request</b><i>63 → 31 lines · only picks an encoder</i></div>
+      <div class="ln-sym warn" id="n-resp" data-k="def" data-n="11"><b>encode_response</b><i>21 → 11 lines · takes str too</i></div>
+      <div class="ln-file good ln-gap"><span class="ln-path">httpx/_multipart.py</span><span>new · 200 lines</span></div>
+      <div class="ln-sym" id="n-df" data-k="class" data-n="40"><b>DataField</b><i>extracted from MultipartStream</i></div>
+      <div class="ln-sym" id="n-ff" data-k="class" data-n="80"><b>FileField</b><i>extracted from MultipartStream</i></div>
+      <div class="ln-sym" id="n-ms" data-k="class" data-n="62"><b>MultipartStream</b><i>moved</i></div>
+      <div class="ln-file ln-gap"><span class="ln-path">tests/</span></div>
+      <div class="ln-sym" id="n-test"><b>test_content.py</b><i>renamed · 99% similar</i></div>
+    </div>
+  </div>
+  <div class="ln-key row">
+    <span><i class="ln-sw"></i>moved as is</span>
+    <span class="warn"><i class="ln-sw"></i>changed</span>
+    <span class="good"><i class="ln-sw"></i>new</span>
+    <span class="bad"><i class="ln-sw ln-dash"></i>removed</span>
+    <span class="small">numbers: lines</span>
+  </div>
+  <style>
+    .ln { --mono: ui-monospace, SFMono-Regular, Menlo, monospace; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(2rem, 0.8fr) minmax(0, 1fr); width: 100%; }
+    .ln-old { grid-column: 1; }
+    .ln-new { grid-column: 3; }
+    .ln-col { display: flex; flex-direction: column; gap: 0.28rem; min-width: 0; text-align: left; }
+    .ln svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .ln-file { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 0.5rem; padding-bottom: 0.1rem; font-size: 0.72rem; font-weight: 600; color: var(--c, var(--muted)); }
+    .ln-path { font: 700 0.82rem var(--mono); color: var(--fg); }
+    .ln-gap { margin-top: 0.7rem; }
+    .ln-sym { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.05rem 0.4rem; padding: 0.26rem 0.5rem; border: 0.1rem solid color-mix(in srgb, var(--c, var(--muted)) 55%, var(--paper)); border-radius: 0.4rem; background: color-mix(in srgb, var(--c, var(--muted)) 8%, var(--paper)); font: 0.84rem var(--mono); }
+    .ln-sym.warn, .ln-sym.good { border-color: var(--c); }
+    .ln-sym[data-k]::before { content: attr(data-k); font-size: 0.74rem; color: var(--muted); }
+    .ln-sym::after { content: attr(data-n); order: 1; margin-left: auto; font-size: 0.72rem; color: var(--muted); }
+    .ln-sym i { order: 2; flex-basis: 100%; font: normal 600 0.72rem ui-sans-serif, system-ui, sans-serif; color: var(--c, var(--muted)); }
+    .ln-sym b { font-weight: 650; }
+    .ln-sub { margin-left: 1.2rem; padding: 0.1rem 0.45rem; border-left: 0.14rem solid var(--line); background: color-mix(in srgb, var(--muted) 6%, transparent); font: 0.74rem var(--mono); color: var(--muted); }
+    .ln-sub b { font-weight: 400; }
+    .ln-in { margin-left: 1.2rem; }
+    .ln-x { opacity: 0.8; }
+    .ln-x b, .ln-path.ln-x { text-decoration: line-through 0.09rem var(--bad); }
+    .ln-sym.ln-x { border-style: dashed; border-color: var(--bad); }
+    .ln-sub.ln-x { border-left: 0.14rem dashed var(--bad); }
+    .ln-hero { border-width: 0.18rem; box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--good) 18%, transparent), 0 0 1.1rem color-mix(in srgb, var(--good) 40%, transparent); animation: ln-glow 2.2s ease-in-out infinite; }
+    .ln-key { gap: 0.4rem 1rem; font-size: 0.8rem; color: var(--muted); }
+    .ln-key > span { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .ln-sw { width: 1.4rem; height: 0.18rem; background: var(--c, var(--muted)); }
+    .ln-sw.ln-dash { background: none; border-top: 0.16rem dashed var(--c); }
+    .ln-e { fill: none; stroke-width: 1.4; stroke: var(--e); }
+    .m { --e: color-mix(in srgb, var(--muted) 70%, transparent); }
+    .c { --e: var(--warn); }
+    .n, .h { --e: var(--good); }
+    .ln-e.h { stroke-width: 3; filter: drop-shadow(0 0 3px var(--good)); }
+    marker path { fill: var(--e); }
+    circle.ln-e { fill: var(--paper); }
+    @keyframes ln-glow { 50% { box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--good) 10%, transparent), 0 0 1.6rem color-mix(in srgb, var(--good) 55%, transparent); } }
+    @media (max-width: 640px) {
+      .ln { grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr); }
+      .ln-sym { font-size: 0.72rem; padding: 0.22rem 0.4rem; }
+      .ln-sym[data-k]::before { display: none; }
+      .ln-sub, .ln-in { margin-left: 0.6rem; }
+    }
+  </style>
+  <script>
+    // Where each piece of _content_streams.py went in the PR. kind: m moved as is (or pulled out of
+    // a class), c changed, n into a new function, h one of the three copies encode_content merges.
+    const EDGES = [
+      ['o-pbs', 'n-pbs', 'c'], ['o-pbs-h', 'n-enc', 'h'], ['o-gen', 'n-gen', 'm'], ['o-agen', 'n-agen', 'm'],
+      ['o-json', 'n-json', 'n'], ['o-url', 'n-url', 'n'], ['o-ms', 'n-ms', 'm'], ['o-df', 'n-df', 'm'],
+      ['o-ff', 'n-ff', 'm'], ['o-req', 'n-req', 'c'], ['o-req-c', 'n-enc', 'h'], ['o-req-df', 'n-mp', 'n'],
+      ['o-req-d', 'n-url', 'n'], ['o-req-f', 'n-mp', 'n'], ['o-req-j', 'n-json', 'n'], ['o-resp', 'n-resp', 'c'],
+      ['o-resp-c', 'n-enc', 'h'], ['o-test', 'n-test', 'm'],
+    ]
+    const ln = document.querySelector('.ln')
+    const NS = 'http://www.w3.org/2000/svg'
+    const mk = (tag, attrs, parent) => {
+      const el = document.createElementNS(NS, tag)
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)
+      parent.append(el)
+      return el
+    }
+    let drawn = false
+    function draw() {
+      ln.querySelector('svg')?.remove()
+      const svg = mk('svg', {}, ln)
+      const defs = mk('defs', {}, svg)
+      for (const k of 'mcnh') {
+        const size = k === 'h' ? 11 : 7
+        const m = mk('marker', { id: `ah-${k}`, class: k, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: size, markerHeight: size, markerUnits: 'userSpaceOnUse', orient: 'auto' }, defs)
+        mk('path', { d: 'M0,0 L10,5 L0,10 Z' }, m)
+      }
+      const box = ln.getBoundingClientRect()
+      const at = id => document.getElementById(id).getBoundingClientRect()
+      // Plain edges first, so the merges are drawn on top.
+      const order = [...EDGES].sort((a, b) => 'mcnh'.indexOf(a[2]) - 'mcnh'.indexOf(b[2]))
+      order.forEach(([from, to, kind], i) => {
+        const a = at(from)
+        const b = at(to)
+        const x1 = a.right - box.left
+        const y1 = a.top + a.height / 2 - box.top
+        const x2 = b.left - box.left - 2
+        const y2 = b.top + Math.min(b.height / 2, 14) - box.top
+        const dx = (x2 - x1) * 0.55
+        const path = mk('path', { d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`, class: `ln-e ${kind}`, 'marker-end': `url(#ah-${kind})`, pathLength: 1 }, svg)
+        mk('circle', { cx: x1, cy: y1, r: kind === 'h' ? 3.2 : 2.4, class: `ln-e ${kind}` }, svg)
+        if (!drawn && !scene.reducedMotion) {
+          path.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1, opacity: 0 }, { strokeDasharray: '1 1', strokeDashoffset: 0, opacity: 1 }], {
+            duration: 700, delay: 200 + i * 90, easing: 'ease-out', fill: 'backwards',
+          })
+        }
+      })
+      drawn = true
+    }
+    let width = 0
+    new ResizeObserver(() => {
+      if (ln.clientWidth !== width) (width = ln.clientWidth), draw()
+    }).observe(ln)
+  </script>
+</div>

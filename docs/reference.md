@@ -831,6 +831,7 @@ pr-review tour validate <tour-model.json> --tour <dir> [--human]
 pr-review tour preview <tourDir> [--landmark <id>]
 pr-review tour publish <tourDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
 pr-review tour plan (--pr <n> | --branch | --uncommitted)
+pr-review tour gallery [<slug>…] [--out <dir>]
 ```
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
@@ -840,17 +841,25 @@ labels the changed paths touch. The **budget** is how many landmarks, decisions,
 questions the tour may have: three landmarks for every change, about one more per
 `tour.budget.linesPerLandmark` changed lines, one more with a blast radius, never over the
 ceilings; decisions and quiz questions follow. A label that speaks of a schema, a migration, or
-stored data requires a **state landmark**, which the budget never counts.
+stored data requires a **state landmark**, which the budget never counts, and so does a changed
+migration, SQL, or schema file.
 
 The generator writes `<tourDir>/tour-model.json` and one scene per landmark under `<scenesDir>`,
-as `<landmark id>.scene.html`, plus at most one `<landmark id>.micro.html`, the micro-world.
-`tour validate` checks the model against the context: the schema, the landmark order (background,
-world, whys, respect), the budget, the caps measured on visible text, every path and anchor
-against the diff, every guard against the head, every scene against the frame's rules, and the
-categories the project keeps. `tour preview` validates, then screenshots every landmark on a
-desktop and a phone through a quiet copy of the server, using Chrome, Chromium, or Edge from the
-PATH or `PR_REVIEW_BROWSER`; without one it prints a `previewUrl` to open in a browser tool.
+as `<landmark id>.scene.html`, plus at most two `<landmark id>.micro.html`, the micro-worlds; a
+micro-world may stand in for its landmark's scene. Each scene names its technique with
+`data-technique` on its root. `tour validate` checks the model against the context: the schema,
+the landmark order (background, world, whys, respect), the budget, the caps measured on visible
+text, every path and anchor against the diff, every guard against the head, every scene against
+the frame's rules, that no technique draws more than two scenes, and the categories the project
+keeps. `tour preview` validates, then screenshots, through a quiet copy of the server, every
+landmark on a desktop and a phone, every scene and micro-world alone at its desktop width, and
+every decision and question, using Chrome, Chromium, or Edge from the PATH or
+`PR_REVIEW_BROWSER`; without one it prints a `previewUrl` to open in a browser tool.
 `tour publish` validates, stores `tours/<headSha>/tour.json`, and shares.
+
+`tour gallery` lists the scene gallery the skill ships beside its scene guide: real pull requests,
+each drawn with one technique. With slugs, it draws those entries as pictures with the same
+browser, into `--out` (a directory of the system's temp dir by default), and prints their paths.
 
 `tour plan` prints the plan a finished tour settled on, for the
 [pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),

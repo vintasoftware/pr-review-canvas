@@ -62,6 +62,10 @@ export const TOUR_LIMITS = {
   tryItSteps: 8,
   tryItLook: 6,
   notToured: 12,
+  /** Micro-worlds in one tour: each is a model the reader plays with, and each costs a reader's time. */
+  microWorlds: 2,
+  /** Scenes of one tour that may draw the same technique: a third is the same picture dealt again. */
+  sceneTechniqueRepeats: 2,
   /** A tour needs a background, a world, and a respect landmark at the least. */
   minLandmarks: 3,
 } as const
@@ -161,7 +165,7 @@ export function landmarkSchema(caps: TourCaps) {
     state: z.boolean().optional(),
     /** The scene, an HTML fragment for the sandboxed frame; read from `<scenes>/<id>.scene.html` when absent. */
     scene: z.string().max(TOUR_LIMITS.sceneChars).nullable().optional(),
-    /** The micro-world, same form, from `<scenes>/<id>.micro.html`; at most one landmark has one. */
+    /** The micro-world, same form, from `<scenes>/<id>.micro.html`; at most two landmarks have one. */
     micro: z.string().max(TOUR_LIMITS.sceneChars).nullable().optional(),
     code: z.array(codeChunkSchema()).max(TOUR_LIMITS.codePerLandmark).default([]),
     literate: z.array(literateBlockSchema(caps)).max(TOUR_LIMITS.literateBlocks).default([]),
@@ -362,6 +366,7 @@ export const TOUR_VALIDATION_CODES = [
   'SCENE_INVALID',
   'MICRO_INVALID',
   'MICRO_LIMIT',
+  'SCENE_REPEATED',
   'CATEGORY_OFF',
   'STATE_LANDMARK_MISSING',
   'TRY_IT_UNVERIFIED',
@@ -422,6 +427,20 @@ export function computeBudget(
   }
 }
 
-export function stateRequiredFor(blastRadius: readonly string[]): boolean {
-  return blastRadius.some(label => STATE_WORDS.test(label))
+/**
+ * Paths that hold the shape of stored data in most stacks: a migrations directory (Django, Rails,
+ * Alembic, Knex, Prisma), an SQL file, or a schema file. A project with no `highRisk` patterns still
+ * gets its state landmark when the change touches one of these.
+ */
+const STATE_PATHS = [
+  /(^|\/)(migrations?|alembic|db\/migrate)\//i,
+  /\.sql$/i,
+  /(^|\/)schema\.(prisma|rb|graphql|sql)$/i,
+]
+
+/** The change touches stored data: a state-labelled blast radius, or a migration or schema file. */
+export function stateRequiredFor(blastRadius: readonly string[], paths: readonly string[] = []): boolean {
+  return (
+    blastRadius.some(label => STATE_WORDS.test(label)) || paths.some(p => STATE_PATHS.some(re => re.test(p)))
+  )
 }

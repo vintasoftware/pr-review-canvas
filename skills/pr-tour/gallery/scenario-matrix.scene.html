@@ -1,0 +1,99 @@
+<div class="scene" data-technique="scenario-matrix">
+  <div class="sx-key">
+    <span class="sx-k muted"><b>2</b> unchanged</span>
+    <span class="sx-k warn"><b>4</b> still 500, but <code>res.status()</code> throws now, with a new message</span>
+    <span class="sx-k good"><b>2</b> sent before, 500 now</span>
+  </div>
+
+  <div class="sx-m">
+    <div class="sx-h">input <span>from the PR's tests</span></div><div class="sx-h">before <span>5.0 branch, ee40a88</span></div><div class="sx-h sx-gap"></div><div class="sx-h">after <span>this PR, 794f2de</span></div>
+
+    <div class="sx-band muted"><b>integers 100 to 999</b><span>pass both checks</span></div>
+    <code class="sx-in">res.status(201)</code>
+    <div class="sx-c muted"><b>201</b><span>sent</span></div><span class="sx-eq">=</span><div class="sx-c muted"><b>201</b><span>sent</span></div>
+    <code class="sx-in">res.status(700)</code>
+    <div class="sx-c muted"><b>700</b><span>sent</span></div><span class="sx-eq">=</span><div class="sx-c muted"><b>700</b><span>sent</span></div>
+
+    <div class="sx-band warn"><b>integers outside 100 to 999</b><span><code>code &lt; 100 || code &gt; 999</code> → <code>RangeError</code></span></div>
+    <code class="sx-in">res.status(99)</code>
+    <div class="sx-c muted"><b>500</b><span>Node throws at <code>.end()</code>: Invalid status code: 99</span></div><span class="sx-eq warn">→</span>
+    <div class="sx-c warn"><b>500</b><span><code>res.status()</code> throws: RangeError: Invalid status code: 99. Status code must be greater than 99 and less than 1000.</span></div>
+    <code class="sx-in">res.status(1000)</code>
+    <div class="sx-c muted"><b>500</b><span>Node throws at <code>.end()</code>: Invalid status code: 1000</span></div><span class="sx-eq warn">→</span>
+    <div class="sx-c warn"><b>500</b><span><code>res.status()</code> throws: RangeError: Invalid status code: 1000. …</span></div>
+
+    <div class="sx-band good"><b>not integers</b><span><code>!Number.isInteger(code)</code> → <code>TypeError</code>, checked first</span></div>
+    <code class="sx-in sx-hero-in">res.status("410")</code>
+    <div class="sx-c bad sx-gone"><b>410</b><span>sent, with a deprecation: res.status("410"): use res.status(410) instead</span></div><span class="sx-eq good">→</span>
+    <div class="sx-c good sx-hero"><b>500</b><span>TypeError: Invalid status code: "410". Status code must be an integer.</span></div>
+    <code class="sx-in">res.status(410.1)</code>
+    <div class="sx-c bad sx-gone"><b>410</b><span>sent, with a deprecation: res.status(410.1): use res.status(410) instead</span></div><span class="sx-eq good">→</span>
+    <div class="sx-c good"><b>500</b><span>TypeError: Invalid status code: 410.1. Status code must be an integer.</span></div>
+    <code class="sx-in">res.status(undefined)</code>
+    <div class="sx-c muted"><b>500</b><span>Node throws at <code>.end()</code>: Invalid status code: undefined</span></div><span class="sx-eq warn">→</span>
+    <div class="sx-c warn"><b>500</b><span><code>res.status()</code> throws: TypeError: Invalid status code: undefined. …</span></div>
+    <code class="sx-in">res.status(null)</code>
+    <div class="sx-c muted"><b>500</b><span>Node throws at <code>.end()</code>: Invalid status code: null</span></div><span class="sx-eq warn">→</span>
+    <div class="sx-c warn"><b>500</b><span><code>res.status()</code> throws: TypeError: Invalid status code: null. …</span></div>
+  </div>
+  <p class="small sx-note"><code>res.sendStatus()</code>, <code>res.redirect()</code>, and a fresh request's 304 now go through <code>res.status()</code> too: <code>res.sendStatus(undefined)</code> → 500, TypeError.</p>
+
+  <style>
+    .scene code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; }
+    .sx-key { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; justify-content: center; font-size: 0.82rem; }
+    .sx-k { display: flex; align-items: center; gap: 0.4rem; color: var(--fg); }
+    .sx-k::before { content: ''; width: 0.9rem; height: 0.9rem; border-radius: 0.25rem; border: 0.14rem solid var(--c); background: var(--tint); }
+    .sx-k b { color: var(--c); font-size: 1rem; }
+    .sx-m {
+      width: 100%; display: grid; align-items: stretch; gap: 0.35rem 0.5rem;
+      grid-template-columns: minmax(9rem, 0.6fr) minmax(0, 1fr) 1.6rem minmax(0, 1fr);
+    }
+    .sx-h span { margin-left: 0.3rem; text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-h { font-size: 0.68rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0 0.2rem 0.2rem; border-bottom: 0.1rem solid var(--line); }
+    .sx-band {
+      grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem;
+      margin-top: 0.6rem; padding: 0.2rem 0.5rem; border-left: 0.3rem solid var(--c); background: var(--tint); border-radius: 0 0.35rem 0.35rem 0;
+    }
+    .sx-band b { font-size: 0.86rem; }
+    .sx-band span { font-size: 0.76rem; color: var(--muted); }
+    .sx-in { align-self: center; justify-self: start; padding: 0.15rem 0.45rem; border-radius: 0.3rem; background: color-mix(in srgb, var(--fg) 7%, var(--paper)); }
+    .sx-hero-in { box-shadow: 0 0 0 0.14rem var(--good); }
+    .sx-c {
+      display: grid; grid-template-columns: 2.9rem minmax(0, 1fr); align-items: center; gap: 0.5rem; min-height: 2.3rem;
+      padding: 0.3rem 0.55rem; border: 0.12rem solid color-mix(in srgb, var(--c) 55%, var(--paper)); border-radius: 0.45rem;
+      background: color-mix(in srgb, var(--c) 7%, var(--paper));
+    }
+    .sx-c.muted { border-color: var(--line); background: var(--paper); }
+    .sx-c b { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--c); }
+    .sx-c.muted b { color: var(--fg); }
+    .sx-c span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; line-height: 1.35; color: var(--fg); overflow-wrap: anywhere; }
+    .sx-c span code { font-size: inherit; font-weight: 700; }
+    .sx-c.muted span { color: var(--muted); }
+    .sx-gone { border-style: dashed; }
+    .sx-gone b, .sx-gone span { text-decoration: line-through; text-decoration-color: var(--bad); opacity: 0.75; }
+    .sx-hero { border-width: 0.18rem; border-color: var(--good); box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--good) 20%, transparent); }
+    .sx-eq { align-self: center; justify-self: center; font-weight: 800; font-size: 1rem; color: var(--c, var(--line)); }
+    .sx-note { max-width: 46rem; text-align: center; margin: 0.2rem 0 0; }
+    .sx-note code { font-size: 0.72rem; }
+    @media (max-width: 640px) {
+      .sx-m { grid-template-columns: minmax(0, 1fr) 1rem minmax(0, 1fr); }
+      .sx-h:first-child, .sx-gap { display: none; }
+      .sx-h:nth-child(2) { grid-column: 1; } .sx-h:nth-child(4) { grid-column: 3; }
+      .sx-in { grid-column: 1 / -1; margin-top: 0.25rem; }
+      .sx-c { grid-template-columns: 1fr; gap: 0.15rem; }
+      .sx-c b { font-size: 1.1rem; }
+    }
+  </style>
+  <script>
+    // Like a test run: each row's after-cell lands once its before-cell is on screen.
+    if (!scene.reducedMotion) {
+      document.querySelectorAll('.sx-m .sx-in').forEach((input, i) => {
+        const before = input.nextElementSibling, sign = before.nextElementSibling, after = sign.nextElementSibling
+        const at = 300 + i * 260
+        before.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250, delay: at, fill: 'backwards' })
+        sign.animate([{ opacity: 0, transform: 'translateX(-0.4rem)' }, { opacity: 1, transform: 'none' }], { duration: 250, delay: at + 120, fill: 'backwards' })
+        after.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: at + 200, fill: 'backwards', easing: 'cubic-bezier(0.2, 1.3, 0.4, 1)' })
+      })
+    }
+  </script>
+</div>

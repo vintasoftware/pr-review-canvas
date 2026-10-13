@@ -2,7 +2,7 @@
 // the prose; this module fills the `{{TOKENS}}` with data so a wording change never touches code.
 import { z } from 'zod'
 import type { TourContext } from '../contract/tour.js'
-import { DECISION_CATEGORIES, tourModelSchema } from '../contract/tour.js'
+import { DECISION_CATEGORIES, TOUR_LIMITS, tourModelSchema } from '../contract/tour.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
 
@@ -97,7 +97,7 @@ function pathsMarkdown(ctx: TourContext): string {
     `- \`<base>\` = \`${ctx.paths.base}\` — the same files at the merge base`,
     `- \`<patches>\` = \`${ctx.paths.patches}\` — one labeled patch per file, \`<key>.diff\``,
     `- \`<model>\` = \`${ctx.paths.model}\` — the one JSON file you write`,
-    `- \`<scenes>\` = \`${ctx.scenesDir}\` — one \`<landmark id>.scene.html\` per landmark, and at most one \`<landmark id>.micro.html\``,
+    `- \`<scenes>\` = \`${ctx.scenesDir}\` — one \`<landmark id>.scene.html\` per landmark, and at most ${TOUR_LIMITS.microWorlds} \`<landmark id>.micro.html\``,
   ].join('\n')
 }
 
@@ -139,7 +139,7 @@ export function renderTourPrompt(
         : ctx.tests.patterns.map(p => `\`${p}\``).join(', '),
     SCENE_GUIDE: extras.sceneGuidePath,
     MICRO_WORLD: ctx.options.microWorld
-      ? 'One landmark may carry a micro-world, when the change has behavior worth playing with: a faithful model of the changed behavior with a few controls in front of it. Write it as `<scenes>/<landmark id>.micro.html`.'
+      ? `Up to ${TOUR_LIMITS.microWorlds} landmarks may carry a micro-world, when the change has behavior worth playing with: a faithful model of the changed behavior the reader drives. Write it as \`<scenes>/<landmark id>.micro.html\`. A micro-world may stand in for its landmark's scene: then write no \`.scene.html\` for that landmark.`
       : 'Micro-worlds are off for this project (`tour.microWorld`): write no `.micro.html` file.',
     TRY_IT: ctx.options.tryIt
       ? 'A product decision carries a `tryIt` recipe: the commands to run the change (from the guide), which synthetic data to use, and what to look at. Before publishing, run the recipe yourself and set `verified: true` only when you saw what `look` describes; a recipe you could not run is left out.'

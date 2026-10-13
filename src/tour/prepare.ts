@@ -146,7 +146,10 @@ export async function prepareTour(
     categories: config.tour.categories,
     tests: { patterns: config.tests.patterns },
     guide: { path: guideText === null ? null : guidePath, text: guideText },
-    stateRequired: stateRequiredFor(blastRadius),
+    stateRequired: stateRequiredFor(
+      blastRadius,
+      derived.files.map(f => f.path)
+    ),
     options: { microWorld: config.tour.microWorld === 'on', tryIt, finalQuiz: config.tour.finalQuiz },
     maxRepairRounds: config.generation.maxRepairRounds,
     preparedAt: ctx.now().toISOString(),

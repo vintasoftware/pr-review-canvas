@@ -15,6 +15,7 @@ pr-tour {
   --tour-accent-fg: light-dark(#fff, #212830);
   --tour-display: 'Space Grotesk', var(--sans);
   --stage-w: 760px;
+  --figure-w: 1120px;
   --here-c: var(--here, var(--purple));
   --here-bg-c: var(--here-bg, var(--annot-bg));
   --btn-primary-c: var(--btn-primary, var(--ok));
@@ -182,14 +183,34 @@ pr-tour {
   text-transform: uppercase;
   color: var(--fg-muted);
 }
+/* A landmark's pictures sit under its lead, wider than the prose: up to --figure-w, centred on the
+   stage, and never wider than the window less its gutters. */
+.tour-figure {
+  --figure-w-c: min(var(--figure-w), calc(100vw - 40px));
+  width: var(--figure-w-c);
+  margin: 20px 0 24px calc((100% - var(--figure-w-c)) / 2);
+  display: grid;
+  gap: 18px;
+}
 .tour-scene {
-  border-color: color-mix(in srgb, var(--tour-accent) 35%, var(--line));
   overflow: hidden;
 }
 .tour-micro {
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-left: 4px solid var(--tour-accent);
+  border-radius: var(--r-card);
+  padding: 12px 16px 16px;
 }
-.tour-micro .tour-card-h {
+.tour-micro-h {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--tour-accent);
 }
 /* The frame is as wide as the card and as tall as the scene says; until it says, a short strip. */

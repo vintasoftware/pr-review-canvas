@@ -221,8 +221,15 @@ export function landmarkHtml(bundle, steps, landmark) {
   const hasLiterate = landmark.literate.length > 0
   const codeView = hasLiterate ? (reader.codeView[landmark.id] ?? 'literate') : 'raw'
   const note = reader.notes[landmark.id] ?? ''
+  // The pictures come first and wide: the reader takes the landmark in from them, then the prose.
   const frame = (/** @type {'scene' | 'micro'} */ kind) =>
-    `<div class="tour-card tour-${kind}"><div class="tour-card-h"><span>${kind === 'scene' ? 'scene' : 'micro-world'}</span>${kind === 'micro' ? '<span>interactive</span>' : ''}</div><div class="tour-frame-host" data-landmark="${esc(landmark.id)}" data-kind="${kind}"></div></div>`
+    kind === 'scene'
+      ? `<div class="tour-scene"><div class="tour-frame-host" data-landmark="${esc(landmark.id)}" data-kind="scene"></div></div>`
+      : `<div class="tour-micro"><div class="tour-micro-h"><span>micro-world</span><span>try it: change the inputs</span></div><div class="tour-frame-host" data-landmark="${esc(landmark.id)}" data-kind="micro"></div></div>`
+  const figure =
+    landmark.scene || landmark.micro
+      ? `<figure class="tour-figure">${landmark.scene ? frame('scene') : ''}${landmark.micro ? frame('micro') : ''}</figure>`
+      : ''
   const guards =
     landmark.guards.length === 0
       ? ''
@@ -261,9 +268,8 @@ export function landmarkHtml(bundle, steps, landmark) {
     <p class="tour-eyebrow"><span class="tour-stage-tag">${esc(STAGE_LABEL[landmark.stage])}</span><span>landmark ${n} of ${tour.landmarks.length}</span>${landmark.state ? '<span class="tour-state-tag">state landmark</span>' : ''}</p>
     <h2 class="tour-title">${esc(landmark.title)}</h2>
     <p class="tour-lead">${inline(landmark.lead)}</p>
+    ${figure}
     <div class="tour-body">${landmark.body.map(p => `<p>${inline(p)}</p>`).join('')}</div>
-    ${landmark.scene ? frame('scene') : ''}
-    ${landmark.micro ? frame('micro') : ''}
     ${guards}
     ${chips}
     <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>

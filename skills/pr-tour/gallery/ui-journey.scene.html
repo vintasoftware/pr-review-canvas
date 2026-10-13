@@ -1,0 +1,159 @@
+<div class="scene" data-technique="ui-journey">
+<style>
+.uj{position:relative;width:100%;display:grid;grid-template-columns:minmax(0,21rem) minmax(0,19rem) minmax(0,16rem);grid-template-areas:"s1 bef bef" "s1 dlg yes" "s1 dlg no" "note same same";justify-content:space-between;align-items:center;gap:1.4rem 5rem}
+.uj-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.uj-svg path{fill:none;stroke:var(--c);stroke-width:1.8;stroke-linecap:round}
+.uj-svg .hero{stroke-width:3.4}
+.uj-svg .glow{stroke-width:10;opacity:.16}
+.uj-svg .dash{stroke-dasharray:6 6}
+.uj-svg .tip{fill:var(--c);stroke:none}
+.uj .window{max-width:none;width:100%}
+.uj-s1{grid-area:s1}
+.uj-tabs{display:flex;gap:.9rem;font-size:.78rem;color:var(--muted);border-bottom:.1rem solid var(--line);padding-bottom:.3rem}
+.uj-tabs b{color:var(--fg);box-shadow:0 .38rem 0 -.2rem var(--ink)}
+.uj-perm{display:grid;grid-template-columns:1fr repeat(3,3.6rem) 1.4rem;align-items:center;font-size:.78rem;row-gap:.25rem}
+.uj-perm>span{padding:.2rem 0}
+.uj-perm .h{font-size:.66rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);border-bottom:.07rem solid var(--line)}
+.uj-perm .c{text-align:center}
+.uj-ck{display:inline-grid;place-items:center;width:1rem;height:1rem;border:.1rem solid var(--line);border-radius:.2rem;font-size:.7rem;font-weight:900;line-height:1}
+.uj-ck.on{background:var(--fg);border-color:var(--fg);color:var(--paper)}
+.uj-steps{display:flex;flex-wrap:wrap;gap:.35rem .8rem;font-size:.78rem;color:var(--muted)}
+.uj-steps b{display:inline-grid;place-items:center;width:1.1rem;height:1.1rem;margin-right:.25rem;border-radius:50%;background:var(--fg);color:var(--paper);font-size:.65rem}
+.uj-bef{grid-area:bef;display:flex;align-items:center;gap:.8rem;padding:.6rem .8rem;border:.12rem dashed var(--bad);border-radius:.6rem;background:color-mix(in srgb,var(--bad) 7%,var(--paper));opacity:.85;font-size:.85rem;text-align:left}
+.uj-bef s{text-decoration-color:var(--bad)}
+.uj-dlg{grid-area:dlg}
+.uj-dlg .window{box-shadow:0 0 0 .4rem color-mix(in srgb,var(--good) 18%,transparent),0 .3rem 1rem color-mix(in srgb,var(--fg) 12%,transparent);border-color:var(--good)}
+.uj-dim{position:relative;padding:1.1rem .7rem;margin:0 -.7rem -.7rem;background:color-mix(in srgb,var(--fg) 22%,var(--paper))}
+.uj-modal{display:flex;flex-direction:column;gap:.7rem;padding:.8rem .9rem;border-radius:.5rem;background:var(--paper);box-shadow:0 .4rem 1.2rem color-mix(in srgb,var(--fg) 30%,transparent);font-size:.85rem}
+.uj-yes{grid-area:yes}.uj-no{grid-area:no}
+.uj-out{border-color:var(--good)}
+.uj-same{grid-area:same;font-size:.8rem;text-align:left}
+.uj-note{grid-area:note;align-self:start;padding-left:.6rem;border-left:.2rem solid var(--warn);text-align:left}
+.uj-rule{font-size:.78rem;text-align:left;color:var(--muted)}
+.uj-rule code{font:.74rem ui-monospace,monospace;color:var(--fg)}
+@media (max-width:640px){
+.uj{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"s1 s1" "bef bef" "dlg dlg" "yes no" "same same" "note note";gap:2.2rem 1rem;padding-left:1.4rem}
+.uj-perm{grid-template-columns:1fr repeat(3,2.9rem) 1.2rem}
+}
+</style>
+<div class="row spread"><span class="small">a moderator, with <code class="code">SiteSetting.moderators_manage_categories = true</code></span><span class="small">steps and groups from spec/system/category_moderator_self_lockout_spec.rb</span></div>
+<div class="uj">
+<svg class="uj-svg" aria-hidden="true"></svg>
+<div class="uj-s1 col" style="align-items:stretch">
+<div class="uj-steps"><span><b>1</b>remove everyone</span><span><b>2</b>add my_group_1</span><span><b>3</b>Save category</span></div>
+<div class="window" data-title="Edit category · Security" id="s1w">
+<div class="uj-tabs"><span>General</span><b>Security</b><span>Settings</span><span>Images</span></div>
+<div class="uj-perm">
+<span class="h">Group</span><span class="h c">See</span><span class="h c">Reply</span><span class="h c">Create</span><span class="h"></span>
+<span class="link">my_group_1</span><span class="c"><i class="uj-ck on">✓</i></span><span class="c"><i class="uj-ck"></i></span><span class="c"><i class="uj-ck"></i></span><i data-icon="trash-2" class="muted"></i>
+</div>
+<span class="field muted">Add a group ▾</span>
+<div class="row" style="justify-content:flex-start"><span class="btn solid" id="save">Save category</span><i data-icon="mouse-pointer-2" class="bob"></i></div>
+</div>
+</div>
+<span class="uj-note small">Also changed: adding a group now looks its <code class="code">group_id</code> up in <code class="code">site.groups</code>. For my_group_1 it was undefined, so the check could not see it.</span>
+
+<div class="uj-bef" id="bef">
+<i data-icon="lock" class="lg bad"></i>
+<span><b class="bad">Before: saved at once.</b> None of their groups can see the category now, so an admin has to give the access back.</span>
+</div>
+
+<div class="uj-dlg col" style="align-items:stretch">
+<span class="uj-rule"><b class="good">After: Save asks first</b> when <code>_wouldLoseAccess()</code>: not an admin, and no row grants <code>everyone</code> or a group they are in</span>
+<div class="window" data-title="Edit category · Security" id="dlg">
+<div class="uj-dim">
+<div class="uj-modal">
+<span>You are about to change category permissions in a way that will remove your own access. Are you sure you want to proceed?</span>
+<div class="row" style="justify-content:flex-start"><span class="btn solid" id="yes">Yes</span><span class="btn" id="no">No</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="uj-yes col" style="align-items:stretch">
+<div class="window uj-out" data-title="/" id="home">
+<span class="skel" style="--w:80%"></span><span class="skel" style="--w:60%"></span><span class="skel" style="--w:70%"></span>
+</div>
+<span class="small good"><b>Yes:</b> saved, then <code class="code">DiscourseURL.routeTo("/")</code></span>
+</div>
+
+<div class="uj-no col" style="align-items:stretch">
+<div class="window uj-out" data-title="Edit category · Security" id="edit">
+<div class="uj-perm"><span>everyone</span><span class="c"><i class="uj-ck on">✓</i></span><span class="c"><i class="uj-ck on">✓</i></span><span class="c"><i class="uj-ck on">✓</i></span><span></span></div>
+</div>
+<span class="small good"><b>No:</b> nothing saved; everyone is still listed on the next visit</span>
+</div>
+
+<div class="uj-same small" id="same">in my_group_1, or an admin: saves at once, as before, no dialog</div>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg'
+const root = document.querySelector('.uj')
+const svg = root.querySelector('.uj-svg')
+// [from, to, tone, style, on a phone: 'v' straight down, 'c' around the left edge, or '-' none,
+//  the screen whose edge the link leaves from]
+const LINKS = [
+  ['#save', '#bef', 'bad', 'dash', 'v', '#s1w'],
+  ['#save', '#dlg', 'good', 'hero', 'c', '#s1w'],
+  ['#yes', '#home', 'good', '', 'v', '#dlg'],
+  ['#no', '#edit', 'good', '', 'v', '#dlg'],
+  ['#save', '#same', 'muted', '', '-', '#s1w'],
+]
+let first = true
+function draw() {
+  const o = root.getBoundingClientRect()
+  const narrow = matchMedia('(max-width: 640px)').matches
+  svg.replaceChildren()
+  svg.setAttribute('viewBox', `0 0 ${o.width} ${o.height}`)
+  LINKS.forEach(([a, b, tone, style, phone, edge], i) => {
+    const A = root.querySelector(a).getBoundingClientRect()
+    const E = root.querySelector(edge).getBoundingClientRect()
+    const B = root.querySelector(b).getBoundingClientRect()
+    let x1, y1, x2, y2, d, dx = 0, dy = 0
+    if (!narrow) {
+      dx = 1
+      x1 = E.right - o.left; y1 = A.top + A.height / 2 - o.top
+      x2 = B.left - o.left; y2 = B.top + Math.min(B.height / 2, 40) - o.top
+      const m = x1 + (x2 - x1) * 0.5
+      d = `M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}`
+    } else if (phone === '-') {
+      return
+    } else if (phone === 'c') {
+      dx = 1
+      x1 = E.left - o.left; y1 = A.top + A.height / 2 - o.top
+      x2 = B.left - o.left; y2 = B.top + Math.min(B.height / 2, 30) - o.top
+      const m = 2
+      d = `M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}`
+    } else {
+      dy = 1
+      x1 = A.left + A.width / 2 - o.left; y1 = A.bottom - o.top
+      x2 = B.left + B.width / 2 - o.left; y2 = B.top - o.top
+      const m = (y1 + y2) / 2
+      d = `M${x1},${y1} C${x1},${m} ${x2},${m} ${x2},${y2}`
+    }
+    const g = document.createElementNS(NS, 'g')
+    g.setAttribute('class', tone)
+    svg.append(g)
+    const add = (n, at) => { const e = document.createElementNS(NS, n); for (const k in at) e.setAttribute(k, at[k]); g.append(e); return e }
+    if (style === 'hero') add('path', { d, class: 'glow' })
+    const p = add('path', { d, class: style })
+    const px = -dy, py = dx
+    add('path', { d: `M${x2},${y2} L${x2 - dx * 10 + px * 6},${y2 - dy * 10 + py * 6} L${x2 - dx * 10 - px * 6},${y2 - dy * 10 - py * 6}Z`, class: 'tip' })
+    if (first && !scene.reducedMotion && tone === 'good') {
+      const len = p.getTotalLength()
+      p.style.strokeDasharray = len
+      p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 700, delay: 400 + i * 450, easing: 'ease-in-out', fill: 'backwards' })
+    }
+  })
+  first = false
+}
+let size = ''
+new ResizeObserver(() => {
+  const r = root.getBoundingClientRect(), now = `${Math.round(r.width)}x${Math.round(r.height)}`
+  if (now !== size) { size = now; draw() }
+}).observe(root)
+if (!scene.reducedMotion) {
+  ;['#dlg', '#home', '#edit'].forEach((s, i) => root.querySelector(s).animate([{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 400, delay: 900 + i * 450, fill: 'backwards' }))
+}
+</script>
+</div>

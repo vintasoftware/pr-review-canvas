@@ -3,8 +3,8 @@
 import type { TourArtifact, TourModel } from '../contract/tour.js'
 import { BASE_SHA, HEAD_SHA, syntheticArtifact } from './synthetic.js'
 
-const SCENE = (text: string) =>
-  `<div class="scene"><div class="banner good"><i data-icon="check"></i>${text}</div></div>`
+const SCENE = (text: string, technique: string) =>
+  `<div class="scene" data-technique="${technique}"><div class="box good"><i data-icon="check"></i>${text}</div></div>`
 
 export function syntheticTourModel(): TourModel {
   return {
@@ -15,7 +15,7 @@ export function syntheticTourModel(): TourModel {
         title: 'run() returned a() alone',
         lead: 'Every caller of run() got the value of a(), and other() computed x.',
         body: ['`run()` in `src/app.ts` returned `a()`. The one test pinned that value at 1.'],
-        scene: SCENE('one function, one value'),
+        scene: SCENE('one function, one value', 'file'),
         code: [],
         literate: [],
         guards: [],
@@ -26,7 +26,7 @@ export function syntheticTourModel(): TourModel {
         title: 'run() now adds b()',
         lead: 'A caller of run() gets a() plus b(); the test expects 3.',
         body: ['The sum replaces the single value, and `other()` gains `y`.'],
-        scene: SCENE('run() = a() + b()'),
+        scene: SCENE('run() = a() + b()', 'scenario-matrix'),
         code: [
           {
             path: 'src/app.ts',
@@ -42,7 +42,7 @@ export function syntheticTourModel(): TourModel {
         title: 'Sum, not product',
         lead: 'The spec says sum; a product would read the same at the call site.',
         body: ['`a() + b()` is what the description asks for.'],
-        scene: SCENE('sum'),
+        scene: SCENE('sum', 'data-flow'),
         code: [{ path: 'src/app.ts', diff: '@@ -1,4 +1,5 @@\n-  return a()\n+  return a() + b()' }],
         literate: [{ chunk: 0 }],
         guards: [],
@@ -53,7 +53,7 @@ export function syntheticTourModel(): TourModel {
         title: 'Keep run() total',
         lead: 'A later change adds to the sum, never replaces it.',
         body: ['Callers depend on the total.'],
-        scene: SCENE('add, never replace'),
+        scene: SCENE('add, never replace', 'checks'),
         code: [],
         literate: [],
         guards: [{ testPath: 'src/app.test.ts', behavior: 'run() is not 1 anymore' }],

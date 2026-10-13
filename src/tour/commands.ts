@@ -1,5 +1,5 @@
-// `pr-review tour <prepare|validate|preview|publish>`: the tour's own steps, mirroring the canvas
-// commands. Everything is injected: the AppContext carries git, the host, and the stores.
+// `pr-review tour <prepare|validate|preview|publish|plan|gallery>`: the tour's own steps, mirroring
+// the canvas commands. Everything is injected: the AppContext carries git, the host, and the stores.
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { HARNESSES } from '../contract/review-artifact.js'
@@ -19,15 +19,16 @@ import {
   TOUR_PUBLISH_OPTIONS as PUBLISH_OPTIONS,
   TOUR_VALIDATE_OPTIONS as VALIDATE_OPTIONS,
 } from './named-dir.js'
+import { renderGallery } from './gallery.js'
 import { prepareTour } from './prepare.js'
 import { headlessScreenshot, previewTour } from './preview.js'
 import { publishTour, readTourContext, readTourModel, tourValidationInput } from './publish.js'
 import { validateTourModel } from './validate.js'
 
-export const TOUR_STEPS = ['prepare', 'validate', 'preview', 'publish', 'plan'] as const
+export const TOUR_STEPS = ['prepare', 'validate', 'preview', 'publish', 'plan', 'gallery'] as const
 export type TourStep = (typeof TOUR_STEPS)[number]
 
-/** The step named, or a usage error naming the five. */
+/** The step named, or a usage error naming them all. */
 export function parseTourStep(argv: string[]): { step: TourStep; rest: string[] } {
   const [step, ...rest] = argv
   const hit = TOUR_STEPS.find(s => s === step)
@@ -54,6 +55,8 @@ export async function runTour(ctx: AppContext, argv: string[], io: CliIo): Promi
       return runTourPreview(ctx, rest, io)
     case 'plan':
       return runTourPlan(ctx, rest, io)
+    case 'gallery':
+      return runTourGallery(rest, io)
     default:
       return runTourPublish(ctx, rest, io)
   }
@@ -150,9 +153,11 @@ async function runTourValidate(ctx: AppContext, argv: string[], io: CliIo): Prom
     printJson(io, { ok: report.ok, errors: report.errors })
     return report.ok ? EXIT.ok : EXIT.invalid
   }
-  if (report.ok) {
+  if ('output' in report && report.output !== null) {
+    const { landmarks, decisions, quiz } = report.output
+    const b = context.budget
     io.stdout(
-      `ok: ${path.basename(file)} passes, ${context.budget.landmarks} landmarks, ${context.budget.decisions} decisions, ${context.budget.quiz} questions in the budget`
+      `ok: ${path.basename(file)} passes: ${landmarks.length} landmarks (budget ${b.landmarks}), ${decisions.length} decisions (budget ${b.decisions}), ${quiz.length} questions (budget ${b.quiz})`
     )
   } else {
     for (const e of report.errors) io.stdout(formatTourError(e))
@@ -187,6 +192,26 @@ async function runTourPreview(ctx: AppContext, argv: string[], io: CliIo): Promi
   )
   printJson(io, result)
   return EXIT.ok
+}
+
+/**
+ * `tour gallery [<slug>…]`: the scene gallery's entries, or the named ones drawn as pictures for
+ * the generator to look at before it draws its own.
+ */
+async function runTourGallery(argv: string[], io: CliIo): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { out: { type: 'string' } },
+    allowPositionals: true,
+    strict: true,
+  })
+  const result = await renderGallery(
+    positionals,
+    { env: process.env, platform: process.platform, screenshot: headlessScreenshot },
+    values.out === undefined ? {} : { outDir: path.resolve(values.out) }
+  )
+  printJson(io, result)
+  return result.status === 'unknown' ? EXIT.invalid : EXIT.ok
 }
 
 async function runTourPublish(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {

@@ -308,14 +308,29 @@ describe('tour preview', () => {
     )
     expect(preview.status).toBe('previewed')
     expect(preview.previewUrl).toBe('http://localhost:3010/tour/42?preview')
+    // The page on a desktop and a phone, then the scene alone at the width the page gives it.
     expect(preview.screenshots.map(f => path.basename(f))).toEqual([
       '01-world-desktop.png',
       '01-world-phone.png',
+      '01-world-scene.png',
     ])
     expect(shots).toEqual([
       { url: 'http://127.0.0.1:9/tour/42?preview&landmark=world&theme=light', width: 1280 },
       { url: 'http://127.0.0.1:9/tour/42?preview&landmark=world&theme=light', width: 390 },
+      { url: 'http://127.0.0.1:9/tour-scene/42/world/scene?preview&theme=light', width: 1120 },
     ])
+    // The whole tour adds each decision and each question, on a desktop.
+    const whole = await previewTour(t.ctx, result.tourDir, {
+      env: { PR_REVIEW_BROWSER: '/opt/chrome' },
+      platform: 'linux',
+      startServer: async () => ({ origin: 'http://127.0.0.1:9', close: async () => undefined }),
+      screenshot: async (_b, _url, file) => writeFile(file, 'png'),
+    })
+    expect(whole.screenshots.map(f => path.basename(f)).slice(-2)).toEqual([
+      'd1-sum-over-product.png',
+      'q1-q-run.png',
+    ])
+    expect(whole.screenshots).toHaveLength(4 * 3 + 2)
     const none = await previewTour(t.ctx, result.tourDir, {
       env: { PATH: '' },
       platform: 'linux',

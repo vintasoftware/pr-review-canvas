@@ -1,0 +1,188 @@
+<div class="scene" data-technique="storyboard">
+<style>
+.sb{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.sb-p{display:flex;flex-direction:column;gap:.7rem;padding:.75rem .9rem .85rem;border:.1rem solid var(--line);border-top:.3rem solid var(--c);border-radius:.7rem;background:var(--paper);text-align:left;min-width:0}
+.sb-p>header{display:flex;gap:.55rem;align-items:center;font-weight:750;font-size:1rem;color:var(--fg)}
+.sb-n{flex:none;display:inline-grid;place-items:center;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--c);color:var(--paper);font-size:.85rem}
+.sb-body{display:flex;flex-direction:column;gap:.8rem;flex:1}
+.sb-pic{position:relative;display:grid;grid-template-columns:max-content minmax(2.5rem,1fr) max-content minmax(2rem,1fr) max-content;grid-template-rows:repeat(8,auto);grid-auto-flow:dense;row-gap:.3rem;align-items:center}
+.sb-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.sb-svg path{fill:none;stroke:var(--c);stroke-width:1.5;stroke-linecap:round}
+.sb-svg .hero{stroke-width:3.2}
+.sb-svg .tip,.sb-svg text{fill:var(--c);stroke:none}
+.sb-svg text{font:700 11px ui-sans-serif,system-ui,sans-serif}
+.sb-svg .dash{stroke-dasharray:4 4}
+.sb-c{grid-column:1;justify-self:start;display:flex;align-items:center;gap:.3rem;font-size:.78rem;white-space:nowrap}
+.sb-c>span{padding:.08rem .45rem;border:.08rem solid var(--c,var(--line));border-radius:.35rem;background:var(--paper);color:var(--fg)}
+.sb-c em{font-style:normal;font-size:.72rem;font-weight:750;color:var(--bad)}
+.sb-m{grid-column:3;justify-self:center}
+.sb-d{display:grid;place-items:center;width:.95rem;height:.95rem;rotate:45deg;border:.1rem solid var(--c,var(--muted));background:var(--paper)}
+.sb-dst{grid-column:5;grid-row:1/-1}
+.sb-box{padding:.3rem .5rem;border:.12rem solid var(--c,var(--line));border-radius:.45rem;background:var(--tint);font:600 .74rem/1.3 ui-monospace,monospace;text-align:center;color:var(--fg)}
+.sb-box.muted{background:var(--paper)}
+.sb-hero{box-shadow:0 0 0 .32rem color-mix(in srgb,var(--good) 18%,transparent)}
+.sb-flow{position:relative;display:grid;grid-template-columns:auto auto auto;justify-content:space-between;align-items:center;gap:2rem 1rem;padding:.4rem 0}
+.sb-flow .sb-d{width:4.4rem;height:4.4rem;justify-self:center;border-width:.14rem}
+.sb-flow .sb-d>span{rotate:-45deg;font:700 .68rem/1.15 ui-monospace,monospace;text-align:center;color:var(--fg)}
+.sb-flow #modal{grid-column:2}
+.sb-cap{display:flex;flex-direction:column;gap:.35rem;margin-top:auto;font-size:.8rem;line-height:1.4;color:var(--fg)}
+.sb-cap code{font:.74rem ui-monospace,monospace}
+.sb-files{font:.68rem/1.5 ui-monospace,monospace;color:var(--muted)}
+.sb .file{max-width:none;font-size:.72rem}
+@media (max-width:640px){.sb{grid-template-columns:1fr}.sb-pic{grid-template-columns:max-content minmax(1rem,1fr) max-content minmax(1rem,1fr) max-content}}
+</style>
+<div class="sb">
+
+<section class="sb-p muted">
+<header><b class="sb-n">1</b>Before: four copies of the check, four callers without one</header>
+<div class="sb-body">
+<div class="sb-pic">
+<div class="sb-c" data-to="#a1"><span>status (legacy)</span></div>
+<div class="sb-c" data-to="#a2"><span>conversation</span></div>
+<div class="sb-c" data-to="#a3"><span>picture-in-picture</span></div>
+<div class="sb-c bad" data-to="#old"><span>statusInteraction</span></div>
+<div class="sb-c bad" data-to="#old"><span>notification</span></div>
+<div class="sb-c bad" data-to="#old"><span>notification group</span></div>
+<div class="sb-c bad" data-to="#old"><span>new composer</span></div>
+<div class="sb-c" data-to="#a8"><span>status page</span></div>
+<i class="sb-m sb-d" id="a1" data-to="#rc1"></i><i class="sb-m sb-d" id="a2" data-to="#rc1"></i><i class="sb-m sb-d" id="a3" data-to="#rc1"></i>
+<span class="sb-m sb-box muted" id="old" data-to="#rc1" data-tone="bad" style="grid-row:span 4">replyComposeById<br>(statusId)</span>
+<i class="sb-m sb-d" id="a8" data-to="#rc1"></i>
+<span class="sb-dst sb-box muted" id="rc1">replyCompose<br>(status)</span>
+</div>
+<div class="sb-cap">
+<span>Four callers each test the draft (◇) before replying, four copies of <code>compose.text.trim()</code>.</span>
+<span>Four go through <code>replyComposeById(statusId)</code>, which never asks: <b class="bad">a reply from a notification overwrites the draft.</b></span>
+</div>
+</div>
+</section>
+
+<section class="sb-p good">
+<header><b class="sb-n">2</b>Add one thunk that asks first</header>
+<div class="sb-body">
+<div class="sb-flow">
+<span class="sb-box muted" id="in" data-to="#g">{ statusId }</span>
+<i class="sb-d good sb-hero" id="g" data-to="#rc2,#modal" data-say="no,yes"><span>changed<br>&amp;&amp; !force</span></i>
+<span class="sb-box muted" id="rc2">replyCompose<br>(status)</span>
+<span class="sb-box good" id="modal" data-to="#in" data-loop>CONFIRM_REPLY modal<br>Yes: force: true</span>
+</div>
+<div class="sb-cap">
+<span><code>replyComposeById({ statusId, force })</code> in compose_typed.ts asks when <code>selectComposerIsChanged</code>: text, a content warning, a poll, a quote, or media.</span>
+<span>The modal now takes <code>statusId</code>, and its Yes comes back with <code>force: true</code>, so it asks once.</span>
+<span class="sb-files">compose_typed.ts +38 −1<br>discard_draft_confirmation.tsx +5 −6</span>
+</div>
+</div>
+</section>
+
+<section class="sb-p warn">
+<header><b class="sb-n">3</b>Send seven callers through it</header>
+<div class="sb-body">
+<div class="sb-pic">
+<div class="sb-c warn" data-to="#g3"><span>status (legacy) <em>−11</em></span></div>
+<div class="sb-c warn" data-to="#g3"><span>conversation <em>−18</em></span></div>
+<div class="sb-c warn" data-to="#g3"><span>picture-in-picture <em>−12</em></span></div>
+<div class="sb-c warn" data-to="#g3"><span>statusInteraction</span></div>
+<div class="sb-c warn" data-to="#g3"><span>notification</span></div>
+<div class="sb-c warn" data-to="#g3"><span>notification group</span></div>
+<div class="sb-c warn" data-to="#g3"><span>new composer</span></div>
+<div class="sb-c" data-to="#b8"><span>status page</span></div>
+<span class="sb-m sb-box good sb-hero" id="g3" data-to="#rc3" style="grid-row:span 7">replyComposeById<br>({ statusId })</span>
+<i class="sb-m sb-d" id="b8" data-to="#rc3"></i>
+<span class="sb-dst sb-box muted" id="rc3">replyCompose<br>(status)</span>
+</div>
+<div class="sb-cap">
+<span>Every caller but one now dispatches the thunk. Three delete their own copy of the check (lines removed, in red).</span>
+<span>The status page keeps its test and passes <code>statusId</code> to the modal.</span>
+<span class="sb-files">8 files, +20 −53</span>
+</div>
+</div>
+</section>
+
+<section class="sb-p bad">
+<header><b class="sb-n">4</b>Delete the old thunk</header>
+<div class="sb-body">
+<div class="file" data-title="app/javascript/mastodon/actions/compose.js">
+<span class="del">export function replyComposeById(statusId) {</span>
+<span class="del">  return (dispatch, getState) =&gt; {</span>
+<span class="del">    const state = getState();</span>
+<span class="del">    const status = state.statuses.get(statusId);</span>
+<span class="del">    …</span>
+<span class="del">      dispatch(replyCompose(status.set('account', account)));</span>
+<span class="del">  …</span>
+</div>
+<div class="file" data-title="its 4 importers, e.g. notification_with_status.tsx">
+<span class="del">import { replyComposeById } from 'mastodon/actions/compose';</span>
+<span class="add">import { replyComposeById } from '@/mastodon/actions/compose_typed';</span>
+</div>
+<div class="sb-cap" style="flex-direction:row;align-items:center;gap:.8rem">
+<span class="big bad">−12</span>
+<span>lines in compose.js, and no caller left for them.</span>
+</div>
+</div>
+</section>
+
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg'
+const TONES = ['good', 'warn', 'bad', 'muted']
+function draw(pic) {
+  let svg = pic.querySelector(':scope > .sb-svg')
+  if (!svg) { svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'sb-svg'); pic.prepend(svg) }
+  const o = pic.getBoundingClientRect()
+  svg.replaceChildren()
+  svg.setAttribute('viewBox', `0 0 ${o.width} ${o.height}`)
+  pic.querySelectorAll('[data-to]').forEach(a => {
+    const says = (a.dataset.say ?? '').split(',')
+    a.dataset.to.split(',').forEach((sel, k) => {
+      const b = pic.querySelector(sel)
+      const A = a.getBoundingClientRect(), B = b.getBoundingClientRect()
+      const tone = a.dataset.tone ?? [...a.classList].find(c => TONES.includes(c)) ?? 'muted'
+      let x1, y1, x2, y2, d, dx = 0, dy = 0, tx, ty
+      if (a.hasAttribute('data-loop')) {
+        dy = -1
+        x1 = A.left - o.left; y1 = A.top + A.height / 2 - o.top
+        x2 = B.left + B.width / 2 - o.left; y2 = B.bottom - o.top
+        d = `M${x1},${y1} C${x2},${y1} ${x2},${y1} ${x2},${y2}`
+      } else if (B.left >= A.right - 2) {
+        dx = 1
+        x1 = A.right - o.left; y1 = A.top + A.height / 2 - o.top
+        x2 = B.left - o.left; y2 = B.top + B.height / 2 - o.top
+        const m = (x1 + x2) / 2
+        d = `M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}`
+        tx = m; ty = Math.min(y1, y2) - 6
+      } else {
+        dy = 1
+        x1 = A.left + A.width / 2 - o.left; y1 = A.bottom - o.top
+        x2 = B.left + B.width / 2 - o.left; y2 = B.top - o.top
+        d = `M${x1},${y1} L${x2},${y2}`
+        tx = x1 + 8; ty = (y1 + y2) / 2 + 4
+      }
+      const px = -dy, py = dx
+      const g = document.createElementNS(NS, 'g')
+      g.setAttribute('class', tone)
+      g.innerHTML = `<path d="${d}" class="${a.matches('.sb-hero') ? 'hero' : ''} ${a.hasAttribute('data-loop') ? 'dash' : ''}"/>` +
+        `<path class="tip" d="M${x2},${y2} L${x2 - dx * 7 + px * 4},${y2 - dy * 7 + py * 4} L${x2 - dx * 7 - px * 4},${y2 - dy * 7 - py * 4}Z"/>` +
+        (says[k] ? `<text x="${tx}" y="${ty}" text-anchor="${dy ? 'start' : 'middle'}">${says[k]}</text>` : '')
+      svg.append(g)
+      if (!scene.reducedMotion && !sizes.has(pic.dataset.k)) {
+        const p = g.firstChild, len = p.getTotalLength()
+        p.style.strokeDasharray = a.hasAttribute('data-loop') ? '' : len
+        if (!a.hasAttribute('data-loop')) p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 600, delay: 350 * pic.dataset.i + 300, fill: 'backwards' })
+      }
+    })
+  })
+}
+const sizes = new Map()
+document.querySelectorAll('.sb-pic, .sb-flow').forEach((p, i) => { p.dataset.i = i; p.dataset.k = `p${i}` })
+const ro = new ResizeObserver(entries => {
+  for (const e of entries) {
+    const p = e.target, k = `${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`
+    if (sizes.get(p.dataset.k) !== k) { draw(p); sizes.set(p.dataset.k, k) }
+  }
+})
+document.querySelectorAll('.sb-pic, .sb-flow').forEach(p => ro.observe(p))
+if (!scene.reducedMotion) {
+  document.querySelectorAll('.sb-p').forEach((p, i) => p.animate([{ opacity: 0, transform: 'translateY(.6rem)' }, { opacity: 1, transform: 'none' }], { duration: 450, delay: i * 350, fill: 'backwards', easing: 'ease-out' }))
+}
+</script>
+</div>

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { PACKAGE_ROOT } from '../paths.js'
 import { iconsFor, iconSvg } from './icons.js'
 import { inlineIcons } from './scene.js'
-import { sceneIcons, sceneProblems } from './validate-scene.js'
+import { sceneIcons, sceneProblems, sceneTechnique } from './validate-scene.js'
 
 describe('icons', () => {
   it('reads a Lucide icon as bare SVG that takes its color and size from the text', () => {
@@ -71,12 +71,25 @@ describe('sceneProblems', () => {
     for (const { interactive, html } of examples) {
       expect(html).toContain('class="scene"')
       expect(sceneProblems(html, { interactive })).toEqual([])
+      if (!interactive) expect(sceneTechnique(html)).not.toBeNull()
       // A class the kit does not define is one the example styles or scripts itself.
       const own = [...html.matchAll(/<(?:style|script)\b[^>]*>([\s\S]*?)<\//g)].map(m => m[1]).join('\n')
       const classes = [...html.matchAll(/\sclass="([^"]*)"/g)].flatMap(m => (m[1] as string).split(/\s+/))
       const unknown = classes.filter(c => c !== '' && !kit.includes(`.${c}`) && !own.includes(c))
       expect(unknown).toEqual([])
     }
+  })
+
+  it('reads the technique a scene names on its root, and only a slug', () => {
+    expect(sceneTechnique('<div class="scene" data-technique="state-machine"><p>x</p></div>')).toBe(
+      'state-machine'
+    )
+    expect(sceneTechnique("<div data-technique=' Sankey '>x</div>")).toBe('sankey')
+    expect(sceneTechnique('<div class="scene"><p>x</p></div>')).toBeNull()
+    expect(sceneTechnique('<div data-technique="two words">x</div>')).toBeNull()
+    expect(
+      sceneTechnique('<p>x</p><script>el.dataset.technique = "x"; `data-technique="t"`</script>')
+    ).toBeNull()
   })
 
   it('names what loads, takes input, or leaves the frame', () => {

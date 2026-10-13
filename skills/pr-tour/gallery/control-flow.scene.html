@@ -1,0 +1,123 @@
+<div class="scene" data-technique="control-flow">
+  <div class="cf-top">
+    <div class="file" data-title="the block the thick line follows (the PR's CHANGELOG example)">
+      <span>Model.transaction do</span>
+      <span>  model.save</span>
+      <span class="hl">  return</span>
+      <span class="muted">  other_model.save # not executed</span>
+      <span>end</span>
+    </div>
+    <table>
+      <tr><th>config.load_defaults</th><th><code>commit_transaction_on_non_local_return</code></th></tr>
+      <tr><td>before 7.1 (upgraded apps)</td><td><code>false</code></td></tr>
+      <tr class="good"><td>7.1 (new apps)</td><td><code>true</code></td></tr>
+    </table>
+  </div>
+
+  <div class="cf-panels">
+    <section class="cf-p" data-p="before">
+      <header><b>before</b> <span class="small">Rails main before the PR (a5fc471) · yes → right, no ↓</span></header>
+      <div class="cf-t r2"><code>ret = yield</code><span>the block runs</span></div><div class="cf-s r2 first hd"><i class="cf-m t" data-h="2"></i></div>
+      <div class="cf-t r3"><code>rescue Exception</code><span>the block raised</span></div><div class="cf-s r3 hu hd"><i class="cf-m d" data-h="3"></i></div><div class="cf-a r3"></div><div class="cf-o r3"><b class="cf-pill">ROLLBACK</b><span>then re-raise</span></div>
+      <div class="cf-s r4 hu hd"></div>
+      <div class="cf-t r5"><code>Thread.current.status == "aborting"</code><span>the thread is being killed</span></div><div class="cf-s r5 hu hd"><i class="cf-m d" data-h="5"></i></div><div class="cf-a r5"></div><div class="cf-o r5"><b class="cf-pill">ROLLBACK</b></div>
+      <div class="cf-t r6"><code>!completed &amp;&amp; transaction.written</code><span>left early, and wrote</span></div><div class="cf-s r6 hu"><i class="cf-m d" data-h="6"></i></div><div class="cf-a r6 bad hero"></div><div class="cf-o r6 bad"><b class="cf-pill hero" data-h="6.6">ROLLBACK</b><span><b>model.save</b> undone, silently</span></div>
+      <div class="cf-t r7 cf-gone"><code>!completed &amp;&amp; !transaction.<wbr>written_indirectly</code><span>left early, wrote nothing</span></div><div class="cf-s r7"><i class="cf-m d bad"></i></div><div class="cf-a r7 bad"></div><div class="cf-o r7 cf-gone"><b class="cf-pill">ROLLBACK</b></div>
+      <div class="cf-t r8 cf-gone"><code>!completed &amp;&amp; transaction.<wbr>written_indirectly</code><span>left early, a nested transaction wrote</span></div><div class="cf-s r8"><i class="cf-m d bad"></i></div><div class="cf-a r8 bad"></div><div class="cf-o r8 cf-gone"><b class="cf-pill">warn, then COMMIT</b><span>“…in the next release of Rails it will rollback.”</span></div>
+      <div class="cf-t r9"><code>commit_transaction</code></div><div class="cf-s r9 last"><i class="cf-m t"></i></div><div class="cf-o r9"><b class="cf-pill">COMMIT</b></div>
+    </section>
+
+    <section class="cf-p" data-p="after">
+      <header><b>after</b> <span class="small">with the PR (5fbaa52), load_defaults 7.1</span></header>
+      <div class="cf-t r2"><code>ret = yield</code><span>the block runs</span></div><div class="cf-s r2 first hd"><i class="cf-m t" data-h="2"></i></div>
+      <div class="cf-t r3"><code>rescue Exception</code><span>the block raised</span></div><div class="cf-s r3 hu hd"><i class="cf-m d" data-h="3"></i></div><div class="cf-a r3"></div><div class="cf-o r3"><b class="cf-pill">ROLLBACK</b><span>then re-raise</span></div>
+      <div class="cf-t r4 good"><code>completed = true if</code><code>commit_transaction_<wbr>on_non_local_return</code><span>new: a non-local exit counts as finished</span></div><div class="cf-s r4 hu hd new"><i class="cf-m a good hero" data-h="4"></i></div>
+      <div class="cf-t r5"><code>Thread.current.status == "aborting"</code><span>the thread is being killed</span></div><div class="cf-s r5 hu hd new"><i class="cf-m d" data-h="5"></i></div><div class="cf-a r5"></div><div class="cf-o r5"><b class="cf-pill">ROLLBACK</b></div>
+      <div class="cf-t r6"><code>!completed &amp;&amp; transaction.written</code><span>left early, and wrote: only when the setting is false</span></div><div class="cf-s r6 hu hd new"><i class="cf-m d warn" data-h="6"></i></div><div class="cf-a r6 warn"></div><div class="cf-o r6 warn"><b class="cf-pill">warn, then ROLLBACK</b><span>“…In Rails 7.2 this transaction will be committed instead.”</span></div>
+      <div class="cf-s r7 hu hd new"></div>
+      <div class="cf-s r8 hu hd new"></div>
+      <div class="cf-t r9"><code>commit_transaction</code></div><div class="cf-s r9 last hu new"><i class="cf-m t good hero" data-h="9"></i></div><div class="cf-o r9 good"><b class="cf-pill hero">COMMIT</b><span><b>model.save</b> kept</span></div>
+    </section>
+  </div>
+
+  <style>
+    .cf-top { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; align-items: center; width: 100%; }
+    .cf-top .file { flex: 0 1 24rem; }
+    .cf-top th code { text-transform: none; letter-spacing: 0; font-size: 0.7rem; }
+    .scene code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; }
+    .cf-panels {
+      --rg: 0.9rem; width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(9, auto); column-gap: 2.2rem; row-gap: var(--rg);
+    }
+    .cf-p { display: grid; grid-row: 1 / span 9; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr) 1.6rem 2.4rem minmax(0, 0.72fr); align-items: center; }
+    .cf-p[data-p="after"] { --hc: var(--good); }
+    .cf-p header { grid-row: 1; grid-column: 1 / -1; display: flex; gap: 0.5rem; align-items: baseline; padding-bottom: 0.3rem; border-bottom: 0.1rem solid var(--line); }
+    .cf-p header b { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .r2 { grid-row: 2; } .r3 { grid-row: 3; } .r4 { grid-row: 4; } .r5 { grid-row: 5; } .r6 { grid-row: 6; } .r7 { grid-row: 7; } .r8 { grid-row: 8; } .r9 { grid-row: 9; }
+    .cf-t { grid-column: 1; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 0.1rem; padding-right: 0.2rem; }
+    .cf-t code { overflow-wrap: anywhere; }
+    .cf-t span { font-size: 0.72rem; color: var(--muted); }
+    .cf-t.good span { color: var(--good); font-weight: 600; }
+    .cf-s { grid-column: 2; position: relative; align-self: stretch; display: grid; place-items: center; min-height: 1.6rem; }
+    .cf-s::before, .cf-s::after { content: ''; position: absolute; left: 50%; width: 0.13rem; translate: -50% 0; background: var(--muted); }
+    .cf-s::before { top: calc(-1 * var(--rg)); bottom: 50%; }
+    .cf-s::after { top: 50%; bottom: 0; }
+    .cf-s.first::before, .cf-s.last::after { display: none; }
+    .cf-s.hu::before, .cf-s.hd::after { width: 0.32rem; background: var(--fg); }
+    .cf-s.new.hu::before, .cf-s.new.hd::after { background: var(--hc); box-shadow: 0 0 0.5rem var(--hc); }
+    .cf-s.r4.hu::before { background: var(--fg); box-shadow: none; }
+    .cf-m { position: relative; z-index: 1; display: block; width: 0.85rem; height: 0.85rem; border: 0.14rem solid var(--c, var(--muted)); background: var(--paper); }
+    .cf-m.d { rotate: 45deg; }
+    .cf-m.t { border-radius: 50%; background: var(--c, var(--muted)); }
+    .cf-m.a { width: 1rem; height: 1rem; border-radius: 0.15rem; background: var(--c); }
+    .cf-m.hero { box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--c) 28%, transparent); }
+    .cf-m.bad { border-style: dashed; opacity: 0.7; }
+    .cf-a { grid-column: 3; position: relative; align-self: stretch; margin-left: -0.8rem; }
+    .cf-a::before { content: ''; position: absolute; left: 0; right: 0.35rem; top: 50%; height: 0.13rem; translate: 0 -50%; background: var(--c, var(--muted)); }
+    .cf-a::after { content: ''; position: absolute; right: 0; top: 50%; translate: 0 -50%; border: 0.3rem solid transparent; border-left: 0.45rem solid var(--c, var(--muted)); border-right: 0; }
+    .cf-a.bad::before { background: repeating-linear-gradient(90deg, var(--bad) 0 0.35rem, transparent 0.35rem 0.6rem); }
+    .cf-a.hero::before { height: 0.32rem; }
+    .cf-o { grid-column: 4; display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; }
+    .cf-o span:not(.chip) { font-size: 0.72rem; color: var(--muted); }
+    .cf-o.bad span, .cf-o.good span { color: var(--c); }
+    .cf-pill { padding: 0.15rem 0.55rem; border: 0.12rem solid var(--c, var(--muted)); border-radius: 999px; background: var(--paper); font-size: 0.74rem; letter-spacing: 0.03em; }
+    .cf-o.warn .cf-pill { background: var(--tint); }
+    .cf-pill.hero { background: var(--c); color: var(--paper); box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--c) 25%, transparent); }
+    .cf-o.bad .cf-pill.hero { background: var(--paper); color: var(--bad); border-style: dashed; }
+    .cf-gone { opacity: 0.6; }
+    .cf-gone code, .cf-gone .cf-pill { text-decoration: line-through; text-decoration-color: var(--bad); text-decoration-thickness: 0.1rem; }
+    .cf-gone span { color: var(--bad); }
+    .cf-dot { position: absolute; z-index: 2; left: 0; top: 0; width: 0.8rem; height: 0.8rem; margin: -0.4rem 0 0 -0.4rem; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 0.15rem var(--paper); }
+    @media (max-width: 640px) {
+      .cf-panels { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(18, auto); }
+      .cf-p[data-p="after"] { grid-row: 10 / span 9; margin-top: 1rem; }
+      .cf-p { grid-template-columns: minmax(0, 1fr) 1.4rem 1.8rem minmax(0, 0.8fr); }
+      .cf-p header { flex-direction: column; gap: 0; }
+    }
+  </style>
+  <script>
+    // A dot rides each panel's path for the block above, one row per beat, so the two
+    // panels move in step and part ways where the code does.
+    if (!scene.reducedMotion) {
+      const BEAT = 520, LAST = 9
+      for (const panel of document.querySelectorAll('.cf-p')) {
+        panel.style.position = 'relative'
+        const p = panel.getBoundingClientRect()
+        const stops = [...panel.querySelectorAll('[data-h]')].map(el => {
+          const r = el.getBoundingClientRect()
+          const h = Number(el.dataset.h)
+          return { h, x: (el.classList.contains('cf-pill') ? r.left - 8 : (r.left + r.right) / 2) - p.left, y: (r.top + r.bottom) / 2 - p.top }
+        }).sort((a, b) => a.h - b.h)
+        const dot = document.createElement('i')
+        dot.className = 'cf-dot'
+        panel.append(dot)
+        const total = (LAST + 2) * BEAT
+        const frames = stops.map(s => ({ transform: `translate(${s.x}px, ${s.y}px)`, offset: ((s.h - 2) * BEAT) / total }))
+        frames.push({ ...frames[frames.length - 1], offset: 1 })
+        dot.animate(frames, {
+          duration: total, iterations: Infinity, easing: 'linear', fill: 'forwards',
+        })
+      }
+    }
+  </script>
+</div>

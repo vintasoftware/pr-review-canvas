@@ -15,10 +15,15 @@ export interface Viewport {
   height: number
 }
 
-/** The desktop the tour's stage is drawn for: the stage is 760 pixels wide and the page scrolls. */
-export const PREVIEW_VIEWPORT: Viewport = { width: 1280, height: 1000 }
+/**
+ * The desktop the tour's stage is drawn for: the prose is 760 pixels wide, the pictures up to
+ * 1120, and the window is tall enough to hold the title, the lead, and the picture under them.
+ */
+export const PREVIEW_VIEWPORT: Viewport = { width: 1280, height: 1400 }
 /** A phone, where a scene must still read: the design promises phone parity. */
-export const PHONE_VIEWPORT: Viewport = { width: 390, height: 844 }
+export const PHONE_VIEWPORT: Viewport = { width: 390, height: 1600 }
+/** A picture alone, at the width the desktop page gives it, so a tall one is seen whole. */
+export const FIGURE_VIEWPORT: Viewport = { width: 1120, height: 1400 }
 
 /** A running copy of the review server that the browser loads the preview from. */
 export interface PreviewServer {
@@ -93,7 +98,11 @@ export interface PreviewTourResult {
   status: 'previewed' | 'no-browser' | 'no-page'
   headSha: string
   landmarks: number
-  /** Two screenshots per landmark, desktop then phone, in tour order; empty without a browser. */
+  /**
+   * Per landmark in tour order: the page on a desktop and on a phone, then each picture alone at
+   * its desktop width (the scene, then the micro-world). For the whole tour, then each decision and
+   * each question on a desktop. Empty without a browser.
+   */
   screenshots: string[]
   /** The same preview on a running `pr-review serve`, for a browser tool; absent for a refs run. */
   previewUrl?: string
@@ -153,13 +162,40 @@ export async function previewTour(
   const screenshots: string[] = []
   try {
     for (const [i, landmark] of landmarks.entries()) {
-      for (const [name, viewport] of [
-        ['desktop', PREVIEW_VIEWPORT],
-        ['phone', PHONE_VIEWPORT],
-      ] as const) {
+      const id = encodeURIComponent(landmark.id)
+      const page = `${server.origin}/tour/${key}?preview&landmark=${id}&theme=light`
+      const picture = (kind: 'scene' | 'micro') =>
+        `${server.origin}/tour-scene/${key}/${id}/${kind}?preview&theme=light`
+      const shots: Array<readonly [string, string, Viewport]> = [
+        ['desktop', page, PREVIEW_VIEWPORT],
+        ['phone', page, PHONE_VIEWPORT],
+        ...(typeof landmark.scene === 'string'
+          ? [['scene', picture('scene'), FIGURE_VIEWPORT] as const]
+          : []),
+        ...(typeof landmark.micro === 'string'
+          ? [['micro', picture('micro'), FIGURE_VIEWPORT] as const]
+          : []),
+      ]
+      for (const [name, url, viewport] of shots) {
         const file = path.join(dir, `${String(i + 1).padStart(2, '0')}-${landmark.id}-${name}.png`)
-        const url = `${server.origin}/tour/${key}?preview&landmark=${encodeURIComponent(landmark.id)}&theme=light`
         await deps.screenshot(browser, url, file, viewport)
+        screenshots.push(file)
+      }
+    }
+    // The whole tour also shows each decision and question once, so their texts are seen too.
+    if (opts.landmark === undefined) {
+      const steps = [
+        ...result.output.decisions.map((d, i) => [`d${i + 1}-${d.key}`, `decision-${d.key}`] as const),
+        ...result.output.quiz.map((q, i) => [`q${i + 1}-${q.id}`, `quiz-${q.id}`] as const),
+      ]
+      for (const [name, hash] of steps) {
+        const file = path.join(dir, `${name}.png`)
+        await deps.screenshot(
+          browser,
+          `${server.origin}/tour/${key}?preview&theme=light#${hash}`,
+          file,
+          PREVIEW_VIEWPORT
+        )
         screenshots.push(file)
       }
     }
@@ -196,7 +232,7 @@ export async function headlessScreenshot(
         '--force-prefers-reduced-motion',
         `--user-data-dir=${profile}`,
         `--window-size=${viewport.width},${viewport.height}`,
-        '--virtual-time-budget=5000',
+        '--virtual-time-budget=10000',
         `--screenshot=${file}`,
         url,
       ],

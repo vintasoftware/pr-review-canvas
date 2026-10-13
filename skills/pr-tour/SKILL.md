@@ -89,15 +89,18 @@ uncommitted work is in it. Tell the user all four.
 
 Read `promptPath` in full: it holds the change, the guide, the manifest, the diffs, the budget,
 the rules for landmarks, decisions, and the quiz, the caps, and the JSON schema. Read
-`sceneGuidePath` before drawing a scene: the kit, the frame, and the catalog of pictures. Read any
+`sceneGuidePath` in full before drawing a scene: how to pick a technique, the change grammar, the
+catalog, the frame, and the kit. Then look at the gallery beside it: real pull requests drawn
+well. Read `gallery/README.md`, run `pr-review tour gallery <slug> …` for the entries nearest the
+pictures you plan, and look at the pictures it prints. Read any
 untouched file with `git show <headSha>:<path>` from the repository root. Do not check anything
 out.
 
 ### 3. Write the model and the scenes
 
 Write `<tourDir>/tour-model.json` matching the schema in the prompt, JSON only. Write each
-landmark's scene to `<scenesDir>/<landmark id>.scene.html`, and at most one micro-world to
-`<scenesDir>/<landmark id>.micro.html`. Use the host's file-writing tool (such as Write); a shell
+landmark's scene to `<scenesDir>/<landmark id>.scene.html`, and at most two micro-worlds to
+`<scenesDir>/<landmark id>.micro.html`; a micro-world may stand in for its landmark's scene. Use the host's file-writing tool (such as Write); a shell
 heredoc into a data directory may be refused by write guards. If you cannot write there, run
 prepare again with `--data-dir <a directory you can write>/.pr-review` and use the paths it prints;
 tell the user `pr-review serve` shows the tour only with that same `--data-dir`.
@@ -126,9 +129,11 @@ pr-review tour publish <tourDir> --agent <your agent id> --model <model id if yo
 ```
 
 Validate prints `ok: …` or one line per problem, `CODE where: message`; fix exactly what it names
-and run it again. Preview writes two screenshots per landmark, desktop and phone, under
-`<tourDir>/preview/`, and prints their paths; look at every one and fix what reads badly: text that
-collides, a scene that says nothing at rest, a picture that is the same as the last. Without a
+and run it again. Preview writes, under `<tourDir>/preview/`, each landmark's page on a desktop and
+on a phone, each scene and micro-world alone at the width the page gives it (`-scene.png`,
+`-micro.png`), and each decision and question; it prints their paths. Look at every one and fix
+what reads badly: text that collides, a scene that says nothing at rest, a picture too small to
+read, a picture that is the same as the last. `--landmark <id>` retakes one landmark. Without a
 browser it prints a `previewUrl` to open in a browser tool instead. Then publish. On failure the
 command prints one line per problem, then an error line, and exits 5; fix the named problems and
 publish again, giving up after the prompt's `maxRepairRounds`.
@@ -162,7 +167,9 @@ you recommend changing, if any.
   literate `chunk` index exists.
 - Guards name test files that exist at the head.
 - Scenes pass the frame's checks (the scene guide lists them); a scene takes no input, a
-  micro-world takes it only through its controls; at most one micro-world.
+  micro-world takes it only through its controls; at most two micro-worlds.
+- Every scene names its technique (`data-technique` on its root), and no technique draws more
+  than two scenes of a tour.
 - Categories the project turned off are not used; a `tryIt` is `verified` or absent.
 - Every text within its cap, measured on what a reader sees.
 

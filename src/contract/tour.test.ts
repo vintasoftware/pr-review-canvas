@@ -39,6 +39,12 @@ describe('the tour budget', () => {
     expect(stateRequiredFor(['schema'])).toBe(true)
     expect(stateRequiredFor(['Database migrations'])).toBe(true)
     expect(stateRequiredFor(['auth', 'design system'])).toBe(false)
+    // Without a state label, a migration or schema file in the change still asks for one.
+    expect(stateRequiredFor([], ['netbox/dcim/migrations/0230_constraints.py'])).toBe(true)
+    expect(stateRequiredFor([], ['db/migrate/20260101_add_eol.rb', 'app/models/user.rb'])).toBe(true)
+    expect(stateRequiredFor([], ['prisma/schema.prisma'])).toBe(true)
+    expect(stateRequiredFor([], ['sql/seed.SQL'])).toBe(true)
+    expect(stateRequiredFor([], ['src/app.ts', 'docs/migrations-guide.md'])).toBe(false)
   })
 })
 
