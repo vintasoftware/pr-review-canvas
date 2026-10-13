@@ -2,7 +2,7 @@
 // The tour's steps end to end over the synthetic pull request: prepare writes the prompt and the
 // context, validate reads the model and the scene files, publish stores and shares, preview
 // screenshots, and the CLI layer prints what the skill reads.
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type CliIo, reportFailure } from '../commands.js'
 import { TourContextSchema, TourArtifactSchema } from '../contract/tour.js'
@@ -310,9 +310,9 @@ describe('tour preview', () => {
     expect(preview.previewUrl).toBe('http://localhost:3010/tour/42?preview')
     // The page on a desktop and a phone, then the scene alone at the width the page gives it.
     expect(preview.screenshots.map(f => path.basename(f))).toEqual([
-      '01-world-desktop.png',
-      '01-world-phone.png',
-      '01-world-scene.png',
+      '02-world-desktop.png',
+      '02-world-phone.png',
+      '02-world-scene.png',
     ])
     expect(shots).toEqual([
       { url: 'http://127.0.0.1:9/tour/42?preview&landmark=world&theme=light', width: 1280 },
@@ -331,6 +331,22 @@ describe('tour preview', () => {
       'q1-q-run.png',
     ])
     expect(whole.screenshots).toHaveLength(4 * 3 + 2)
+    // A retake of one landmark replaces only its own pictures; the rest of the run stays.
+    await previewTour(
+      t.ctx,
+      result.tourDir,
+      {
+        env: { PR_REVIEW_BROWSER: '/opt/chrome' },
+        platform: 'linux',
+        startServer: async () => ({ origin: 'http://127.0.0.1:9', close: async () => undefined }),
+        screenshot: async (_b, _url, file) => writeFile(file, 'retake'),
+      },
+      { landmark: 'world' }
+    )
+    const kept = await readdir(path.join(result.tourDir, 'preview'))
+    expect(kept).toHaveLength(4 * 3 + 2)
+    expect(await readFile(path.join(result.tourDir, 'preview', '02-world-scene.png'), 'utf8')).toBe('retake')
+    expect(await readFile(path.join(result.tourDir, 'preview', '01-before-scene.png'), 'utf8')).toBe('png')
     const none = await previewTour(t.ctx, result.tourDir, {
       env: { PATH: '' },
       platform: 'linux',
@@ -393,6 +409,20 @@ describe('the tour CLI', () => {
     const prepare = capture()
     expect(await runTour(t.ctx, ['prepare', '--pr', '42'], prepare.io)).toBe(0)
     expect(JSON.parse(prepare.out[0]!).status).toBe('exists')
+    // A code chunk for the model, whole or trimmed to a new-side range.
+    const chunk = capture()
+    expect(await runTour(t.ctx, ['hunk', result.tourDir, 'src_app_ts#1'], chunk.io)).toBe(0)
+    const whole = JSON.parse(chunk.out[0]!) as { path: string; diff: string }
+    expect(whole.path).toBe('src/app.ts')
+    expect(whole.diff).toMatch(/^@@ -1,\d+ \+1,\d+ @@/)
+    const trimmed = capture()
+    expect(
+      await runTour(t.ctx, ['hunk', result.tourDir, 'src_app_ts#1', '--from', '2', '--to', '2'], trimmed.io)
+    ).toBe(0)
+    expect(JSON.parse(trimmed.out[0]!).diff).toMatch(/^@@ -\d+,\d+ \+2,1 @@/)
+    await expect(runTour(t.ctx, ['hunk', result.tourDir, 'nope#1'], chunk.io)).rejects.toThrow(
+      'no hunk nope#1 in this change'
+    )
   })
 
   it('names its usage errors', async () => {
@@ -405,6 +435,13 @@ describe('the tour CLI', () => {
     await expect(runTour(t.ctx, ['publish', 'dir'], io)).rejects.toThrow('needs --agent')
     await expect(runTour(t.ctx, ['publish', 'dir', '--agent', 'x'], io)).rejects.toThrow('needs --harness')
     await expect(runTour(t.ctx, ['preview'], io)).rejects.toThrow('takes one directory')
+    await expect(runTour(t.ctx, ['hunk', 'dir'], io)).rejects.toThrow('takes a tour directory and a hunk id')
+    await expect(runTour(t.ctx, ['hunk', 'dir', 'a#1', '--from', 'x', '--to', '2'], io)).rejects.toThrow(
+      '--from takes a line number'
+    )
+    await expect(runTour(t.ctx, ['hunk', 'dir', 'a#1', '--from', '2'], io)).rejects.toThrow(
+      'takes --from and --to together'
+    )
   })
 
   it('reads the tour dir a command line names, so the data dir can follow it', () => {

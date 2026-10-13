@@ -399,6 +399,29 @@ pr-tour {
   color: var(--fg-muted);
   margin: 0 0 18px;
 }
+/* The cover's route: the landmarks by title, numbered, each with its stage. */
+.tour-agenda {
+  margin: 0 0 18px;
+  padding: 0 0 0 1.6em;
+  display: grid;
+  gap: 6px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+.tour-agenda li::marker {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tour-agenda-stage {
+  display: inline-block;
+  min-width: 8.5em;
+  margin-right: 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tour-accent);
+  font-weight: 700;
+}
 .tour-budget {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -20,7 +20,6 @@ import {
   returnBannerHtml,
   staleBarHtml,
   tourHeaderHtml,
-  worldLandmark,
 } from './screens.js'
 import { buildSteps } from './steps.js'
 
@@ -49,7 +48,6 @@ beforeEach(() => {
 describe('inline', () => {
   it('escapes, then turns backtick spans into code', () => {
     expect(inline('a `<b>` & c')).toBe('a <code>&lt;b&gt;</code> &amp; c')
-    expect(worldLandmark(tourOf(bundleWith())).id).toBe('world')
   })
 })
 
@@ -118,9 +116,14 @@ describe('coverHtml', () => {
   it('sums the tour up and offers to start, or to continue', () => {
     document.body.innerHTML = coverHtml(bundleWith())
     expect(document.querySelector('.tour-title')?.textContent).toBe('feat: add b')
-    expect(document.querySelector('.tour-lead')?.textContent).toBe(
-      'A caller of run() gets a() plus b(); the test expects 3.'
-    )
+    // The route by landmark title, not a landmark's lead told twice.
+    expect(document.querySelector('.tour-lead')).toBeNull()
+    expect([...document.querySelectorAll('.tour-agenda li')].map(li => li.textContent)).toEqual([
+      'Before this changerun() returned a() alone',
+      'The worldrun() now adds b()',
+      'WhySum, not product',
+      'What to respectKeep run() total',
+    ])
     expect([...document.querySelectorAll('.tour-budget b')].map(b => b.textContent)).toEqual([
       '4',
       '1',
@@ -431,13 +434,9 @@ describe('planHtml', () => {
 })
 
 describe('the corners of the screens', () => {
-  it('leads with the first landmark when none is the world, names the model, and skips what is empty', () => {
+  it('lists every landmark on the cover, names the model, and skips what is empty', () => {
     const bundle = bundleWith()
     const tour = tourOf(bundle)
-    const first = tour.landmarks[0]
-    if (first === undefined) {
-      throw new Error('no landmark')
-    }
     const noWorld = {
       ...tour,
       landmarks: tour.landmarks.map(l =>
@@ -447,7 +446,12 @@ describe('the corners of the screens', () => {
       notToured: [],
     }
     document.body.innerHTML = coverHtml({ ...bundle, tour: noWorld })
-    expect(document.querySelector('.tour-lead')?.textContent).toBe(first.lead)
+    expect([...document.querySelectorAll('.tour-agenda-stage')].map(s => s.textContent)).toEqual([
+      'Before this change',
+      'Why',
+      'Why',
+      'What to respect',
+    ])
     document.body.innerHTML = tourHeaderHtml({ ...bundle, tour: noWorld }, LOOK)
     expect(document.querySelector('.pill.agent')?.textContent).toBe('tour by claude · opus · claude-code')
     document.body.innerHTML = planHtml({ ...bundle, tour: noWorld })

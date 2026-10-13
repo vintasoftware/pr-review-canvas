@@ -32,8 +32,8 @@ export type TourPick = (typeof PICKS)[number]
 export const TOUR_CAPS = {
   landmarkTitle: 60,
   lead: 140,
-  /** One paragraph of a landmark's body, or of a literate diff. */
-  paragraph: 500,
+  /** One paragraph of a landmark's body, or of a literate diff: about 60 words. */
+  paragraph: 400,
   decisionTitle: 70,
   context: 300,
   sideLabel: 60,
@@ -56,7 +56,10 @@ export const TOUR_LIMITS = {
   codePerLandmark: 3,
   /** Paragraphs and embedded chunks of a literate diff: up to three chunks, a few snippets, and the prose between them. */
   literateBlocks: 12,
+  /** Paragraphs a stored landmark may hold; tours written before the two-paragraph rule had three. */
   bodyParagraphs: 3,
+  /** Paragraphs a new landmark's body may have: the picture carries the rest. */
+  bodyParagraphsWritten: 2,
   quizOptions: 3,
   guards: 6,
   tryItSteps: 8,

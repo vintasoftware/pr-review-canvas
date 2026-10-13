@@ -81,6 +81,13 @@ describe('renderGallery', () => {
       '<main class="scene-root"><div class="scene-fit"><div class="scene" data-technique="sequence">'
     )
     expect(frame).toContain('window.parent.postMessage')
+    // Without --out, each run draws into a new private directory of its own.
+    const deps = { env: browserEnv, platform: 'linux' as const, screenshot: async () => undefined }
+    const first = await renderGallery(['sequence'], deps, { dir })
+    const second = await renderGallery(['sequence'], deps, { dir })
+    const firstDir = path.dirname(first.entries[0]?.png ?? '')
+    expect(path.basename(firstDir)).toMatch(/^pr-review-gallery-/)
+    expect(path.dirname(second.entries[0]?.png ?? '')).not.toBe(firstDir)
   })
 
   it('names an unknown entry, and says where to look without a browser', async () => {

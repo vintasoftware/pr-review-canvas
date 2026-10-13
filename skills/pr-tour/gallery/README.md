@@ -108,17 +108,17 @@ Copy the craft, never the content: your tour draws its own change.
 
 `storyboard.scene.html`
 
-[Composer: Ensure replying shows confirmation modal if content already added](https://github.com/mastodon/mastodon/pull/40910)
+[Denormalized number of orders placed by the user](https://github.com/saleor/saleor/pull/17859) (merged 2025-06-25, head `e538c2d`, BSD-3-Clause)
 
-**What it does.** It replaces the legacy `replyComposeById(statusId)` thunk, which never asked, with a typed `replyComposeById({ statusId, force })`. The new thunk opens the discard-draft modal when `selectComposerIsChanged`. Seven reply call sites now go through it: three that had their own copy of the check, and four that had none. The old thunk is deleted.
+**What it does.** It adds `User.number_of_orders` and backfills it with a Celery task that queues itself batch by batch after migrate. The count goes up in `order_created()`, and in `orderBulkCreate` it goes up per user on commit. It goes down when expired orders are deleted.
 
-**Why this technique.** The diff is spread across 11 files, but its intent is four moves: see the gap, add one gate, route the callers through it, delete the old path. A storyboard with one small picture per move tells that story, while a file-by-file diff hides it.
+**Why this technique.** A denormalized counter is one idea spread over every write path in 16 files. Four panels of intent (store, backfill, count, uncount) show that each path that changes the truth got a step, and show the one path that did not.
 
 **Craft notes**
 
-- Panels 1 and 3 have the same framing (the same eight callers in the same order, the same target), and in the 2×2 grid one sits above the other. The reader compares the wiring before and after directly: four ◇ copies and four red unguarded wires become seven amber wires into one green gate.
-- Each panel takes its tone from the change grammar (gray before, green added, amber changed, red removed) on its number and top edge. The numbers in the pictures are real: lines deleted per file (−11, −18, −12), +38 for the new thunk, −12 for the old one.
-- Panel 2 draws only the gate's anatomy: input, condition, both exits, and the dashed `force: true` loop that keeps the modal from asking twice. The caption names what "changed" covers (text, content warning, poll, quote, media), so the picture can stay small.
+- Give each panel the picture its step needs: a table with the new column, a chain of batches, a fan-in with the delta per path, and a time axis over the test's expired orders. Keep the frame the same in every panel: a number, a top edge toned by the change grammar (green for new, amber for changed), and the files with their +/− counts at the bottom.
+- Put the deltas from the tests in big type (+1, +2) and keep the unchanged path in the picture: `confirmAccount` → `match_orders_with_new_user()`, gray with a dashed ring, ±0. A counter drifts at the edge of the change, so draw that edge.
+- Say what the code at the head does, even where it is wrong. The backfill's `.get(user.id)` returns None, not 0, for a user with no orders, no test in the PR runs the task, and #17882 fixed it. That goes in one amber "!" line in the checks, not in a banner.
 
 ### `sequence`
 
@@ -204,17 +204,17 @@ Copy the craft, never the content: your tour draws its own change.
 
 `schema.scene.html`
 
-[Refactor FASP capabilities into own db model](https://github.com/mastodon/mastodon/pull/40763)
+[Replace `PageRevision` with generic `Revision` model](https://github.com/wagtail/wagtail/pull/8441) (merged 2022-05-17, head `83e49d0`, BSD-3-Clause)
 
-**What it does.** It replaces the `fasp_providers.capabilities` jsonb array with a `fasp_capabilities` table (one row per capability, with a foreign key to its provider), copies the existing arrays into rows with `jsonb_array_elements`, and drops the column. A `down` step folds the rows back into arrays.
+**What it does.** It renames `wagtailcore_pagerevision` to `wagtailcore_revision` and replaces its `page` foreign key with a generic pointer: `object_id` (now a `varchar(255)`) plus two foreign keys to `django_content_type`. Migration 0071 fills `content_type` from each revision's own JSON and `base_content_type` with the Page content type, and 0072 makes both NOT NULL.
 
-**Why this technique.** The change is all shape: a field goes, an entity and a relationship arrive, and every existing array becomes rows. An ER diagram drawn above the same rows before and after shows all three at once, and prose cannot do that.
+**Why this technique.** The change is a relationship that changes kind (a database-enforced FK becomes a pointer matched as text), plus a three-step row migration. An ER diagram over the same rows at each migration shows the new shape and how existing data reaches it.
 
 **Craft notes**
 
-- Draw the relationship at the columns it joins (provider `id` PK to `fasp_provider_id` FK) with a crow's foot, and keep the sibling `has_many` tables in gray. The reader sees the new table follow a pattern the model already uses.
-- Show row migration as one wire per JSON element, from the element to the row it becomes. Sample data comes from the spec fabricators and is labeled as an example. The derived values (a missing `enabled` becomes `false`) are tinted amber and named in a mapping strip under the wires.
-- End on the same question asked of the new shape: the old `@>` scope against the new `joins` scope, answered with the example data ("provider 2"). The picture then closes on a result instead of a banner. Wires are drawn by a script from the HTML boxes' rects, and they re-route (sideways on a desktop, around the left edge on a phone), so the text stays in the layout.
+- Draw the changed relationship twice between the same two columns. The dropped FK is a red dashed arc, and the new pointer is the glowing amber dotted line, labeled with what replaces the constraint ("matched as text, no constraint"). A dashed ghost box ("any other model") gives the reason for the change without inventing a caller: "no model but Page saves one yet".
+- Show the migration as a filmstrip: the same two example rows (pages 4 and 7 from `test.json`), one card per migration, each cell toned by what that step did. Hatched means no column yet, a green outline means added but NULL, and filled green means populated. A dotted wire runs from the `"content_type"` key in each row's JSON to the cell 0071 fills, so provenance is the second hero.
+- Mark stand-ins honestly. Content type ids are drawn as `⟨tests.eventpage⟩`, with a caption saying what `⟨x⟩` means, instead of made-up integers. The script computes the wires from element rects and re-routes them into a left gutter on a phone. On a phone the 0072 card folds into the 0071 card's label.
 
 ### `scenario-matrix`
 
@@ -236,17 +236,17 @@ Copy the craft, never the content: your tour draws its own change.
 
 `ui-journey.scene.html`
 
-[UX: Warn moderators before they lock themselves out of a category](https://github.com/discourse/discourse/pull/36663)
+[feat: change collab trigger & add share dialog](https://github.com/excalidraw/excalidraw/pull/7647) (merged 2024-02-03, head `8b19f3c`, MIT)
 
-**What it does.** When a moderator saves category permissions that leave none of their groups with access (`_wouldLoseAccess()`), Save opens a yes/no dialog first. Yes saves and routes to `/`. No saves nothing. Before this change, the save went through at once and an admin had to restore access.
+**What it does.** The top-right users-icon button becomes a "Share" button (only an icon below 830 px wide). It opens a new Share dialog that offers live collaboration or a read-only shareable link. The main menu and the welcome screen open the same dialog with only its collaboration half (`type: "collaborationOnly"`), and the padlock illustration is removed.
 
-**Why this technique.** The change lives entirely in what one person sees after one click: a new dialog, two new exits, and an old outcome that goes away. A screen-flow drawn as the moderator meets it, forking from the same Save button, shows the branch and its cost faster than the controller code.
+**Why this technique.** The PR is about what a user finds and how many clicks a link takes ("Many users don't know we support collaboration"). A screen flow from the three entry points through the dialogs to the outcomes, before above after on the same grid, shows the new entry point and the shorter path.
 
 **Craft notes**
 
-- Take the journey from the system spec. Its steps (remove everyone, add my_group_1, Save category), its groups, and its three outcomes become the numbered steps, the sample data, and the branches. The real locale strings (the dialog text, Yes/No, "Save category", the tab names) are in the screens.
-- Fork the old and new paths from one source. The removed path is a red dashed wire to a faded, dashed box. The new path is a thick green wire to the glowing dialog, which is the hero. The unchanged path (in the group, or an admin) is a thin gray wire to one muted line, so the reader sees what the change leaves alone.
-- Put enabling changes outside the screens. The `group_id` lookup fix is an amber side note, not UI text. Wires leave from the screen's edge at the button's height, not from the button, so they never cross the drawn UI.
+- Draw each entry point as a small fragment of the real UI (the toolbar strip, the ☰ menu, the welcome screen) with its real locale strings. Start each wire at the edge of the fragment or dialog, at the height of the clicked item, so no wire crosses the drawn UI. Wires into one dialog fan down its left side and do not stack.
+- Number the clicks of the one journey that changes: ☰ → Save to... → Export to Link becomes Share → Export to Link. The numbers appear in each band's header and on the clicked controls, so the reader counts the saving without a banner.
+- Keep the unchanged paths in the picture: gray wires to the same Save to... dialog and session dialog. The hero is only the Share button (amber glow) and its `type: "share"` wire. The dialog's added half is green, the reworded copy is amber, and the removed padlock is red, dashed, and struck through. A red "Stop session" button would read as removed, so the real danger color is drawn muted.
 
 ## Micro-worlds
 

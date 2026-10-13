@@ -93,6 +93,9 @@ describe('validateTourModel', () => {
       input()
     ).errors
     expect(errors.map(e => e.where)).toEqual(['landmarks.1.literate.0'])
+    // A body has at most two paragraphs: the picture carries the rest.
+    const three = validateTourModel(withLandmark(model, 2, { body: ['one', 'two', 'three'] }), input()).errors
+    expect(three.map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'landmarks.2.body']])
   })
 
   it('checks every reference into the diff: code paths, chunks, anchors, guards, landmarks', () => {

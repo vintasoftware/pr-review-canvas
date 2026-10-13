@@ -1,4 +1,4 @@
-// `pr-review tour <prepare|validate|preview|publish|plan|gallery>`: the tour's own steps, mirroring
+// `pr-review tour <prepare|validate|preview|publish|plan|gallery|hunk>`: the tour's own steps, mirroring
 // the canvas commands. Everything is injected: the AppContext carries git, the host, and the stores.
 import path from 'node:path'
 import { parseArgs } from 'node:util'
@@ -20,12 +20,13 @@ import {
   TOUR_VALIDATE_OPTIONS as VALIDATE_OPTIONS,
 } from './named-dir.js'
 import { renderGallery } from './gallery.js'
+import { HunkNotFound, tourChunk } from './hunk.js'
 import { prepareTour } from './prepare.js'
 import { headlessScreenshot, previewTour } from './preview.js'
 import { publishTour, readTourContext, readTourModel, tourValidationInput } from './publish.js'
 import { validateTourModel } from './validate.js'
 
-export const TOUR_STEPS = ['prepare', 'validate', 'preview', 'publish', 'plan', 'gallery'] as const
+export const TOUR_STEPS = ['prepare', 'validate', 'preview', 'publish', 'plan', 'gallery', 'hunk'] as const
 export type TourStep = (typeof TOUR_STEPS)[number]
 
 /** The step named, or a usage error naming them all. */
@@ -57,6 +58,8 @@ export async function runTour(ctx: AppContext, argv: string[], io: CliIo): Promi
       return runTourPlan(ctx, rest, io)
     case 'gallery':
       return runTourGallery(rest, io)
+    case 'hunk':
+      return runTourHunk(rest, io)
     default:
       return runTourPublish(ctx, rest, io)
   }
@@ -156,8 +159,10 @@ async function runTourValidate(ctx: AppContext, argv: string[], io: CliIo): Prom
   if ('output' in report && report.output !== null) {
     const { landmarks, decisions, quiz } = report.output
     const b = context.budget
+    // The state landmark is never counted against the budget, so it is named apart.
+    const state = landmarks.filter(l => l.state === true).length
     io.stdout(
-      `ok: ${path.basename(file)} passes: ${landmarks.length} landmarks (budget ${b.landmarks}), ${decisions.length} decisions (budget ${b.decisions}), ${quiz.length} questions (budget ${b.quiz})`
+      `ok: ${path.basename(file)} passes: ${landmarks.length - state} landmarks (budget ${b.landmarks})${state > 0 ? ' and the state landmark' : ''}, ${decisions.length} decisions (budget ${b.decisions}), ${quiz.length} questions (budget ${b.quiz})`
     )
   } else {
     for (const e of report.errors) io.stdout(formatTourError(e))
@@ -212,6 +217,45 @@ async function runTourGallery(argv: string[], io: CliIo): Promise<number> {
   )
   printJson(io, result)
   return result.status === 'unknown' ? EXIT.invalid : EXIT.ok
+}
+
+/**
+ * `tour hunk <tourDir> <hunk id> [--from <line> --to <line>]`: a code chunk for the model, the
+ * whole hunk or the lines of a new-side range, as one JSON object to paste.
+ */
+async function runTourHunk(argv: string[], io: CliIo): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { from: { type: 'string' }, to: { type: 'string' } },
+    allowPositionals: true,
+    strict: true,
+  })
+  const [tourDir, id] = positionals
+  if (tourDir === undefined || id === undefined || positionals.length > 2) {
+    throw new UsageError('tour hunk takes a tour directory and a hunk id: pr-review tour hunk <tourDir> <id>')
+  }
+  const line = (raw: string | undefined, name: string) => {
+    if (raw === undefined) return undefined
+    const n = Number(raw)
+    if (!Number.isInteger(n) || n < 1) throw new UsageError(`tour hunk --${name} takes a line number`)
+    return n
+  }
+  const from = line(values.from, 'from')
+  const to = line(values.to, 'to')
+  if ((from === undefined) !== (to === undefined)) {
+    throw new UsageError('tour hunk takes --from and --to together, or neither for the whole hunk')
+  }
+  const context = await readTourContext(path.resolve(tourDir))
+  try {
+    printJson(
+      io,
+      await tourChunk(context, id, from === undefined || to === undefined ? undefined : { from, to })
+    )
+  } catch (err) {
+    if (err instanceof HunkNotFound) throw new UsageError(err.message)
+    throw err
+  }
+  return EXIT.ok
 }
 
 async function runTourPublish(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {

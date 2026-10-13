@@ -197,7 +197,9 @@ body {
   font-size: 0.8rem;
   color: var(--c, var(--muted));
 }
-.code {
+/* Inline code, as the class or as a bare <code> outside a terminal or a file, which have their own. */
+.code,
+:where(code):not(.term *, .file *) {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
   padding: 0.15rem 0.4rem;

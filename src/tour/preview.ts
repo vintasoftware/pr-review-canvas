@@ -3,7 +3,7 @@
 // Which pages, and where the pictures go, is the tour's business (`pr-review tour preview`).
 import { execFile } from 'node:child_process'
 import { accessSync, constants } from 'node:fs'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -135,7 +135,10 @@ export async function previewTour(
       : validateTourModel(model.raw, await tourValidationInput(ctx, context, model.raw))
   if (!result.ok || result.output === null)
     throw new TourInvalidError({ ok: false, errors: result.errors }, 0)
-  const landmarks = result.output.landmarks.filter(l => opts.landmark === undefined || l.id === opts.landmark)
+  // Each landmark keeps its place in the tour, so a retake of one is numbered as the whole run is.
+  const landmarks = result.output.landmarks
+    .map((landmark, i) => ({ landmark, n: String(i + 1).padStart(2, '0') }))
+    .filter(({ landmark }) => opts.landmark === undefined || landmark.id === opts.landmark)
   const key =
     context.target.kind === 'pr'
       ? String(context.target.number)
@@ -156,12 +159,21 @@ export async function previewTour(
   if (browser === null)
     return { ...base, status: 'no-browser', screenshots: [], previewUrl, hint: NO_BROWSER_HINT }
   const dir = path.join(tourDir, 'preview')
-  await rm(dir, { recursive: true, force: true })
+  // A whole run starts over; a retake of one landmark replaces only that landmark's pictures.
+  if (opts.landmark === undefined) {
+    await rm(dir, { recursive: true, force: true })
+  } else {
+    for (const { n, landmark } of landmarks) {
+      for (const name of await readdir(dir).catch(() => [] as string[])) {
+        if (name.startsWith(`${n}-${landmark.id}-`)) await rm(path.join(dir, name), { force: true })
+      }
+    }
+  }
   await mkdir(dir, { recursive: true })
   const server = await deps.startServer(ctx)
   const screenshots: string[] = []
   try {
-    for (const [i, landmark] of landmarks.entries()) {
+    for (const { n, landmark } of landmarks) {
       const id = encodeURIComponent(landmark.id)
       const page = `${server.origin}/tour/${key}?preview&landmark=${id}&theme=light`
       const picture = (kind: 'scene' | 'micro') =>
@@ -177,7 +189,7 @@ export async function previewTour(
           : []),
       ]
       for (const [name, url, viewport] of shots) {
-        const file = path.join(dir, `${String(i + 1).padStart(2, '0')}-${landmark.id}-${name}.png`)
+        const file = path.join(dir, `${n}-${landmark.id}-${name}.png`)
         await deps.screenshot(browser, url, file, viewport)
         screenshots.push(file)
       }
@@ -230,6 +242,11 @@ export async function headlessScreenshot(
         '--hide-scrollbars',
         '--mute-audio',
         '--force-prefers-reduced-motion',
+        // A scene's frame has no origin, so Chrome would draw it in a process of its own, which the
+        // virtual time budget does not wait for: the shot then catches the frame before it sizes
+        // itself. In one process, the frames load, report their heights, and paint within the budget.
+        '--disable-site-isolation-trials',
+        '--disable-features=IsolateOrigins,site-per-process',
         `--user-data-dir=${profile}`,
         `--window-size=${viewport.width},${viewport.height}`,
         '--virtual-time-budget=10000',

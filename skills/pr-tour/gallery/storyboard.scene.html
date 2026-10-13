@@ -1,188 +1,110 @@
 <div class="scene" data-technique="storyboard">
-<style>
-.sb{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
-.sb-p{display:flex;flex-direction:column;gap:.7rem;padding:.75rem .9rem .85rem;border:.1rem solid var(--line);border-top:.3rem solid var(--c);border-radius:.7rem;background:var(--paper);text-align:left;min-width:0}
-.sb-p>header{display:flex;gap:.55rem;align-items:center;font-weight:750;font-size:1rem;color:var(--fg)}
-.sb-n{flex:none;display:inline-grid;place-items:center;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--c);color:var(--paper);font-size:.85rem}
-.sb-body{display:flex;flex-direction:column;gap:.8rem;flex:1}
-.sb-pic{position:relative;display:grid;grid-template-columns:max-content minmax(2.5rem,1fr) max-content minmax(2rem,1fr) max-content;grid-template-rows:repeat(8,auto);grid-auto-flow:dense;row-gap:.3rem;align-items:center}
-.sb-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-.sb-svg path{fill:none;stroke:var(--c);stroke-width:1.5;stroke-linecap:round}
-.sb-svg .hero{stroke-width:3.2}
-.sb-svg .tip,.sb-svg text{fill:var(--c);stroke:none}
-.sb-svg text{font:700 11px ui-sans-serif,system-ui,sans-serif}
-.sb-svg .dash{stroke-dasharray:4 4}
-.sb-c{grid-column:1;justify-self:start;display:flex;align-items:center;gap:.3rem;font-size:.78rem;white-space:nowrap}
-.sb-c>span{padding:.08rem .45rem;border:.08rem solid var(--c,var(--line));border-radius:.35rem;background:var(--paper);color:var(--fg)}
-.sb-c em{font-style:normal;font-size:.72rem;font-weight:750;color:var(--bad)}
-.sb-m{grid-column:3;justify-self:center}
-.sb-d{display:grid;place-items:center;width:.95rem;height:.95rem;rotate:45deg;border:.1rem solid var(--c,var(--muted));background:var(--paper)}
-.sb-dst{grid-column:5;grid-row:1/-1}
-.sb-box{padding:.3rem .5rem;border:.12rem solid var(--c,var(--line));border-radius:.45rem;background:var(--tint);font:600 .74rem/1.3 ui-monospace,monospace;text-align:center;color:var(--fg)}
-.sb-box.muted{background:var(--paper)}
-.sb-hero{box-shadow:0 0 0 .32rem color-mix(in srgb,var(--good) 18%,transparent)}
-.sb-flow{position:relative;display:grid;grid-template-columns:auto auto auto;justify-content:space-between;align-items:center;gap:2rem 1rem;padding:.4rem 0}
-.sb-flow .sb-d{width:4.4rem;height:4.4rem;justify-self:center;border-width:.14rem}
-.sb-flow .sb-d>span{rotate:-45deg;font:700 .68rem/1.15 ui-monospace,monospace;text-align:center;color:var(--fg)}
-.sb-flow #modal{grid-column:2}
-.sb-cap{display:flex;flex-direction:column;gap:.35rem;margin-top:auto;font-size:.8rem;line-height:1.4;color:var(--fg)}
-.sb-cap code{font:.74rem ui-monospace,monospace}
-.sb-files{font:.68rem/1.5 ui-monospace,monospace;color:var(--muted)}
-.sb .file{max-width:none;font-size:.72rem}
-@media (max-width:640px){.sb{grid-template-columns:1fr}.sb-pic{grid-template-columns:max-content minmax(1rem,1fr) max-content minmax(1rem,1fr) max-content}}
-</style>
-<div class="sb">
+  <div class="sb">
+    <section class="sb-g">
+      <h4><b>1</b>Store the count</h4>
+      <table class="sb-t">
+        <tr><th>account_user</th><th class="good">number_of_orders</th></tr>
+        <tr><td>customer_user</td><td class="good sb-hero">0</td></tr>
+        <tr><td>customer_user2</td><td class="good sb-hero">0</td></tr>
+      </table>
+      <p class="small">A column on <code>User</code>. Every existing row reads 0 until step 2 runs.</p>
+      <div class="file sb-file" data-title="account/models.py · class User"><span>search_document = models.TextField(blank=True, default="")</span><span>uuid = models.UUIDField(default=uuid4, unique=True)</span><span class="add"># Denormalized number of orders placed by the user</span><span class="add">number_of_orders = models.PositiveIntegerField(default=0, db_default=0)</span></div>
+      <ul class="sb-f"><li>account/models.py<b>+3</b></li><li>migrations/<wbr>0090_user_number_of_orders.py<b>+17</b></li></ul>
+    </section>
 
-<section class="sb-p muted">
-<header><b class="sb-n">1</b>Before: four copies of the check, four callers without one</header>
-<div class="sb-body">
-<div class="sb-pic">
-<div class="sb-c" data-to="#a1"><span>status (legacy)</span></div>
-<div class="sb-c" data-to="#a2"><span>conversation</span></div>
-<div class="sb-c" data-to="#a3"><span>picture-in-picture</span></div>
-<div class="sb-c bad" data-to="#old"><span>statusInteraction</span></div>
-<div class="sb-c bad" data-to="#old"><span>notification</span></div>
-<div class="sb-c bad" data-to="#old"><span>notification group</span></div>
-<div class="sb-c bad" data-to="#old"><span>new composer</span></div>
-<div class="sb-c" data-to="#a8"><span>status page</span></div>
-<i class="sb-m sb-d" id="a1" data-to="#rc1"></i><i class="sb-m sb-d" id="a2" data-to="#rc1"></i><i class="sb-m sb-d" id="a3" data-to="#rc1"></i>
-<span class="sb-m sb-box muted" id="old" data-to="#rc1" data-tone="bad" style="grid-row:span 4">replyComposeById<br>(statusId)</span>
-<i class="sb-m sb-d" id="a8" data-to="#rc1"></i>
-<span class="sb-dst sb-box muted" id="rc1">replyCompose<br>(status)</span>
-</div>
-<div class="sb-cap">
-<span>Four callers each test the draft (◇) before replying, four copies of <code>compose.text.trim()</code>.</span>
-<span>Four go through <code>replyComposeById(statusId)</code>, which never asks: <b class="bad">a reply from a notification overwrites the draft.</b></span>
-</div>
-</div>
-</section>
+    <section class="sb-g">
+      <h4><b>2</b>Backfill after migrate</h4>
+      <span class="chip muted sb-pm">post_migrate of the order app</span>
+      <div class="sb-run"><span>1000 users</span><span>next 1000</span><span>next 1000</span><span>none left</span></div>
+      <small class="sb-hop">one Celery task per batch; each queues the next with <code>.delay(user_ids[-1])</code>, the last pk</small>
+      <ul class="checks">
+        <li class="good">sets each user's count of orders, <code>status ≠ DRAFT</code></li>
+        <li class="good">skips users whose count already matches</li>
+        <li class="warn">a user with no orders: <code>.get(user.id)</code> is None, not 0; no test runs the task, and #17882 fixed it</li>
+        <li>down: <code>RunPython.noop</code></li>
+      </ul>
+      <ul class="sb-f"><li>migrations/<wbr>0091_populate_user_<wbr>number_of_orders.py<b>+28</b></li><li>migrations/tasks/<wbr>saleor3_22.py<b>+52</b></li></ul>
+    </section>
 
-<section class="sb-p good">
-<header><b class="sb-n">2</b>Add one thunk that asks first</header>
-<div class="sb-body">
-<div class="sb-flow">
-<span class="sb-box muted" id="in" data-to="#g">{ statusId }</span>
-<i class="sb-d good sb-hero" id="g" data-to="#rc2,#modal" data-say="no,yes"><span>changed<br>&amp;&amp; !force</span></i>
-<span class="sb-box muted" id="rc2">replyCompose<br>(status)</span>
-<span class="sb-box good" id="modal" data-to="#in" data-loop>CONFIRM_REPLY modal<br>Yes: force: true</span>
-</div>
-<div class="sb-cap">
-<span><code>replyComposeById({ statusId, force })</code> in compose_typed.ts asks when <code>selectComposerIsChanged</code>: text, a content warning, a poll, a quote, or media.</span>
-<span>The modal now takes <code>statusId</code>, and its Yes comes back with <code>force: true</code>, so it asks once.</span>
-<span class="sb-files">compose_typed.ts +38 −1<br>discard_draft_confirmation.tsx +5 −6</span>
-</div>
-</div>
-</section>
+    <section class="sb-w">
+      <h4><b>3</b>Count each new order</h4>
+      <div class="sb-p">
+        <span class="sb-src" style="grid-row: 1">checkoutComplete</span><span class="sb-src" style="grid-row: 2">draftOrderComplete</span>
+        <span class="arrow warn" style="grid-row: 1 / 3"></span>
+        <span class="sb-fn warn" style="grid-row: 1 / 3">order_created()<i>F("number_of_orders") + 1</i></span>
+        <span class="big warn" style="grid-row: 1 / 3">+1</span>
+        <span class="sb-src">orderBulkCreate</span><span class="arrow warn"></span>
+        <span class="sb-fn good">update_user_<wbr>orders_count()<i>tally per user, + count on commit, rows locked</i></span>
+        <span class="big warn">+2</span>
+        <span class="sb-src sb-ring">confirmAccount</span><span class="arrow"></span>
+        <span class="sb-fn muted">match_orders_<wbr>with_new_user()<i>attaches earlier guest orders</i></span>
+        <span class="big muted">±0</span>
+      </div>
+      <p class="small">From the tests: a checkout or draft order completed for <code>customer_user</code>, +1; <code>orderBulkCreate</code> of two orders, +2. Unchanged: confirming an account does not count the guest orders it takes over.</p>
+      <ul class="sb-f"><li>order/actions.py<b>+5</b></li><li>account/utils.py<b>+20 −1</b></li><li>account/lock_objects.py<b>+5</b></li><li>graphql/order/bulk_mutations/order_bulk_create.py<b>+12 −3</b></li></ul>
+    </section>
 
-<section class="sb-p warn">
-<header><b class="sb-n">3</b>Send seven callers through it</header>
-<div class="sb-body">
-<div class="sb-pic">
-<div class="sb-c warn" data-to="#g3"><span>status (legacy) <em>−11</em></span></div>
-<div class="sb-c warn" data-to="#g3"><span>conversation <em>−18</em></span></div>
-<div class="sb-c warn" data-to="#g3"><span>picture-in-picture <em>−12</em></span></div>
-<div class="sb-c warn" data-to="#g3"><span>statusInteraction</span></div>
-<div class="sb-c warn" data-to="#g3"><span>notification</span></div>
-<div class="sb-c warn" data-to="#g3"><span>notification group</span></div>
-<div class="sb-c warn" data-to="#g3"><span>new composer</span></div>
-<div class="sb-c" data-to="#b8"><span>status page</span></div>
-<span class="sb-m sb-box good sb-hero" id="g3" data-to="#rc3" style="grid-row:span 7">replyComposeById<br>({ statusId })</span>
-<i class="sb-m sb-d" id="b8" data-to="#rc3"></i>
-<span class="sb-dst sb-box muted" id="rc3">replyCompose<br>(status)</span>
-</div>
-<div class="sb-cap">
-<span>Every caller but one now dispatches the thunk. Three delete their own copy of the check (lines removed, in red).</span>
-<span>The status page keeps its test and passes <code>statusId</code> to the modal.</span>
-<span class="sb-files">8 files, +20 −53</span>
-</div>
-</div>
-</section>
-
-<section class="sb-p bad">
-<header><b class="sb-n">4</b>Delete the old thunk</header>
-<div class="sb-body">
-<div class="file" data-title="app/javascript/mastodon/actions/compose.js">
-<span class="del">export function replyComposeById(statusId) {</span>
-<span class="del">  return (dispatch, getState) =&gt; {</span>
-<span class="del">    const state = getState();</span>
-<span class="del">    const status = state.statuses.get(statusId);</span>
-<span class="del">    …</span>
-<span class="del">      dispatch(replyCompose(status.set('account', account)));</span>
-<span class="del">  …</span>
-</div>
-<div class="file" data-title="its 4 importers, e.g. notification_with_status.tsx">
-<span class="del">import { replyComposeById } from 'mastodon/actions/compose';</span>
-<span class="add">import { replyComposeById } from '@/mastodon/actions/compose_typed';</span>
-</div>
-<div class="sb-cap" style="flex-direction:row;align-items:center;gap:.8rem">
-<span class="big bad">−12</span>
-<span>lines in compose.js, and no caller left for them.</span>
-</div>
-</div>
-</section>
-
-</div>
-<script>
-const NS = 'http://www.w3.org/2000/svg'
-const TONES = ['good', 'warn', 'bad', 'muted']
-function draw(pic) {
-  let svg = pic.querySelector(':scope > .sb-svg')
-  if (!svg) { svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'sb-svg'); pic.prepend(svg) }
-  const o = pic.getBoundingClientRect()
-  svg.replaceChildren()
-  svg.setAttribute('viewBox', `0 0 ${o.width} ${o.height}`)
-  pic.querySelectorAll('[data-to]').forEach(a => {
-    const says = (a.dataset.say ?? '').split(',')
-    a.dataset.to.split(',').forEach((sel, k) => {
-      const b = pic.querySelector(sel)
-      const A = a.getBoundingClientRect(), B = b.getBoundingClientRect()
-      const tone = a.dataset.tone ?? [...a.classList].find(c => TONES.includes(c)) ?? 'muted'
-      let x1, y1, x2, y2, d, dx = 0, dy = 0, tx, ty
-      if (a.hasAttribute('data-loop')) {
-        dy = -1
-        x1 = A.left - o.left; y1 = A.top + A.height / 2 - o.top
-        x2 = B.left + B.width / 2 - o.left; y2 = B.bottom - o.top
-        d = `M${x1},${y1} C${x2},${y1} ${x2},${y1} ${x2},${y2}`
-      } else if (B.left >= A.right - 2) {
-        dx = 1
-        x1 = A.right - o.left; y1 = A.top + A.height / 2 - o.top
-        x2 = B.left - o.left; y2 = B.top + B.height / 2 - o.top
-        const m = (x1 + x2) / 2
-        d = `M${x1},${y1} C${m},${y1} ${m},${y2} ${x2},${y2}`
-        tx = m; ty = Math.min(y1, y2) - 6
-      } else {
-        dy = 1
-        x1 = A.left + A.width / 2 - o.left; y1 = A.bottom - o.top
-        x2 = B.left + B.width / 2 - o.left; y2 = B.top - o.top
-        d = `M${x1},${y1} L${x2},${y2}`
-        tx = x1 + 8; ty = (y1 + y2) / 2 + 4
-      }
-      const px = -dy, py = dx
-      const g = document.createElementNS(NS, 'g')
-      g.setAttribute('class', tone)
-      g.innerHTML = `<path d="${d}" class="${a.matches('.sb-hero') ? 'hero' : ''} ${a.hasAttribute('data-loop') ? 'dash' : ''}"/>` +
-        `<path class="tip" d="M${x2},${y2} L${x2 - dx * 7 + px * 4},${y2 - dy * 7 + py * 4} L${x2 - dx * 7 - px * 4},${y2 - dy * 7 - py * 4}Z"/>` +
-        (says[k] ? `<text x="${tx}" y="${ty}" text-anchor="${dy ? 'start' : 'middle'}">${says[k]}</text>` : '')
-      svg.append(g)
-      if (!scene.reducedMotion && !sizes.has(pic.dataset.k)) {
-        const p = g.firstChild, len = p.getTotalLength()
-        p.style.strokeDasharray = a.hasAttribute('data-loop') ? '' : len
-        if (!a.hasAttribute('data-loop')) p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 600, delay: 350 * pic.dataset.i + 300, fill: 'backwards' })
-      }
-    })
-  })
-}
-const sizes = new Map()
-document.querySelectorAll('.sb-pic, .sb-flow').forEach((p, i) => { p.dataset.i = i; p.dataset.k = `p${i}` })
-const ro = new ResizeObserver(entries => {
-  for (const e of entries) {
-    const p = e.target, k = `${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`
-    if (sizes.get(p.dataset.k) !== k) { draw(p); sizes.set(p.dataset.k, k) }
-  }
-})
-document.querySelectorAll('.sb-pic, .sb-flow').forEach(p => ro.observe(p))
-if (!scene.reducedMotion) {
-  document.querySelectorAll('.sb-p').forEach((p, i) => p.animate([{ opacity: 0, transform: 'translateY(.6rem)' }, { opacity: 1, transform: 'none' }], { duration: 450, delay: i * 350, fill: 'backwards', easing: 'ease-out' }))
-}
-</script>
+    <section class="sb-w">
+      <h4><b>4</b>Uncount deleted orders</h4>
+      <div class="sb-axis">
+        <span class="sb-cut">deleted: expired over 3 days ago</span>
+        <i style="--d: 7"><s>order_3</s><br>7 d</i><i style="--d: 5"><s>order_2</s><br>5 d</i><i style="--d: 0">order_1<br>now</i>
+      </div>
+      <table class="sb-t">
+        <tr><td>customer_user</td><td>order_1, <s>order_2</s></td><td class="warn num">2 → 1</td></tr>
+        <tr><td>customer_user2</td><td><s>order_3</s></td><td class="warn num">1 → 0</td></tr>
+      </table>
+      <code class="sb-code" style="--t: var(--good)">reduce_user_<wbr>number_of_orders():<br>max(user.number_of_orders - order_count, 0)</code>
+      <p class="small">From the test, with <code>delete_expired_orders_after</code> 3 days. The task counts the batch's orders per user before it deletes them.</p>
+      <ul class="sb-f"><li>order/tasks.py<b>+27</b></li></ul>
+    </section>
+  </div>
+  <style>
+    .sb { width: 100%; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.05fr) minmax(0, 1.6fr) minmax(0, 1fr); gap: 0.8rem; }
+    .sb-g { --t: var(--good); }
+    .sb-w { --t: var(--warn); }
+    .sb section { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem 0.7rem 0.5rem; border: 0.08rem solid var(--line); border-top: 0.25rem solid var(--t); border-radius: 0.6rem; background: var(--paper); font-size: 0.74rem; }
+    .sb h4 { display: flex; align-items: center; gap: 0.45rem; margin: 0; font-size: 1.24em; }
+    .sb h4 b { display: grid; place-items: center; flex: none; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--t); color: var(--paper); font-size: 0.87em; }
+    .sb code, .sb-p, .sb-t, .sb-f, .sb-axis { font-family: ui-monospace, monospace; }
+    .sb code { font-size: 0.95em; }
+    .sb .small { margin: 0; font-size: 0.95em; }
+    .sb-t { width: 100%; font-size: 0.92em; }
+    .sb-t th { text-transform: none; letter-spacing: 0; font-size: 0.97em; }
+    .sb-t td { padding: 0.18rem 0.4rem; }
+    .sb-t .num { white-space: nowrap; }
+    .sb s { color: var(--muted); }
+    .sb-hero { text-align: center; box-shadow: inset 0 0 0 0.12rem var(--good), 0 0 0.7rem color-mix(in srgb, var(--good) 50%, transparent); }
+    .sb-code { padding: 0.25rem 0.45rem; border-radius: 0.3rem; background: color-mix(in srgb, var(--t) 10%, var(--paper)); color: var(--t); font-weight: 650; overflow-wrap: anywhere; }
+    .sb-f { margin: auto 0 0; padding: 0.35rem 0 0; border-top: 0.07rem solid var(--line); list-style: none; font-size: 0.84em; color: var(--muted); }
+    .sb-f li { display: flex; justify-content: space-between; gap: 0.4rem; }
+    .sb-f b { white-space: nowrap; color: var(--good); }
+    .sb-pm { align-self: center; }
+    .sb-file { font-size: 0.84em; line-height: 1.35; }
+    .sb-file > :not(.add) { color: var(--muted); }
+    .sb-run { display: grid; grid-template-columns: repeat(3, 1fr) 0.9fr; gap: 0.55rem; }
+    .sb-run span { position: relative; display: grid; place-items: center; min-height: 2.2rem; border: 0.1rem solid var(--good); border-radius: 0.35rem; background: color-mix(in srgb, var(--good) 12%, var(--paper)); font-size: 0.86em; font-weight: 650; text-align: center; animation: sb-lit 4.8s calc(var(--i) * 1.2s) infinite; }
+    .sb-run span:last-child { border-style: dashed; background: none; color: var(--muted); }
+    .sb-run span + span::before { content: '›'; position: absolute; left: -0.55rem; top: 50%; translate: 0 -55%; font-size: 1rem; font-weight: 800; color: var(--good); }
+    @keyframes sb-lit { 0%, 20% { box-shadow: 0 0 0 0.22rem color-mix(in srgb, var(--good) 35%, transparent); } 25% { box-shadow: none; } }
+    .sb-hop { font-size: 0.86em; color: var(--muted); }
+    .sb .checks { font-size: 0.95em; gap: 0.15rem; }
+    .sb-p { display: grid; grid-template-columns: auto 1.6rem 1fr auto; align-items: center; gap: 0.3rem 0.4rem; font-size: 0.89em; }
+    .sb-p .arrow { --len: 1.6rem; }
+    .sb-src { grid-column: 1; padding: 0.15rem 0.35rem; border: 0.07rem solid var(--line); border-radius: 0.3rem; }
+    .sb-fn { display: flex; flex-direction: column; padding: 0.2rem 0.4rem; border-radius: 0.3rem; background: var(--tint); color: var(--c); font-weight: 700; }
+    .sb-fn i { font-style: normal; font-weight: 500; color: var(--fg); }
+    .sb-p .big { font-size: 2.27em; text-align: right; }
+    .sb-ring { border: 0.1rem dashed var(--muted); color: var(--muted); }
+    .sb-axis { position: relative; height: 3.3rem; margin: 0 0.6rem; border-bottom: 0.1rem solid var(--line); }
+    .sb-axis::before { content: ''; position: absolute; left: -0.6rem; right: 41.7%; top: 1.05rem; bottom: 0; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--muted) 20%, transparent) 0 0.2rem, transparent 0.2rem 0.45rem); border-right: 0.1rem dashed var(--muted); }
+    .sb-cut { position: absolute; top: 0; left: -0.6rem; white-space: nowrap; font-size: 0.84em; font-weight: 650; color: var(--muted); }
+    .sb-axis i { position: absolute; bottom: 0.15rem; right: calc(4% + var(--d) / 7 * 88%); translate: 50% 0; font: normal 600 0.81em/1.15 ui-monospace, monospace; text-align: center; }
+    @media (max-width: 64rem) { .sb { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 40rem) { .sb { grid-template-columns: minmax(0, 1fr); } .sb section { font-size: 0.95rem; } }
+  </style>
+  <script>
+    // The batches light up in turn, one Celery task after another.
+    document.querySelectorAll('.sb-run span').forEach((s, i) => s.style.setProperty('--i', i))
+  </script>
 </div>

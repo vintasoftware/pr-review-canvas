@@ -50,12 +50,6 @@ export function inline(text) {
   return esc(text).replace(/`([^`]+)`/g, '<code>$1</code>')
 }
 
-/** The landmark that says what the change means; the cover leads with it. A tour has landmarks. */
-/** @param {TourPageTour} tour */
-export function worldLandmark(tour) {
-  return /** @type {TourPageLandmark} */ (tour.landmarks.find(l => l.stage === 'world') ?? tour.landmarks[0])
-}
-
 /**
  * @param {TourBundle} bundle
  * @param {{ host: string, theme: import('../theme.js').Theme, skin: import('../skin.js').Skin, now: Date }} opts
@@ -155,7 +149,10 @@ export function navHtml(steps, i, reader) {
 export function coverHtml(bundle) {
   const { pr } = bundle
   const tour = /** @type {TourPageTour} */ (bundle.tour)
-  const world = worldLandmark(tour)
+  // The route ahead, by landmark title: each landmark tells its own lead, so the cover tells none.
+  const agenda = `<ol class="tour-agenda">${tour.landmarks
+    .map(l => `<li><span class="tour-agenda-stage">${esc(STAGE_LABEL[l.stage])}</span>${esc(l.title)}</li>`)
+    .join('')}</ol>`
   const guide =
     tour.guide === null
       ? '<span>no guide on file</span>'
@@ -170,7 +167,7 @@ export function coverHtml(bundle) {
     <p class="tour-eyebrow"><span class="tour-stage-tag">Tour</span><span>${link} · ${esc(tour.repo.owner)}/${esc(tour.repo.name)}</span></p>
     <h1 class="tour-title">${esc(pr.title)}</h1>
     <p class="tour-cover-meta"><span>by ${esc(pr.author)}</span><span class="mono">${esc(pr.headRef)} → ${esc(pr.baseRef)}</span><span><span class="ok">+${pr.additions}</span> <span class="bad">−${pr.deletions}</span> in ${plural(pr.changedFiles, 'file')}</span>${guide}${blast}</p>
-    <p class="tour-lead">${inline(world.lead)}</p>
+    ${agenda}
     <div class="tour-budget">
       <div><b>${tour.landmarks.length}</b><span>landmarks</span></div>
       <div><b>${tour.decisions.length}</b><span>decisions</span></div>

@@ -82,6 +82,10 @@
       }
     }
     fit()
+    // A frame can be laid out before its fonts settle, and an observer's first callback can come
+    // late; two timed fits make sure the page hears the height the scene ends at.
+    setTimeout(fit, 100)
+    setTimeout(fit, 600)
     const main = document.querySelector('.scene-root')
     if (main === null || typeof ResizeObserver !== 'function') return
     new ResizeObserver(refit).observe(main)

@@ -832,6 +832,7 @@ pr-review tour preview <tourDir> [--landmark <id>]
 pr-review tour publish <tourDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
 pr-review tour plan (--pr <n> | --branch | --uncommitted)
 pr-review tour gallery [<slug>…] [--out <dir>]
+pr-review tour hunk <tourDir> <hunk id> [--from <line> --to <line>]
 ```
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
@@ -859,7 +860,12 @@ every decision and question, using Chrome, Chromium, or Edge from the PATH or
 
 `tour gallery` lists the scene gallery the skill ships beside its scene guide: real pull requests,
 each drawn with one technique. With slugs, it draws those entries as pictures with the same
-browser, into `--out` (a directory of the system's temp dir by default), and prints their paths.
+browser, into `--out` (by default a new private directory in the system's temp dir), and prints
+their paths.
+
+`tour hunk` prints one code chunk for the model, `{ "path", "diff" }`, read from the prepared
+patches: the whole hunk, or with `--from` and `--to` the lines of that new-side range and the
+deletions among them, under an `@@` header that counts them.
 
 `tour plan` prints the plan a finished tour settled on, for the
 [pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),

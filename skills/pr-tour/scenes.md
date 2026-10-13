@@ -43,7 +43,8 @@ Every tour draws change the same way, so a reader learns it once:
   says nothing about what they touch.
 - **One hero**, at most two: the element the change is really about (the edge it adds, the state
   it removes, the line that moved) gets the emphasis, a thicker stroke, a glow, a gentle pulse.
-  If everything is emphasized, nothing is.
+  If everything is emphasized, nothing is. Emphasize with weight and light, never with `ink`: the
+  accent is green in the github skin, the same green as added, so an `ink` hero reads as "new".
 - **Before and after** are the same picture twice, with the same layout, actors, labels, and
   scale, so the eye goes straight to what differs. Side by side on a desktop; stacked on a phone.
 
@@ -64,7 +65,19 @@ Every tour draws change the same way, so a reader learns it once:
   is what keeps text from colliding; validation refuses a scene whose markup has no words.
 - **Room to breathe.** Use the width. A diagram of six nodes laid out across 1120 px reads at a
   glance; the same six crammed into a column do not. Leave white space between groups; let one
-  thing be big.
+  thing be big. Start a tour with a light picture: the first scene is met before the reader holds
+  any of the change, so it shows the few parts the change touches, not every wire.
+- **A budget for busy pictures.** At most three columns or eight wires in one picture, and no
+  label under 0.75 rem. A picture that needs more is two pictures, or it builds up: two parts at a
+  time in motion, all of them at rest. A moved function, its callers, and its cache are three
+  ideas: draw the one the landmark is about.
+- **A phone composition of its own.** On a phone the frame is about 320 px wide, and a diagram
+  whose meaning is in its wires loses it when its columns stack and the wires go. Draw the phone
+  version on purpose under `@media (max-width: 40rem)`: stack each source above its destination
+  with a labeled arrow down, turn a matrix into a compact table, keep before and after as two
+  stacked copies of the same small picture, and drop the nodes the picture's question does not
+  need. Then check the phone preview: every relationship the desktop picture shows must still be
+  readable there.
 - **A stage that persists**, when the tour returns to the same system: the background landmark
   may draw a map of the part of the system the change touches (its components and how they talk,
   all `muted`, the way it was), and a later landmark, often the respect landmark, draws the same
@@ -149,6 +162,9 @@ slug in `code` is what goes in `data-technique`.
   the combination the change adds or fixes marked.
 - `checks`: the cases handled or tested (the kit's `checks`), with the one gap open: the guards a
   landmark names.
+- `test-flips`: the existing tests whose expectations the change rewrote, each assertion before
+  and after (`status` 500 → 401, `calls` 1 → 3). A behavior change in the project's own
+  numbers, and the best evidence of what a caller will notice.
 - `boundary`: where the new behavior stops. Two or three paths side by side under the same input:
   one the change covers, one it charges but does not stop, one it leaves alone, each ending in what
   the reader sees. The edge of a behavior is where readers form the wrong theory, so draw it when
@@ -203,15 +219,15 @@ Scenes:
 - `heatmap`: httpx#1808, a renamed and flipped default: one square per changed line, by kind.
 - `dependency-matrix`: next.js#82844, shared types moved out of the server: import counts per cell.
 - `impact-map`: vitest#5876, stricter error equality: the callers that fan into the changed function.
-- `storyboard`: mastodon#40910, one guard replacing four copies: four panels of intent.
+- `storyboard`: saleor#17859, a denormalized order count: store, backfill, count, uncount.
 - `sequence`: tokio#8371, lock order under an exhausted budget: two runs on one row grid.
 - `control-flow`: rails#48600, a non-local return now commits: two flowcharts, rows aligned.
 - `state-machine`: opossum#389, a circuit breaker stuck half-open: the transition that frees it.
 - `trace`: gitea#33528, 106 queries becoming 6: both runs as ticks on one axis.
 - `data-flow`: caddy#4507, trusted proxies for `X-Forwarded-*`: forged headers stopped at the gate.
-- `schema`: mastodon#40763, a jsonb field becoming its own table: rows wired to the rows they become.
+- `schema`: wagtail#8441, page revisions becoming generic revisions: rows traced through migrations.
 - `scenario-matrix`: express#4212, invalid status codes now throw: inputs by outcome, before and after.
-- `ui-journey`: discourse#36663, a warning before a moderator locks themselves out: the screens.
+- `ui-journey`: excalidraw#7647, a new share dialog: three entry points to a link, before and after.
 
 Micro-worlds:
 
@@ -263,10 +279,17 @@ Rules:
   pick it and show the code's real refusal: the status, the error code, the stderr line.
 - **The outcome in words, not only in shapes.** A `term`, a `file`, a `table`, or a `window` shows
   what happens; a `small` line under it says why, quoting the live values.
-- **Starts in a telling state.** The default inputs show the change at its most typical, and the
-  outcome is drawn before the reader touches anything. Leave one surprising combination to find.
-  When the landmark also has a scene, open on a case the scene does not show, so the two never
-  draw the same thing.
+- **Scales that follow the inputs.** A time axis or a bar scale fits the values the current inputs
+  produce, and is recomputed when they change; a label that does not fit its bar goes beside it,
+  never clipped inside it.
+- **Starts in a telling state.** At rest the micro-world proves its landmark's title: it opens on
+  the input where before and after differ (or where the counterfactual bites), with the outcome
+  drawn before the reader touches anything, and a caption says what the default shows. When the
+  landmark also has a scene, open on a case the scene does not draw. Leave one surprising
+  combination to find.
+- **Labels say what the model tests.** A verdict names what the model checks ("passes
+  validation", not "saved"), and a simulated event names where it is injected ("the connection
+  drops after the headers"), not a wider interval it stands for ("while loading").
 - **Scripts listen with `addEventListener`.** No handler attributes, no `<form>`; a `button` is
   `type="button"`.
 
@@ -275,7 +298,10 @@ Rules:
 - **Your own CSS** in a `<style>` inside the scene: grids, keyframes, transitions, clip paths.
   Scope your classes with a prefix of your own so they cannot clash with the kit, and take every
   color from the kit's tokens (`var(--good)`, `var(--ink)`, …) so the scene fits both themes and
-  both skins.
+  both skins. Scope element rules too: a rule on every `svg` or `path` also restyles the kit's
+  icons, so give your own SVG a class and write the rules under it. Text below about 0.75 rem is
+  under 9 px on a phone: size small labels in `em` of a readable base, or raise them under a
+  `@media (max-width: 40rem)` rule.
 - **Inline SVG** for shapes the kit lacks: nodes and edges, curves, ribbons, zones, charts. Give it
   a `viewBox` and `width="100%"` so it scales; a `viewBox` about 1100 units wide makes 1 unit about
   1 px on a desktop, so SVG text of `font-size="14"` reads like the kit's small text, and stays
@@ -334,8 +360,10 @@ Rules:
   pushes them apart), `col`, `grid` (`style="--cols: 3"`), `stack` (items tight on top of each
   other), `controls` (a micro-world's fieldsets, side by side and wrapping).
 - **Things**: `box` (a rounded panel; a `label` inside is its caption; `box ghost` dashed and empty,
-  `box solid` filled; it stacks its children, so wrap a sentence that mixes text and `code` in one
-  `<span>`, or its pieces stack as separate lines), `chip` (a small pill), `banner` (a full-width bar), `big` (a large number or
+  `box solid` filled; it stacks and centers its children, so wrap a sentence that mixes text and
+  `code` in one `<span>`, or its pieces stack as separate lines, and give a list or a paragraph in a
+  box `style="text-align: left; align-items: stretch"`), `chip` (a small pill that never wraps:
+  keep it to a few words), `banner` (a full-width bar), `big` (a large number or
   word), `label` (small caps), `small`, `code` (inline code), `strike`, `fade`, `hatch` (a hatched
   fill for what cannot happen: a cell, a slot, a box), `stamp` (a rotated verdict on the scene's
   corner).
