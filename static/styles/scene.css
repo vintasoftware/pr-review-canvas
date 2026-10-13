@@ -36,8 +36,9 @@
 }
 * {
   box-sizing: border-box;
-  /* A pale wash of the element's tone. Declared on every element, so it follows the tone there. */
-  --tint: color-mix(in srgb, var(--c, var(--ink)) 14%, var(--paper));
+  /* A pale wash of the element's tone, gray when it has none. Declared on every element, so it
+     follows the tone there. */
+  --tint: color-mix(in srgb, var(--c, var(--muted)) 14%, var(--paper));
 }
 html,
 body {

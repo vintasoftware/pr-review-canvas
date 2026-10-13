@@ -418,7 +418,7 @@ data-technique="…">`, the column the kit lays things out in. A `<style>` and a
   `em`, list item, or cell color their text with it.
 - **Tokens** for your own CSS: `--c` (the element's tone, where one is set), `--ink`, `--good`,
   `--bad`, `--warn`, `--muted`, `--fg` (text), `--paper` (background), `--line` (borders), and
-  `--tint` (a pale wash of the element's tone).
+  `--tint` (a pale wash of the element's tone; gray for an element with no tone).
 - **Icons**: `<i data-icon="database" class="lg"></i>`, by [Lucide](https://lucide.dev/icons) name:
   `user`, `users`, `message-square`, `git-pull-request`, `git-commit-horizontal`, `file-code`,
   `database`, `server`, `cloud`, `hard-drive`, `lock`, `lock-open`, `key-round`, `shield-check`,
