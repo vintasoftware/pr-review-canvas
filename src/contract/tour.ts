@@ -163,7 +163,7 @@ export function landmarkSchema(caps: TourCaps) {
     body: z.array(text(caps, 'paragraph')).min(1).max(TOUR_LIMITS.bodyParagraphs),
     /**
      * The state landmark: a schema, a migration, or the shape of stored data. Never cut by the
-     * budget, and it always carries a reversibility decision.
+     * budget; it carries a reversibility decision when undoing the change is not clean.
      */
     state: z.boolean().optional(),
     /** The scene, an HTML fragment for the sandboxed frame; read from `<scenes>/<id>.scene.html` when absent. */

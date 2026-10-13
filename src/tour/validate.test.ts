@@ -72,13 +72,14 @@ describe('validateTourModel', () => {
     ])
   })
 
-  it('requires a state landmark for stored data, with a reversibility trade-off on it', () => {
+  it('requires a state landmark for stored data, with or without a decision on it', () => {
     const model = syntheticTourModel()
     expect(codes(model, { stateRequired: true })).toEqual(['STATE_LANDMARK_MISSING'])
     const state = withLandmark(model, 2, { state: true })
     expect(codes(state, { stateRequired: true })).toEqual([])
+    // A change that undoes cleanly spends no decision on reversibility.
     const noTradeOff = { ...state, decisions: [{ ...state.decisions[0]!, category: 'product' as const }] }
-    expect(codes(noTradeOff, { stateRequired: true })).toEqual(['STATE_LANDMARK_MISSING'])
+    expect(codes(noTradeOff, { stateRequired: true })).toEqual([])
   })
 
   it('measures every text a reader sees against its cap', () => {

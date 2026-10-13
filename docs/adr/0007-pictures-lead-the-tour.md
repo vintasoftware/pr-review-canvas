@@ -41,11 +41,29 @@ Fable model that decided and GPT-6-Astra as a second opinion, blind to which ver
   four views of boxes and arrows judged 4 to 6 for the same reason.
 - **Ship the gallery's pictures as PNGs.** Simpler for the generator, but 2.4 MB copied into every
   project that installs the skill.
+- **A rule for each fault the judges found.** We tried it twice. A third version added bookends,
+  anchored code listings, branch-checked universals, and new techniques; a fourth went back to the
+  lighter prompt and added five checks the judges had confirmed against the code. Neither beat the
+  lighter prompt: the third summed 31.3 against its 31.8 over the four pull requests, the fourth
+  lost three of four. Quoting code with its line numbers pushed pictures toward annotated listings
+  where a sequence explained more, and the per-branch check left as many wrong claims as before.
+  The one rule that won its case was a micro-world whose every caption is computed from its state
+  and checked over every combination of its controls; it is the only one kept.
 
 ## Consequences
 
 - Judged blind against the first tour, the new one won on all four pull requests with both judges
   (Fable 8.5 against 6.75 on average; Astra 8 against 7). Cognitive load stayed its weakest score.
+  The second version, with the cover's route, two-paragraph bodies, and deterministic previews,
+  then summed 223 against the first's 216 and lightened the load; the later rounds above did not
+  improve on it, and scores settled near 8 of 10.
+- A state landmark no longer has to carry a decision on reversibility, and decisions no longer have
+  to cover three categories: both quotas made generators write decisions the change never faced. A
+  state landmark still says how the change is undone, and validation still requires it.
+- The judges kept finding the same faults in every version, at one or two per pull request: a rule
+  stated without the branch that breaks it, a keep-reason that argues for the change, a picture
+  that loses its wires on a phone. More prompt text did not remove them; a check that reads the
+  tour is the next thing to try.
 - A tour written before the change still loads: the stored schema keeps three body paragraphs and
   scenes without a technique; only new tours are held to the new rules.
 - The gallery has to stay licensed permissively and valid against the frame; a test checks that

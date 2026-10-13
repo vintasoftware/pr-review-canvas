@@ -162,7 +162,7 @@ you recommend changing, if any.
 - The first landmark is the background, the second the world, the last what to respect; every
   landmark between is a why; each of the other three appears once.
 - At most the budget's landmarks, decisions, and quiz questions; a state landmark does not count.
-- A state landmark when the change touches stored data, with a trade-off decision on reversibility.
+- A state landmark when the change touches stored data.
 - Every decision anchors on a why or respect landmark of this tour and on a new-side line inside a
   hunk; every quiz question names a landmark of this tour.
 - Code chunks and literate snippets name files of the diff and start with their `@@` header; a

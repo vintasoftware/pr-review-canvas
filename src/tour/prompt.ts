@@ -70,7 +70,7 @@ function budgetMarkdown(ctx: TourContext): string {
     `- Blast radius: **${radius}** (from the project's \`highRisk\` patterns: ${ctx.highRisk.length === 0 ? 'none configured' : ctx.highRisk.map(r => `\`${r.pattern}\` → ${r.label}`).join(', ')})`,
     `- At most **${b.landmarks} landmarks** (the state landmark, when required, does not count), **${b.decisions} decisions**, **${b.quiz} quiz questions**.`,
     ctx.stateRequired
-      ? '- **A state landmark is required**: the change touches stored data. Mark it `"state": true`; it always carries a reversibility decision.'
+      ? '- **A state landmark is required**: the change touches stored data. Mark it `"state": true`; it says how the change is undone, with a reversibility decision when undoing it is not clean.'
       : '- No state landmark is required, unless you find the change touches a schema, a migration, or the shape of stored data: then add one, marked `"state": true`.',
   ].join('\n')
 }

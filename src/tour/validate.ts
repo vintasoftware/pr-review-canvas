@@ -236,8 +236,6 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     })
   }
   const landmarkOf = new Map(model.landmarks.map(l => [l.id, l]))
-  const stateLandmarks = new Set(model.landmarks.filter(l => l.state === true).map(l => l.id))
-  let reversibility = 0
   model.decisions.forEach((d, i) => {
     const where = `decisions.${i}`
     dup('decision', d.key, where)
@@ -258,7 +256,6 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
         message: `${where}: landmark "${d.landmark}" is not a why or respect landmark of this tour`,
       })
     }
-    if (stateLandmarks.has(d.landmark) && d.category === 'trade-off') reversibility += 1
     if (!input.categories.includes(d.category)) {
       errors.push({
         code: 'CATEGORY_OFF',
@@ -298,13 +295,6 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
       }
     }
   })
-  if (stateLandmarks.size > 0 && reversibility === 0) {
-    errors.push({
-      code: 'STATE_LANDMARK_MISSING',
-      where: 'decisions',
-      message: 'decisions: the state landmark carries a trade-off decision on reversibility',
-    })
-  }
 
   // Quiz.
   if (model.quiz.length > input.budget.quiz) {
