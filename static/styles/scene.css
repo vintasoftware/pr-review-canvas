@@ -206,6 +206,9 @@ body {
   /* As a flex item (a column's child) it keeps its own width instead of stretching across. */
   width: max-content;
   max-width: 100%;
+  /* A name longer than its cell breaks rather than clips, and only then: a table still sizes its
+     columns around whole names. */
+  overflow-wrap: break-word;
   padding: 0.15rem 0.4rem;
   border-radius: 0.3rem;
   background: color-mix(in srgb, var(--fg) 8%, var(--paper));

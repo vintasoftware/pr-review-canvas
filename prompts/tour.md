@@ -27,15 +27,15 @@ nothing.
   request, not per batch). Write "always", "every", "all", "only", "never", "guarantees", or "the
   compiler forces" only when the code makes it so, and name the members of a set ("`email` and
   `phone` may be empty") rather than claim something of all of them. The author's code comments and
-  the description are claims to check against the code, not facts to repeat. Check a sentence or a
-  label with "every", "each", "only", "all", "no", or "cannot" against every case the code has, the
-  outermost handler and each mode included, and put the exception beside the claim. A rule that
-  holds only on one branch says which ("a hook that returns nothing"); test each "to change this
-  safely" rule against an early return and against a step that never finishes, and tell where a
-  failure is detected apart from what stops it. An alternative is described by what it reaches and
-  what it does not. Before you validate, list the tour's ten strongest claims, titles, labels, and
-  pictures included, check each against the code, and soften or cut the ones the code does not
-  prove. A wrong claim teaches the wrong theory, and it costs more than a missing one.
+  the description are claims to check against the code, not facts to repeat. Before you write
+  "every", "each", "only", "never", "cannot", or "silently", list the branches the code has (each
+  mode and flag, each early return, a hook that returns instead of continuing, the outermost
+  handler) and check the claim on each; a branch that breaks it goes in the same sentence ("each
+  handler re-raises when standalone mode is off, except a closed pipe, which exits 1"). "Silently"
+  means nothing later throws, logs, or returns an error for it. Before you validate, list the tour's
+  ten strongest claims, titles, labels, and pictures included, check each against the code, and
+  soften or cut the ones the code does not prove. A wrong claim teaches the wrong theory, and it
+  costs more than a missing one.
 - **One word per mechanism.** Name each mechanism once and keep the name in the prose, the pictures,
   the decisions, and the quiz: if "timer" is what interrupts work, a check that only compares
   elapsed time is never called a timer.
@@ -103,8 +103,7 @@ and never retold.
   active voice, things named as the code and the scene name them.
 - **One picture**: a landmark shows one picture, a scene or a micro-world. It shows both only when
   the micro-world opens on a case the scene does not draw; a landmark that wants two pictures for
-  two ideas is two landmarks. A landmark longer than about two desktop screens is cut before
-  anything is added to it.
+  two ideas is two landmarks.
 - **Order**: the order that explains, never the order of the files. Follow cause and effect: the
   request before the route, the rule before its uses, the bug before its fix, the shared path before
   the cases, so each landmark picks up where the last one left the reader.
@@ -140,24 +139,24 @@ catalog, the gallery of real pull requests drawn well (look at its pictures), th
 kit. Each scene names its technique, and no technique draws more than two scenes of a tour: pick the
 picture for the idea, not the one you drew last. {{MICRO_WORLD}}
 
-**Code.** `code` holds the chunks of the diff behind the landmark, zero to three, only the ones its
-picture and body explain (a whole test file belongs to the landmark about the tests), each a file
-path and a unified-diff excerpt starting with its `@@` header, copied from the patch. A long hunk
-may be trimmed to the lines that matter, with an `@@` header whose numbers match the lines kept. Do
-not copy chunks by hand: `pr-review tour hunk <tourDir> <hunk id>` prints the chunk as JSON, ready
-to paste, and `--from <line> --to <line>` trims it to a range of new-side lines. `literate` is the
-same change as prose in reading order: paragraphs that say what the next chunk does and why it is
-shaped that way, each followed by `{ "chunk": n }` for the chunk it introduces, or by a snippet `{
-"path", "diff" }` the raw view does not carry. The reader can switch between the literate diff and
-the raw chunks, so they must never disagree about the code.
+**Code.** `code` holds the chunks of the diff behind the landmark, zero to three, each a file path
+and a unified-diff excerpt starting with its `@@` header, copied from the patch. A long hunk may be
+trimmed to the lines that matter, with an `@@` header whose numbers match the lines kept. Do not
+copy chunks by hand: `pr-review tour hunk <tourDir> <hunk id>` prints the chunk as JSON, ready to
+paste, and `--from <line> --to <line>` trims it to a range of the file's own line numbers at the
+head (as the `@@` header counts them, not the line numbers of this prompt). `literate` is the same
+change as prose in reading order: paragraphs that say what the next chunk does and why it is shaped
+that way, each followed by `{ "chunk": n }` for the chunk it introduces, or by a snippet `{ "path",
+"diff" }` the raw view does not carry. The reader can switch between the literate diff and the raw
+chunks, so they must never disagree about the code.
 
 **Guards.** `guards` names the tests that pin the behavior the landmark explains: a `testPath` that
 exists at the head (changed or not; the project's test patterns are {{TEST_PATTERNS}}) and one line
 on what it pins: the regression it would catch, named by its test case, never a restatement of the
 landmark ("`rejects an expired session`: fails if a save goes through after the session ends"). Four
-guards at most, each a test that would fail if this landmark's claim were false; a test that only
-sits nearby is no guard. A behavior with no guard becomes a decision: write the test now, or accept
-the gap with a reason (category `trade-off`). Tests are reviewed through the tour, not read.
+guards at most: the ones that pin this landmark's point. A behavior with no guard becomes a
+decision: write the test now, or accept the gap with a reason (category `trade-off`). Tests are
+reviewed through the tour, not read.
 
 ## Decisions
 
@@ -166,12 +165,7 @@ sides have a real cost; say the cost in each side's `consequence`. The reader ke
 asks to change it, so `keep` is what the code does now and `change` is the one alternative worth
 weighing. Most `recommended` are `keep`; a `change` recommendation must be argued in `context`.
 Spend the decision slots on choices the reader can still weigh: a choice the landmarks already
-argued to its end, one a later commit of this {{TARGET_WORD}} already closed, or one nobody would
-make the other way, is not a decision. Put each decision on its own axis (naming, failure policy,
-where the logic lives, what the user sees), and write its context fresh, never pasted from a
-landmark. Name the alternatives a reviewer would raise, not only the one you weigh, and on the
-change side say what happens to data already stored (regenerate, migrate, fall back). Write the
-`reason` as the author's claim ("the bar was dropped because…"), not as "we".
+argued to its end, or one nobody would make the other way, is not a decision.
 
 Categories, from the project's list:
 
@@ -186,9 +180,11 @@ inside a hunk). Its `key` is a stable slug: a regenerated tour carries the reade
 name the choice, not its position.
 
 `reason` is the justification the author would give for keeping the decision, in the author's voice,
-and where it belongs: `code` (a maintainer needs it, as a comment), `pr` (a reviewer would ask, as a
-comment on the line), `lint` (the reason is a rule the codebase can enforce, so a check is cheaper
-than a comment), or `tour` (only the tour needs it). Propose the place; the author confirms it.
+and it argues for `keep`: a reader who read only the reason would keep the code, so it never leans
+on a cost that the `change` side removes. Then say where it belongs: `code` (a maintainer needs it,
+as a comment), `pr` (a reviewer would ask, as a comment on the line), `lint` (the reason is a rule
+the codebase can enforce, so a check is cheaper than a comment), or `tour` (only the tour needs it).
+Propose the place; the author confirms it.
 
 {{TRY_IT}}
 
@@ -200,9 +196,8 @@ for, and what the code does in it ("a user whose session expired presses Save: w
 or what a later change must do ("a new payment provider is added: which list must name it?"). Never
 a gotcha, an edge case the landmarks did not cover, a detail only the code shows, or a UI value
 nobody needs to remember (a pixel size, a color hex, a class name). Each question names the landmark
-a wrong answer reopens and is answerable from it. The question states its whole requirement, so
-exactly one option meets it. Three options of about the same length, one right, and a one-sentence
-`why`; spread the right answers across the three positions.
+a wrong answer reopens and is answerable from it. Three options of about the same length, one right,
+and a one-sentence `why`; spread the right answers across the three positions.
 
 ## Caps
 

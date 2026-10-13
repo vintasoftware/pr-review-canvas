@@ -19,10 +19,10 @@ controls in front of it. See [Micro-worlds](#micro-worlds).
 2. **Ask what kind of idea it is.** Code that moved? Behavior over time? Data changing shape? A
    screen a person sees? A rule with cases? Then pick the technique that fits from the
    [catalog](#the-catalog), and name it on the root: `<div class="scene"
-data-technique="sequence">`. Use each technique once in a tour; the second use is for the bookend
-   below, and validation refuses a third, because the same picture dealt over and over teaches
-   nothing new. When two fit, take the one this tour has used least. A technique not in the catalog
-   is welcome: name it with a slug of your own.
+data-technique="sequence">`. Two scenes of a tour may share a technique; a third may not
+   (validation refuses it), because the same picture dealt over and over teaches nothing new. When
+   two fit, take the one this tour has used least. A technique not in the catalog is welcome: name
+   it with a slug of your own.
 3. **Look at the gallery.** Open the [gallery](#the-gallery) entries closest to your technique and
    look at their PNGs before you write a line. They show the bar: real names, the change grammar,
    one hero, room to breathe.
@@ -78,16 +78,22 @@ Every tour draws change the same way, so a reader learns it once:
   copies of the same small picture, and drop the nodes the picture's question does not need. Then
   check its `-phone` preview: every relationship the desktop picture shows must still be readable
   there.
-- **A bookend, not a rerun.** The background landmark may draw a map of the part of the system the
-  change touches (its components and how they talk, all `muted`, the way it was), and the respect
-  landmark may draw the same map again with the change overlaid in the change grammar: same
-  positions, same names, so the reader sees the whole change land on the system they met. That is
-  the one reuse. Two neighboring landmarks never share a layout; the next idea gets the picture of
-  its own kind.
+- **A stage that persists**, when the tour returns to the same system: the background landmark may
+  draw a map of the part of the system the change touches (its components and how they talk, all
+  `muted`, the way it was), and a later landmark, often the respect landmark, draws the same map
+  with the change overlaid in the change grammar. Same positions, same names: the reader sees the
+  whole change land on the system they already met. The second drawing adds what the first could not
+  have (the change, the boundary, what nothing watches); a redraw with nothing new is a rerun, so
+  draw something else.
 - **Faithful.** A picture that lies teaches the wrong theory. Every arrow is a real call or a real
-  message; every state is a real state; every count is a real count or marked as an example. Code in
-  a picture is real lines at a named commit, with their line numbers; leave out what does not matter
-  with `…`, and strike through only a line the diff removes.
+  message; every state is a real state; every count is a real count or marked as an example. A
+  legend or key is checked entry by entry against what it marks.
+- **Code is quoted, with its line numbers.** Code drawn in a picture is real lines at the base or
+  the head, says which, and carries their line numbers (`cli.py:1412`); it is struck through only
+  where the diff removes it. A sketch that paraphrases the code is labeled a sketch.
+- **Moved code gets a lineage.** When the change moves, extracts, merges, or splits a function or a
+  class, one landmark draws it as a `lineage`, each end labeled with its file and line, so the
+  reader can say where the code now lives.
 
 ## Pictures by landmark
 
@@ -95,9 +101,7 @@ Every tour draws change the same way, so a reader learns it once:
   of the system the change touches, the old behavior a user meets, or the cost of leaving it: the
   bug, the slow path, the complaint. It stays true outside this pull request.
 - **World**: what a user or a caller notices, before and after, drawn where they meet it: the
-  screen, the terminal, the response, the config file, the email. For a library, the calls as a
-  caller writes them, inputs on the left and outcomes before and after on the right, the case the
-  change makes worse included; the tests that flipped are evidence for it, not the picture.
+  screen, the terminal, the response, the config file, the email.
 - **Why**: the part the landmark explains, and why it is shaped that way: the sequence it orders,
   the state it adds, the branch it takes, the code it moved, the cases it handles.
 - **Respect**: what a later change must keep true: the one place a new case goes, the invariant, the
@@ -112,10 +116,8 @@ in `code` is what goes in `data-technique`.
 ### Code that moves or changes shape
 
 - `lineage`: a movement map. Functions, classes, or blocks before (left) and after (right),
-  connected by arrows labeled **moved**, **renamed**, **extracted**, **merged**, **inlined**, one
-  labeled wire per symbol, never a bundle; what was deleted fades out at the bottom. For refactors,
-  extractions, renames: a moved symbol gets a lineage, not an after-state diagram with a "removed"
-  box.
+  connected by arrows labeled **moved**, **renamed**, **extracted**, **merged**, **inlined**; what
+  was deleted fades out at the bottom. For refactors, extractions, renames.
 - `sankey`: an alluvial diagram of code redistributed between modules, ribbon width by symbols or
   lines; one big `utils.py` splitting into three, or three helpers merging into one. Draw the
   ribbons in SVG with cubic curves; label both ends.
@@ -155,24 +157,17 @@ in `code` is what goes in `data-technique`.
   flips. Animate the lanes, hold on the outcome.
 - `trace`: an execution trace or flame graph under the same workload, before and after: 101 queries
   collapsing into 2, a hot path that disappears, time per stage as stacked bars.
-- `ledger`: one run, phase by phase, against a budget it spends (time, memory, retries, a quota):
-  each phase with its own local allowance and what is left after it, every place the code reads the
-  budget marked as a tick, and the phases that are counted but never cut marked apart. One worked
-  ledger replaces a screen per phase.
 - `live-state`: the actors as cards with their real fields (a status pill, a small key-value table),
   and the values after each step of one run: `cart:session_42 items 0 → 1`. One stage, values
   changing, like a debugger paused at the interesting moment.
 
 ### Rules with cases
 
-- `scenario-matrix`: representative inputs as rows, outcomes before and after as columns, the rows
-  that change shown and the rest folded into one "unchanged: N cases" line, the cells that differ
-  tinted: `expired token: 500 → 401`, `valid token: 200 → 200`. The most honest picture of a
-  behavior change, and often the best world landmark.
+- `scenario-matrix`: representative inputs as rows, outcomes before and after as columns, the cells
+  that differ tinted: `expired token: 500 → 401`, `valid token: 200 → 200`. The most honest picture
+  of a behavior change, and often the best world landmark.
 - `decision-table`: the rule as a grid of conditions and the branch each combination takes, with the
-  combination the change adds or fixes marked. For a fallback chain, one row per input condition
-  with its exact output (missing, empty, unknown, stale), each marked with the test that pins it or
-  "none".
+  combination the change adds or fixes marked.
 - `checks`: the cases handled or tested (the kit's `checks`), with the one gap open: the guards a
   landmark names.
 - `test-flips`: the existing tests whose expectations the change rewrote, each assertion before and
@@ -287,11 +282,13 @@ Rules:
 
 - **Faithful.** The model is the code's branches, with the code's names and values, transcribed from
   the diff; a micro-world that lies teaches the wrong theory. Put the model at the top of the
-  script, as plain functions, so it reads. Where you can, run the real function's body over the real
-  input (the fixture, the patch text) rather than a table of its outputs. Every caption is computed
-  from the state the controls build, never typed in: a name or a count written as a literal is wrong
-  as soon as the reader moves a control. Before you publish, step through every combination of the
-  controls and check each caption and number against the model.
+  script, as plain functions, so it reads. A model that looks results up instead of computing them
+  says so in its caption ("values from the PR's tests").
+- **Every caption computed, every state checked.** Each caption, verdict, and highlight is computed
+  from the controls' current state, never written for one state. Before you publish, run the model
+  over every combination of the controls (a few lines of script in a scratch file, or by hand for a
+  handful) and check each outcome against the code at both commits; a combination the model gets
+  wrong is fixed or made unreachable.
 - **One object to think with.** Build the world around one thing the reader handles (the request,
   the row, the command line), not a panel of knobs. Two to four controls, each changing something
   the reader can see. Group them in `fieldset`s with a `legend` inside a `controls` row.
@@ -307,9 +304,6 @@ Rules:
   drawn before the reader touches anything, and a caption says what the default shows. When the
   landmark also has a scene, open on a case the scene does not draw. Leave one surprising
   combination to find.
-- **Colors follow the result.** A before or after card is tinted by what its version does with the
-  current inputs (red only when that version fails), never fixed red for before and green for after:
-  where both behave the same, both read the same.
 - **Labels say what the model tests.** A verdict names what the model checks ("passes validation",
   not "saved"), and a simulated event names where it is injected ("the connection drops after the
   headers"), not a wider interval it stands for ("while loading").
