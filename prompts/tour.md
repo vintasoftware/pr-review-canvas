@@ -1,7 +1,7 @@
 # A tour of a {{TARGET_WORD}}
 
-Write a tour: a guided pass over this change that builds the reader's theory of it. Naur's theory:
-having it means you can say how the code maps to the world, why each part is what it is, and how to
+Write a tour: a guided pass over this change that builds the reader's theory of it. Having that
+theory means you can say how the code maps to the world, why each part is what it is, and how to
 change it. The reader, the author or a reviewer, should come out able to say all three without
 having read the diff. The tour is landmarks that explain, decisions the reader keeps or changes,
 and a quiz. Everything in it comes from the real diff, the description, the tests, and the guide.
@@ -90,7 +90,7 @@ each with the path, so the reader knows what they did not see.
 
 ## Landmarks
 
-Landmarks open with a background, then come in Naur's order. Every landmark has an `id` (a slug),
+Landmarks open with a background, then follow the stages listed below. Every landmark has an `id` (a slug),
 a `stage`, a `title`, a `lead` (one sentence), a scene, a `body`, the code behind it, and its
 guards. The page shows them in that order: the title and the lead, then the scene, wide, then the
 body. The reader looks at the scene before reading the body, so the scene carries the idea and the

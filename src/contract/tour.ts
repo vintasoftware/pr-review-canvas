@@ -6,7 +6,10 @@ import { GeneratorSchema, PrSchema, RepoSchema, FileEntrySchema, type FileEntry 
 import { PrepareTargetSchema } from './generation-context.js'
 import { HighRiskRuleSchema } from '../project-config.js'
 
-/** A landmark's place in the tour: the background, then Naur's order. */
+/**
+ * A landmark's place in the tour: the background, then what the change means to the world, why
+ * each part is the way it is, and what a later change must respect.
+ */
 export const TOUR_STAGES = ['background', 'world', 'why', 'respect'] as const
 export type TourStage = (typeof TOUR_STAGES)[number]
 
