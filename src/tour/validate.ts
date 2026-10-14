@@ -183,6 +183,16 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
         })
       }
     })
+    if (typeof l.scene !== 'string' && (l.stage === 'background' || typeof l.micro !== 'string')) {
+      errors.push({
+        code: 'PICTURE_MISSING',
+        where,
+        message:
+          l.stage === 'background'
+            ? `${where}: the background has no scene; write <scenes>/${l.id}.scene.html`
+            : `${where}: no picture; write <scenes>/${l.id}.scene.html, or <scenes>/${l.id}.micro.html to stand in for it`,
+      })
+    }
     if (typeof l.scene === 'string') {
       for (const problem of sceneProblems(l.scene)) {
         errors.push({ code: 'SCENE_INVALID', where: `${where}.scene`, message: `${where}.scene: ${problem}` })

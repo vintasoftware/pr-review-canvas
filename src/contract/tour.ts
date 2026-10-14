@@ -170,9 +170,9 @@ export function landmarkSchema(caps: TourCaps) {
      */
     state: z.boolean().optional(),
     /** The scene, an HTML fragment for the sandboxed frame; read from `<scenes>/<id>.scene.html` when absent. */
-    scene: z.string().max(TOUR_LIMITS.sceneChars).nullable().optional(),
+    scene: z.string().max(TOUR_LIMITS.sceneChars).optional(),
     /** The micro-world, same form, from `<scenes>/<id>.micro.html`; at most two landmarks have one. */
-    micro: z.string().max(TOUR_LIMITS.sceneChars).nullable().optional(),
+    micro: z.string().max(TOUR_LIMITS.sceneChars).optional(),
     code: z.array(codeChunkSchema()).max(TOUR_LIMITS.codePerLandmark).default([]),
     literate: z.array(literateBlockSchema(caps)).max(TOUR_LIMITS.literateBlocks).default([]),
     guards: z.array(guardSchema(caps)).max(TOUR_LIMITS.guards).default([]),
@@ -370,6 +370,7 @@ export const TOUR_VALIDATION_CODES = [
   'ANCHOR_OUTSIDE_DIFF',
   'CHUNK_UNKNOWN',
   'GUARD_PATH_UNKNOWN',
+  'PICTURE_MISSING',
   'SCENE_INVALID',
   'MICRO_INVALID',
   'MICRO_LIMIT',

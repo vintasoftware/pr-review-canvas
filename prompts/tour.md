@@ -149,7 +149,8 @@ the frame, and the kit. Reach first for the thing itself as the reader would mee
 the terminal, the file, the markup), or a micro-world when the behavior turns on inputs. Draw an
 abstract diagram only when those cannot show a detail that truly matters to understanding the change
 or deciding on it, and then draw it simply. Each scene names its technique, and no technique draws
-more than two scenes of a tour. {{MICRO_WORLD}}
+more than two scenes of a tour. {{MICRO_WORLD}} Every landmark has a picture. Leave `scene` and `micro`
+out of `<model>`: publish reads each landmark's files from `<scenes>`.
 
 **Code.** `code` holds the chunks of the diff behind the landmark, zero to three, each a file path
 and a unified-diff excerpt starting with its `@@` header, copied from the patch. A long hunk may be

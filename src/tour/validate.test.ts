@@ -149,6 +149,19 @@ describe('validateTourModel', () => {
     ])
   })
 
+  it('gives every landmark a picture: a scene, or a micro-world standing in for it past the background', () => {
+    const model = syntheticTourModel()
+    const bare = (i: number) => withLandmark(model, i, { scene: undefined, micro: undefined })
+    expect(codes(bare(2))).toEqual(['PICTURE_MISSING'])
+    expect(validateTourModel(bare(2), input()).errors[0]?.message).toMatch(
+      /<scenes>\/sum\.micro\.html to stand in/
+    )
+    const micro = '<div class="scene"><label><input type="radio" name="a"> a</label><p>t</p></div>'
+    expect(codes(withLandmark(model, 2, { scene: undefined, micro }))).toEqual([])
+    expect(codes(withLandmark(model, 0, { scene: undefined, micro }))).toEqual(['PICTURE_MISSING'])
+    expect(validateTourModel(bare(0), input()).errors[0]?.message).toMatch(/the background has no scene/)
+  })
+
   it('checks scenes and micro-worlds against the frame, and allows two micro-worlds', () => {
     const model = syntheticTourModel()
     expect(

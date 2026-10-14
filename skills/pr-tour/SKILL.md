@@ -166,6 +166,8 @@ you recommend changing, if any.
 - Code chunks and literate snippets name files of the diff and start with their `@@` header; a
   literate `chunk` index exists.
 - Guards name test files that exist at the head.
+- Every landmark has a picture: the background a scene, any other landmark a scene or a
+  micro-world standing in for it.
 - Scenes pass the frame's checks (the scene guide lists them); a scene takes no input, a
   micro-world takes it only through its controls; at most two micro-worlds.
 - Every scene names its technique (`data-technique` on its root), and no technique draws more
