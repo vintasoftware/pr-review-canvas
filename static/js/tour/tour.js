@@ -20,6 +20,7 @@ import { listenToFrames, mountFrames, tellFramesTheme } from './frames.js'
 import { createGrill, GRILL_DIALOG_ID } from './grill.js'
 import {
   codeButtonHtml,
+  codeViewHtml,
   coverHtml,
   decisionHtml,
   helpHtml,
@@ -346,6 +347,23 @@ export class PrTourElement extends HTMLElement {
     }
   }
 
+  /**
+   * Switches the code behind a landmark between its literate and raw diff, in place like
+   * `toggleCode`.
+   * @param {import('../contract-types.js').TourPageLandmark} landmark
+   * @param {'literate' | 'raw'} view
+   */
+  showCodeView(landmark, view) {
+    const bundle = /** @type {TourBundle} */ (this.bundle)
+    bundle.reader.codeView[landmark.id] = view
+    this.save()
+    for (const tab of this.querySelectorAll('.tour-code-tab')) {
+      tab.setAttribute('aria-selected', String(tab instanceof HTMLElement && tab.dataset['view'] === view))
+    }
+    const body = /** @type {HTMLElement} */ (qs('.tour-code-body', this))
+    body.innerHTML = codeViewHtml(landmark, view)
+  }
+
   openHelp() {
     const dialog = /** @type {HTMLDialogElement} */ (qs('#help-dialog', this))
     dialog.innerHTML = helpHtml()
@@ -461,9 +479,7 @@ export class PrTourElement extends HTMLElement {
       } else if (act === 'code' && step?.kind === 'landmark') {
         this.toggleCode(step.landmark.id)
       } else if (act === 'code-view' && step?.kind === 'landmark') {
-        bundle.reader.codeView[step.landmark.id] = target.dataset['view'] === 'raw' ? 'raw' : 'literate'
-        this.save()
-        this.renderStep()
+        this.showCodeView(step.landmark, target.dataset['view'] === 'raw' ? 'raw' : 'literate')
       } else if (act === 'landmark') {
         e.preventDefault()
         this.jumpTo(stepIndexOf(this.steps, 'landmark', target.dataset['landmark'] ?? ''))

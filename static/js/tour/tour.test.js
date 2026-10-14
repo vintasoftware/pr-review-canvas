@@ -175,6 +175,8 @@ describe('the tour page', () => {
     ])
     click('.tour-code-tab[data-view="raw"]')
     expect(document.querySelector('.tour-code-tab[aria-selected="true"]')?.textContent).toBe('raw diff')
+    expect(document.querySelector('.tour-code-body .tour-literate')).toBeNull()
+    expect(document.querySelector('iframe.tour-frame')).toBe(frame)
     click('[data-act="code"]')
     expect(document.querySelector('.tour-code')?.hasAttribute('hidden')).toBe(true)
 

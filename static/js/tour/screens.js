@@ -249,7 +249,7 @@ export function landmarkHtml(bundle, steps, landmark) {
                   </div>`
                : ''
            }
-           ${codeView === 'literate' ? literateHtml(landmark) : landmark.code.map(chunkHtml).join('')}
+           <div class="tour-code-body">${codeViewHtml(landmark, codeView)}</div>
          </div>`
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
@@ -266,6 +266,14 @@ export function landmarkHtml(bundle, steps, landmark) {
 /** @param {boolean} open */
 export function codeButtonHtml(open) {
   return `${open ? 'hide code' : 'code behind this landmark'} <kbd>i</kbd>`
+}
+
+/**
+ * @param {TourPageLandmark} landmark
+ * @param {'literate' | 'raw'} view
+ */
+export function codeViewHtml(landmark, view) {
+  return view === 'literate' ? literateHtml(landmark) : landmark.code.map(chunkHtml).join('')
 }
 
 /**
