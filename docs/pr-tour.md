@@ -38,7 +38,8 @@ status`). The tour page is `/tour/<n>`.
 
 ## Specs and designs
 
-- `docs/adr/`: the decisions, one file each. The tour's own design is ADR 0005.
+- `docs/adr/`: the decisions, one file each. The tour's own design is ADR 0005; ADR 0006 runs
+  generated scene scripts in a sandbox, and ADR 0007 puts pictures first in a tour.
 - `CONTEXT.md`: the glossary; its words are the ones code, docs, prompts, and UI use.
 - `docs/reference.md`: the CLI and config reference.
 - The pull request description is the spec when nothing else is.

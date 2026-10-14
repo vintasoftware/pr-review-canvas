@@ -31,14 +31,6 @@ actually generated the tour when publishing.
 
 ## Flow
 
-### 0. The guide
-
-The tour reads the project's guide, `docs/pr-tour.md` by default (`tour.guide` in the config):
-how to run the app, how to make synthetic data, which non-functional requirements matter, where
-specs live, what you may run. Prepare reports `guide: null` when the project has none. Then run
-the `/pr-tour-setup` interview first, unless the user says to skip it; a tour without a guide has
-no try-it recipes and names non-functional requirements only where the code makes them plain.
-
 ### 1. Prepare
 
 ```bash
@@ -77,6 +69,12 @@ Progress goes to stderr. The last stdout line is JSON:
   (including refs and local runs). Tell the user before publishing when sharing is on.
 - `blastRadius` is what the change touches among the project's high-risk areas; it raised the
   budget. Tell the user: a team that routes review by risk wants to know.
+- `guide` is the project's guide, `docs/pr-tour.md` by default (`tour.guide` in the config): how
+  to run the app, how to make synthetic data, which non-functional requirements matter, where
+  specs live, what you may run. When it is `null` the project has none. Run the `/pr-tour-setup`
+  interview then, unless the user says to skip it, and run prepare again so the prompt carries the
+  new guide. A tour without a guide has no try-it recipes and names non-functional
+  requirements only where the code makes them plain.
 - `status: "exists"` means a tour already exists for this head. Stop and tell the user: "tour
   already exists for <headSha>; run with --force to regenerate".
 - An `{ "error": … }` line means prepare failed. Report the code, message, and hint verbatim and

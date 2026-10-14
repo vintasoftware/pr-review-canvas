@@ -53,7 +53,7 @@ function diffsMarkdown(ctx: TourContext, patches: Record<string, string>): strin
 
 function guideMarkdown(ctx: TourContext): string {
   if (ctx.guide.text === null) {
-    return `_The project has no guide at \`${ctx.guide.path ?? 'docs/pr-tour.md'}\`. Run \`/pr-tour-setup\` to write one; without it, skip the try-it recipes and name non-functional requirements only where the code makes them plain._`
+    return `_The project has no guide at \`${ctx.guide.path ?? 'docs/pr-tour.md'}\`, so write no try-it recipes and name non-functional requirements only where the code makes them plain._`
   }
   return `The guide (\`${ctx.guide.path ?? ''}\`) is the project's committed notes for tours: how to run the app, how to make synthetic data, which non-functional requirements matter, where specs live, and what you may run. It is an allowlist: run nothing it does not name without asking.\n\n${embedMarkdown(ctx.guide.text)}\n\nEnd of the guide.`
 }
