@@ -239,7 +239,7 @@ export function landmarkHtml(bundle, steps, landmark) {
   const code =
     landmark.code.length === 0
       ? ''
-      : `<div class="tour-actions"><button class="tour-btn quiet" type="button" data-act="code">${codeOpen ? 'hide code' : 'code behind this landmark'} <kbd>i</kbd></button></div>
+      : `<div class="tour-actions"><button class="tour-btn quiet" type="button" data-act="code">${codeButtonHtml(codeOpen)}</button></div>
          <div class="tour-code"${codeOpen ? '' : ' hidden'}>
            ${
              hasLiterate
@@ -261,6 +261,11 @@ export function landmarkHtml(bundle, steps, landmark) {
     ${chips}
     <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>
     ${code}`
+}
+
+/** @param {boolean} open */
+export function codeButtonHtml(open) {
+  return `${open ? 'hide code' : 'code behind this landmark'} <kbd>i</kbd>`
 }
 
 /**

@@ -19,6 +19,7 @@ import { applyTheme, nextTheme, readTheme, themeLabel } from '../theme.js'
 import { listenToFrames, mountFrames, tellFramesTheme } from './frames.js'
 import { createGrill, GRILL_DIALOG_ID } from './grill.js'
 import {
+  codeButtonHtml,
   coverHtml,
   decisionHtml,
   helpHtml,
@@ -327,7 +328,8 @@ export class PrTourElement extends HTMLElement {
   }
 
   /**
-   * Opens or closes the code behind a landmark, and scrolls to it when it opens.
+   * Opens or closes the code behind a landmark, and scrolls to it when it opens. It changes the
+   * code in place: drawing the step again would reload its scenes.
    * @param {string} id
    */
   toggleCode(id) {
@@ -335,9 +337,11 @@ export class PrTourElement extends HTMLElement {
     const open = bundle.reader.codeOpen[id] !== true
     bundle.reader.codeOpen[id] = open
     this.save()
-    this.renderStep()
-    const code = this.querySelector('.tour-code')
-    if (open && code !== null) {
+    const code = /** @type {HTMLElement} */ (qs('.tour-code', this))
+    code.hidden = !open
+    const button = /** @type {HTMLElement} */ (qs('[data-act="code"]', this))
+    button.innerHTML = codeButtonHtml(open)
+    if (open) {
       scrollIntoViewSafe(code, 'start')
     }
   }

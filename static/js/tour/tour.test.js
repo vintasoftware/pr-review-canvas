@@ -164,8 +164,12 @@ describe('the tour page', () => {
     // The keys move too, and `i` opens the code behind a landmark that has some and scrolls to it.
     press('ArrowRight')
     expect(location.hash).toBe('#landmark-world')
+    // It opens in place, so the scenes do not reload.
+    const frame = document.querySelector('iframe.tour-frame')
+    expect(frame).not.toBeNull()
     press('i')
     expect(document.querySelector('.tour-code')?.hasAttribute('hidden')).toBe(false)
+    expect(document.querySelector('iframe.tour-frame')).toBe(frame)
     expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toEqual([
       document.querySelector('.tour-code'),
     ])
