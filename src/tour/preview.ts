@@ -109,7 +109,10 @@ export interface PreviewTourResult {
    * then each decision and each question on a desktop. Empty without a browser.
    */
   screenshots: string[]
-  /** The same preview on a running `pr-review serve`, for a browser tool; absent for a refs run. */
+  /**
+   * Without a browser, the same preview on a running `pr-review serve`, for a browser tool. Absent
+   * once screenshots are taken: they come from a server of their own, gone when preview ends.
+   */
   previewUrl?: string
   hint?: string
 }
@@ -219,7 +222,7 @@ export async function previewTour(
   } finally {
     await server.close()
   }
-  return { ...base, status: 'previewed', screenshots, previewUrl }
+  return { ...base, status: 'previewed', screenshots }
 }
 
 const run = promisify(execFile)

@@ -150,8 +150,8 @@ commit.
 ### 6. Report
 
 On success the last line is `{ "status": "published", "sharing", "headSha", "tourJsonPath",
-"attempts", "tourUrl" }`. Report `tourUrl` (start `pr-review serve` to open it) and inspect
-`sharing` as for a canvas: `shared` links to `sharing.url`; `off` says nothing was posted and does
+"attempts", "tourUrl" }`. Report `tourUrl`: where the reader's `pr-review serve` shows the tour, on
+its usual port, whether or not one runs now (start one to open it). Inspect `sharing` as for a canvas: `shared` links to `sharing.url`; `off` says nothing was posted and does
 not offer to; `failed` warns, quotes `sharing.warning`, and gives the ZIP path to attach by hand;
 `local` is a run with no pull request.
 

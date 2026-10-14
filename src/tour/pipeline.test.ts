@@ -315,7 +315,8 @@ describe('tour preview', () => {
       { landmark: 'world' }
     )
     expect(preview.status).toBe('previewed')
-    expect(preview.previewUrl).toBe('http://localhost:3010/tour/42?preview')
+    // The screenshots came from a server of preview's own, so no URL points at another one.
+    expect(preview.previewUrl).toBeUndefined()
     // The page on a desktop and a phone, then the scene alone at the width the page gives it.
     expect(preview.screenshots.map(f => path.basename(f))).toEqual([
       '02-world-desktop.png',
