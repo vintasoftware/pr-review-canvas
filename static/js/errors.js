@@ -127,6 +127,10 @@ export const ERROR_CARDS = {
     title: 'The chat is answering another message',
     action: 'Wait for the answer, or stop it, then send again.',
   },
+  CHECKOUT_BUSY: {
+    title: 'The review checkout is in use',
+    action: 'Wait for the chat answer on this review to finish, then try again.',
+  },
   NOT_IMPLEMENTED: {
     title: 'That part is not built yet',
     action: 'Nothing to do here; the feature is not in this version.',

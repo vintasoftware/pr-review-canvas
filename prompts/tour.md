@@ -19,14 +19,22 @@ tests.
 
 ## Hard rules
 
-- Read-only, except for `<model>` and the files under `<scenes>`. Do not check anything out.
+- Read-only, except for `<model>`, the files under `<scenes>`, and the checkouts below. Do not check
+  anything out in the repository itself.
+- To run anything (a try-it recipe, or a script the change adds or edits, to draw its real output),
+  take a checkout: `pr-review tour checkout <tourDir> head` (or `base`) prints `{ "dir" }`, a git
+  worktree at that commit. Run there and nowhere else. It holds tracked files only: install
+  dependencies in it first, the way the guide says. A server you start there listens on a free port,
+  never one the reader's own servers use, and stops when you are done.
 - The {{TARGET_WORD}} head is **not** checked out. Read a changed file as it is at the head from
   `<head>/<path>` and at the merge base from `<base>/<path>`. Read untouched files with
   `git show {{HEAD_SHA}}:<path>` from the repository root. Use `git show {{MERGE_BASE_SHA}}:<path>`
   for base context.
 - `<model>` must match the JSON schema at the end of this file. Prefer the host's file-writing
   tool over a shell heredoc: the tour directory may sit where shell write guards block heredocs.
-- The guide below is an allowlist of what you may run. An action it does not name is asked first.
+- The guide below is an allowlist of what you may run. Inside a checkout you may also run the scripts
+  the diff adds or changes. Any other action is asked first. Output you draw from a script comes from
+  running it, never from working it out by hand.
 - No secrets, credentials, or protected health information, even as sample data.
 - **Say exactly what the code does, no more.** When you state a behavior, state its edge: what it
   covers and what it does not (a cache cleared on logout but not on a password change; a limit

@@ -12,7 +12,7 @@ export const TOUR_PUBLISH_OPTIONS = {
 } as const
 export const TOUR_PREVIEW_OPTIONS = { landmark: { type: 'string' } } as const
 
-/** `tour validate --tour <dir>`, `tour preview <dir>`, or `tour publish <dir>`; undefined otherwise. Never throws. */
+/** `tour validate --tour <dir>`, `tour preview <dir>`, `tour publish <dir>`, or `tour checkout <dir>`; undefined otherwise. Never throws. */
 export function namedTourDir(argv: string[]): string | undefined {
   const [step, ...rest] = argv
   if (step === 'validate') {
@@ -31,6 +31,9 @@ export function namedTourDir(argv: string[]): string | undefined {
       allowPositionals: true,
       strict: false,
     }).positionals[0]
+  }
+  if (step === 'checkout') {
+    return parseArgs({ args: rest, options: {}, allowPositionals: true, strict: false }).positionals[0]
   }
   return undefined
 }

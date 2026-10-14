@@ -833,6 +833,7 @@ pr-review tour publish <tourDir> --agent <id> [--model <id>] --harness claude-co
 pr-review tour plan (--pr <n> | --branch | --uncommitted)
 pr-review tour gallery [<slug>…] [--out <dir>]
 pr-review tour hunk <tourDir> <hunk id> [--from <line> --to <line>]
+pr-review tour checkout <tourDir> head|base
 ```
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
@@ -868,6 +869,13 @@ their paths.
 `tour hunk` prints one code chunk for the model, `{ "path", "diff" }`, read from the prepared
 patches: the whole hunk, or with `--from` and `--to` the lines of that new-side range and the
 deletions among them, under an `@@` header that counts them.
+
+`tour checkout` gives the generator a place to run things: a [review checkout](#review-checkouts)
+at the tour's head, the same one AI Chat reads, or one at its merge base, kept apart under
+`checkouts/base/<key>`. It prints `{ "side", "dir", "sha" }`. Try-it recipes run in the head
+checkout, and a script the change touches runs in either, so nothing runs in your own checkout. A
+ref comparison has no review, so it has no checkout; while a chat turn holds the head checkout,
+the command answers `CHECKOUT_BUSY`.
 
 `tour plan` prints the plan a finished tour settled on, for the
 [pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),
@@ -1021,6 +1029,8 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   review, a turn on the same review from another is refused with `CHAT_BUSY`; ask again once the
   first answer is done.
 
+Merge-base checkouts that tours take are listed and removed with the others.
+
 `serve` removes checkouts with no chat turn for `checkoutIdleDays`, at startup and every
 `checkoutSweepMinutes`. `pr-review clean` does the same on demand:
 
@@ -1068,6 +1078,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                               |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                             |
 | `CHAT_BUSY`                             | Wait for the running reply or press **stop**; when another `pr-review serve` holds the review checkout, ask again once its answer is done             |
+| `CHECKOUT_BUSY`                         | A chat answer holds the review checkout `tour checkout` needs; run it again once the answer is done                                                   |
 | `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                  |
 | `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                               |
 | `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                        |

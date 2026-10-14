@@ -8,6 +8,7 @@ import { type ChatManager, createChatManager } from '../chat/chat-manager.js'
 import {
   type CheckoutGit,
   createCheckoutGit,
+  combineCheckouts,
   createReviewCheckouts,
   type ReviewCheckouts,
 } from '../chat/checkouts.js'
@@ -68,8 +69,13 @@ export interface AppContext {
   preflight: PreflightProbe
   chat: ChatManager
   transcripts: TranscriptStore
-  /** The review checkouts AI Chat reads code from, one per review. */
+  /**
+   * The review checkouts, one per review at its head: AI Chat reads code from them, and a tour
+   * runs its try-it recipes in them. Listing and sweeping also cover `baseCheckouts`.
+   */
   checkouts: ReviewCheckouts
+  /** One checkout per review at its merge base, where a tour runs a script as it was before the change. */
+  baseCheckouts: ReviewCheckouts
   now: () => Date
   version: string
   staticDir: string
@@ -140,6 +146,7 @@ export interface ChatSet {
   chat: ChatManager
   transcripts: TranscriptStore
   checkouts: ReviewCheckouts
+  baseCheckouts: ReviewCheckouts
 }
 
 /** Where the review checkouts of one repository live, next to its canvases. */
@@ -158,11 +165,10 @@ export function createChatSet(
 ): ChatSet {
   const { prompts } = opts
   const settings = createSettingsStore(config.dataDir)
-  const checkouts = createReviewCheckouts({
-    root: checkoutsRoot(config.dataDir, config),
-    git: opts.checkoutGit ?? createCheckoutGit(config.repoRoot),
-    now,
-  })
+  const checkoutGit = opts.checkoutGit ?? createCheckoutGit(config.repoRoot)
+  const root = checkoutsRoot(config.dataDir, config)
+  const baseCheckouts = createReviewCheckouts({ root: path.join(root, 'base'), git: checkoutGit, now })
+  const checkouts = combineCheckouts(createReviewCheckouts({ root, git: checkoutGit, now }), baseCheckouts)
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
@@ -170,6 +176,7 @@ export function createChatSet(
     preflight,
     transcripts,
     checkouts,
+    baseCheckouts,
     agents: createAgentDirectory({ runner, preflight, cwd: config.repoRoot, now }),
     chat: createChatManager({
       runner,

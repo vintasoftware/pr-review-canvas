@@ -8,7 +8,14 @@ import { type CliIo, reportFailure } from '../commands.js'
 import { TourContextSchema, TourArtifactSchema } from '../contract/tour.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { ghPost, makeTestContext, type TestContext } from '../testing/fakes.js'
-import { GH_ISSUE_COMMENTS, ghFor42, gitFor42, gitForLocal, HEAD_SHA } from '../testing/synthetic.js'
+import {
+  BASE_SHA,
+  GH_ISSUE_COMMENTS,
+  ghFor42,
+  gitFor42,
+  gitForLocal,
+  HEAD_SHA,
+} from '../testing/synthetic.js'
 import { syntheticTourModel } from '../testing/synthetic-tour.js'
 import { buildTourComment, readTourComment, tourCommentSummary } from './comment.js'
 import { namedTourDir, tourStepCreatesDataDir } from './named-dir.js'
@@ -428,6 +435,47 @@ describe('the tour CLI', () => {
     )
   })
 
+  it('checks out the head and the merge base in worktrees of their own, listed and swept with the chat ones', async () => {
+    const result = await prepared()
+    const head = capture()
+    expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head'], head.io)).toBe(0)
+    const headOut = JSON.parse(head.out[0]!) as { side: string; dir: string; sha: string }
+    expect(headOut).toEqual({ side: 'head', dir: path.join(t.ctx.checkouts.root, '42'), sha: HEAD_SHA })
+    expect(await readFile(path.join(headOut.dir, 'HEAD'), 'utf8')).toBe(HEAD_SHA)
+    const base = capture()
+    expect(await runTour(t.ctx, ['checkout', result.tourDir, 'base'], base.io)).toBe(0)
+    const baseOut = JSON.parse(base.out[0]!) as { side: string; dir: string; sha: string }
+    expect(baseOut).toEqual({
+      side: 'base',
+      dir: path.join(t.ctx.checkouts.root, 'base', '42'),
+      sha: BASE_SHA,
+    })
+    expect((await t.ctx.checkouts.list()).map(c => c.dir).sort()).toEqual([headOut.dir, baseOut.dir].sort())
+    const swept = await t.ctx.checkouts.sweep({ all: true })
+    expect(swept.removed).toHaveLength(2)
+    // The chat holds the head checkout: the tour waits rather than move it under the answer.
+    const lease = await t.ctx.checkouts.lease(42)
+    await expect(runTour(t.ctx, ['checkout', result.tourDir, 'head'], head.io)).rejects.toThrow(
+      'another pr-review process is using the review checkout of 42'
+    )
+    await lease.release()
+    await expect(runTour(t.ctx, ['checkout', result.tourDir, 'side'], head.io)).rejects.toThrow(
+      'takes a tour directory and a side'
+    )
+  })
+
+  it('has no checkout for a ref comparison', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const result = await prepareTour(
+      t.ctx,
+      { kind: 'refs', base: 'main', head: 'feat/b' },
+      { force: false, log: () => undefined }
+    )
+    await expect(runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)).rejects.toThrow(
+      'a ref comparison has no checkout'
+    )
+  })
+
   it('names its usage errors', async () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const { io } = capture()
@@ -451,6 +499,7 @@ describe('the tour CLI', () => {
     expect(namedTourDir(['validate', 'm.json', '--tour', '/d/tours/x'])).toBe('/d/tours/x')
     expect(namedTourDir(['publish', '/d/tours/x', '--agent', 'a'])).toBe('/d/tours/x')
     expect(namedTourDir(['preview', '/d/tours/x'])).toBe('/d/tours/x')
+    expect(namedTourDir(['checkout', '/d/tours/x', 'head'])).toBe('/d/tours/x')
     expect(namedTourDir(['prepare', '--pr', '1'])).toBeUndefined()
     expect(tourStepCreatesDataDir(['prepare'])).toBe(true)
     expect(tourStepCreatesDataDir(['publish', 'x'])).toBe(false)

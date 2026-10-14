@@ -86,6 +86,7 @@ const COMMANDS: CommandHelp[] = [
         detail: '--harness claude-code|codex|other [--model <id>] [--allow-stale]',
       },
       { form: 'plan --pr <n>', detail: 'or --branch, --uncommitted: the confirmed plan' },
+      { form: 'checkout <dir> head|base', detail: 'a worktree to run things in' },
     ],
     notes: [
       'A tour is stored beside the canvases and shared as its own comment. The pr-tour skill runs these.',

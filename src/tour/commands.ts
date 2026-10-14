@@ -1,4 +1,4 @@
-// `pr-review tour <prepare|validate|preview|publish|plan|gallery|hunk>`: the tour's own steps, mirroring
+// `pr-review tour <prepare|validate|preview|publish|plan|gallery|hunk|checkout>`: the tour's own steps, mirroring
 // the canvas commands. Everything is injected: the AppContext carries git, the host, and the stores.
 import path from 'node:path'
 import { parseArgs } from 'node:util'
@@ -21,12 +21,23 @@ import {
 } from './named-dir.js'
 import { renderGallery } from './gallery.js'
 import { HunkNotFound, tourChunk } from './hunk.js'
+import { CheckoutBusyError } from '../chat/checkouts.js'
+import { AppError } from '../server/errors.js'
 import { prepareTour } from './prepare.js'
 import { headlessScreenshot, previewTour } from './preview.js'
 import { publishTour, readTourContext, readTourModel, tourValidationInput } from './publish.js'
 import { validateTourModel } from './validate.js'
 
-export const TOUR_STEPS = ['prepare', 'validate', 'preview', 'publish', 'plan', 'gallery', 'hunk'] as const
+export const TOUR_STEPS = [
+  'prepare',
+  'validate',
+  'preview',
+  'publish',
+  'plan',
+  'gallery',
+  'hunk',
+  'checkout',
+] as const
 export type TourStep = (typeof TOUR_STEPS)[number]
 
 /** The step named, or a usage error naming them all. */
@@ -60,6 +71,8 @@ export async function runTour(ctx: AppContext, argv: string[], io: CliIo): Promi
       return runTourGallery(rest, io)
     case 'hunk':
       return runTourHunk(rest, io)
+    case 'checkout':
+      return runTourCheckout(ctx, rest, io)
     default:
       return runTourPublish(ctx, rest, io)
   }
@@ -219,6 +232,52 @@ async function runTourGallery(argv: string[], io: CliIo): Promise<number> {
   )
   printJson(io, result)
   return result.status === 'unknown' ? EXIT.invalid : EXIT.ok
+}
+
+/**
+ * `tour checkout <tourDir> <head|base>`: a git worktree at the tour's head or merge base, where the
+ * generator runs a try-it recipe or a script the change touches, never in the reader's checkout.
+ * The head is the review's own checkout, the one AI Chat reads; the base has one of its own. A
+ * ref comparison has no review, so it has no checkout. Prints `{ side, dir, sha }`.
+ */
+async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
+  const { positionals } = parseArgs({ args: argv, options: {}, allowPositionals: true, strict: true })
+  const [tourDir, side] = positionals
+  if (tourDir === undefined || (side !== 'head' && side !== 'base') || positionals.length > 2) {
+    throw new UsageError(
+      'tour checkout takes a tour directory and a side: pr-review tour checkout <tourDir> <head|base>'
+    )
+  }
+  const context = await readTourContext(path.resolve(tourDir))
+  const target = context.target
+  if (target.kind === 'refs') {
+    throw new UsageError(
+      'tour checkout needs a review (a pull request, the branch, or uncommitted work); a ref comparison has no checkout'
+    )
+  }
+  const key = target.kind === 'pr' ? target.number : target.source
+  const sha = side === 'head' ? context.headSha : context.mergeBaseSha
+  let lease
+  try {
+    lease = await (side === 'head' ? ctx.checkouts : ctx.baseCheckouts).lease(key)
+  } catch (err) {
+    if (err instanceof CheckoutBusyError) {
+      throw new AppError(
+        'CHECKOUT_BUSY',
+        err.message,
+        409,
+        'wait for the chat answer on this review to finish, then run it again'
+      )
+    }
+    throw err
+  }
+  try {
+    await lease.moveTo(sha)
+  } finally {
+    await lease.release()
+  }
+  printJson(io, { side, dir: lease.dir, sha })
+  return EXIT.ok
 }
 
 /**

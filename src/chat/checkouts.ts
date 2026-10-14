@@ -305,3 +305,24 @@ export function createReviewCheckouts(opts: {
     },
   }
 }
+
+/**
+ * One view over several checkout folders: a lease goes to the first, while listing and sweeping
+ * cover them all, so `clean`, the idle sweep, and the settings dialog see every checkout.
+ */
+export function combineCheckouts(primary: ReviewCheckouts, ...others: ReviewCheckouts[]): ReviewCheckouts {
+  const all = [primary, ...others]
+  return {
+    root: primary.root,
+    lease: key => primary.lease(key),
+    async list() {
+      const lists = await Promise.all(all.map(c => c.list()))
+      return lists.flat().sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
+    },
+    async sweep(options) {
+      const results = await Promise.all(all.map(c => c.sweep(options)))
+      return { removed: results.flatMap(r => r.removed), skipped: results.flatMap(r => r.skipped) }
+    },
+    size: dir => primary.size(dir),
+  }
+}
