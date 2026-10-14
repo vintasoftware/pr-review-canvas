@@ -1,7 +1,8 @@
 // @ts-check
-// The drawer a change pick opens. With AI Chat on, the agent grills the reader in the tour's own
+// The drawer "something else" opens. With AI Chat on, the agent grills the reader in the tour's own
 // thread: it asks what it needs, then restates the change as a card the reader approves, edits, or
 // rejects; only an approved restatement settles the decision and enters the plan. The reader may
+// say that is enough at any time, and the agent restates from what it has. The reader may
 // also ask how the agent would carry it out (the reverse quiz), and speak instead of type. With
 // chat off, the reader writes the restatement themselves in the same card.
 /** @typedef {import('../contract-types.js').Decision} Decision */
@@ -21,8 +22,11 @@ export const GRILL_DIALOG_ID = 'tour-grill'
 /** What the reader says first, so the agent starts asking rather than the reader explaining. */
 /** @param {Decision} d */
 export function openingMessage(d) {
-  return `I want to change this decision: ${d.change.label}. Ask me what you need to restate it.`
+  return `On "${d.title}" I want neither "${d.keep.label}" nor "${d.change.label}". Ask me what you need to restate what I want instead.`
 }
+
+export const DONE_MESSAGE =
+  "That's enough. Restate what I want now, from what we have, as one restatement block."
 
 export const REVERSE_QUIZ_MESSAGE =
   'How would you carry this change out? Name the files and the steps, in order, and what you would run to check it.'
@@ -80,13 +84,13 @@ export function grillsWithChat(bundle) {
 }
 
 /**
- * The restatement form, prefilled from a draft or from the decision itself.
+ * The restatement form, prefilled from a draft, or with where the decision points.
  * @param {Decision} d
  * @param {Restatement | undefined} draft
  * @param {{ cancel: string }} [opts]
  */
 export function restatementFormHtml(d, draft, opts = { cancel: 'close-grill' }) {
-  const r = draft ?? { what: d.change.label, where: [`${d.anchor.path}:${d.anchor.line}`], unchanged: '' }
+  const r = draft ?? { what: '', where: [`${d.anchor.path}:${d.anchor.line}`], unchanged: '' }
   return `<form class="tour-restate" data-act="restate">
         <h4>What you want instead</h4>
         <label><b>What changes</b><textarea name="what" required maxlength="2000">${esc(r.what)}</textarea></label>
@@ -103,7 +107,7 @@ export function restatementFormHtml(d, draft, opts = { cancel: 'close-grill' }) 
  */
 export function formGrillHtml(d, draft) {
   return `<div class="tour-chat-box">
-    <div class="tour-chat-h"><div><b>Change · ${esc(d.title)}</b><span class="agent">say what you want instead, in your words</span></div><button class="tour-btn quiet" type="button" data-act="close-grill" aria-label="Close">✕</button></div>
+    <div class="tour-chat-h"><div><b>Something else · ${esc(d.title)}</b><span class="agent">say what you want instead, in your words</span></div><button class="tour-btn quiet" type="button" data-act="close-grill" aria-label="Close">✕</button></div>
     <div class="tour-chat-log">
       <div class="tour-msg agent"><span class="who">the decision</span>${inline(d.context)}</div>
       <div class="tour-msg agent"><span class="who">what the code does</span>${esc(d.keep.label)}. ${inline(d.keep.consequence)}</div>
@@ -230,7 +234,11 @@ export function createGrill(options) {
 
   const toolsHtml = () => {
     const reverse = bundle.options.reverseQuiz === 'on' && decision !== null
-    return `<div class="tour-tools">${reverse ? '<button class="tour-btn" type="button" data-act="reverse">Ask how it would do it</button><span class="tour-hint">reverse quiz · optional</span>' : ''}${streaming ? '<button class="tour-btn quiet" type="button" data-act="stop">stop</button>' : ''}</div>`
+    const done =
+      decision === null
+        ? ''
+        : `<button class="tour-btn" type="button" data-act="done"${streaming ? ' disabled' : ''}>That's enough, restate it</button>`
+    return `<div class="tour-tools">${done}${reverse ? '<button class="tour-btn" type="button" data-act="reverse">Ask how it would do it</button><span class="tour-hint">reverse quiz · optional</span>' : ''}${streaming ? '<button class="tour-btn quiet" type="button" data-act="stop">stop</button>' : ''}</div>`
   }
 
   const composerHtml = () => {
@@ -381,6 +389,8 @@ export function createGrill(options) {
         box.value = 'No, that is not it: '
         box.focus()
       }
+    } else if (act === 'done') {
+      void send(DONE_MESSAGE)
     } else if (act === 'reverse') {
       void send(REVERSE_QUIZ_MESSAGE)
     } else if (act === 'stop') {

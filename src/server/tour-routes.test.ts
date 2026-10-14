@@ -152,7 +152,7 @@ describe('GET /api/tours/:n', () => {
             finishedAt: '2026-09-01T00:00:00.000Z',
             picks: {
               'sum-over-product': { pick: 'keep' },
-              second: { pick: 'change', restatement },
+              second: { pick: 'other', restatement },
               third: { pick: 'keep' },
               gone: { pick: 'keep' },
             },
@@ -164,7 +164,7 @@ describe('GET /api/tours/:n', () => {
     const author = await json<TourBundle>(await get('/api/tours/42'))
     expect(author.reader.picks).toEqual({
       'sum-over-product': { pick: 'keep', approved: true },
-      second: { pick: 'change', approved: true, restatement },
+      second: { pick: 'other', approved: true, restatement },
       third: { pick: 'keep', approved: true },
     })
     await t.cleanup()
@@ -630,7 +630,7 @@ describe('finishing on the pull request', () => {
     const changed = settledReader({
       picks: {
         'sum-over-product': {
-          pick: 'change',
+          pick: 'other',
           approved: true,
           restatement: { what: 'Multiply.', where: ['src/app.ts:4'], unchanged: 'Callers.' },
         },
@@ -678,7 +678,7 @@ describe('finishing on the pull request', () => {
     const changed = settledReader({
       picks: {
         'sum-over-product': {
-          pick: 'change',
+          pick: 'other',
           approved: true,
           restatement: { what: 'Multiply.', where: ['src/app.ts:4'], unchanged: 'Callers.' },
         },

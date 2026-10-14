@@ -8,7 +8,7 @@ import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.
 import type { AuthorPick, Decision, TourArtifact, TourRecord } from '../contract/tour.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { buildTourPrompt, planOf, unansweredQuiz, unsettledDecisions } from './plan.js'
+import { buildTourPrompt, type ChangeAsked, planOf, unansweredQuiz, unsettledDecisions } from './plan.js'
 import { writeReaderState } from './reader.js'
 import { shareTourOnPr } from './share.js'
 
@@ -23,11 +23,9 @@ export interface FinishTourInput {
 }
 
 /** A reviewer's approved change as the comment their pending review will carry. */
-export function changeRequestBody(
-  decision: Decision,
-  r: { what: string; where: string[]; unchanged: string }
-): string {
-  return `**Change requested in the tour:** ${decision.title}\n\n${r.what}\n\nWhere: ${r.where.join(', ')}\n\nStays the same: ${r.unchanged}`
+export function changeRequestBody(decision: Decision, r: ChangeAsked): string {
+  const unchanged = r.unchanged === undefined ? '' : `\n\nStays the same: ${r.unchanged}`
+  return `**Change requested in the tour:** ${decision.title}\n\n${r.what}\n\nWhere: ${r.where.join(', ')}${unchanged}`
 }
 
 /** The fingerprint a queued change request carries, so finishing twice queues it once. */
@@ -51,7 +49,7 @@ export function finishedRecord(
     for (const [key, pick] of Object.entries(input.reader.picks)) {
       if (!pick.approved) continue
       const entry: AuthorPick = { pick: pick.pick }
-      if (pick.pick === 'change' && pick.restatement !== undefined) entry.restatement = pick.restatement
+      if (pick.pick === 'other' && pick.restatement !== undefined) entry.restatement = pick.restatement
       picks[key] = entry
     }
     record.author = { finishedAt: at, picks, prompt }
@@ -67,7 +65,7 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
       'SIGNOFF_INCOMPLETE',
       `${open.length} decision${open.length === 1 ? ' is' : 's are'} not settled: ${open.join('; ')}`,
       409,
-      'keep or change each decision first'
+      'settle each decision first'
     )
   }
   if (ctx.projectConfig.config.tour.finalQuiz === 'required') {

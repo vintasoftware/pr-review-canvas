@@ -121,7 +121,7 @@ A landmark the reader plays with: inputs of the changed behavior go in, outcomes
 _Avoid_: Demo, Sandbox, Playground
 
 **Decision**:
-A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it or asks to change it; changing starts a grilling.
+A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it, takes the tour's alternative, or asks for something else, which starts a grilling.
 _Avoid_: Attention point, Card, Finding, Issue
 
 **Pokayoke**:
@@ -129,7 +129,7 @@ A structure in the change that makes a class of mistake impossible, or a place w
 _Avoid_: Validation, Guardrail, Defensive code
 
 **Grilling**:
-The agent's questions after a change pick, asked until it can restate the change.
+The agent's questions after the reader asks for something else, asked until it can restate the change or the reader says that is enough.
 _Avoid_: Chat, Interview, Clarification
 
 **Restatement**:

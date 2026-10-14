@@ -15,14 +15,15 @@ function reader(over: Partial<TourReaderState> = {}): TourReaderState {
 }
 
 describe('pickSettled', () => {
-  it('needs an approved keep, or an approved change with its restatement', () => {
+  it('needs an approved side, or something else with its restatement', () => {
     expect(pickSettled(undefined)).toBe(false)
     expect(pickSettled({ pick: 'keep', approved: false })).toBe(false)
     expect(pickSettled({ pick: 'keep', approved: true })).toBe(true)
-    expect(pickSettled({ pick: 'change', approved: true })).toBe(false)
+    expect(pickSettled({ pick: 'change', approved: true })).toBe(true)
+    expect(pickSettled({ pick: 'other', approved: true })).toBe(false)
     expect(
       pickSettled({
-        pick: 'change',
+        pick: 'other',
         approved: true,
         restatement: { what: 'w', where: ['x'], unchanged: 'u' },
       })
@@ -101,7 +102,7 @@ describe('buildTourPrompt', () => {
       reader({
         picks: {
           'sum-over-product': {
-            pick: 'change',
+            pick: 'other',
             approved: true,
             restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'The callers.' },
           },
@@ -131,13 +132,25 @@ describe('buildTourPrompt', () => {
     expect(prompt).toContain('# Keep the branch change as the tour settled it')
   })
 
+  it("lists the tour's alternative as a change on the decision's line, with nothing said to stay", () => {
+    const prompt = buildTourPrompt(
+      syntheticTour(),
+      reader({ picks: { 'sum-over-product': { pick: 'change', approved: true } } }),
+      '42'
+    )
+    expect(prompt).toContain(
+      '1. Sum over product?\n   What: Product. Grows faster; the spec would have to change.\n   Where: src/app.ts:4\n'
+    )
+    expect(prompt).not.toContain('Stays the same')
+  })
+
   it('says none when nothing was kept', () => {
     const prompt = buildTourPrompt(
       syntheticTour(),
       reader({
         picks: {
           'sum-over-product': {
-            pick: 'change',
+            pick: 'other',
             approved: true,
             restatement: { what: 'w', where: ['x'], unchanged: 'u' },
           },

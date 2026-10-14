@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { syntheticTourBundle } from '../../../src/testing/tour-page.js'
 import {
   createGrill,
+  DONE_MESSAGE,
   formGrillHtml,
   grillsWithChat,
   openingMessage,
@@ -102,21 +103,31 @@ describe('grillsWithChat', () => {
 })
 
 describe('the form without an agent', () => {
-  it('starts the restatement from the decision, or from the draft, and reads it back', () => {
+  it("starts the restatement at the decision's line, or from the draft, and reads it back", () => {
     document.body.innerHTML = formGrillHtml(decision, undefined)
-    expect(document.querySelector('textarea[name="what"]')?.textContent).toBe('Product')
+    expect(document.querySelector('.tour-chat-h b')?.textContent).toBe('Something else · Sum over product?')
+    expect(document.querySelector('textarea[name="what"]')?.textContent).toBe('')
     expect(document.querySelector('textarea[name="where"]')?.textContent).toBe('src/app.ts:4')
     const form = document.querySelector('form')
     if (!(form instanceof HTMLFormElement)) {
       throw new Error('no form')
     }
     expect(readRestatement(form)).toBeNull()
+    const what = form.querySelector('textarea[name="what"]')
     const unchanged = form.querySelector('textarea[name="unchanged"]')
     const where = form.querySelector('textarea[name="where"]')
-    if (!(unchanged instanceof HTMLTextAreaElement && where instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        what instanceof HTMLTextAreaElement &&
+        unchanged instanceof HTMLTextAreaElement &&
+        where instanceof HTMLTextAreaElement
+      )
+    ) {
       throw new Error('no field')
     }
     unchanged.value = '  The callers.  '
+    expect(readRestatement(form)).toBeNull()
+    what.value = 'Product'
     where.value = 'src/app.ts, , src/b.ts '
     expect(readRestatement(form)).toEqual({
       what: 'Product',
@@ -148,12 +159,20 @@ describe('the form without an agent', () => {
     await grill.open(decision, undefined)
     expect(dialog.open).toBe(true)
     const form = dialog.querySelector('form[data-act="restate"]')
+    const what = dialog.querySelector('textarea[name="what"]')
     const unchanged = dialog.querySelector('textarea[name="unchanged"]')
-    if (!(form instanceof HTMLFormElement && unchanged instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        form instanceof HTMLFormElement &&
+        what instanceof HTMLTextAreaElement &&
+        unchanged instanceof HTMLTextAreaElement
+      )
+    ) {
       throw new Error('no form')
     }
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     expect(onApprove).not.toHaveBeenCalled()
+    what.value = 'Product'
     unchanged.value = 'Callers.'
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     expect(onApprove).toHaveBeenCalledWith(decision, {
@@ -170,11 +189,12 @@ describe('the form without an agent', () => {
 })
 
 describe('the grilling with an agent', () => {
-  it('opens the thread, sends the opening once, draws the restatement card, and approves it', async () => {
+  it('opens the thread, sends the opening once, restates when the reader says enough, and approves it', async () => {
     const dialog = mountDialog()
     const server = fakeApi({
       answers: [
         'What should happen to the callers?',
+        'Noted. Anything else?',
         'Thanks.\n```restatement\n{ "what": "Multiply.", "where": ["src/app.ts:4"], "unchanged": "Callers." }\n```',
       ],
     })
@@ -190,7 +210,7 @@ describe('the grilling with an agent', () => {
       { message: openingMessage(decision), context: { kind: 'tour-decision', key: 'sum-over-product' } },
     ])
     expect(dialog.querySelector('.tour-msg.reader')?.textContent).toContain(
-      'I want to change this decision: Product.'
+      'On "Sum over product?" I want neither "Sum" nor "Product".'
     )
     expect(dialog.querySelector('.tour-msg.agent')?.textContent).toContain(
       'What should happen to the callers?'
@@ -203,8 +223,13 @@ describe('the grilling with an agent', () => {
     }
     composer.value = 'They stay.'
     composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
-    await vi.waitFor(() => expect(dialog.querySelector('.tour-restate')).not.toBeNull())
+    await vi.waitFor(() => expect(server.sent).toHaveLength(2))
     expect(server.sent[1]?.message).toBe('They stay.')
+    // The reader may stop the questions at any time: the agent restates from what it has.
+    await vi.waitFor(() => expect(dialog.querySelector('[data-act="done"]:not([disabled])')).not.toBeNull())
+    click('[data-act="done"]')
+    await vi.waitFor(() => expect(dialog.querySelector('.tour-restate')).not.toBeNull())
+    expect(server.sent[2]?.message).toBe(DONE_MESSAGE)
     expect(dialog.querySelector('.tour-restate .where span')?.textContent).toBe('src/app.ts:4')
     // Reject puts the words in the box; edit turns the card into the form; approve settles.
     click('[data-act="reject"]')
@@ -222,7 +247,7 @@ describe('the grilling with an agent', () => {
     expect(dialog.open).toBe(false)
     // Opening again does not send the opening twice: the thread already holds it.
     await grill.open(decision, RESTATEMENT)
-    expect(server.sent).toHaveLength(2)
+    expect(server.sent).toHaveLength(3)
     grill.stop()
   })
 
@@ -271,6 +296,7 @@ describe('the grilling with an agent', () => {
     await vi.waitFor(() => expect(dialog.querySelector('.tour-plan-card')).not.toBeNull())
     expect(dialog.querySelector('.tour-plan-card')?.textContent).toContain('Sum over product?')
     expect(dialog.querySelector('[data-act="reverse"]')).toBeNull()
+    expect(dialog.querySelector('[data-act="done"]')).toBeNull()
     // An agent error, a cancelled turn, and a request that fails each leave a note.
     const composer = () => /** @type {HTMLTextAreaElement} */ (dialog.querySelector('#composer'))
     const form = () => /** @type {HTMLFormElement} */ (dialog.querySelector('form[data-act="send"]'))

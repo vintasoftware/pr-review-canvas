@@ -205,12 +205,23 @@ describe('the tour page', () => {
     click('.tour-rail-seg[data-step="6"]')
     expect(location.hash).toBe('#decision-sum-over-product')
 
-    // `k` keeps; a change of mind reopens it.
+    // Nothing is chosen at first. `k` keeps and `a` takes the alternative, each settling it; a
+    // change of mind, or a click outside the options, takes the pick back.
+    const chosen = () =>
+      document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')
+    expect(chosen()).toBeUndefined()
     press('k')
     expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
     click('[data-act="unsettle"]')
-    expect(document.querySelector('[data-act="keep"]')).not.toBeNull()
-    click('[data-act="keep"]')
+    expect(chosen()).toBeUndefined()
+    press('a')
+    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ alternative · in the plan')
+    click('.tour-lead')
+    expect(chosen()).toBeUndefined()
+    press('ArrowRight')
+    expect(location.hash).toBe('#decision-sum-over-product')
+    click('.tour-option[data-pick="keep"]')
+    expect(chosen()).toBe('keep')
     expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
     click('[data-nav="next"]')
     expect(location.hash).toBe('#quiz-q-run')
@@ -256,14 +267,12 @@ describe('the tour page', () => {
     el.remove()
   })
 
-  it('takes a change through the drawer, and the plan lists it', async () => {
+  it('takes something else through the drawer, moves on once approved, and the plan lists it', async () => {
     const server = fakeServer(syntheticTourBundle({ reader: { ...freshReaderState(), step: 5 } }))
     vi.stubGlobal('fetch', server.impl)
     mount()
     await drawn('.tour-options')
     expect(location.hash).toBe('#decision-sum-over-product')
-    click('.tour-option[data-pick="change"]')
-    expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('Say what you want instead')
     press('c')
     const dialog = document.querySelector('#tour-grill')
     if (!(dialog instanceof HTMLDialogElement)) {
@@ -280,26 +289,33 @@ describe('the tour page', () => {
     // Submitting with a field empty settles nothing.
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     expect(dialog.open).toBe(true)
+    const what = form.querySelector('textarea[name="what"]')
     const unchanged = form.querySelector('textarea[name="unchanged"]')
-    if (!(unchanged instanceof HTMLTextAreaElement)) {
+    if (!(what instanceof HTMLTextAreaElement && unchanged instanceof HTMLTextAreaElement)) {
       throw new Error('no field')
     }
+    what.value = 'Multiply.'
     unchanged.value = 'The callers.'
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     expect(dialog.open).toBe(false)
+    // An approved restatement settles the decision and moves on.
+    expect(location.hash).toBe('#quiz-q-run')
+    press('ArrowLeft')
     expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ change approved · in the plan')
     expect(document.querySelector('.tour-restated')?.textContent).toContain('The callers.')
-    // Reopening keeps the draft, and closing keeps the approval.
+    // A click outside the options leaves something else alone.
+    click('.tour-lead')
+    expect(document.querySelector('.tour-state.change')).not.toBeNull()
+    // Reopening keeps the draft; closing leaves the conversation to continue.
     click('[data-act="grill"]')
     expect(dialog.querySelector('textarea[name="unchanged"]')?.textContent).toBe('The callers.')
     click('[data-act="close-grill"]')
     expect(dialog.open).toBe(false)
-    expect(document.querySelector('[data-act="grill"]')?.textContent).toBe('Say what you want instead c')
-    click('[data-act="grill"]')
+    expect(document.querySelector('[data-act="grill"]')?.textContent).toBe('Continue the conversation c')
+    click('.tour-option[data-pick="other"]')
     // The drawer is drawn again each time it opens.
     dialog.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    expect(document.querySelector('.tour-state.change')).not.toBeNull()
-    click('[data-nav="next"]')
+    expect(location.hash).toBe('#quiz-q-run')
     press('2')
     click('[data-nav="next"]')
     expect(document.querySelector('.tour-title')?.textContent).toBe('1 change to make, 0 kept')
@@ -472,7 +488,7 @@ describe('the tour page', () => {
     const note = document.createElement('textarea')
     el.append(note)
     note.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }))
-    expect(document.querySelector('[data-act="keep"]')).not.toBeNull()
+    expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
     // Other fields' input and change events, and a click on text, are not the page's business.
     note.dispatchEvent(new Event('input', { bubbles: true }))
     note.dispatchEvent(new Event('change', { bubbles: true }))

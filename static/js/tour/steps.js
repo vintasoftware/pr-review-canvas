@@ -30,14 +30,28 @@ export function buildSteps(tour, options) {
 }
 
 /**
- * A keep is settled once approved; a change once its restatement was approved.
+ * A keep or the tour's alternative is settled once approved; something else once its restatement
+ * was approved.
  * @param {ReaderPick | undefined} pick
  */
 export function pickSettled(pick) {
   if (pick === undefined || !pick.approved) {
     return false
   }
-  return pick.pick === 'keep' || pick.restatement !== undefined
+  return pick.pick !== 'other' || pick.restatement !== undefined
+}
+
+/**
+ * The option a decision shows as chosen: a settled side, or something else while it is talked
+ * through. Nothing is chosen until the reader picks.
+ * @param {ReaderPick | undefined} pick
+ * @returns {ReaderPick['pick'] | null}
+ */
+export function chosenPick(pick) {
+  if (pick === undefined) {
+    return null
+  }
+  return pick.approved || pick.pick === 'other' ? pick.pick : null
 }
 
 /**

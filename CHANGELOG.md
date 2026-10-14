@@ -5,7 +5,8 @@
 ### The tour
 
 - A tour is a guided pass over one change, apart from the canvas: landmarks with a generated
-  scene each (one may be a micro-world to play with), decisions to keep or change, and a quiz.
+  scene each (one may be a micro-world to play with), decisions to keep, change to the tour's
+  alternative, or change to something else through a grilling, and a quiz.
   `/pr-tour <n|branch|uncommitted>` generates and shares it; `/pr-tour-setup` writes the
   project's tour guide; `/pr-tour-apply` carries the confirmed plan out. `pr-review tour
 prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; scenes run in a

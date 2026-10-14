@@ -522,7 +522,7 @@ pr-tour {
 /* ---- Decision ---- */
 .tour-options {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin: 16px 0;
 }
@@ -558,10 +558,6 @@ pr-tour {
 }
 .tour-option-k .now {
   color: var(--here-c);
-  font-weight: 700;
-}
-.tour-option-k .rec {
-  color: var(--tour-accent);
   font-weight: 700;
 }
 .tour-option-l {

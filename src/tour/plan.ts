@@ -1,5 +1,5 @@
-// The plan a finished tour settles on: the decisions kept, the changes approved
-// in the grilling, and the reader's notes, written as the prompt whoever touches the change next
+// The plan a finished tour settles on: the decisions kept, the tour's alternatives picked, the
+// changes approved in the grilling, and the reader's notes, written as the prompt whoever touches the change next
 // runs from.
 import type { ReaderPick, Restatement, TourReaderState } from '../contract/tour-api.js'
 import type { Decision, Landmark, TourArtifact } from '../contract/tour.js'
@@ -9,9 +9,17 @@ export interface PlanEntry {
   pick: ReaderPick
 }
 
-/** An approved change: settled, so its restatement is there. */
+/** What an approved change asks for. The tour's alternative names nothing that stays the same. */
+export type ChangeAsked = Omit<Restatement, 'unchanged'> & { unchanged?: string }
+
+/** An approved change: the tour's alternative, or something else with its restatement. */
 export interface PlanChange extends PlanEntry {
-  restatement: Restatement
+  restatement: ChangeAsked
+}
+
+/** The tour's alternative, as the change it asks for. */
+export function alternativeChange(d: Decision): ChangeAsked {
+  return { what: `${d.change.label}. ${d.change.consequence}`, where: [`${d.anchor.path}:${d.anchor.line}`] }
 }
 
 export interface TourPlan {
@@ -20,10 +28,13 @@ export interface TourPlan {
   notes: Array<{ landmark: Landmark; text: string }>
 }
 
-/** A decision is settled by an approved keep, or by a change whose restatement was approved. */
+/**
+ * A decision is settled by an approved keep or alternative, or by something else whose restatement
+ * was approved.
+ */
 export function pickSettled(pick: ReaderPick | undefined): boolean {
   if (pick === undefined || !pick.approved) return false
-  return pick.pick === 'keep' || pick.restatement !== undefined
+  return pick.pick !== 'other' || pick.restatement !== undefined
 }
 
 /** The decisions the reader has not settled yet, by title. */
@@ -45,9 +56,11 @@ export function planOf(
     .filter((e): e is PlanEntry => pickSettled(e.pick))
   return {
     changes: entries.flatMap(e =>
-      e.pick.pick === 'change' && e.pick.restatement !== undefined
-        ? [{ ...e, restatement: e.pick.restatement }]
-        : []
+      e.pick.pick === 'change'
+        ? [{ ...e, restatement: alternativeChange(e.decision) }]
+        : e.pick.pick === 'other' && e.pick.restatement !== undefined
+          ? [{ ...e, restatement: e.pick.restatement }]
+          : []
     ),
     kept: entries.filter(e => e.pick.pick === 'keep'),
     notes: tour.landmarks
@@ -103,7 +116,7 @@ export function buildTourPrompt(tour: TourArtifact, reader: TourReaderState, key
         `${i + 1}. ${decision.title}`,
         `   What: ${r.what}`,
         `   Where: ${r.where.join(', ')}`,
-        `   Stays the same: ${r.unchanged}`
+        ...(r.unchanged === undefined ? [] : [`   Stays the same: ${r.unchanged}`])
       )
     })
   }

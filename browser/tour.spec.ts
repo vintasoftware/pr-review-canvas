@@ -55,13 +55,13 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
 
   // The reader keeps every decision; the second one through the keyboard.
   await page.goto(`${tourUrl}#decision-pipe-means-json`)
-  await expect(page.locator('.tour-option[aria-checked="true"]')).toHaveAttribute('data-pick', 'keep')
-  await page.locator('[data-act="keep"]').click()
+  await expect(page.locator('.tour-option[aria-checked="true"]')).toHaveCount(0)
+  await page.locator('.tour-option[data-pick="keep"]').click()
   await expect(page.locator('.tour-state')).toHaveText('✓ kept')
   await page.locator('[data-nav="next"]').click()
   await page.keyboard.press('k')
   await page.locator('[data-nav="next"]').click()
-  await page.locator('[data-act="keep"]').click()
+  await page.locator('.tour-option[data-pick="keep"]').click()
   await page.locator('[data-nav="next"]').click()
 
   // A wrong answer reopens the landmark; the right one moves on.
@@ -97,20 +97,22 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   expect(bundle.tour.record.author.picks['pipe-means-json']).toEqual({ pick: 'keep' })
 })
 
-test('takes a change through the drawer and lists it in the plan', async ({ page, tourUrl }) => {
+test('takes something else through the drawer and moves on to the next decision', async ({
+  page,
+  tourUrl,
+}) => {
   await page.goto(`${tourUrl}#decision-pipe-means-json`)
-  await page.locator('.tour-option[data-pick="change"]').click()
-  await page.locator('[data-act="grill"]').click()
+  await page.locator('.tour-option[data-pick="other"]').click()
   const dialog = page.locator('#tour-grill')
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('textarea[name="what"]')).toHaveValue('Only --json means JSON')
+  await dialog.locator('textarea[name="what"]').fill('Only --json means JSON')
   await dialog.locator('textarea[name="unchanged"]').fill('Agents that pass --json.')
   await dialog.locator('button[type="submit"]').click()
   await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/#decision-handoff-passes-json$/)
+  await page.keyboard.press('ArrowLeft')
   await expect(page.locator('.tour-state.change')).toContainText('change approved')
   await expect(page.locator('.tour-restated')).toContainText('Agents that pass --json.')
-  await page.keyboard.press('ArrowRight')
-  await expect(page).toHaveURL(/#decision-handoff-passes-json$/)
 })
 
 test('the home page and the canvas header link to the tour', async ({ page, tourUrl }) => {

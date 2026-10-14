@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { Pr } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
 import type { CanvasRelation, ChatStatus, PublicHost } from './api.js'
-import { type Landmark, PICKS, type TourArtifact, type TourRecord } from './tour.js'
+import { type Landmark, READER_PICKS, type TourArtifact, type TourRecord } from './tour.js'
 
 /** The reader's approved restatement of a change, what changes, where, and what stays the same. */
 export const RestatementSchema = z.object({
@@ -15,11 +15,11 @@ export const RestatementSchema = z.object({
 export type Restatement = z.infer<typeof RestatementSchema>
 
 /**
- * The reader's answer to one decision. A keep is settled once approved; a change is settled once
- * its restatement was approved, which is what enters the plan.
+ * The reader's answer to one decision. A keep or the tour's alternative is settled once approved;
+ * something else is settled once its restatement was approved, which is what enters the plan.
  */
 export const ReaderPickSchema = z.object({
-  pick: z.enum(PICKS),
+  pick: z.enum(READER_PICKS),
   approved: z.boolean(),
   restatement: RestatementSchema.optional(),
   tried: z.boolean().optional(),

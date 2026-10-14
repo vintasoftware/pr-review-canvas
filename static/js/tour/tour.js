@@ -182,7 +182,7 @@ export class PrTourElement extends HTMLElement {
       '<div id="rail"></div>' +
       '<main id="main" class="tour-main"><div class="tour-stage" id="stage"></div></main>' +
       '<nav class="tour-nav" id="nav" aria-label="Tour navigation"></nav>' +
-      `<dialog class="tour-chat" id="${GRILL_DIALOG_ID}" aria-label="Say what you want instead"></dialog>` +
+      `<dialog class="tour-chat" id="${GRILL_DIALOG_ID}" aria-label="Something else"></dialog>` +
       '<dialog class="tour-help" id="help-dialog" aria-label="Tour help"></dialog>' +
       footerHtml(boot.version)
     this.frames = listenToFrames(this, { preview: bundle.preview })
@@ -192,11 +192,12 @@ export class PrTourElement extends HTMLElement {
       bundle,
       onApprove: (decision, restatement) => {
         this.updatePick(decision, pick => {
-          pick.pick = 'change'
+          pick.pick = 'other'
           pick.approved = true
           pick.restatement = restatement
         })
         toast(this, 'change approved · in the plan')
+        this.go(this.current + 1)
       },
       onReader: () => this.save(),
     })
@@ -318,11 +319,49 @@ export class PrTourElement extends HTMLElement {
     this.renderStep()
   }
 
+  /**
+   * Settles a decision on one of its two sides.
+   * @param {Decision} d
+   * @param {'keep' | 'change'} side
+   */
+  choose(d, side) {
+    this.updatePick(d, pick => {
+      pick.pick = side
+      pick.approved = true
+      delete pick.restatement
+    })
+  }
+
+  /**
+   * A click on the decision page outside its options and controls takes back a side picked there.
+   * Something else stays: it holds a conversation, and "undo" drops it.
+   * @param {EventTarget | null} clicked
+   */
+  clearChoiceOn(clicked) {
+    const decision = this.decisionStep()?.decision ?? null
+    const stage = this.querySelector('#stage')
+    if (
+      decision === null ||
+      !(clicked instanceof Node) ||
+      stage === null ||
+      !stage.contains(clicked) ||
+      (clicked instanceof Element && clicked.closest('a, button, input, label, textarea, select') !== null)
+    ) {
+      return
+    }
+    const pick = /** @type {TourBundle} */ (this.bundle).reader.picks[decision.key]
+    if (pick?.approved && pick.pick !== 'other') {
+      this.updatePick(decision, p => {
+        p.approved = false
+      })
+    }
+  }
+
   /** @param {Decision} d */
   openGrill(d) {
     const bundle = /** @type {TourBundle} */ (this.bundle)
     this.updatePick(d, pick => {
-      pick.pick = 'change'
+      pick.pick = 'other'
       pick.approved = false
     })
     void this.grill?.open(d, bundle.reader.picks[d.key]?.restatement)
@@ -455,6 +494,7 @@ export class PrTourElement extends HTMLElement {
       const target =
         e.target instanceof Element ? e.target.closest('[data-act], [data-nav], .tour-rail-seg') : null
       if (!(target instanceof HTMLElement)) {
+        this.clearChoiceOn(e.target)
         return
       }
       const bundle = /** @type {TourBundle} */ (this.bundle)
@@ -491,16 +531,12 @@ export class PrTourElement extends HTMLElement {
       } else if (act === 'return') {
         this.returnBack()
       } else if (act === 'pick' && decision !== null) {
-        const chosen = target.dataset['pick'] === 'change' ? 'change' : 'keep'
-        this.updatePick(decision, pick => {
-          pick.pick = chosen
-          pick.approved = false
-        })
-      } else if (act === 'keep' && decision !== null) {
-        this.updatePick(decision, pick => {
-          pick.pick = 'keep'
-          pick.approved = true
-        })
+        const chosen = target.dataset['pick']
+        if (chosen === 'other') {
+          this.openGrill(decision)
+        } else {
+          this.choose(decision, chosen === 'change' ? 'change' : 'keep')
+        }
       } else if (act === 'unsettle' && decision !== null) {
         delete bundle.reader.picks[decision.key]
         this.save()
@@ -558,10 +594,9 @@ export class PrTourElement extends HTMLElement {
       } else if (e.key === 'i' && step?.kind === 'landmark' && step.landmark.code.length > 0) {
         this.toggleCode(step.landmark.id)
       } else if (e.key === 'k' && decision !== null) {
-        this.updatePick(decision, pick => {
-          pick.pick = 'keep'
-          pick.approved = true
-        })
+        this.choose(decision, 'keep')
+      } else if (e.key === 'a' && decision !== null) {
+        this.choose(decision, 'change')
       } else if (e.key === 'c' && decision !== null) {
         this.openGrill(decision)
       } else if (/^[1-9]$/.test(e.key) && step?.kind === 'quiz') {

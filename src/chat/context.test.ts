@@ -191,15 +191,22 @@ describe('renderChatContext for a tour', () => {
         sources({ tour: { artifact: tour, reader } })
       )
     ).toContain('The reader keeps it.')
-    reader.picks['sum-over-product'] = { pick: 'change', approved: false }
+    reader.picks['sum-over-product'] = { pick: 'other', approved: false }
     expect(
       await renderChatContext(
         { kind: 'tour-decision', key: 'sum-over-product' },
         sources({ tour: { artifact: tour, reader } })
       )
-    ).toContain('wants it changed and has not said how yet')
+    ).toContain('wants something else and has not said what yet')
+    reader.picks['sum-over-product'] = { pick: 'change', approved: true }
+    expect(
+      await renderChatContext(
+        { kind: 'tour-decision', key: 'sum-over-product' },
+        sources({ tour: { artifact: tour, reader } })
+      )
+    ).toContain("The reader picks the tour's alternative.")
     reader.picks['sum-over-product'] = {
-      pick: 'change',
+      pick: 'other',
       approved: true,
       restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
     }
@@ -229,7 +236,7 @@ describe('renderChatContext for a tour', () => {
     const reader = freshReaderState()
     reader.picks['sum-over-product'] = { pick: 'keep', approved: true }
     reader.picks['second'] = {
-      pick: 'change',
+      pick: 'other',
       approved: true,
       restatement: { what: 'w', where: ['x'], unchanged: 'u' },
     }

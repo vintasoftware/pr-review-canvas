@@ -70,8 +70,8 @@ installed skill in Claude Code or Codex, replacing `123` with your PR or MR numb
 The skill reads the project's tour guide (`/pr-tour-setup` writes one, once per project),
 generates the tour, checks every landmark as a screenshot, and shares the tour in a PR or MR
 comment. Start `pr-review serve` and open **http://localhost:3010/tour/123**: read the landmarks,
-keep or change each decision (a change opens the grilling, where AI Chat restates what you want
-in your words), take the quiz, and confirm the plan. The tour writes a re-implementation prompt
+keep each decision, take the tour's alternative, or ask for something else (that opens the
+grilling, where AI Chat restates what you want in your words), take the quiz, and confirm the plan. The tour writes a re-implementation prompt
 and records that you toured; `/pr-tour-apply 123` carries the plan out. Tours of local work
 (`/pr-tour branch`, `/pr-tour uncommitted`) stay on your machine. See
 [the tour](docs/reference.md#the-tour) for the whole flow and its settings.

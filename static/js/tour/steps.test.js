@@ -77,10 +77,12 @@ describe('reachability', () => {
     expect(reachable(steps, 5, reader)).toBe(true)
     expect(reachable(steps, 6, reader)).toBe(false)
     expect(settled(steps[5] ?? { kind: 'cover' }, reader)).toBe(false)
-    reader.picks['sum-over-product'] = { pick: 'change', approved: true }
+    reader.picks['sum-over-product'] = { pick: 'other', approved: true }
     expect(reachable(steps, 6, reader)).toBe(false)
+    reader.picks['sum-over-product'] = { pick: 'change', approved: true }
+    expect(reachable(steps, 6, reader)).toBe(true)
     reader.picks['sum-over-product'] = {
-      pick: 'change',
+      pick: 'other',
       approved: true,
       restatement: { what: 'w', where: ['x'], unchanged: 'u' },
     }

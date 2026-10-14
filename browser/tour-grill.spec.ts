@@ -8,7 +8,7 @@ import { expect, test } from './fixtures.js'
 const RESTATEMENT =
   '```restatement\n{ "what": "Only --json means JSON; a pipe prints text.", "where": ["src/commands.ts:66"], "unchanged": "prepare, validate, and publish keep printing JSON." }\n```'
 
-test('grills a change through AI Chat, in the tour thread, and approves the restatement', async ({
+test('grills something else through AI Chat, in the tour thread, and approves the restatement', async ({
   page,
   chatServer,
 }) => {
@@ -20,7 +20,7 @@ test('grills a change through AI Chat, in the tour thread, and approves the rest
               { type: 'chunk', text: '1. Change `outputMode` in `src/commands.ts`.\n2. Run `pnpm test`.' },
               { type: 'done', stopReason: 'end_turn' },
             ]
-          : options.prompt.includes('I want to change this decision')
+          : options.prompt.includes('I want neither')
             ? [
                 { type: 'chunk', text: 'What should a person piping into `less` see?' },
                 { type: 'done', stopReason: 'end_turn' },
@@ -51,13 +51,12 @@ test('grills a change through AI Chat, in the tour thread, and approves the rest
   })
   const origin = new URL(url).origin
   await page.goto(`${origin}/tour/42#decision-pipe-means-json`)
-  await page.locator('.tour-option[data-pick="change"]').click()
-  await page.locator('[data-act="grill"]').click()
+  await page.locator('.tour-option[data-pick="other"]').click()
   const dialog = page.locator('#tour-grill')
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.tour-chat-h .agent')).toContainText('claude')
   // The opening goes out by itself, and the agent asks its first question.
-  await expect(dialog.locator('.tour-msg.reader').first()).toContainText('I want to change this decision')
+  await expect(dialog.locator('.tour-msg.reader').first()).toContainText('I want neither')
   await expect(dialog.locator('.tour-msg.agent').first()).toContainText('piping into')
   await expect(dialog.locator('[data-act="stop"]')).toHaveCount(0)
 
@@ -79,6 +78,9 @@ test('grills a change through AI Chat, in the tour thread, and approves the rest
 
   await card.locator('[data-act="approve"]').click()
   await expect(dialog).toBeHidden()
+  // Approving settles the decision and moves on; back on it, the restatement is what settled it.
+  await expect(page).toHaveURL(/#decision-handoff-passes-json$/)
+  await page.keyboard.press('ArrowLeft')
   await expect(page.locator('.tour-state.change')).toContainText('change approved')
   await expect(page.locator('.tour-restated')).toContainText('a pipe prints text')
   await expect(page.locator('.toast')).toContainText('change approved')

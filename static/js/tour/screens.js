@@ -18,6 +18,7 @@ import { themeLabel } from '../theme.js'
 import {
   minutesOf,
   nextLabel,
+  chosenPick,
   pickSettled,
   plural,
   positionLabel,
@@ -317,8 +318,9 @@ export function decisionHtml(bundle, steps, d) {
   const n = tour.decisions.indexOf(d) + 1
   const landmark = tour.landmarks.find(l => l.id === d.landmark)
   const landmarkIndex = landmark === undefined ? 0 : tour.landmarks.indexOf(landmark) + 1
-  const p = reader.picks[d.key] ?? { pick: d.recommended, approved: false }
+  const p = reader.picks[d.key]
   const done = pickSettled(p)
+  const chosen = chosenPick(p)
   const note = (reader.notes[d.landmark] ?? '').trim()
   const from =
     landmark === undefined
@@ -328,15 +330,23 @@ export function decisionHtml(bundle, steps, d) {
     ? `<div class="tour-card tour-tryit"><div class="tour-card-h"><span>try it${d.tryIt.verified ? ' · verified when this tour was generated' : ''}</span></div>
        <ol>${d.tryIt.steps.map(s => `<li><code>${esc(s)}</code></li>`).join('')}</ol>
        <ul>${d.tryIt.look.map(s => `<li>${inline(s)}</li>`).join('')}</ul>
-       <label><input type="checkbox" data-act="tried"${p.tried ? ' checked' : ''}> I tried it</label></div>`
+       <label><input type="checkbox" data-act="tried"${p?.tried ? ' checked' : ''}> I tried it</label></div>`
     : ''
-  const actions = done
-    ? p.pick === 'keep'
-      ? `<span class="tour-state">✓ kept</span><button class="tour-btn quiet" type="button" data-act="unsettle">change my mind</button>`
-      : `<span class="tour-state change">✓ change approved · in the plan</span><button class="tour-btn quiet" type="button" data-act="grill">reopen</button><button class="tour-btn quiet" type="button" data-act="unsettle">change my mind</button>`
-    : p.pick === 'keep'
-      ? `<button class="tour-btn accent" type="button" data-act="keep">Keep it <kbd>k</kbd></button>`
-      : `<button class="tour-btn accent" type="button" data-act="grill">Say what you want instead <kbd>c</kbd></button>`
+  const unsettle = '<button class="tour-btn quiet" type="button" data-act="unsettle">undo</button>'
+  const actions =
+    chosen === null
+      ? '<span class="tour-hint">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</span>'
+      : chosen === 'keep'
+        ? `<span class="tour-state">✓ kept</span>${unsettle}`
+        : chosen === 'change'
+          ? `<span class="tour-state change">✓ alternative · in the plan</span>${unsettle}`
+          : done
+            ? `<span class="tour-state change">✓ change approved · in the plan</span><button class="tour-btn quiet" type="button" data-act="grill">reopen</button>${unsettle}`
+            : `<button class="tour-btn accent" type="button" data-act="grill">Continue the conversation <kbd>c</kbd></button>${unsettle}`
+  const other = {
+    label: 'Something else',
+    consequence: 'Neither side: say what you want instead, then approve it as restated.',
+  }
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
     <p class="tour-eyebrow"><span class="tour-stage-tag">${esc(CATEGORY_LABEL[d.category] ?? d.category)}</span><span>decision ${n} of ${tour.decisions.length}</span>${from}</p>
@@ -344,25 +354,27 @@ export function decisionHtml(bundle, steps, d) {
     <p class="tour-lead">${inline(d.context)}</p>
     <p class="tour-anchor"><span class="mono">${esc(d.anchor.path)}:${d.anchor.line}</span></p>
     ${note === '' ? '' : `<div class="tour-landmark-note"><b>Your note on landmark ${landmarkIndex}</b>${esc(note)}</div>`}
-    <div class="tour-options" role="radiogroup" aria-label="Keep or change">
-      ${optionHtml('keep', d.keep, p.pick === 'keep', true, d.recommended === 'keep')}
-      ${optionHtml('change', d.change, p.pick === 'change', false, d.recommended === 'change')}
+    <div class="tour-options" role="radiogroup" aria-label="Keep, the alternative, or something else">
+      ${optionHtml('keep', d.keep, chosen === 'keep', true)}
+      ${optionHtml('change', d.change, chosen === 'change', false)}
+      ${optionHtml('other', other, chosen === 'other', false)}
     </div>
     ${tryIt}
     <div class="tour-actions">${actions}</div>
-    ${done && p.pick === 'change' && p.restatement ? restatedHtml(p.restatement) : ''}`
+    ${done && p?.pick === 'other' && p.restatement ? restatedHtml(p.restatement) : ''}`
 }
 
+const OPTION_LABEL = { keep: 'keep', change: 'alternative', other: 'something else' }
+
 /**
- * @param {'keep' | 'change'} kind
+ * @param {'keep' | 'change' | 'other'} kind
  * @param {{ label: string, consequence: string }} side
  * @param {boolean} checked
  * @param {boolean} isNow
- * @param {boolean} isRecommended
  */
-function optionHtml(kind, side, checked, isNow, isRecommended) {
+function optionHtml(kind, side, checked, isNow) {
   return `<button class="tour-option" type="button" role="radio" aria-checked="${checked}" data-act="pick" data-pick="${kind}">
-    <span class="tour-option-k"><span>${kind}</span>${isNow ? '<span class="now">what the code does</span>' : ''}${isRecommended ? '<span class="rec">recommended</span>' : ''}</span>
+    <span class="tour-option-k"><span>${OPTION_LABEL[kind]}</span>${isNow ? '<span class="now">what the code does</span>' : ''}</span>
     <span class="tour-option-l">${esc(side.label)}</span>
     <span class="tour-option-c">${inline(side.consequence)}</span></button>`
 }
@@ -411,10 +423,19 @@ export function planHtml(bundle) {
     .map(d => ({ d, p: reader.picks[d.key] }))
     .filter(e => pickSettled(e.p))
     .map(e => ({ d: e.d, p: /** @type {ReaderPick} */ (e.p) }))
-  // A settled change has its restatement: that is what settled it.
+  // The tour's alternative asks for its own side; something else settled with its restatement.
   const changes = entries
-    .filter(e => e.p.pick === 'change')
-    .map(e => ({ d: e.d, r: /** @type {Restatement} */ (e.p.restatement) }))
+    .filter(e => e.p.pick !== 'keep')
+    .map(e => ({
+      d: e.d,
+      r:
+        e.p.pick === 'other'
+          ? /** @type {Restatement} */ (e.p.restatement)
+          : /** @type {{ what: string, where: string[], unchanged?: string }} */ ({
+              what: `${e.d.change.label}. ${e.d.change.consequence}`,
+              where: [`${e.d.anchor.path}:${e.d.anchor.line}`],
+            }),
+    }))
   const kept = entries.filter(e => e.p.pick === 'keep')
   const notes = tour.landmarks
     .map(l => ({ l, text: (reader.notes[l.id] ?? '').trim() }))
@@ -447,7 +468,7 @@ export function planHtml(bundle) {
     <p class="tour-eyebrow"><span class="tour-stage-tag">The plan</span></p>
     <h2 class="tour-title">${esc(title)}</h2>
     <p class="tour-lead">${esc(lead)}</p>
-    ${changes.length ? `<h3 class="tour-section-h">Changes</h3><ol class="tour-plan-list">${changes.map(({ d, r }) => `<li><b>${esc(d.title)}</b><br>${inline(r.what)} <span class="where">${r.where.map(esc).join(' · ')}</span><span class="where">stays: ${inline(r.unchanged)}</span></li>`).join('')}</ol>` : ''}
+    ${changes.length ? `<h3 class="tour-section-h">Changes</h3><ol class="tour-plan-list">${changes.map(({ d, r }) => `<li><b>${esc(d.title)}</b><br>${inline(r.what)} <span class="where">${r.where.map(esc).join(' · ')}</span>${r.unchanged === undefined ? '' : `<span class="where">stays: ${inline(r.unchanged)}</span>`}</li>`).join('')}</ol>` : ''}
     ${notes.length ? `<h3 class="tour-section-h">Your notes while reading</h3><ul class="tour-kept">${notes.map(({ l, text }) => `<li><span>landmark ${tour.landmarks.indexOf(l) + 1}</span><span>${esc(text)}</span><span class="place">${esc(l.title)}</span></li>`).join('')}</ul>` : ''}
     <h3 class="tour-section-h">Kept</h3>
     <ul class="tour-kept">${kept.map(({ d }) => `<li><span>${esc(d.keep.label)}</span><span>${inline(d.keep.consequence)}</span></li>`).join('') || '<li>none</li>'}</ul>
@@ -498,7 +519,7 @@ export function helpHtml() {
     <dt><kbd>→</kbd> <kbd>space</kbd></dt><dd>next</dd>
     <dt><kbd>←</kbd></dt><dd>back</dd>
     <dt><kbd>i</kbd></dt><dd>show the code behind a landmark</dd>
-    <dt><kbd>k</kbd> <kbd>c</kbd></dt><dd>keep, or say what you want instead</dd>
+    <dt><kbd>k</kbd> <kbd>a</kbd> <kbd>c</kbd></dt><dd>keep, take the alternative, or ask for something else</dd>
     <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>answer a question</dd>
     <dt><kbd>esc</kbd></dt><dd>close this, or the drawer</dd>
   </dl>

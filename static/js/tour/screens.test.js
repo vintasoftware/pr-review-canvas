@@ -244,7 +244,7 @@ describe('landmarkHtml', () => {
 })
 
 describe('decisionHtml', () => {
-  it('preselects the recommendation and offers keep', () => {
+  it('offers three options with nothing chosen', () => {
     const bundle = bundleWith({ notes: { sum: 'my note' } })
     const decision = tourOf(bundle).decisions[0]
     if (decision === undefined) {
@@ -253,26 +253,46 @@ describe('decisionHtml', () => {
     document.body.innerHTML = decisionHtml(bundle, stepsOf(bundle), decision)
     expect(document.querySelector('.tour-stage-tag')?.textContent).toBe('Trade-off')
     expect(document.querySelector('.tour-eyebrow a')?.textContent).toBe('from landmark 3: Sum, not product')
-    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
-      'keep'
-    )
+    expect([...document.querySelectorAll('.tour-option')].map(o => o.getAttribute('data-pick'))).toEqual([
+      'keep',
+      'change',
+      'other',
+    ])
+    expect(
+      [...document.querySelectorAll('.tour-option-k > span:first-child')].map(s => s.textContent)
+    ).toEqual(['keep', 'alternative', 'something else'])
+    expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
     expect(document.querySelector('.tour-option .now')?.textContent).toBe('what the code does')
-    expect(document.querySelector('.tour-option .rec')?.textContent).toBe('recommended')
     expect(document.querySelector('.tour-landmark-note')?.textContent).toContain('my note')
-    expect(document.querySelector('[data-act="keep"]')).not.toBeNull()
+    expect(document.querySelector('.tour-actions .tour-hint')?.textContent).toBe(
+      'pick one: k keep · a alternative · c something else'
+    )
     expect(document.querySelector('.tour-tryit')).toBeNull()
     expect(document.querySelector('.tour-anchor')?.textContent).toBe('src/app.ts:4')
   })
 
-  it('shows a change pick, a settled keep, a settled change, and a try-it recipe', () => {
-    const bundle = bundleWith({ picks: { 'sum-over-product': { pick: 'change', approved: false } } })
+  it('shows something else being talked through, a settled keep, the alternative, a settled change, and a try-it recipe', () => {
+    const bundle = bundleWith({ picks: { 'sum-over-product': { pick: 'other', approved: false } } })
     const steps = stepsOf(bundle)
     const decision = tourOf(bundle).decisions[0]
     if (decision === undefined) {
       throw new Error('no decision')
     }
     document.body.innerHTML = decisionHtml(bundle, steps, decision)
-    expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('Say what you want instead')
+    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
+      'other'
+    )
+    expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('Continue the conversation')
+    // A side picked and taken back is not chosen.
+    bundle.reader.picks['sum-over-product'] = { pick: 'change', approved: false }
+    document.body.innerHTML = decisionHtml(bundle, steps, decision)
+    expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
+    bundle.reader.picks['sum-over-product'] = { pick: 'change', approved: true }
+    document.body.innerHTML = decisionHtml(bundle, steps, decision)
+    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
+      'change'
+    )
+    expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ alternative · in the plan')
     bundle.reader.picks['sum-over-product'] = { pick: 'keep', approved: true, tried: true }
     const withTry = {
       ...decision,
@@ -287,7 +307,7 @@ describe('decisionHtml', () => {
     expect(document.querySelector('input[data-act="tried"]')?.hasAttribute('checked')).toBe(true)
     expect(document.querySelector('.tour-eyebrow a')).toBeNull()
     bundle.reader.picks['sum-over-product'] = {
-      pick: 'change',
+      pick: 'other',
       approved: true,
       restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
     }
@@ -336,7 +356,7 @@ describe('planHtml', () => {
     const bundle = bundleWith({
       picks: {
         'sum-over-product': {
-          pick: 'change',
+          pick: 'other',
           approved: true,
           restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
         },
@@ -351,6 +371,15 @@ describe('planHtml', () => {
     expect(document.querySelectorAll('.tour-kept')[1]?.textContent).toBe('none')
     expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('Confirm the plan')
     expect(document.querySelector('.tour-not li .path')?.textContent).toBe('src/new-name.ts')
+  })
+
+  it("lists the tour's alternative as a change with nothing said to stay", () => {
+    const bundle = bundleWith({ picks: { 'sum-over-product': { pick: 'change', approved: true } } })
+    document.body.innerHTML = planHtml(bundle)
+    expect(document.querySelector('.tour-title')?.textContent).toBe('1 change to make, 0 kept')
+    const item = document.querySelector('.tour-plan-list li')
+    expect(item?.textContent).toContain('Product. Grows faster; the spec would have to change.')
+    expect(item?.querySelectorAll('.where')).toHaveLength(1)
   })
 
   it('says nothing to change, and hides the record line when nothing is shared', () => {
@@ -464,7 +493,7 @@ describe('the corners of the screens', () => {
     const changed = bundleWith({
       picks: {
         'sum-over-product': {
-          pick: 'change',
+          pick: 'other',
           approved: true,
           restatement: { what: 'w', where: ['x'], unchanged: 'u' },
         },

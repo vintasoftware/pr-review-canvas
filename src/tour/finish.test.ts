@@ -4,7 +4,8 @@ import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { makeTestContext, type TestContext } from '../testing/fakes.js'
 import { ghFor42, gitFor42, HEAD_SHA } from '../testing/synthetic.js'
 import { syntheticTour } from '../testing/synthetic-tour.js'
-import { finishedRecord, finishTour } from './finish.js'
+import { changeRequestBody, finishedRecord, finishTour } from './finish.js'
+import { alternativeChange } from './plan.js'
 
 let t: TestContext
 afterEach(() => t?.cleanup())
@@ -26,11 +27,11 @@ describe('finishedRecord', () => {
           picks: {
             kept: { pick: 'keep', approved: true },
             changed: {
-              pick: 'change',
+              pick: 'other',
               approved: true,
               restatement: { what: 'w', where: ['x'], unchanged: 'u' },
             },
-            open: { pick: 'change', approved: false },
+            open: { pick: 'other', approved: false },
           },
         },
       },
@@ -46,7 +47,7 @@ describe('finishedRecord', () => {
         finishedAt: 'now',
         picks: {
           kept: { pick: 'keep' },
-          changed: { pick: 'change', restatement: { what: 'w', where: ['x'], unchanged: 'u' } },
+          changed: { pick: 'other', restatement: { what: 'w', where: ['x'], unchanged: 'u' } },
         },
         prompt: 'the prompt',
       },
@@ -66,6 +67,17 @@ describe('finishedRecord', () => {
       'now'
     )
     expect(reviewer.author).toEqual({ finishedAt: 'x', picks: {}, prompt: 'p' })
+  })
+})
+
+describe('changeRequestBody', () => {
+  it("says what stays the same only when the restatement does: the tour's alternative does not", () => {
+    const [decision] = syntheticTour().decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    const body = changeRequestBody(decision, alternativeChange(decision))
+    expect(body).toBe(
+      '**Change requested in the tour:** Sum over product?\n\nProduct. Grows faster; the spec would have to change.\n\nWhere: src/app.ts:4'
+    )
   })
 })
 

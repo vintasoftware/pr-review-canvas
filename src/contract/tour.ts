@@ -24,8 +24,12 @@ export const DECISION_CATEGORIES = [
 ] as const
 export type DecisionCategory = (typeof DECISION_CATEGORIES)[number]
 
+/** The two sides a decision offers: what the code does, and the tour's alternative. */
 export const PICKS = ['keep', 'change'] as const
 export type TourPick = (typeof PICKS)[number]
+/** A reader's answer: one of the two sides, or something else they describe in a grilling. */
+export const READER_PICKS = [...PICKS, 'other'] as const
+export type ReaderPickKind = (typeof READER_PICKS)[number]
 
 /** Visible-character caps on the generator's prose. Numbers, so the prompt can print them. */
 export const TOUR_CAPS = {
@@ -277,8 +281,8 @@ export type TouredBy = z.infer<typeof TouredBySchema>
 
 /** The author's answer to a decision, as the shared record keeps it. */
 export const AuthorPickSchema = z.object({
-  pick: z.enum(PICKS),
-  /** For a change: the approved restatement, what changes and what stays the same. */
+  pick: z.enum(READER_PICKS),
+  /** For something else: the approved restatement, what changes and what stays the same. */
   restatement: z
     .object({ what: z.string().min(1), where: z.array(z.string().min(1)), unchanged: z.string().min(1) })
     .optional(),

@@ -145,9 +145,11 @@ function renderTourDecision(key: string, tour: TourSources): string {
       ? 'The reader has not answered yet.'
       : pick.pick === 'keep'
         ? `The reader keeps it${pickSettled(pick) ? '' : ' so far'}.`
-        : pick.restatement === undefined
-          ? 'The reader wants it changed and has not said how yet.'
-          : `The reader wants it changed; the restatement so far: ${pick.restatement.what} (where: ${pick.restatement.where.join(', ')}; unchanged: ${pick.restatement.unchanged}).`
+        : pick.pick === 'change'
+          ? `The reader picks the tour's alternative${pickSettled(pick) ? '' : ' so far'}.`
+          : pick.restatement === undefined
+            ? 'The reader wants something else and has not said what yet.'
+            : `The reader wants something else; the restatement so far: ${pick.restatement.what} (where: ${pick.restatement.where.join(', ')}; unchanged: ${pick.restatement.unchanged}).`
   const note = (tour.reader.notes[decision.landmark] ?? '').trim()
   return [
     `## Context: decision \`${decision.key}\` — ${decision.title}`,
@@ -180,7 +182,7 @@ function renderTourPlan(tour: TourSources): string {
     list(
       plan.changes.map(
         ({ decision, restatement }) =>
-          `- \`${decision.key}\`: ${restatement.what} (where: ${restatement.where.join(', ')}; unchanged: ${restatement.unchanged})`
+          `- \`${decision.key}\`: ${restatement.what} (where: ${restatement.where.join(', ')}${restatement.unchanged === undefined ? '' : `; unchanged: ${restatement.unchanged}`})`
       )
     ),
     '',
