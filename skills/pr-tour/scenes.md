@@ -392,9 +392,9 @@ Rules:
   about 320 px on a phone (about 27 rem at 12 px), and as tall as the scene: nothing is shrunk or
   cut off, and a tall scene pushes the prose after it down. Lay out with flex and grid, size
   canvases and SVG by width and `aspect-ratio` or `viewBox`, and let rows wrap. A scene taller than
-  about 700 px on a desktop pushes the prose out of sight: prefer wide to tall. On a phone, a
-  `grid` of three columns becomes cramped; prefer two, or a `row` that wraps, or stack the before
-  and the after.
+  about 700 px on a desktop pushes the prose out of sight: prefer wide to tall. A `grid` keeps its
+  columns on a phone, and three become cramped: set `--cols-phone` (`style="--cols: 3;
+--cols-phone: 1"`) to stack it, or use a `row` that wraps.
 - **Narrow by default.** A `window`, a `term`, a `file`, `bars`, a `timeline`, and a `thread` are
   at most 26 to 28 rem wide and centered, about a third of a desktop frame, so two sit side by side.
   One that should fill the frame, or a long line of code or output, takes
@@ -417,7 +417,7 @@ Rules:
 ## The kit
 
 - **Layout**: `scene` (the column everything sits in), `row` (items side by side; `row spread`
-  pushes them apart), `col`, `grid` (`style="--cols: 3"`), `stack` (items tight on top of each
+  pushes them apart), `col`, `grid` (`style="--cols: 3"`, and `--cols-phone: 1` to stack it on a phone), `stack` (items tight on top of each
   other), `controls` (a micro-world's fieldsets, side by side and wrapping).
 - **Things**: `box` (a rounded panel; a `label` inside is its caption; `box ghost` dashed and empty,
   `box solid` filled; it stacks and centers its children, so wrap a sentence that mixes text and
@@ -466,7 +466,8 @@ Rules:
   `ban`, `refresh-cw`, `repeat`, `copy`, `trash-2`, `eye`, `eye-off`, `send`, `inbox`,
   `list-checks`, `bug`, `zap`, `package`, `settings`, `terminal`, `history`, `undo-2`, `split`,
   `merge`, `layers`, `link`, and any other Lucide name. Sizes: none (text size), `lg`, `xl`; leave
-  the size off inside a `chip`.
+  the size off inside a `chip`. Icons are drawn into the markup when the scene is published, so a
+  script cannot make one: write each icon a script needs once in the markup, hidden, and clone it.
 - **Arrows**: `<span class="arrow"></span>` points right, `arrow down` points down,
   `style="--len: 4rem"` sets its length, `data-say="retry"` writes a word on it (beside it, for
   `arrow down`), `arrow flow` animates things moving along it, either way, `arrow blocked` crosses

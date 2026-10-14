@@ -93,6 +93,12 @@ body {
   gap: 0.5rem;
   width: 100%;
 }
+/* A grid keeps its columns on a phone unless `--cols-phone` names fewer. */
+@media (width <= 40rem) {
+  .grid {
+    grid-template-columns: repeat(var(--cols-phone, var(--cols, 2)), minmax(0, 1fr));
+  }
+}
 .stack {
   display: flex;
   flex-direction: column;
