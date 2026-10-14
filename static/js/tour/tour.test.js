@@ -125,6 +125,7 @@ function text() {
 
 beforeEach(() => {
   window.scrollTo = vi.fn()
+  Element.prototype.scrollIntoView = vi.fn()
   history.replaceState(null, '', '/tour/42')
 })
 
@@ -160,11 +161,14 @@ describe('the tour page', () => {
     )
     expect(window.scrollTo).toHaveBeenCalled()
 
-    // The keys move too, and `i` opens the code behind a landmark that has some.
+    // The keys move too, and `i` opens the code behind a landmark that has some and scrolls to it.
     press('ArrowRight')
     expect(location.hash).toBe('#landmark-world')
     press('i')
     expect(document.querySelector('.tour-code')?.hasAttribute('hidden')).toBe(false)
+    expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toEqual([
+      document.querySelector('.tour-code'),
+    ])
     click('.tour-code-tab[data-view="raw"]')
     expect(document.querySelector('.tour-code-tab[aria-selected="true"]')?.textContent).toBe('raw diff')
     click('[data-act="code"]')

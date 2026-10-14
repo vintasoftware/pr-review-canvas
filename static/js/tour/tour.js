@@ -9,7 +9,7 @@
 /** @typedef {import('./steps.js').Step} Step */
 import { ApiError, saveAppearance } from '../api.js'
 import { wireCopyCommands } from '../commands.js'
-import { copyToClipboard, esc, qs } from '../dom.js'
+import { copyToClipboard, esc, qs, scrollIntoViewSafe } from '../dom.js'
 import { errorCardHtml } from '../errors.js'
 import { hostLabel, setHost } from '../host.js'
 import { toast } from '../interactions.js'
@@ -326,6 +326,22 @@ export class PrTourElement extends HTMLElement {
     void this.grill?.open(d, bundle.reader.picks[d.key]?.restatement)
   }
 
+  /**
+   * Opens or closes the code behind a landmark, and scrolls to it when it opens.
+   * @param {string} id
+   */
+  toggleCode(id) {
+    const bundle = /** @type {TourBundle} */ (this.bundle)
+    const open = bundle.reader.codeOpen[id] !== true
+    bundle.reader.codeOpen[id] = open
+    this.save()
+    this.renderStep()
+    const code = this.querySelector('.tour-code')
+    if (open && code !== null) {
+      scrollIntoViewSafe(code, 'start')
+    }
+  }
+
   openHelp() {
     const dialog = /** @type {HTMLDialogElement} */ (qs('#help-dialog', this))
     dialog.innerHTML = helpHtml()
@@ -439,9 +455,7 @@ export class PrTourElement extends HTMLElement {
       } else if (act === 'grill-plan') {
         void this.grill?.openPlan()
       } else if (act === 'code' && step?.kind === 'landmark') {
-        bundle.reader.codeOpen[step.landmark.id] = bundle.reader.codeOpen[step.landmark.id] !== true
-        this.save()
-        this.renderStep()
+        this.toggleCode(step.landmark.id)
       } else if (act === 'code-view' && step?.kind === 'landmark') {
         bundle.reader.codeView[step.landmark.id] = target.dataset['view'] === 'raw' ? 'raw' : 'literate'
         this.save()
@@ -524,7 +538,6 @@ export class PrTourElement extends HTMLElement {
         return
       }
       const step = this.steps[this.current]
-      const bundle = /** @type {TourBundle} */ (this.bundle)
       const decision = this.decisionStep()?.decision ?? null
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
@@ -532,9 +545,7 @@ export class PrTourElement extends HTMLElement {
       } else if (e.key === 'ArrowLeft') {
         this.go(this.current - 1)
       } else if (e.key === 'i' && step?.kind === 'landmark' && step.landmark.code.length > 0) {
-        bundle.reader.codeOpen[step.landmark.id] = bundle.reader.codeOpen[step.landmark.id] !== true
-        this.save()
-        this.renderStep()
+        this.toggleCode(step.landmark.id)
       } else if (e.key === 'k' && decision !== null) {
         this.updatePick(decision, pick => {
           pick.pick = 'keep'
