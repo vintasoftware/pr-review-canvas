@@ -1,165 +1,58 @@
 <div class="scene" data-technique="sankey">
-  <div class="sk-fig">
-    <span class="sk-hd sk-hl">before · <b>util.py</b> · 702<i> lines</i></span>
-    <span class="sk-hd sk-hr">after · 9 files · 773<i> lines</i></span>
-    <div class="sk-lab" data-n="200"><b>util.py</b><span class="sk-n">200</span><span class="sk-sym">keeps assertrepr_compare, format_explanation, _format_lines, the diff-style config</span></div>
-    <div class="sk-lab" data-n="12"><b>_typing.py</b><span class="sk-n">12</span><span class="sk-sym">_AssertionTextDiffStyle, _HighlightFunc</span></div>
-    <div class="sk-lab" data-n="11"><b>highlight.py</b><span class="sk-n">11</span><span class="sk-sym">dummy_highlighter</span></div>
-    <div class="sk-lab" data-n="60"><b>_guards.py</b><span class="sk-n">60</span><span class="sk-sym">issequence, istext, ismapping, isset, isnamedtuple, isdatacls, isattrs, isiterable, has_default_eq</span></div>
-    <div class="sk-lab" data-n="111"><b>compare_text.py</b><span class="sk-n">111</span><span class="sk-sym">_compare_eq_text, _diff_text, _diff_text_block, _format_text_block_lines, _notin_text</span></div>
-    <div class="sk-lab" data-n="98"><b>_compare_sequence.py</b><span class="sk-n">98</span><span class="sk-sym">_compare_eq_iterable, _compare_eq_sequence</span></div>
-    <div class="sk-lab" data-n="134"><b>_compare_any.py</b><span class="sk-n">134</span><span class="sk-sym">_compare_eq_any, _compare_eq_cls</span></div>
-    <div class="sk-lab" data-n="94"><b>_compare_set.py</b><span class="sk-n">94</span><span class="sk-sym">_compare_eq_set, _compare_gt_set, _compare_lt_set, _compare_gte_set, _compare_lte_set, _set_one_sided_diff</span><span class="sk-sym sk-hot">+ SET_COMPARISON_FUNCTIONS: one table for != &gt;= &lt;= &gt; &lt;</span></div>
-    <div class="sk-lab" data-n="53"><b>_compare_mapping.py</b><span class="sk-n">53</span><span class="sk-sym">_compare_eq_mapping</span></div>
-    <span class="sk-tk sk-drop-t">11 imports dropped</span>
-    <span class="sk-tk">L151</span><span class="sk-tk">L205</span><span class="sk-tk sk-hot"><i>5 <code>elif op ==</code><br>set branches · </i>L251</span><span class="sk-tk">L284</span><span class="sk-tk">L336</span><span class="sk-tk">L421</span><span class="sk-tk">L510</span><span class="sk-tk">L579</span><span class="sk-tk">L625</span><span class="sk-tk">L686</span>
-  </div>
-  <div class="sk-key row">
-    <span><i class="sk-sw sk-stay"></i>stays in util.py</span>
-    <span><i class="sk-sw sk-move"></i>moved verbatim</span>
-    <span><i class="sk-sw sk-hero"></i>rewritten</span>
-    <span><i class="sk-sw sk-new"></i>new lines: imports, the table</span>
-    <span><i class="sk-sw sk-drop"></i>dropped</span>
-  </div>
+  <svg class="sk sk-wide" viewBox="0 0 1120 540" role="img" aria-label="util.py split by lines: 188 kept, 421 to five compare files, 68 to three helper files, 14 rewritten into SET_COMPARISON_FUNCTIONS, 11 dropped">
+    <path class="sk-stay" d="M322,59 C511,59 511,20 700,20 V132.8 C511,132.8 511,171.8 322,171.8 Z"/>
+<path class="sk-hero" d="M322,171.8 C511,171.8 511,158.8 700,158.8 V167.2 C511,167.2 511,180.2 322,180.2 Z"/>
+<path class="sk-move" d="M322,180.2 C511,180.2 511,167.2 700,167.2 V419.8 C511,419.8 511,432.8 322,432.8 Z"/>
+<path class="sk-move" d="M322,432.8 C511,432.8 511,445.8 700,445.8 V486.6 C511,486.6 511,473.6 322,473.6 Z"/>
+<path class="sk-drop" d="M322,473.6 C511,473.6 511,512.6 700,512.6 V519.2 C511,519.2 511,480.2 322,480.2 Z"/>
+    <rect class="sk-stay" x="300" y="59" width="22" height="112.8"/><rect class="sk-hero" x="300" y="171.8" width="22" height="8.4"/><rect class="sk-move" x="300" y="180.2" width="22" height="252.6"/><rect class="sk-move" x="300" y="432.8" width="22" height="40.8"/><rect class="sk-drop" x="300" y="473.6" width="22" height="6.6"/>
+    <rect class="sk-stay" x="700" y="20" width="22" height="112.8"/><rect class="sk-hero" x="700" y="158.8" width="22" height="8.4"/><rect class="sk-move" x="700" y="167.2" width="22" height="252.6"/><rect class="sk-move" x="700" y="445.8" width="22" height="40.8"/><rect class="sk-drop" x="700" y="512.6" width="22" height="6.6"/>
+    <text class="sk-name" x="284" y="282" text-anchor="end">util.py</text><text class="sk-sub" x="284" y="300" text-anchor="end">702 lines · before</text>
+    <text class="sk-say" x="511" y="306" text-anchor="middle">moved as is</text>
+    <text class="sk-name " x="740" y="72">util.py</text><text class="sk-sub " x="740" y="90">188 lines kept</text>
+    <text class="sk-name sk-hot" x="740" y="158">SET_COMPARISON_FUNCTIONS</text><text class="sk-sub sk-hot" x="740" y="176">14 lines · was 5 elif</text>
+    <text class="sk-name " x="740" y="290">compare_* · 5 files</text><text class="sk-sub " x="740" y="308">421 lines</text>
+    <text class="sk-name " x="740" y="462">helpers · 3 files</text><text class="sk-sub " x="740" y="480">68 lines</text>
+    <text class="sk-name sk-gone" x="740" y="521">11 imports dropped</text>
+  </svg>
+  <svg class="sk sk-tall" viewBox="0 0 360 470" role="img" aria-label="util.py split by lines: 188 kept, 421 to five compare files, 68 to three helper files, 14 rewritten into SET_COMPARISON_FUNCTIONS, 11 dropped">
+    <path class="sk-stay" d="M22,71 C76,71 76,44 130,44 V138 C76,138 76,165 22,165 Z"/>
+<path class="sk-hero" d="M22,165 C76,165 76,156 130,156 V163 C76,163 76,172 22,172 Z"/>
+<path class="sk-move" d="M22,172 C76,172 76,163 130,163 V373.5 C76,373.5 76,382.5 22,382.5 Z"/>
+<path class="sk-move" d="M22,382.5 C76,382.5 76,391.5 130,391.5 V425.5 C76,425.5 76,416.5 22,416.5 Z"/>
+<path class="sk-drop" d="M22,416.5 C76,416.5 76,443.5 130,443.5 V449 C76,449 76,422 22,422 Z"/>
+    <rect class="sk-stay" x="10" y="71" width="12" height="94"/><rect class="sk-hero" x="10" y="165" width="12" height="7"/><rect class="sk-move" x="10" y="172" width="12" height="210.5"/><rect class="sk-move" x="10" y="382.5" width="12" height="34"/><rect class="sk-drop" x="10" y="416.5" width="12" height="5.5"/>
+    <rect class="sk-stay" x="130" y="44" width="12" height="94"/><rect class="sk-hero" x="130" y="156" width="12" height="7"/><rect class="sk-move" x="130" y="163" width="12" height="210.5"/><rect class="sk-move" x="130" y="391.5" width="12" height="34"/><rect class="sk-drop" x="130" y="443.5" width="12" height="5.5"/>
+    <text class="sk-name" x="10" y="22">util.py</text><text class="sk-sub" x="72" y="22">702 lines · before</text>
+    <text class="sk-name " x="152" y="88">util.py</text><text class="sk-sub " x="152" y="106">188 lines kept</text>
+    <text class="sk-name sk-hot" x="152" y="166">SET_COMPARISON_FUNCTIONS</text><text class="sk-sub sk-hot" x="152" y="184">14 lines · was 5 elif</text>
+    <text class="sk-name " x="152" y="268">compare_* · 5 files</text><text class="sk-sub " x="152" y="286">421 lines</text>
+    <text class="sk-name " x="152" y="404">helpers · 3 files</text><text class="sk-sub " x="152" y="422">68 lines</text>
+    <text class="sk-name sk-gone" x="152" y="451">11 imports dropped</text>
+  </svg>
   <style>
-    .sk-fig { position: relative; width: 100%; }
-    .sk-fig.on > * { position: absolute; }
-    .sk-fig svg { inset: 0; width: 100%; height: 100%; overflow: visible; }
-    .sk-hd { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
-    .sk-hd b { font: 700 0.8rem ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; color: var(--fg); }
-    .sk-hd i, .sk-tk i { font-style: normal; }
-    .sk-lab { display: block; font-size: 0.8rem; line-height: 1.3; text-align: left; }
-    .sk-lab b, .sk-seg, .sk-sym, .sk-tk, .sk-tk code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .sk-lab b { font-size: 0.86rem; }
-    .sk-n { margin-left: 0.45rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-    .sk-n::after { content: ' lines'; }
-    .sk-sym { display: block; font-size: 0.78rem; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
-    .sk-hot { color: var(--warn) !important; font-weight: 700; }
-    .sk-tk { font-size: 0.74rem; line-height: 1.3; color: var(--muted); text-align: right; white-space: nowrap; translate: -100% -50%; }
-    .sk-tk i { font-family: ui-sans-serif, system-ui, sans-serif; }
-    .sk-drop-t { color: var(--bad); font-family: ui-sans-serif, system-ui, sans-serif; }
-    .sk-seg { display: flex; align-items: center; padding: 0 0.45rem; font-size: 0.72rem; line-height: 1.2; color: var(--fg); overflow: hidden; }
-    .sk-key { gap: 0.4rem 1.1rem; font-size: 0.8rem; color: var(--muted); }
-    .sk-key span { display: inline-flex; align-items: center; gap: 0.35rem; }
-    .sk-sw { display: inline-block; width: 1.4rem; height: 0.7rem; border-radius: 0.2rem; }
-    .sk-stay { --sk: color-mix(in srgb, var(--muted) 25%, transparent); --sk-bar: color-mix(in srgb, var(--muted) 25%, var(--paper)); }
-    .sk-move { --sk: color-mix(in srgb, var(--muted) 46%, transparent); --sk-bar: color-mix(in srgb, var(--muted) 46%, var(--paper)); }
-    .sk-hero { --sk: color-mix(in srgb, var(--warn) 80%, transparent); --sk-bar: var(--warn); }
-    .sk-new { --sk: var(--good); --sk-bar: var(--good); }
-    .sk-dst { --sk-bar: color-mix(in srgb, var(--muted) 72%, var(--paper)); }
-    i.sk-sw { background: var(--sk); }
-    path { fill: var(--sk); }
-    rect { fill: var(--sk-bar); }
-    path.sk-hero { stroke: var(--warn); stroke-width: 1.5; filter: drop-shadow(0 0 5px var(--warn)); animation: sk-glow 1.8s ease-in-out infinite; }
-    i.sk-drop { border: 0.1rem dashed var(--bad); }
-    path.sk-drop { fill: color-mix(in srgb, var(--bad) 14%, transparent); stroke: var(--bad); stroke-dasharray: 3 2; }
-    rect.sk-drop { fill: color-mix(in srgb, var(--bad) 10%, var(--paper)); stroke: var(--bad); stroke-dasharray: 2 1.5; }
-    .sk-cut { stroke: var(--paper); stroke-width: 1.2; }
-    @keyframes sk-glow { 50% { fill-opacity: 0.55; } }
-    @media (max-width: 640px) { .sk-tk i, .sk-hd i, .sk-drop-t { display: none; } }
+    .sk { width: 100%; height: auto; overflow: visible; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .sk-tall { display: none; }
+    .sk text { fill: var(--fg); }
+    .sk-name { font: 700 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .sk-sub { font-size: 13px; }
+    .sk .sk-sub, .sk .sk-say { fill: var(--muted); }
+    .sk-say { font-size: 14px; font-weight: 600; }
+    .sk .sk-hot { fill: var(--warn); }
+    .sk .sk-gone { fill: var(--bad); font-weight: 600; }
+    path.sk-stay { fill: color-mix(in srgb, var(--muted) 14%, transparent); }
+    path.sk-move { fill: color-mix(in srgb, var(--muted) 30%, transparent); }
+    path.sk-hero { fill: var(--warn); stroke: var(--warn); stroke-width: 2; filter: drop-shadow(0 0 5px var(--warn)); animation: sk-glow 2s ease-in-out infinite; }
+    path.sk-drop { fill: color-mix(in srgb, var(--bad) 10%, transparent); stroke: var(--bad); stroke-dasharray: 4 3; opacity: 0.8; }
+    rect.sk-stay, rect.sk-move { fill: color-mix(in srgb, var(--muted) 60%, var(--paper)); stroke: var(--paper); }
+    rect.sk-hero { fill: var(--warn); }
+    rect.sk-drop { fill: none; stroke: var(--bad); stroke-dasharray: 3 2; }
+    @keyframes sk-glow { 50% { filter: drop-shadow(0 0 10px var(--warn)); } }
+    @media (max-width: 40rem) {
+      .sk-wide { display: none; }
+      .sk-tall { display: block; }
+      .sk-name { font-size: 12px; }
+      .sk-sub { font-size: 11.5px; }
+    }
   </style>
-  <script>
-    // util.py at the base, top to bottom: [lines, destination, kind, name], from the PR's diff.
-    // kind: s stays, m moved verbatim, h rewritten, d dropped. 702 lines in all.
-    const SEG = [
-      [11, null, 'd'], [4, '_typing.py', 'm'], [10, 'highlight.py', 'm'],
-      [125, 'util.py', 's', 'config, format_explanation, _split_explanation, _format_lines'],
-      [54, '_guards.py', 'm', '9 guards: issequence … has_default_eq'],
-      [46, 'util.py', 's', 'assertrepr_compare'], [14, '_compare_set.py', 'h'], [17, 'util.py', 's'],
-      [52, '_compare_any.py', 'm', '_compare_eq_any'],
-      [85, 'compare_text.py', 'm', '_compare_eq_text, _diff_text_block, _format_text_block_lines, _diff_text'],
-      [89, '_compare_sequence.py', 'm', '_compare_eq_iterable, _compare_eq_sequence'],
-      [69, '_compare_set.py', 'm', '6 set functions: _compare_eq_set … _set_one_sided_diff'],
-      [46, '_compare_mapping.py', 'm', '_compare_eq_mapping'], [61, '_compare_any.py', 'm', '_compare_eq_cls'],
-      [19, 'compare_text.py', 'm', '_notin_text'],
-    ]
-    // The segment each tick marks, in the order of the ticks in the markup.
-    const TICK_AT = [0, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]
-    const fig = document.querySelector('.sk-fig')
-    const NS = 'http://www.w3.org/2000/svg'
-    const mk = (tag, attrs, parent) => {
-      const el = document.createElementNS(NS, tag)
-      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)
-      parent.append(el)
-      return el
-    }
-    const px = (el, left, top) => Object.assign(el.style, { left: `${left}px`, top: `${top}px` })
-    function draw() {
-      fig.querySelectorAll('svg, .sk-seg').forEach(el => el.remove())
-      fig.classList.add('on')
-      const W = fig.clientWidth
-      const narrow = W < 640
-      const top = 26
-      const xL = narrow ? 36 : 158
-      const barL = narrow ? 8 : 184
-      const barR = narrow ? 8 : 12
-      const xR = Math.round(W * (narrow ? 0.43 : 0.6))
-      const labX = xR + barR + (narrow ? 7 : 12)
-      const gap = narrow ? 7 : 9
-      const k = narrow ? 0.7 : 0.85 // pixels per line
-      const labs = [...fig.querySelectorAll('.sk-lab')]
-      labs.forEach(el => { el.style.left = `${labX}px`; el.style.width = `${W - labX}px` })
-      // Right nodes: a slot per file, as tall as its bar or its label, whichever is taller.
-      const node = {}
-      let y = top
-      labs.forEach(el => {
-        const h = Number(el.dataset.n) * k
-        node[el.querySelector('b').textContent] = { y, fill: y, h }
-        el.style.top = `${y - 2}px`
-        y += Math.max(h, el.offsetHeight) + gap
-      })
-      const H = Math.max(y - gap, top + 702 * k) + 4
-      fig.style.height = `${H}px`
-      // The left bar is centered against the taller right column.
-      let ly = top + (H - 4 - top - 702 * k) / 2
-      px(fig.querySelector('.sk-hl'), narrow ? 0 : xL, narrow ? 0 : ly - top)
-      px(fig.querySelector('.sk-hr'), xR, 0)
-      const svg = mk('svg', {}, fig)
-      fig.prepend(svg)
-      const ribbons = mk('g', {}, svg)
-      const bars = mk('g', {}, svg)
-      const ticks = [...fig.querySelectorAll('.sk-tk')]
-      const x1 = xL + barL
-      SEG.forEach(([lines, to, kind, name], i) => {
-        const h = lines * k
-        const cls = { s: 'sk-stay', m: 'sk-move', h: 'sk-hero', d: 'sk-drop' }[kind]
-        mk('rect', { x: xL, y: ly, width: barL, height: h, class: cls }, bars)
-        mk('line', { x1: xL, x2: x1, y1: ly, y2: ly, class: 'sk-cut' }, bars)
-        if (to) {
-          const t = node[to]
-          const xm = (x1 + xR) / 2
-          const d = `M${x1},${ly} C${xm},${ly} ${xm},${t.fill} ${xR},${t.fill} L${xR},${t.fill + h} C${xm},${t.fill + h} ${xm},${ly + h} ${x1},${ly + h}Z`
-          mk('path', { d, class: cls }, kind === 'h' ? bars : ribbons)
-          t.fill += h
-        } else {
-          mk('path', { d: `M${x1},${ly} L${x1 + (narrow ? 30 : 60)},${ly + h / 2} L${x1},${ly + h}Z`, class: cls }, ribbons)
-        }
-        if (name && !narrow) {
-          const seg = document.createElement('div')
-          seg.className = 'sk-seg'
-          seg.textContent = name
-          Object.assign(seg.style, { width: `${barL}px`, height: `${h}px` })
-          px(seg, xL, ly)
-          fig.append(seg)
-        }
-        const at = TICK_AT.indexOf(i)
-        if (at >= 0) px(ticks[at], xL - 6, i === 0 ? ly + h / 2 : ly + 4)
-        ly += h
-      })
-      // Right bars: the lines that arrived, then the file's own new lines in green.
-      for (const t of Object.values(node)) {
-        mk('rect', { x: xR, y: t.y, width: barR, height: t.fill - t.y, class: 'sk-dst' }, bars)
-        mk('rect', { x: xR, y: t.fill, width: barR, height: t.y + t.h - t.fill, class: 'sk-new' }, bars)
-      }
-      if (!scene.reducedMotion) {
-        ribbons.animate([{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }], {
-          duration: 1400, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'backwards',
-        })
-      }
-    }
-    let drawnAt = 0
-    new ResizeObserver(() => {
-      if (fig.clientWidth !== drawnAt) draw(), (drawnAt = fig.clientWidth)
-    }).observe(fig)
-  </script>
 </div>

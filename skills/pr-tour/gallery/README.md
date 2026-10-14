@@ -14,15 +14,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 **PR:** [vitejs/vite#20916](https://github.com/vitejs/vite/pull/20916), "feat: forward browser console logs and errors to dev server terminal" (merged 2026-03-05, +994 −14).
 
-**What it does:** Vite's dev server can now send browser errors, unhandled rejections, and `console.error` / `.warn` calls back over the existing HMR WebSocket and print them in its terminal with a source-mapped code frame. `server.forwardConsole` turns this on by itself when `@vercel/detect-agent` sees a coding agent.
+**What it does:** Vite's dev server can now send browser errors, unhandled rejections, and `console.error` / `.warn` calls back over the existing HMR WebSocket, and print them in its terminal with a source-mapped stack. `server.forwardConsole` turns this on by itself when a coding agent is detected.
 
-**Why this technique:** The change adds parts and connections on both sides of a boundary that already existed (browser tab and Node, joined by the HMR socket). Only a system diagram with that boundary drawn shows the real news: the old socket now carries traffic the other way.
+**Why this technique:** The idea is one sentence: browser errors now travel back to the dev server over the HMR socket it already had. That is a boundary and a new direction across it, which only a system diagram with the boundary drawn can show.
 
 **Craft notes to copy:**
 
-1. **Draw the boundary as a band with lanes.** The unchanged lane (`update · full-reload`, pointing to the browser) stays gray, so the new lane pointing the other way reads as the change at once. The hero wire runs straight through its lane, one line from sender to receiver, instead of stopping at the band's edge.
-2. **One row per moment, each flowing its own way.** The startup path (`server.forwardConsole` → `clientInjections` → `client.ts`) runs right to left along the top. The runtime path (throw → capture → socket → plugin → terminal) runs left to right below it. Arrowheads carry the direction, so no legend is needed. The scene ends where the output lands: the real terminal output from the PR's docs.
-3. **HTML boxes on a CSS grid; wires from a script.** The zones are grid items that overlap behind the nodes. Wires are SVG paths computed from `getBoundingClientRect()` and redrawn by a `ResizeObserver`. On a phone the grid reflows to two columns, and the two wires that would cross boxes go around the margin instead (a per-wire `'L'`/`'R'` hint).
+1. **Draw only the parts on the error's path.** Two zones (browser tab, dev server), the socket between them, and four boxes: `src/main.ts`, the new client half, the new server plugin, and the terminal. The config option, the injected define, the agent detection, and the source-map helpers are real, but they are not the idea, so they go in the prose.
+2. **One hero: the new lane.** The socket is two gray rails with its old lane (`update · full-reload`, thin, pointing to the browser). The new `vite:forward-console` lane is the one thick green arrow, with a glow, running the other way from sender to receiver.
+3. **One error flows through.** The same `throw new Error('this is test error')` starts in `main.ts` and ends as the terminal's real output from the PR's docs. The figure is a static inline SVG with a second, portrait copy for phones (`@media (max-width: 40rem)`), where the socket runs top to bottom.
 
 ### `lineage`
 
@@ -32,13 +32,13 @@ Copy the craft, never the content: your tour draws its own change.
 
 **What it does.** It deletes `httpx/_content_streams.py` (395 lines) and splits it between `_content.py`, where the stream classes become plain `encode_*` functions, and `_multipart.py`, where `DataField` and `FileField` are pulled out of `MultipartStream`. Three copies of the same content handling (in `PlainByteStream`, `encode_request`, and `encode_response`) are merged into one new `encode_content`.
 
-**Why a lineage map.** Every symbol has a different fate: moved as is, pulled out of a class, turned from a class into a function, or split into branches that merge elsewhere. The reviewer's question is which of them to read. A map from each symbol to its new form, with that fate written on it, answers that question in one look.
+**Why a lineage map.** The one idea is "three copies became one function". A lineage map draws where code came from and where it went, so three old rows with arrows that meet at one new row says that idea before the reader reads a word.
 
 **Craft notes**
 
-- **Open functions into their branches.** `encode_request` is drawn with its five branches as sub-rows (`content`, `data + files`, `data`, `files`, `json`), and `PlainByteStream` with its `get_headers()`. Extractions and merges then have a real source row. One arrow from a whole function to four new ones would hide the refactor.
-- **Write the fate on the target row, not on the arrow.** Each new row says what happened to it: "was a class", "2 branches merged", "63 → 31 lines · only picks an encoder", "renamed · 99% similar". Eighteen arrows never fight their labels. An arrow takes its target's tone, plain edges are drawn first, and merges are drawn on top.
-- **The hero is the merge point.** Three thick arrows from three far-apart rows meet at one glowing `encode_content`, and a reader sees "duplication removed" before reading a word. The rows are HTML. A script measures their laid-out boxes to route the curves and redraws when the width changes, so the same markup works at 1120 px and at 360 px.
+- **Draw the idea, not the whole file.** The PR moves about fifteen symbols. The figure keeps the three sources and the one target and leaves out the rest (`MultipartStream`, the `encode_*` functions that were classes, the test rename). Those moves are real, but they are other ideas, and the prose can name them.
+- **Let repetition show the duplication.** Each old box carries the same short label, `bytes → Content-Length`. The reader sees the same words three times and knows they were copies. The old boxes are dashed and red because the file is deleted. The green arrows and the glowing `encode_content` are the one hero.
+- **One concrete example.** The new box shows `"hello" → Content-Length: 5`, which is what `encode_content("hello")` returns. On a phone the three sources stack and join a single spine that points down at `encode_content`.
 
 ### `sankey`
 
@@ -46,15 +46,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 [Move comparison helpers to their own files out of `assertion/util.py`](https://github.com/pytest-dev/pytest/pull/14520) (merged 2026-05-25, head `7a1c94e`)
 
-**What it does.** It splits the 702-line `src/_pytest/assertion/util.py` into eight new modules (`_guards.py`, `_typing.py`, `highlight.py`, `compare_text.py`, `_compare_sequence.py`, `_compare_any.py`, `_compare_set.py`, `_compare_mapping.py`) and leaves `util.py` with 200 lines. The only rewrite turns the five `elif op ==` set branches in `assertrepr_compare` into a `SET_COMPARISON_FUNCTIONS` table.
+**What it does.** It splits the 702-line `src/_pytest/assertion/util.py` into eight new modules (five `compare_*` files and three helpers: `_guards.py`, `_typing.py`, `highlight.py`) and leaves `util.py` with 188 of its old lines. The only rewrite turns the five `elif op ==` set branches in `assertrepr_compare` into a `SET_COMPARISON_FUNCTIONS` table.
 
-**Why a Sankey.** A reviewer of a split asks two things: how much went where, and did any of it change on the way. Ribbons sized by line count answer both. The one rewritten strand shows up against the gray of the verbatim moves.
+**Why a Sankey.** A reviewer of a split asks two things: how much went where, and did any of it change on the way. Ribbons sized by line count answer both. The one rewritten strand shows up in amber against the gray of the code that only moved.
 
 **Craft notes**
 
-- **Draw the source as the old file, top to bottom.** The left node is `util.py` as one tall bar in file order, with each segment's symbol names inside it and its first line number (`L151`, `L284`, …) beside it. The "before" then reads as the file's layout, and the ribbon crossings show the code being sorted into its new files. Two strands land on `_compare_any.py` and two on `compare_text.py` because those symbols sat far apart in the old file.
-- **Make the numbers add up.** Each ribbon is the real count of removed lines. A script walked the base file's AST and gave every `-` line to its symbol, with blank separators going to the symbol after them. 702 = 188 kept + 489 moved + 14 rewritten + 11 dropped imports. Each destination bar is the file's real size: the lines that arrived, plus a green cap for the file's own new lines (imports, the table). A reader who checks one number finds it right.
-- **Verbatim moves are gray, so the eye goes to the one change.** Code that only changed homes is unchanged code, so it gets the muted tone. The single amber ribbon (glow, slow pulse, labeled at both ends) is then the one thing to review. Right-column slots are `max(bar, label)` tall so labels never collide, and the left bar is centered against that taller column.
+- **Group the destinations.** Eight new files would make eight ribbons that say the same thing. The figure groups them by what they hold: `compare_* · 5 files` (421 lines) and `helpers · 3 files` (68 lines). With `util.py` (188 kept) and the 11 dropped imports, that makes five ribbons. 188 + 14 + 421 + 68 + 11 = 702, so every number still adds up.
+- **Sort so the ribbons never cross.** The source bar is in destination order, not file order, so each ribbon runs straight across. Crossings would show how the old file was laid out, and that is not the idea.
+- **Gray for moves, amber for the rewrite.** Code that only changed homes is unchanged code, so it is muted, and the big ribbon says just "moved as is". The 14-line amber ribbon is thin, so it gets a glow and the only colored label, `SET_COMPARISON_FUNCTIONS · was 5 elif`. On a phone the same figure is drawn narrower, with the labels to the right of the bars.
 
 ### `heatmap`
 
@@ -62,15 +62,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 [Switch follow redirects default](https://github.com/encode/httpx/pull/1808) (merged 2021-09-13, head `9f5f582`)
 
-**What it does.** It renames `allow_redirects` to `follow_redirects` across the client API and flips the default from `True` to `False`. `Client` and `AsyncClient` gain the argument. The tests that relied on redirects now pass `follow_redirects=True`, and the docs explain the new default.
+**What it does.** It renames `allow_redirects` to `follow_redirects` across the client API and flips the default from `True` to `False`. `Client` and `AsyncClient` gain the argument. Tests that relied on redirects now pass `follow_redirects=True`, and the docs explain the new default.
 
-**Why a heatmap.** The 378 changed lines (+218 −160) look like a rename, and the behavior change hides inside 24 of them: the `= True` became `= False` on the same lines that renamed the argument. A map of every changed line, colored by what that line does, shows the reviewer where to look. It also shows how much of the diff is the cost: green tests asking for redirects back.
+**Why a heatmap.** The 378 changed lines look like a rename, and the behavior change hides inside 24 of them. One square per changed line, one strip per top-level directory, shows where those 24 sit. It also shows what the rest of the diff is: gray renames in `httpx/`, and green tests and docs that follow the new default.
 
 **Craft notes**
 
-- **One square per changed line, in diff order, in columns sized by lines.** The `httpx/`, `tests/`, and `docs/` columns are flex items whose `flex-grow` is their line count, so area is honest. Because the squares keep diff order, the pattern inside a file means something: the amber and gray stripes in `_api.py` are the nine signatures and their pass-throughs, one after another.
-- **Color by what the line does, not by + or −.** Gray means same behavior (renamed, moved, or unrelated), amber is the flip, green is added for the new default, and red dashed is removed docs of the old default. The lines were classified one by one from the diff, and the legend counts (198 + 20 + 4 + 129 + 27) add up to the PR's 378.
-- **Define the hero with the code before the map.** A large "24" and a four-line snippet of the real hero lines sit above the squares, toned like their squares. "Amber" means `allow_redirects: bool = True,` → `follow_redirects: bool = False,` before the reader scans a single cell. Only the hero squares glow and pulse.
+- One hero: the 24 amber squares glow and pulse, and everything else is pale. The squares keep diff order, so the regular amber pairs in `httpx/` are the nine `_api.py` signatures, one after another. The squares were classified from the diff and add up to the PR's 378 (160 + 84 + 134).
+- Label each strip directly, at its right, in its own tone ("24 change behavior", "74 opt back in", "27 old default, removed"). Then no legend table is needed. Gray is explained once ("136 rename only") and reads as context everywhere else.
+- The only code is two tokens: `True` → `False`, plus the one argument the tests add. The old file list with +/− counts and per-file captions is gone, because the directory and its line count say enough. On a phone each label drops under its strip.
 
 ### `dependency-matrix`
 
@@ -78,15 +78,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 **PR:** [vercel/next.js#82844](https://github.com/vercel/next.js/pull/82844), "[types] refactor shared types" (merged 2025-08-20, 68 files, +442 −392).
 
-**What it does:** It moves the App Router types that client and server both use out of `server/app-render/types.ts` and `app-router-context.shared-runtime.ts` into a new `shared/lib/app-router-types.ts`. Client code then stops importing a server module, and `browser-chunks.test.ts` ("must not bundle any server modules into browser chunks") passes.
+**What it does:** It moves the App Router types that client and server both use (21 exports, such as `FlightRouterState`) out of `server/app-render/types.ts` and `app-router-context.shared-runtime.ts` into a new `shared/lib/app-router-types.ts`. Client code then stops importing a server module, and `browser-chunks.test.ts` ("must not bundle any server modules into browser chunks") passes.
 
-**Why this technique:** The PR is 68 files that each re-point an import or two. A file list hides the pattern, and a graph of the edges is a hairball. In a matrix the whole PR is one column emptying (`server/app-render/types`, 44 → 0 from client and shared rows) and one new column filling (69 imports).
+**Why this technique:** The PR is 68 files that each re-point an import or two. A file list hides the pattern, and a graph of the edges is a hairball. A matrix of who imports what shows the whole PR as one column emptying and one new column filling.
 
 **Craft notes to copy:**
 
-1. **Group both axes by layer.** Put client, shared, and server bands on both axes, and bracket the rows that ship to the browser. The change grammar then reads like a map: the red column sits in server territory, the green one in shared. The two column totals under the matrix give the outcome in two numbers, so no banner is needed.
-2. **Show numbers only where something changed.** Unchanged cells are gray dots sized by `log(count)`, so the 1,212 on the server diagonal is quieter than the 7 that matter. Removed cells are dashed, struck, and faded. A count that only dropped is amber, with the old number struck small in the corner.
-3. **Count it, and say what kind of import each one is.** The cells come from a script run over the PR's base and merge commits, with tests left out. The script also tells type imports from value imports: a `2v` badge and the one glow mark the two value imports of the `const enum HasLoadingBoundary`. A bundler keeps value imports and erases `import type`, which is why those two cells matter.
+1. **Keep only the two columns that changed.** Three rows (client, shared, server) and two columns (the old server module and the new shared one) make six cells. The real matrix has 8 × 8 groups, but the other cells did not change and do not carry the idea. A bracket marks the two rows that ship in browser chunks, because that is why the client cell matters.
+2. **Write the change in the cell.** A removed count reads `40 → 0` with the old number struck, in a dashed red cell. A new count is a plain green number, and a count that only dropped (`19 → 13`, server code) is amber. The glowing `client` cell is the hero: it is the import the browser test forbids. The cells come from counting import statements at the PR's base and merge commits, with tests left out.
+3. **Put the example with its column.** Under the new column's header, a `FlightRouterState` chip and "+ 20 types moved here" tell the reader what the new imports point at. The two value imports of a `const enum` are left out. They matter in review, but they are a second idea for the prose. On a phone the grid keeps its shape with narrower columns, and the file names wrap at `/`.
 
 ### `impact-map`
 
@@ -94,15 +94,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 **PR:** [vitest-dev/vitest#5876](https://github.com/vitest-dev/vitest/pull/5876), "fix(expect)!: check more properties for error equality" (merged 2024-12-10).
 
-**What it does:** Vitest's deep equality no longer compares two `Error`s by `message` alone. A new `isErrorEqual` checks prototype, name, message, `cause` (only when the expected error has one), `AggregateError.errors`, and own enumerable props. `toThrowError(new Error(…))` now uses the same equality.
+**What it does:** Vitest's deep equality no longer compares two `Error`s by `message` alone. A new `isErrorEqual` checks prototype, name, message, `cause`, `AggregateError.errors`, and own enumerable props. `toThrowError(new Error(…))` now uses the same equality.
 
-**Why this technique:** The logic change is +41 −4 lines in `jest-utils.ts`, at the bottom of the call graph. Its reach is every matcher that calls `equals()`. An impact map shows the whole fan of unchanged callers and the tests whose verdict flips, which a diff of `jest-utils.ts` cannot show.
+**Why this technique:** The logic change is small and sits at the bottom of the call graph, but every matcher that calls `equals()` gets it. An impact map shows that reach: a few callers fanning into one changed function. A diff of `jest-utils.ts` cannot show it.
 
 **Craft notes to copy:**
 
-1. **Lay the columns out from effect to cause and on to the output:** tests → callers → the change → what prints when it fails. Draw every unchanged caller in gray, and fold matcher families into one pill with a count (`×4`, `×6`). The reader sees how wide the fan is before reading a word.
-2. **Put verdicts at the edge of the map.** Each test card says `before ✓ / now ✕` and why. The tests are taken from the PR's own tests and docs, including the one case that still passes (cause is one-way). The last panel is the real diff the first test now prints, and the cost shows up as two of Vitest's own assertions that had to change.
-3. **Motion that means something.** A ripple runs from the changed function back out along the wires, hop by hop, to every caller. At rest the wires are gray, because that code is unchanged; only the one new call (`toThrow → equals`) is green, and only the new function glows. On a phone the callers share a single wire, and wires stay clear of the column labels.
+1. **A few callers stand for the fan.** Four matchers (`toEqual`, `toStrictEqual`, `toHaveBeenCalledWith`, `toThrowError`) and a gray "+ 14 more calls" show how wide the reach is without listing 18 call sites. Unchanged callers and their wires are gray. `toThrowError` is amber, and its wire is the one green "new call".
+2. **One hero inside the changed function.** `equals(a, b)` is a plain box. The new `isErrorEqual` inside it glows green, with what it compares in four words (`name · message · cause · props`). The removed rule, `a.message === b.message`, sits struck out below the box, not mixed in.
+3. **One example, one verdict.** A small card takes the PR's own test case (`MyError('hi', 'a')` vs `MyError('hi', 'b')` under `toEqual`) and shows `before ✓ now ✕`. The diff it prints, the one-way `cause` rule, and Vitest's own changed assertions go in the prose. On a phone the callers stack and their wires join two trunks (gray and green) down to the function.
 
 ### `storyboard`
 
@@ -110,15 +110,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 [Denormalized number of orders placed by the user](https://github.com/saleor/saleor/pull/17859) (merged 2025-06-25, head `e538c2d`, BSD-3-Clause)
 
-**What it does.** It adds `User.number_of_orders` and backfills it with a Celery task that queues itself batch by batch after migrate. The count goes up in `order_created()`, and in `orderBulkCreate` it goes up per user on commit. It goes down when expired orders are deleted.
+**What it does.** It adds `User.number_of_orders` and backfills it with a Celery task that queues itself batch by batch after migrate. The count goes up in `order_created()` (and per user in `orderBulkCreate`), and it goes down when expired orders are deleted.
 
-**Why this technique.** A denormalized counter is one idea spread over every write path in 16 files. Four panels of intent (store, backfill, count, uncount) show that each path that changes the truth got a step, and show the one path that did not.
+**Why this technique.** A denormalized counter is one idea spread over every write path: each path that changes the truth must change the count too. Four panels, one per step (add, backfill, count, uncount), follow one user's count through them, so the reader sees the counter stay true.
 
 **Craft notes**
 
-- Give each panel the picture its step needs: a table with the new column, a chain of batches, a fan-in with the delta per path, and a time axis over the test's expired orders. Keep the frame the same in every panel: a number, a top edge toned by the change grammar (green for new, amber for changed), and the files with their +/− counts at the bottom.
-- Put the deltas from the tests in big type (+1, +2) and keep the unchanged path in the picture: `confirmAccount` → `match_orders_with_new_user()`, gray with a dashed ring, ±0. A counter drifts at the edge of the change, so draw that edge.
-- Say what the code at the head does, even where it is wrong. The backfill's `.get(user.id)` returns None, not 0, for a user with no orders, no test in the PR runs the task, and #17882 fixed it. That goes in one amber "!" line in the checks, not in a banner.
+- One toy example runs through every panel: `customer_user` and their orders, with the count going 0 → 1 → 2 → 1. The last step is the PR's own test (2 → 1 when `order_2` expired and was deleted). Each panel is the same tiny picture: a 2–4 word title, the orders as chips, the count in a circle, and the one function name under it. Files, +/− counts, code, and checklists are left to the prose.
+- The change grammar sits on the chips: the new column and the new order are green, the deleted order is red, dashed, and struck. The top edge says what the step is: green for new code, amber for a path that changed.
+- One hero: the count after `order_created()`, the hot path every new order takes, with a thicker ring and a glow. The other counts keep a thin ring.
 
 ### `sequence`
 
@@ -128,13 +128,13 @@ Copy the craft, never the content: your tour draws its own change.
 
 **The change.** `Acquire::poll` used to check the task's coop budget before calling `semaphore.poll_acquire`, so a task with no budget left returned `Pending` without joining `waiters.queue`, and a later task could take the lock first. The fix calls `poll_acquire` first and checks the budget only once the permit is `Ready`.
 
-**Why a sequence diagram.** The bug is about ordering: two tasks poll in the order t_a, t_b and get the lock in the order t_b, t_a. Only lifelines and numbered messages show "who asked first" next to "who got it first". The scene follows the PR's own test, `mutex_fifo_with_coop_budget`, step for step.
+**Why a sequence diagram.** The bug is about order: t_a asks for the lock before t_b but gets it after. Lifelines read top to bottom as time, so "who asked first" and "who was woken" sit on one page. Two copies of the same small diagram, before and after, show the one message that changed.
 
 **Craft notes to copy.**
 
-- Draw both panels on one row grid: the same actors, the same six numbered steps, the same row heights. The eye reads across, and the only rows that differ are step 3 (t_a's poll) and step 6 (who is woken). A tinted band behind step 3 marks the step where the two runs split.
-- Show the hidden state next to the messages. The `waiters.queue` column (`[ ]`, then `[t_b]`, against `[t_a]`, then `[t_a, t_b]`) explains the outcome before the wake arrow does. Activation bars show who holds the lock: t0 until `drop(g0)`, then the task that won.
-- Draw a call that never happens as a dashed red arrow that ends in ✕ where it would have landed, with no arrowhead. Below each panel, put the test's own assertion as the verdict: `assert!(!t_b.is_woken())`, ✕ before and ✓ after.
+- Keep only the actors the reorder needs: t_a, t_b, and the `Mutex` with its queue beside it. t0 is a three-word note, "held by t0", not a lifeline, and the PR test's six steps become three messages. The budget, the permit count, and the test's assertion go in the prose.
+- One hero: t_a's `lock()` with its budget spent. Before, it is a dashed red arrow that ends in ✕ short of the `Mutex`, and the queue stays `[ ]`. After, it is a thick green arrow that lands, and the queue reads `[t_a]`. The last arrow, `wake t_b` against `wake t_a`, follows from it without a verdict banner.
+- The queue state is the toy data: `[ ]`, `[t_b]` against `[t_a]`, `[t_a, t_b]`. Every label is a call or a value, at most four words.
 
 ### `control-flow`
 
@@ -142,15 +142,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 **PR:** [rails/rails#48600: Active Record commit transaction on `return`, `break` and `throw`](https://github.com/rails/rails/pull/48600)
 
-**What it changes:** A `transaction` block left through `return`, `break`, or `throw` now commits when `commit_transaction_on_non_local_return` is true, which is the `load_defaults 7.1` default. With the setting false, it still rolls back, now with a deprecation warning. The two `written_indirectly` branches are gone.
+**What it changes:** A `transaction` block left through `return`, `break`, or `throw` now commits when `commit_transaction_on_non_local_return` is true, which is the `load_defaults 7.1` default. With the setting false, it still rolls back, now with a deprecation warning.
 
-**Why this technique:** The change is one new line at the top of an `ensure` chain, and it reroutes a single exit path from ROLLBACK to COMMIT. Two flowcharts side by side, with their rows aligned, show exactly where the routes part.
+**Why this technique:** The change is one new step before a decision, and it sends one exit to the other branch. A flowchart with one diamond and two outcomes shows that in a glance: the same chart twice, the route moving from ROLLBACK to COMMIT.
 
 **Craft notes:**
 
-- Draw it as a metro map: a vertical spine with small diamonds (decisions), a square (the new action), and circles (start and end). Conditions in code sit to the left, and "yes" exits go right to outcome pills. The spine, markers, and arrows are pure CSS on grid cells, so there is no edge-drawing script to fail.
-- The two panels are subgrids of one grid, so row N is the same height in both. A step that exists on one side only leaves an empty slot on the other side (blank before the new line, blank after the removed checks). The reader sees the added and removed steps as gaps.
-- Follow one real input, the PR's CHANGELOG block with its `return` line highlighted, as a thick hero line. It is drawn in the text color (`--fg`) where both panels agree. It turns green from the new node onward, and it is red and dashed where the old route exits. Two dots ride the panels in step, one row per beat, so motion shows the moment they part.
+- Draw the textbook shapes: a rounded start, one rectangle for the new step, one diamond, two outcome boxes. The real `ensure` chain has five checks (exception, aborting thread, two `written_indirectly` cases); only `completed?` decides this route, so the others go in the prose.
+- The toy input is the start node itself, `save; return`, so the reader follows one block. The before chart leaves an empty gap where the new step lands in the after chart, and the layout does not move.
+- One hero per panel: the dashed red `no` route to ROLLBACK before, the thick green route from `completed = true` to a filled COMMIT after. The setting shows as two small words in the new box, `load_defaults 7.1`, not as a table.
 
 ### `state-machine`
 
@@ -158,15 +158,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 **PR:** [nodeshift/opossum#389: Fix stuck halfOpen when using errorFilter](https://github.com/nodeshift/opossum/pull/389)
 
-**What it changes:** If the one trial call in half-open fails with an error that `errorFilter` ignores, the breaker now emits `'success'` and closes. Before the fix, `fail()` returned early, so the breaker stayed half-open with `pendingClose: false` and no timer, and every later `fire()` was rejected.
+**What it changes:** If the one trial call in half-open fails with an error that `errorFilter` ignores, the breaker now emits `'success'` and closes. Before the fix, `fail()` returned early, so the breaker stayed half-open with no timer, and every later `fire()` was rejected.
 
-**Why this technique:** The bug was a state with no way out, and only a state diagram shows that: the reader can see the dashed red loop that never leaves half-open, and the widened `'success'` edge that replaced it.
+**Why this technique:** The bug was a state with no way out, and a state diagram is the picture that shows a way out. The three breaker states every reader already knows, plus one new arrow, carry the whole fix.
 
 **Craft notes:**
 
-- Nodes and edge labels are HTML in a CSS grid (`grid-template-areas`). After layout, a script reads each box and draws the SVG edges behind them, and every edge runs through or beside its own label. Text never collides, and the phone layout reflows into the same topology without a second drawing.
-- Split a state where the change lives (half-open becomes `pendingClose: true` and `pendingClose: false`) so the trap is a box you can point at. Draw the change as an edge's condition: one amber `'success'` edge, with the old "resolved" clause in gray and the new clause tagged in green, which is truer to the code than adding a second edge.
-- Under the diagram, the PR's own test is a four-step trace, with the real options and the before and after outcome in the last cell. While motion runs, a token rides the same path and lights each step. At rest, the trace alone still tells the story.
+- Three states and five arrows, as a textbook draws a circuit breaker: `closed`, `open`, `half-open`, with `failure`, `resetTimeout`, and `success` in gray. The `pendingClose` flag, the half-open → open failure edge, and the event names stay in the prose.
+- One hero: the green arrow from half-open to closed, labeled with the PR test's own call, `fire(400)` and `filtered`. The old behavior is a dashed red self-loop under half-open, labeled `stuck here` and struck through, so new and removed sit next to each other.
+- A static SVG with a `viewBox` and fixed label positions is enough for three nodes. On a phone the labels get a larger font size so they stay readable after the picture scales down.
 
 ### `trace`
 
@@ -176,13 +176,14 @@ Copy the craft, never the content: your tour draws its own change.
 
 **The change.** Rendering a page of commits looked users up one email at a time: `GetUserByEmail` ran once per author and again for every commit's committer, at 2 queries each. Now `ValidateCommitsWithEmails` and `ParseCommitsWithSignature` each collect the page's emails and make one `GetUsersByEmails` call: 3 `IN (…)` queries, however many commits there are.
 
-**Why a trace.** The PR is an N+1 fix, and its claim is a count under a workload. Two icicle traces on one query axis make the claim visible: 106 red ticks become 6 green ones, and the after trace ends 100 queries earlier. The workload is one page of 50 commits (`CommitsRangeSize`), e.g. by 3 authors. The unchanged `GetLatestCommitStatus` per commit is kept gray in both traces, so the reader sees the next N+1 this PR leaves alone.
+**Why a trace.** The PR is an N+1 fix, and its claim is a count under a workload. Two runs drawn as tick strips on one query axis show that claim and nothing else: 106 faded red ticks, then 6 glowing green ones.
 
 **Craft notes to copy.**
 
-- One scale for both runs, counted in real units (queries, from reading the code), not invented milliseconds. Where the count depends on the data (a third status query only when a commit has statuses), draw that tick hatched instead of guessing.
-- When the "after" is too thin to label at true scale, keep the true scale and add a zoom lens: a dashed trapezoid from the sliver to an inset that names every frame and every query (`email_address IN`, `user.id IN`, `user.lower_name IN`).
-- Put the saving where the time went: a dashed green box fills the space the after trace no longer uses ("100 fewer queries"). A playhead moving at the same pace over both traces shows the after run finishing first.
+- One scale for both runs, counted in real units: queries, from reading the code, not invented milliseconds. The workload is the toy example, named once above the strips: one page of 50 commits (`CommitsRangeSize`), e.g. by 3 authors. That gives 3 + 50 calls at 2 queries each, or 106.
+- Leave out what the idea doesn't need. The call frames, the zoom lens, and the unchanged `GetLatestCommitStatus` per commit all belong in the prose. Each strip has only its function name, a label that multiplies out to its total (`53 calls × 2 queries`, `2 calls × 3 queries`), and the total at the end of the strip.
+- Let the ticks show the multiplication. The queries of one call sit close together, and a wider gap ends the call: pairs before, triples after. A reader counting ticks against the label never finds ticks the label doesn't explain.
+- The hero is the short strip. It glows, and its number is the biggest thing in the figure. The long strip is the removed path: faded, with its function name struck through. The empty width after the 6 shows the saving, so it needs no box or label.
 
 ### `data-flow`
 
@@ -190,15 +191,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 [reverseproxy: Implement trusted proxies for `X-Forwarded-*` headers](https://github.com/caddyserver/caddy/pull/4507)
 
-**The change.** `reverse_proxy` used to keep whatever `X-Forwarded-For` and `X-Forwarded-Proto` the client sent, and it passed `X-Forwarded-Host` through untouched. Now `addForwardedHeaders` keeps prior values only when `req.RemoteAddr` is in the new `trusted_proxies` list. For any other client it writes all three headers from what it saw on the connection: `RemoteAddr`, `req.TLS`, and `req.Host`.
+**The change.** `reverse_proxy` used to keep whatever `X-Forwarded-For` the client sent and append the client's address to it. Now `addForwardedHeaders` keeps prior values only when `req.RemoteAddr` is in the new `trusted_proxies` list. For any other client it writes the header from the connection. `X-Forwarded-Proto` and `X-Forwarded-Host` get the same rule.
 
-**Why a data-flow diagram.** The bug is about where a value comes from: a header that anyone can forge reached the upstream app as if Caddy had vouched for it (issue #4503: a crawler's arbitrary `X-Forwarded-For` values spoiled the backend's statistics). Wires from each source to each upstream header show that origin directly. A single new gate, with three wires stopped at it, shows the fix.
+**Why a data-flow diagram.** The bug is about where a value comes from: a header anyone can forge reached the upstream app as if Caddy had vouched for it (issue #4503: a crawler's fake `X-Forwarded-For` values spoiled a backend's statistics). One forged value, followed from client to upstream, shows the hole, and one gate in its path shows the fix.
 
 **Craft notes to copy.**
 
-- Use the same three columns in both panels: what the client sends, what Caddy knows, what the upstream reads. Use one lane per header, so the before and after rows line up. The client column has dashed borders, marking input anyone can write.
-- Let the wires carry the change grammar. Removed flows are red and dashed into struck-out values. Blocked flows end in ✕ at the green `trusted_proxies` gate. The unchanged `RemoteAddr` flow is gray. The flow that now wins is amber (changed), and the brand-new `req.Host` flow is green.
-- Draw the wires with a script that measures the laid-out chips (`getBoundingClientRect`) and redraws on resize, so the same markup works at 1120 px and at 360 px. Keep the text in HTML. The data that decides (the client's address feeding the trust check) gets its own thin wire.
+- **One header is enough.** Proto and Host follow the same rule, so drawing all three only repeats it three times. The figure follows `X-Forwarded-For: 198.51.100.7` from a client at `203.0.113.9`, and the prose names the other two headers.
+- **The same small picture twice.** Before and after are the same three boxes (client, Caddy, upstream app) at the same positions. Before: the forged value flows through in red dashes and lands struck out in the upstream's value. After: its wire ends in ✕ at a green `trusted_proxies` bar, the one hero, and an amber `RemoteAddr` wire carries the value that now wins.
+- **Mark untrusted input by its border.** The client's header sits in a dashed chip, so "anyone can write this" needs no caption. The figure is a static inline SVG, with a stacked portrait copy for phones.
 
 ### `schema`
 
@@ -208,13 +209,13 @@ Copy the craft, never the content: your tour draws its own change.
 
 **What it does.** It renames `wagtailcore_pagerevision` to `wagtailcore_revision` and replaces its `page` foreign key with a generic pointer: `object_id` (now a `varchar(255)`) plus two foreign keys to `django_content_type`. Migration 0071 fills `content_type` from each revision's own JSON and `base_content_type` with the Page content type, and 0072 makes both NOT NULL.
 
-**Why this technique.** The change is a relationship that changes kind (a database-enforced FK becomes a pointer matched as text), plus a three-step row migration. An ER diagram over the same rows at each migration shows the new shape and how existing data reaches it.
+**Why this technique.** The change is a relationship that changes kind: a foreign key the database enforced becomes a pointer matched as text. An ER diagram of just the three tables and three columns involved shows that shift, with one row traced through it.
 
 **Craft notes**
 
-- Draw the changed relationship twice between the same two columns. The dropped FK is a red dashed arc, and the new pointer is the glowing amber dotted line, labeled with what replaces the constraint ("matched as text, no constraint"). A dashed ghost box ("any other model") gives the reason for the change without inventing a caller: "no model but Page saves one yet".
-- Show the migration as a filmstrip: the same two example rows (pages 4 and 7 from `test.json`), one card per migration, each cell toned by what that step did. Hatched means no column yet, a green outline means added but NULL, and filled green means populated. A dotted wire runs from the `"content_type"` key in each row's JSON to the cell 0071 fills, so provenance is the second hero.
-- Mark stand-ins honestly. Content type ids are drawn as `⟨tests.eventpage⟩`, with a caption saying what `⟨x⟩` means, instead of made-up integers. The script computes the wires from element rects and re-routes them into a left gutter on a phone. On a phone the 0072 card folds into the 0071 card's label.
+- Draw only the columns the migration moves. The revision table has three rows: `object_id` (amber, with `page_id` struck before it) and the two new content type columns (green). The other six columns, the indexes, and the four foreign keys that only follow the rename are left out.
+- The changed relationship is drawn twice between the same two columns: the dropped FK as a faded red dashed arc, and the new pointer as the glowing amber dotted hero. Each has a two-word label on the wire ("FK dropped", "matched as text").
+- Toy data instead of types: the revision of page 7 "About us" from the test fixture. `"7"` sits in `object_id` and `7` in `page.id`, so the text match is visible. The content type rows are named (`tests.simplepage`, `wagtailcore.page`) rather than given made-up ids. The phone draws its own stacked SVG, with the wires in the side gutters.
 
 ### `scenario-matrix`
 
@@ -222,15 +223,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 **PR:** [expressjs/express#4212: Throw on invalid status codes](https://github.com/expressjs/express/pull/4212)
 
-**What it changes:** `res.status()` now throws a `TypeError` when the code is not an integer and a `RangeError` when it is outside 100 to 999. Before, a string like `"410"` or a float like `410.1` was sent with a deprecation warning, and an out-of-range code failed later, inside Node, at `.end()`. `res.sendStatus()`, `res.redirect()`, and the 304 path also go through `res.status()` now.
+**What it changes:** `res.status()` now throws a `TypeError` when the code is not an integer and a `RangeError` when it is outside 100 to 999. Before, a string like `"410"` was sent with a deprecation warning, and an out-of-range code failed later, inside Node, at `.end()`. `res.sendStatus()`, `res.redirect()`, and the 304 path go through `res.status()` too.
 
-**Why this technique:** This is a validation change, and its whole effect is "this input, that outcome." A matrix of the PR's own test inputs, with before and after side by side, shows at a glance which rows changed their HTTP status and which only changed which code throws the error.
+**Why this technique:** This is a validation change, and its whole effect is "this input, that outcome." A small grid of inputs against before and after shows which input changed its HTTP status and which only changed who throws.
 
 **Craft notes:**
 
-- Group the rows into bands named by the rule that sorts them: "integers 100 to 999", "outside 100 to 999 → RangeError", "not integers → TypeError, checked first". The bands are the new code's two `if`s, so the reader learns the rule while reading the cases.
-- Each cell is a tiny response: a big status number for scanning, plus the exact message the code builds for reading. The status column alone shows the pattern (`410 → 500` on two rows, `500 → 500` on four). A count key above the matrix, which also serves as the color legend, gives the totals before the reader scans.
-- Use the change grammar on the cells, not just the rows. A behavior that is gone is a red, dashed, struck-through cell. A new outcome is green. "Same status, new thrower" is amber. Only one row, the `"410"` row that the old suite asserted would send 410, gets the hero ring.
+- Keep only the rows that tell the story, one per kind of outcome: `201` (unchanged, gray), `"410"` (410 becomes 500), and `99` (still 500, but `res.status()` throws now). The other test inputs (`410.1`, `1000`, `undefined`, `null`) repeat one of these rows, so they go in the prose.
+- Each cell is a big status number and a 1–3 word label (`sent`, `TypeError`, `Node throws at .end()`), not the full error message. The status column alone shows the pattern.
+- The change grammar is on the cells: the old `410` is red, dashed, and struck; the new `500` is green; "same status, new thrower" is amber. The one hero is the `"410"` row's new cell, the case the old suite asserted would send 410.
 
 ### `ui-journey`
 
@@ -238,15 +239,15 @@ Copy the craft, never the content: your tour draws its own change.
 
 [feat: change collab trigger & add share dialog](https://github.com/excalidraw/excalidraw/pull/7647) (merged 2024-02-03, head `8b19f3c`, MIT)
 
-**What it does.** The top-right users-icon button becomes a "Share" button (only an icon below 830 px wide). It opens a new Share dialog that offers live collaboration or a read-only shareable link. The main menu and the welcome screen open the same dialog with only its collaboration half (`type: "collaborationOnly"`), and the padlock illustration is removed.
+**What it does.** The top-right users-icon button becomes a "Share" button (only an icon below 830 px wide). It opens a new Share dialog that offers live collaboration or a read-only shareable link. The main menu and the welcome screen open the same dialog with only its collaboration half, and the padlock illustration is removed.
 
-**Why this technique.** The PR is about what a user finds and how many clicks a link takes ("Many users don't know we support collaboration"). A screen flow from the three entry points through the dialogs to the outcomes, before above after on the same grid, shows the new entry point and the shorter path.
+**Why this technique.** The PR is about how many clicks a link takes ("Many users don't know we support collaboration"). The same path drawn twice, before above after, shows the read-only link going from three clicks to two.
 
 **Craft notes**
 
-- Draw each entry point as a small fragment of the real UI (the toolbar strip, the ☰ menu, the welcome screen) with its real locale strings. Start each wire at the edge of the fragment or dialog, at the height of the clicked item, so no wire crosses the drawn UI. Wires into one dialog fan down its left side and do not stack.
-- Number the clicks of the one journey that changes: ☰ → Save to... → Export to Link becomes Share → Export to Link. The numbers appear in each band's header and on the clicked controls, so the reader counts the saving without a banner.
-- Keep the unchanged paths in the picture: gray wires to the same Save to... dialog and session dialog. The hero is only the Share button (amber glow) and its `type: "share"` wire. The dialog's added half is green, the reworded copy is amber, and the removed padlock is red, dashed, and struck through. A red "Stop session" button would read as removed, so the real danger color is drawn muted.
+- Draw one journey only: canvas → ☰ main menu → Save to... → link, against canvas → Share dialog → link. The other entry points (welcome screen, menu item), the session dialog, and the removed padlock do not change the click count, so they go in the prose.
+- Each screen is a small sketch of the real UI with its real labels, two or three items, and a numbered badge on the clicked item. The after row keeps the before row's columns, and one long arrow crosses the empty third column, so the saved step shows as a gap.
+- One hero: the new Share button, amber (it replaces the users icon) with a glow. The Share dialog is green because it is new; everything else is gray.
 
 ## Micro-worlds
 

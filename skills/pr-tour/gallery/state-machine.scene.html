@@ -1,174 +1,39 @@
 <div class="scene" data-technique="state-machine">
-  <div class="sm-board">
-    <svg class="sm-edges" aria-hidden="true"><defs></defs><g></g></svg>
+  <svg class="sm" viewBox="0 0 440 330" role="img" aria-label="circuit breaker states: a filtered error in half-open now goes to closed instead of staying stuck">
+    <defs>
+      <marker id="sm-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+      <marker id="sm-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--good)"/></marker>
+      <marker id="sm-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--bad)"/></marker>
+    </defs>
 
-    <div class="sm-n" data-n="closed"><b>closed</b><span class="small">fire() runs the action</span></div>
-    <div class="sm-n" data-n="open"><b>open</b><span class="small">fire() rejected: <q>Breaker is open</q></span></div>
-    <div class="sm-n" data-n="pend"><b>half-open</b><code>pendingClose: true</code><span class="small">lets the next fire() through</span></div>
-    <div class="sm-n" data-n="trial"><b>half-open</b><code>pendingClose: false</code><span class="small">one trial call in flight; every other fire() rejected</span></div>
+    <path class="sm-e" d="M142,53 H296" marker-end="url(#sm-m)"/>
+    <text class="sm-l" x="220" y="42">failure</text>
+    <path class="sm-e" d="M345,79 L264,226" marker-end="url(#sm-m)"/>
+    <text class="sm-l" x="294" y="206" text-anchor="start">resetTimeout</text>
+    <path class="sm-e" d="M153,253 Q40,253 40,82" marker-end="url(#sm-m)"/>
+    <text class="sm-l" x="72" y="204" text-anchor="start">success</text>
+    <path class="sm-e gone" d="M200,278 C182,328 258,328 240,282" marker-end="url(#sm-b)"/>
+    <text class="sm-l gone" x="264" y="314" text-anchor="start">stuck here</text>
+    <path class="sm-e hero" d="M186,227 L111,82" marker-end="url(#sm-g)"/>
+    <text class="sm-l hero" x="168" y="142" text-anchor="start">fire(400)</text>
+    <text class="sm-l hero" x="168" y="162" text-anchor="start">filtered</text>
 
-    <span class="sm-l muted" data-l="co">rejected → <code>'failure'</code><br>error rate &gt; <code>error<wbr>Threshold<wbr>Percentage</code></span>
-    <span class="sm-l muted" data-l="op"><code>resetTimeout</code> elapsed</span>
-    <span class="sm-l muted" data-l="pt"><code>fire()</code></span>
-    <span class="sm-l muted" data-l="to">rejected, <code>errorFilter(err)</code> false → <code>'failure'</code></span>
-    <span class="sm-l warn sm-hero" data-l="tc"><span class="sm-tag">changed</span><code>'success'</code> → <code>close()</code><br><span class="sm-was">resolved</span><br><span class="sm-add"><span class="sm-tag">new</span>or rejected, <code>errorFilter(err)</code> true</span></span>
-    <span class="sm-l bad sm-gone" data-l="stuck"><span class="sm-tag">removed</span><s>rejected, <code>errorFilter(err)</code> true: <code>fail()</code> returns early</s><br>no event, no timer: stuck here, every <code>fire()</code> rejected</span>
-    <span class="sm-l warn" data-l="cc"><span class="sm-tag">changed</span>rejected, <code>errorFilter(err)</code> true → now emits <code>'success'</code> (was: no event)</span>
-  </div>
-
-  <div class="sm-trace">
-    <span class="small">The PR's new test: <code>errorThresholdPercentage: 1</code>, <code>resetTimeout: 100</code>, <code>errorFilter: err =&gt; err.statusCode &lt; 500</code></span>
-    <ol>
-      <li><code>fire(500)</code><span class="small">500 &lt; 500 is false: a failure, rate 100% → <b>open</b></span></li>
-      <li><code>+100 ms</code><span class="small">resetTimeout → <b>half-open</b>, pendingClose: true</span></li>
-      <li><code>fire(400)</code><span class="small">400 &lt; 500 is true: a filtered error</span></li>
-      <li><span class="sm-out bad"><s>before: half-open, pendingClose: false, for good</s></span><span class="sm-out good">now: <b>closed</b></span></li>
-    </ol>
-  </div>
-
+    <rect class="sm-s" x="20" y="30" width="120" height="46" rx="23"/><text x="80" y="58">closed</text>
+    <rect class="sm-s" x="300" y="30" width="120" height="46" rx="23"/><text x="360" y="58">open</text>
+    <rect class="sm-s" x="155" y="230" width="130" height="46" rx="23"/><text x="220" y="258">half-open</text>
+  </svg>
   <style>
-    .sm-board {
-      position: relative; width: 100%; display: grid; align-items: center; gap: 1.5rem 1.6rem;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
-      grid-template-areas: "cc . ." "closed co open" "tc to op" "trial pt pend" "stuck . .";
-    }
-    .sm-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-    .sm-edges path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-    .sm-n, .sm-l { position: relative; }
-    .sm-n {
-      display: flex; flex-direction: column; align-items: center; gap: 0.2rem; text-align: center;
-      padding: 0.55rem 0.6rem; border: 0.14rem solid var(--muted); border-radius: 0.8rem; background: var(--paper);
-      box-shadow: 0 0.15rem 0.6rem color-mix(in srgb, var(--fg) 10%, transparent);
-    }
-    .sm-n b { font-size: 1.1rem; }
-    .sm-n .small { font-size: 0.75rem; }
-    .sm-n code { padding: 0.05rem 0.4rem; border-radius: 0.3rem; background: color-mix(in srgb, var(--fg) 8%, var(--paper)); }
-    .scene code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.74rem; }
-    .sm-l {
-      justify-self: center; max-width: 100%; padding: 0.25rem 0.5rem; border-radius: 0.45rem; background: var(--paper);
-      border: 0.1rem solid color-mix(in srgb, var(--c) 45%, var(--paper)); color: var(--fg); font-size: 0.78rem; line-height: 1.35; text-align: center;
-    }
-    [data-n="closed"] { grid-area: closed; } [data-n="open"] { grid-area: open; }
-    [data-n="pend"] { grid-area: pend; } [data-n="trial"] { grid-area: trial; }
-    [data-l="co"] { grid-area: co; } [data-l="op"] { grid-area: op; } [data-l="pt"] { grid-area: pt; } [data-l="to"] { grid-area: to; }
-    [data-l="tc"] { grid-area: tc; justify-self: end; text-align: left; } [data-l="stuck"] { grid-area: stuck; } [data-l="cc"] { grid-area: cc; }
-    .sm-tag {
-      display: inline-block; margin-right: 0.3rem; padding: 0 0.3rem; border-radius: 0.25rem; background: var(--c); color: var(--paper);
-      font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 0.1em;
-    }
-    .sm-hero { margin-left: 2.6rem; border: 0.16rem solid var(--warn); box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--warn) 16%, transparent); }
-    .sm-was { color: var(--muted); }
-    .sm-add { --c: var(--good); color: var(--good); font-weight: 650; }
-    .sm-gone { border-style: dashed; color: color-mix(in srgb, var(--fg) 70%, var(--paper)); }
-    .scene s { text-decoration-color: var(--bad); text-decoration-thickness: 0.1rem; }
-    .sm-trace { width: 100%; display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; }
-    .sm-trace ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
-    .sm-trace li {
-      display: flex; flex-direction: column; gap: 0.2rem; padding: 0.4rem 0.55rem;
-      border: 0.1rem solid var(--line); border-radius: 0.5rem; transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    .sm-trace li.on { border-color: var(--fg); box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--fg) 14%, transparent); }
-    .sm-trace li code { font-weight: 700; }
-    .sm-out { font-size: 0.8rem; }
-    .sm-out.bad { color: color-mix(in srgb, var(--bad) 75%, var(--paper)); }
-    .sm-out.good { font-weight: 650; }
-    @media (max-width: 640px) {
-      .sm-board { gap: 1.1rem 0.6rem; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 1fr); grid-template-areas: "cc cc ." "closed co open" "tc to op" "trial pt pend" "stuck stuck ."; }
-      .sm-n { padding: 0.4rem 0.3rem; }
-      .sm-l { padding: 0.2rem 0.3rem; }
-      .sm-trace ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
+    .sm { width: 100%; max-width: 38rem; height: auto; overflow: visible; }
+    .sm text { font: 700 16px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--fg); text-anchor: middle; }
+    .sm text[text-anchor="start"] { text-anchor: start; }
+    .sm .sm-l { font-weight: 500; font-size: 14.5px; fill: var(--muted); }
+    .sm .sm-l.hero { font-weight: 700; fill: var(--good); }
+    .sm .sm-l.gone { fill: var(--bad); text-decoration: line-through; }
+    .sm-s { fill: var(--paper); stroke: var(--fg); stroke-width: 1.8; }
+    .sm-e { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+    .sm-e.gone { stroke: var(--bad); stroke-dasharray: 6 5; opacity: 0.75; }
+    .sm-e.hero { stroke: var(--good); stroke-width: 4; filter: drop-shadow(0 0 4px var(--good)); animation: sm-glow 2s ease-in-out infinite; }
+    @media (max-width: 40rem) { .sm .sm-l { font-size: 16.5px; } .sm text { font-size: 17px; } }
+    @keyframes sm-glow { 50% { filter: drop-shadow(0 0 9px var(--good)); } }
   </style>
-  <script>
-    // Each edge: from node, to node, the label it runs through, its tone, and its shape.
-    const EDGES = [
-      { from: 'closed', to: 'open', via: 'co', tone: 'muted', shape: 'h' },
-      { from: 'open', to: 'pend', via: 'op', tone: 'muted', shape: 'v' },
-      { from: 'pend', to: 'trial', via: 'pt', tone: 'muted', shape: 'h' },
-      { from: 'trial', to: 'open', via: 'to', tone: 'muted', shape: 'curve' },
-      { from: 'trial', to: 'closed', via: 'tc', tone: 'warn', shape: 'v', hero: true, beside: true },
-      { from: 'trial', to: 'trial', via: 'stuck', tone: 'bad', shape: 'loop', dashed: true },
-      { from: 'closed', to: 'closed', via: 'cc', tone: 'warn', shape: 'loop' },
-    ]
-    // The test's walk: the edges a token rides, in order; step i of the trace lights as it lands.
-    const WALK = [0, 1, 2, 4]
-
-    const NS = 'http://www.w3.org/2000/svg'
-    const board = document.querySelector('.sm-board')
-    const svg = board.querySelector('svg')
-    const layer = svg.querySelector('g')
-    for (const tone of ['muted', 'warn', 'bad']) {
-      svg.querySelector('defs').insertAdjacentHTML('beforeend',
-        `<marker id="sm-${tone}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--${tone})"/></marker>`)
-    }
-    const box = el => {
-      const b = board.getBoundingClientRect(), r = el.getBoundingClientRect()
-      return { l: r.left - b.left, r: r.right - b.left, t: r.top - b.top, b: r.bottom - b.top, x: (r.left + r.right) / 2 - b.left, y: (r.top + r.bottom) / 2 - b.top }
-    }
-    const at = (kind, name) => box(board.querySelector(`[data-${kind}="${name}"]`))
-    const G = 3
-
-    function route(e) {
-      const a = at('n', e.from), z = at('n', e.to), m = at('l', e.via)
-      if (e.shape === 'h') {
-        const [x1, x2] = a.x < z.x ? [a.r + G, z.l - G] : [a.l - G, z.r + G]
-        return `M${x1},${m.y} L${x2},${m.y}`
-      }
-      if (e.shape === 'v') {
-        const [y1, y2] = a.y < z.y ? [a.b + G, z.t - G] : [a.t - G, z.b + G]
-        const x = e.beside ? (m.l + a.l) / 2 : m.x
-        return `M${x},${y1} L${x},${y2}`
-      }
-      if (e.shape === 'curve') {
-        const x1 = a.r - (a.r - a.l) * 0.12, y1 = a.t - G, x2 = z.l + (z.r - z.l) * 0.12, y2 = z.b + G
-        return `M${x1},${y1} Q${2 * m.x - (x1 + x2) / 2},${2 * m.y - (y1 + y2) / 2} ${x2},${y2}`
-      }
-      // A loop leaves the node, runs behind its label, and comes back in.
-      const edge = m.y > a.y ? a.b + G : a.t - G
-      const s = Math.min(a.r - a.l, m.r - m.l) * 0.34
-      return `M${a.x - s},${edge} L${a.x - s},${m.y} L${a.x + s},${m.y} L${a.x + s},${edge}`
-    }
-
-    function draw() {
-      layer.replaceChildren()
-      for (const e of EDGES) {
-        const d = route(e)
-        const path = style => {
-          const p = document.createElementNS(NS, 'path')
-          p.setAttribute('d', d)
-          p.setAttribute('style', style)
-          layer.append(p)
-          return p
-        }
-        if (e.hero) path('stroke: var(--warn); stroke-width: 12; opacity: 0.2')
-        e.el = path(`stroke: var(--${e.tone}); stroke-width: ${e.hero ? 3.5 : 2}${e.dashed ? '; stroke-dasharray: 6 5' : ''}`)
-        e.el.setAttribute('marker-end', `url(#sm-${e.tone})`)
-      }
-    }
-    draw()
-    new ResizeObserver(draw).observe(board)
-
-    if (!scene.reducedMotion) {
-      const steps = document.querySelectorAll('.sm-trace li')
-      const tok = document.createElementNS(NS, 'circle')
-      tok.setAttribute('r', 7)
-      tok.setAttribute('style', 'fill: var(--fg); stroke: var(--paper); stroke-width: 2')
-      const RIDE = 1100, HOLD = 700, REST = 2400, LEG = RIDE + HOLD
-      const cycle = WALK.length * LEG + REST
-      const t0 = performance.now()
-      const tick = now => {
-        const t = Math.max(0, now - t0) % cycle
-        const i = Math.min(WALK.length - 1, Math.floor(t / LEG))
-        const into = t - i * LEG
-        const path = EDGES[WALK[i]].el
-        const pt = path.getPointAtLength(path.getTotalLength() * Math.min(1, into / RIDE))
-        tok.setAttribute('cx', pt.x)
-        tok.setAttribute('cy', pt.y)
-        if (tok.parentNode !== layer) layer.append(tok)
-        steps.forEach((s, k) => s.classList.toggle('on', k === i && into > RIDE * 0.7))
-        requestAnimationFrame(tick)
-      }
-      requestAnimationFrame(tick)
-    }
-  </script>
 </div>

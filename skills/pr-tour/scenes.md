@@ -257,22 +257,26 @@ the craft, never the content: your tour draws its own change.
 
 Scenes:
 
-- `architecture`: vite#20916, browser console logs forwarded to the dev server: a new lane on the
-  HMR socket beside the unchanged ones.
-- `lineage`: httpx#1296, one module split in two, classes becoming functions, three copies merged.
-- `sankey`: pytest#14520, a 702-line `util.py` redistributed into eight modules, ribbons by lines.
-- `heatmap`: httpx#1808, a renamed and flipped default: one square per changed line, by kind.
-- `dependency-matrix`: next.js#82844, shared types moved out of the server: import counts per cell.
-- `impact-map`: vitest#5876, stricter error equality: the callers that fan into the changed function.
-- `storyboard`: saleor#17859, a denormalized order count: store, backfill, count, uncount.
-- `sequence`: tokio#8371, lock order under an exhausted budget: two runs on one row grid.
-- `control-flow`: rails#48600, a non-local return now commits: two flowcharts, rows aligned.
-- `state-machine`: opossum#389, a circuit breaker stuck half-open: the transition that frees it.
+- `architecture`: vite#20916, browser errors forwarded to the dev server: two zones, four boxes, and
+  a new lane on the HMR socket beside the unchanged one.
+- `lineage`: httpx#1296, three copies of the content handling merged into one `encode_content`.
+- `sankey`: pytest#14520, a 702-line `util.py` split into new modules: four ribbons by lines, one
+  rewritten.
+- `heatmap`: httpx#1808, a renamed and flipped default: one square per changed line, three strips.
+- `dependency-matrix`: next.js#82844, shared types moved out of the server: a 3 × 2 grid of import
+  counts.
+- `impact-map`: vitest#5876, stricter error equality: four callers fanning into the changed function.
+- `storyboard`: saleor#17859, a denormalized order count: four panels, one user's count.
+- `sequence`: tokio#8371, lock order under an exhausted budget: three lifelines, before and after.
+- `control-flow`: rails#48600, a non-local return now commits: one decision, before and after.
+- `state-machine`: opossum#389, a circuit breaker stuck half-open: three states, the transition that
+  frees it.
 - `trace`: gitea#33528, 106 queries becoming 6: both runs as ticks on one axis.
-- `data-flow`: caddy#4507, trusted proxies for `X-Forwarded-*`: forged headers stopped at the gate.
-- `schema`: wagtail#8441, page revisions becoming generic revisions: rows traced through migrations.
-- `scenario-matrix`: express#4212, invalid status codes now throw: inputs by outcome, before and after.
-- `ui-journey`: excalidraw#7647, a new share dialog: three entry points to a link, before and after.
+- `data-flow`: caddy#4507, trusted proxies for `X-Forwarded-For`: one forged header stopped at the
+  gate.
+- `schema`: wagtail#8441, page revisions becoming generic revisions: three tables, one row traced.
+- `scenario-matrix`: express#4212, invalid status codes now throw: three inputs, before and after.
+- `ui-journey`: excalidraw#7647, a new Share button: three clicks to a link before, two after.
 
 Micro-worlds:
 

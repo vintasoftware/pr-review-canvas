@@ -1,85 +1,73 @@
 <div class="scene" data-technique="sequence">
   <div class="sq-pair">
-    <section class="sq-panel bad">
-      <div class="sq-cap"><span class="chip bad">before</span><span class="small"><code class="code">Acquire::poll</code> checks the coop budget, then the queue</span></div>
-      <div class="sq-grid">
-        <i class="sq-band"></i><i class="sq-hold muted" style="--x:2"></i><i class="sq-won" style="--x:4"></i>
-        <b class="sq-actor" style="--x:2">t0</b><b class="sq-actor" style="--x:3">t_a</b><b class="sq-actor" style="--x:4">t_b</b><b class="sq-actor" style="--x:5">Mutex</b><span class="sq-qh">waiters.queue</span>
-        <i class="sq-life" style="--x:2"></i><i class="sq-life" style="--x:3"></i><i class="sq-life" style="--x:4"></i><i class="sq-life" style="--x:5"></i>
-        <b class="sq-n" style="--y:2">1</b><b class="sq-n" style="--y:3">2</b><b class="sq-n" style="--y:4">3</b><b class="sq-n" style="--y:5">4</b><b class="sq-n" style="--y:6">5</b><b class="sq-n" style="--y:7">6</b>
-        <div class="sq-msg muted" style="--y:2;--x:2;--n:4"><b>lock_owned()</b><i class="sq-line"></i><span>Ready(g0): t0 holds the lock</span></div>
-        <span class="sq-q muted" style="--y:2">[ ]</span>
-        <div class="sq-note" style="--y:3"><b>consume_budget()</b> until spent</div>
-        <div class="sq-msg bad gone" style="--y:4;--x:3;--n:3"><b>lock_owned().await</b><i class="sq-line"></i><span>coop::poll_proceed → Pending; poll_acquire never runs</span></div>
-        <span class="sq-q bad hero" style="--y:4">[ ]</span>
-        <div class="sq-msg muted" style="--y:5;--x:4;--n:2"><b>lock_owned()</b><i class="sq-line"></i><span>queued, Pending</span></div>
-        <span class="sq-q bad" style="--y:5">[t_b]</span>
-        <div class="sq-msg muted" style="--y:6;--x:2;--n:4"><b>drop(g0)</b><i class="sq-line"></i><span>release one permit</span></div>
-        <div class="sq-msg bad rev" style="--y:7;--x:4;--n:2"><b>wake t_b</b><i class="sq-line"></i><span>oldest waiter</span></div>
-        <span class="sq-q muted" style="--y:7">[ ]</span>
-      </div>
-      <div class="sq-out bad"><span class="sq-mark">✕</span><code>assert!(!t_b.is_woken())</code><span>t_b polled second, locks first</span></div>
-    </section>
-    <section class="sq-panel good">
-      <div class="sq-cap"><span class="chip good">after</span><span class="small">the queue first; the budget only once the lock is <code class="code">Ready</code></span></div>
-      <div class="sq-grid">
-        <i class="sq-band"></i><i class="sq-hold muted" style="--x:2"></i><i class="sq-won" style="--x:3"></i>
-        <b class="sq-actor" style="--x:2">t0</b><b class="sq-actor" style="--x:3">t_a</b><b class="sq-actor" style="--x:4">t_b</b><b class="sq-actor" style="--x:5">Mutex</b><span class="sq-qh">waiters.queue</span>
-        <i class="sq-life" style="--x:2"></i><i class="sq-life" style="--x:3"></i><i class="sq-life" style="--x:4"></i><i class="sq-life" style="--x:5"></i>
-        <b class="sq-n" style="--y:2">1</b><b class="sq-n" style="--y:3">2</b><b class="sq-n" style="--y:4">3</b><b class="sq-n" style="--y:5">4</b><b class="sq-n" style="--y:6">5</b><b class="sq-n" style="--y:7">6</b>
-        <div class="sq-msg muted" style="--y:2;--x:2;--n:4"><b>lock_owned()</b><i class="sq-line"></i><span>Ready(g0): t0 holds the lock</span></div>
-        <span class="sq-q muted" style="--y:2">[ ]</span>
-        <div class="sq-note" style="--y:3"><b>consume_budget()</b> until spent</div>
-        <div class="sq-msg good hero" style="--y:4;--x:3;--n:3"><b>lock_owned().await</b><i class="sq-line"></i><span>poll_acquire → queued, Pending; <em class="warn">budget not checked</em></span></div>
-        <span class="sq-q good hero" style="--y:4">[t_a]</span>
-        <div class="sq-msg muted" style="--y:5;--x:4;--n:2"><b>lock_owned()</b><i class="sq-line"></i><span>queued, Pending</span></div>
-        <span class="sq-q good" style="--y:5">[t_a, t_b]</span>
-        <div class="sq-msg muted" style="--y:6;--x:2;--n:4"><b>drop(g0)</b><i class="sq-line"></i><span>release one permit</span></div>
-        <div class="sq-msg good rev" style="--y:7;--x:3;--n:3"><b>wake t_a</b><i class="sq-line"></i><span>oldest waiter</span></div>
-        <span class="sq-q muted" style="--y:7">[t_b]</span>
-      </div>
-      <div class="sq-out good"><span class="sq-mark">✓</span><code>assert!(!t_b.is_woken())</code><span>locks in the order they polled</span></div>
-    </section>
+    <figure class="sq-panel">
+      <span class="chip bad">before</span>
+      <svg viewBox="0 0 360 240" role="img" aria-label="before: t_a never joins the queue, t_b is woken first">
+        <defs>
+          <marker id="sq-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+          <marker id="sq-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--bad)"/></marker>
+        </defs>
+        <g class="sq-heads">
+          <line x1="50" y1="42" x2="50" y2="228"/><line x1="150" y1="42" x2="150" y2="228"/><line x1="260" y1="42" x2="260" y2="228"/>
+          <rect x="22" y="14" width="56" height="28" rx="6"/><text x="50" y="33">t_a</text>
+          <rect x="122" y="14" width="56" height="28" rx="6"/><text x="150" y="33">t_b</text>
+          <rect x="222" y="14" width="76" height="28" rx="6"/><text x="260" y="33">Mutex</text>
+          <text class="sq-sm" x="268" y="58">held by t0</text><text class="sq-sm" x="268" y="76">queue</text>
+        </g>
+        <g class="sq-msg bad hero"><line x1="50" y1="88" x2="232" y2="88" stroke-dasharray="7 6"/><text class="sq-x" x="240" y="94">✕</text><text x="140" y="78">lock(), budget spent</text></g>
+        <text class="sq-q bad" x="268" y="93">[ ]</text>
+        <g class="sq-msg muted" style="animation-delay: 0.7s"><line x1="150" y1="140" x2="258" y2="140" marker-end="url(#sq-m)"/><text x="204" y="130">lock()</text></g>
+        <text class="sq-q muted" x="268" y="145" style="animation-delay: 0.7s">[t_b]</text>
+        <g class="sq-msg bad" style="animation-delay: 1.4s"><line x1="260" y1="196" x2="152" y2="196" marker-end="url(#sq-b)"/><text x="206" y="186">wake t_b</text></g>
+      </svg>
+    </figure>
+    <figure class="sq-panel">
+      <span class="chip good">after</span>
+      <svg viewBox="0 0 360 240" role="img" aria-label="after: t_a joins the queue first and is woken first">
+        <defs>
+          <marker id="sq-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+          <marker id="sq-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--good)"/></marker>
+        </defs>
+        <g class="sq-heads">
+          <line x1="50" y1="42" x2="50" y2="228"/><line x1="150" y1="42" x2="150" y2="228"/><line x1="260" y1="42" x2="260" y2="228"/>
+          <rect x="22" y="14" width="56" height="28" rx="6"/><text x="50" y="33">t_a</text>
+          <rect x="122" y="14" width="56" height="28" rx="6"/><text x="150" y="33">t_b</text>
+          <rect x="222" y="14" width="76" height="28" rx="6"/><text x="260" y="33">Mutex</text>
+          <text class="sq-sm" x="268" y="58">held by t0</text><text class="sq-sm" x="268" y="76">queue</text>
+        </g>
+        <g class="sq-msg good hero"><line x1="50" y1="88" x2="256" y2="88" marker-end="url(#sq-g)"/><text x="140" y="78">lock(), budget spent</text></g>
+        <text class="sq-q good" x="268" y="93">[t_a]</text>
+        <g class="sq-msg muted" style="animation-delay: 0.7s"><line x1="150" y1="140" x2="258" y2="140" marker-end="url(#sq-m2)"/><text x="204" y="130">lock()</text></g>
+        <text class="sq-q muted" x="268" y="145" style="animation-delay: 0.7s">[t_a, t_b]</text>
+        <g class="sq-msg good" style="animation-delay: 1.4s"><line x1="260" y1="196" x2="52" y2="196" marker-end="url(#sq-g)"/><text x="156" y="186">wake t_a</text></g>
+      </svg>
+    </figure>
   </div>
   <style>
-    .sq-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(23rem, 1fr)); gap: 1.4rem 2.4rem; width: 100%; }
-    .sq-panel { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-    .sq-cap .small { color: var(--fg); }
-    .sq-cap .code { --c: var(--fg); }
-    .sq-cap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; min-height: 1.6rem; }
-    .sq-grid { position: relative; display: grid; grid-template-columns: 1.3rem repeat(4, minmax(0, 1fr)) 5.6rem; grid-template-rows: auto repeat(6, minmax(3.3rem, auto)); align-items: center; }
-    .sq-grid > * { grid-row: var(--y, 1); }
-    .sq-actor, .sq-life, .sq-msg { grid-column: var(--x) / span var(--n, 1); }
-    .sq-actor { justify-self: center; z-index: 1; padding: 0.2rem 0.6rem; border: 0.13rem solid var(--fg); border-radius: 0.45rem; background: var(--paper); font: 700 0.85rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .sq-qh { grid-column: 6; justify-self: center; font: 650 0.66rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
-    .sq-life { grid-row: 1 / -1; justify-self: center; align-self: stretch; width: 0; border-left: 0.12rem dashed var(--line); }
-    .sq-band { grid-row: 4; grid-column: 1 / -1; align-self: stretch; margin: 0.15rem -0.4rem; border-radius: 0.5rem; background: color-mix(in srgb, var(--c) 9%, transparent); }
-    .sq-n { grid-column: 1; justify-self: start; display: grid; place-items: center; width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 0.1rem solid var(--line); color: var(--muted); font-size: 0.66rem; }
-    .sq-msg, .sq-note, .sq-q { animation: sq-in 0.45s ease-out both; animation-delay: calc((var(--y) - 2) * 0.55s); }
-    .sq-msg { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 0.18rem; min-width: 0; color: var(--c); text-align: center; font: 0.76rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .sq-msg > b, .sq-msg > span { padding: 0 0.25rem; border-radius: 0.2rem; }
-    .sq-msg > span { font: 0.7rem/1.25 ui-sans-serif, system-ui, sans-serif; color: color-mix(in srgb, var(--c) 80%, var(--fg)); }
-    .sq-msg.muted > span { color: var(--muted); }
-    .sq-line { position: relative; align-self: stretch; height: 0.15rem; margin: 0 calc(50% / var(--n)); background: var(--c); border-radius: 1rem; }
-    .sq-line::after { content: ''; position: absolute; right: -0.15rem; top: 50%; translate: 0 -50%; border: 0.33rem solid transparent; border-left: 0.55rem solid var(--c); border-right: 0; }
-    .rev .sq-line::after { right: auto; left: -0.15rem; border-left: 0; border-right: 0.55rem solid var(--c); }
-    .gone .sq-line { background: repeating-linear-gradient(90deg, var(--c) 0 0.4rem, transparent 0.4rem 0.7rem); opacity: 0.8; }
-    .gone .sq-line::after { content: '✕'; right: -0.45rem; translate: 0 -54%; border: 0; color: var(--bad); font: 900 1rem ui-sans-serif, system-ui, sans-serif; }
-    .hero .sq-line { height: 0.26rem; }
-    .sq-note { grid-column: 2 / span 3; justify-self: center; z-index: 1; padding: 0.2rem 0.5rem; border: 0.1rem solid var(--line); border-radius: 0.4rem; background: var(--paper); color: var(--muted); font-size: 0.72rem; text-align: center; }
-    .sq-note b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); }
-    .sq-q { grid-column: 6; justify-self: center; padding: 0.15rem 0.4rem; border: 0.1rem solid color-mix(in srgb, var(--c) 55%, var(--paper)); border-radius: 0.35rem; background: var(--tint); color: var(--c); font: 700 0.76rem ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
-    .sq-q.muted { font-weight: 500; }
-    .sq-q.hero { border-width: 0.16rem; border-color: var(--c); }
-    .sq-out { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.55rem; padding: 0.35rem 0.6rem; border-radius: 0.5rem; border: 0.12rem solid var(--c); background: var(--tint); font-size: 0.8rem; }
-    .sq-out code { font: 700 0.78rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c); }
-    .sq-mark { display: grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--c); color: var(--paper); font-weight: 900; font-size: 0.75rem; }
-    .sq-out > span:last-child { color: var(--fg); }
-    .hero.good .sq-line { box-shadow: 0 0 0.5rem color-mix(in srgb, var(--c) 55%, transparent); animation: sq-glow 1.8s ease-in-out 3.2s infinite; }
-    .sq-hold, .sq-won { grid-column: var(--x); justify-self: center; align-self: stretch; width: 0.55rem; border-radius: 0.2rem; background: color-mix(in srgb, var(--c) 30%, var(--paper)); border: 0.1rem solid color-mix(in srgb, var(--c) 60%, var(--paper)); }
-    .sq-hold { grid-row: 2 / 7; margin: 1.55rem 0 1.6rem; }
-    .sq-won { grid-row: 7; margin: 1.6rem 0 0; animation: sq-in 0.45s ease-out 2.9s both; }
-    @keyframes sq-in { from { opacity: 0; transform: translateY(0.4rem); } }
-    @keyframes sq-glow { 50% { box-shadow: 0 0 1rem var(--c); } }
+    .sq-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 30rem)); justify-content: center; gap: 1.5rem 4rem; width: 100%; }
+    .sq-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; margin: 0; min-width: 0; }
+    .sq-panel svg { width: 100%; height: auto; overflow: visible; }
+    .sq-panel text { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--fg); text-anchor: middle; }
+    .sq-heads line { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+    .sq-heads rect { fill: var(--paper); stroke: var(--fg); stroke-width: 1.6; }
+    .sq-heads text { font-weight: 700; }
+    .sq-panel .sq-sm { text-anchor: start; font-size: 11.5px; font-weight: 500; fill: var(--muted); }
+    .sq-msg { --c: var(--muted); }
+    .sq-msg.bad { --c: var(--bad); } .sq-msg.good { --c: var(--good); }
+    .sq-msg line { stroke: var(--c); stroke-width: 2; }
+    .sq-panel .sq-msg text { fill: var(--c); }
+    .sq-msg.muted text { fill: var(--fg); font-weight: 500; }
+    .sq-msg.hero line { stroke-width: 4; }
+    .sq-msg.good.hero line { filter: drop-shadow(0 0 4px var(--good)); }
+    .sq-panel .sq-x { font: 900 16px ui-sans-serif, system-ui, sans-serif; }
+    .sq-panel .sq-q { text-anchor: start; font-weight: 700; }
+    .sq-panel .sq-q.bad { fill: var(--bad); } .sq-panel .sq-q.good { fill: var(--good); } .sq-panel .sq-q.muted { fill: var(--muted); }
+    .sq-msg, .sq-q { animation: sq-in 0.5s ease-out both; }
+    @keyframes sq-in { from { opacity: 0; } }
+    @media (max-width: 40rem) {
+      .sq-pair { grid-template-columns: minmax(0, 1fr); }
+      .sq-panel text { font-size: 14px; }
+      .sq-panel .sq-sm, .sq-panel .sq-q { font-size: 13.5px; }
+    }
   </style>
 </div>

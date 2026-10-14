@@ -1,178 +1,92 @@
 <div class="scene" data-technique="schema">
-  <div class="sc-er">
-    <div class="sc-t muted" id="t-page">
-      <b>wagtailcore_page</b><i>Page</i>
-      <p id="p-id"><span>id</span><em>PK</em></p>
-      <p><span>content_type_id</span><em>FK</em></p>
-      <p><span>title</span><em>varchar</em></p>
-      <p class="muted">… path, live, the rest: unchanged</p>
-    </div>
-    <div class="sc-t sc-ghost warn" id="t-any"><span>any other model</span><em><code>content_type</code> picks its table; no model but Page saves one yet</em></div>
-    <div class="sc-t warn" id="t-rev">
-      <b><s>wagtailcore_pagerevision</s> wagtailcore_revision</b><i><s>PageRevision</s> Revision</i>
-      <p><span>id</span><em>PK</em></p>
-      <p id="r-obj" class="warn"><span><s>page_id</s> object_id</span><em><s>integer FK</s> varchar(255)</em></p>
-      <p id="r-base" class="good"><span>base_content_type_id</span><em>FK, not null</em></p>
-      <p id="r-ct" class="good"><span>content_type_id</span><em>FK, not null</em></p>
-      <p><span>submitted_for_moderation</span><em>boolean</em></p>
-      <p><span>created_at</span><em>datetime</em></p>
-      <p><span>user_id</span><em>FK, null</em></p>
-      <p><span>content</span><em>json</em></p>
-      <p><span>approved_go_live_at</span><em>datetime, null</em></p>
-      <p class="good"><span>base_content_object_idx</span><em>(base_content_type, object_id)</em></p>
-      <p class="good"><span>content_object_idx</span><em>(content_type, object_id)</em></p>
-      <small>FKs into it follow the rename, unchanged: page.live_revision, taskstate.page_revision, pagelogentry.revision, comment.revision_created</small>
-    </div>
-    <div class="sc-t muted" id="t-ct">
-      <b>django_content_type</b><i>ContentType</i>
-      <p id="c-id"><span>id</span><em>PK</em></p>
-      <p><span>app_label</span><em>varchar</em></p>
-      <p><span>model</span><em>varchar</em></p>
-    </div>
-    <span class="sc-lb bad" data-at="drop">FK dropped</span>
-    <span class="sc-lb warn" data-at="soft">object_id = str(page.pk): matched as text, no constraint</span>
-    <span class="sc-lb good" data-at="base">for pages, always wagtailcore.page</span>
-    <span class="sc-lb good" data-at="ct">the specific type, e.g. tests.eventpage</span>
-  </div>
+  <svg class="sc-defs" width="0" height="0" aria-hidden="true">
+    <defs>
+      <marker id="ah-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="bad" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ah-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="3.5" markerHeight="3.5" orient="auto-start-reverse"><path class="warn" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ah-good" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="good" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+  </svg>
+  <svg class="sc sc-wide" viewBox="0 45 1000 225" role="img" aria-label="wagtailcore_revision points at its page by object_id text and two content types">
+    <g class="t">
+      <rect x="30" y="100" width="230" height="116" rx="8"/><text class="h" x="45" y="125">wagtailcore_page</text>
+      <line x1="30" y1="138" x2="260" y2="138"/>
+      <text x="45" y="163">id</text><text class="v" x="245" y="163">7</text>
+      <text x="45" y="199">title</text><text class="v" x="245" y="199">About us</text>
+    </g>
+    <g class="t chg">
+      <rect x="390" y="56" width="270" height="194" rx="8"/>
+      <text class="old" x="405" y="78">wagtailcore_pagerevision</text><text class="h" x="405" y="102">wagtailcore_revision</text>
+      <rect class="cell warn" x="391" y="116" width="268" height="44"/><text x="405" y="143"><tspan class="old">page_id</tspan> object_id</text><text class="v" x="645" y="143">"7"</text>
+      <rect class="cell good" x="391" y="160" width="268" height="44"/><text x="405" y="187">content_type_id</text>
+      <rect class="cell good" x="391" y="204" width="268" height="45"/><text x="405" y="231">base_content_type_id</text>
+    </g>
+    <g class="t">
+      <rect x="775" y="140" width="210" height="116" rx="8"/><text class="h" x="790" y="165">django_content_type</text>
+      <line x1="775" y1="178" x2="985" y2="178"/>
+      <text x="790" y="203">tests.simplepage</text>
+      <text x="790" y="239">wagtailcore.page</text>
+    </g>
+    <path class="w bad" d="M390,128 C340,70 300,90 262,150" marker-end="url(#ah-bad)"/>
+    <text class="lb bad" x="322" y="72">FK dropped</text>
+    <path class="w warn hero" d="M390,146 C340,150 300,160 264,160" marker-end="url(#ah-warn)"/>
+    <text class="lb warn" x="327" y="192">matched as text</text>
+    <path class="w good" d="M660,182 C725,182 730,198 773,198" marker-end="url(#ah-good)"/>
+    <path class="w good" d="M660,226 C725,226 730,234 773,234" marker-end="url(#ah-good)"/>
+    <text class="lb good" x="718" y="166">filled by 0071</text>
+  </svg>
 
-  <div class="sc-film">
-    <span class="sc-h row spread"><span class="label">existing rows, migration by migration</span><span class="small">e.g. revisions of two pages in the test fixture <code class="code">test.json</code>; ⟨x⟩ is the id of content type x</span></span>
-    <i></i>
-    <span class="sc-st">before<em>0069</em></span>
-    <span class="sc-st warn">0070 · rename<em>RenameModel, AlterField, RenameField, 2 AddField, 2 AddIndex</em></span>
-    <span class="sc-st good">0071 · RunPython<em>populate_revision_content_type<br>↶ down: both back to NULL</em></span>
-    <span class="sc-st good">0072<em>2 AlterField</em></span>
-  </div>
-  <p class="small sc-new">New rows: <code class="code">Page.save_revision()</code> writes <code class="code">object_id=self.id</code> <code class="code">content_type_id=self.content_type_id</code> <code class="code">base_content_type_id=get_default_page_content_type().id</code></p>
-
+  <svg class="sc sc-tall" viewBox="0 0 340 480" role="img" aria-label="the same tables, stacked">
+    <g class="t">
+      <rect x="90" y="8" width="210" height="96" rx="8"/><text class="h" x="102" y="30">wagtailcore_page</text>
+      <line x1="90" y1="40" x2="300" y2="40"/>
+      <text x="102" y="62">id</text><text class="v" x="288" y="62">7</text>
+      <text x="102" y="92">title</text><text class="v" x="288" y="92">About us</text>
+    </g>
+    <text class="lb bad" x="180" y="128">FK dropped</text>
+    <text class="lb warn" x="180" y="148">matched as text</text>
+    <g class="t chg">
+      <rect x="50" y="160" width="250" height="172" rx="8"/>
+      <text class="old" x="62" y="180">wagtailcore_pagerevision</text><text class="h" x="62" y="200">wagtailcore_revision</text>
+      <rect class="cell warn" x="51" y="212" width="248" height="40"/><text x="62" y="237"><tspan class="old">page_id</tspan> object_id</text><text class="v" x="288" y="237">"7"</text>
+      <rect class="cell good" x="51" y="252" width="248" height="40"/><text x="62" y="277">content_type_id</text>
+      <rect class="cell good" x="51" y="292" width="248" height="39"/><text x="62" y="317">base_content_type_id</text>
+    </g>
+    <text class="lb good" x="190" y="360">filled by 0071</text>
+    <g class="t">
+      <rect x="90" y="374" width="210" height="100" rx="8"/><text class="h" x="102" y="396">django_content_type</text>
+      <line x1="90" y1="406" x2="300" y2="406"/>
+      <text x="102" y="430">wagtailcore.page</text>
+      <text x="102" y="461">tests.simplepage</text>
+    </g>
+    <path class="w bad" d="M50,226 C4,226 4,47 88,47" marker-end="url(#ah-bad)"/>
+    <path class="w warn hero" d="M50,236 C26,236 26,64 88,64" marker-end="url(#ah-warn)"/>
+    <path class="w good" d="M300,272 C336,272 336,456 302,456" marker-end="url(#ah-good)"/>
+    <path class="w good" d="M300,312 C322,312 322,426 302,426" marker-end="url(#ah-good)"/>
+  </svg>
   <style>
-    .scene { --mono: ui-monospace, monospace; --sans: ui-sans-serif, system-ui, sans-serif; }
-    .scene :is(em, i) { font-style: normal; color: var(--muted); }
-    .sc-er, .sc-film { position: relative; width: 100%; }
-    .sc-er { display: grid; grid-template-columns: 14rem 1fr 23.5rem 1fr 11.5rem; align-items: start; row-gap: 1.6rem; }
-    #t-page { grid-area: 1 / 1; }
-    #t-any { grid-area: 2 / 1; }
-    #t-rev { grid-area: 1 / 3 / 4; }
-    #t-ct { grid-area: 1 / 5; margin-top: 3.2rem; }
-    .sc-t, .sc-j, .sc-c { position: relative; z-index: 1; border: 0.08rem solid var(--line); border-radius: 0.45rem; background: var(--paper); }
-    .sc-t { display: flex; flex-direction: column; border: 0.1rem solid var(--c, var(--line)); overflow: hidden; font-size: 0.74rem; }
-    .sc-t.muted { --c: var(--line); color: var(--fg); }
-    .sc-t.warn { border-width: 0.14rem; }
-    .sc-t > b { padding: 0.35rem 0.55rem 0; font: 700 0.86rem var(--mono); }
-    .sc-t > i { padding: 0 0.55rem 0.3rem; border-bottom: 0.1rem solid var(--line); font-size: 0.7rem; }
-    .sc-t p { display: flex; justify-content: space-between; gap: 0.6rem; margin: 0; padding: 0.17rem 0.55rem; border-bottom: 0.06rem solid color-mix(in srgb, var(--line) 60%, transparent); }
-    .sc-t p span { font-family: var(--mono); white-space: nowrap; }
-    .sc-t em { text-align: right; }
-    .sc-t p:is(.good, .warn) { background: var(--tint); font-weight: 650; }
-    .sc-t p:is(.good, .warn) span, .sc-ghost span { color: var(--c); }
-    .sc-t s { color: var(--bad); opacity: 0.75; margin-right: 0.3rem; font-weight: 400; }
-    .sc-t small { padding: 0.35rem 0.55rem; font-size: 0.68rem; color: var(--muted); }
-    .sc-ghost { padding: 0.45rem 0.6rem; border: 0.12rem dashed var(--c); background: none; }
-    .sc-ghost span { font-weight: 700; }
-    .sc-ghost em { text-align: left; }
-    .sc-lb { position: absolute; z-index: 2; max-width: 11.5rem; padding: 0 0.2rem; font-size: 0.68rem; font-weight: 650; background: var(--paper); translate: -50% -50%; text-align: center; }
-    svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-    path { fill: none; stroke: var(--c); stroke-width: 1.6; }
-    path.bad { stroke-dasharray: 5 4; }
-    path.hero { stroke-width: 3; stroke-dasharray: 2 5; stroke-linecap: round; filter: drop-shadow(0 0 3px var(--c)); animation: sc-run 1.2s linear infinite; }
-    path.thin { stroke-width: 1.4; stroke-dasharray: 2 4; stroke-linecap: round; }
-    @keyframes sc-run { to { stroke-dashoffset: -14; } }
-    @keyframes sc-in { from { opacity: 0; translate: -0.8rem 0; } }
-    .sc-film { display: grid; grid-template-columns: 17rem 1fr 1fr 1.25fr 0.7fr; gap: 1rem 0.9rem; margin: 0.6rem 0 0.5rem; }
-    .sc-h { grid-column: 1 / -1; }
-    .sc-st { display: flex; flex-direction: column; font-size: 0.78rem; font-weight: 700; color: var(--c, var(--fg)); }
-    .sc-st em { font-weight: 400; font-size: 0.66rem; }
-    .sc-j, .sc-c { font: 0.7rem/1.45 var(--mono); }
-    .sc-j { padding: 0.3rem 0.5rem; }
-    .sc-j b { display: block; font: 700 0.72rem var(--sans); }
-    .sc-j .k { color: var(--good); font-weight: 700; outline: 0.1rem solid var(--good); border-radius: 0.2rem; }
-    .sc-c { display: grid; align-content: start; animation: sc-in 0.5s calc(var(--d) * 0.6s) both; }
-    .sc-c > span { display: flex; justify-content: space-between; gap: 0.4rem; padding: 0.05rem 0.45rem; white-space: nowrap; }
-    .sc-c > span:is(.good, .warn) { background: var(--tint); font-weight: 700; }
-    .sc-c > .nul b, .sc-c > .no { color: var(--muted); font-weight: 400; }
-    .sc-c > .no b { flex: 1; height: 0.6rem; align-self: center; border-radius: 0.2rem; }
-    .sc-c.end { border-style: dashed; }
-    .sc-c.end > span { justify-content: center; font: 650 0.62rem var(--sans); color: var(--good); }
-    .sc-new { align-self: stretch; margin: 0; }
+    .sc-defs { position: absolute; }
+    .sc { width: 100%; height: auto; overflow: visible; font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .sc-tall { display: none; font-size: 13px; }
+    .sc .t rect { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .sc .t line { stroke: var(--line); stroke-width: 1.5; }
+    .sc .t.chg > rect:first-child { stroke: var(--warn); stroke-width: 2.5; }
+    .sc text { fill: var(--fg); }
+    .sc .h { font-weight: 700; }
+    .sc .v { text-anchor: end; fill: var(--muted); }
+    .sc .old { fill: var(--bad); opacity: 0.7; text-decoration: line-through; font-size: 0.85em; }
+    .sc .cell { stroke: none; }
+    .sc .cell.warn { fill: color-mix(in srgb, var(--warn) 16%, var(--paper)); }
+    .sc .cell.good { fill: color-mix(in srgb, var(--good) 13%, var(--paper)); }
+    .sc .lb { font: 600 14px ui-sans-serif, system-ui, sans-serif; text-anchor: middle; }
+    .sc-tall .lb { font-size: 12px; }
+    .sc text.lb, .sc-defs path { fill: var(--c); }
+    .sc path.w { fill: none; stroke: var(--c); stroke-width: 2; }
+    .sc .w.bad { stroke-dasharray: 6 5; opacity: 0.6; }
+    .sc .w.hero { stroke-width: 4; stroke-dasharray: 2 7; stroke-linecap: round; filter: drop-shadow(0 0 4px var(--warn)); animation: sc-run 1.2s linear infinite; }
+    @keyframes sc-run { to { stroke-dashoffset: -18; } }
     @media (max-width: 40rem) {
-      .sc-er { grid-template-columns: 1fr; padding-left: 1.4rem; row-gap: 0.9rem; }
-      #t-page, #t-any, #t-rev, #t-ct { grid-area: auto; margin: 0; }
-      #t-rev { order: -1; }
-      .sc-lb, .sc-film > i, .sc-film .sc-st, .sc-film svg, .sc-c.end { display: none; }
-      .sc-film { grid-template-columns: 1fr; }
-      .sc-t { font-size: 0.88rem; }
-      .sc-j, .sc-c { font-size: 0.85rem; }
-      .sc-c::before { content: attr(data-st); padding: 0.1rem 0.45rem; font: 700 0.66rem var(--sans); }
+      .sc-wide { display: none; }
+      .sc-tall { display: block; }
     }
   </style>
-  <script>
-    // Two revisions of pages in wagtail/test/testapp/fixtures/test.json: [page id, title, specific type].
-    const ROWS = [[4, 'Christmas', 'tests.eventpage'], [7, 'About us', 'tests.simplepage']]
-    const film = document.querySelector('.sc-film')
-    const ln = (k, v, cls = '') => `<span class="${cls}"><i>${k}</i><b>${v}</b></span>`
-    const card = (d, st, body, cls = '') => `<div class="sc-c ${cls}" style="--d: ${d}" data-st="${st}">${body}</div>`
-    for (const [pk, title, type] of ROWS) {
-      film.insertAdjacentHTML('beforeend', `
-        <div class="sc-j"><b>content, e.g. page ${pk} · ${title}</b>{"pk": ${pk}, "title": "${title}",<br><span class="k">"content_type": ⟨${type}⟩</span>, …}</div>
-        ${card(0, 'before', ln('page_id', pk) + ln('base_content_type_id', '', 'no hatch') + ln('content_type_id', '', 'no hatch'))}
-        ${card(1, '0070', ln('object_id', `"${pk}"`, 'warn') + ln('base_content_type_id', 'NULL', 'good nul') + ln('content_type_id', 'NULL', 'good nul'))}
-        ${card(2, '0071, then 0072: both NOT NULL', ln('object_id', `"${pk}"`) + ln('base_content_type_id', '⟨wagtailcore.page⟩', 'good') + ln('content_type_id', `⟨${type}⟩`, 'good sc-to'))}
-        ${card(3, '0072', '<span>&nbsp;</span><span>NOT NULL</span><span>NOT NULL</span>', 'end')}`)
-    }
-    const NS = 'http://www.w3.org/2000/svg'
-    function wire(svg, d, cls, tone) {
-      const p = document.createElementNS(NS, 'path')
-      p.setAttribute('d', d)
-      p.setAttribute('class', cls)
-      p.style.setProperty('--c', `var(--${tone})`)
-      svg.append(p)
-    }
-    function at(box, el) {
-      const f = box.getBoundingClientRect(), r = el.getBoundingClientRect()
-      return { l: r.left - f.left, r: r.right - f.left, b: r.bottom - f.top, y: (r.top + r.bottom) / 2 - f.top }
-    }
-    // A horizontal S-curve; k lifts its middle (the dropped FK arcs over the new pointer).
-    const S = (x1, y1, x2, y2, k = 0) => { const m = (x1 + x2) / 2; return `M${x1},${y1} C${m},${y1 - k} ${m},${y2 - k} ${x2},${y2}` }
-    function draw() {
-      document.querySelectorAll('svg').forEach(s => s.remove())
-      const er = document.querySelector('.sc-er')
-      const svg = document.createElementNS(NS, 'svg')
-      er.prepend(svg)
-      const $ = id => at(er, document.getElementById(id))
-      const obj = $('r-obj'), pid = $('p-id'), any = $('t-any'), cid = $('c-id'), base = $('r-base'), ct = $('r-ct')
-      if (er.clientWidth < 600) {
-        // Stacked: wires bulge into the left gutter.
-        const L = (a, b, k) => `M${a.l},${a.y} C${a.l - k},${a.y} ${b.l - k},${b.y} ${b.l},${b.y}`
-        wire(svg, L(obj, pid, 12), 'bad', 'bad')
-        wire(svg, L(obj, pid, 22), 'hero', 'warn')
-        wire(svg, L(obj, any, 17), 'thin', 'warn')
-        wire(svg, L(base, cid, 10), '', 'good')
-        wire(svg, L(ct, cid, 15), '', 'good')
-        return
-      }
-      wire(svg, S(obj.l, obj.y - 4, pid.r, pid.y - 4, 34), 'bad', 'bad')
-      wire(svg, S(obj.l, obj.y + 2, pid.r, pid.y + 4), 'hero', 'warn')
-      wire(svg, S(obj.l, obj.y + 5, any.r, any.y), 'thin', 'warn')
-      wire(svg, S(base.r, base.y, cid.l, cid.y - 3), '', 'good')
-      wire(svg, S(ct.r, ct.y, cid.l, cid.y + 3), '', 'good')
-      const gl = (pid.r + obj.l) / 2, gr = (base.r + cid.l) / 2
-      const put = (name, x, y) => Object.assign(er.querySelector(`[data-at="${name}"]`).style, { left: `${x}px`, top: `${y}px` })
-      put('drop', gl, pid.y - 34)
-      put('soft', gl - 10, pid.y + 34)
-      put('base', gr, base.y - 26)
-      put('ct', gr, ct.y + 30)
-      // The rows, wired: each revision's own JSON names the type that 0071 copies.
-      const fs = document.createElementNS(NS, 'svg')
-      film.prepend(fs)
-      const tos = film.querySelectorAll('.sc-to')
-      film.querySelectorAll('.k').forEach((k, i) => {
-        const a = at(film, k), b = at(film, tos[i]), gy = at(film, tos[i].parentElement).b + 7
-        wire(fs, `M${a.r},${a.y} C${a.r + 16},${a.y} ${a.r + 4},${gy} ${a.r + 24},${gy} L${b.l - 26},${gy} C${b.l - 8},${gy} ${b.l - 16},${b.y} ${b.l},${b.y}`, 'hero', 'good')
-      })
-    }
-    // Wires are absolute, so a redraw never resizes what is watched.
-    const ro = new ResizeObserver(draw)
-    ro.observe(document.body)
-    ro.observe(film)
-  </script>
 </div>

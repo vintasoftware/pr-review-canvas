@@ -1,97 +1,53 @@
 <div class="scene" data-technique="heatmap">
-  <div class="hm-top">
-    <div class="hm-lead">
-      <div class="row"><span class="big warn">24</span><span class="hm-of">of the 378 changed lines change what httpx does. The other 354 rename the argument, make the tests ask for redirects, or rewrite the docs.</span></div>
-      <div class="file" data-title="the 24 lines">
-        <span class="hl warn"><i>×10</i>− <s>allow_redirects: bool = True,</s></span>
-        <span class="hl warn"><i>×10: 9 in _api.py, BaseClient</i>+ follow_redirects: bool = False,</span>
-        <span class="hl good"><i>Client, AsyncClient</i>+ follow_redirects: bool = False,</span>
-        <span class="hl good"><i>×2, into BaseClient</i>+ follow_redirects=follow_redirects,</span>
-      </div>
-    </div>
-    <ul class="hm-key">
-      <li><i class="hm-c G"></i><b>198</b><span>renamed, moved, or unrelated; same behavior</span></li>
-      <li><i class="hm-c A"></i><b>20</b><span>the default flips, <code>True</code> → <code>False</code></span></li>
-      <li><i class="hm-c H"></i><b>4</b><span><code>Client</code>, <code>AsyncClient</code> gain the argument</span></li>
-      <li><i class="hm-c N"></i><b>129</b><span>tests ask for redirects, docs explain</span></li>
-      <li><i class="hm-c x"></i><b>27</b><span>removed: docs of the old default</span></li>
-      <li class="hm-note">1 square is 1 changed line, in diff order</li>
-    </ul>
-  </div>
-  <div class="hm-areas">
-    <section style="--w: 160">
-      <h4>httpx/ <span>160 lines</span></h4>
-      <div class="hm-f" data-k="aAgGgGaAgGaAgGaAgGaAgGaAgGaAgGaAgGaAgG"><b>_api.py</b> <span>+19 −19</span><p>the default flips in request, stream, get, options, head, post, put, patch, delete</p></div>
-      <div class="hm-f" data-k="aAgGHHgGgGgGgGgGggggGGGGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGHHgGgGgGgGgGggggGGGGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgG"><b>_client.py</b> <span>+62 −58</span><p>BaseClient flips; Client and AsyncClient take the argument; 114 lines only rename</p></div>
-      <div class="hm-f" data-k="gG"><b>_models.py</b> <span>+1 −1</span><p>a comment</p></div>
+  <div class="hm">
+    <section data-k="aAgGgGaAgGaAgGaAgGaAgGaAgGaAgGaAgGaAgGaAgGHHgGgGgGgGgGggggGGGGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGHHgGgGgGgGgGggggGGGGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgGgG">
+      <h4>httpx/<span>160 lines</span></h4>
+      <p><b class="warn hm-hero">24 change behavior</b><span class="hm-code">default <code class="code">True</code> → <code class="code">False</code></span><span class="muted">136 rename only</span></p>
     </section>
-    <section style="--w: 84">
-      <h4>tests/ <span>84 lines</span></h4>
-      <div class="hm-f" data-k="nNnNnNgGgGgGgGnNnNNNnNNNnNnNNNnNNNnNNNnNNNnNNNnNnNnNnNnNnNgGnNnNnNNNnNnNNN"><b>client/test_redirects.py</b> <span>+46 −28</span><p>23 calls add <code>follow_redirects=True</code>; 5 only rename</p></div>
-      <div class="hm-f" data-k="nNNNnNNN"><b>client/test_event_hooks.py</b> <span>+6 −2</span><p>2 clients opt in</p></div>
-      <div class="hm-f" data-k="nN"><b>test_utils.py</b> <span>+1 −1</span><p>1 client opts in</p></div>
+    <section data-k="nNnNnNgGgGgGgGnNnNNNnNNNnNnNNNnNNNnNNNnNNNnNNNnNnNnNnNnNnNgGnNnNnNNNnNnNNNnNNNnNNNnN">
+      <h4>tests/<span>84 lines</span></h4>
+      <p><b class="good">74 opt back in</b><code class="code">follow_redirects=True</code></p>
     </section>
-    <section style="--w: 134">
-      <h4>docs/ <span>134 lines</span></h4>
-      <div class="hm-f" data-k="GGGGGGGGGGGGGGGNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNGGGGGGgggggggggggggggGxxxxxxxxxxxxxxxxxxx"><b>compatibility.md</b> <span>+64 −34</span><p>new “Redirects” section; “HEAD redirection” removed; “Client instances” moved up; an unrelated “Upload files” note</p></div>
-      <div class="hm-f" data-k="gGnNgGxgggggNNxxxNxNNNgGxNNNxNxNGGGG"><b>quickstart.md</b> <span>+19 −17</span><p>the github.com example now stops at 301 unless it opts in</p></div>
+    <section data-k="GGGGGGGGGGGGGGGNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNGGGGGGgggggggggggggggGxxxxxxxxxxxxxxxxxxxgGnNgGxgggggNNxxxNxNNNgGxNNNxNxNGGGG">
+      <h4>docs/<span>134 lines</span></h4>
+      <p><b class="good">55 explain it</b><b class="bad">27 old default, removed</b></p>
     </section>
   </div>
   <style>
-    .hm-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.8rem 1.6rem; width: 100%; }
-    .hm-lead { display: flex; flex-direction: column; gap: 0.55rem; flex: 1 1 24rem; max-width: 36rem; }
-    .hm-lead .row { justify-content: flex-start; flex-wrap: nowrap; align-items: flex-start; }
-    .hm-lead .big { font-size: 2.8rem; }
-    .hm-of { font-size: 0.95rem; line-height: 1.35; text-align: left; }
-    .hm-lead .file { max-width: none; }
-    .hm-lead .file i { float: right; padding-left: 0.8rem; font: 0.72rem ui-sans-serif, system-ui, sans-serif; color: var(--muted); line-height: inherit; }
-    .hm-lead .file s { text-decoration-color: color-mix(in srgb, var(--bad) 70%, transparent); }
-    .hm-key { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; font-size: 0.84rem; text-align: left; }
-    .hm-key li { display: flex; align-items: center; gap: 0.45rem; }
-    .hm-key b { min-width: 1.9rem; text-align: right; font-variant-numeric: tabular-nums; }
-    .hm-note { padding-top: 0.15rem; font-size: 0.76rem; color: var(--muted); }
-    .hm-areas { display: flex; flex-wrap: wrap; gap: 1rem 1.2rem; width: 100%; align-items: flex-start; }
-    .hm-areas section { flex: var(--w) 1 0; min-width: 12rem; display: flex; flex-direction: column; gap: 0.6rem; text-align: left; }
-    .hm-areas h4 { margin: 0; padding-bottom: 0.2rem; border-bottom: 0.1rem solid var(--line); font: 700 0.86rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .hm-areas h4 span, .hm-f > span { font: 0.74rem ui-sans-serif, system-ui, sans-serif; color: var(--muted); }
-    .hm-f b { font: 650 0.8rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .hm-f p { margin: 0.3rem 0 0; font-size: 0.76rem; line-height: 1.3; color: var(--muted); }
-    .hm-f code, .hm-key code { font: 0.92em ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .hm-cells { display: grid; grid-template-columns: repeat(auto-fill, var(--cell)); gap: 0.14rem; margin-top: 0.3rem; --cell: 1rem; }
-    .hm-c { display: inline-block; flex: none; width: var(--cell, 1rem); height: var(--cell, 1rem); border-radius: 0.16rem; background: var(--c); }
-    .G, .g { --c: color-mix(in srgb, var(--muted) 42%, var(--paper)); }
-    .A, .a { --c: var(--warn); }
-    .N, .n, .H { --c: var(--good); }
-    .hm-c.x { --c: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--paper)); border: 0.1rem dashed var(--bad); }
-    .hm-c:is(.A, .a, .H) { box-shadow: 0 0 0.45rem 0.08rem color-mix(in srgb, var(--c) 70%, transparent); }
-    .hm-cells :is(.A, .a, .H) { animation: hm-pulse 1.8s ease-in-out infinite; }
-    @keyframes hm-pulse { 50% { box-shadow: 0 0 0.85rem 0.22rem color-mix(in srgb, var(--c) 85%, transparent); } }
-    @media (max-width: 640px) {
-      .hm-areas section { flex-basis: 100%; }
-      .hm-cells { --cell: 0.85rem; }
-      .hm-lead .file i { display: none; }
+    .hm { display: grid; grid-template-columns: 7rem 1fr 15rem; gap: 2rem 1.4rem; width: 100%; text-align: left; }
+    .hm section { display: contents; }
+    .hm h4 { display: flex; flex-direction: column; margin: 0; font: 700 0.95rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .hm h4 span, .hm .muted { font: 0.8rem ui-sans-serif, system-ui, sans-serif; color: var(--muted); }
+    .hm p { display: flex; flex-direction: column; gap: 0.3rem; margin: 0; font-size: 0.88rem; }
+    .hm p b { color: var(--c); }
+    .hm-hero { font-size: 1.15rem; }
+    .hm-cells { display: grid; grid-template-columns: repeat(auto-fill, var(--cell)); gap: 0.2rem; align-content: start; --cell: 1rem; }
+    .hm-c { width: var(--cell); height: var(--cell); border-radius: 0.14rem; background: color-mix(in srgb, var(--muted) 30%, var(--paper)); }
+    .hm-c.n { background: color-mix(in srgb, var(--good) 55%, var(--paper)); }
+    .hm-c.x { border: 0.08rem dashed var(--bad); background: color-mix(in srgb, var(--bad) 12%, var(--paper)); opacity: 0.75; }
+    .hm-c:is(.a, .h) { background: var(--warn); box-shadow: 0 0 0.45rem 0.1rem color-mix(in srgb, var(--warn) 70%, transparent); animation: hm-pulse 1.8s ease-in-out infinite; }
+    @keyframes hm-pulse { 50% { box-shadow: 0 0 0.85rem 0.22rem color-mix(in srgb, var(--warn) 85%, transparent); } }
+    @media (max-width: 40rem) {
+      .hm { grid-template-columns: 1fr; gap: 0.5rem; }
+      .hm h4 { flex-direction: row; align-items: baseline; gap: 0.5rem; margin-top: 0.9rem; }
+      .hm p { flex-direction: row; flex-wrap: wrap; gap: 0.2rem 0.8rem; }
+      .hm-cells { --cell: 0.62rem; gap: 0.13rem; }
     }
   </style>
   <script>
-    // Each file's changed lines in diff order, one letter a line, classified from the PR's diff:
-    // g renamed or moved, a the default flips, h Client and AsyncClient take the argument,
-    // n added for the new default, x removed docs of the old default. Case is the side of the
-    // diff (lower removed, upper added); the picture colors both sides the same.
-    let i = 0
-    for (const f of document.querySelectorAll('.hm-f')) {
+    // One letter per changed line, in diff order, classified from the PR's diff: a the default
+    // flips, h Client and AsyncClient take the argument (with a, the 24), n added for the new
+    // default, x removed docs of the old default, g renamed, moved, or unrelated. Case is the
+    // side of the diff; both sides are colored the same.
+    for (const s of document.querySelectorAll('.hm section')) {
       const cells = document.createElement('div')
       cells.className = 'hm-cells'
-      for (const k of f.dataset.k) {
+      for (const k of s.dataset.k) {
         const c = document.createElement('i')
-        c.className = `hm-c ${k}`
-        if (!scene.reducedMotion) {
-          c.animate([{ opacity: 0, transform: 'scale(0.4)' }, { opacity: 1, transform: 'none' }], {
-            duration: 260, delay: 150 + i++ * 4, easing: 'ease-out', fill: 'backwards',
-          })
-        }
+        c.className = `hm-c ${k.toLowerCase()}`
         cells.append(c)
       }
-      f.querySelector('p').before(cells)
+      s.querySelector('p').before(cells)
     }
   </script>
 </div>

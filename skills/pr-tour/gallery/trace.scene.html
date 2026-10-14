@@ -1,124 +1,33 @@
 <div class="scene" data-technique="trace">
-  <div class="tr-load small">One page of <code class="code">/{owner}/{repo}/commits/branch/master</code>: <b>50 commits</b> (<code class="code">CommitsRangeSize</code>), e.g. by 3 authors whose emails are Gitea accounts, unsigned</div>
-  <div class="tr-axis"><b class="label">database queries, in the order they run · one tick each</b><span>0</span><span>50</span><span>100</span><span>150</span><span>200</span><span>250</span></div>
-  <section class="tr-trace" data-trace="before">
-    <div class="tr-head"><span class="chip bad">before</span><span class="big bad">106</span><span class="small"><b>queries to find users:</b> 3 + 50 calls to <code class="code">GetUserByEmail</code>, one per author, then one per commit's committer, 2 queries each</span></div>
-    <div class="tr-rows"></div>
-  </section>
-  <section class="tr-trace" data-trace="after">
-    <div class="tr-head"><span class="chip good">after</span><span class="big good">6</span><span class="small"><b>queries to find users:</b> 2 calls to <code class="code">GetUsersByEmails</code>, one for the authors, one for the committers, 3 queries each</span></div>
-    <div class="tr-rows"></div>
-  </section>
-  <div class="tr-zoomwrap">
-    <svg class="tr-lens" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 2.34,0 100,10 0,10"></polygon></svg>
-    <div class="tr-zoom">
-      <span class="tr-z warn" style="grid-column: span 3">ValidateCommitsWithEmails</span><span class="tr-z warn" style="grid-column: span 3">ParseCommitsWithSignature</span>
-      <span class="tr-z good" style="grid-column: span 3">GetUsersByEmails(3 emails)</span><span class="tr-z good" style="grid-column: span 3">GetUsersByEmails(3 emails)</span>
-      <span class="tr-q">email_<wbr>address IN</span><span class="tr-q">user.id IN</span><span class="tr-q">user.lower_<wbr>name IN</span><span class="tr-q">email_<wbr>address IN</span><span class="tr-q">user.id IN</span><span class="tr-q">user.lower_<wbr>name IN</span>
-    </div>
-    <span class="small tr-note">Unchanged, both runs: <code class="code">GetLatestCommitStatus</code> once per commit, 2 queries, and a third <span class="tr-swatch"></span> when the commit has statuses</span>
+  <span class="label tr-unit">database queries for one page of 50 commits, e.g. 3 authors · one tick per query</span>
+  <div class="tr-run bad">
+    <span class="tr-name"><span class="chip bad">before</span><code class="code strike">GetUserByEmail</code> <span class="small">53 calls × 2 queries</span></span>
+    <div class="tr-track" style="--n: 106"><i class="tr-ticks"></i><b class="big">106</b></div>
+  </div>
+  <div class="tr-run good">
+    <span class="tr-name"><span class="chip good">after</span><code class="code">GetUsersByEmails</code> <span class="small">2 calls × 3 queries</span></span>
+    <div class="tr-track" style="--n: 6"><i class="tr-ticks"></i><b class="big">6</b></div>
   </div>
   <style>
-    .tr-load { align-self: stretch; color: var(--fg); }
-    .tr-axis { position: relative; align-self: stretch; height: 2.4rem; border-bottom: 0.1rem solid var(--line); font-size: 0.66rem; color: var(--muted); }
-    .tr-axis .label { position: absolute; top: 0; left: 0; font-size: 0.66rem; }
-    .tr-axis span { position: absolute; bottom: 0.2rem; white-space: nowrap; }
-    .tr-trace { align-self: stretch; display: flex; flex-direction: column; gap: 0.35rem; }
-    .tr-head { display: flex; align-items: center; gap: 0.3rem 0.6rem; flex-wrap: wrap; }
-    .tr-head .small { color: var(--fg); flex: 1 1 18rem; }
-    .tr-head .big { font-size: 1.9rem; }
-    .tr-rows { display: flex; flex-direction: column; gap: 0.12rem; }
-    .tr-row { position: relative; height: 1.25rem; }
-    .tr-row.q { height: 0.8rem; }
-    .tr-f { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; overflow: hidden; padding: 0 0.3rem; border-radius: 0.2rem; background: color-mix(in srgb, var(--c) 22%, var(--paper)); box-shadow: inset 0 0 0 0.07rem color-mix(in srgb, var(--c) 55%, var(--paper)); color: var(--fg); font: 600 0.68rem ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; text-overflow: ellipsis; }
-    .tr-f.tick { padding: 0; border-radius: 0.06rem; background: var(--c); box-shadow: none; }
-    .tr-f.tick.muted { background: color-mix(in srgb, var(--muted) 50%, var(--paper)); }
-    .tr-f.tick.opt { background: repeating-linear-gradient(-45deg, var(--muted) 0 0.12rem, transparent 0.12rem 0.3rem); opacity: 0.6; }
-    .tr-f.gone { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--c) 30%, var(--paper)) 0 0.35rem, color-mix(in srgb, var(--c) 12%, var(--paper)) 0.35rem 0.5rem); }
-    .tr-f.hero { box-shadow: 0 0 0 0.12rem var(--good), 0 0 0.6rem var(--good); z-index: 1; }
-    .tr-lbl { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 0.35rem; font: 600 0.68rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); white-space: nowrap; overflow: hidden; pointer-events: none; }
-    .tr-saved { position: absolute; top: 0; bottom: 0; display: grid; place-items: center; margin-left: 0.3rem; border: 0.12rem dashed var(--good); border-radius: 0.4rem; background: color-mix(in srgb, var(--good) 7%, transparent); color: var(--good); font-weight: 750; font-size: 0.85rem; text-align: center; }
-    .tr-play { position: absolute; top: -0.2rem; bottom: -0.2rem; width: 0.14rem; background: var(--fg); opacity: 0; }
-    .tr-zoomwrap { align-self: stretch; display: flex; flex-direction: column; margin-top: -0.3rem; }
-    .tr-lens { width: 100%; height: 1.6rem; display: block; }
-    .tr-lens polygon { fill: color-mix(in srgb, var(--good) 10%, transparent); stroke: color-mix(in srgb, var(--good) 60%, var(--paper)); stroke-width: 0.12rem; vector-effect: non-scaling-stroke; stroke-dasharray: 4 3; }
-    .tr-zoom { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.15rem; padding: 0.3rem; border: 0.1rem dashed color-mix(in srgb, var(--good) 60%, var(--paper)); border-top: 0; border-radius: 0 0 0.5rem 0.5rem; background: color-mix(in srgb, var(--good) 5%, var(--paper)); }
-    .tr-z, .tr-q { padding: 0.18rem 0.35rem; border-radius: 0.2rem; font: 600 0.68rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
-    .tr-z { background: color-mix(in srgb, var(--c) 22%, var(--paper)); box-shadow: inset 0 0 0 0.07rem color-mix(in srgb, var(--c) 55%, var(--paper)); }
-    .tr-q { background: var(--good); color: var(--paper); font-weight: 650; font-size: 0.62rem; }
-    .tr-note { margin-top: 0.5rem; }
-    .tr-swatch { display: inline-block; width: 1.4rem; height: 0.7rem; vertical-align: middle; border-radius: 0.1rem; background: repeating-linear-gradient(-45deg, var(--muted) 0 0.12rem, transparent 0.12rem 0.3rem); }
+    .tr-unit { align-self: stretch; }
+    .tr-run { align-self: stretch; display: grid; grid-template-columns: 22rem 1fr; align-items: center; gap: 0.5rem 1rem; margin-top: 1.4rem; }
+    .tr-name { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+    .tr-name .small { color: var(--muted); }
+    .tr-track { position: relative; height: 3rem; margin-right: 4.5rem; --f: calc(var(--n) / 106); }
+    /* One call is q queries wide; its ticks sit close together and a wider gap ends the call. */
+    /* One call's queries sit close together; a wider gap ends the call. --u is one query. */
+    .tr-ticks { position: absolute; inset: 0 auto 0 0; width: calc(var(--f) * 100%); --u: calc(100% / var(--n)); }
+    .bad .tr-ticks { background: repeating-linear-gradient(90deg, var(--c) 0 calc(var(--u) * 0.6), transparent 0 calc(var(--u) * 0.8), var(--c) 0 calc(var(--u) * 1.4), transparent 0 calc(var(--u) * 2)); }
+    .good .tr-ticks { background: repeating-linear-gradient(90deg, var(--c) 0 calc(var(--u) * 0.6), transparent 0 calc(var(--u) * 0.8), var(--c) 0 calc(var(--u) * 1.4), transparent 0 calc(var(--u) * 1.6), var(--c) 0 calc(var(--u) * 2.2), transparent 0 calc(var(--u) * 3)); }
+    .tr-track b { position: absolute; top: 50%; left: calc(var(--f) * 100% + 0.6rem); translate: 0 -50%; color: var(--c); line-height: 1; }
+    .bad .tr-ticks, .bad .tr-track b { opacity: 0.55; }
+    .good .tr-ticks { filter: drop-shadow(0 0 0.35rem var(--good)); animation: tr-glow 1.8s ease-in-out infinite alternate; }
+    .good .tr-track b { font-size: 2.6rem; text-shadow: 0 0 0.6rem color-mix(in srgb, var(--good) 45%, transparent); }
+    @keyframes tr-glow { from { filter: drop-shadow(0 0 0.1rem var(--good)); } }
+    @media (max-width: 40rem) {
+      .tr-run { grid-template-columns: 1fr; margin-top: 1.1rem; }
+      .tr-track { height: 2.4rem; margin-right: 3.9rem; }
+      .tr-track b, .good .tr-track b { font-size: 1.9rem; }
+    }
   </style>
-  <script>
-    // The workload, from the code: one page is 50 commits; e.g. 3 author emails, all Gitea users.
-    const COMMITS = 50
-    const AUTHORS = 3
-    // Each run: [L2 function, tone, [call, tone, queries per call (q = always, o = only with statuses)], count].
-    const status = ['ParseCommitsWithStatus', 'muted', ['GetLatestCommitStatus', 'muted', 'qqo'], COMMITS]
-    const RUNS = {
-      before: [
-        ['ValidateCommitsWithEmails', 'warn', ['GetUserByEmail', 'bad', 'qq'], AUTHORS],
-        ['ParseCommitsWithSignature', 'warn', ['GetUserByEmail', 'bad', 'qq'], COMMITS],
-        status,
-      ],
-      after: [
-        ['ValidateCommitsWithEmails', 'warn', ['GetUsersByEmails', 'good', 'qqq'], 1],
-        ['ParseCommitsWithSignature', 'warn', ['GetUsersByEmails', 'good', 'qqq'], 1],
-        status,
-      ],
-    }
-    const total = trace => RUNS[trace].reduce((n, [, , [, , q], count]) => n + q.length * count, 0)
-    const SCALE = total('before')
-    const pct = units => `${(units / SCALE) * 100}%`
-    const el = (cls, x, w, text) => {
-      const e = document.createElement('div')
-      e.className = cls
-      e.style.left = pct(x)
-      e.style.width = pct(w)
-      if (text) e.textContent = text
-      return e
-    }
-    document.querySelectorAll('.tr-axis span').forEach((s, i) => {
-      s.style.left = pct(i * 50)
-      if (i > 0) s.style.translate = '-50% 0'
-    })
-    for (const trace of document.querySelectorAll('.tr-trace')) {
-      const name = trace.dataset.trace
-      const rows = [0, 1, 2, 3].map(i => {
-        const r = document.createElement('div')
-        r.className = i === 3 ? 'tr-row q' : 'tr-row'
-        trace.querySelector('.tr-rows').append(r)
-        return r
-      })
-      rows[0].append(el('tr-f muted', 0, total(name), 'ConvertFromGitCommit'))
-      let x = 0
-      for (const [fn, tone, [call, callTone, queries], count] of RUNS[name]) {
-        const w = queries.length * count
-        rows[1].append(el(`tr-f ${tone}`, x, w, w > 20 ? fn : ''))
-        for (let i = 0; i < count; i++) {
-          const cx = x + i * queries.length
-          rows[2].append(el(`tr-f ${callTone}${callTone === 'bad' ? ' gone' : ''}${callTone === 'good' ? ' hero' : ''}`, cx, queries.length))
-          ;[...queries].forEach((q, j) => rows[3].append(el(`tr-f tick ${callTone}${q === 'o' ? ' opt' : ''}`, cx + j + 0.12, 0.76)))
-        }
-        if (count > 1) rows[2].append(el('tr-lbl', x, w, w > 20 ? `${call} × ${count}` : `×${count}`))
-        x += w
-      }
-      const box = trace.querySelector('.tr-rows')
-      box.style.position = 'relative'
-      if (name === 'after') {
-        const saved = SCALE - total(name)
-        box.append(el('tr-saved', total(name), saved, `${saved} fewer queries`))
-      }
-      if (!scene.reducedMotion) {
-        const play = document.createElement('div')
-        play.className = 'tr-play'
-        box.append(play)
-        const end = (total(name) / SCALE) * 100
-        play.animate(
-          [{ left: '0%', opacity: 1 }, { left: `${end}%`, opacity: 1, offset: total(name) / SCALE }, { left: `${end}%`, opacity: 0 }],
-          { duration: 6000, iterations: Infinity, easing: 'linear' }
-        )
-      }
-    }
-  </script>
 </div>

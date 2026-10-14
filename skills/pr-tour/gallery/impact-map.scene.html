@@ -1,146 +1,72 @@
 <div class="scene" data-technique="impact-map">
-  <div class="im">
-    <svg class="im-wires" aria-hidden="true"></svg>
-    <section class="im-col">
-      <span class="label">tests that call it · unchanged</span>
-      <div class="im-test" id="t1"><code>expect(new MyError('hi', 'a'))<br>  .toEqual(new MyError('hi', 'b'))</code><span class="im-v"><span class="muted">before ✓</span><span class="bad">now ✕ custom differs</span></span></div>
-      <div class="im-test" id="t2"><code>expect(() =&gt; {<br>  throw new MyError('hi', 'a')<br>}).toThrowError(new MyError('hi', 'b'))</code><span class="im-v"><span class="muted">before ✓ same message</span><span class="bad">now ✕</span></span></div>
-      <div class="im-test" id="t3"><code>expect(new Error('hi'))<br>  .toEqual(new Error('hi', { cause: 'x' }))</code><span class="im-v"><span class="muted">before ✓</span><span class="bad">now ✕ cause missing</span></span></div>
-      <div class="im-test" id="t4"><code>expect(new Error('hi', { cause: 'x' }))<br>  .toEqual(new Error('hi'))</code><span class="im-v"><span class="muted">before ✓</span><span class="good">now ✓ cause is one-way</span></span></div>
-      <code class="small">class MyError extends Error { constructor(message, public custom) }</code>
-      <div class="file" data-title="jest-expect.test.ts · 2 of Vitest's own assertions changed like this">
-        <span class="del">expect(error).toEqual(new Error('promise resolved "+0" …'))</span>
-        <span class="add">expect(error).toMatchObject({ message: 'promise resolved "+0" …' })</span>
-      </div>
-    </section>
-    <section class="im-col">
-      <span class="label">callers · one changed</span>
-      <span class="small"><b class="im-n">18</b> calls in jest-expect.ts, 17 before</span>
-      <div class="im-ms">
-        <span class="im-m" id="m-eq">toEqual</span>
-        <span class="im-m" id="m-st">toStrictEqual</span>
-        <span class="im-m" id="m-mo">toMatchObject</span>
-        <span class="im-m" id="m-ce">toContainEqual</span>
-        <span class="im-m" id="m-hp">toHaveProperty(k, v)</span>
-        <span class="im-m" id="m-cw">toHaveBeen…CalledWith <b>×4</b></span>
-        <span class="im-m" id="m-rw">…Returned/ResolvedWith <b>×6</b></span>
-        <span class="im-m" id="m-tb">toBe <i>hint only</i></span>
-        <span class="im-m" id="m-as">objectContaining, arrayContaining</span>
-        <span class="im-m" id="m-ex">this.equals in expect.extend</span>
-        <div class="im-m im-chg" id="m-th">toThrow · toThrowError
-          <span class="im-del">expected.message === thrown.message</span>
-          <span class="im-add">jestEquals(thrown, expected)</span>
-        </div>
-      </div>
-    </section>
-    <section class="im-col im-core">
-      <span class="label">the change · jest-utils.ts</span>
-      <div class="im-fn" id="f-equals"><code>equals(a, b)</code><span class="small">unchanged</span></div>
-      <div class="im-fn im-chg" id="f-eq"><code>eq()</code><span class="small">changed: the Error case moves below the cycle check; custom testers still run first</span>
-        <span class="im-del">if (a instanceof Error &amp;&amp; b instanceof Error) return a.message === b.message</span>
-      </div>
-      <div class="im-fn im-new im-hero" id="f-ie"><code>isErrorEqual(a, b)</code><span class="small">new, after node:assert's rules; compares</span>
-        <ul class="im-cmp"><li>prototype</li><li>name</li><li>message</li><li><b>cause</b> if expected has one</li><li>AggregateError.errors</li><li>own enumerable props</li></ul>
-      </div>
-    </section>
-    <section class="im-col">
-      <span class="label">downstream, when it fails</span>
-      <div class="im-fn" id="d-pe"><code>processError → printDiffOrStringify</code><span class="small">@vitest/utils · unchanged</span></div>
-      <div class="im-fn im-chg" id="d-ra"><code>replaceAsymmetricMatcher</code><span class="small">changed: drops a received cause the expected error lacks, so the diff is one-way too</span></div>
-      <div class="im-fn im-new" id="d-pf"><code>pretty-format plugins.Error</code><span class="small">new: prints name, message, cause, props</span></div>
-      <div class="file" data-title="the diff the first test now prints" id="d-diff">
-        <span class="muted">  MyError {</span>
-        <span>    "message": "hi",</span>
-        <span class="del">  "custom": "b",</span>
-        <span class="add">  "custom": "a",</span>
-        <span class="muted">  }</span>
-      </div>
-    </section>
-  </div>
+  <svg class="im-defs" aria-hidden="true"><defs>
+    <marker id="im-m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="im-hm" d="M0 0 10 5 0 10z"/></marker>
+    <marker id="im-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="im-hg" d="M0 0 10 5 0 10z"/></marker>
+  </defs></svg>
+  <svg class="im im-d" viewBox="0 0 1000 300" role="img" aria-label="Four matchers call equals, whose Error case is now isErrorEqual">
+    <text class="im-cap" x="40" y="26">callers in <tspan class="im-code">jest-expect.ts</tspan></text>
+    <rect class="im-pill" x="40" y="40" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="65" text-anchor="middle">toEqual</text>
+    <rect class="im-pill" x="40" y="100" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="125" text-anchor="middle">toStrictEqual</text>
+    <rect class="im-pill" x="40" y="160" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="185" text-anchor="middle">toHaveBeenCalledWith</text>
+    <rect class="im-pill im-chg" x="40" y="220" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="245" text-anchor="middle">toThrowError</text>
+    <text class="im-sm" x="150" y="288" text-anchor="middle">+ 14 more calls</text>
+    <path class="im-w" d="M260 60C370 60 360 104 462 104" marker-end="url(#im-m)"/>
+    <path class="im-w" d="M260 120C370 120 360 124 462 124" marker-end="url(#im-m)"/>
+    <path class="im-w" d="M260 180C370 180 360 144 462 144" marker-end="url(#im-m)"/>
+    <path class="im-w im-new" d="M260 240C370 240 360 164 460 164" marker-end="url(#im-g)"/>
+    <text class="im-sm im-good" x="276" y="264">new call</text>
+    <text class="im-cap" x="470" y="62"><tspan class="im-code">jest-utils.ts</tspan></text>
+    <rect class="im-box" x="470" y="72" width="270" height="140" rx="10"/>
+    <text class="im-fn im-b" x="488" y="102">equals(a, b)</text>
+    <rect class="im-hero" x="486" y="118" width="238" height="78" rx="8"/>
+    <text class="im-fn im-b" x="502" y="148">isErrorEqual</text><text class="im-sm im-fg" x="502" y="176">name · message · cause · props</text>
+    <text class="im-gone" x="488" y="240">a.message === b.message</text>
+    <text class="im-cap" x="800" y="62">e.g. <tspan class="im-code">toEqual</tspan></text>
+    <rect class="im-box" x="800" y="72" width="180" height="140" rx="10"/>
+    <text class="im-fn" x="816" y="104">MyError('hi', 'a')</text><text class="im-sm" x="816" y="126">vs</text><text class="im-fn" x="816" y="148">MyError('hi', 'b')</text>
+    <text class="im-sm" x="816" y="190">before ✓</text><text class="im-v" x="900" y="190">now ✕</text>
+  </svg>
+  <svg class="im im-p" viewBox="0 0 340 530" role="img" aria-label="Four matchers call equals, whose Error case is now isErrorEqual">
+    <text class="im-cap" x="14" y="20">callers in <tspan class="im-code">jest-expect.ts</tspan></text>
+    <rect class="im-pill" x="14" y="30" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="52" text-anchor="middle">toEqual</text>
+    <rect class="im-pill" x="14" y="72" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="94" text-anchor="middle">toStrictEqual</text>
+    <rect class="im-pill" x="14" y="114" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="136" text-anchor="middle">toHaveBeenCalledWith</text>
+    <rect class="im-pill im-chg" x="14" y="156" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="178" text-anchor="middle">toThrowError</text>
+    <text class="im-sm" x="14" y="214">+ 14 more calls</text>
+    <path class="im-w" d="M250 47H280Q290 47 290 57V242" marker-end="url(#im-m)"/>
+    <path class="im-w" d="M250 89H280Q290 89 290 99"/><path class="im-w" d="M250 131H280Q290 131 290 141"/>
+    <path class="im-w im-new" d="M250 173H306Q316 173 316 183V240" marker-end="url(#im-g)"/>
+    <text class="im-cap" x="14" y="242"><tspan class="im-code">jest-utils.ts</tspan></text>
+    <rect class="im-box" x="14" y="250" width="312" height="120" rx="9"/>
+    <text class="im-fn im-b" x="30" y="276">equals(a, b)</text>
+    <rect class="im-hero" x="28" y="288" width="284" height="68" rx="8"/>
+    <text class="im-fn im-b" x="42" y="314">isErrorEqual</text><text class="im-sm im-fg" x="42" y="340">name · message · cause · props</text>
+    <text class="im-gone" x="30" y="394">a.message === b.message</text>
+    <text class="im-cap" x="14" y="426">e.g. <tspan class="im-code">toEqual</tspan></text>
+    <rect class="im-box" x="14" y="434" width="312" height="84" rx="9"/>
+    <text class="im-fn" x="30" y="458">MyError('hi', 'a')</text><text class="im-fn" x="30" y="480"><tspan class="im-sm">vs </tspan>MyError('hi', 'b')</text>
+    <text class="im-sm" x="30" y="506">before ✓</text><text class="im-v" x="112" y="506">now ✕</text>
+  </svg>
   <style>
-    .im { position: relative; width: 100%; display: grid; grid-template-columns: 1.45fr 0.95fr 1fr 1.05fr; gap: 1rem 2rem; align-items: start; }
-    .im-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-    .im-wires path { fill: none; stroke-width: 1.4; stroke: color-mix(in srgb, var(--muted) 55%, transparent); }
-    .im-wires path.r { animation: im-ripple 4s ease-out infinite; animation-delay: calc(var(--hop) * 0.35s); }
-    .im-wires path.good { stroke: var(--good); stroke-width: 2.4; animation: none; }
-    .im-wires path.hero { stroke-width: 3.6; stroke-dasharray: 7 5; animation: im-flow 0.9s linear infinite; }
-    @keyframes im-flow { to { stroke-dashoffset: -12; } }
-    @keyframes im-ripple { 0%, 100% { stroke: color-mix(in srgb, var(--muted) 55%, transparent); } 12% { stroke: var(--warn); stroke-width: 2.6; } 40% { stroke: color-mix(in srgb, var(--muted) 55%, transparent); } }
-    .im-col { position: relative; display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
-    .im code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.74rem; overflow-wrap: anywhere; white-space: pre-wrap; }
-    .im code.small { font-size: 0.68rem; color: var(--muted); }
-    .im-test { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.45rem 0.6rem; border: 0.1rem solid var(--line); border-radius: 0.5rem; background: var(--paper); }
-    .im-v { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: 0.74rem; font-weight: 650; }
-    .im-ms { display: flex; flex-direction: column; align-items: flex-start; gap: 0.32rem; }
-    .im-m { display: inline-flex; gap: 0.3rem; align-items: baseline; padding: 0.18rem 0.55rem; border: 0.1rem solid color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 999px; background: var(--paper); color: var(--muted); font: 600 0.74rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .im-m b { color: var(--fg); } .im-m i { font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 500; }
-    div.im-m { flex-direction: column; align-items: stretch; gap: 0.2rem; border-radius: 0.5rem; }
-    .im-chg { border-color: var(--warn) !important; background: color-mix(in srgb, var(--warn) 9%, var(--paper)); color: var(--fg); }
-    .im-new { border-color: var(--good) !important; background: color-mix(in srgb, var(--good) 10%, var(--paper)); }
-    .im-hero { border-width: 0.2rem !important; box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--good) 16%, transparent), 0 0 1.4rem color-mix(in srgb, var(--good) 35%, transparent); }
-    .im-del, .im-add { font: 0.68rem ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0.1rem 0.35rem; border-radius: 0.25rem; overflow-wrap: anywhere; }
-    .im-del { color: var(--bad); background: color-mix(in srgb, var(--bad) 9%, var(--paper)); border: 0.07rem dashed var(--bad); text-decoration: line-through; opacity: 0.75; }
-    .im-add { color: var(--good); background: color-mix(in srgb, var(--good) 10%, var(--paper)); }
-    .im-fn { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.65rem; border: 0.12rem solid color-mix(in srgb, var(--muted) 50%, transparent); border-radius: 0.55rem; background: var(--paper); }
-    .im-fn > code { font-size: 0.86rem; font-weight: 700; }
-    .im-core { gap: 1.6rem; }
-    .im-cmp { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem; }
-    .im-cmp li { padding: 0.08rem 0.45rem; border-radius: 999px; background: color-mix(in srgb, var(--good) 16%, var(--paper)); font-size: 0.74rem; }
-    .im-n { font-size: 1.15rem; color: var(--fg); }
-    .im .file { max-width: none; }
-    @media (max-width: 760px) {
-      .im { grid-template-columns: 1fr; gap: 1.6rem; }
-      .im-ms { flex-direction: row; flex-wrap: wrap; }
-      .im code, .im-m, .im-v, .im-cmp li, .im-del, .im-add { font-size: 0.8rem; }
-    }
+    .im-defs { position: absolute; width: 0; height: 0; }
+    .im { width: 100%; height: auto; overflow: visible; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .im-p { display: none; max-width: 26rem; margin: 0 auto; }
+    @media (max-width: 40rem) { .im-d { display: none; } .im-p { display: block; } }
+    .im-cap { fill: var(--muted); font-size: 13px; font-weight: 600; }
+    .im-code { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .im-pill, .im-box { fill: var(--paper); stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.5; }
+    .im-pill.im-chg { fill: color-mix(in srgb, var(--warn) 9%, var(--paper)); stroke: var(--warn); stroke-width: 2; }
+    .im-fn { fill: var(--fg); font: 600 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .im-b { font-weight: 800; font-size: 15px; }
+    .im-sm { fill: var(--muted); font-size: 13px; }
+    .im-fg { fill: var(--fg); }
+    .im-good { fill: var(--good); font-weight: 700; }
+    .im-v { fill: var(--bad); font-size: 13px; font-weight: 800; }
+    .im-w { fill: none; stroke: color-mix(in srgb, var(--muted) 70%, transparent); stroke-width: 1.8; }
+    .im-w.im-new { stroke: var(--good); stroke-width: 2.6; }
+    .im-hm { fill: var(--muted); } .im-hg { fill: var(--good); }
+    .im-hero { fill: color-mix(in srgb, var(--good) 10%, var(--paper)); stroke: var(--good); stroke-width: 2.6; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--good) 55%, transparent)); }
+    .im-gone { fill: var(--bad); opacity: 0.75; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: line-through; }
+    .im-p .im-fn { font-size: 12.5px; }
   </style>
-  <script>
-    // Who calls what: [from, to, tone]. Gray wires are unchanged calls; 'good' is the call this PR adds.
-    const MATCHERS = ['m-eq', 'm-st', 'm-mo', 'm-ce', 'm-hp', 'm-cw', 'm-rw', 'm-tb', 'm-as', 'm-ex']
-    const WIRES = [
-      ['t1', 'm-eq'], ['t3', 'm-eq'], ['t4', 'm-eq'], ['t2', 'm-th'],
-      ...MATCHERS.map(m => [m, 'f-equals']),
-      ['m-th', 'f-equals', 'good'],
-      ['f-equals', 'f-eq'], ['f-eq', 'f-ie', 'good hero'],
-      ['f-ie', 'd-pe'], ['d-pe', 'd-ra'], ['d-ra', 'd-pf'], ['d-pf', 'd-diff'],
-    ]
-    // Hops from the change, for the ripple that runs back out to every caller.
-    const hop = id => (id === 'f-equals' ? 0 : id.startsWith('m-') ? 1 : id.startsWith('t') ? 2 : -1)
-    const box = document.querySelector('.im')
-    const svg = box.querySelector('.im-wires')
-    const $ = id => document.getElementById(id)
-    // A wire leaves A's right side for a box to its right, or A's bottom for a box below it.
-    function wire(A, B, R, tone, h, fx = 0.5) {
-      const side = B.left >= A.right - 2
-      const [x1, y1, x2, y2] = side
-        ? [A.right, A.top + A.height / 2, B.left, B.top + Math.min(B.height / 2, 18)]
-        : [A.left + A.width * fx, A.bottom, B.left + B.width * fx, B.top]
-      const [a, b, c, d] = [x1 - R.left, y1 - R.top, x2 - R.left, y2 - R.top]
-      const k = side ? Math.max(24, (c - a) / 2) : Math.max(14, (d - b) / 2)
-      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      p.setAttribute('d', side ? `M${a} ${b} C${a + k} ${b} ${c - k} ${d} ${c} ${d}` : `M${a} ${b} C${a} ${b + k} ${c} ${d - k} ${c} ${d}`)
-      p.setAttribute('class', tone + (h >= 0 && !tone ? ' r' : ''))
-      p.style.setProperty('--hop', h)
-      svg.append(p)
-    }
-    function draw() {
-      const R = box.getBoundingClientRect()
-      const stacked = getComputedStyle(box).gridTemplateColumns.split(' ').length === 1
-      svg.replaceChildren()
-      for (const [from, to, tone = ''] of WIRES) {
-        if (stacked && (from.startsWith('t') || MATCHERS.includes(from))) continue
-        const A = $(from).getBoundingClientRect()
-        // On a phone the columns stack, and wires keep to the right of the column labels.
-        wire(stacked && from === 'm-th' ? { left: A.right - 20, width: 0, right: A.right, bottom: A.bottom } : A,
-          $(to).getBoundingClientRect(), R, tone, hop(to), stacked ? 0.75 : 0.5)
-      }
-      if (stacked) {
-        // The matchers share one wire into equals().
-        const M = box.querySelector('.im-ms').getBoundingClientRect()
-        wire({ left: M.left, width: M.width, right: M.right, bottom: M.bottom }, $('f-equals').getBoundingClientRect(), R, '', 0, 0.9)
-      }
-    }
-    draw()
-    new ResizeObserver(draw).observe(box)
-  </script>
 </div>

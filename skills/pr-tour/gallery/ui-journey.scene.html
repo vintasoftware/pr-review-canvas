@@ -1,149 +1,46 @@
 <div class="scene" data-technique="ui-journey">
-  <section class="uj-band" id="before">
-    <p class="uj-hd"><span class="chip muted">before</span><span class="small">a read-only link: <b class="uj-n">1</b> ☰ <b class="uj-n">2</b> Save to... <b class="uj-n">3</b> Export to Link</span></p>
-    <div class="uj-c1">
-      <div class="uj-f uj-bar"><i class="uj-tools"></i><span class="uj-ico" id="b-btn"><i data-icon="users"></i></span></div>
-      <div class="uj-f" data-t="☰ main menu"><b class="uj-n">1</b><span>Open</span><span id="b-save"><b class="uj-n">2</b>Save to...</span><span>Export image...</span><span id="b-menu" class="uj-on">Live collaboration...</span><span>Help</span></div>
-      <div class="uj-f" data-t="welcome screen"><small>All your data is saved locally in your browser.</small><span>Open</span><span>Help</span><span id="b-wel" class="uj-on">Live collaboration...</span></div>
-    </div>
-    <div class="uj-c2">
-      <div class="uj-d" id="b-room">
-        <div class="uj-lock"><i data-icon="lock" class="lg"></i><span class="small bad">lock illustration</span></div>
-        <h4>Live collaboration...</h4>
-        <p><b>You can invite people to your current scene to collaborate with you.</b></p>
-        <span class="skel"></span><span class="skel" style="--w: 70%"></span>
-        <span class="btn solid sm muted uj-go" id="b-start"><i data-icon="play"></i>Start session</span>
-      </div>
-      <div class="uj-d uj-save" id="b-sd"><h4>Save to...</h4><div class="uj-cards"><span>Save to disk</span><span>Shareable link<em class="btn sm" id="b-link"><b class="uj-n">3</b>Export to Link</em></span><span>Excalidraw+</span></div></div>
-    </div>
-    <div class="uj-c3">
-      <div class="uj-d uj-out" id="b-sess"><h4>Live collaboration...</h4><span class="uj-fl">Your name</span><span class="uj-fl">Link<em>Copy link</em></span><span class="btn sm muted">Stop session</span></div>
-      <div class="uj-d uj-out" id="b-sl"><h4>Shareable link</h4><span class="uj-fl">Link<em>Copy link</em></span></div>
-    </div>
-  </section>
+  <div class="uj">
+    <span class="chip muted uj-tag">before</span>
+    <div class="uj-s" data-t="canvas"><span class="uj-on"><b class="uj-n">1</b>☰</span><i class="uj-tools"></i><span class="uj-ico"><i data-icon="users"></i></span></div>
+    <span class="arrow uj-a"></span>
+    <div class="uj-s uj-col" data-t="☰ main menu"><span>Open</span><span class="uj-on"><b class="uj-n">2</b>Save to...</span><span>Export image...</span></div>
+    <span class="arrow uj-a"></span>
+    <div class="uj-s uj-col" data-t="Save to..."><span>Save to disk</span><span class="uj-on"><b class="uj-n">3</b>Export to Link</span></div>
+    <span class="arrow uj-a"></span>
+    <span class="uj-out"><i data-icon="link"></i>read-only link</span>
 
-  <section class="uj-band" id="after">
-    <p class="uj-hd"><span class="chip good">after</span><span class="small">a read-only link: <b class="uj-n">1</b> Share <b class="uj-n">2</b> Export to Link. Under 830 px wide, Share is an icon: <span class="uj-ico warn"><i data-icon="share-2"></i></span></span></p>
-    <div class="uj-c1">
-      <div class="uj-f uj-bar"><i class="uj-tools"></i><span class="btn solid sm warn uj-hero" id="a-btn"><b class="uj-n">1</b>Share</span></div>
-      <div class="uj-f muted" data-t="☰ main menu"><span>Open</span><span id="a-save">Save to...</span><span>Export image...</span><span id="a-menu" class="uj-on">Live collaboration...</span><span>Help</span></div>
-      <div class="uj-f muted" data-t="welcome screen"><small>All your data is saved locally in your browser.</small><span>Open</span><span>Help</span><span id="a-wel" class="uj-on">Live collaboration...</span></div>
-    </div>
-    <div class="uj-c2">
-      <div class="uj-d uj-share" id="a-room">
-        <h4 class="warn">Live collaboration</h4>
-        <p class="warn">Invite people to collaborate on your drawing.</p>
-        <span class="skel"></span><span class="skel" style="--w: 70%"></span>
-        <span class="btn solid sm muted uj-go" id="a-start"><i data-icon="play"></i>Start session</span>
-        <div class="uj-or good"><span>Or</span><em>collaborationOnly ends here</em></div>
-        <h4 class="good">Shareable link</h4>
-        <p class="good">Export as a read-only link.</p>
-        <span class="btn solid sm good uj-go" id="a-link"><b class="uj-n">2</b>Export to Link</span>
-      </div>
-      <div class="uj-d uj-save muted" id="a-sd"><h4>Save to...</h4><div class="uj-cards"><span>Save to disk</span><span>Shareable link<em class="btn sm" id="a-link2">Export to Link</em></span><span>Excalidraw+</span></div></div>
-    </div>
-    <div class="uj-c3">
-      <div class="uj-d uj-out" id="a-sess"><h4>Live collaboration</h4><span class="uj-fl">Your name</span><span class="uj-fl">Link<em>Copy link</em></span><span class="btn sm muted">Stop session</span></div>
-      <div class="uj-d uj-out" id="a-sl"><h4>Shareable link</h4><span class="uj-fl">Link<em>Copy link</em></span></div>
-    </div>
-  </section>
-
+    <span class="chip good uj-tag">after</span>
+    <div class="uj-s" data-t="canvas"><span>☰</span><i class="uj-tools"></i><span class="btn solid sm warn uj-hero"><b class="uj-n">1</b>Share</span></div>
+    <span class="arrow uj-a"></span>
+    <div class="uj-s uj-col uj-new" data-t="Share dialog"><span class="uj-mute">Live collaboration</span><span class="uj-on good"><b class="uj-n">2</b>Export to Link</span></div>
+    <span class="arrow uj-a uj-long"></span>
+    <span class="uj-out"><i data-icon="link"></i>read-only link</span>
+  </div>
   <style>
-    .scene em { font-style: normal; }
-    .uj-band { position: relative; width: 100%; display: grid; grid-template-columns: 16.5rem 1fr 19rem 1fr 14rem; align-items: start; row-gap: 0.4rem; }
-    .uj-band + .uj-band { margin-top: 0.6rem; padding-top: 0.8rem; border-top: 0.1rem dashed var(--line); }
-    .uj-hd { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; }
-    .uj-c1, .uj-c2, .uj-c3 { display: flex; flex-direction: column; gap: 0.7rem; position: relative; z-index: 1; }
-    .uj-c2 { grid-column: 3; }
-    .uj-c3 { grid-column: 5; padding-top: 1.4rem; gap: 2rem; }
-    .uj-n { display: inline-grid; place-items: center; width: 1.05rem; height: 1.05rem; margin-right: 0.25rem; border-radius: 50%; background: var(--fg); color: var(--paper); font-size: 0.62rem; }
-    .uj-f, .uj-d { position: relative; display: flex; flex-direction: column; border: 0.08rem solid var(--line); border-radius: 0.5rem; background: var(--paper); box-shadow: 0 0.15rem 0.6rem color-mix(in srgb, var(--fg) 10%, transparent); font-size: 0.74rem; }
-    .uj-f { padding: 0.35rem 0.4rem; gap: 0.05rem; }
-    .uj-f[data-t]::before { content: attr(data-t); font-size: 0.84em; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.15rem; }
-    .uj-f > .uj-n { position: absolute; top: 0.25rem; right: 0.35rem; }
-    .uj-f > span { padding: 0.06rem 0.35rem; border-radius: 0.3rem; }
-    .uj-f small { padding: 0 0.35rem 0.2rem; font-size: 0.89em; color: var(--muted); }
-    .uj-on { background: color-mix(in srgb, var(--fg) 8%, var(--paper)); font-weight: 650; }
-    .uj-bar { flex-direction: row; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
-    .uj-tools { flex: 1; height: 1.5rem; border-radius: 0.4rem; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--fg) 12%, var(--paper)) 0 1.1rem, transparent 1.1rem 1.45rem); }
-    .uj-ico { display: inline-grid; place-items: center; vertical-align: middle; width: 1.8rem; height: 1.8rem; border-radius: 0.45rem; background: var(--muted); }
+    .uj { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) 3rem minmax(0, 1fr) 3rem minmax(0, 1fr) 3rem auto; align-items: center; gap: 2.4rem 0.6rem; padding-top: 1.3rem; }
+    .uj-tag { justify-self: start; }
+    .uj-a { --len: 100%; }
+    .uj-long { grid-column: 5 / 8; }
+    .uj-s { position: relative; display: flex; align-items: center; gap: 0.45rem; padding: 0.5rem 0.6rem; border: 0.08rem solid var(--line); border-radius: 0.5rem; background: var(--paper); box-shadow: 0 0.15rem 0.6rem color-mix(in srgb, var(--fg) 10%, transparent); font-size: 0.85rem; }
+    .uj-s::before { content: attr(data-t); position: absolute; left: 0.2rem; bottom: calc(100% + 0.3rem); font-size: 0.75rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+    .uj-col { flex-direction: column; align-items: stretch; gap: 0.15rem; }
+    .uj-s > span { padding: 0.15rem 0.4rem; border-radius: 0.3rem; color: var(--muted); white-space: nowrap; }
+    .uj-s > .uj-on { background: color-mix(in srgb, var(--c, var(--fg)) 10%, var(--paper)); color: var(--c, var(--fg)); font-weight: 650; }
+    .uj-s > .uj-mute { color: var(--muted); }
+    .uj-new { border: 0.14rem solid var(--good); }
+    .uj-tools { flex: 1; min-width: 2rem; height: 1.3rem; border-radius: 0.35rem; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--fg) 12%, var(--paper)) 0 1rem, transparent 1rem 1.3rem); }
+    .uj-ico { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0 !important; background: var(--muted); }
     .uj-ico .icon { color: var(--paper); }
-    .uj-ico.warn { width: 1.4rem; height: 1.4rem; background: var(--warn); }
-    .uj-hero { box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--warn) 30%, transparent), 0 0 0.9rem var(--warn); animation: uj-glow 1.8s ease-in-out infinite; }
-    .uj-hero .uj-n, .uj-go .uj-n { background: var(--paper); color: var(--c); }
-    @keyframes uj-glow { 50% { box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--warn) 20%, transparent), 0 0 1.3rem var(--warn); } }
-    .uj-d { padding: 0.5rem 0.65rem; gap: 0.3rem; }
-    .uj-d h4 { margin: 0; font-size: 1.1em; color: var(--c, var(--fg)); }
-    .uj-d p { margin: 0; color: var(--c, var(--fg)); }
-    .uj-go { align-self: center; margin-top: 0.15rem; }
-    .uj-lock { display: flex; align-items: center; gap: 0.5rem; align-self: center; padding: 0.15rem 0.6rem; border: 0.1rem dashed var(--bad); border-radius: 0.4rem; color: var(--bad); opacity: 0.7; text-decoration: line-through; }
-    .uj-share { border: 0.14rem solid var(--warn); }
-    .uj-or { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; font-weight: 650; color: var(--c); }
-    .uj-or::before, .uj-or::after { content: ''; flex: 1; border-top: 0.1rem solid color-mix(in srgb, var(--good) 50%, var(--paper)); }
-    .uj-or em { order: 3; font-size: 0.84em; font-weight: 500; color: var(--muted); }
-    .uj-cards { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 0.3rem; }
-    .uj-cards > span { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.3rem 0.2rem; border: 0.07rem solid var(--line); border-radius: 0.35rem; font-size: 0.89em; font-weight: 650; text-align: center; }
-    .uj-save h4, .uj-out h4 { font-size: 1em; }
-    .uj-fl { display: flex; justify-content: space-between; align-items: center; padding: 0.15rem 0.35rem; border: 0.07rem solid var(--line); border-radius: 0.3rem; font-size: 0.89em; color: var(--muted); }
-    .uj-fl em { padding: 0 0.3rem; border-radius: 0.25rem; background: color-mix(in srgb, var(--fg) 14%, var(--paper)); color: var(--fg); font-weight: 650; }
-    .uj-out .btn { align-self: flex-start; }
-    .uj-w { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-    .uj-w path { fill: none; stroke: var(--c); stroke-width: 1.5; }
-    .uj-w path.hero { stroke-width: 3.2; filter: drop-shadow(0 0 3px var(--c)); }
-    .uj-w path.new { stroke-width: 2.2; }
-    .uj-lb { position: absolute; z-index: 2; translate: -50% -50%; padding: 0 0.2rem; background: var(--paper); font: 600 0.62rem ui-monospace, monospace; color: var(--c); white-space: nowrap; }
+    .uj-n { display: inline-grid; place-items: center; width: 1.1rem; height: 1.1rem; margin-right: 0.3rem; border-radius: 50%; background: var(--fg); color: var(--paper); font-size: 0.75rem; }
+    .uj-s > .btn.uj-hero { color: var(--paper); box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--warn) 30%, transparent), 0 0 1rem var(--warn); }
+    .uj-hero .uj-n { background: var(--paper); color: var(--warn); }
+    .uj-out { display: flex; align-items: center; gap: 0.35rem; font-weight: 650; white-space: nowrap; }
     @media (max-width: 40rem) {
-      .uj-band { grid-template-columns: 1fr; row-gap: 0.7rem; }
-      .uj-c2, .uj-c3 { grid-column: 1; padding: 0; gap: 0.7rem; }
-      .uj-c1, .uj-c3 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-      .uj-bar { grid-column: 1 / -1; }
-      .uj-w, .uj-lb { display: none; }
-      .uj-f, .uj-d { font-size: 0.92rem; }
+      .uj { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; justify-items: center; padding-top: 0; }
+      .uj-tag { margin-top: 0.6rem; }
+      .uj-s { width: 100%; margin-top: 1.3rem; }
+      .uj-a, .uj-long { grid-column: auto; --len: 0.16rem; width: 0.16rem; height: 1.3rem; }
+      .uj-a::after { inset: auto auto -0.1rem 50%; border: 0.32rem solid transparent; border-top: 0.5rem solid var(--c, var(--muted)); border-bottom: 0; transform: translateX(-50%); }
     }
   </style>
-  <script>
-    // [band, from, to, tone, kind, label]. A wire leaves the right side of the dialog (or menu
-    // item) at the height of what is clicked.
-    const WIRES = [
-      ['before', 'b-btn', 'b-room'], ['before', 'b-menu', 'b-room'], ['before', 'b-wel', 'b-room'],
-      ['before', 'b-save', 'b-sd'], ['before', 'b-start', 'b-sess'], ['before', 'b-link', 'b-sl'],
-      ['after', 'a-btn', 'a-room', 'warn', 'hero', 'type: "share"'],
-      ['after', 'a-menu', 'a-room', 'muted', '', 'type: "collaborationOnly"'], ['after', 'a-wel', 'a-room'],
-      ['after', 'a-save', 'a-sd'], ['after', 'a-start', 'a-sess'],
-      ['after', 'a-link', 'a-sl', 'good', 'new'], ['after', 'a-link2', 'a-sl'],
-    ]
-    const NS = 'http://www.w3.org/2000/svg'
-    function draw() {
-      document.querySelectorAll('.uj-w, .uj-lb').forEach(e => e.remove())
-      if (document.body.clientWidth < 600) return
-      const ends = {}
-      for (const [band, from, to, tone = 'muted', kind = '', label] of WIRES) {
-        const box = document.getElementById(band), f = box.getBoundingClientRect()
-        const src = document.getElementById(from), s = src.getBoundingClientRect()
-        const t = document.getElementById(to).getBoundingClientRect()
-        let svg = box.querySelector('.uj-w')
-        if (!svg) (svg = document.createElementNS(NS, 'svg')), svg.setAttribute('class', 'uj-w'), box.prepend(svg)
-        const x1 = (src.closest('.uj-d') || src).getBoundingClientRect().right - f.left, y1 = (s.top + s.bottom) / 2 - f.top
-        // Wires into one box spread down its left side, in the order they arrive.
-        const n = (ends[to] = (ends[to] || 0) + 1)
-        const x2 = t.left - f.left, y2 = Math.min(t.top - f.top + 14 + (n - 1) * 12, t.bottom - f.top - 8), m = (x1 + x2) / 2
-        for (const d of [`M${x1},${y1} C${m},${y1} ${m},${y2} ${x2 - 7},${y2}`, `M${x2 - 8},${y2 - 4} L${x2},${y2} L${x2 - 8},${y2 + 4}`]) {
-          const p = document.createElementNS(NS, 'path')
-          p.setAttribute('d', d)
-          p.setAttribute('class', kind)
-          p.style.setProperty('--c', `var(--${tone})`)
-          svg.append(p)
-        }
-        if (label) {
-          const l = document.createElement('span')
-          l.className = 'uj-lb'
-          l.textContent = label
-          Object.assign(l.style, { left: `${m}px`, top: `${(y1 + y2) / 2 - 9}px` })
-          l.style.setProperty('--c', `var(--${tone})`)
-          box.append(l)
-        }
-      }
-    }
-    new ResizeObserver(draw).observe(document.body)
-  </script>
 </div>
