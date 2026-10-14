@@ -285,7 +285,8 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('# Review canvas for a change set')
     expect(prompt).toContain('- Ref comparison')
     expect(prompt).not.toContain('state: pre-pr')
-    expect(prompt).toContain('_No description._')
+    expect(prompt).toContain('_No pull request yet, and no commit messages._')
+    expect(renderPrompt(context(), PATCHES, sources)).not.toContain('No pull request yet')
     expect(prompt).toContain(
       '_No layers are configured; divide the change into semantic sections based on its behavior and concerns._'
     )

@@ -6,6 +6,11 @@ import { envWithoutRepo } from './environment.mjs'
  * The git operations the tool needs. Routes, stores, and the CLI receive an implementation
  * through AppContext and never spawn git themselves. Tests use an in-memory fake.
  */
+export interface CommitMessage {
+  subject: string
+  body: string
+}
+
 export interface Git {
   /** `git rev-parse <ref>`; throws GitError when the ref is unknown. */
   revParse(ref: string): Promise<string>
@@ -29,6 +34,8 @@ export interface Git {
   blobSize(ref: string, path: string): Promise<number | null>
   /** Author name of one commit (`git log -1 --format=%an`). */
   commitAuthor(ref: string): Promise<string>
+  /** The messages of the commits in `a..b`, oldest first, merges left out. */
+  commitMessages(a: string, b: string): Promise<CommitMessage[]>
   topLevel(): Promise<string>
   commonDir(): Promise<string>
   remoteUrl(name: string): Promise<string | null>
@@ -179,6 +186,17 @@ export function createGit(cwd: string, exec: GitExec = execGit): Git {
       return r.code === 0 ? Number(r.stdout.toString('utf8').trim()) : null
     },
     commitAuthor: ref => run(['log', '-1', '--format=%an', ref]),
+    commitMessages: async (a, b) => {
+      // Record and unit separators split the log, since a message may hold any printable text.
+      const out = await run(['log', '--reverse', '--no-merges', '--format=%x1e%s%x1f%b', `${a}..${b}`])
+      return out
+        .split('\x1e')
+        .slice(1)
+        .map(entry => {
+          const [subject = '', body = ''] = entry.split('\x1f')
+          return { subject: subject.trim(), body: body.trim() }
+        })
+    },
     topLevel: () => run(['rev-parse', '--show-toplevel']),
     commonDir: () => run(['rev-parse', '--path-format=absolute', '--git-common-dir']),
     remoteUrl: async name => {

@@ -10,7 +10,7 @@ import type { CheckoutGit } from '../chat/checkouts.js'
 import type { RuntimeConfig } from '../config.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
-import { type Git, GitError } from '../git/git.js'
+import { type CommitMessage, type Git, GitError } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
 import { DEFAULT_PROJECT_CONFIG, type LoadedProjectConfig } from '../project-config.js'
@@ -34,6 +34,8 @@ export interface FakeGitOptions {
   remotes?: Record<string, string>
   /** `<sha>` → author name; unknown commits answer 'someone'. */
   authors?: Record<string, string>
+  /** `<a>..<b>` → the commit messages in that range, oldest first; unlisted ranges have none. */
+  messages?: Record<string, CommitMessage[]>
   /** `<a>..<b>` → true when a is an ancestor of b; unlisted pairs are not ancestors. */
   ancestors?: Record<string, boolean>
   /** `<a>..<b>` → how many commits b is ahead of a; unlisted pairs count 0. */
@@ -126,6 +128,10 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
       calls.push(['cat-file', '-s', `${ref}:${p}`])
       const content = options.blobs?.[`${ref}:${p}`]
       return content === undefined ? null : Buffer.byteLength(content, 'utf8')
+    },
+    commitMessages: async (a, b) => {
+      calls.push(['log', '--reverse', `${a}..${b}`])
+      return options.messages?.[`${a}..${b}`] ?? []
     },
     commitAuthor: async ref => {
       calls.push(['log', '-1', '--format=%an', ref])

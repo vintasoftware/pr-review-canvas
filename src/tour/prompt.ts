@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { TourContext } from '../contract/tour.js'
 import { DECISION_CATEGORIES, TOUR_LIMITS, tourModelSchema } from '../contract/tour.js'
 import { labelPatch } from '../git/patch-lines.js'
-import { embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
+import { bodyMarkdown, embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
 
 const INLINE_DIFF_MAX_LINES = 1500
 
@@ -34,11 +34,6 @@ function metaMarkdown(ctx: TourContext): string {
     `- Head: \`${ctx.headSha}\` · merge base: \`${ctx.mergeBaseSha}\``,
     `- Size: ${pr.changedFiles} files, +${pr.additions} −${pr.deletions}`,
   ].join('\n')
-}
-
-function bodyMarkdown(ctx: TourContext): string {
-  const body = ctx.pr.body.trim()
-  return body === '' ? '_No description._' : `> ${body.replace(/\n/g, '\n> ')}`
 }
 
 function diffsMarkdown(ctx: TourContext, patches: Record<string, string>): string {
@@ -121,7 +116,7 @@ export function renderTourPrompt(
   const tokens: Record<string, string> = {
     TARGET_WORD: ctx.target.kind === 'pr' ? 'pull request' : 'change set',
     META: metaMarkdown(ctx),
-    BODY: bodyMarkdown(ctx),
+    BODY: bodyMarkdown(ctx.pr),
     HEAD_SHA: ctx.headSha,
     MERGE_BASE_SHA: ctx.mergeBaseSha,
     PATHS: pathsMarkdown(ctx),

@@ -5,7 +5,6 @@ import { appendFile, mkdir, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import type { PrepareTargetInput } from '../contract/generation-context.js'
 import type { LocalKey } from '../contract/review-key.js'
-import type { Pr } from '../contract/review-artifact.js'
 import { resolveTourSharing } from '../contract/settings.js'
 import {
   blastRadiusOf,
@@ -19,7 +18,7 @@ import { loadPromptFile } from '../prompt-files.js'
 import { PACKAGE_ROOT } from '../paths.js'
 import type { GenerationModels } from '../project-config.js'
 import { matchesGlob } from '../review/glob.js'
-import { resolveTargetPr } from '../review/prepare.js'
+import { completeTargetPr, resolveTargetPr } from '../review/prepare.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import { renderTourPrompt } from './prompt.js'
@@ -119,8 +118,7 @@ export async function prepareTour(
   }
 
   opts.log('prompt')
-  const fullPr: Pr =
-    target.kind === 'pr' ? pr : { ...pr, additions, deletions, changedFiles: derived.files.length }
+  const fullPr = await completeTargetPr(ctx, target, pr, derived)
   const derivedDir = ctx.derived.derivedDir(pr.headSha)
   const tryIt = config.tour.tryIt === 'auto' ? guideHasRunRecipe(guideText) : config.tour.tryIt === 'on'
   const context: TourContext = {

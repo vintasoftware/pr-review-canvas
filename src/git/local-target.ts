@@ -3,7 +3,7 @@
 // working tree as it stands.
 import type { Pr, Repo } from '../contract/review-artifact.js'
 import type { LocalKey } from '../contract/review-key.js'
-import { type Git, GitError } from './git.js'
+import { type CommitMessage, type Git, GitError } from './git.js'
 
 /** Tried in order when the user names no base: the remote's default branch first. */
 export const BASE_CANDIDATES = ['origin/HEAD', 'origin/main', 'origin/master', 'main', 'master'] as const
@@ -135,4 +135,37 @@ export async function resolveLocalHead(git: Git, source: LocalKey): Promise<Loca
   return snapshot === null
     ? { headSha: head, branch, uncommitted: false }
     : { headSha: snapshot, branch, uncommitted: true }
+}
+
+/** How much of a change set's commit log stands in for its description. */
+export const COMMIT_LOG_MAX_CHARS = 8000
+
+/**
+ * The description of a change set that has no pull request: its commit messages, oldest first.
+ * They are the author's own account of why, the nearest thing to a description it has. The
+ * snapshot commit of an `uncommitted` review is the tool's, not the author's, so it is left out.
+ * A log too long for the prompt keeps its oldest commits and says how to read the rest.
+ */
+export async function commitLogDescription(git: Git, pr: Pr): Promise<string> {
+  const head = pr.state === UNCOMMITTED_STATE ? `${pr.headSha}^` : pr.headSha
+  const messages = await git.commitMessages(pr.mergeBaseSha, head)
+  const parts: string[] = []
+  let used = 0
+  for (const [i, m] of messages.entries()) {
+    const part = formatCommitMessage(m)
+    if (used + part.length > COMMIT_LOG_MAX_CHARS && parts.length > 0) {
+      const rest = messages.length - i
+      parts.push(
+        `… and ${rest} more ${rest === 1 ? 'commit' : 'commits'}: \`git log --reverse ${pr.mergeBaseSha}..${head}\``
+      )
+      break
+    }
+    parts.push(part)
+    used += part.length
+  }
+  return parts.join('\n\n')
+}
+
+function formatCommitMessage(m: CommitMessage): string {
+  return m.body === '' ? `**${m.subject}**` : `**${m.subject}**\n\n${m.body}`
 }

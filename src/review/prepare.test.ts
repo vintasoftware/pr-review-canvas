@@ -148,7 +148,11 @@ describe('prepare', () => {
   })
 
   it('describes a change set from two refs with fallbacks for the PR fields', async () => {
-    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const git = gitFor42()
+    git.options.messages = {
+      [`${BASE_SHA}..${HEAD_SHA}`]: [{ subject: 'Add widgets', body: 'The old ones broke.' }],
+    }
+    t = await makeTestContext({ git, gh: ghFor42() })
     const o = opts()
     const result = await prepare(t.ctx, { kind: 'refs', base: 'main', head: 'feat/b' }, o)
     expect(result.status).toBe('prepared')
@@ -158,7 +162,8 @@ describe('prepare', () => {
     expect(context.pr).toEqual({
       number: null,
       title: 'feat/b',
-      body: '',
+      // No pull request, so the commit messages stand in for its description.
+      body: '**Add widgets**\n\nThe old ones broke.',
       author: 'octocat',
       url: 'https://github.com/acme/widgets/compare/main...feat/b',
       state: 'pre-pr',
@@ -180,7 +185,9 @@ describe('prepare', () => {
     expect(prompt).not.toContain('Author:')
     expect(prompt).not.toContain('state: pre-pr')
     expect(result.sharing).toBe('off')
-    expect(prompt).toContain('_No description._')
+    expect(prompt).toContain(
+      '_No pull request yet. The commit messages stand in for a description, oldest first:_\n\n> **Add widgets**\n> \n> The old ones broke.'
+    )
     expect(await t.ctx.prs.readPr(42)).toBeNull()
   })
 

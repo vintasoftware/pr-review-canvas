@@ -7,10 +7,10 @@ having read the diff. The tour is landmarks that explain, decisions the reader k
 and a quiz. Everything in it comes from the real diff, the description, the tests, and the guide.
 Invent nothing.
 
-A tour is for understanding and for the few decisions that matter, not for coverage. Write it the
-way a good textbook explains a mechanism: background a newcomer can follow, the core intuition on a
-concrete example with toy data, then the parts. An edge case belongs in the tour only when a reader
-who missed it would misunderstand the change or decide badly; the rest is left to the code and its
+A tour is for understanding and for the few decisions that matter, not for coverage. You must understand the whole context to decide what to prioritize, but the reader should get a focused tour. Write it the  
+way a good textbook explains a mechanism: background a newcomer can follow, the core intuition on a  
+concrete example with toy data, then the parts. An edge case belongs in the tour only when a reader  
+who missed it would misunderstand the change or decide badly; the rest is left to the code and its  
 tests.
 
 ## Paths

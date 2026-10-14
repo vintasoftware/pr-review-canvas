@@ -13,7 +13,12 @@ import {
 } from '../contract/generation-context.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
 import type { LocalKey } from '../contract/review-key.js'
-import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/local-target.js'
+import {
+  commitLogDescription,
+  describeLocalWork,
+  resolveLocalBase,
+  UNCOMMITTED_STATE,
+} from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 
 import { toPr } from '../host/pr.js'
@@ -217,6 +222,29 @@ export async function resolveTargetPr(
   return { target, pr }
 }
 
+/**
+ * The PR meta a prompt records. A pull request's counts and description are the forge's. A change
+ * set counts its own from the diff (the page derives its own from the files it shows, so this is
+ * only what the canvas or tour records) and takes its commit messages as its description.
+ */
+export async function completeTargetPr(
+  ctx: AppContext,
+  target: PrepareTarget,
+  pr: Pr,
+  derived: Derived
+): Promise<Pr> {
+  if (target.kind === 'pr') {
+    return pr
+  }
+  return {
+    ...pr,
+    body: await commitLogDescription(ctx.git, pr),
+    additions: derived.files.reduce((n, f) => n + f.additions, 0),
+    deletions: derived.files.reduce((n, f) => n + f.deletions, 0),
+    changedFiles: derived.files.length,
+  }
+}
+
 export async function prepare(
   ctx: AppContext,
   input: PrepareTargetInput,
@@ -255,10 +283,7 @@ export async function prepare(
   const derived = await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)
   const additions = derived.files.reduce((n, f) => n + f.additions, 0)
   const deletions = derived.files.reduce((n, f) => n + f.deletions, 0)
-  // A pull request's counts are the forge's; anything else is counted from the diff itself. The
-  // page derives its own from the files it shows, so this is only what the canvas records.
-  const fullPr: Pr =
-    target.kind === 'pr' ? pr : { ...pr, additions, deletions, changedFiles: derived.files.length }
+  const fullPr = await completeTargetPr(ctx, target, pr, derived)
   const derivedDir = ctx.derived.derivedDir(pr.headSha)
   const config = ctx.projectConfig.config
 
