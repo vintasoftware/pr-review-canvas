@@ -168,7 +168,7 @@ describe('returnBannerHtml', () => {
 })
 
 describe('landmarkHtml', () => {
-  it('draws the prose, the scene host, the guards, the chips, the note, and the code closed', () => {
+  it('draws the prose, the scene host, the chips, the note, and the code closed', () => {
     const bundle = bundleWith({ notes: { sum: 'hm <b>' } })
     const steps = stepsOf(bundle)
     const sum = tourOf(bundle).landmarks[2]
@@ -187,10 +187,9 @@ describe('landmarkHtml', () => {
     expect(document.querySelector('[data-act="code"]')?.textContent).toContain('code behind this landmark')
     // The tabs are drawn with the code, hidden with it.
     expect(document.querySelector('.tour-code-tabs')).not.toBeNull()
-    expect(document.querySelector('.tour-guards')).toBeNull()
   })
 
-  it('opens the code in the literate view, or the raw one, and lists the guards', () => {
+  it('opens the code in the literate view, or the raw one', () => {
     const bundle = bundleWith({ codeOpen: { world: true } })
     const steps = stepsOf(bundle)
     const tour = tourOf(bundle)
@@ -206,7 +205,6 @@ describe('landmarkHtml', () => {
     expect(document.querySelector('.tour-literate .tour-diff .add')?.textContent).toBe(
       "+import { b } from './b'"
     )
-    expect(document.querySelector('.tour-guards')?.textContent).toContain('src/app.test.ts')
     expect(document.querySelector('.tour-chips')).toBeNull()
     bundle.reader.codeView['world'] = 'raw'
     document.body.innerHTML = landmarkHtml(bundle, steps, world)

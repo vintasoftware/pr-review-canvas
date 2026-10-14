@@ -151,7 +151,7 @@ async function runTourValidate(ctx: AppContext, argv: string[], io: CliIo): Prom
   const report =
     'error' in model
       ? { ok: false, errors: [{ code: 'SCHEMA' as const, where: '(root)', message: model.error.message }] }
-      : validateTourModel(model.raw, await tourValidationInput(ctx, context, model.raw))
+      : validateTourModel(model.raw, tourValidationInput(context))
   if (values.human !== true) {
     printJson(io, { ok: report.ok, errors: report.errors })
     return report.ok ? EXIT.ok : EXIT.invalid

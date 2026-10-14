@@ -18,7 +18,6 @@ export function syntheticTourModel(): TourModel {
         scene: SCENE('one function, one value', 'file'),
         code: [],
         literate: [],
-        guards: [],
       },
       {
         id: 'world',
@@ -34,7 +33,6 @@ export function syntheticTourModel(): TourModel {
           },
         ],
         literate: ['The import first, then the sum:', { chunk: 0 }],
-        guards: [{ testPath: 'src/app.test.ts', behavior: 'run() returns 3' }],
       },
       {
         id: 'sum',
@@ -45,7 +43,6 @@ export function syntheticTourModel(): TourModel {
         scene: SCENE('sum', 'data-flow'),
         code: [{ path: 'src/app.ts', diff: '@@ -1,4 +1,5 @@\n-  return a()\n+  return a() + b()' }],
         literate: [{ chunk: 0 }],
-        guards: [],
       },
       {
         id: 'respect',
@@ -56,7 +53,6 @@ export function syntheticTourModel(): TourModel {
         scene: SCENE('add, never replace', 'checks'),
         code: [],
         literate: [],
-        guards: [{ testPath: 'src/app.test.ts', behavior: 'run() is not 1 anymore' }],
       },
     ],
     decisions: [

@@ -227,15 +227,6 @@ export function landmarkHtml(bundle, steps, landmark) {
     landmark.scene || landmark.micro
       ? `<figure class="tour-figure">${landmark.scene ? frame('scene') : ''}${landmark.micro ? frame('micro') : ''}</figure>`
       : ''
-  const guards =
-    landmark.guards.length === 0
-      ? ''
-      : `<div class="tour-guards"><span class="tour-guards-h">guarded by</span>${landmark.guards
-          .map(
-            g =>
-              `<span class="tour-guard" title="${esc(g.behavior)}"><span class="mono">${esc(g.testPath)}</span> ${esc(g.behavior)}</span>`
-          )
-          .join('')}</div>`
   const chips =
     decisionsHere.length === 0
       ? ''
@@ -267,7 +258,6 @@ export function landmarkHtml(bundle, steps, landmark) {
     <p class="tour-lead">${inline(landmark.lead)}</p>
     ${figure}
     <div class="tour-body">${landmark.body.map(p => `<p>${inline(p)}</p>`).join('')}</div>
-    ${guards}
     ${chips}
     <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>
     ${code}`

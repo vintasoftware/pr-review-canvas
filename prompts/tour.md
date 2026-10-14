@@ -90,10 +90,10 @@ each with the path, so the reader knows what they did not see.
 
 ## Landmarks
 
-Landmarks open with a background, then follow the stages listed below. Every landmark has an `id` (a slug),
-a `stage`, a `title`, a `lead` (one sentence), a scene, a `body`, the code behind it, and its
-guards. The page shows them in that order: the title and the lead, then the scene, wide, then the
-body. The reader looks at the scene before reading the body, so the scene carries the idea and the
+Landmarks open with a background, then follow the stages listed below. Every landmark has an `id`
+(a slug), a `stage`, a `title`, a `lead` (one sentence), a scene, a `body`, and the code behind it.
+The page shows them in that order: the title and the lead, then the scene, wide, then the body. The
+reader looks at the scene before reading the body, so the scene carries the idea and the
 body says only what the picture cannot: why it is shaped this way, what it costs, what came before.
 Never say the same thing twice: not the title in the lead, not the lead in the scene, not the scene
 in the body, and not one landmark's point in the next. Each claim has one home: the landmark that
@@ -163,13 +163,11 @@ is shaped that way, each followed by `{ "chunk": n }` for the chunk it introduce
 `{ "path", "diff" }` the raw view does not carry. The reader can switch between the literate diff
 and the raw chunks, so they must never disagree about the code.
 
-**Guards.** `guards` names the tests that pin the behavior the landmark explains: a `testPath`
-that exists at the head (changed or not; the project's test patterns are {{TEST_PATTERNS}}) and
-one line on what it pins: the regression it would catch, named by its test case, never a restatement
-of the landmark ("`rejects an expired session`: fails if a save goes through after the session
-ends"). Four guards at most: the ones that pin this landmark's point. A behavior with no guard
-becomes a decision: write the test now, or accept the gap with a reason (category `trade-off`).
-Tests are reviewed through the tour, not read.
+**Tests.** Read the tests that pin the behavior each landmark explains (the project's test patterns
+are {{TEST_PATTERNS}}). An important behavior no test pins is a decision: write the test now, or
+accept the gap with a reason (category `trade-off`). A gap that does not earn a decision under the
+budget is named in the respect landmark's body instead. Tests are reviewed through the tour, not
+read.
 
 ## Decisions
 
@@ -216,7 +214,7 @@ one right, and a one-sentence `why`; spread the right answers across the three p
 
 Every text is measured on what a reader sees: backticks and link targets do not count. Inline
 `code` renders in leads, bodies, literate paragraphs, a decision's context, consequences, and
-reason, and the quiz; every other text (titles, side labels, guard lines, not-toured lines) is
+reason, and the quiz; every other text (titles, side labels, not-toured lines) is
 plain, so write no backticks or other markup there. No other markdown renders anywhere: no
 `*emphasis*`.
 

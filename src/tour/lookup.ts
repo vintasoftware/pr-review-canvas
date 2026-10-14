@@ -35,7 +35,7 @@ export async function previewArtifact(ctx: AppContext, pr: Pr): Promise<TourArti
           errors: [{ code: 'SCHEMA' as const, where: '(root)', message: model.error.message }],
           output: null,
         }
-      : validateTourModel(model.raw, await tourValidationInput(ctx, context, model.raw))
+      : validateTourModel(model.raw, tourValidationInput(context))
   if (!result.ok || result.output === null) {
     throw new AppError(
       'MODEL_INVALID',

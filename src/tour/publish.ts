@@ -17,7 +17,7 @@ import { currentHead, parseModelText, PublishError } from '../review/publish.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { shareTourOnPr } from './share.js'
-import { guardPaths, type TourValidationInput, validateTourModel } from './validate.js'
+import { type TourValidationInput, validateTourModel } from './validate.js'
 
 export interface TourPublishOptions {
   agent: string
@@ -98,19 +98,9 @@ async function attachScenes(raw: unknown, scenesDir: string): Promise<void> {
   }
 }
 
-export async function tourValidationInput(
-  ctx: AppContext,
-  context: TourContext,
-  raw: unknown
-): Promise<TourValidationInput> {
-  const inDiff = new Set(context.files.map(f => f.path))
-  const headPaths = new Set<string>()
-  for (const p of guardPaths(raw)) {
-    if (!inDiff.has(p) && (await ctx.git.blobSize(context.headSha, p)) !== null) headPaths.add(p)
-  }
+export function tourValidationInput(context: TourContext): TourValidationInput {
   return {
     files: context.files,
-    headPaths,
     caps: context.caps,
     budget: context.budget,
     categories: context.categories,
@@ -187,7 +177,7 @@ export async function publishTour(
           errors: [{ code: 'SCHEMA' as const, where: '(root)', message: model.error.message }],
           output: null,
         }
-      : validateTourModel(model.raw, await tourValidationInput(ctx, context, model.raw))
+      : validateTourModel(model.raw, tourValidationInput(context))
   const now = ctx.now().toISOString()
   const attempts = await recordAttempt(tourDir, now, result)
   if (!result.ok || result.output === null)

@@ -231,25 +231,6 @@ pr-tour {
   color: var(--bad);
 }
 
-/* What guards the behavior a landmark explains. */
-.tour-guards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  align-items: baseline;
-  margin: 14px 0 0;
-  font-size: 12.5px;
-  color: var(--fg-muted);
-}
-.tour-guards-h {
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 11px;
-}
-.tour-guard .mono {
-  color: var(--fg);
-}
-
 /* Code behind a landmark. */
 .tour-code {
   margin: 12px 0;

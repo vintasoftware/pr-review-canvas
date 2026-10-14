@@ -17,8 +17,6 @@ import { sceneProblems, sceneTechnique } from './validate-scene.js'
 
 export interface TourValidationInput {
   files: readonly FileEntry[]
-  /** Test paths that exist at the head outside the diff, looked up by the caller. */
-  headPaths: ReadonlySet<string>
   caps: TourCaps
   budget: TourBudget
   categories: TourContext['categories']
@@ -27,22 +25,6 @@ export interface TourValidationInput {
 }
 
 export type TourValidationResult = TourValidationReport & { output: TourModel | null }
-
-/** The test paths a model names as guards, for the caller to look up at the head. */
-export function guardPaths(raw: unknown): string[] {
-  const out = new Set<string>()
-  const landmarks = (raw as { landmarks?: unknown })?.landmarks
-  if (!Array.isArray(landmarks)) return []
-  for (const l of landmarks) {
-    const guards = (l as { guards?: unknown })?.guards
-    if (!Array.isArray(guards)) continue
-    for (const g of guards) {
-      const p = (g as { testPath?: unknown })?.testPath
-      if (typeof p === 'string' && p !== '') out.add(p)
-    }
-  }
-  return [...out]
-}
 
 function formatIssuePath(segments: PropertyKey[]): string {
   return segments.length === 0 ? '(root)' : segments.map(String).join('.')
@@ -68,7 +50,7 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     if (n > cap)
       errors.push({ code: 'TEXT_TOO_LONG', where, message: `${where}: ${n} visible chars, cap ${cap}` })
   }
-  // Titles, side labels, guard lines, and not-toured lines are drawn as written: backticks there
+  // Titles, side labels, and not-toured lines are drawn as written: backticks there
   // show as backticks.
   const plain = (where: string, text: string) => {
     if (text.includes('`'))
@@ -87,7 +69,7 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     ids.add(key)
   }
 
-  // Landmarks: order, texts, code, literate, guards, scenes.
+  // Landmarks: order, texts, code, literate, scenes.
   const stages = model.landmarks.map(l => l.stage)
   const last = stages.length - 1
   if (stages[0] !== 'background' || stages[1] !== 'world' || stages[last] !== 'respect') {
@@ -169,17 +151,6 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
           code: 'PATH_UNKNOWN',
           where: `${where}.literate.${j}`,
           message: `${where}.literate.${j}: ${b.path} is not in the diff`,
-        })
-      }
-    })
-    l.guards.forEach((g, j) => {
-      tooLong(`${where}.guards.${j}.behavior`, g.behavior, caps.guardBehavior)
-      plain(`${where}.guards.${j}.behavior`, g.behavior)
-      if (!byPath.has(g.testPath) && !input.headPaths.has(g.testPath)) {
-        errors.push({
-          code: 'GUARD_PATH_UNKNOWN',
-          where: `${where}.guards.${j}`,
-          message: `${where}.guards.${j}: ${g.testPath} is neither in the diff nor at the head`,
         })
       }
     })

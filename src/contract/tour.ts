@@ -45,7 +45,6 @@ export const TOUR_CAPS = {
   question: 200,
   option: 140,
   why: 200,
-  guardBehavior: 120,
   tryItLine: 200,
   notToured: 90,
 } as const
@@ -64,7 +63,6 @@ export const TOUR_LIMITS = {
   /** Paragraphs a new landmark's body may have: the picture carries the rest. */
   bodyParagraphsWritten: 2,
   quizOptions: 3,
-  guards: 6,
   tryItSteps: 8,
   tryItLook: 6,
   notToured: 12,
@@ -148,15 +146,6 @@ export function literateBlockSchema(caps: TourCaps) {
   ])
 }
 
-export function guardSchema(caps: TourCaps) {
-  return z.object({
-    /** A test file at the head, changed or not. */
-    testPath: z.string().min(1),
-    /** What it pins, in one line. */
-    behavior: text(caps, 'guardBehavior'),
-  })
-}
-
 export function landmarkSchema(caps: TourCaps) {
   return z.object({
     id: slug(),
@@ -175,7 +164,6 @@ export function landmarkSchema(caps: TourCaps) {
     micro: z.string().max(TOUR_LIMITS.sceneChars).optional(),
     code: z.array(codeChunkSchema()).max(TOUR_LIMITS.codePerLandmark).default([]),
     literate: z.array(literateBlockSchema(caps)).max(TOUR_LIMITS.literateBlocks).default([]),
-    guards: z.array(guardSchema(caps)).max(TOUR_LIMITS.guards).default([]),
   })
 }
 
@@ -369,7 +357,6 @@ export const TOUR_VALIDATION_CODES = [
   'PATH_UNKNOWN',
   'ANCHOR_OUTSIDE_DIFF',
   'CHUNK_UNKNOWN',
-  'GUARD_PATH_UNKNOWN',
   'PICTURE_MISSING',
   'SCENE_INVALID',
   'MICRO_INVALID',

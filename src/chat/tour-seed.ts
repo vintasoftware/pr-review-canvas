@@ -10,15 +10,10 @@ export async function loadTourSeedTemplate(dir = PROMPTS_DIR, project?: ProjectP
   return loadPromptFile('tour-grill.md', dir, project)
 }
 
-/** The landmarks as the tour tells them: the stage, the title, the lead, and the guards. */
+/** The landmarks as the tour tells them: the stage, the title, and the lead. */
 export function landmarksMarkdown(tour: TourArtifact): string {
   return tour.landmarks
-    .map(l => {
-      const guards = l.guards.map(g => `\`${g.testPath}\` (${g.behavior})`).join(', ')
-      return `- **${l.title}** (${l.stage}${l.state ? ', state landmark' : ''}): ${l.lead}${
-        guards === '' ? '' : ` Guarded by ${guards}.`
-      }`
-    })
+    .map(l => `- **${l.title}** (${l.stage}${l.state ? ', state landmark' : ''}): ${l.lead}`)
     .join('\n')
 }
 

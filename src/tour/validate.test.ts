@@ -3,14 +3,13 @@ import { toFileEntry } from '../git/diff-collector.js'
 import { TOUR_CAPS, type TourModel } from '../contract/tour.js'
 import { SYNTHETIC_FILES } from '../testing/synthetic.js'
 import { syntheticTourModel } from '../testing/synthetic-tour.js'
-import { guardPaths, type TourValidationInput, validateTourModel } from './validate.js'
+import { type TourValidationInput, validateTourModel } from './validate.js'
 
 const files = SYNTHETIC_FILES.map(toFileEntry)
 
 function input(over: Partial<TourValidationInput> = {}): TourValidationInput {
   return {
     files,
-    headPaths: new Set(),
     caps: { ...TOUR_CAPS },
     budget: { landmarks: 4, decisions: 2, quiz: 2 },
     categories: ['trade-off', 'architecture', 'product', 'pokayoke', 'nfr', 'spec'],
@@ -107,7 +106,7 @@ describe('validateTourModel', () => {
     expect(three.map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'landmarks.2.body']])
   })
 
-  it('checks every reference into the diff: code paths, chunks, anchors, guards, landmarks', () => {
+  it('checks every reference into the diff: code paths, chunks, anchors, landmarks', () => {
     const model = syntheticTourModel()
     expect(
       codes(withLandmark(model, 1, { code: [{ path: 'src/nope.ts', diff: '@@ -1 +1 @@\n+x' }] }))
@@ -119,14 +118,6 @@ describe('validateTourModel', () => {
     expect(
       codes(withLandmark(model, 1, { literate: [{ path: 'src/nope.ts', diff: '@@ -1 +1 @@\n+x' }] }))
     ).toEqual(['PATH_UNKNOWN'])
-    expect(
-      codes(withLandmark(model, 1, { guards: [{ testPath: 'src/other.test.ts', behavior: 'x' }] }))
-    ).toEqual(['GUARD_PATH_UNKNOWN'])
-    expect(
-      codes(withLandmark(model, 1, { guards: [{ testPath: 'src/other.test.ts', behavior: 'x' }] }), {
-        headPaths: new Set(['src/other.test.ts']),
-      })
-    ).toEqual([])
     const decision = model.decisions[0]!
     expect(
       codes({ ...model, decisions: [{ ...decision, anchor: { path: 'src/app.ts', line: 40 } }] })
@@ -215,13 +206,5 @@ describe('validateTourModel', () => {
         { options: { microWorld: true, tryIt: false, finalQuiz: 'on' } }
       )
     ).toEqual(['TRY_IT_UNVERIFIED'])
-  })
-
-  it('lists the guard paths of a raw model, for the head lookup', () => {
-    expect(guardPaths(syntheticTourModel())).toEqual(['src/app.test.ts'])
-    expect(
-      guardPaths({ landmarks: [{ guards: 'no' }, { guards: [{ testPath: '' }, { testPath: 'a' }] }] })
-    ).toEqual(['a'])
-    expect(guardPaths(null)).toEqual([])
   })
 })

@@ -105,8 +105,8 @@ tell the user `pr-review serve` shows the tour only with that same `--data-dir`.
 
 The prompt is the spec. In short: the first landmark is the background (the world before the
 change, and why the change matters), then the world, then the whys with the decisions anchored on
-them, then what to respect; every landmark has a scene, its code chunks with a literate diff, and
-its guards; every decision has both sides' costs, a recommended side, a reason with its place, and
+them, then what to respect; every landmark has a scene and its code chunks with a literate diff;
+every decision has both sides' costs, a recommended side, a reason with its place, and
 an anchor in the diff; the quiz checks reading, never gotchas. A state landmark is required when
 the change touches stored data. Stay within the budget prepare printed.
 
@@ -165,7 +165,6 @@ you recommend changing, if any.
   hunk; every quiz question names a landmark of this tour.
 - Code chunks and literate snippets name files of the diff and start with their `@@` header; a
   literate `chunk` index exists.
-- Guards name test files that exist at the head.
 - Every landmark has a picture: the background a scene, any other landmark a scene or a
   micro-world standing in for it.
 - Scenes pass the frame's checks (the scene guide lists them); a scene takes no input, a

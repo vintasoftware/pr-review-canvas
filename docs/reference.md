@@ -850,7 +850,7 @@ as `<landmark id>.scene.html`, plus at most two `<landmark id>.micro.html`, the 
 micro-world may stand in for its landmark's scene. Each scene names its technique with
 `data-technique` on its root. `tour validate` checks the model against the context: the schema,
 the landmark order (background, world, whys, respect), the budget, the caps measured on visible
-text, every path and anchor against the diff, every guard against the head, every scene against
+text, every path and anchor against the diff, that every landmark has a picture, every scene against
 the frame's rules, that no technique draws more than two scenes, and the categories the project
 keeps. `tour preview` validates, then screenshots, through a quiet copy of the server, every
 landmark on a desktop and a phone, every scene and micro-world alone at its desktop and phone

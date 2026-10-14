@@ -76,7 +76,7 @@ function capsMarkdown(ctx: TourContext): string {
     `- landmark title: ${c.landmarkTitle}; lead: ${c.lead}; each body paragraph and literate paragraph: ${c.paragraph}; a body: ${TOUR_LIMITS.bodyParagraphsWritten} paragraphs`,
     `- decision title: ${c.decisionTitle}; context: ${c.context}; each side's label: ${c.sideLabel}; consequence: ${c.consequence}; reason: ${c.reason}`,
     `- quiz question: ${c.question}; option: ${c.option}; why: ${c.why}`,
-    `- guard behavior: ${c.guardBehavior}; try-it step or look line: ${c.tryItLine}; not-toured title: ${c.notToured}`,
+    `- try-it step or look line: ${c.tryItLine}; not-toured title: ${c.notToured}`,
     '- a scene or micro-world: 12,000 characters of HTML; a code chunk: 6,000 characters of diff',
   ].join('\n')
 }
