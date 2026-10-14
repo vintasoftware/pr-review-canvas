@@ -439,13 +439,26 @@ describe('the tour CLI', () => {
     const result = await prepared()
     const head = capture()
     expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head'], head.io)).toBe(0)
-    const headOut = JSON.parse(head.out[0]!) as { side: string; dir: string; sha: string }
-    expect(headOut).toEqual({ side: 'head', dir: path.join(t.ctx.checkouts.root, '42'), sha: HEAD_SHA })
+    const headOut = JSON.parse(head.out[0]!) as {
+      side: string
+      dir: string
+      sha: string
+      port: number
+      scratch: string
+    }
+    expect(headOut).toMatchObject({ side: 'head', dir: path.join(t.ctx.checkouts.root, '42'), sha: HEAD_SHA })
+    // A free port and an empty folder in the tour dir, so a server started there keeps off the reader's.
+    expect(headOut.port).toBeGreaterThan(0)
+    expect(headOut.scratch).toBe(path.join(result.tourDir, 'scratch', 'head'))
+    await writeFile(path.join(headOut.scratch, 'state.json'), '{}')
+    const again = capture()
+    await runTour(t.ctx, ['checkout', result.tourDir, 'head'], again.io)
+    expect(await readdir(headOut.scratch)).toEqual([])
     expect(await readFile(path.join(headOut.dir, 'HEAD'), 'utf8')).toBe(HEAD_SHA)
     const base = capture()
     expect(await runTour(t.ctx, ['checkout', result.tourDir, 'base'], base.io)).toBe(0)
     const baseOut = JSON.parse(base.out[0]!) as { side: string; dir: string; sha: string }
-    expect(baseOut).toEqual({
+    expect(baseOut).toMatchObject({
       side: 'base',
       dir: path.join(t.ctx.checkouts.root, 'base', '42'),
       sha: BASE_SHA,

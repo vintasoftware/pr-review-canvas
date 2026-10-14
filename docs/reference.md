@@ -872,8 +872,11 @@ deletions among them, under an `@@` header that counts them.
 
 `tour checkout` gives the generator a place to run things: a [review checkout](#review-checkouts)
 at the tour's head, the same one AI Chat reads, or one at its merge base, kept apart under
-`checkouts/base/<key>`. It prints `{ "side", "dir", "sha" }`. Try-it recipes run in the head
-checkout, and a script the change touches runs in either, so nothing runs in your own checkout. A
+`checkouts/base/<key>`. It prints `{ "side", "dir", "sha", "port", "scratch" }`: a port nothing
+listens on, and an empty folder in the tour directory, emptied on each call, for the run's state.
+Try-it recipes run in the head checkout on that port with their state in that folder, and a script
+the change touches runs in either checkout, so nothing runs in your own checkout or writes your
+review state. A
 ref comparison has no review, so it has no checkout; while a chat turn holds the head checkout,
 the command answers `CHECKOUT_BUSY`.
 

@@ -138,7 +138,7 @@ export function renderTourPrompt(
       ? `Up to ${TOUR_LIMITS.microWorlds} landmarks may carry a micro-world, when the change has behavior worth playing with: a faithful model of the changed behavior the reader drives. Write it as \`<scenes>/<landmark id>.micro.html\`. A micro-world may stand in for its landmark's scene, except on the background: then write no \`.scene.html\` for that landmark.`
       : 'Micro-worlds are off for this project (`tour.microWorld`): write no `.micro.html` file.',
     TRY_IT: ctx.options.tryIt
-      ? 'A product decision carries a `tryIt` recipe: the commands to run the change (from the guide), which synthetic data to use, and what to look at. Before publishing, run the recipe yourself in the head checkout and set `verified: true` only when you saw what `look` describes; a recipe you could not run is left out.'
+      ? 'A product decision carries a `tryIt` recipe: the commands to run the change (from the guide, as the reader runs them), which synthetic data to use, and what to look at. Before publishing, run the recipe yourself in the head checkout, with its `port` and `scratch`, and set `verified: true` only when you saw what `look` describes; a recipe you could not run is left out.'
       : 'Try-it recipes are off (`tour.tryIt`, or the guide has no run recipe): write no `tryIt`.',
     MAX_REPAIR_ROUNDS: String(ctx.maxRepairRounds),
     SCHEMA: tourSchemaMarkdown(ctx),

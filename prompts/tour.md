@@ -22,10 +22,11 @@ tests.
 - Read-only, except for `<model>`, the files under `<scenes>`, and the checkouts below. Do not check
   anything out in the repository itself.
 - To run anything (a try-it recipe, or a script the change adds or edits, to draw its real output),
-  take a checkout: `pr-review tour checkout <tourDir> head` (or `base`) prints `{ "dir" }`, a git
-  worktree at that commit. Run there and nowhere else. It holds tracked files only: install
-  dependencies in it first, the way the guide says. A server you start there listens on a free port,
-  never one the reader's own servers use, and stops when you are done.
+  take a checkout: `pr-review tour checkout <tourDir> head` (or `base`) prints
+  `{ "dir", "port", "scratch" }`: a git worktree at that commit, a free port, and an empty folder.
+  Run there and nowhere else. It holds tracked files only: install dependencies in it first, the
+  way the guide says. A server you start there listens on `port` and keeps all its state (a data
+  directory, a database file, a HOME) in `scratch`, never in the reader's; stop it when you are done.
 - The {{TARGET_WORD}} head is **not** checked out. Read a changed file as it is at the head from
   `<head>/<path>` and at the merge base from `<base>/<path>`. Read untouched files with
   `git show {{HEAD_SHA}}:<path>` from the repository root. Use `git show {{MERGE_BASE_SHA}}:<path>`
@@ -34,8 +35,10 @@ tests.
   tool over a shell heredoc: the tour directory may sit where shell write guards block heredocs. A
   script that assembles the JSON, from `tour hunk` output for example, is fine too; never retype a
   chunk by hand.
-- The guide below is an allowlist of what you may run. Inside a checkout you may also run the scripts
-  the diff adds or changes. Any other action is asked first. Output you draw from a script comes from
+- The guide below is an allowlist of what you may run. Inside a checkout you may also run the code
+  the diff adds or changes, at either side: its scripts, and the project's own commands it changes.
+  To show what a new script reports before the change, copy it into the base checkout and run it
+  there. Any other action is asked first. Output you draw from a script comes from
   running it, never from working it out by hand.
 - No secrets, credentials, or protected health information, even as sample data.
 - **Say exactly what the code does, no more.** When you state a behavior, state its edge: what it

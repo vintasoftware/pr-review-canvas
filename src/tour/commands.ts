@@ -1,5 +1,7 @@
 // `pr-review tour <prepare|validate|preview|publish|plan|gallery|hunk|checkout>`: the tour's own steps, mirroring
 // the canvas commands. Everything is injected: the AppContext carries git, the host, and the stores.
+import { mkdir, rm } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { HARNESSES } from '../contract/review-artifact.js'
@@ -238,7 +240,10 @@ async function runTourGallery(argv: string[], io: CliIo): Promise<number> {
  * `tour checkout <tourDir> <head|base>`: a git worktree at the tour's head or merge base, where the
  * generator runs a try-it recipe or a script the change touches, never in the reader's checkout.
  * The head is the review's own checkout, the one AI Chat reads; the base has one of its own. A
- * ref comparison has no review, so it has no checkout. Prints `{ side, dir, sha }`.
+ * ref comparison has no review, so it has no checkout. Prints `{ side, dir, sha, port, scratch }`:
+ * a port nothing listens on, and an empty folder in the tour dir for the run's state, so a server
+ * started there touches neither the reader's ports nor their data dir, which every worktree of
+ * the clone shares.
  */
 async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
   const { positionals } = parseArgs({ args: argv, options: {}, allowPositionals: true, strict: true })
@@ -276,7 +281,10 @@ async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Prom
   } finally {
     await lease.release()
   }
-  printJson(io, { side, dir: lease.dir, sha })
+  const scratch = path.join(context.tourDir, 'scratch', side)
+  await rm(scratch, { recursive: true, force: true })
+  await mkdir(scratch, { recursive: true })
+  printJson(io, { side, dir: lease.dir, sha, port: await freePort(), scratch })
   return EXIT.ok
 }
 
@@ -347,3 +355,15 @@ async function runTourPublish(ctx: AppContext, argv: string[], io: CliIo): Promi
 }
 
 export { PublishError }
+
+/** A port nothing listens on now, picked by the system. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as { port: number }
+      server.close(() => resolve(port))
+    })
+  })
+}

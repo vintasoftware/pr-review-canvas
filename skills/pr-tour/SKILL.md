@@ -113,10 +113,12 @@ the change touches stored data. Stay within the budget prepare printed.
 ### 4. Try-it recipes
 
 A product decision may carry a `tryIt` recipe, from the guide's run instructions. Run the recipe
-yourself in the head checkout (`pr-review tour checkout <tourDir> head` prints its `dir`), never in
-the reader's checkout, with the synthetic data the guide names and nothing else. Install
-dependencies there first, serve on a free port, stop what you started, and set `verified: true` only
-when you saw what `look` describes. A ref comparison has no checkout, so its recipes are left out. A recipe you could not run is left out of the model, with a
+yourself in the head checkout (`pr-review tour checkout <tourDir> head` prints its `dir`, a free
+`port`, and an empty `scratch` folder), never in the reader's checkout, with the synthetic data the
+guide names and nothing else. Install dependencies there first, serve on `port`, keep the run's
+state (a data directory, a database file) in `scratch`, stop what you started, and set
+`verified: true` only when you saw what `look` describes. Write the steps as the reader runs them,
+with the guide's own command. A ref comparison has no checkout, so its recipes are left out. A recipe you could not run is left out of the model, with a
 line to the user on why. The review server executes nothing: the reader runs the recipe in their
 own terminal.
 

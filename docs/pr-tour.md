@@ -12,6 +12,11 @@ pnpm start --fixture-canvas __fixtures__/pr-278/review.json   # http://localhost
 
 The CLI runs from source through `tsx`; there is no build step.
 
+In a tour checkout (`pr-review tour checkout`), add the `port` and `scratch` it printed:
+`pnpm start --fixture-canvas __fixtures__/pr-278/review.json --port <port> --data-dir <scratch>`.
+Without `--data-dir`, every worktree of this clone shares the main checkout's `.pr-review/`, so a
+run there would write your real review state.
+
 `pnpm start` serves the review app for this clone. The fixture canvas makes every pull request
 report a ready canvas, so a look at the review page needs no generation run. Opening
 `/review/<n>` still fetches that pull request's live head, so it needs a GitHub login (`gh auth
@@ -51,7 +56,7 @@ pnpm install
 pnpm check
 pnpm test
 pnpm test:browser
-pnpm start --fixture-canvas __fixtures__/pr-278/review.json
+pnpm start --fixture-canvas __fixtures__/pr-278/review.json [--port <port> --data-dir <scratch>]
 git show <sha>:<path>
 gh pr view <n>
 ```
