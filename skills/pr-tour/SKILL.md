@@ -136,7 +136,8 @@ question; it prints their paths. A phone page is taller than the phone shot, so 
 phone composition from its `-phone` picture, not from the page. Look at every one and fix
 what reads badly: text that collides, a scene that says nothing at rest, a picture too small to
 read, a picture that is the same as the last. `--landmark <id>` retakes one landmark. Without a
-browser it prints a `previewUrl` to open in a browser tool instead. Then publish. On failure the
+browser it prints a `previewUrl` to open in a browser tool instead. Then publish: it reads the
+model and the scene files again, so what you fixed after the preview is what gets published. On failure the
 command prints one line per problem, then an error line, and exits 5; fix the named problems and
 publish again, giving up after the prompt's `maxRepairRounds`.
 

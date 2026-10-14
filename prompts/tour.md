@@ -31,7 +31,9 @@ tests.
   `git show {{HEAD_SHA}}:<path>` from the repository root. Use `git show {{MERGE_BASE_SHA}}:<path>`
   for base context.
 - `<model>` must match the JSON schema at the end of this file. Prefer the host's file-writing
-  tool over a shell heredoc: the tour directory may sit where shell write guards block heredocs.
+  tool over a shell heredoc: the tour directory may sit where shell write guards block heredocs. A
+  script that assembles the JSON, from `tour hunk` output for example, is fine too; never retype a
+  chunk by hand.
 - The guide below is an allowlist of what you may run. Inside a checkout you may also run the scripts
   the diff adds or changes. Any other action is asked first. Output you draw from a script comes from
   running it, never from working it out by hand.
@@ -167,9 +169,10 @@ and a unified-diff excerpt starting with its `@@` header, copied from the patch.
 trimmed to the lines that matter, with an `@@` header whose numbers match the lines kept. Do not
 copy chunks by hand: `pr-review tour hunk <tourDir> <hunk id>` prints the chunk as JSON, ready to
 paste, and `--from <line> --to <line>` trims it to a range of the file's own line numbers at the
-head (as the `@@` header counts them, not the line numbers of this prompt). `literate` is the same
-change as prose in reading order: paragraphs that say what the next chunk does and why it
-is shaped that way, each followed by `{ "chunk": n }` for the chunk it introduces, or by a snippet
+head (as the `@@` header counts them, not the line numbers of this prompt). A range of only added lines
+keeps no old line, so its header reads `-N,0`, N being the old line it follows, as diff writes it.
+`literate` is the same change as prose in reading order: paragraphs that say what the next chunk
+does and why it is shaped that way, each followed by `{ "chunk": n }` for the chunk it introduces, or by a snippet
 `{ "path", "diff" }` the raw view does not carry. The reader can switch between the literate diff
 and the raw chunks, so they must never disagree about the code.
 
