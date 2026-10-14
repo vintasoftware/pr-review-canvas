@@ -5,24 +5,43 @@ import { matchesGlob } from '../review/glob.js'
 import { syntheticTour, syntheticTourModel } from '../testing/synthetic-tour.js'
 import {
   blastRadiusOf,
+  budgetLimits,
   computeBudget,
   effectiveTourCaps,
   formatTourError,
   stateRequiredFor,
   TOUR_CAPS,
   TourArtifactSchema,
+  TourBudgetSchema,
   TourModelSchema,
 } from './tour.js'
 
 describe('the tour budget', () => {
   const ceilings = DEFAULT_PROJECT_CONFIG.tour.budget
 
-  it('gives every change three landmarks, one more per 500 lines, and more with a blast radius', () => {
-    expect(computeBudget(0, [], ceilings)).toEqual({ landmarks: 3, decisions: 1, quiz: 2 })
-    expect(computeBudget(300, [], ceilings)).toEqual({ landmarks: 4, decisions: 2, quiz: 2 })
-    expect(computeBudget(1000, [], ceilings)).toEqual({ landmarks: 5, decisions: 3, quiz: 3 })
-    expect(computeBudget(300, ['auth'], ceilings)).toEqual({ landmarks: 5, decisions: 3, quiz: 2 })
-    expect(computeBudget(5000, ['auth', 'schema'], ceilings)).toEqual({ landmarks: 6, decisions: 5, quiz: 5 })
+  it('budgets one why landmark per 400 lines, one more with a blast radius, under the ceilings', () => {
+    const budget = (why: number) => ({ why, whyMax: 4, decisions: 5, quiz: 5 })
+    expect(computeBudget(0, [], ceilings)).toEqual(budget(1))
+    expect(computeBudget(300, [], ceilings)).toEqual(budget(1))
+    expect(computeBudget(1000, [], ceilings)).toEqual(budget(3))
+    expect(computeBudget(300, ['auth'], ceilings)).toEqual(budget(2))
+    expect(computeBudget(5000, ['auth', 'schema'], ceilings)).toEqual(budget(4))
+  })
+
+  it('reads a budget recorded before why landmarks were budgeted apart', () => {
+    expect(TourBudgetSchema.parse({ landmarks: 6, decisions: 5, quiz: 5 })).toEqual({
+      why: 3,
+      whyMax: 3,
+      decisions: 5,
+      quiz: 5,
+    })
+  })
+
+  it('limits decisions to one more than the why landmarks, and questions to one fewer than all', () => {
+    const budget = { why: 2, whyMax: 4, decisions: 5, quiz: 5 }
+    expect(budgetLimits(budget, 4, 1)).toEqual({ decisions: 2, quiz: 3 })
+    expect(budgetLimits(budget, 3, 0)).toEqual({ decisions: 1, quiz: 2 })
+    expect(budgetLimits(budget, 7, 4)).toEqual({ decisions: 5, quiz: 5 })
   })
 
   it('names the high-risk labels the changed paths touch, once each, in config order', () => {
@@ -100,7 +119,7 @@ describe('the tour schemas', () => {
       headSha: 'a'.repeat(40),
       mergeBaseSha: 'b'.repeat(40),
       blastRadius: [],
-      budget: { landmarks: 4, decisions: 1, quiz: 1 },
+      budget: { why: 1, whyMax: 4, decisions: 1, quiz: 1 },
       guide: null,
       ...model,
       generatedAt: '2026-09-10T12:00:00.000Z',
@@ -145,11 +164,11 @@ describe('the tour schemas', () => {
 describe('tour settings', () => {
   it('reads the tour block of the project config with defaults for what is left out', () => {
     const { config } = mergeProjectConfig({
-      tour: { budget: { landmarks: 4 }, finalQuiz: 'required', categories: ['product'] },
+      tour: { budget: { whyLandmarks: 2 }, finalQuiz: 'required', categories: ['product'] },
     })
     expect(config.tour).toEqual({
       ...DEFAULT_PROJECT_CONFIG.tour,
-      budget: { ...DEFAULT_PROJECT_CONFIG.tour.budget, landmarks: 4 },
+      budget: { ...DEFAULT_PROJECT_CONFIG.tour.budget, whyLandmarks: 2 },
       finalQuiz: 'required',
       categories: ['product'],
     })

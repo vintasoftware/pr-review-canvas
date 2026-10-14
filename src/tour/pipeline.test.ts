@@ -58,7 +58,7 @@ describe('tour prepare', () => {
       sharing: 'shared',
       status: 'prepared',
       blastRadius: [],
-      budget: { landmarks: 4, decisions: 2, quiz: 2 },
+      budget: { why: 1, whyMax: 4, decisions: 5, quiz: 5 },
       guide: null,
     })
     expect(result.sceneGuidePath).toMatch(/skills\/pr-tour\/scenes\.md$/)
@@ -67,7 +67,8 @@ describe('tour prepare', () => {
     expect(context.options).toEqual({ microWorld: true, tryIt: false, finalQuiz: 'on' })
     const prompt = await readFile(result.promptPath, 'utf8')
     expect(prompt).not.toContain('{{')
-    expect(prompt).toContain('At most **4 landmarks**')
+    expect(prompt).toContain('at most **1 why landmark**')
+    expect(prompt).toContain('never more than **4**')
     expect(prompt).toContain('```diff')
     expect(prompt).toContain('The project has no guide')
     expect(prompt).toContain('"landmarks"')
@@ -78,7 +79,7 @@ describe('tour prepare', () => {
     const config = { ...DEFAULT_PROJECT_CONFIG, highRisk: [{ pattern: 'src/app.ts', label: 'schema' }] }
     const result = await prepared({ projectConfig: { config, warnings: [], source: null } })
     expect(result.blastRadius).toEqual(['schema'])
-    expect(result.budget).toEqual({ landmarks: 5, decisions: 3, quiz: 2 })
+    expect(result.budget).toEqual({ why: 2, whyMax: 4, decisions: 5, quiz: 5 })
     const prompt = await readFile(result.promptPath, 'utf8')
     expect(prompt).toContain('A state landmark is required')
   })

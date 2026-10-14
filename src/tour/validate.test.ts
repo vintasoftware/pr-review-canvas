@@ -11,7 +11,7 @@ function input(over: Partial<TourValidationInput> = {}): TourValidationInput {
   return {
     files,
     caps: { ...TOUR_CAPS },
-    budget: { landmarks: 4, decisions: 2, quiz: 2 },
+    budget: { why: 1, whyMax: 4, decisions: 5, quiz: 5 },
     categories: ['trade-off', 'architecture', 'product', 'pokayoke', 'nfr', 'spec'],
     stateRequired: false,
     options: { microWorld: true, tryIt: true, finalQuiz: 'on' },
@@ -60,12 +60,44 @@ describe('validateTourModel', () => {
     expect(codes(withLandmark(model, 3, { stage: 'why' }))).toContain('LANDMARK_ORDER')
   })
 
-  it('holds the tour to its budget, and lets a state landmark through it', () => {
+  it('budgets why landmarks: one over with a reason, never over the ceiling, a state landmark aside', () => {
     const model = syntheticTourModel()
-    expect(codes(model, { budget: { landmarks: 3, decisions: 2, quiz: 2 } })).toEqual(['LANDMARK_BUDGET'])
-    const state = withLandmark(model, 2, { state: true })
-    expect(codes(state, { budget: { landmarks: 3, decisions: 2, quiz: 2 } })).toEqual([])
-    expect(codes(model, { budget: { landmarks: 4, decisions: 0, quiz: 0 } })).toEqual([
+    const moreWhys = (n: number, extra: Partial<TourModel> = {}): TourModel => {
+      const [background, world, sum, respect] = model.landmarks
+      const whys = Array.from({ length: n }, (_, i) => ({
+        ...sum!,
+        id: `sum-${i}`,
+        scene: `<div class="scene" data-technique="extra-${i}"><p>part ${i}</p></div>`,
+      }))
+      return { ...model, ...extra, landmarks: [background!, world!, sum!, ...whys, respect!] }
+    }
+    expect(codes(model)).toEqual([])
+    expect(codes(moreWhys(1))).toEqual(['LANDMARK_BUDGET'])
+    expect(codes(moreWhys(1, { overBudget: 'The hand-off is a second idea.' }))).toEqual([])
+    expect(codes(moreWhys(2, { overBudget: 'Two more ideas.' }))).toEqual(['LANDMARK_BUDGET'])
+    const ceiling = validateTourModel(
+      moreWhys(2, { overBudget: 'x' }),
+      input({ budget: { why: 2, whyMax: 2, decisions: 5, quiz: 5 } })
+    )
+    expect(ceiling.errors.map(e => e.message)).toEqual([
+      'landmarks: 3 why landmarks, ceiling 2; merge the two most closely related into one',
+    ])
+    const state = withLandmark(moreWhys(1), 3, { state: true })
+    expect(codes(state)).toEqual([])
+  })
+
+  it('lets decisions and questions grow with the landmarks, under their own ceilings', () => {
+    const model = syntheticTourModel()
+    // One why landmark: two decisions at most. Four landmarks: three questions at most.
+    const decision = model.decisions[0]!
+    const three = [0, 1, 2].map(i => ({ ...decision, key: `d-${i}` }))
+    expect(codes({ ...model, decisions: three })).toEqual(['DECISION_BUDGET'])
+    expect(codes({ ...model, decisions: three.slice(0, 2) })).toEqual([])
+    const question = model.quiz[0]!
+    const four = [0, 1, 2, 3].map(i => ({ ...question, id: `q-${i}` }))
+    expect(codes({ ...model, quiz: four })).toEqual(['QUIZ_BUDGET'])
+    expect(codes({ ...model, quiz: four.slice(0, 3) })).toEqual([])
+    expect(codes(model, { budget: { why: 1, whyMax: 4, decisions: 0, quiz: 0 } })).toEqual([
       'DECISION_BUDGET',
       'QUIZ_BUDGET',
     ])

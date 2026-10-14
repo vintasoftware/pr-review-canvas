@@ -3,7 +3,7 @@
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { HARNESSES } from '../contract/review-artifact.js'
-import { formatTourError } from '../contract/tour.js'
+import { budgetLimits, formatTourError } from '../contract/tour.js'
 import { type CliIo, EXIT, parsePrepareTarget, printJson, UsageError } from '../commands.js'
 import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { PublishError } from '../review/publish.js'
@@ -160,9 +160,11 @@ async function runTourValidate(ctx: AppContext, argv: string[], io: CliIo): Prom
     const { landmarks, decisions, quiz } = report.output
     const b = context.budget
     // The state landmark is never counted against the budget, so it is named apart.
-    const state = landmarks.filter(l => l.state === true).length
+    const counted = landmarks.filter(l => l.state !== true)
+    const whys = counted.filter(l => l.stage === 'why').length
+    const limits = budgetLimits(b, counted.length, whys)
     io.stdout(
-      `ok: ${path.basename(file)} passes: ${landmarks.length - state} landmarks (budget ${b.landmarks})${state > 0 ? ' and the state landmark' : ''}, ${decisions.length} decisions (budget ${b.decisions}), ${quiz.length} questions (budget ${b.quiz})`
+      `ok: ${path.basename(file)} passes: ${whys} why landmarks (budget ${b.why}, ceiling ${b.whyMax})${counted.length < landmarks.length ? ' and the state landmark' : ''}, ${decisions.length} decisions (budget ${limits.decisions}), ${quiz.length} questions (budget ${limits.quiz})`
     )
   } else {
     for (const e of report.errors) io.stdout(formatTourError(e))

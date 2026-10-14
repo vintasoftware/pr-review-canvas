@@ -82,7 +82,8 @@ Every changed file with its hunk ids and headers.
 
 {{BUDGET}}
 
-The budget is a ceiling, not a target; most tours should stay under it. A why landmark is one idea a
+The budget is a ceiling, not a target; most tours should stay under it. It counts why landmarks only:
+the other three stages are one landmark each. A why landmark is one idea a
 reviewer must hold to judge the change, not one file, one function, or one edge case: two ideas a
 reader would sum up in one sentence are one landmark. Prefer fewer, sharper landmarks: reading all
 of them takes under eight minutes. What the budget leaves out is listed as `notToured`, so the reader

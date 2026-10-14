@@ -2,6 +2,7 @@
 // the text a reader sees, the landmark order, the budget, and every reference into the diff.
 import type { FileEntry } from '../contract/review-artifact.js'
 import {
+  budgetLimits,
   type TourBudget,
   type TourCaps,
   type TourContext,
@@ -92,14 +93,25 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
         'landmarks: between the world and the respect landmark every landmark is a why, and each of the other three appears once',
     })
   }
-  const counted = model.landmarks.filter(l => l.state !== true).length
-  if (counted > input.budget.landmarks) {
+  // Only why landmarks are budgeted; a state landmark never counts.
+  const counted = model.landmarks.filter(l => l.state !== true)
+  const whys = counted.filter(l => l.stage === 'why').length
+  const { why, whyMax } = input.budget
+  if (whys > whyMax) {
     errors.push({
       code: 'LANDMARK_BUDGET',
       where: 'landmarks',
-      message: `landmarks: ${counted} landmarks, budget ${input.budget.landmarks} (a state landmark does not count)`,
+      message: `landmarks: ${whys} why landmarks, ceiling ${whyMax}; merge the two most closely related into one`,
+    })
+  } else if (whys > why + 1 || (whys === why + 1 && model.overBudget === undefined)) {
+    errors.push({
+      code: 'LANDMARK_BUDGET',
+      where: 'landmarks',
+      message: `landmarks: ${whys} why landmarks, budget ${why}; one more needs "overBudget" saying why, and more than one is never allowed`,
     })
   }
+  if (model.overBudget !== undefined) tooLong('overBudget', model.overBudget, caps.overBudget)
+  const limits = budgetLimits(input.budget, counted.length, whys)
   if (input.stateRequired && !model.landmarks.some(l => l.state === true)) {
     errors.push({
       code: 'STATE_LANDMARK_MISSING',
@@ -209,11 +221,11 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
   }
 
   // Decisions.
-  if (model.decisions.length > input.budget.decisions) {
+  if (model.decisions.length > limits.decisions) {
     errors.push({
       code: 'DECISION_BUDGET',
       where: 'decisions',
-      message: `decisions: ${model.decisions.length} decisions, budget ${input.budget.decisions}`,
+      message: `decisions: ${model.decisions.length} decisions, budget ${limits.decisions} (one more than the why landmarks, at most ${input.budget.decisions})`,
     })
   }
   const landmarkOf = new Map(model.landmarks.map(l => [l.id, l]))
@@ -278,11 +290,11 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
   })
 
   // Quiz.
-  if (model.quiz.length > input.budget.quiz) {
+  if (model.quiz.length > limits.quiz) {
     errors.push({
       code: 'QUIZ_BUDGET',
       where: 'quiz',
-      message: `quiz: ${model.quiz.length} questions, budget ${input.budget.quiz}`,
+      message: `quiz: ${model.quiz.length} questions, budget ${limits.quiz} (one fewer than the landmarks, at least 2, at most ${input.budget.quiz})`,
     })
   }
   model.quiz.forEach((q, i) => {

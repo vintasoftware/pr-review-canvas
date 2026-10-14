@@ -47,6 +47,7 @@ export const TOUR_CAPS = {
   why: 200,
   tryItLine: 200,
   notToured: 90,
+  overBudget: 200,
 } as const
 export type TourCaps = { -readonly [K in keyof typeof TOUR_CAPS]: number }
 
@@ -78,16 +79,39 @@ export const TOUR_LIMITS = {
 export type TourLimits = { -readonly [K in keyof typeof TOUR_LIMITS]: number }
 
 /**
- * How much tour this change gets: ceilings on landmarks, decisions, and quiz questions. `prepare`
- * computes it from the diff, the blast radius, and the project's `tour.budget`, and records it in
- * the context, so the validator holds the generator to the same numbers the prompt stated.
+ * How much tour this change gets. Background, world, and respect are one landmark each, so only the
+ * why landmarks are budgeted: `why` from the size of the change, one more when the model says why
+ * (`overBudget`), never over `whyMax`. Decisions and quiz questions follow the landmarks written,
+ * never over their own ceilings. `prepare` computes it from the diff, the blast radius, and the
+ * project's `tour.budget`, and records it in the context, so the validator holds the generator to
+ * the same numbers the prompt stated.
  */
-export const TourBudgetSchema = z.object({
-  landmarks: z.number().int().positive(),
+const TourBudgetShape = z.object({
+  why: z.number().int().positive(),
+  whyMax: z.number().int().positive(),
   decisions: z.number().int().nonnegative(),
   quiz: z.number().int().nonnegative(),
 })
-export type TourBudget = z.infer<typeof TourBudgetSchema>
+/** Tours prepared before the why budget recorded ceilings on all landmarks; three of them were fixed. */
+export const TourBudgetSchema = z.preprocess(v => {
+  if (v === null || typeof v !== 'object' || !('landmarks' in v) || 'why' in v) return v
+  const { landmarks, ...rest } = v as { landmarks: number }
+  const why = Math.max(1, landmarks - TOUR_LIMITS.minLandmarks)
+  return { ...rest, why, whyMax: why }
+}, TourBudgetShape)
+export type TourBudget = z.infer<typeof TourBudgetShape>
+
+/** The decisions and quiz questions a tour may have, given the landmarks it has, state aside. */
+export function budgetLimits(
+  budget: TourBudget,
+  landmarks: number,
+  whys: number
+): { decisions: number; quiz: number } {
+  return {
+    decisions: Math.min(budget.decisions, whys + 1),
+    quiz: Math.min(budget.quiz, Math.max(2, landmarks - 1)),
+  }
+}
 
 /** The raw-text ceiling behind a cap: four times the cap, as the canvas does it. */
 export const TOUR_HARD_CAP_FACTOR = 4
@@ -240,6 +264,8 @@ export function tourModelSchema(visibleCaps: TourCaps) {
   const caps = hardTourCaps(visibleCaps)
   return z.object({
     landmarks: z.array(landmarkSchema(caps)).min(TOUR_LIMITS.minLandmarks),
+    /** Why the tour needs one why landmark over the budget; validation asks for it then. */
+    overBudget: text(caps, 'overBudget').optional(),
     decisions: z.array(decisionSchema(caps)),
     quiz: z.array(quizQuestionSchema(caps)),
     notToured: z.array(notTouredSchema(caps)).max(TOUR_LIMITS.notToured).default([]),
@@ -417,23 +443,21 @@ export function blastRadiusOf(
 const STATE_WORDS = /schema|migration|database|storage|stored data/i
 
 /**
- * The budget for one change: about one landmark per `linesPerLandmark` changed lines on top of
- * the three every tour has, more when the blast radius is not empty, never over the ceilings.
+ * The budget for one change: about one why landmark per `linesPerLandmark` changed lines, one more
+ * when the blast radius is not empty, at least one, never over the project's ceiling.
  */
 export function computeBudget(
   changedLines: number,
   blastRadius: readonly string[],
-  ceilings: { landmarks: number; decisions: number; quiz: number; linesPerLandmark: number }
+  ceilings: { whyLandmarks: number; decisions: number; quiz: number; linesPerLandmark: number }
 ): TourBudget {
   const risky = blastRadius.length > 0 ? 1 : 0
-  const why = Math.ceil(changedLines / Math.max(1, ceilings.linesPerLandmark))
+  const bySize = Math.ceil(changedLines / Math.max(1, ceilings.linesPerLandmark))
   return {
-    landmarks: Math.min(
-      ceilings.landmarks,
-      Math.max(TOUR_LIMITS.minLandmarks, TOUR_LIMITS.minLandmarks + why + risky)
-    ),
-    decisions: Math.min(ceilings.decisions, why + 1 + risky),
-    quiz: Math.min(ceilings.quiz, Math.max(2, why + 1)),
+    why: Math.min(ceilings.whyLandmarks, Math.max(1, bySize + risky)),
+    whyMax: ceilings.whyLandmarks,
+    decisions: ceilings.decisions,
+    quiz: ceilings.quiz,
   }
 }
 

@@ -92,7 +92,7 @@ export function syntheticTour(over: Partial<TourArtifact> = {}): TourArtifact {
     headSha: HEAD_SHA,
     mergeBaseSha: BASE_SHA,
     blastRadius: ['schema'],
-    budget: { landmarks: 4, decisions: 2, quiz: 2 },
+    budget: { why: 1, whyMax: 4, decisions: 5, quiz: 5 },
     guide: null,
     ...syntheticTourModel(),
     generatedAt: '2026-09-10T12:00:00.000Z',

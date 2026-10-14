@@ -838,10 +838,12 @@ pr-review tour hunk <tourDir> <hunk id> [--from <line> --to <line>]
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
 `scenesDir`, `sceneGuidePath`, `models` (`tour.models` over `generation.models`), `sharing`,
 `blastRadius`, `budget`, `guide`, and `status`. The **blast radius** is the set of `highRisk`
-labels the changed paths touch. The **budget** is how many landmarks, decisions, and quiz
-questions the tour may have: three landmarks for every change, about one more per
-`tour.budget.linesPerLandmark` changed lines, one more with a blast radius, never over the
-ceilings; decisions and quiz questions follow. A label that speaks of a schema, a migration, or
+labels the changed paths touch. The **budget** counts why landmarks only, since the background,
+the world, and the respect landmark are one each: about one per `tour.budget.linesPerLandmark`
+changed lines, one more with a blast radius, at least one (`why`). The tour may write one more
+when its model says why in `overBudget`, and never more than `tour.budget.whyLandmarks`
+(`whyMax`). Decisions may number one more than the why landmarks written, and quiz questions one
+fewer than all landmarks (at least two), each under its own ceiling. A label that speaks of a schema, a migration, or
 stored data requires a **state landmark**, which the budget never counts, and so does a changed
 migration, SQL, or schema file.
 
@@ -937,10 +939,10 @@ Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-r
 
 | Key                            | Default           | Details                                                                                                      |
 | ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tour.budget.landmarks`        | `6`               | Ceiling on landmarks; the state landmark does not count                                                      |
+| `tour.budget.whyLandmarks`     | `4`               | Hard ceiling on why landmarks; the state landmark does not count                                             |
 | `tour.budget.decisions`        | `5`               | Ceiling on decisions                                                                                         |
 | `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                    |
-| `tour.budget.linesPerLandmark` | `500`             | About one why landmark per this many changed lines                                                           |
+| `tour.budget.linesPerLandmark` | `400`             | About one why landmark per this many changed lines                                                           |
 | `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                      |
 | `tour.reverseQuiz`             | `on`              | `on` or `off`: the reader may ask the agent how it would carry the plan out                                  |
 | `tour.grill`                   | `change`          | `change` grills on change picks, `always` on every pick, `off` never                                         |

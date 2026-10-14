@@ -71,11 +71,11 @@ const OnOff = z.enum(['on', 'off'])
 /** The tour's settings, under `tour:`. The defaults are the design's. */
 export const TourConfigSchema = z.object({
   budget: z.object({
-    /** Ceilings: at most this many landmarks, decisions, and quiz questions. */
-    landmarks: z.number().int().positive(),
+    /** Hard ceilings: at most this many why landmarks, decisions, and quiz questions. */
+    whyLandmarks: z.number().int().positive(),
     decisions: z.number().int().positive(),
     quiz: z.number().int().positive(),
-    /** About one landmark per this many changed lines, on top of the three every tour has. */
+    /** About one why landmark per this many changed lines. */
     linesPerLandmark: z.number().int().positive(),
   }),
   finalQuiz: z.enum(['on', 'off', 'required']),
@@ -98,7 +98,7 @@ export type TourConfig = z.infer<typeof TourConfigSchema>
 const PartialTourConfigSchema = z.object({
   budget: z
     .object({
-      landmarks: z.number().int().positive().optional(),
+      whyLandmarks: z.number().int().positive().optional(),
       decisions: z.number().int().positive().optional(),
       quiz: z.number().int().positive().optional(),
       linesPerLandmark: z.number().int().positive().optional(),
@@ -117,7 +117,7 @@ const PartialTourConfigSchema = z.object({
 })
 
 export const DEFAULT_TOUR_CONFIG: TourConfig = {
-  budget: { landmarks: 6, decisions: 5, quiz: 5, linesPerLandmark: 500 },
+  budget: { whyLandmarks: 4, decisions: 5, quiz: 5, linesPerLandmark: 400 },
   finalQuiz: 'on',
   reverseQuiz: 'on',
   grill: 'change',
@@ -269,7 +269,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     },
     tour: {
       budget: {
-        landmarks: user.tour?.budget?.landmarks ?? DEFAULT_TOUR_CONFIG.budget.landmarks,
+        whyLandmarks: user.tour?.budget?.whyLandmarks ?? DEFAULT_TOUR_CONFIG.budget.whyLandmarks,
         decisions: user.tour?.budget?.decisions ?? DEFAULT_TOUR_CONFIG.budget.decisions,
         quiz: user.tour?.budget?.quiz ?? DEFAULT_TOUR_CONFIG.budget.quiz,
         linesPerLandmark: user.tour?.budget?.linesPerLandmark ?? DEFAULT_TOUR_CONFIG.budget.linesPerLandmark,

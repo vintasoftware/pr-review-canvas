@@ -63,7 +63,8 @@ function budgetMarkdown(ctx: TourContext): string {
   const radius = ctx.blastRadius.length === 0 ? 'none of the high-risk areas' : ctx.blastRadius.join(', ')
   return [
     `- Blast radius: **${radius}** (from the project's \`highRisk\` patterns: ${ctx.highRisk.length === 0 ? 'none configured' : ctx.highRisk.map(r => `\`${r.pattern}\` → ${r.label}`).join(', ')})`,
-    `- At most **${b.landmarks} landmarks** (the state landmark, when required, does not count), **${b.decisions} decisions**, **${b.quiz} quiz questions**.`,
+    `- Landmarks: the background, the world, and the respect landmark, one each, and at most **${b.why} why ${b.why === 1 ? 'landmark' : 'landmarks'}**. One more why landmark is allowed only with \`overBudget\` saying why this change needs it, and never more than **${b.whyMax}**: past that, merge the two most closely related why landmarks into one. The state landmark, when required, does not count.`,
+    `- Decisions: at most one more than the why landmarks you write, and never more than **${b.decisions}**. Quiz questions: at most one fewer than the landmarks you write (at least 2), and never more than **${b.quiz}**.`,
     ctx.stateRequired
       ? '- **A state landmark is required**: the change touches stored data. Mark it `"state": true`; it says how the change is undone, with a reversibility decision when undoing it is not clean.'
       : '- No state landmark is required, unless you find the change touches a schema, a migration, or the shape of stored data: then add one, marked `"state": true`.',

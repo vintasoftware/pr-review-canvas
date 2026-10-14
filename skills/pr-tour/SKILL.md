@@ -59,7 +59,7 @@ Progress goes to stderr. The last stdout line is JSON:
   "models": { "claude": "opus" },
   "sharing": "shared",
   "blastRadius": ["auth"],
-  "budget": { "landmarks": 5, "decisions": 3, "quiz": 3 },
+  "budget": { "why": 2, "whyMax": 4, "decisions": 5, "quiz": 5 },
   "guide": "docs/pr-tour.md",
   "status": "prepared"
 }
@@ -159,7 +159,9 @@ you recommend changing, if any.
 
 - The first landmark is the background, the second the world, the last what to respect; every
   landmark between is a why; each of the other three appears once.
-- At most the budget's landmarks, decisions, and quiz questions; a state landmark does not count.
+- At most `why` why landmarks, one more with `overBudget` saying why, never more than `whyMax`; a
+  state landmark does not count. Decisions at most one more than the why landmarks, quiz questions
+  at most one fewer than all landmarks (at least two), each under its ceiling.
 - A state landmark when the change touches stored data.
 - Every decision anchors on a why or respect landmark of this tour and on a new-side line inside a
   hunk; every quiz question names a landmark of this tour.

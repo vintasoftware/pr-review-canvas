@@ -103,10 +103,10 @@ canvas:
 # Every key is optional; these are the defaults.
 tour:
   budget:
-    landmarks: 6 # ceilings; about one landmark per linesPerLandmark changed lines on top of the three every tour has
+    whyLandmarks: 4 # hard ceilings; background, world, and respect are one landmark each
     decisions: 5
     quiz: 5
-    linesPerLandmark: 500
+    linesPerLandmark: 400 # about one why landmark per this many changed lines
   finalQuiz: on # on, off, or required before the prompt is written
   reverseQuiz: on
   grill: change # grill on change picks; always; or off
