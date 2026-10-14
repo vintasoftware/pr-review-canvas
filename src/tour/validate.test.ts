@@ -109,6 +109,9 @@ describe('validateTourModel', () => {
   it('checks every reference into the diff: code paths, chunks, anchors, landmarks', () => {
     const model = syntheticTourModel()
     expect(
+      codes({ ...model, notToured: [{ title: 'Renames', paths: ['src/new-name.ts', 'src/nope.ts'] }] })
+    ).toEqual(['PATH_UNKNOWN'])
+    expect(
       codes(withLandmark(model, 1, { code: [{ path: 'src/nope.ts', diff: '@@ -1 +1 @@\n+x' }] }))
     ).toEqual(['PATH_UNKNOWN'])
     expect(codes(withLandmark(model, 1, { code: [{ path: 'src/app.ts', diff: 'not a hunk' }] }))).toEqual([

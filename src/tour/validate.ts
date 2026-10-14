@@ -302,6 +302,14 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
   model.notToured.forEach((n, i) => {
     tooLong(`notToured.${i}.title`, n.title, caps.notToured)
     plain(`notToured.${i}.title`, n.title)
+    n.paths.forEach((p, j) => {
+      if (!byPath.has(p))
+        errors.push({
+          code: 'PATH_UNKNOWN',
+          where: `notToured.${i}.paths.${j}`,
+          message: `notToured.${i}.paths.${j}: ${p} is not in the diff`,
+        })
+    })
   })
 
   return { ok: errors.length === 0, errors, output: errors.length === 0 ? model : null }

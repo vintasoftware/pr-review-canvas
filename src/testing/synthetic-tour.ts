@@ -79,7 +79,7 @@ export function syntheticTourModel(): TourModel {
         why: 'The sum replaces the single value.',
       },
     ],
-    notToured: [{ title: 'The renamed file', path: 'src/new-name.ts' }],
+    notToured: [{ title: 'The renamed file', paths: ['src/new-name.ts'] }],
   }
 }
 

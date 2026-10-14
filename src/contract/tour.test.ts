@@ -2,7 +2,7 @@
 import { DEFAULT_SETTINGS, resolveTourSharing } from './settings.js'
 import { DEFAULT_PROJECT_CONFIG, mergeProjectConfig } from '../project-config.js'
 import { matchesGlob } from '../review/glob.js'
-import { syntheticTourModel } from '../testing/synthetic-tour.js'
+import { syntheticTour, syntheticTourModel } from '../testing/synthetic-tour.js'
 import {
   blastRadiusOf,
   computeBudget,
@@ -50,6 +50,30 @@ describe('the tour budget', () => {
 })
 
 describe('the tour schemas', () => {
+  it('read a stored tour written before not-toured groups and before guards were dropped', () => {
+    const stored = syntheticTour()
+    const old = {
+      ...stored,
+      landmarks: stored.landmarks.map(l => ({
+        ...l,
+        guards: [{ testPath: 'src/app.test.ts', behavior: 'x' }],
+      })),
+      notToured: [{ title: 'The renamed file', path: 'src/new-name.ts' }],
+    }
+    const parsed = TourArtifactSchema.parse(old)
+    expect(parsed.notToured).toEqual([{ title: 'The renamed file', paths: ['src/new-name.ts'] }])
+    expect(parsed.landmarks[0]).not.toHaveProperty('guards')
+  })
+
+  it('group not-toured files under one reason, one to twenty paths', () => {
+    const entry = (paths: string[]) =>
+      TourModelSchema.safeParse({ ...syntheticTourModel(), notToured: [{ title: 'Notation only', paths }] })
+        .success
+    expect(entry(['a.css', 'b.css'])).toBe(true)
+    expect(entry([])).toBe(false)
+    expect(entry(Array.from({ length: 21 }, (_, i) => `f${i}.css`))).toBe(false)
+  })
+
   it('accept the synthetic tour as a model and as a stored artifact', () => {
     const model = syntheticTourModel()
     expect(TourModelSchema.safeParse(model).success).toBe(true)

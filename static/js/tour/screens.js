@@ -451,7 +451,7 @@ export function planHtml(bundle) {
     <h3 class="tour-section-h">Kept, with reasons</h3>
     <ul class="tour-kept">${kept.map(({ d, p }) => `<li><span>${esc(d.keep.label)}</span><span><q>${inline(d.reason.text)}</q></span><span class="place">${esc(PLACE_LABEL[p.place ?? d.reason.place])}</span></li>`).join('') || '<li>none</li>'}</ul>
     ${done}
-    ${tour.notToured.length ? `<h3 class="tour-section-h">Not toured</h3><ul class="tour-not">${tour.notToured.map(n => `<li><span>${esc(n.title)}</span><span class="path">${esc(n.path)}</span></li>`).join('')}</ul>` : ''}`
+    ${tour.notToured.length ? `<h3 class="tour-section-h">Not toured</h3><ul class="tour-not">${tour.notToured.map(n => `<li><span>${esc(n.title)}</span><span class="path">${n.paths.map(esc).join('<br>')}</span></li>`).join('')}</ul>` : ''}`
 }
 
 /** @param {import('../contract-types.js').TourSharing} sharing */

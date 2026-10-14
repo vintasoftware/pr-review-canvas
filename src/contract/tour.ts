@@ -66,6 +66,8 @@ export const TOUR_LIMITS = {
   tryItSteps: 8,
   tryItLook: 6,
   notToured: 12,
+  /** Files one not-toured entry may group under its reason. */
+  notTouredPaths: 20,
   /** Micro-worlds in one tour: each is a model the reader plays with, and each costs a reader's time. */
   microWorlds: 2,
   /** Scenes of one tour that may draw the same technique: a third is the same picture dealt again. */
@@ -216,9 +218,22 @@ export function quizQuestionSchema(caps: TourCaps) {
   })
 }
 
+/** What the budget left out: one reason, and the files of the diff it covers. */
 export function notTouredSchema(caps: TourCaps) {
-  return z.object({ title: text(caps, 'notToured'), path: z.string().min(1) })
+  return z.object({
+    title: text(caps, 'notToured'),
+    paths: z.array(z.string().min(1)).min(1).max(TOUR_LIMITS.notTouredPaths),
+  })
 }
+
+/** A stored entry: tours written before entries grouped files name one `path`. */
+const storedNotTouredSchema = z.preprocess(
+  v =>
+    v !== null && typeof v === 'object' && 'path' in v && !('paths' in v)
+      ? { title: (v as { title?: unknown }).title, paths: [(v as { path: unknown }).path] }
+      : v,
+  notTouredSchema(TOUR_ARTIFACT_HARD_CAPS)
+)
 
 /** What the generator writes to `tour-model.json`. The validator checks the rest. */
 export function tourModelSchema(visibleCaps: TourCaps) {
@@ -287,7 +302,7 @@ export const TourArtifactSchema = z.object({
   landmarks: z.array(landmarkSchema(TOUR_ARTIFACT_HARD_CAPS)),
   decisions: z.array(decisionSchema(TOUR_ARTIFACT_HARD_CAPS)),
   quiz: z.array(quizQuestionSchema(TOUR_ARTIFACT_HARD_CAPS)),
-  notToured: z.array(notTouredSchema(TOUR_ARTIFACT_HARD_CAPS)),
+  notToured: z.array(storedNotTouredSchema),
   generatedAt: z.string(),
   generator: GeneratorSchema,
   source: z.enum(['local', 'import']),
