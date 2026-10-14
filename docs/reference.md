@@ -883,8 +883,8 @@ the command answers `CHECKOUT_BUSY`.
 `tour plan` prints the plan a finished tour settled on, for the
 [pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),
 `headSha`, `tourDir`, `promptPath`, the `prompt` itself, `finishedAt`, and how many `changes`
-and `kept` decisions it holds. `/pr-tour-apply <key>` reads it, makes the approved changes, writes
-the kept reasons that belong in the code, runs the project checks, and offers a fresh tour.
+and `kept` decisions it holds. `/pr-tour-apply <key>` reads it, makes the approved changes, runs
+the project checks, and offers a fresh tour.
 
 The three later steps use the data directory that holds the tour dir, as `validate` and `publish`
 do for a canvas. `tour publish` answers `CANVAS_STALE` when the head moved and `CANVAS_ELSEWHERE`
@@ -920,10 +920,9 @@ audio goes, and the reader can turn audio off for themselves. Without chat, the 
 restatement in the same card. **Confirm the plan** (`POST /api/tours/<n>/finish`) writes
 the re-implementation prompt to `tours/<headSha>/prompt.md`, records the reader in the tour's
 record (and the author's picks, so a regenerated tour carries them by decision key), and shares
-the record on the pull request once. On the tour of the pull request's head, finishing also posts
-to the pull request: the author's kept reasons whose place is the pull request go out as inline
-comments on their decisions' lines, once each; a reviewer's approved changes go into their pending
-review as comments on those lines, once each, and leave with their verdict. The quiz result stays on the machine. With `?preview`, the
+the record on the pull request once. On the tour of the pull request's head, a reviewer's approved
+changes go into their pending review as comments on their decisions' lines, once each, and leave
+with their verdict. The quiz result stays on the machine. With `?preview`, the
 page draws `tour-model.json` as the generator has written it and saves nothing; `?landmark=<id>`
 opens on that landmark, which is how `tour preview` takes its screenshots.
 

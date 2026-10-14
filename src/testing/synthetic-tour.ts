@@ -65,7 +65,6 @@ export function syntheticTourModel(): TourModel {
         keep: { label: 'Sum', consequence: 'What the spec says; a product reads the same at the call site.' },
         change: { label: 'Product', consequence: 'Grows faster; the spec would have to change.' },
         recommended: 'keep',
-        reason: { text: 'Sum is what the spec says.', place: 'pr' },
         anchor: { path: 'src/app.ts', line: 4 },
       },
     ],

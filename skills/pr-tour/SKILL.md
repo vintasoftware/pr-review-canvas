@@ -106,8 +106,7 @@ tell the user `pr-review serve` shows the tour only with that same `--data-dir`.
 The prompt is the spec. In short: the first landmark is the background (the world before the
 change, and why the change matters), then the world, then the whys with the decisions anchored on
 them, then what to respect; every landmark has a scene and its code chunks with a literate diff;
-every decision has both sides' costs, a recommended side, a reason with its place, and
-an anchor in the diff; the quiz checks reading, never gotchas. A state landmark is required when
+every decision has both sides' costs, a recommended side, and an anchor in the diff; the quiz checks reading, never gotchas. A state landmark is required when
 the change touches stored data. Stay within the budget prepare printed.
 
 ### 4. Try-it recipes

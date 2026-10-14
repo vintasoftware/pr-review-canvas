@@ -26,7 +26,7 @@ describe('renderTourSeed', () => {
       '- **run() now adds b()** (world): A caller of run() gets a() plus b(); the test expects 3.'
     )
     expect(seed).toContain('- `sum-over-product` · trade-off · **Sum over product?** (`src/app.ts:4`)')
-    expect(seed).toContain('  - recommended: keep; the reason to keep: Sum is what the spec says.')
+    expect(seed).toContain('  - recommended: keep\n')
     expect(seed).toContain('The project has no tour guide.')
     expect(seed).toContain('```restatement')
     expect(seed).toContain('```plan')

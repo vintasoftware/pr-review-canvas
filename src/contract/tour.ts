@@ -1,6 +1,6 @@
 // The tour: what the generator writes, what the store keeps, and what `tour prepare` records for
 // `tour publish` to validate against. The words are CONTEXT.md's: landmark, scene, micro-world,
-// decision, reason, quiz, not toured, blast radius, guide.
+// decision, quiz, not toured, blast radius, guide.
 import { z } from 'zod'
 import { GeneratorSchema, PrSchema, RepoSchema, FileEntrySchema, type FileEntry } from './review-artifact.js'
 import { PrepareTargetSchema } from './generation-context.js'
@@ -24,10 +24,6 @@ export const DECISION_CATEGORIES = [
 ] as const
 export type DecisionCategory = (typeof DECISION_CATEGORIES)[number]
 
-/** Where a kept decision's reason belongs. */
-export const REASON_PLACES = ['code', 'pr', 'lint', 'tour'] as const
-export type ReasonPlace = (typeof REASON_PLACES)[number]
-
 export const PICKS = ['keep', 'change'] as const
 export type TourPick = (typeof PICKS)[number]
 
@@ -41,7 +37,6 @@ export const TOUR_CAPS = {
   context: 300,
   sideLabel: 60,
   consequence: 300,
-  reason: 200,
   question: 200,
   option: 140,
   why: 200,
@@ -218,8 +213,6 @@ export function decisionSchema(caps: TourCaps) {
     keep: decisionSideSchema(caps),
     change: decisionSideSchema(caps),
     recommended: z.enum(PICKS),
-    /** The reason recorded on keep, in the author's voice, and where the generator proposes it belongs. */
-    reason: z.object({ text: text(caps, 'reason'), place: z.enum(REASON_PLACES) }),
     /** A line of the diff, on the new side, the decision points at. */
     anchor: z.object({ path: z.string().min(1), line: z.number().int().positive() }),
     tryIt: tryItSchema(caps).optional(),
@@ -285,14 +278,10 @@ export type TouredBy = z.infer<typeof TouredBySchema>
 /** The author's answer to a decision, as the shared record keeps it. */
 export const AuthorPickSchema = z.object({
   pick: z.enum(PICKS),
-  /** For a keep: where the reason went. */
-  place: z.enum(REASON_PLACES).optional(),
   /** For a change: the approved restatement, what changes and what stays the same. */
   restatement: z
     .object({ what: z.string().min(1), where: z.array(z.string().min(1)), unchanged: z.string().min(1) })
     .optional(),
-  /** For a keep whose reason belongs on the pull request: the comment it was posted as, once. */
-  commentUrl: z.string().optional(),
 })
 export type AuthorPick = z.infer<typeof AuthorPickSchema>
 

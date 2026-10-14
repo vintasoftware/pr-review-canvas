@@ -244,7 +244,7 @@ describe('landmarkHtml', () => {
 })
 
 describe('decisionHtml', () => {
-  it('preselects the recommendation, records the reason, and offers keep', () => {
+  it('preselects the recommendation and offers keep', () => {
     const bundle = bundleWith({ notes: { sum: 'my note' } })
     const decision = tourOf(bundle).decisions[0]
     if (decision === undefined) {
@@ -259,10 +259,6 @@ describe('decisionHtml', () => {
     expect(document.querySelector('.tour-option .now')?.textContent).toBe('what the code does')
     expect(document.querySelector('.tour-option .rec')?.textContent).toBe('recommended')
     expect(document.querySelector('.tour-landmark-note')?.textContent).toContain('my note')
-    expect(document.querySelector('.tour-reason q')?.textContent).toBe('Sum is what the spec says.')
-    expect(document.querySelector('select[data-act="place"] option[selected]')?.getAttribute('value')).toBe(
-      'pr'
-    )
     expect(document.querySelector('[data-act="keep"]')).not.toBeNull()
     expect(document.querySelector('.tour-tryit')).toBeNull()
     expect(document.querySelector('.tour-anchor')?.textContent).toBe('src/app.ts:4')
@@ -276,16 +272,15 @@ describe('decisionHtml', () => {
       throw new Error('no decision')
     }
     document.body.innerHTML = decisionHtml(bundle, steps, decision)
-    expect(document.querySelector('.tour-reason')).toBeNull()
     expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('Say what you want instead')
-    bundle.reader.picks['sum-over-product'] = { pick: 'keep', approved: true, place: 'code', tried: true }
+    bundle.reader.picks['sum-over-product'] = { pick: 'keep', approved: true, tried: true }
     const withTry = {
       ...decision,
       landmark: 'nope',
       tryIt: { steps: ['pnpm start'], look: ['the sum'], verified: true },
     }
     document.body.innerHTML = decisionHtml(bundle, steps, withTry)
-    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept · reason code comment')
+    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
     expect(document.querySelector('[data-act="unsettle"]')).not.toBeNull()
     expect(document.querySelector('.tour-tryit ol code')?.textContent).toBe('pnpm start')
     expect(document.querySelector('.tour-tryit .tour-card-h')?.textContent).toContain('verified')
@@ -363,7 +358,9 @@ describe('planHtml', () => {
     document.body.innerHTML = planHtml({ ...bundle, shares: false })
     expect(document.querySelector('.tour-title')?.textContent).toBe('Nothing to change. 1 decision kept.')
     expect(document.querySelector('.tour-lead')?.textContent).not.toContain('shared')
-    expect(document.querySelector('.tour-kept li .place')?.textContent).toBe('PR comment')
+    expect(document.querySelector('.tour-kept li')?.textContent).toBe(
+      'SumWhat the spec says; a product reads the same at the call site.'
+    )
     expect(document.querySelector('.tour-hint')?.textContent).toBe('writes the prompt')
     document.body.innerHTML = planHtml({ ...bundle, preview: true })
     expect(document.querySelector('[data-act="confirm"]')).toBeNull()
@@ -391,27 +388,16 @@ describe('planHtml', () => {
     expect(document.querySelector('#prompt')?.textContent).toBe('# P')
     expect(document.body.textContent).toContain('/pr-tour-apply 42')
     expect(document.querySelector('[data-act="confirm"]')).toBeNull()
-    // What went to the pull request, for the author and for a reviewer.
-    const withPosted = finished({ status: 'off' })
-    const done = /** @type {import('../contract-types.js').TourFinished} */ (withPosted.reader.finished)
-    withPosted.reader.finished = { ...done, posted: 2, warnings: ['one was not posted: boom'] }
-    document.body.innerHTML = planHtml(withPosted)
-    expect(document.querySelector('.tour-sharing')?.textContent).toContain(
-      '2 kept reasons posted as comments on their lines.'
-    )
-    expect(document.querySelector('.tour-sharing .failed')?.textContent).toBe('one was not posted: boom')
-    withPosted.reader.finished = { ...done, posted: 0 }
-    document.body.innerHTML = planHtml(withPosted)
-    expect(document.querySelector('.tour-sharing')?.textContent).toContain(
-      'No kept reason belonged on the pull request'
-    )
-    withPosted.reader.finished = { ...done, queued: 1 }
-    document.body.innerHTML = planHtml(withPosted)
+    // What went into a reviewer's pending review.
+    const withQueued = finished({ status: 'off' })
+    const done = /** @type {import('../contract-types.js').TourFinished} */ (withQueued.reader.finished)
+    withQueued.reader.finished = { ...done, queued: 1 }
+    document.body.innerHTML = planHtml(withQueued)
     expect(document.querySelector('.tour-sharing')?.textContent).toContain(
       '1 change request added to your pending review'
     )
-    withPosted.reader.finished = { ...done, queued: 0 }
-    document.body.innerHTML = planHtml(withPosted)
+    withQueued.reader.finished = { ...done, queued: 0 }
+    document.body.innerHTML = planHtml(withQueued)
     expect(document.querySelector('.tour-sharing')?.textContent).toContain(
       'Nothing new for your pending review.'
     )

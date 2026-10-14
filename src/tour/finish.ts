@@ -6,10 +6,8 @@ import path from 'node:path'
 import type { TourFinished, TourFinishResponse, TourReaderState, TourSharing } from '../contract/tour-api.js'
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { AuthorPick, Decision, TourArtifact, TourRecord } from '../contract/tour.js'
-import type { PrLoader } from '../server/bundle.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { postOnPr } from '../server/routes/review-routes.js'
 import { buildTourPrompt, planOf, unansweredQuiz, unsettledDecisions } from './plan.js'
 import { writeReaderState } from './reader.js'
 import { shareTourOnPr } from './share.js'
@@ -20,15 +18,8 @@ export interface FinishTourInput {
   artifact: TourArtifact
   reader: TourReaderState
   reviewer: { login: string | null; author: boolean }
-  /** The loader the comments post through; absent when nothing is posted (a local review). */
-  loader?: PrLoader | undefined
   /** True when the tour describes the pull request's head, so its lines are the head's lines. */
   current?: boolean | undefined
-}
-
-/** A kept reason as the author's comment on the decision's line. */
-export function keptReasonBody(decision: Decision): string {
-  return `**Kept in the tour:** ${decision.keep.label}\n\n${decision.reason.text}\n\n_from the pr-review tour_`
 }
 
 /** A reviewer's approved change as the comment their pending review will carry. */
@@ -60,7 +51,6 @@ export function finishedRecord(
     for (const [key, pick] of Object.entries(input.reader.picks)) {
       if (!pick.approved) continue
       const entry: AuthorPick = { pick: pick.pick }
-      if (pick.pick === 'keep' && pick.place !== undefined) entry.place = pick.place
       if (pick.pick === 'change' && pick.restatement !== undefined) entry.restatement = pick.restatement
       picks[key] = entry
     }
@@ -96,69 +86,17 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
   const promptPath = path.join(ctx.tours.tourDir(headSha), 'prompt.md')
   await writeFile(promptPath, `${prompt}\n`, 'utf8')
   const record = finishedRecord(artifact.record, input, prompt, at)
-  // The pull request side, only for the tour of the head: a line of an older commit means
-  // something else on the head a comment would land on.
-  const onPr = !isLocalKey(key) && input.current === true && input.loader !== undefined
-  let posted = 0
-  let queued = 0
-  const warnings: string[] = []
-  if (onPr && input.reviewer.author) {
-    posted = await postKeptReasons(ctx, input.loader as PrLoader, key as number, artifact, record, warnings)
-  } else if (onPr) {
-    queued = await queueChangeRequests(ctx, key as number, headSha, artifact, reader)
-  }
+  // A reviewer's changes go into their pending review, only for the tour of the head: a line of an
+  // older commit means something else on the head a comment would land on.
+  const queues = !isLocalKey(key) && input.current === true && !input.reviewer.author
+  const queued = queues ? await queueChangeRequests(ctx, key as number, headSha, artifact, reader) : 0
   await ctx.tours.revise(headSha, { ...artifact, record, revisedAt: at })
   const sharing: TourSharing = isLocalKey(key) ? { status: 'local' } : await shareTourOnPr(ctx, headSha, key)
   const finished: TourFinished = { at, promptPath, prompt, sharing }
-  if (onPr && input.reviewer.author) finished.posted = posted
-  if (onPr && !input.reviewer.author) finished.queued = queued
-  if (warnings.length > 0) finished.warnings = warnings
+  if (queues) finished.queued = queued
   const next: TourReaderState = { ...reader, finished }
   await writeReaderState(ctx, headSha, next)
   return { finished, record, reader: next }
-}
-
-/**
- * The author's kept reasons whose place is the pull request, posted once each as a comment on the
- * decision's line; the record remembers the comment so a second finish posts nothing again. A post
- * that fails is a warning, not a failed finish: the record and the prompt stand either way.
- */
-async function postKeptReasons(
-  ctx: AppContext,
-  loader: PrLoader,
-  number: number,
-  artifact: TourArtifact,
-  record: TourRecord,
-  warnings: string[]
-): Promise<number> {
-  const picks = record.author?.picks ?? {}
-  let posted = 0
-  for (const decision of artifact.decisions) {
-    const pick = picks[decision.key]
-    if (pick === undefined || pick.pick !== 'keep' || pick.place !== 'pr') continue
-    const before = artifact.record.author?.picks[decision.key]?.commentUrl
-    if (before !== undefined) {
-      pick.commentUrl = before
-      continue
-    }
-    try {
-      const result = await postOnPr(ctx, loader, number, {
-        kind: 'inline',
-        path: decision.anchor.path,
-        line: decision.anchor.line,
-        side: 'new',
-        body: keptReasonBody(decision),
-        headSha: artifact.headSha,
-      })
-      pick.commentUrl = result.comment.url
-      posted += 1
-    } catch (err) {
-      warnings.push(
-        `The reason for "${decision.title}" was not posted: ${err instanceof Error ? err.message : String(err)}`
-      )
-    }
-  }
-  return posted
 }
 
 /** A reviewer's approved changes, each queued once in their pending review on the decision's line. */

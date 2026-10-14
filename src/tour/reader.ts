@@ -35,7 +35,6 @@ export async function readReaderState(
       const pick = carried[decision.key]
       if (pick === undefined) continue
       const entry: ReaderPick = { pick: pick.pick, approved: true }
-      if (pick.place !== undefined) entry.place = pick.place
       if (pick.restatement !== undefined) entry.restatement = pick.restatement
       state.picks[decision.key] = entry
     }

@@ -1,4 +1,4 @@
-// The plan a finished tour settles on: the decisions kept with their reasons, the changes approved
+// The plan a finished tour settles on: the decisions kept, the changes approved
 // in the grilling, and the reader's notes, written as the prompt whoever touches the change next
 // runs from.
 import type { ReaderPick, Restatement, TourReaderState } from '../contract/tour-api.js'
@@ -94,15 +94,7 @@ export function buildTourPrompt(tour: TourArtifact, reader: TourReaderState, key
     '## Decisions kept by the author (do not reopen)',
     ...(plan.kept.length === 0
       ? ['- none']
-      : plan.kept.map(({ decision, pick }) => {
-          const place =
-            pick.place === 'code'
-              ? ` (write this as a comment near ${decision.anchor.path}:${decision.anchor.line})`
-              : pick.place === 'lint'
-                ? ' (enforce this with a lint rule)'
-                : ''
-          return `- ${decision.key}: ${decision.keep.label}. ${decision.reason.text}${place}`
-        })),
+      : plan.kept.map(({ decision }) => `- ${decision.key}: ${decision.keep.label}`)),
   ]
   if (plan.changes.length > 0) {
     lines.push('', '## Changes to make, as approved in the tour')

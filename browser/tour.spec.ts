@@ -57,7 +57,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   await page.goto(`${tourUrl}#decision-pipe-means-json`)
   await expect(page.locator('.tour-option[aria-checked="true"]')).toHaveAttribute('data-pick', 'keep')
   await page.locator('[data-act="keep"]').click()
-  await expect(page.locator('.tour-state')).toContainText('kept · reason PR comment')
+  await expect(page.locator('.tour-state')).toHaveText('✓ kept')
   await page.locator('[data-nav="next"]').click()
   await page.keyboard.press('k')
   await page.locator('[data-nav="next"]').click()
@@ -79,7 +79,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   await page.locator('.tour-quiz-opt[data-i="1"]').click()
   await page.locator('[data-nav="next"]').click()
 
-  // The plan: the note, the kept reasons, and the prompt once confirmed. The record is shared.
+  // The plan: the note, the kept decisions, and the prompt once confirmed. The record is shared.
   await expect(page).toHaveURL(/#plan$/)
   await expect(page.locator('.tour-title')).toHaveText('Nothing to change. 3 decisions kept.')
   await expect(page.locator('.tour-kept').first()).toContainText('the pipe rule surprised me')
@@ -94,7 +94,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   await expect(page.locator('#prompt')).toContainText('the pipe rule surprised me')
   const bundle = await (await page.request.get(`${new URL(tourUrl).origin}/api/tours/42`)).json()
   expect(bundle.tour.record.touredBy.map((t: { login: string }) => t.login)).toEqual(['octocat'])
-  expect(bundle.tour.record.author.picks['pipe-means-json']).toEqual({ pick: 'keep', place: 'pr' })
+  expect(bundle.tour.record.author.picks['pipe-means-json']).toEqual({ pick: 'keep' })
 })
 
 test('takes a change through the drawer and lists it in the plan', async ({ page, tourUrl }) => {

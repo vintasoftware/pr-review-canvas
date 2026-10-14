@@ -205,19 +205,13 @@ describe('the tour page', () => {
     click('.tour-rail-seg[data-step="6"]')
     expect(location.hash).toBe('#decision-sum-over-product')
 
-    // `k` keeps; a change of mind reopens it; the place of the reason can change either way.
+    // `k` keeps; a change of mind reopens it.
     press('k')
-    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept · reason PR comment')
+    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
     click('[data-act="unsettle"]')
     expect(document.querySelector('[data-act="keep"]')).not.toBeNull()
     click('[data-act="keep"]')
-    const place = document.querySelector('select[data-act="place"]')
-    if (!(place instanceof HTMLSelectElement)) {
-      throw new Error('no select')
-    }
-    place.value = 'code'
-    place.dispatchEvent(new Event('change', { bubbles: true }))
-    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept · reason code comment')
+    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
     click('[data-nav="next"]')
     expect(location.hash).toBe('#quiz-q-run')
 
@@ -248,7 +242,7 @@ describe('the tour page', () => {
     expect(server.calls.filter(c => c.startsWith('POST'))).toEqual(['POST /api/tours/42/finish'])
     const last = server.saved.at(-1)
     expect(last?.notes).toEqual({ world: 'rename b' })
-    expect(last?.picks).toEqual({ 'sum-over-product': { pick: 'keep', approved: true, place: 'code' } })
+    expect(last?.picks).toEqual({ 'sum-over-product': { pick: 'keep', approved: true } })
     expect(last?.quiz).toEqual({ 'q-run': { answered: 1, right: true } })
     expect(last?.step).toBe(7)
     expect(server.calls.filter(c => c.startsWith('PUT')).length).toBeLessThan(server.calls.length)
@@ -485,18 +479,8 @@ describe('the tour page', () => {
     const plain = document.createTextNode('x')
     el.append(plain)
     plain.dispatchEvent(new Event('click', { bubbles: true }))
-    // The place of a reason may be a lint rule or the tour alone.
-    // The screen is drawn again after each change, so the control is looked up each time.
-    for (const value of ['lint', 'tour']) {
-      const place = document.querySelector('select[data-act="place"]')
-      if (!(place instanceof HTMLSelectElement)) {
-        throw new Error('no select')
-      }
-      place.value = value
-      place.dispatchEvent(new Event('change', { bubbles: true }))
-    }
     press('k')
-    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept · reason tour only')
+    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
     click('[data-nav="prev"]')
     expect(location.hash).toBe('#landmark-respect')
     // A change event on a landmark has no decision to update.

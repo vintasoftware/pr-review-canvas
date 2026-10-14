@@ -25,7 +25,6 @@ describe('finishedRecord', () => {
           ...freshReaderState(),
           picks: {
             kept: { pick: 'keep', approved: true },
-            placed: { pick: 'keep', approved: true, place: 'lint' },
             changed: {
               pick: 'change',
               approved: true,
@@ -47,7 +46,6 @@ describe('finishedRecord', () => {
         finishedAt: 'now',
         picks: {
           kept: { pick: 'keep' },
-          placed: { pick: 'keep', place: 'lint' },
           changed: { pick: 'change', restatement: { what: 'w', where: ['x'], unchanged: 'u' } },
         },
         prompt: 'the prompt',

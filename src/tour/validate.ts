@@ -240,7 +240,6 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
       plain(`${where}.${side}.label`, d[side].label)
       tooLong(`${where}.${side}.consequence`, d[side].consequence, caps.consequence)
     }
-    tooLong(`${where}.reason.text`, d.reason.text, caps.reason)
     const landmark = landmarkOf.get(d.landmark)
     if (landmark === undefined || (landmark.stage !== 'why' && landmark.stage !== 'respect')) {
       errors.push({

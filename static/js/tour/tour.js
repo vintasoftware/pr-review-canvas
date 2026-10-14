@@ -311,7 +311,7 @@ export class PrTourElement extends HTMLElement {
    */
   updatePick(d, update) {
     const bundle = /** @type {TourBundle} */ (this.bundle)
-    const pick = bundle.reader.picks[d.key] ?? { pick: d.recommended, approved: false, place: d.reason.place }
+    const pick = bundle.reader.picks[d.key] ?? { pick: d.recommended, approved: false }
     update(pick)
     bundle.reader.picks[d.key] = pick
     this.save()
@@ -531,19 +531,10 @@ export class PrTourElement extends HTMLElement {
       if (decision === null) {
         return
       }
-      if (target instanceof HTMLSelectElement && target.dataset['act'] === 'place') {
-        const place = target.value
-        this.updatePick(decision, pick => {
-          pick.place = place === 'code' || place === 'pr' || place === 'lint' ? place : 'tour'
-        })
-      } else if (target instanceof HTMLInputElement && target.dataset['act'] === 'tried') {
+      if (target instanceof HTMLInputElement && target.dataset['act'] === 'tried') {
         const tried = target.checked
         const bundle = /** @type {TourBundle} */ (this.bundle)
-        const pick = bundle.reader.picks[decision.key] ?? {
-          pick: decision.recommended,
-          approved: false,
-          place: decision.reason.place,
-        }
+        const pick = bundle.reader.picks[decision.key] ?? { pick: decision.recommended, approved: false }
         pick.tried = tried
         bundle.reader.picks[decision.key] = pick
         this.save()

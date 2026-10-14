@@ -78,7 +78,6 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
         artifact: found.artifact,
         reader,
         reviewer,
-        loader,
         current: found.status === 'ready',
       })
     })

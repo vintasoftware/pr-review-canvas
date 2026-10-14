@@ -26,7 +26,7 @@ export function decisionsMarkdown(tour: TourArtifact): string {
         `- \`${d.key}\` · ${d.category} · **${d.title}** (\`${d.anchor.path}:${d.anchor.line}\`)`,
         `  - keep: ${d.keep.label}. ${d.keep.consequence}`,
         `  - change: ${d.change.label}. ${d.change.consequence}`,
-        `  - recommended: ${d.recommended}; the reason to keep: ${d.reason.text}`,
+        `  - recommended: ${d.recommended}`,
       ].join('\n')
     )
     .join('\n')

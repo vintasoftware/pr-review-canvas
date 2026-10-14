@@ -6,7 +6,7 @@ description: Implement the plan a finished tour settled on, with the pr-review t
 # pr-tour-apply
 
 A finished tour leaves one prompt behind: what the change is for, what a later change must
-respect, the decisions the author kept with their reasons, and the changes the reader approved in
+respect, the decisions the author kept, and the changes the reader approved in
 the grilling, restated in their words. You carry that prompt out. The plan needed no further
 review when it was confirmed, so you do not reopen it: a kept decision stays as it is, and an
 approved change is made as restated.
@@ -44,11 +44,6 @@ For each change in the prompt, in order: what changes, where, and what stays the
 inside "where" unless the code forces you out, and say so when it does. "Stays the same" is a
 constraint, not a suggestion: run the tests that guard it before and after.
 
-For each kept decision whose reason belongs in the code (the prompt says "write this as a comment
-near `path:line`"), write the reason as a comment there, in the author's words, without a preamble.
-For a reason that belongs as a lint rule, add the rule to the project's linter when it has one that
-can express it, and say so when it cannot.
-
 Leave the reader's notes as they are: they are context, not instructions, unless the prompt turned
 one into a change.
 
@@ -60,7 +55,7 @@ touch failures that were there before; report them.
 
 ### 5. Report and offer a fresh tour
 
-Say what changed, file by file, which kept reasons went into the code, and what the checks said.
+Say what changed, file by file, and what the checks said.
 Then offer to commit, and to run `/pr-tour <key>` again once the new commit is on the pull request:
 the new head gets a new tour, and the reader's picks carry over by decision key, so only what
 changed is asked again.

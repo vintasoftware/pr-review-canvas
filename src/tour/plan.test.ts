@@ -36,7 +36,7 @@ describe('planOf', () => {
     const plan = planOf(
       tour,
       reader({
-        picks: { 'sum-over-product': { pick: 'keep', approved: true, place: 'code' } },
+        picks: { 'sum-over-product': { pick: 'keep', approved: true } },
         notes: { world: '  a thought ', sum: '   ' },
       })
     )
@@ -68,10 +68,10 @@ describe('planOf', () => {
 })
 
 describe('buildTourPrompt', () => {
-  it('writes the intent, what to respect, the kept decisions with their places, and what to do after', () => {
+  it('writes the intent, what to respect, the kept decisions, and what to do after', () => {
     const prompt = buildTourPrompt(
       syntheticTour(),
-      reader({ picks: { 'sum-over-product': { pick: 'keep', approved: true, place: 'code' } } }),
+      reader({ picks: { 'sum-over-product': { pick: 'keep', approved: true } } }),
       '42'
     )
     expect(prompt).toContain('# Keep PR #42 as the tour settled it')
@@ -80,14 +80,12 @@ describe('buildTourPrompt', () => {
     expect(prompt).toContain(
       '## What a change must respect\nA later change adds to the sum, never replaces it.'
     )
-    expect(prompt).toContain(
-      '- sum-over-product: Sum. Sum is what the spec says. (write this as a comment near src/app.ts:4)'
-    )
+    expect(prompt).toContain('- sum-over-product: Sum\n')
     expect(prompt).not.toContain('## Changes to make')
     expect(prompt).toContain('- Run /pr-tour 42 again; picks carry by decision key.')
   })
 
-  it('lists approved changes with their restatement, the notes, and a lint place', () => {
+  it('lists approved changes with their restatement, and the notes', () => {
     const tour = syntheticTour({
       decisions: [
         ...syntheticTour().decisions,
@@ -95,7 +93,6 @@ describe('buildTourPrompt', () => {
           ...syntheticTour().decisions[0]!,
           key: 'second',
           title: 'Second?',
-          reason: { text: 'Rule.', place: 'lint' },
         },
       ],
     })
@@ -108,14 +105,14 @@ describe('buildTourPrompt', () => {
             approved: true,
             restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'The callers.' },
           },
-          second: { pick: 'keep', approved: true, place: 'lint' },
+          second: { pick: 'keep', approved: true },
         },
         notes: { world: 'Rename b later.' },
       }),
       '42'
     )
     expect(prompt).toContain('# Re-implement PR #42 as the tour settled it')
-    expect(prompt).toContain('- second: Sum. Rule. (enforce this with a lint rule)')
+    expect(prompt).toContain('- second: Sum')
     expect(prompt).toContain(
       '## Changes to make, as approved in the tour\n1. Sum over product?\n   What: Multiply.\n   Where: src/app.ts\n   Stays the same: The callers.'
     )
@@ -124,7 +121,7 @@ describe('buildTourPrompt', () => {
     )
   })
 
-  it('names a local change by its key and writes a kept reason with no place plainly', () => {
+  it('names a local change by its key', () => {
     const tour = syntheticTour({ pr: { ...syntheticTour().pr, number: null } })
     const prompt = buildTourPrompt(
       tour,
@@ -132,7 +129,6 @@ describe('buildTourPrompt', () => {
       'branch'
     )
     expect(prompt).toContain('# Keep the branch change as the tour settled it')
-    expect(prompt).toContain('- sum-over-product: Sum. Sum is what the spec says.\n')
   })
 
   it('says none when nothing was kept', () => {

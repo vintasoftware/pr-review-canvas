@@ -158,7 +158,7 @@ function renderTourDecision(key: string, tour: TourSources): string {
     '',
     `- keep: ${decision.keep.label}. ${decision.keep.consequence}`,
     `- change: ${decision.change.label}. ${decision.change.consequence}`,
-    `- the tour recommended: ${decision.recommended}; its reason to keep: ${decision.reason.text}`,
+    `- the tour recommended: ${decision.recommended}`,
     '',
     stands,
     ...(note === '' ? [] : ['', `The reader's note on that landmark: ${note}`]),
@@ -174,11 +174,7 @@ function renderTourPlan(tour: TourSources): string {
     '## Context: the plan',
     '',
     'Kept:',
-    list(
-      plan.kept.map(
-        ({ decision }) => `- \`${decision.key}\`: ${decision.keep.label}. ${decision.reason.text}`
-      )
-    ),
+    list(plan.kept.map(({ decision }) => `- \`${decision.key}\`: ${decision.keep.label}`)),
     '',
     'Approved changes:',
     list(

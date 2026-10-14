@@ -207,12 +207,6 @@ name the rest, an untested behavior included, in the respect landmark. Each deci
 new-side line inside a hunk). Its `key` is a stable slug: a regenerated tour carries the reader's
 picks by it, so name the choice, not its position.
 
-`reason` is the justification the author would give for keeping the decision, in the author's
-voice, and where it belongs: `code` (a maintainer needs it, as a comment), `pr` (a reviewer would
-ask, as a comment on the line), `lint` (the reason is a rule the codebase can enforce, so a check
-is cheaper than a comment), or `tour` (only the tour needs it). Propose the place; the author
-confirms it.
-
 {{TRY_IT}}
 
 ## Quiz
@@ -229,8 +223,8 @@ one right, and a one-sentence `why`; spread the right answers across the three p
 ## Caps
 
 Every text is measured on what a reader sees: backticks and link targets do not count. Inline
-`code` renders in leads, bodies, literate paragraphs, a decision's context, consequences, and
-reason, and the quiz; every other text (titles, side labels, not-toured lines) is
+`code` renders in leads, bodies, literate paragraphs, a decision's context and consequences, and
+the quiz; every other text (titles, side labels, not-toured lines) is
 plain, so write no backticks or other markup there. No other markdown renders anywhere: no
 `*emphasis*`.
 

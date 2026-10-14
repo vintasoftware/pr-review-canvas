@@ -290,10 +290,6 @@
         "consequence": "Piping into `less` or a log file shows text. Every script and agent that reads these commands must add `--json` now, and an older `upgrade` parent that hands off to this version would read text and report a failed step."
       },
       "recommended": "keep",
-      "reason": {
-        "text": "Scripts and agents never passed a flag; they read the JSON line. A pipe keeps that contract without a release note nobody reads.",
-        "place": "pr"
-      },
       "anchor": {
         "path": "src/commands.ts",
         "line": 66
@@ -314,10 +310,6 @@
         "consequence": "One less argument, and the handoff line matches what an older parent sends. The report then depends on a rule in another function, and the first person to make a pipe print text breaks upgrade without touching upgrade.ts."
       },
       "recommended": "keep",
-      "reason": {
-        "text": "The parent parses the child's stdout. That must hold even if the pipe rule changes, so the handoff asks for JSON itself.",
-        "place": "code"
-      },
       "anchor": {
         "path": "src/upgrade.ts",
         "line": 213
@@ -338,10 +330,6 @@
         "consequence": "A command's flags are all in its own `parseArgs`, and `serve --json` is a usage error. Every command must declare it, and a forgotten one rejects --json with a usage error instead of printing JSON."
       },
       "recommended": "keep",
-      "reason": {
-        "text": "The output mode is one fact about the run, known before the command runs. One function owns it, so no command can forget the flag.",
-        "place": "code"
-      },
       "anchor": {
         "path": "src/commands.ts",
         "line": 59

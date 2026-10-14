@@ -16,7 +16,7 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   pick is grilled through AI Chat in the tour's own thread, with a restatement card to approve,
   edit, or reject, a reverse quiz, and speech input with a one-time notice.
 - A reviewer's approved changes go into their pending review as comments on the decisions'
-  lines; the author's kept reasons that belong on the pull request post as inline comments.
+  lines.
 - Config: `tour:` in `pr-review.config.yml` (budget, quiz, grilling, audio, micro-world, try-it,
   categories, sharing, models, guide); `tourComment` in `.pr-review/settings.yml`; prompt
   templates `tour.md` and `tour-grill.md`.

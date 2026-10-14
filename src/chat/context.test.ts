@@ -165,7 +165,7 @@ describe('enclosingHunk', () => {
 describe('renderChatContext for a tour', () => {
   const tour = syntheticTour()
 
-  it('gives a decision both sides, the tour reason, and where the reader stands', async () => {
+  it('gives a decision both sides, the recommendation, and where the reader stands', async () => {
     const reader = freshReaderState()
     const fresh = await renderChatContext(
       { kind: 'tour-decision', key: 'sum-over-product' },
@@ -174,7 +174,7 @@ describe('renderChatContext for a tour', () => {
     expect(fresh).toContain('## Context: decision `sum-over-product` — Sum over product?')
     expect(fresh).toContain('trade-off · from the landmark "Sum, not product" · `src/app.ts:4`')
     expect(fresh).toContain('- keep: Sum. What the spec says')
-    expect(fresh).toContain('- the tour recommended: keep; its reason to keep: Sum is what the spec says.')
+    expect(fresh).toContain('- the tour recommended: keep\n')
     expect(fresh).toContain('The reader has not answered yet.')
     reader.notes['sum'] = 'hm'
     reader.picks['sum-over-product'] = { pick: 'keep', approved: false }
@@ -242,7 +242,7 @@ describe('renderChatContext for a tour', () => {
         '## Context: the plan',
         '',
         'Kept:',
-        '- `sum-over-product`: Sum. Sum is what the spec says.',
+        '- `sum-over-product`: Sum',
         '',
         'Approved changes:',
         '- `second`: w (where: x; unchanged: u)',

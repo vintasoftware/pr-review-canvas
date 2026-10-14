@@ -121,16 +121,12 @@ A landmark the reader plays with: inputs of the changed behavior go in, outcomes
 _Avoid_: Demo, Sandbox, Playground
 
 **Decision**:
-A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it or asks to change it; keeping records a reason, changing starts a grilling.
+A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it or asks to change it; changing starts a grilling.
 _Avoid_: Attention point, Card, Finding, Issue
 
 **Pokayoke**:
 A structure in the change that makes a class of mistake impossible, or a place where the change lacks one. A decision category.
 _Avoid_: Validation, Guardrail, Defensive code
-
-**Reason**:
-The author's justification for a kept decision, together with where it belongs: in the code, on the pull request, as a lint rule, or in the tour only.
-_Avoid_: Resolution, Justification comment
 
 **Grilling**:
 The agent's questions after a change pick, asked until it can restate the change.

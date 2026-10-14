@@ -91,7 +91,7 @@ function settledReader(over: Partial<TourReaderState> = {}): TourReaderState {
   return {
     ...freshReaderState(),
     step: 5,
-    picks: { 'sum-over-product': { pick: 'keep', approved: true, place: 'pr' } },
+    picks: { 'sum-over-product': { pick: 'keep', approved: true } },
     quiz: { 'q-run': { answered: 1, right: true } },
     notes: { world: 'Rename b later.' },
     ...over,
@@ -151,7 +151,7 @@ describe('GET /api/tours/:n', () => {
           author: {
             finishedAt: '2026-09-01T00:00:00.000Z',
             picks: {
-              'sum-over-product': { pick: 'keep', place: 'code' },
+              'sum-over-product': { pick: 'keep' },
               second: { pick: 'change', restatement },
               third: { pick: 'keep' },
               gone: { pick: 'keep' },
@@ -163,7 +163,7 @@ describe('GET /api/tours/:n', () => {
     )
     const author = await json<TourBundle>(await get('/api/tours/42'))
     expect(author.reader.picks).toEqual({
-      'sum-over-product': { pick: 'keep', approved: true, place: 'code' },
+      'sum-over-product': { pick: 'keep', approved: true },
       second: { pick: 'change', approved: true, restatement },
       third: { pick: 'keep', approved: true },
     })
@@ -333,7 +333,6 @@ describe('PUT /api/tours/:n/reader', () => {
 describe('POST /api/tours/:n/finish', () => {
   it('writes the prompt, records the author with their picks, shares the record once, and marks the reader finished', async () => {
     const sharing = ghSharing()
-    // Nothing fakes the inline post here: the reason is not posted, and the finish says so.
     t = await context({ gh: sharing.gh })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
@@ -344,17 +343,15 @@ describe('POST /api/tours/:n/finish', () => {
     expect(body.finished).toEqual({
       at: '2026-09-10T12:00:00.000Z',
       promptPath,
-      prompt: expect.stringContaining('- sum-over-product: Sum. Sum is what the spec says.'),
+      prompt: expect.stringContaining('- sum-over-product: Sum'),
       sharing: { status: 'shared', url: 'https://github.com/acme/widgets/pull/42#issuecomment-6001' },
-      posted: 0,
-      warnings: [expect.stringContaining('The reason for "Sum over product?" was not posted')],
     })
     expect(await readFile(promptPath, 'utf8')).toBe(`${body.finished.prompt}\n`)
     expect(body.record).toEqual({
       touredBy: [{ login: 'octocat', at: '2026-09-10T12:00:00.000Z' }],
       author: {
         finishedAt: '2026-09-10T12:00:00.000Z',
-        picks: { 'sum-over-product': { pick: 'keep', place: 'pr' } },
+        picks: { 'sum-over-product': { pick: 'keep' } },
         prompt: body.finished.prompt,
       },
     })
@@ -624,46 +621,6 @@ describe('finishing on the pull request', () => {
     html_url: 'https://github.com/acme/widgets/pull/42#discussion_r5001',
   }))
 
-  it("posts the author's kept reasons that belong on the pull request, once each", async () => {
-    const posted: unknown[] = []
-    const sharing = ghSharing({
-      'repos/acme/widgets/pulls/42/comments': ghPost(body => {
-        posted.push(body)
-        return {
-          ...GH_REVIEW_COMMENTS[0],
-          ...(body as Record<string, unknown>),
-          id: 5001,
-          html_url: 'https://github.com/acme/widgets/pull/42#discussion_r5001',
-        }
-      }),
-    })
-    t = await context({ gh: sharing.gh })
-    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
-    // The line is checked against the head's diff, which the bundle route builds.
-    await get('/api/prs/42')
-    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
-    const first = await json<TourFinishResponse>(
-      await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
-    )
-    expect(first.finished.posted).toBe(1)
-    expect(first.finished.queued).toBeUndefined()
-    expect(first.record.author?.picks['sum-over-product']).toEqual({
-      pick: 'keep',
-      place: 'pr',
-      commentUrl: 'https://github.com/acme/widgets/pull/42#discussion_r5001',
-    })
-    expect(posted).toHaveLength(1)
-    expect(posted[0]).toMatchObject({ path: 'src/app.ts', line: 4, side: 'RIGHT' })
-    expect(String((posted[0] as Record<string, unknown>)['body'])).toContain('**Kept in the tour:** Sum')
-    // Finishing again posts nothing new and keeps the comment.
-    const again = await json<TourFinishResponse>(
-      await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
-    )
-    expect(again.finished.posted).toBe(0)
-    expect(again.record.author?.picks['sum-over-product']?.commentUrl).toContain('discussion_r5001')
-    expect(posted).toHaveLength(1)
-  })
-
   it("queues a reviewer's approved changes in their pending review, once each", async () => {
     t = await context({
       gh: ghFor42({ postRoutes: { 'repos/acme/widgets/pulls/42/comments': POSTED } }),
@@ -684,7 +641,6 @@ describe('finishing on the pull request', () => {
       await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
     )
     expect(first.finished.queued).toBe(1)
-    expect(first.finished.posted).toBeUndefined()
     const pending = (await t.ctx.state.read(42)).pending
     expect(pending).toHaveLength(1)
     expect(pending[0]).toMatchObject({
@@ -703,9 +659,12 @@ describe('finishing on the pull request', () => {
     expect((await t.ctx.state.read(42)).pending).toHaveLength(1)
   })
 
-  it('posts nothing from the tour of an older commit', async () => {
+  it("queues nothing from a reviewer's tour of an older commit", async () => {
     const git = gitFor42()
-    t = await context({ git })
+    t = await context({
+      git,
+      capabilities: { get: async () => ({ canComment: true, tokenKind: 'x', login: 'reviewer' }) },
+    })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     moveFakeHead(git, {
       headRef: 'pull/42/head',
@@ -716,12 +675,21 @@ describe('finishing on the pull request', () => {
       ahead: { [HEAD_SHA]: 1 },
     })
     await get('/api/tours/42?refresh=1')
-    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
+    const changed = settledReader({
+      picks: {
+        'sum-over-product': {
+          pick: 'change',
+          approved: true,
+          restatement: { what: 'Multiply.', where: ['src/app.ts:4'], unchanged: 'Callers.' },
+        },
+      },
+    })
+    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: changed })
     const body = await json<TourFinishResponse>(
       await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
     )
-    expect(body.finished.posted).toBeUndefined()
     expect(body.finished.queued).toBeUndefined()
+    expect((await t.ctx.state.read(42)).pending).toEqual([])
   })
 })
 

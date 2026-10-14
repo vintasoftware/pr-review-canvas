@@ -40,7 +40,6 @@ export const CATEGORY_LABEL = {
   nfr: 'Non-functional',
   spec: 'Spec fidelity',
 }
-export const PLACE_LABEL = { code: 'code comment', pr: 'PR comment', lint: 'lint rule', tour: 'tour only' }
 
 /**
  * Prose with `code` spans, the one bit of markup the generator's text carries.
@@ -318,21 +317,13 @@ export function decisionHtml(bundle, steps, d) {
   const n = tour.decisions.indexOf(d) + 1
   const landmark = tour.landmarks.find(l => l.id === d.landmark)
   const landmarkIndex = landmark === undefined ? 0 : tour.landmarks.indexOf(landmark) + 1
-  const p = reader.picks[d.key] ?? { pick: d.recommended, approved: false, place: d.reason.place }
+  const p = reader.picks[d.key] ?? { pick: d.recommended, approved: false }
   const done = pickSettled(p)
   const note = (reader.notes[d.landmark] ?? '').trim()
-  const place = p.place ?? d.reason.place
   const from =
     landmark === undefined
       ? ''
       : `<a href="#landmark-${esc(landmark.id)}" data-act="landmark" data-landmark="${esc(landmark.id)}">from landmark ${landmarkIndex}: ${esc(landmark.title)}</a>`
-  const reason =
-    p.pick === 'keep'
-      ? `<div class="tour-reason"><div>Reason recorded, in your words: <q>${inline(d.reason.text)}</q></div>
-         <label>belongs <select data-act="place">${Object.entries(PLACE_LABEL)
-           .map(([k, v]) => `<option value="${k}"${place === k ? ' selected' : ''}>${v}</option>`)
-           .join('')}</select></label></div>`
-      : ''
   const tryIt = d.tryIt
     ? `<div class="tour-card tour-tryit"><div class="tour-card-h"><span>try it${d.tryIt.verified ? ' · verified when this tour was generated' : ''}</span></div>
        <ol>${d.tryIt.steps.map(s => `<li><code>${esc(s)}</code></li>`).join('')}</ol>
@@ -341,7 +332,7 @@ export function decisionHtml(bundle, steps, d) {
     : ''
   const actions = done
     ? p.pick === 'keep'
-      ? `<span class="tour-state">✓ kept · reason ${esc(PLACE_LABEL[place])}</span><button class="tour-btn quiet" type="button" data-act="unsettle">change my mind</button>`
+      ? `<span class="tour-state">✓ kept</span><button class="tour-btn quiet" type="button" data-act="unsettle">change my mind</button>`
       : `<span class="tour-state change">✓ change approved · in the plan</span><button class="tour-btn quiet" type="button" data-act="grill">reopen</button><button class="tour-btn quiet" type="button" data-act="unsettle">change my mind</button>`
     : p.pick === 'keep'
       ? `<button class="tour-btn accent" type="button" data-act="keep">Keep it <kbd>k</kbd></button>`
@@ -357,7 +348,6 @@ export function decisionHtml(bundle, steps, d) {
       ${optionHtml('keep', d.keep, p.pick === 'keep', true, d.recommended === 'keep')}
       ${optionHtml('change', d.change, p.pick === 'change', false, d.recommended === 'change')}
     </div>
-    ${reason}
     ${tryIt}
     <div class="tour-actions">${actions}</div>
     ${done && p.pick === 'change' && p.restatement ? restatedHtml(p.restatement) : ''}`
@@ -436,13 +426,11 @@ export function planHtml(bundle) {
     : `Nothing to change. ${plural(kept.length, 'decision')} kept.`
   const lead = changes.length
     ? `Read it once. When you confirm, the prompt is written${bundle.shares ? ' and the record is shared' : ''}. No further plan review.`
-    : `Your reasons are recorded. When you confirm, ${bundle.shares ? 'the record is shared and ' : ''}the prompt carries the intent and the kept decisions for whoever touches this next.`
+    : `When you confirm, ${bundle.shares ? 'the record is shared and ' : ''}the prompt carries the intent and the kept decisions for whoever touches this next.`
   const done = finished
     ? `<h3 class="tour-section-h">Done</h3><ul class="tour-sharing">
          ${sharingLine(finished.sharing)}
-         ${finished.posted === undefined ? '' : `<li>${finished.posted === 0 ? 'No kept reason belonged on the pull request this time.' : `${plural(finished.posted, 'kept reason')} posted as ${finished.posted === 1 ? 'a comment' : 'comments'} on ${finished.posted === 1 ? 'its line' : 'their lines'}.`}</li>`}
          ${finished.queued === undefined ? '' : `<li>${finished.queued === 0 ? 'Nothing new for your pending review.' : `${plural(finished.queued, 'change request')} added to your pending review; it goes out with your verdict.`}</li>`}
-         ${(finished.warnings ?? []).map(w => `<li class="failed">${esc(w)}</li>`).join('')}
          ${bundle.options.finalQuiz === 'off' ? '' : `<li class="private">Quiz ${right} of ${tour.quiz.length}, kept on this machine.</li>`}
          <li>Prompt written to <span class="mono">${esc(finished.promptPath)}</span>. Run <code>/pr-tour-apply ${esc(bundle.local ?? String(tour.pr.number))}</code> to implement it.</li>
        </ul>
@@ -461,8 +449,8 @@ export function planHtml(bundle) {
     <p class="tour-lead">${esc(lead)}</p>
     ${changes.length ? `<h3 class="tour-section-h">Changes</h3><ol class="tour-plan-list">${changes.map(({ d, r }) => `<li><b>${esc(d.title)}</b><br>${inline(r.what)} <span class="where">${r.where.map(esc).join(' · ')}</span><span class="where">stays: ${inline(r.unchanged)}</span></li>`).join('')}</ol>` : ''}
     ${notes.length ? `<h3 class="tour-section-h">Your notes while reading</h3><ul class="tour-kept">${notes.map(({ l, text }) => `<li><span>landmark ${tour.landmarks.indexOf(l) + 1}</span><span>${esc(text)}</span><span class="place">${esc(l.title)}</span></li>`).join('')}</ul>` : ''}
-    <h3 class="tour-section-h">Kept, with reasons</h3>
-    <ul class="tour-kept">${kept.map(({ d, p }) => `<li><span>${esc(d.keep.label)}</span><span><q>${inline(d.reason.text)}</q></span><span class="place">${esc(PLACE_LABEL[p.place ?? d.reason.place])}</span></li>`).join('') || '<li>none</li>'}</ul>
+    <h3 class="tour-section-h">Kept</h3>
+    <ul class="tour-kept">${kept.map(({ d }) => `<li><span>${esc(d.keep.label)}</span><span>${inline(d.keep.consequence)}</span></li>`).join('') || '<li>none</li>'}</ul>
     ${done}
     ${tour.notToured.length ? `<h3 class="tour-section-h">Not toured</h3><ul class="tour-not">${tour.notToured.map(n => `<li><span>${esc(n.title)}</span><span class="path">${n.paths.map(esc).join('<br>')}</span></li>`).join('')}</ul>` : ''}`
 }

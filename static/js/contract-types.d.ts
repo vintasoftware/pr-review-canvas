@@ -67,14 +67,7 @@ export type {
   Theme,
 } from '../../src/contract/settings.js'
 export type { PrState } from '../../src/contract/state.js'
-export type {
-  CodeChunk,
-  Decision,
-  QuizQuestion,
-  ReasonPlace,
-  TourPick,
-  TourRecord,
-} from '../../src/contract/tour.js'
+export type { CodeChunk, Decision, QuizQuestion, TourPick, TourRecord } from '../../src/contract/tour.js'
 export type {
   ReaderPick,
   Restatement,

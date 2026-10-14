@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { Pr } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
 import type { CanvasRelation, ChatStatus, PublicHost } from './api.js'
-import { type Landmark, PICKS, REASON_PLACES, type TourArtifact, type TourRecord } from './tour.js'
+import { type Landmark, PICKS, type TourArtifact, type TourRecord } from './tour.js'
 
 /** The reader's approved restatement of a change, what changes, where, and what stays the same. */
 export const RestatementSchema = z.object({
@@ -21,7 +21,6 @@ export type Restatement = z.infer<typeof RestatementSchema>
 export const ReaderPickSchema = z.object({
   pick: z.enum(PICKS),
   approved: z.boolean(),
-  place: z.enum(REASON_PLACES).optional(),
   restatement: RestatementSchema.optional(),
   tried: z.boolean().optional(),
 })
@@ -42,12 +41,8 @@ export const TourFinishedSchema = z.object({
   promptPath: z.string(),
   prompt: z.string(),
   sharing: TourSharingSchema,
-  /** The author's kept reasons posted as comments on their lines, this time. */
-  posted: z.number().int().nonnegative().optional(),
   /** A reviewer's approved changes added to their pending review, this time. */
   queued: z.number().int().nonnegative().optional(),
-  /** A comment that could not be posted: the finish stands, the reason is said. */
-  warnings: z.array(z.string()).optional(),
 })
 export type TourFinished = z.infer<typeof TourFinishedSchema>
 
