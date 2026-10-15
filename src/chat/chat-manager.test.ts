@@ -3,7 +3,7 @@ import { freshReaderState } from '../contract/tour-api.js'
 import { syntheticTour } from '../testing/synthetic-tour.js'
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
 import type { ChatEvent } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
@@ -13,7 +13,13 @@ import { createStateStore, type StateStore } from '../store/state-store.js'
 import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import { createFakeCheckoutGit, type FakeCheckoutGit, makeTempDir } from '../testing/fakes.js'
 import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
-import { ChatBusyError, type ChatManager, type ChatTarget, createChatManager } from './chat-manager.js'
+import {
+  ChatBusyError,
+  type ChatManager,
+  type ChatTarget,
+  createChatManager,
+  STOPPED_TURN_WAIT_MS,
+} from './chat-manager.js'
 import { CheckoutBusyError, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
 import { createTranscriptStore, type TranscriptStore } from './threads.js'
 
@@ -570,6 +576,73 @@ describe('a stop that arrives before the agent has started', () => {
     await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
     expect(runner.runs[0]?.prompt).toContain('SEED for')
     expect((await manager.threads(42)).threads[0]?.title).toBe('two')
+  })
+})
+
+describe('a turn sent while a stopped one is still finishing', () => {
+  /** A turn the reader left while it was still setting up: stopped, with its return queued. */
+  async function abandonDuringSetup(gate: Promise<void>): Promise<{ left: Promise<unknown> }> {
+    build({ runner: createFakeRunner({ ensureGate: gate }) })
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const abandoned = stream[Symbol.asyncIterator]()
+    await advanceTo(abandoned, 'checkout')
+    const setup = abandoned.next()
+    await manager.cancel(42)
+    return { left: Promise.all([setup, abandoned.return?.(undefined)]) }
+  }
+
+  it('waits for the stopped turn to let go, then answers', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    const { left } = await abandonDuringSetup(gate)
+    const back = collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    openGate()
+    await left
+    expect((await back).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
+    const turns = await transcripts.read(42, T1)
+    expect(turns.map(turn => [turn.role, turn.text, turn.incomplete])).toEqual([
+      ['user', 'one', undefined],
+      ['assistant', '', 'cancelled'],
+      ['user', 'two', undefined],
+      ['assistant', 'Yes. The behavior is covered at `src/a.ts:10`.', undefined],
+    ])
+  })
+
+  it('is refused when the stopped turn outstays the wait', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    const { left } = await abandonDuringSetup(gate)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const back = manager.send(target(), { message: 'two', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+      const refused = expect(back.next()).rejects.toBeInstanceOf(ChatBusyError)
+      await vi.advanceTimersByTimeAsync(STOPPED_TURN_WAIT_MS)
+      await refused
+    } finally {
+      vi.useRealTimers()
+    }
+    openGate()
+    await left
+    expect(manager.busy(42)).toBe(false)
+  })
+
+  it('is still refused while the running turn was not stopped', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    build({ runner: createFakeRunner({ ensureGate: gate }) })
+    const running = collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await vi.waitFor(() => expect(runner.ensured).toHaveLength(1))
+    await expect(
+      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
+    openGate()
+    await running
   })
 })
 

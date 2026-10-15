@@ -9,11 +9,9 @@ import { readReaderState, writeReaderState } from '../../tour/reader.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
-import { logRequestError } from '../errors.js'
 import { oneAtATime } from '../one-at-a-time.js'
-import { SSE_HEADERS, sseStream } from '../sse.js'
 import { parseTargetKey } from './api.js'
-import { replayFrom, toChatError } from './chat-routes.js'
+import { turnResponse } from './chat-routes.js'
 import { readBody } from './review-routes.js'
 
 /** The stored tour the page is on, which must be the one a write names. */
@@ -133,24 +131,7 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
       },
       { message: input.message, context: input.context }
     )
-    const iterator = events[Symbol.asyncIterator]()
-    let first
-    try {
-      first = await iterator.next()
-    } catch (err) {
-      throw toChatError(err)
-    }
-    return new Response(
-      sseStream(
-        replayFrom(first, iterator),
-        undefined,
-        () => {
-          void ctx.chat.cancel(key)
-        },
-        err => logRequestError(ctx.log, c.req, err)
-      ),
-      { headers: SSE_HEADERS }
-    )
+    return turnResponse(ctx, c.req, key, events)
   })
 
   api.get('/tours/:n/grill/history', async c => {

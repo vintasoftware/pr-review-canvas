@@ -61,8 +61,10 @@ describe('sseStream', () => {
   it('tells the caller when the stream ends, once', async () => {
     let closed = 0
     await drain(
-      sseStream(toIterable([{ event: 'cancelled' }]), () => {
-        closed += 1
+      sseStream(toIterable([{ event: 'cancelled' }]), {
+        onClose: () => {
+          closed += 1
+        },
       })
     )
     expect(closed).toBe(1)
@@ -80,8 +82,10 @@ describe('sseStream', () => {
         },
       }),
     }
-    const stream = sseStream(iterable, () => {
-      closed = true
+    const stream = sseStream(iterable, {
+      onClose: () => {
+        closed = true
+      },
     })
     const reader = stream.getReader()
     await reader.read()
@@ -105,8 +109,10 @@ describe('sseStream', () => {
         yield { event: 'chunk', text: 'late' } as ChatEvent
       },
     }
-    const reader = sseStream(silent, undefined, () => {
-      cancelled = true
+    const reader = sseStream(silent, {
+      onCancel: () => {
+        cancelled = true
+      },
     }).getReader()
     await reader.read()
     const pending = reader.read()
@@ -114,6 +120,61 @@ describe('sseStream', () => {
     expect(cancelled).toBe(true)
     gate.open?.()
     await pending.catch(() => undefined)
+  })
+})
+
+describe('sseStream with the request signal', () => {
+  /** A turn that waits at its first event until it is told to return. */
+  function waiting(log: string[]): AsyncIterable<ChatEvent> {
+    return {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({
+          done: false,
+          value: { event: 'turn', thread: 't1', agent: 'claude', seeded: true },
+        }),
+        return: async () => {
+          log.push('return')
+          return { done: true, value: undefined }
+        },
+      }),
+    }
+  }
+
+  it('stops the turn when the reader left before anything was read', () => {
+    const log: string[] = []
+    const left = new AbortController()
+    left.abort()
+    sseStream(waiting(log), {
+      onCancel: () => log.push('cancel'),
+      onClose: () => log.push('close'),
+      signal: left.signal,
+    })
+    expect(log).toEqual(['cancel', 'return', 'close'])
+  })
+
+  it('stops the turn when the request is aborted while nobody reads the body', () => {
+    const log: string[] = []
+    const left = new AbortController()
+    sseStream(waiting(log), { onCancel: () => log.push('cancel'), signal: left.signal })
+    expect(log).toEqual([])
+    left.abort()
+    left.abort()
+    expect(log).toEqual(['cancel', 'return'])
+  })
+
+  it('does not stop anything once the stream has ended', async () => {
+    const left = new AbortController()
+    let cancelled = 0
+    await drain(
+      sseStream(toIterable([{ event: 'cancelled' }]), {
+        onCancel: () => {
+          cancelled += 1
+        },
+        signal: left.signal,
+      })
+    )
+    left.abort()
+    expect(cancelled).toBe(0)
   })
 })
 

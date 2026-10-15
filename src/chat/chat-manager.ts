@@ -1,7 +1,7 @@
 // One turn at a time per pull request: build the prompt, run the agent, stream what it says,
 // and keep the transcript. The lock is what makes `CHAT_BUSY` a real answer rather than two
 // agents writing into one thread.
-import type { AgentRunner } from '../acpx/acpx.js'
+import { type AgentRunner, CANCEL_TIMEOUT_SEC, KILL_GRACE_MS } from '../acpx/acpx.js'
 import { latestModel } from '../acpx/models.js'
 import type {
   ChatContext,
@@ -34,6 +34,12 @@ export class ChatBusyError extends Error {
     this.name = 'ChatBusyError'
   }
 }
+
+/**
+ * How long a new turn waits for a stopped one to let go before it is refused: as long as the
+ * runner gives a stopped agent to end.
+ */
+export const STOPPED_TURN_WAIT_MS = CANCEL_TIMEOUT_SEC * 1000 + KILL_GRACE_MS
 
 export interface ChatManagerDeps {
   runner: AgentRunner
@@ -94,6 +100,8 @@ interface RunningTurn {
   lease: CheckoutLease | null
   /** True once a stop arrived, which can be before the agent has started. */
   stopped: boolean
+  /** Settles once the turn has let go of the lock. */
+  ended: Promise<void>
 }
 
 /**
@@ -256,12 +264,25 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
-    if (running.has(target.key)) {
-      throw new ChatBusyError()
+    const held = running.get(target.key)
+    if (held !== undefined) {
+      if (!held.stopped) {
+        throw new ChatBusyError()
+      }
+      // A stopped turn is only finishing up, as when the reader left and came back: this turn
+      // waits for it rather than being refused.
+      await settlesWithin(held.ended, STOPPED_TURN_WAIT_MS)
+      if (running.has(target.key)) {
+        throw new ChatBusyError()
+      }
     }
-    // The slot is taken before the first await, so a second request that arrives while this one
-    // is still reading the settings sees a busy chat rather than starting a second agent.
-    const slot: RunningTurn = { run: null, stopped: false, lease: null }
+    // The slot is taken with no await since the check, so a second request that arrives while
+    // this one is still reading the settings sees a busy chat rather than starting a second agent.
+    let end = (): void => undefined
+    const ended = new Promise<void>(resolve => {
+      end = resolve
+    })
+    const slot: RunningTurn = { run: null, stopped: false, lease: null, ended }
     running.set(target.key, slot)
     try {
       yield* runTurn(target, input, slot)
@@ -269,6 +290,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       // The lock goes first, so a slot that looks free always has a free checkout behind it.
       await slot.lease?.release().catch(() => undefined)
       running.delete(target.key)
+      end()
     }
   }
 
@@ -553,6 +575,18 @@ function seedPaths(deps: ChatManagerDeps, target: ChatTarget, code: CodeSource):
     repoRoot: deps.repoRoot,
     code,
   }
+}
+
+/** Waits for `promise`, but no longer than `ms`. */
+async function settlesWithin(promise: Promise<void>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    promise,
+    new Promise<void>(resolve => {
+      timer = setTimeout(resolve, ms)
+    }),
+  ])
+  clearTimeout(timer)
 }
 
 function hintFor(code: string): { hint?: string } {

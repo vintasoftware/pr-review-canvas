@@ -1,6 +1,10 @@
 // @vitest-environment node
 // The tour page, its API, and its scene frames, end to end through Hono.
+import { once } from 'node:events'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import http from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { serve } from '@hono/node-server'
 import path from 'node:path'
 import type { ErrorEnvelope } from '../contract/api.js'
 import type { TourBundle, TourFinishResponse, TourReaderState } from '../contract/tour-api.js'
@@ -583,6 +587,60 @@ describe('the grilling routes', () => {
     expect(await json<{ cancelled: boolean }>(await send('/api/tours/42/grill/cancel', 'POST', {}))).toEqual({
       cancelled: false,
     })
+  })
+
+  it('stops the turn when the reader leaves before its first event, so coming back can grill again', async () => {
+    // The second turn of a seeded thread says nothing until the agent starts, and this gate holds
+    // it there: the reader leaves before the response has begun.
+    let openGate = (): void => undefined
+    let gate: Promise<void> | undefined
+    const runner = createFakeRunner()
+    const asked: string[] = []
+    runner.sessionModel = async ({ session }) => {
+      asked.push(session)
+      await gate
+      return null
+    }
+    t = await context({ projectConfig: CHAT_ON, runner })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const server = serve({ fetch: createApp(t.ctx).fetch, port: 0, hostname: '127.0.0.1' }) as http.Server
+    await once(server, 'listening')
+    const { port } = server.address() as AddressInfo
+    const origin = `http://127.0.0.1:${port}`
+    const body = (message: string) =>
+      JSON.stringify({ message, context: { kind: 'tour-decision', key: 'sum-over-product' } })
+    const post = (message: string) =>
+      fetch(`${origin}/api/tours/42/grill`, {
+        method: 'POST',
+        headers: { ...WRITE, origin },
+        body: body(message),
+      })
+    try {
+      expect(await (await post('first')).text()).toContain('event: done')
+      gate = new Promise<void>(resolve => {
+        openGate = resolve
+      })
+      const request = http.request({
+        host: '127.0.0.1',
+        port,
+        method: 'POST',
+        path: '/api/tours/42/grill',
+        headers: { ...WRITE, host: `127.0.0.1:${port}`, origin },
+      })
+      request.on('error', () => undefined)
+      request.end(body('opening'))
+      await vi.waitFor(() => expect(asked).toHaveLength(2))
+      request.destroy()
+      await new Promise(resolve => setTimeout(resolve, 50))
+      openGate()
+      await vi.waitFor(() => expect(t.ctx.chat.busy(42)).toBe(false), { timeout: 1000 })
+      const again = await post('back')
+      expect(again.status).toBe(200)
+      expect(await again.text()).toContain('event: done')
+    } finally {
+      server.closeAllConnections()
+      server.close()
+    }
   })
 
   it('refuses without chat, without a tour, with a canvas context, and answers an unknown decision as a refusal', async () => {
