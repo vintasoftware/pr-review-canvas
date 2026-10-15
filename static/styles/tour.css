@@ -12,21 +12,16 @@ pr-tour {
 .tour-page {
   --tour-accent: light-dark(#1f883d, #57ab5a);
   --tour-accent-bg: light-dark(#dafbe1, rgb(87 171 90 / 15%));
-  --tour-accent-fg: light-dark(#fff, #212830);
   --tour-display: 'Space Grotesk', var(--sans);
   --stage-w: 760px;
   --figure-w: 1120px;
   --here-c: var(--here, var(--purple));
   --here-bg-c: var(--here-bg, var(--annot-bg));
-  --btn-primary-c: var(--btn-primary, var(--ok));
-  --btn-primary-fg-c: var(--btn-primary-fg, var(--bg));
-  --btn-bg-c: var(--btn-bg, var(--panel-2));
   --r-card: 8px;
 }
 :root[data-skin='olive'] .tour-page {
   --tour-accent: light-dark(#50643f, #b5cf8f);
   --tour-accent-bg: light-dark(#e4ecd7, rgb(181 207 143 / 14%));
-  --tour-accent-fg: light-dark(#f7f7f2, #1d1f1a);
 }
 .tour-page .hdr-title h1 .tour-word {
   color: var(--tour-accent);
@@ -452,40 +447,8 @@ pr-tour {
   background: var(--panel);
 }
 
-/* ---- Buttons ---- */
-.tour-btn {
-  font: inherit;
-  font-size: 14px;
-  padding: 7px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--btn-bg-c);
-  color: var(--fg);
-  cursor: pointer;
-}
-.tour-btn:hover {
-  border-color: var(--fg-muted);
-}
-.tour-btn.primary {
-  background: var(--btn-primary-c);
-  border-color: var(--btn-primary-c);
-  color: var(--btn-primary-fg-c);
-  font-weight: 600;
-}
-.tour-btn.accent {
-  background: var(--tour-accent);
-  border-color: var(--tour-accent);
-  color: var(--tour-accent-fg);
-  font-weight: 600;
-}
-.tour-btn.quiet {
-  background: transparent;
-}
-.tour-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.tour-btn kbd {
+/* ---- Commands: the project's, with the key that does the same ---- */
+.tour-actions .cmd kbd {
   font-family: var(--mono);
   font-size: 11px;
   margin-left: 6px;
@@ -866,52 +829,6 @@ pr-tour {
   border-left: 1px solid var(--line);
   min-height: 0;
 }
-.tour-chat-h {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-}
-.tour-chat-h b {
-  font-family: var(--tour-display);
-  font-size: 15px;
-}
-.tour-chat-h .agent {
-  display: block;
-  font-size: 12px;
-  color: var(--fg-muted);
-  font-family: var(--mono);
-}
-.tour-chat-log {
-  flex: 1 1 auto;
-  overflow: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.tour-msg {
-  max-width: 92%;
-  font-size: 14px;
-  line-height: 1.45;
-  padding: 10px 12px;
-  border-radius: 10px;
-}
-.tour-msg.agent {
-  align-self: flex-start;
-  background: var(--panel-2);
-  border-bottom-left-radius: 2px;
-}
-.tour-msg .who {
-  display: block;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-  margin-bottom: 4px;
-}
 .tour-restate {
   align-self: stretch;
   border: 2px solid var(--here-c);
@@ -941,7 +858,11 @@ pr-tour {
   width: 100%;
   font: inherit;
   font-size: 13.5px;
-  min-height: 56px;
+  /* Each field grows to fit what it holds, so an edit starts with the whole text in view. A
+     browser without field-sizing keeps the minimum, five lines, and the resize handle. */
+  field-sizing: content;
+  min-height: calc(5lh + 14px);
+  max-height: 50vh;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 6px 8px;
@@ -1022,7 +943,6 @@ pr-tour {
   .tour-chat-box {
     border-left: 0;
     border-top: 1px solid var(--line);
-    border-radius: 14px 14px 0 0;
   }
   .tour-nav {
     padding: 8px 16px;
@@ -1032,23 +952,7 @@ pr-tour {
   }
 }
 
-/* ---- The grilling: turns, the composer, the mic, and the agent's cards ---- */
-.tour-msg.reader {
-  align-self: flex-end;
-  background: var(--tour-accent-bg);
-  border: 1px solid color-mix(in srgb, var(--tour-accent) 40%, transparent);
-  border-bottom-right-radius: 2px;
-}
-.tour-msg.note {
-  align-self: center;
-  font-size: 12px;
-  color: var(--fg-muted);
-  background: transparent;
-  padding: 0;
-}
-.tour-msg.agent .prose p {
-  margin: 0 0 8px;
-}
+/* ---- The grilling: the canvas's chat, with the mic and the agent's cards ---- */
 .tour-restate .where {
   display: flex;
   flex-wrap: wrap;
@@ -1078,67 +982,90 @@ pr-tour {
   font-size: 12px;
   white-space: pre-wrap;
 }
-.tour-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 0 12px 10px;
-}
-.tour-tools .tour-btn {
-  font-size: 12.5px;
-  padding: 5px 10px;
-}
-.tour-composer {
-  border-top: 1px solid var(--line);
-  padding: 10px 12px 12px;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  align-items: end;
-}
-.tour-composer textarea {
-  font: inherit;
-  font-size: 14px;
-  min-height: 42px;
-  max-height: 140px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px 10px;
-  background: var(--bg);
-  color: var(--fg);
-  resize: none;
-}
-.tour-btn.icon {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
-}
 .tour-mic[data-state='listening'] {
   border-color: var(--bad);
   color: var(--bad);
   animation: tour-pulse 1s infinite;
+}
+.tour-notice .tbtns {
+  margin-top: 8px;
 }
 @keyframes tour-pulse {
   50% {
     box-shadow: 0 0 0 6px color-mix(in srgb, var(--bad) 25%, transparent);
   }
 }
+.tour-grill-steps {
+  display: flex;
+  gap: 6px 16px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 10px 14px;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.tour-grill-steps li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tour-grill-steps b {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid currentcolor;
+  font-size: 11px;
+}
+.tour-grill-steps [data-state='now'] {
+  color: var(--fg);
+  font-weight: 600;
+}
+.tour-grill-steps [data-state='now'] b {
+  border-color: var(--tour-accent);
+  background: var(--tour-accent);
+  color: var(--bg);
+}
+.tour-grill-steps [data-state='done'] b {
+  border-color: var(--tour-accent);
+  color: var(--tour-accent);
+}
+.tour-grill-guide {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--tour-accent-bg);
+  font-size: 13px;
+}
+.tour-grill-guide p {
+  flex: 1 1 auto;
+  margin: 0;
+}
 .tour-notice {
-  grid-column: 1 / -1;
   font-size: 12.5px;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--warn-bg);
   border-left: 4px solid var(--warn);
 }
-.tour-notice .tour-actions {
-  margin-top: 8px;
-  gap: 8px;
+.tour-writing {
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font-style: italic;
+  animation: tour-writing 1.4s ease-in-out infinite;
 }
-.tour-notice .tour-btn {
-  font-size: 12px;
-  padding: 4px 10px;
+@keyframes tour-writing {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-writing {
+    animation: none;
+  }
 }

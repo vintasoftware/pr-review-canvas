@@ -114,7 +114,7 @@ describe('GET /api/tours/:n', () => {
       preview: false,
       shares: true,
       skillCommand: '/pr-tour 42',
-      options: { finalQuiz: 'on', reverseQuiz: 'on', grill: 'change', audio: 'on' },
+      options: { finalQuiz: 'on', grill: 'change', audio: 'on' },
     })
     expect(bundle.tour).toBeUndefined()
     expect(bundle.reader.step).toBe(0)

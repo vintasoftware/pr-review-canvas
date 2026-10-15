@@ -15,19 +15,19 @@ test('grills something else through AI Chat, in the tour thread, and approves th
   const { url, ctx } = await chatServer({
     runner: {
       script: options =>
-        options.prompt.includes('How would you carry')
+        options.prompt.includes('I want neither')
           ? [
-              { type: 'chunk', text: '1. Change `outputMode` in `src/commands.ts`.\n2. Run `pnpm test`.' },
+              { type: 'chunk', text: 'What should a person piping into `less` see?' },
               { type: 'done', stopReason: 'end_turn' },
             ]
-          : options.prompt.includes('I want neither')
+          : options.prompt.includes("That's enough")
             ? [
-                { type: 'chunk', text: 'What should a person piping into `less` see?' },
+                { type: 'chunk', text: 'Thanks.\n' },
+                { type: 'chunk', text: RESTATEMENT },
                 { type: 'done', stopReason: 'end_turn' },
               ]
             : [
-                { type: 'chunk', text: 'Thanks.\n' },
-                { type: 'chunk', text: RESTATEMENT },
+                { type: 'chunk', text: 'And should `--json` still force JSON at a terminal?' },
                 { type: 'done', stopReason: 'end_turn' },
               ],
     },
@@ -54,33 +54,49 @@ test('grills something else through AI Chat, in the tour thread, and approves th
   await page.locator('.tour-option[data-pick="other"]').click()
   const dialog = page.locator('#tour-grill')
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('.tour-chat-h .agent')).toContainText('claude')
+  await expect(dialog.locator('.ctx-line')).toContainText('claude')
   // The opening goes out by itself, and the agent asks its first question.
-  await expect(dialog.locator('.tour-msg.reader').first()).toContainText('I want neither')
-  await expect(dialog.locator('.tour-msg.agent').first()).toContainText('piping into')
+  await expect(dialog.locator('.turn.u').first()).toContainText('I want neither')
+  await expect(dialog.locator('.turn.a').first()).toContainText('piping into')
   await expect(dialog.locator('[data-act="stop"]')).toHaveCount(0)
 
+  // Step one: talk it through.
+  const step = dialog.locator('.tour-grill-steps [aria-current="step"]')
+  await expect(step).toContainText('talk it through')
   await dialog.locator('#composer').fill('Text, like at a terminal.')
   await dialog.locator('#composer').press('Enter')
+  await expect(dialog.locator('.turn.a').last()).toContainText('still force JSON')
+
+  // Step two: finish. The agent restates from what it has.
+  await dialog.locator('.tour-grill-guide [data-act="done"]').click()
+  await expect(dialog.locator('.turn.u').last()).toContainText("That's enough")
   const card = dialog.locator('.tour-restate')
   await expect(card).toBeVisible()
   await expect(card).toContainText('a pipe prints text')
   await expect(card.locator('.where span')).toHaveText('src/commands.ts:66')
 
-  // The drawer is drawn again once a turn ends; the next click waits for that.
-  const settled = () => expect(dialog.locator('[data-act="stop"]')).toHaveCount(0)
-  await settled()
-
-  // The reverse quiz asks how the agent would do it.
-  await dialog.locator('[data-act="reverse"]').click()
-  await expect(dialog.locator('.tour-msg.agent').last()).toContainText('Change outputMode')
-  await settled()
-
+  // Step three: approve.
+  await expect(step).toContainText('approve')
+  await expect(dialog.locator('[data-act="done"]')).toHaveCount(0)
+  // Edit shows each field whole, at least five lines tall, with nothing to scroll inside it.
+  await card.locator('[data-act="edit"]').click()
+  const fields = dialog.locator('form[data-act="restate"] textarea')
+  await expect(fields).toHaveCount(3)
+  for (const field of await fields.all()) {
+    const size = await field.evaluate(el => ({
+      scroll: el.scrollHeight,
+      client: el.clientHeight,
+      line: parseFloat(getComputedStyle(el).lineHeight),
+    }))
+    expect(size.scroll).toBeLessThanOrEqual(size.client + 1)
+    expect(size.client).toBeGreaterThanOrEqual(size.line * 5)
+  }
+  await dialog.locator('[data-act="redraw"]').click()
   await card.locator('[data-act="approve"]').click()
   await expect(dialog).toBeHidden()
-  // Approving settles the decision and moves on; back on it, the restatement is what settled it.
-  await expect(page).toHaveURL(/#decision-handoff-passes-json$/)
-  await page.keyboard.press('ArrowLeft')
+  // Approving settles the decision and stays on it: something else is chosen, the restatement shown.
+  await expect(page).toHaveURL(/#decision-pipe-means-json$/)
+  await expect(page.locator('.tour-option[aria-checked="true"]')).toHaveAttribute('data-pick', 'other')
   await expect(page.locator('.tour-state.change')).toContainText('change approved')
   await expect(page.locator('.tour-restated')).toContainText('a pipe prints text')
   await expect(page.locator('.toast')).toContainText('change approved')
@@ -98,7 +114,9 @@ test('grills something else through AI Chat, in the tour thread, and approves th
 
   // Reopening shows the thread as it was and sends no opening again.
   await page.locator('[data-act="grill"]').click()
-  await expect(dialog.locator('.tour-msg.reader')).toHaveCount(3)
+  await expect(dialog.locator('.turn.u')).toHaveCount(3)
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
+  // Reading the conversation again does not take the approval back.
+  await expect(page.locator('.tour-state.change')).toContainText('change approved')
 })

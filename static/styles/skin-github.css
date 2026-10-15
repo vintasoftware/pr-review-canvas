@@ -187,9 +187,10 @@
 
   /* Buttons, GitHub's btn-sm. This list is the one place that decides which commands are buttons:
    the header toolbar, sign-off, a point's verbs, the ask of a layer or file, the layer's last
-   step, the author's resolve, and the "reviewed" toggles. */
+   step, the author's resolve, the "reviewed" toggles, and a tour's commands outside its chat. */
   :is(
     .hdr-actions .cmd,
+    :is(.tour-actions, .tour-nav, .tour-return, .tour-restate, .tour-notice, .tour-help) .cmd,
     .signoff .cmd,
     :is(.findings, .ifind)
       .cmd:is(
@@ -224,13 +225,14 @@
       background: var(--btn-bg);
       color: var(--fg-dim);
     }
-    /* The primary action of its block: approving the review, saving the author's reason. */
-    &:is(#approve, [data-act='settle-save']):not(:disabled) {
+    /* The primary action of its block: approving the review, saving the author's reason, a tour's
+     filled command. */
+    &:is(#approve, [data-act='settle-save'], .fill):not(:disabled) {
       border-color: transparent;
       background: var(--btn-primary);
       color: var(--btn-primary-fg);
     }
-    &:is(#approve, [data-act='settle-save']):not(:disabled):hover {
+    &:is(#approve, [data-act='settle-save'], .fill):not(:disabled):hover {
       background: var(--btn-primary-hover);
     }
     /* Once ticked, "reviewed" turns green: done. */
@@ -239,9 +241,13 @@
       background: var(--tint-done);
       color: var(--ok);
     }
-    /* Every command button but sign-off draws the glyph its `--icon` names below. A command left
-     without one draws nothing rather than a solid square. The text stays the accessible name. */
-    &.cmd:not(.signoff .cmd)::before {
+    /* Every command button but sign-off's and a tour's draws the glyph its `--icon` names below. A
+     command left without one draws nothing rather than a solid square. The text stays the
+     accessible name. */
+    &.cmd:not(
+        .signoff .cmd,
+        :is(.tour-actions, .tour-nav, .tour-return, .tour-restate, .tour-notice, .tour-help) .cmd
+      )::before {
       content: '';
       flex: 0 0 var(--icon-size, 14px);
       width: var(--icon-size, 14px);
@@ -652,7 +658,7 @@
     border-radius: var(--r);
     padding: 5px 12px;
   }
-  dialog {
+  dialog:not(.tour-chat) {
     border-width: 1px;
     border-color: var(--line);
     border-radius: 12px;

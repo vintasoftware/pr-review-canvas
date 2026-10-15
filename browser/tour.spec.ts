@@ -97,7 +97,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   expect(bundle.tour.record.author.picks['pipe-means-json']).toEqual({ pick: 'keep' })
 })
 
-test('takes something else through the drawer and moves on to the next decision', async ({
+test('takes something else through the drawer and stays on the decision it settled', async ({
   page,
   tourUrl,
 }) => {
@@ -109,10 +109,11 @@ test('takes something else through the drawer and moves on to the next decision'
   await dialog.locator('textarea[name="unchanged"]').fill('Agents that pass --json.')
   await dialog.locator('button[type="submit"]').click()
   await expect(dialog).toBeHidden()
-  await expect(page).toHaveURL(/#decision-handoff-passes-json$/)
-  await page.keyboard.press('ArrowLeft')
+  await expect(page).toHaveURL(/#decision-pipe-means-json$/)
   await expect(page.locator('.tour-state.change')).toContainText('change approved')
   await expect(page.locator('.tour-restated')).toContainText('Agents that pass --json.')
+  await page.locator('[data-nav="next"]').click()
+  await expect(page).toHaveURL(/#decision-handoff-passes-json$/)
 })
 
 test('the home page and the canvas header link to the tour', async ({ page, tourUrl }) => {

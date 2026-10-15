@@ -104,7 +104,6 @@ export interface TourStaleInfo {
 /** The tour's own options, as the page needs them; the rest belongs to the generator. */
 export interface TourPageOptions {
   finalQuiz: 'on' | 'off' | 'required'
-  reverseQuiz: 'on' | 'off'
   grill: 'change' | 'always' | 'off'
   audio: 'on' | 'off'
 }

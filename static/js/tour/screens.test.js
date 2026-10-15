@@ -132,11 +132,11 @@ describe('coverHtml', () => {
     ])
     expect(document.querySelector('.tour-cover-meta')?.textContent).toContain('no guide on file')
     expect(document.querySelector('.tour-cover-meta')?.textContent).toContain('touches: schema')
-    expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('Start the tour')
+    expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('start the tour')
     const back = bundleWith({ step: 3 })
     const tour = { ...tourOf(back), guide: 'docs/pr-tour.md', blastRadius: [] }
     document.body.innerHTML = coverHtml({ ...back, tour, options: { ...back.options, finalQuiz: 'off' } })
-    expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('Continue the tour')
+    expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('continue the tour')
     expect(document.querySelector('.tour-cover-meta')?.textContent).toContain('guide: docs/pr-tour.md')
     expect(document.querySelector('.tour-cover-meta')?.textContent).not.toContain('touches')
     expect([...document.querySelectorAll('.tour-budget b')].map(b => b.textContent)).toEqual([
@@ -282,7 +282,7 @@ describe('decisionHtml', () => {
     expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
       'other'
     )
-    expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('Continue the conversation')
+    expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('continue the conversation')
     // A side picked and taken back is not chosen.
     bundle.reader.picks['sum-over-product'] = { pick: 'change', approved: false }
     document.body.innerHTML = decisionHtml(bundle, steps, decision)
@@ -369,7 +369,7 @@ describe('planHtml', () => {
     expect(document.querySelector('.tour-plan-list li')?.textContent).toContain('Multiply.')
     expect(document.querySelectorAll('.tour-kept')[0]?.textContent).toContain('a note')
     expect(document.querySelectorAll('.tour-kept')[1]?.textContent).toBe('none')
-    expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('Confirm the plan')
+    expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('confirm the plan')
     expect(document.querySelector('.tour-not li .path')?.textContent).toBe('src/new-name.ts')
   })
 

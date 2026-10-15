@@ -267,7 +267,7 @@ describe('the tour page', () => {
     el.remove()
   })
 
-  it('takes something else through the drawer, moves on once approved, and the plan lists it', async () => {
+  it('takes something else through the drawer, stays on it once approved, and the plan lists it', async () => {
     const server = fakeServer(syntheticTourBundle({ reader: { ...freshReaderState(), step: 5 } }))
     vi.stubGlobal('fetch', server.impl)
     mount()
@@ -298,23 +298,27 @@ describe('the tour page', () => {
     unchanged.value = 'The callers.'
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     expect(dialog.open).toBe(false)
-    // An approved restatement settles the decision and moves on.
-    expect(location.hash).toBe('#quiz-q-run')
-    press('ArrowLeft')
+    // An approved restatement settles the decision; the reader moves on when ready.
+    expect(location.hash).toBe('#decision-sum-over-product')
+    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
+      'other'
+    )
     expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ change approved · in the plan')
     expect(document.querySelector('.tour-restated')?.textContent).toContain('The callers.')
     // A click outside the options leaves something else alone.
     click('.tour-lead')
     expect(document.querySelector('.tour-state.change')).not.toBeNull()
-    // Reopening keeps the draft; closing leaves the conversation to continue.
+    // Reopening keeps the draft, and closing it keeps the change approved.
     click('[data-act="grill"]')
     expect(dialog.querySelector('textarea[name="unchanged"]')?.textContent).toBe('The callers.')
     click('[data-act="close-grill"]')
     expect(dialog.open).toBe(false)
-    expect(document.querySelector('[data-act="grill"]')?.textContent).toBe('Continue the conversation c')
+    expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ change approved · in the plan')
     click('.tour-option[data-pick="other"]')
     // The drawer is drawn again each time it opens.
     dialog.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    expect(dialog.open).toBe(false)
+    click('[data-nav="next"]')
     expect(location.hash).toBe('#quiz-q-run')
     press('2')
     click('[data-nav="next"]')

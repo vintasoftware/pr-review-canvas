@@ -913,15 +913,14 @@ Something else opens the **grilling**: with AI Chat on (`chat.enabled`, acpx ins
 the canvas's pane never lists), seeded from `prompts/tour-grill.md` with the landmarks and the
 decisions, and read-only like every chat turn (`POST /api/tours/<n>/grill`, its history at
 `GET /api/tours/<n>/grill/history`). The agent asks what it needs, then emits a fenced
-`restatement` block that the page turns into a card: approve settles the decision, puts it in the
-plan, and moves on to the next step; edit lets the reader correct it, reject sends the correction
-back. The agent says when it has enough; **That's enough, restate it** asks it to restate at once
-from what it has. With `tour.reverseQuiz`
-on, **Ask how it would do it** has the agent say the steps it would take. On the plan, **Restate
-the plan with the agent** asks for one fenced `plan` block. The reader may speak instead of type
+`restatement` block that the page turns into a card once the block is whole: approve settles the
+decision and puts it in the plan, and reopening the conversation keeps it approved; edit lets the
+reader correct it, reject sends the correction back. A decision asked about but never answered gets
+the opening again. The agent says when it has enough; **finish** asks it to restate at once from what it has.
+On the plan, **restate the plan with the agent** asks for one fenced `plan` block. The reader may speak instead of type
 (`tour.audio`): the browser's Web Speech API turns it into text, the page says once where the
 audio goes, and the reader can turn audio off for themselves. Without chat, the reader writes the
-restatement in the same card. **Confirm the plan** (`POST /api/tours/<n>/finish`) writes
+restatement in the same card. **confirm the plan** (`POST /api/tours/<n>/finish`) writes
 the re-implementation prompt to `tours/<headSha>/prompt.md`, records the reader in the tour's
 record (and the author's picks, so a regenerated tour carries them by decision key), and shares
 the record on the pull request once. On the tour of the pull request's head, a reviewer's approved
@@ -958,7 +957,6 @@ Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-r
 | `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                    |
 | `tour.budget.linesPerLandmark` | `400`             | About one why landmark per this many changed lines                                                           |
 | `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                      |
-| `tour.reverseQuiz`             | `on`              | `on` or `off`: the reader may ask the agent how it would carry the plan out                                  |
 | `tour.grill`                   | `change`          | `change` grills when the reader asks for something else, `always` on every pick, `off` never                 |
 | `tour.audio`                   | `on`              | Speech through the browser's Web Speech API, with a one-time notice on where the audio goes                  |
 | `tour.microWorld`              | `on`              | `off` refuses a micro-world                                                                                  |

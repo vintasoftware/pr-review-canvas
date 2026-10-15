@@ -25,7 +25,7 @@ export function syntheticTourBundle(over: Partial<TourBundle> = {}): TourBundle 
     reviewer: { login: 'octocat', author: true },
     preview: false,
     shares: true,
-    options: { finalQuiz: 'on', reverseQuiz: 'on', grill: 'change', audio: 'on' },
+    options: { finalQuiz: 'on', grill: 'change', audio: 'on' },
     chat: { enabled: false, acpx: false },
     skillCommand: '/pr-tour 42',
     warnings: [],

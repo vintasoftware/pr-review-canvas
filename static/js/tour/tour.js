@@ -197,7 +197,6 @@ export class PrTourElement extends HTMLElement {
           pick.restatement = restatement
         })
         toast(this, 'change approved · in the plan')
-        this.go(this.current + 1)
       },
       onReader: () => this.save(),
     })
@@ -357,12 +356,18 @@ export class PrTourElement extends HTMLElement {
     }
   }
 
-  /** @param {Decision} d */
+  /**
+   * Opens the drawer on something else. A restatement approved before stays approved until another
+   * one is: reopening is to read or continue the conversation, not to take the change back.
+   * @param {Decision} d
+   */
   openGrill(d) {
     const bundle = /** @type {TourBundle} */ (this.bundle)
     this.updatePick(d, pick => {
-      pick.pick = 'other'
-      pick.approved = false
+      if (pick.pick !== 'other') {
+        pick.pick = 'other'
+        pick.approved = false
+      }
     })
     void this.grill?.open(d, bundle.reader.picks[d.key]?.restatement)
   }

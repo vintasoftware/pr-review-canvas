@@ -79,7 +79,6 @@ export const TourConfigSchema = z.object({
     linesPerLandmark: z.number().int().positive(),
   }),
   finalQuiz: z.enum(['on', 'off', 'required']),
-  reverseQuiz: OnOff,
   grill: z.enum(['change', 'always', 'off']),
   audio: OnOff,
   microWorld: OnOff,
@@ -105,7 +104,6 @@ const PartialTourConfigSchema = z.object({
     })
     .optional(),
   finalQuiz: z.enum(['on', 'off', 'required']).optional(),
-  reverseQuiz: OnOff.optional(),
   grill: z.enum(['change', 'always', 'off']).optional(),
   audio: OnOff.optional(),
   microWorld: OnOff.optional(),
@@ -119,7 +117,6 @@ const PartialTourConfigSchema = z.object({
 export const DEFAULT_TOUR_CONFIG: TourConfig = {
   budget: { whyLandmarks: 4, decisions: 5, quiz: 5, linesPerLandmark: 400 },
   finalQuiz: 'on',
-  reverseQuiz: 'on',
   grill: 'change',
   audio: 'on',
   microWorld: 'on',
@@ -275,7 +272,6 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
         linesPerLandmark: user.tour?.budget?.linesPerLandmark ?? DEFAULT_TOUR_CONFIG.budget.linesPerLandmark,
       },
       finalQuiz: user.tour?.finalQuiz ?? DEFAULT_TOUR_CONFIG.finalQuiz,
-      reverseQuiz: user.tour?.reverseQuiz ?? DEFAULT_TOUR_CONFIG.reverseQuiz,
       grill: user.tour?.grill ?? DEFAULT_TOUR_CONFIG.grill,
       audio: user.tour?.audio ?? DEFAULT_TOUR_CONFIG.audio,
       microWorld: user.tour?.microWorld ?? DEFAULT_TOUR_CONFIG.microWorld,

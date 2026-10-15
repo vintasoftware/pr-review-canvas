@@ -88,3 +88,35 @@ export function splitFences(markdown, info) {
   flushProse()
   return out
 }
+
+/**
+ * A text still being written, cut where a block with one of these info strings opens and has not
+ * closed yet, or null when no such block is open. The cut text is CRLF read as LF.
+ * @param {string} markdown
+ * @param {string[]} infos compared case-insensitively
+ * @returns {{ before: string, info: string } | null}
+ */
+export function openFence(markdown, infos) {
+  const wanted = new Set(infos.map(i => i.toLowerCase()))
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  /** @type {{ marker: string, at: number, info: string } | null} */
+  let open = null
+  for (const [i, line] of lines.entries()) {
+    const fence = fenceOf(line)
+    if (fence === null) {
+      continue
+    }
+    if (open === null) {
+      open = { marker: fence.marker, at: i, info: fence.info.toLowerCase() }
+    } else if (
+      fence.info === '' &&
+      fence.marker.length >= open.marker.length &&
+      fence.marker[0] === open.marker[0]
+    ) {
+      open = null
+    }
+  }
+  return open === null || !wanted.has(open.info)
+    ? null
+    : { before: lines.slice(0, open.at).join('\n'), info: open.info }
+}

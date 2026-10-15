@@ -136,10 +136,6 @@ _Avoid_: Chat, Interview, Clarification
 The agent's own words for a requested change: what changes, where, and what stays the same. The reader approves, edits, or rejects it, and only an approved restatement enters the plan.
 _Avoid_: Summary, Transcript, Spec
 
-**Reverse quiz**:
-The reader's questions to the agent about how it would carry out the plan, asked to catch a wrong understanding before anything runs.
-_Avoid_: Quiz, Dry run
-
 **Plan**:
 The approved restatements of a tour, restated once as a whole at the end and confirmed by the reader. It needs no further review before an agent implements it.
 _Avoid_: Fix list, Prompt, Task list

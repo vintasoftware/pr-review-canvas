@@ -15,7 +15,7 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   parity, the code behind a landmark as a literate or raw diff, a note per landmark, and a plan
   that writes the re-implementation prompt and shares who toured on the pull request. A change
   pick is grilled through AI Chat in the tour's own thread, with a restatement card to approve,
-  edit, or reject, a reverse quiz, and speech input with a one-time notice.
+  edit, or reject, and speech input with a one-time notice.
 - A reviewer's approved changes go into their pending review as comments on the decisions'
   lines.
 - Config: `tour:` in `pr-review.config.yml` (budget, quiz, grilling, audio, micro-world, try-it,

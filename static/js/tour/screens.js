@@ -139,9 +139,9 @@ export function navHtml(steps, i, reader) {
   const step = steps[i]
   const canNext = step !== undefined && i < steps.length - 1 && settled(step, reader)
   return `<div class="tour-nav-inner">
-    <button class="tour-btn quiet" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>
+    <button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>
     <span class="tour-nav-pos">${esc(positionLabel(steps, i))}</span>
-    <button class="tour-btn${canNext ? ' accent' : ''}" type="button" data-nav="next"${canNext ? '' : ' disabled'}>${esc(nextLabel(steps, i))} →</button>
+    <button class="cmd${canNext ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ' disabled'}>${esc(nextLabel(steps, i))} →</button>
   </div>`
 }
 
@@ -176,7 +176,7 @@ export function coverHtml(bundle) {
     </div>
     ${bundle.reader.finished ? '<p class="tour-hint">You finished this tour. Read it again, or open the plan.</p>' : ''}
     <div class="tour-cover-actions">
-      <button class="tour-btn accent" type="button" data-nav="next">${bundle.reader.step > 0 ? 'Continue the tour' : 'Start the tour'}</button>
+      <button class="cmd fill big" type="button" data-nav="next">${bundle.reader.step > 0 ? 'continue the tour' : 'start the tour'}</button>
       <span class="tour-hint"><kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>i</kbd> code · <kbd>?</kbd> help</span>
     </div>`
 }
@@ -201,7 +201,7 @@ export function returnBannerHtml(steps, tour, from) {
             'back to the landmark',
           ]
         : ['Jumped from a decision.', 'back to the decision']
-  return `<div class="tour-return"><span>${esc(text)}</span><button class="tour-btn" type="button" data-act="return">${esc(label)}</button></div>`
+  return `<div class="tour-return"><span>${esc(text)}</span><button class="cmd" type="button" data-act="return">${esc(label)}</button></div>`
 }
 
 /**
@@ -239,7 +239,7 @@ export function landmarkHtml(bundle, steps, landmark) {
   const code =
     landmark.code.length === 0
       ? ''
-      : `<div class="tour-actions"><button class="tour-btn quiet" type="button" data-act="code">${codeButtonHtml(codeOpen)}</button></div>
+      : `<div class="tour-actions"><button class="cmd" type="button" data-act="code">${codeButtonHtml(codeOpen)}</button></div>
          <div class="tour-code"${codeOpen ? '' : ' hidden'}>
            ${
              hasLiterate
@@ -332,7 +332,7 @@ export function decisionHtml(bundle, steps, d) {
        <ul>${d.tryIt.look.map(s => `<li>${inline(s)}</li>`).join('')}</ul>
        <label><input type="checkbox" data-act="tried"${p?.tried ? ' checked' : ''}> I tried it</label></div>`
     : ''
-  const unsettle = '<button class="tour-btn quiet" type="button" data-act="unsettle">undo</button>'
+  const unsettle = '<button class="cmd" type="button" data-act="unsettle">undo</button>'
   const actions =
     chosen === null
       ? '<span class="tour-hint">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</span>'
@@ -341,8 +341,8 @@ export function decisionHtml(bundle, steps, d) {
         : chosen === 'change'
           ? `<span class="tour-state change">✓ alternative · in the plan</span>${unsettle}`
           : done
-            ? `<span class="tour-state change">✓ change approved · in the plan</span><button class="tour-btn quiet" type="button" data-act="grill">reopen</button>${unsettle}`
-            : `<button class="tour-btn accent" type="button" data-act="grill">Continue the conversation <kbd>c</kbd></button>${unsettle}`
+            ? `<span class="tour-state change">✓ change approved · in the plan</span><button class="cmd" type="button" data-act="grill">reopen</button>${unsettle}`
+            : `<button class="cmd fill" type="button" data-act="grill">continue the conversation <kbd>c</kbd></button>${unsettle}`
   const other = {
     label: 'Something else',
     consequence: 'Neither side: say what you want instead, then approve it as restated.',
@@ -397,7 +397,7 @@ export function quizHtml(bundle, q) {
   const reopen =
     landmark === undefined
       ? ''
-      : `<button class="tour-btn" type="button" data-act="reopen" data-landmark="${esc(landmark.id)}">reopen landmark ${landmarkIndex}: ${esc(landmark.title)}</button><span class="tour-hint">then answer again</span>`
+      : `<button class="cmd" type="button" data-act="reopen" data-landmark="${esc(landmark.id)}">reopen landmark ${landmarkIndex}: ${esc(landmark.title)}</button><span class="tour-hint">then answer again</span>`
   const after = a
     ? a.right
       ? `<div class="tour-quiz-why right">${inline(q.why)}</div>`
@@ -456,12 +456,12 @@ export function planHtml(bundle) {
          <li>Prompt written to <span class="mono">${esc(finished.promptPath)}</span>. Run <code>/pr-tour-apply ${esc(bundle.local ?? String(tour.pr.number))}</code> to implement it.</li>
        </ul>
        <h3 class="tour-section-h">Re-implementation prompt</h3>
-       <div class="tour-prompt"><div class="tour-actions"><button class="tour-btn" type="button" data-act="copy">copy</button></div><pre id="prompt">${esc(finished.prompt)}</pre></div>`
+       <div class="tour-prompt"><div class="tour-actions"><button class="cmd" type="button" data-act="copy">copy</button></div><pre id="prompt">${esc(finished.prompt)}</pre></div>`
     : bundle.preview
       ? '<div class="tour-actions"><span class="tour-hint">A preview is not finished: publish the tour first.</span></div>'
-      : `<div class="tour-actions"><button class="tour-btn accent" type="button" data-act="confirm">Confirm the plan</button><span class="tour-hint">writes the prompt${bundle.shares ? ', shares the record' : ''}</span>${
+      : `<div class="tour-actions"><button class="cmd fill" type="button" data-act="confirm">confirm the plan</button><span class="tour-hint">writes the prompt${bundle.shares ? ', shares the record' : ''}</span>${
           bundle.chat.enabled && bundle.options.grill !== 'off'
-            ? '<button class="tour-btn quiet" type="button" data-act="grill-plan">Restate the plan with the agent</button>'
+            ? '<button class="cmd" type="button" data-act="grill-plan">restate the plan with the agent</button>'
             : ''
         }</div>`
   return `
@@ -524,5 +524,5 @@ export function helpHtml() {
     <dt><kbd>esc</kbd></dt><dd>close this, or the drawer</dd>
   </dl>
   <p>A tour has landmarks that explain the change, decisions you keep or change, and a quiz. The browser's back and forward buttons move through it, and a reload lands where you were.</p>
-  <div class="tour-actions"><button class="tour-btn" type="button" data-act="close-help">close</button></div>`
+  <div class="tour-actions"><button class="cmd" type="button" data-act="close-help">close</button></div>`
 }

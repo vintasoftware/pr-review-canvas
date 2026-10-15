@@ -75,7 +75,6 @@ export async function resolveTourBundle(
     shares: !isLocalKey(key) && !found.preview && (await tourSharingOn(ctx)),
     options: {
       finalQuiz: config.finalQuiz,
-      reverseQuiz: config.reverseQuiz,
       grill: config.grill,
       audio: config.audio,
     },

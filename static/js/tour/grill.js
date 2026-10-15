@@ -2,16 +2,18 @@
 // The drawer "something else" opens. With AI Chat on, the agent grills the reader in the tour's own
 // thread: it asks what it needs, then restates the change as a card the reader approves, edits, or
 // rejects; only an approved restatement settles the decision and enters the plan. The reader may
-// say that is enough at any time, and the agent restates from what it has. The reader may
-// also ask how the agent would carry it out (the reverse quiz), and speak instead of type. With
-// chat off, the reader writes the restatement themselves in the same card.
+// finish at any time, and the agent restates from what it has. The reader may speak instead of
+// type. With chat off, the reader writes the restatement themselves in the same card.
 /** @typedef {import('../contract-types.js').Decision} Decision */
 /** @typedef {import('../contract-types.js').Restatement} Restatement */
 /** @typedef {import('../contract-types.js').TourBundle} TourBundle */
 /** @typedef {import('../contract-types.js').ChatTurn} ChatTurn */
 /** @typedef {import('../contract-types.js').TourGrillContext} TourGrillContext */
 /** @typedef {import('./grill-cards.js').PlanBlock} PlanBlock */
+import { ApiError } from '../api.js'
+import { liveAnswer } from '../chat-answer.js'
 import { esc, qs } from '../dom.js'
+import { openFence } from '../fences.js'
 import { renderMarkdown } from '../markdown.js'
 import { splitGrillAnswer } from './grill-cards.js'
 import { inline } from './screens.js'
@@ -26,10 +28,11 @@ export function openingMessage(d) {
 }
 
 export const DONE_MESSAGE =
-  "That's enough. Restate what I want now, from what we have, as one restatement block."
+  'That\'s enough. Restate what I want now, from what we have, as one fenced ```restatement block of JSON with "what", "where", and "unchanged", so I can approve it.'
 
-export const REVERSE_QUIZ_MESSAGE =
-  'How would you carry this change out? Name the files and the steps, in order, and what you would run to check it.'
+/** Sent when an answer to finish came back without the block, so the reader has a card to approve. */
+export const CARD_MESSAGE =
+  'Put that restatement in one fenced ```restatement block of JSON with "what", "where", and "unchanged", so I can approve it.'
 
 export const PLAN_MESSAGE =
   'Restate the whole plan as one plan block: every change I approved and every decision I kept.'
@@ -96,7 +99,7 @@ export function restatementFormHtml(d, draft, opts = { cancel: 'close-grill' }) 
         <label><b>What changes</b><textarea name="what" required maxlength="2000">${esc(r.what)}</textarea></label>
         <label><b>Where</b> <span class="tour-hint">paths or places, comma separated</span><textarea name="where" required maxlength="2000">${esc(r.where.join(', '))}</textarea></label>
         <label><b>Stays the same</b><textarea name="unchanged" required maxlength="2000" placeholder="What this change must not touch">${esc(r.unchanged)}</textarea></label>
-        <div class="tour-actions"><button class="tour-btn primary" type="submit">Approve · into the plan</button><button class="tour-btn quiet" type="button" data-act="${esc(opts.cancel)}">Cancel</button></div>
+        <div class="tour-actions"><button class="cmd fill" type="submit">approve · into the plan</button><button class="cmd" type="button" data-act="${esc(opts.cancel)}">cancel</button></div>
       </form>`
 }
 
@@ -107,10 +110,11 @@ export function restatementFormHtml(d, draft, opts = { cancel: 'close-grill' }) 
  */
 export function formGrillHtml(d, draft) {
   return `<div class="tour-chat-box">
-    <div class="tour-chat-h"><div><b>Something else · ${esc(d.title)}</b><span class="agent">say what you want instead, in your words</span></div><button class="tour-btn quiet" type="button" data-act="close-grill" aria-label="Close">✕</button></div>
-    <div class="tour-chat-log">
-      <div class="tour-msg agent"><span class="who">the decision</span>${inline(d.context)}</div>
-      <div class="tour-msg agent"><span class="who">what the code does</span>${esc(d.keep.label)}. ${inline(d.keep.consequence)}</div>
+    <div class="chat-h"><h2>Something else · ${esc(d.title)}</h2><button class="cmd" type="button" data-act="close-grill">close</button></div>
+    <p class="ctx-line">say what you want instead, in your words</p>
+    <div class="transcript" id="grill-log">
+      <div class="turn a"><span class="role">The decision</span><div class="prose">${inline(d.context)}</div></div>
+      <div class="turn a"><span class="role">What the code does</span><div class="prose">${esc(d.keep.label)}. ${inline(d.keep.consequence)}</div></div>
       ${restatementFormHtml(d, draft)}
     </div>
   </div>`
@@ -138,12 +142,12 @@ export function readRestatement(form) {
 /**
  * A restatement as the agent's card: approve, edit, or say what is wrong.
  * @param {Restatement} r
- * @param {number} index
+ * @param {string | number} key where the drawer keeps the restatement
  */
-export function restatementCardHtml(r, index) {
-  return `<div class="tour-restate" data-restatement="${index}"><h4>Here is what I understood</h4>
+export function restatementCardHtml(r, key) {
+  return `<div class="tour-restate" data-restatement="${esc(String(key))}"><h4>Here is what I understood</h4>
     <b>What changes</b>${inline(r.what)}<b>Where</b><div class="where">${r.where.map(w => `<span>${esc(w)}</span>`).join('')}</div><b>Stays the same</b>${inline(r.unchanged)}
-    <div class="tour-actions"><button class="tour-btn primary" type="button" data-act="approve" data-restatement="${index}">Approve</button><button class="tour-btn" type="button" data-act="edit" data-restatement="${index}">Edit</button><button class="tour-btn quiet" type="button" data-act="reject">No, that is not it</button></div></div>`
+    <div class="tour-actions"><button class="cmd fill" type="button" data-act="approve" data-restatement="${esc(String(key))}">approve</button><button class="cmd" type="button" data-act="edit" data-restatement="${esc(String(key))}">edit</button><button class="cmd" type="button" data-act="reject">no, that is not it</button></div></div>`
 }
 
 /**
@@ -164,18 +168,26 @@ export function planCardHtml(plan, bundle) {
  * One answer as HTML: prose, restatement cards, plan cards, and what failed to be a block.
  * @param {string} text
  * @param {TourBundle} bundle
- * @param {Restatement[]} sink the restatements found, in order; a card's index points here
+ * @param {Map<string, Restatement>} sink the restatements found; a card's key points here
+ * @param {string} turnKey this answer's part of the keys, replaced on each redraw of it
  */
-export function answerHtml(text, bundle, sink) {
+export function answerHtml(text, bundle, sink, turnKey) {
   const keys = new Set((bundle.tour?.decisions ?? []).map(d => d.key))
+  for (const key of [...sink.keys()]) {
+    if (key.startsWith(`${turnKey}-`)) {
+      sink.delete(key)
+    }
+  }
+  let n = 0
   return splitGrillAnswer(text, keys)
     .map(segment => {
       if (segment.type === 'markdown') {
         return renderMarkdown(segment.text)
       }
       if (segment.type === 'restatement') {
-        sink.push(segment.restatement)
-        return restatementCardHtml(segment.restatement, sink.length - 1)
+        const key = `${turnKey}-${n++}`
+        sink.set(key, segment.restatement)
+        return restatementCardHtml(segment.restatement, key)
       }
       if (segment.type === 'plan') {
         return planCardHtml(segment.plan, bundle)
@@ -197,8 +209,16 @@ export function createGrill(options) {
   let decision = null
   /** @type {TourGrillContext} */
   let context = { kind: 'tour-plan' }
-  /** @type {Restatement[]} */
-  let restatements = []
+  /** The restatements on screen, by the key their card's buttons carry. */
+  /** @type {Map<string, Restatement>} */
+  const restatements = new Map()
+  /**
+   * Answers drawn as they streamed, kept as they are: their elapsed time and tool calls stay
+   * under them when the drawer is drawn again.
+   * @type {Map<ChatTurn, HTMLElement>}
+   */
+  const drawn = new Map()
+  let stopLive = () => {}
   let streaming = false
   /** @type {AbortController | null} */
   let inFlight = null
@@ -208,8 +228,14 @@ export function createGrill(options) {
   /** @type {ChatTurn[]} */
   let history = []
   let historyLoaded = false
+  /** True from a click on finish until the agent's answer to it ends. */
+  let finishing = false
+  /** A message refused because another answer runs for this pull request, kept to send again. */
+  let refused = ''
+  /** True when the answer to finish came back without a card to approve. */
+  let missed = false
 
-  const log = () => /** @type {HTMLElement | null} */ (qs('.tour-chat-log', dialog))
+  const log = () => /** @type {HTMLElement | null} */ (qs('#grill-log', dialog))
   const composer = () => /** @type {HTMLTextAreaElement | null} */ (qs('#composer', dialog))
 
   /** @param {Decision | null} d */
@@ -217,55 +243,144 @@ export function createGrill(options) {
     const agent = bundle.chat.agent ?? 'agent'
     const model = bundle.chat.model ? ` · ${esc(bundle.chat.model)}` : ''
     const title = d === null ? 'The plan' : `Grilling · ${esc(d.title)}`
-    return `<div class="tour-chat-h"><div><b>${title}</b><span class="agent">${esc(agent)}${model} · read-only · one thread per tour</span></div><button class="tour-btn quiet" type="button" data-act="close-grill" aria-label="Close">✕</button></div>`
+    return `<div class="chat-h"><h2>${title}</h2><button class="cmd" type="button" data-act="close-grill">close</button></div><p class="ctx-line">${esc(agent)}${model} · read-only · one thread per tour</p>`
   }
+
+  /**
+   * The turns of this conversation: a decision's exchange, or the plan's. The tour keeps one thread,
+   * so an answer belongs to the reader's turn before it.
+   */
+  const visible = () => {
+    let mine = false
+    return history.filter(turn => {
+      if (turn.role === 'user') {
+        mine =
+          decision === null
+            ? turn.context?.kind === 'tour-plan'
+            : turn.context?.kind === 'tour-decision' && turn.context.key === decision.key
+      }
+      return mine
+    })
+  }
+
+  /**
+   * Where the reader is in a decision's grilling: talking it through, waiting for the agent to
+   * restate after finish, or reading a restatement to approve.
+   * @returns {'talk' | 'finish' | 'approve'}
+   */
+  const stage = () => {
+    if (streaming) {
+      return finishing ? 'finish' : 'talk'
+    }
+    const last = visible().at(-1)
+    return last?.role === 'assistant' && hasCard(last.text) ? 'approve' : 'talk'
+  }
+
+  /** @param {string} text */
+  const hasCard = text => {
+    const keys = new Set((bundle.tour?.decisions ?? []).map(d => d.key))
+    return splitGrillAnswer(text, keys).some(s => s.type === 'restatement')
+  }
+
+  /** The three steps of a grilling, the one the reader is on marked. */
+  const stepsHtml = () => {
+    const at = ['talk', 'finish', 'approve'].indexOf(stage())
+    const step = (/** @type {number} */ i, /** @type {string} */ label) =>
+      `<li data-state="${i < at ? 'done' : i === at ? 'now' : 'next'}"${i === at ? ' aria-current="step"' : ''}><b>${i < at ? '✓' : i + 1}</b>${label}</li>`
+    return `<ol class="tour-grill-steps" aria-label="Steps">${step(0, 'talk it through')}${step(1, 'finish')}${step(2, 'approve')}</ol>`
+  }
+
+  /** What to do now, under the transcript: finish while talking, then approve the restatement. */
+  const guideHtml = () => {
+    if (refused !== '') {
+      return '<div class="tour-grill-guide" role="alert"><p>Another answer is still running for this pull request, in another tab or in the canvas\'s AI Chat.</p><button class="cmd fill" type="button" data-act="busy-retry">stop it and retry</button></div>'
+    }
+    const now = stage()
+    if (now === 'finish') {
+      return '<div class="tour-grill-guide" role="status"><p>The agent is restating what you want from the conversation…</p></div>'
+    }
+    if (now === 'talk' && missed) {
+      return '<div class="tour-grill-guide" role="status"><p>The agent answered without a card to approve.</p><button class="cmd fill" type="button" data-act="ask-card">ask for the card</button><button class="cmd" type="button" data-act="write-own">write it myself</button></div>'
+    }
+    if (now === 'approve') {
+      return '<div class="tour-grill-guide" role="status"><p><b>Approve</b> the restatement above to record the decision. Not quite? Edit it, or say what is wrong below.</p></div>'
+    }
+    return `<div class="tour-grill-guide"><p>Answer the agent's questions in your words. <b>Said enough?</b> Finish, and the agent restates what you want for you to approve.</p><button class="cmd fill" type="button" data-act="done"${streaming ? ' disabled' : ''}>finish</button></div>`
+  }
+
+  /** @param {string | undefined} incomplete */
+  const stoppedHtml = incomplete =>
+    incomplete === undefined ? '' : `<p class="muted small">the answer stopped early (${esc(incomplete)})</p>`
 
   /** @param {ChatTurn} turn */
   const turnHtml = turn => {
+    const i = history.indexOf(turn)
     if (turn.role === 'user') {
-      return `<div class="tour-msg reader"><span class="who">you</span>${esc(turn.text)}</div>`
+      return `<div class="turn u" data-turn="${i}"><span class="role">You</span><div class="prose"><p>${esc(turn.text)}</p></div></div>`
     }
-    const note =
-      turn.incomplete === undefined
-        ? ''
-        : `<div class="tour-msg note">the answer stopped early (${esc(turn.incomplete)})</div>`
-    return `<div class="tour-msg agent"><span class="who">agent</span>${answerHtml(turn.text, bundle, restatements)}</div>${note}`
+    if (drawn.has(turn)) {
+      return `<div data-keep="${i}"></div>`
+    }
+    return `<div class="turn a" data-turn="${i}"><span class="role">AI Chat</span><div class="prose">${answerHtml(turn.text, bundle, restatements, `t${i}`)}</div>${stoppedHtml(turn.incomplete)}</div>`
   }
 
-  const toolsHtml = () => {
-    const reverse = bundle.options.reverseQuiz === 'on' && decision !== null
-    const done =
-      decision === null
-        ? ''
-        : `<button class="tour-btn" type="button" data-act="done"${streaming ? ' disabled' : ''}>That's enough, restate it</button>`
-    return `<div class="tour-tools">${done}${reverse ? '<button class="tour-btn" type="button" data-act="reverse">Ask how it would do it</button><span class="tour-hint">reverse quiz · optional</span>' : ''}${streaming ? '<button class="tour-btn quiet" type="button" data-act="stop">stop</button>' : ''}</div>`
+  /**
+   * An answer as it streams. A card is drawn once its block is whole, not as code that grows
+   * while the agent writes it.
+   * @param {string} text
+   * @param {boolean} done
+   * @param {string} turnKey
+   */
+  const liveHtml = (text, done, turnKey) => {
+    const open = done ? null : openFence(text, ['restatement', 'plan'])
+    if (open === null) {
+      return answerHtml(text, bundle, restatements, turnKey)
+    }
+    return `${answerHtml(open.before, bundle, restatements, turnKey)}<p class="tour-writing" role="status">writing the ${open.info === 'plan' ? 'plan' : 'restatement'}…</p>`
   }
 
-  const composerHtml = () => {
-    const audio = bundle.options.audio === 'on' && !bundle.reader.audioOff
-    const mic = !audio
-      ? ''
-      : Speech === null
-        ? '<button class="tour-btn icon tour-mic" type="button" disabled title="This browser has no speech recognition" aria-label="Speak">🎙</button>'
-        : `<button class="tour-btn icon tour-mic" type="button" data-act="mic" data-state="${listening ? 'listening' : ''}" aria-label="Speak" title="Speak instead of typing">🎙</button>`
-    const noticeHtml = notice
-      ? '<div class="tour-notice">Speech is turned into text by your browser, which may send the audio to its vendor for that. Project setting: audio on.<div class="tour-actions"><button class="tour-btn" type="button" data-act="notice-ok">Got it</button><button class="tour-btn quiet" type="button" data-act="notice-off">Turn audio off for me</button></div></div>'
-      : ''
-    return `<form class="tour-composer" data-act="send">${noticeHtml}<textarea id="composer" rows="1" placeholder="${listening ? 'Listening…' : 'Answer, or ask'}"${streaming ? ' disabled' : ''}></textarea>${mic}<button class="tour-btn primary" type="submit"${streaming ? ' disabled' : ''}>send</button></form>`
-  }
-
-  const render = () => {
-    restatements = []
-    // What the reader typed survives a redraw.
-    const typed = composer()?.value ?? ''
-    const box = `<div class="tour-chat-box">${headerHtml(decision)}<div class="tour-chat-log" id="grill-log">${history.map(turnHtml).join('')}${
-      historyLoaded ? '' : '<div class="tour-msg note">loading the thread…</div>'
-    }</div>${toolsHtml()}${composerHtml()}</div>`
-    dialog.innerHTML = box
+  const scrollToEnd = () => {
     const el = log()
     if (el !== null) {
       el.scrollTop = el.scrollHeight
     }
+  }
+
+  /** The drawer's commands, after send: stop, the mic, and the grilling's own. */
+  const commandsHtml = () => {
+    const audio = bundle.options.audio === 'on' && !bundle.reader.audioOff
+    const mic = !audio
+      ? ''
+      : Speech === null
+        ? '<button class="cmd tour-mic" type="button" disabled title="This browser has no speech recognition" aria-label="Speak">🎙</button>'
+        : `<button class="cmd tour-mic" type="button" data-act="mic" data-state="${listening ? 'listening' : ''}" aria-label="Speak" title="Speak instead of typing">🎙</button>`
+    const stop = streaming ? '<button class="cmd" type="button" data-act="stop">stop</button>' : ''
+    return `${stop}${mic}`
+  }
+
+  const composerHtml = () => {
+    const noticeHtml = notice
+      ? '<div class="tour-notice">Speech is turned into text by your browser, which may send the audio to its vendor for that. Project setting: audio on.<div class="tbtns"><button class="cmd" type="button" data-act="notice-ok">got it</button><button class="cmd" type="button" data-act="notice-off">turn audio off for me</button></div></div>'
+      : ''
+    return `<form class="chat-composer" data-act="send">${noticeHtml}<label class="sr" for="composer">Message</label><textarea id="composer" rows="2" placeholder="${listening ? 'Listening…' : decision !== null && stage() === 'approve' ? 'Not it? Say what is wrong' : 'Answer, or ask'}"${streaming ? ' disabled' : ''}></textarea><div class="tbtns"><button class="cmd fill" type="submit"${streaming ? ' disabled' : ''}>send</button>${commandsHtml()}<span class="muted small">enter to send</span></div></form>`
+  }
+
+  const render = () => {
+    // What the reader typed survives a redraw.
+    const typed = composer()?.value ?? ''
+    const steps = decision === null ? '' : stepsHtml()
+    const guide = decision === null && refused === '' ? '' : guideHtml()
+    const box = `<div class="tour-chat-box">${headerHtml(decision)}${steps}<div class="transcript" id="grill-log" role="log" aria-label="Transcript">${visible().map(turnHtml).join('')}${
+      historyLoaded ? '' : '<p class="empty">Opening this thread…</p>'
+    }</div>${guide}${composerHtml()}</div>`
+    dialog.innerHTML = box
+    for (const slot of dialog.querySelectorAll('[data-keep]')) {
+      const kept = drawn.get(/** @type {ChatTurn} */ (history[Number(slot.getAttribute('data-keep'))]))
+      if (kept !== undefined) {
+        slot.replaceWith(kept)
+      }
+    }
+    scrollToEnd()
     const next = composer()
     if (next !== null) {
       next.value = typed
@@ -282,52 +397,68 @@ export function createGrill(options) {
       return
     }
     streaming = true
+    missed = false
+    const asked = finishing
     history.push({ role: 'user', text: message, at: new Date().toISOString(), context })
     /** @type {ChatTurn} */
     const answer = { role: 'assistant', text: '', at: new Date().toISOString() }
     history.push(answer)
+    const turnKey = `t${history.length - 1}`
+    const turn = document.createElement('div')
+    turn.className = 'turn a'
+    turn.dataset['turn'] = String(history.length - 1)
+    turn.innerHTML = '<span class="role">AI Chat</span><div class="prose"></div>'
+    drawn.set(answer, turn)
     render()
+    const live = liveAnswer({
+      turn,
+      body: /** @type {HTMLElement} */ (turn.querySelector('.prose')),
+      render: (written, done) => liveHtml(written, done, turnKey),
+      onDraw: scrollToEnd,
+      onError: (failure, code) => {
+        answer.incomplete = code
+        history.push({ role: 'assistant', text: '', at: '', incomplete: failure })
+      },
+      onCancelled: () => {
+        answer.incomplete = 'cancelled'
+      },
+    })
+    stopLive = live.stop
     inFlight = new AbortController()
-    const draw = () => {
-      const el = log()
-      const last = el?.lastElementChild
-      if (el === null || !(last instanceof HTMLElement)) {
-        return
-      }
-      restatements = []
-      // Cards of earlier answers keep their index: they are counted again from the top.
-      el.innerHTML = history.map(turnHtml).join('')
-      el.scrollTop = el.scrollHeight
-    }
     try {
-      await api.streamGrill(
-        key,
-        { message, context },
-        {
-          signal: inFlight.signal,
-          onEvent: event => {
-            const data = /** @type {Record<string, unknown>} */ (event.data ?? {})
-            if (event.event === 'chunk' && typeof data['text'] === 'string') {
-              answer.text += data['text']
-              draw()
-            } else if (event.event === 'error' && typeof data['message'] === 'string') {
-              answer.incomplete = String(data['code'] ?? 'error')
-              history.push({ role: 'assistant', text: '', at: '', incomplete: data['message'] })
-            } else if (event.event === 'cancelled') {
-              answer.incomplete = 'cancelled'
-            }
-          },
-        }
-      )
+      await api.streamGrill(key, { message, context }, { signal: inFlight.signal, onEvent: live.onEvent })
     } catch (err) {
-      if (!(err instanceof Error && err.name === 'AbortError')) {
+      if (err instanceof ApiError && err.code === 'CHAT_BUSY') {
+        // Nothing was said: the two turns go, and the message waits for "stop it and retry".
+        history.splice(history.indexOf(answer) - 1, 2)
+        drawn.delete(answer)
+        refused = message
+      } else if (!(err instanceof Error && err.name === 'AbortError')) {
         answer.incomplete = err instanceof Error ? err.message : String(err)
       }
     } finally {
       streaming = false
+      finishing = false
       inFlight = null
+      stopLive = () => {}
+      answer.text = live.text()
+      live.finish()
+      turn.insertAdjacentHTML('beforeend', stoppedHtml(answer.incomplete))
+      // Finish asks for a card; an answer without one gets a way to ask again or write it.
+      missed = asked && answer.incomplete === undefined && drawn.has(answer) && !hasCard(answer.text)
       render()
     }
+  }
+
+  /** Sends what the reader typed and empties the box, so the redraw does not put it back. */
+  const sendTyped = () => {
+    const box = composer()
+    if (box === null || streaming) {
+      return
+    }
+    const text = box.value
+    box.value = ''
+    void send(text)
   }
 
   const stop = () => {
@@ -369,30 +500,56 @@ export function createGrill(options) {
     if (act === 'close-grill') {
       close()
     } else if (act === 'approve' && decision !== null) {
-      const r = restatements[Number(target.dataset['restatement'])]
+      const r = restatements.get(target.dataset['restatement'] ?? '')
       if (r !== undefined) {
         options.onApprove(decision, r)
         close()
       }
     } else if (act === 'edit' && decision !== null) {
-      const r = restatements[Number(target.dataset['restatement'])]
+      const r = restatements.get(target.dataset['restatement'] ?? '')
       const card = target.closest('.tour-restate')
       if (r !== undefined && card !== null) {
         card.outerHTML = restatementFormHtml(decision, r, { cancel: 'redraw' })
         dialog.querySelector('textarea')?.focus()
       }
     } else if (act === 'redraw') {
+      // The form goes back to the card it came from; a form of the reader's own just goes.
+      const turnEl = target.closest('.turn[data-turn]')
+      const i = Number(turnEl?.getAttribute('data-turn'))
+      const turn = history[i]
+      const body = turnEl?.querySelector('.prose')
+      if (turn !== undefined && body instanceof HTMLElement) {
+        body.innerHTML = answerHtml(turn.text, bundle, restatements, `t${i}`)
+      } else {
+        render()
+      }
+    } else if (act === 'ask-card') {
+      finishing = true
+      void send(CARD_MESSAGE)
+    } else if (act === 'write-own' && decision !== null) {
+      missed = false
       render()
+      log()?.insertAdjacentHTML('beforeend', restatementFormHtml(decision, undefined, { cancel: 'redraw' }))
+      log()?.querySelector('textarea')?.focus()
+      scrollToEnd()
     } else if (act === 'reject') {
       const box = composer()
       if (box !== null) {
         box.value = 'No, that is not it: '
         box.focus()
       }
+    } else if (act === 'busy-retry') {
+      const message = refused
+      refused = ''
+      finishing = message === DONE_MESSAGE
+      // The server waits for a stopped turn to let go, so the message goes right after the stop.
+      void api
+        .cancelGrill(key)
+        .catch(() => undefined)
+        .then(() => send(message))
     } else if (act === 'done') {
+      finishing = true
       void send(DONE_MESSAGE)
-    } else if (act === 'reverse') {
-      void send(REVERSE_QUIZ_MESSAGE)
     } else if (act === 'stop') {
       stop()
     } else if (act === 'mic') {
@@ -424,10 +581,7 @@ export function createGrill(options) {
     }
     if (form.dataset['act'] === 'send') {
       e.preventDefault()
-      const box = composer()
-      if (box !== null) {
-        void send(box.value)
-      }
+      sendTyped()
     } else if (form.dataset['act'] === 'restate') {
       e.preventDefault()
       const r = readRestatement(form)
@@ -448,7 +602,7 @@ export function createGrill(options) {
       target.id === 'composer'
     ) {
       e.preventDefault()
-      void send(target.value)
+      sendTyped()
     }
   }
 
@@ -480,12 +634,10 @@ export function createGrill(options) {
   }
 
   /**
-   * True when the thread already holds a turn about this decision, so the opening is not sent
-   * again.
-   * @param {Decision} d
+   * True when the agent already answered about the open decision, so the opening is not sent again.
+   * An exchange whose answers all stopped before a word gets the opening again.
    */
-  const grilledBefore = d =>
-    history.some(t => t.role === 'user' && t.context?.kind === 'tour-decision' && t.context.key === d.key)
+  const answeredBefore = () => visible().some(t => t.role === 'assistant' && t.text.trim() !== '')
 
   return {
     /**
@@ -495,6 +647,7 @@ export function createGrill(options) {
     async open(d, draft) {
       decision = d
       context = { kind: 'tour-decision', key: d.key }
+      missed = false
       if (!grillsWithChat(bundle)) {
         dialog.innerHTML = formGrillHtml(d, draft)
         dialog.showModal()
@@ -505,7 +658,7 @@ export function createGrill(options) {
       dialog.showModal()
       await loadHistory()
       render()
-      if (!grilledBefore(d)) {
+      if (!answeredBefore()) {
         await send(openingMessage(d))
       }
     },
@@ -513,6 +666,7 @@ export function createGrill(options) {
     async openPlan() {
       decision = null
       context = { kind: 'tour-plan' }
+      missed = false
       render()
       dialog.showModal()
       await loadHistory()
@@ -522,6 +676,7 @@ export function createGrill(options) {
     close,
     stop() {
       close()
+      stopLive()
       dialog.removeEventListener('click', onClick)
       dialog.removeEventListener('submit', onSubmit)
       dialog.removeEventListener('keydown', onKeydown)
