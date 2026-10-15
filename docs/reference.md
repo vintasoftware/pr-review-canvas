@@ -784,6 +784,52 @@ Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. A
 offers no **resolve**:
 regenerate it for the current head first.
 
+### Settled decisions
+
+A question the author already answered, before the canvas existed, can be recorded in the commit
+that carries the answer, so the canvas shows it as resolved instead of asking it again. Add one
+`Settled-decision` line per decision to the commit message, after the prose that explains it:
+
+```text
+fix(app): keep the sum in run()
+
+The spec says sum; a product would double-count retries.
+
+Settled-decision: src/app.ts:4 keep the sum; the spec says sum, not product
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+- `<path>:<line>` is the line the decision is about, in that commit's version of the file. Write
+  `<path>:<line>:old` for a line the change deleted, numbered as in the commit's parent. The rest
+  of the line is the decision and its reason, which becomes the resolution's reason; a longer one
+  is cut at the reason limit. A line that does not read this way is not a decision and is skipped.
+- The line counts wherever it sits in the message, at the start of a line, in any letter case. It
+  need not be in the block git reads as trailers, so a blank line before `Co-Authored-By` loses
+  nothing.
+- `prepare` reads the decisions of `merge-base..head` from the commits whose author email is the
+  one whoever runs it commits as (`GIT_AUTHOR_EMAIL`, else `user.email`), so a commit someone else
+  pushed to the branch cannot answer the author's questions. On a pull request it reads them only
+  when that person is the pull request's author, the same rule as **resolve**; a canvas anyone
+  else generates resolves no decision.
+- A new-side line is carried from its commit to the head, and an old-side line from the commit's
+  parent to the merge base, while the commits in between leave it as it was. When one of them
+  changed the line, or the line is outside the diff, the decision is context: the generator does
+  not raise its question again unless the code contradicts the answer, and the canvas gets no
+  point for it. A rebase rewrites the versions the numbers refer to while the lines keep their
+  text, so after one a decision can land on another line, or be lost; regenerate with care, or
+  write the decision again.
+- Two decisions on the same line: the later commit's stands, which is how a decision is revised.
+  There is no line that withdraws one. To ask its question again, change the line it is about, so
+  the decision becomes context, or rewrite the commit; reopening its point on the canvas lasts only
+  until the canvas is generated again, because the commit still says it.
+- Publish adds each decision in the diff to the canvas as a `decision` point for the author,
+  titled with the decision, on its line, and resolved with its reason as of its commit. These
+  points are not the generator's to write and do not count toward its attention points. A canvas
+  holds at most 36 of them; past that, the oldest are context. A reason the author wrote on the
+  canvas for such a point stands over the commit's when the canvas is generated again; a reason
+  an earlier canvas took from a commit gives way to the decisions read now.
+- The review loop skill in this repository writes these lines for the decisions its gate asks.
+
 ### Comments and sign-off
 
 You can post inline comments, replies, PR-level comments, and attention points. Inline comments

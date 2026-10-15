@@ -37,6 +37,7 @@ function context(over: Partial<GenerationContext> = {}): GenerationContext {
     tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
     smallPr: true,
     largePr: false,
+    decisions: [],
     preparedAt: '2026-09-10T12:00:00.000Z',
     ...over,
   }
@@ -378,6 +379,49 @@ describe('renderPrompt', () => {
       })
     ).toThrow('generation-strict-incremental.md uses an unknown token {{NOPE}}')
   })
+
+  it.each(['strict', 'surfacing'] as const)(
+    "lists the author's settled decisions in the %s prompt, in the diff and out of it, as questions not to raise",
+    mode => {
+      const none = context()
+      none.generation.mode = mode
+      expect(renderPrompt(none, PATCHES, sources)).toContain(
+        '### Settled decisions\n\n_No settled decisions are recorded on these commits._'
+      )
+      const ctx = context({
+        decisions: [
+          {
+            id: 'abc1234-1',
+            commit: `abc1234${'0'.repeat(33)}`,
+            date: '2026-10-13T10:00:00-03:00',
+            text: 'keep the sum; the spec says sum',
+            path: 'src/app.ts',
+            side: 'new',
+            line: 4,
+          },
+          {
+            id: 'abc1234-2',
+            commit: `abc1234${'0'.repeat(33)}`,
+            date: '2026-10-13T10:00:00-03:00',
+            text: 'other() stays private',
+            path: 'src/app.ts',
+            side: 'new',
+            line: null,
+          },
+        ],
+      })
+      ctx.generation.mode = mode
+      const prompt = renderPrompt(ctx, PATCHES, sources)
+      expect(prompt).toContain('Do not raise any of them again, and write no point for them.')
+      expect(prompt).toContain(
+        '- `abc1234-1` on `src/app.ts` new-side line 4 (commit `abc1234`, 2026-10-13): keep the sum; the spec says sum\n\n**Not in this diff**'
+      )
+      expect(prompt).toContain(
+        '- `abc1234-2` on `src/app.ts` (commit `abc1234`, 2026-10-13): other() stays private'
+      )
+      expect(prompt).not.toContain('settledDecision')
+    }
+  )
 
   it('throws on a template token it does not know', () => {
     const generation = { ...sources.generation, strict: 'hi {{NOPE}}' }

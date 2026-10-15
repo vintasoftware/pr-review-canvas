@@ -110,6 +110,25 @@ export const BasisSplitSchema = z.object({
 export type BasisSplit = z.infer<typeof BasisSplitSchema>
 
 /**
+ * A decision the author already took about this change, read from a `Settled-decision` line in the
+ * message of one of its commits. `line` is where the decision's code sits at the head, inside a
+ * chunk of this diff; null when that code changed after the commit, or sits outside the diff.
+ */
+export const SettledDecisionSchema = z.object({
+  /** `<short sha>-<n>`: the commit and which of its decision lines this is, stable across runs. */
+  id: z.string().min(1),
+  commit: z.string().regex(/^[0-9a-f]{40}$/),
+  /** The commit's author date. */
+  date: z.string(),
+  /** The decision and its reason, as the line states them. */
+  text: z.string().min(1),
+  path: z.string().min(1),
+  side: SideSchema,
+  line: z.number().int().positive().nullable(),
+})
+export type SettledDecision = z.infer<typeof SettledDecisionSchema>
+
+/**
  * `context.json`: everything the agent and `publish` need about one prepared canvas. Written by
  * `prepare` next to `prompt.md`; `publish` validates `model.json` against the hunk index and the
  * caps recorded here, so a config change between the two commands does not change the rules.
@@ -152,6 +171,8 @@ export const GenerationContextSchema = z.object({
   largePr: z.boolean(),
   /** Absent when this canvas is generated from a blank page: no basis, `--force`, or turned off. */
   basis: BasisSplitSchema.optional(),
+  /** The author's settled decisions on these commits. Defaulted, so an older context still reads. */
+  decisions: z.array(SettledDecisionSchema).default([]),
   preparedAt: z.string(),
 })
 export type GenerationContext = z.infer<typeof GenerationContextSchema>

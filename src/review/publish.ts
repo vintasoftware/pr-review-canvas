@@ -271,8 +271,14 @@ export async function publish(
     generator,
     testPatterns: context.tests.patterns,
     basisCanvasSha: context.basis?.canvasSha,
+    decisions: context.decisions,
   })
-  const settled = await settlementsToKeep(ctx, context, artifact)
+  // A resolution the author wrote on a canvas stands over a decision's own words. One an earlier
+  // publish took from a commit does not: the decisions read now are the current ones.
+  const writtenOnCanvas = Object.entries(await settlementsToKeep(ctx, context, artifact)).filter(
+    ([, settlement]) => settlement.commit === undefined
+  )
+  const settled = { ...artifact.settled, ...Object.fromEntries(writtenOnCanvas) }
   if (Object.keys(settled).length > 0) {
     artifact.settled = settled
   }

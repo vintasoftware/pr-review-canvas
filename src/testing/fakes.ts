@@ -10,7 +10,7 @@ import type { CheckoutGit } from '../chat/checkouts.js'
 import type { RuntimeConfig } from '../config.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
-import { type Git, GitError } from '../git/git.js'
+import { type CommitKeyedLines, execGitIn, type Git, GitError, type GitExec } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { type CliResponse, HostCliError, type HostClient } from '../host/client.js'
 import { basePathOf, projectSlug, worktreeOf } from '../hub/slug.js'
@@ -54,6 +54,10 @@ export interface FakeGitOptions {
   symbolicRefs?: Record<string, string>
   /** `git config user.name`. */
   user?: string | null
+  /** The email `git var GIT_AUTHOR_IDENT` names. */
+  email?: string | null
+  /** `<from>..<to>` → the commits of that range with keyed lines, oldest first. */
+  keyedLines?: Record<string, CommitKeyedLines[]>
 }
 
 export interface FakeGit extends Git {
@@ -163,6 +167,14 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
     configuredUser: async () => {
       calls.push(['config', 'user.name'])
       return options.user ?? null
+    },
+    authorEmail: async () => {
+      calls.push(['var', 'GIT_AUTHOR_IDENT'])
+      return options.email ?? null
+    },
+    commitKeyedLines: async (from, to, key) => {
+      calls.push(['log', `--keyed=${key}`, `${from}..${to}`])
+      return options.keyedLines?.[`${from}..${to}`] ?? []
     },
     currentBranch: async () => {
       calls.push(['symbolic-ref', 'HEAD'])
@@ -422,6 +434,25 @@ export interface TestContext {
 export async function makeTempDir(prefix = 'pr-review-test-'): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), prefix))
 }
+
+/** The variables a `git commit` sets for its hooks, which name who the commit is by. */
+const IDENTITY_ENV_VARS = [
+  'GIT_AUTHOR_NAME',
+  'GIT_AUTHOR_EMAIL',
+  'GIT_AUTHOR_DATE',
+  'GIT_COMMITTER_NAME',
+  'GIT_COMMITTER_EMAIL',
+  'GIT_COMMITTER_DATE',
+]
+
+/**
+ * Git for a throwaway repository whose commits must be by the people its own config names. Under
+ * the pre-commit hook, the outer commit's identity is in the environment and would win over that
+ * config, so it is taken out.
+ */
+export const execGitAsRepoConfig: GitExec = execGitIn(
+  Object.fromEntries(Object.entries(process.env).filter(([name]) => !IDENTITY_ENV_VARS.includes(name)))
+)
 
 /** A full AppContext with real stores under a fresh temp data dir. */
 export async function makeTestContext(opts: TestContextOptions = {}): Promise<TestContext> {

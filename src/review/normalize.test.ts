@@ -233,6 +233,56 @@ describe('normalize', () => {
     expect(long?.title).toBe('Missing test…')
   })
 
+  it('adds one resolved point for each settled decision in the diff, titled by the decision', () => {
+    const commit = 'c'.repeat(40)
+    const decision = (id: string, text: string, line: number | null) => ({
+      id,
+      commit,
+      date: '2026-10-13T10:00:00-03:00',
+      text,
+      path: 'src/app.ts',
+      side: 'new' as const,
+      line,
+    })
+    const long = `keep the sum ${'because the spec says so '.repeat(5)}`.trim()
+    const unbroken = 'x'.repeat(TEXT_CAPS.pointTitle + 5)
+    const artifact = normalize(artifactToModelOutput(syntheticArtifact()), {
+      ...input(),
+      decisions: [
+        decision('c-1', long, 2),
+        decision('c-2', unbroken, 4),
+        decision('c-3', 'not in the diff', null),
+      ],
+    })
+    const points = artifact.points.filter(point => point.origin === 'decision')
+    expect(points.map(point => [point.title, point.line, point.layerId])).toEqual([
+      [
+        `${long
+          .slice(0, TEXT_CAPS.pointTitle - 1)
+          .replace(/\S*$/, '')
+          .trimEnd()}…`,
+        2,
+        'run-path',
+      ],
+      ['Settled decision…', 4, 'run-path'],
+    ])
+    expect(points[0]).toMatchObject({
+      kind: 'decision',
+      level: 'fyi',
+      audience: 'author',
+      side: 'new',
+      body: 'The author settled this in commit `ccccccc` on 2026-10-13.',
+    })
+    expect(artifact.settled).toEqual({
+      [points[0]!.fingerprint]: { reason: long, at: '2026-10-13T10:00:00-03:00', commit },
+      [points[1]!.fingerprint]: { reason: unbroken, at: '2026-10-13T10:00:00-03:00', commit },
+    })
+    // They are publish's, so a saved canvas hands none of them back to the generator.
+    expect(artifactToModelOutput(artifact).points.map(point => point.title)).not.toContain(
+      'Settled decision…'
+    )
+  })
+
   it('keeps the fingerprint stable across spacing and case, and distinct across kind or path', () => {
     const a = fingerprint({ kind: 'risk', path: 'src/a.ts', title: 'Retry  loop' })
     expect(fingerprint({ kind: 'risk', path: 'src/a.ts', title: '  retry LOOP ' })).toBe(a)

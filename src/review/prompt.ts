@@ -6,6 +6,7 @@ import {
   type BasisSplitPoint,
   type GenerationContext,
   LARGE_PR,
+  type SettledDecision,
 } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
@@ -313,6 +314,31 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
   ].join('\n\n')
 }
 
+function decisionLine(decision: SettledDecision): string {
+  const where =
+    decision.line === null
+      ? `\`${decision.path}\``
+      : `\`${decision.path}\` ${decision.side}-side line ${decision.line}`
+  return `- \`${decision.id}\` on ${where} (commit \`${decision.commit.slice(0, 7)}\`, ${decision.date.slice(0, 10)}): ${decision.text}`
+}
+
+/**
+ * The author's settled decisions. Publish adds the ones in the diff to the canvas as resolved
+ * points; the generator only has to leave them, and the rest, unasked.
+ */
+function decisionsMarkdown(decisions: readonly SettledDecision[]): string {
+  if (decisions.length === 0) {
+    return '_No settled decisions are recorded on these commits._'
+  }
+  const anchored = decisions.filter(decision => decision.line !== null).map(decisionLine)
+  const context = decisions.filter(decision => decision.line === null).map(decisionLine)
+  return [
+    'The author already settled these questions, each in a `Settled-decision` line of one of the commits. Do not raise any of them again, and write no point for them. A question one of them answers comes back only if the code contradicts the answer.',
+    `**In this diff** — publish adds each to the canvas as a point resolved with the author's reason:\n\n${anchored.length === 0 ? '_none_' : anchored.join('\n')}`,
+    `**Not in this diff** — the code changed after the commit, or sits outside the diff:\n\n${context.length === 0 ? '_none_' : context.join('\n')}`,
+  ].join('\n\n')
+}
+
 /** Selects one task and fills its data and format placeholders before the generator sees it. */
 export function renderPrompt(
   ctx: GenerationContext,
@@ -347,6 +373,7 @@ export function renderPrompt(
     FILE_DELTA: fileDeltaMarkdown(ctx.basis),
     CARRIED: carriedMarkdown(ctx.basis),
     RE_JUDGED: reJudgedMarkdown(ctx.basis),
+    SETTLED_DECISIONS: decisionsMarkdown(ctx.decisions),
   }
   // A prepared basis picks the incremental wording: one prompt states one job, with no conditions.
   // Both wordings end with the mode's judging rules, which are assembled first so the tokens inside

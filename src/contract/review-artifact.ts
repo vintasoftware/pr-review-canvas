@@ -319,7 +319,8 @@ export const PointSchema = z.object({
   audience: z.enum(POINT_AUDIENCES).default('reviewer'),
   id: z.string().min(1),
   fingerprint: z.string().min(1),
-  origin: z.enum(['model', 'tests']),
+  /** Who wrote the point: the generator, publish for a missing test, or publish for a settled decision. */
+  origin: z.enum(['model', 'tests', 'decision']),
   /** The layer that owns the point's hunk; publish fills it from the file's layer. */
   layerId: z.string().optional(),
 })
@@ -337,6 +338,11 @@ export const SettlementSchema = z.object({
   reason: z.string().trim().min(1).max(SETTLEMENT_REASON_MAX),
   at: z.string(),
   commentUrl: z.string().optional(),
+  /** The commit whose `Settled-decision` line gave the reason, when the answer came from one. */
+  commit: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
 })
 export type Settlement = z.infer<typeof SettlementSchema>
 

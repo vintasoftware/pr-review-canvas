@@ -95,17 +95,21 @@ export function splitBasis(
       reJudgedFiles,
     }
   })
-  const points: BasisSplitPoint[] = artifact.points.map(point => {
-    const split = { kind: point.kind, path: point.path, title: point.title }
-    const headLines = !linksStand(point, unchanged)
-      ? undefined
-      : unchanged.has(point.path)
-        ? { side: point.side ?? 'new', line: point.line, endLine: point.endLine ?? point.line }
-        : lineCarried.get(point)
-    return headLines === undefined
-      ? { ...split, status: 're-judged' }
-      : { ...split, status: 'carried', headLines }
-  })
+  // Publish writes a settled decision's point again from the commits, so the generator is never
+  // asked to copy one.
+  const points: BasisSplitPoint[] = artifact.points
+    .filter(point => point.origin !== 'decision')
+    .map(point => {
+      const split = { kind: point.kind, path: point.path, title: point.title }
+      const headLines = !linksStand(point, unchanged)
+        ? undefined
+        : unchanged.has(point.path)
+          ? { side: point.side ?? 'new', line: point.line, endLine: point.endLine ?? point.line }
+          : lineCarried.get(point)
+      return headLines === undefined
+        ? { ...split, status: 're-judged' }
+        : { ...split, status: 'carried', headLines }
+    })
   return { layers, points }
 }
 

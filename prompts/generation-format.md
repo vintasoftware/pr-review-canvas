@@ -303,6 +303,10 @@ When in doubt, choose `reviewer`: a point the author resolves leaves every revie
   item into a point. Also compare the points with the inventory: deleting a layer paragraph must
   not delete its decision or check. Confirm `decisions` and `checkByHand` are absent from every layer.
 
+### Settled decisions
+
+{{SETTLED_DECISIONS}}
+
 ## Risk
 
 The project marks these paths as high blast radius; the publish step tags a layer that touches

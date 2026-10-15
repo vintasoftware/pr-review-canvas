@@ -2,10 +2,10 @@
 name: thermo-nuclear-review-loop
 description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer explicitly approves it under a strict code-quality standard. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without growing defensive code.
 metadata:
-  version: "4"
+  version: "5"
 ---
 
-# Thermo-Nuclear Review Loop v4
+# Thermo-Nuclear Review Loop v5
 
 You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, independently verify its findings, fix the justified ones, and repeat until it explicitly approves. There is no separate fixer agent.
 
@@ -66,7 +66,7 @@ A finding goes to the human, not to the fix, when it depends on a decision that 
 
 Fix every other justified finding first. Then, once per iteration, put the gate items to the user in one batch: each with the finding, the evidence, the reviewer's recommendation in its own words, and yours. The default recommendation for triggers 1 and 2 is "reject the finding". Use the host's structured question tool when it has one; otherwise end the turn with the questions in plain text. Wait for the answers.
 
-Record each answer as a **settled decision**: what was asked, what was decided, and the date. Settled decisions go into every later reviewer prompt. The reviewer may re-raise one only with new evidence; you decide whether the evidence changes the answer.
+Record each answer as a **settled decision**: what was asked, what was decided, and the date. Settled decisions go into every later reviewer prompt. The reviewer may re-raise one only with new evidence; you decide whether the evidence changes the answer. A settled decision about a line of the change also goes into the next iteration commit as a `Settled-decision` line (see Commit), so it reaches every later reader of the history, not only this loop.
 
 Gate interviews do not count as iterations.
 
@@ -90,7 +90,7 @@ Adding a lint rule, tightening typing, or adding a script counts as a fix and ne
 
 **Verify.** Run the repository's build and test commands, plus focused checks the affected code warrants (sanitizers, concurrency checks, format and lint). Separate environment-only failures from regressions; report both.
 
-**Commit.** One commit per iteration on the current branch, so each cycle stays reviewable. Write the message for a reader of `git log` who never saw the review. The subject follows the repository's own convention (type and scope where it uses them) and says what the code does differently now; the body gives each change with the behavior it alters and why, in the project's words, and records a settled decision by the trade-off it settles and its date. The iteration number, the pass, and the reviewer's finding numbers belong to the iteration report, so they stay out of the message. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
+**Commit.** One commit per iteration on the current branch, so each cycle stays reviewable. Write the message for a reader of `git log` who never saw the review. The subject follows the repository's own convention (type and scope where it uses them) and says what the code does differently now; the body gives each change with the behavior it alters and why, in the project's words, and records a settled decision by the trade-off it settles and its date. After the prose, add one line per settled decision about a line of the change, at the end of the message next to `Co-Authored-By`: `Settled-decision: <path>:<line> <what was decided and why, in one line>`, where `<line>` is the line the decision is about in this commit's version of the file, or `<line>:old` for a line the change deleted, numbered as in this commit's parent. The commit's author and date are the decision's. pr-review reads these lines and shows each decision as a resolved attention point, so the canvas does not ask the human again. A decision about no particular line stays in the prose. The iteration number, the pass, and the reviewer's finding numbers belong to the iteration report, so they stay out of the message. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
 
 **Iteration report** (to the user, every iteration): findings fixed, gated, rejected with counter-evidence; the reason for each new file; verification results.
 

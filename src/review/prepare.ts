@@ -24,6 +24,8 @@ import type { Derived } from '../store/derived-store.js'
 import { fileDelta, findBasisCanvas, splitBasis } from './incremental.js'
 import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
+import { isAuthor } from './self-review.js'
+import { readSettledDecisions } from './settled-decisions.js'
 
 export interface PrepareOptions {
   force: boolean
@@ -190,6 +192,15 @@ async function resolveBasis(
   }
 }
 
+/**
+ * Whether whoever prepares this canvas may resolve its points, the rule the settle route enforces:
+ * a pull request's points are its author's, and work with no pull request is the reader's own. A
+ * decision becomes a resolution, so only this person's decisions are read.
+ */
+async function mayResolve(ctx: AppContext, target: PrepareTarget, pr: Pr): Promise<boolean> {
+  return target.kind !== 'pr' || isAuthor((await ctx.capabilities.get()).login, pr)
+}
+
 /** The target with its base resolved, which is the form `context.json` records. */
 async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promise<PrepareTarget> {
   if (input.kind !== 'local') {
@@ -279,6 +290,13 @@ export async function prepare(
     tests: { patterns: config.tests.patterns },
     smallPr: derived.files.reduce((n, f) => n + f.hunks.length, 0) <= config.generation.smallPrHunks,
     largePr: isLargePr({ files: derived.files.length, additions, deletions }),
+    decisions: await readSettledDecisions({
+      git: ctx.git,
+      mergeBaseSha: pr.mergeBaseSha,
+      headSha: pr.headSha,
+      files: derived.files,
+      authorEmail: (await mayResolve(ctx, target, pr)) ? await ctx.git.authorEmail() : null,
+    }),
     preparedAt: ctx.now().toISOString(),
   }
   await clearCanvasDir(canvasDir)
