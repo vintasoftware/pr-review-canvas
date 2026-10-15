@@ -7,6 +7,7 @@
 /** @typedef {import('./proposed-comment.js').ProposedComment} ProposedComment */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 import { cancelChat, createThread, fetchThreadHistory, fetchThreads, streamChat } from './api.js'
+import { checkoutWarningHtml, liveAnswer } from './chat-answer.js'
 import { chatContextAttrs, chatContextLabel, sameChatContext, WHOLE_PR } from './chat-context.js'
 import { wireChatPanel } from './chat-panel.js'
 import {
@@ -190,30 +191,6 @@ function turnInnerHtml(role, bodyHtml, opts = {}) {
   )
 }
 
-/**
- * What the activity line says while a review checkout is created or moved.
- * @param {{ sha: string, creating: boolean }} event
- */
-export function checkoutActivityText(event) {
-  const sha = event.sha.slice(0, 7)
-  return event.creating ? `Creating the review checkout at ${sha}` : `Checking out ${sha}`
-}
-
-/**
- * The warning a turn shows when its review checkout failed and it read the reader's checkout.
- * @param {{ message: string, branch: string | null }} event
- */
-export function checkoutWarningHtml(event) {
-  const where =
-    event.branch === null
-      ? 'your checkout'
-      : `your checkout on <span class="mono">${esc(event.branch)}</span>`
-  return (
-    `<p class="chat-warning small" role="status">The review checkout could not be updated, so AI Chat read ${where}. ` +
-    `Answers may describe another version of the code. <span class="muted">${esc(event.message)}</span></p>`
-  )
-}
-
 /** @typedef {{ postedUrl?: string | undefined, queued?: boolean, submitted?: boolean }} SendState */
 
 /**
@@ -392,12 +369,11 @@ export function wireChat(options) {
   /** @type {string | null} */
   let activeThread = null
   let streaming = false
-  let stopActivity = () => {}
+  /** Drops the timers of the answer in flight. */
+  let stopLive = () => {}
   /** The turn in flight, so taking the pane down stops its request too. */
   /** @type {AbortController | null} */
   let inFlight = null
-  /** @type {number | ReturnType<typeof setTimeout>} */
-  let frame = 0
   let turnSeq = 0
   /**
    * Counts the things that replace the whole transcript. A history load that comes back after
@@ -498,37 +474,6 @@ export function wireChat(options) {
     }
     const body = turn.querySelector('.prose')
     return { turn, body: body instanceof HTMLElement ? body : turn }
-  }
-
-  /**
-   * Redraws a streaming answer at most once per frame: a chunk every few milliseconds must not
-   * mean a markdown parse every few milliseconds.
-   * @param {HTMLElement} body the turn's `.prose` element
-   * @param {() => string} html
-   */
-  const scheduleRender = (body, html) => {
-    if (frame !== 0) {
-      return
-    }
-    // requestAnimationFrame is what batches the redraws; setTimeout stands in for it in a test
-    // environment that has none.
-    const run = () => {
-      frame = 0
-      body.innerHTML = html()
-      if (scroll.pinned) {
-        scrollToBottom('follow')
-      }
-    }
-    frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : setTimeout(run, 16)
-  }
-
-  /** @param {number | ReturnType<typeof setTimeout>} handle */
-  const cancelFrame = handle => {
-    if (typeof handle === 'number' && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(handle)
-      return
-    }
-    clearTimeout(handle)
   }
 
   const drawThreads = /** @param {import('./contract-types.js').ChatThreadsResponse} data */ data => {
@@ -644,116 +589,42 @@ export function wireChat(options) {
     dispatch({ type: 'send' })
     scrollToBottom('follow')
     const answer = appendTurn('assistant', '')
-    const activity = document.createElement('p')
-    activity.className = 'muted small chat-activity'
-    activity.setAttribute('aria-live', 'off')
-    answer.turn.append(activity)
-    const started = Date.now()
-    /** What the turn is waiting on: the answer, or a review checkout first. */
-    let phase = 'Preparing answer'
-    const updateActivity = () => {
-      const elapsed = Date.now() - started
-      activity.textContent = `${phase}${'.'.repeat((Math.floor(elapsed / 400) % 3) + 1)} · ${Math.floor(elapsed / 1000)}s`
-    }
-    updateActivity()
-    const timer = setInterval(updateActivity, 400)
-    stopActivity = () => clearInterval(timer)
-    const toolDetails = document.createElement('details')
-    toolDetails.className = 'chat-tool-calls muted small'
-    toolDetails.hidden = true
-    answer.turn.append(toolDetails)
-    const tools = new Map()
     const turnKey = answer.turn.id
+    const live = liveAnswer({
+      ...answer,
+      render: text => renderAnswer(text, turnKey),
+      onDraw: () => {
+        if (scroll.pinned) {
+          scrollToBottom('follow')
+        }
+      },
+      // An answer growing out of sight is one thing to catch up on, however many chunks it
+      // arrives in; catching up clears the count, so drifting away again counts anew.
+      onChunk: () => {
+        if (!scroll.pinned && scroll.unseen === 0) {
+          dispatch({ type: 'append', id: turnKey, belowFold: true })
+        }
+      },
+      onThread: thread => {
+        activeThread = thread
+        void refreshThreads()
+      },
+      onError: failure => showCommandError(stopButton, failure),
+      onCancelled: () => answer.turn.insertAdjacentHTML('beforeend', '<p class="muted small">stopped</p>'),
+    })
+    stopLive = live.stop
     setStreaming(true)
-    let text = ''
     inFlight = new AbortController()
     try {
       await api.streamChat(
         prNumber,
         { message, context, ...(activeThread === null ? {} : { thread: activeThread }) },
-        {
-          signal: inFlight.signal,
-          onEvent: event => {
-            const data = /** @type {Record<string, unknown>} */ (event.data ?? {})
-            const field = /** @param {string} key */ key => data[key]
-            const thread = field('thread')
-            if (event.event === 'turn' && typeof thread === 'string') {
-              activeThread = thread
-              void refreshThreads()
-              // The checkout, if there was one, is done once the turn starts.
-              phase = 'Preparing answer'
-              activity.classList.remove('checking-out')
-              updateActivity()
-              return
-            }
-            if (event.event === 'checkout') {
-              const checkout = /** @type {import('./contract-types.js').ChatCheckoutEvent} */ ({
-                event: 'checkout',
-                ...data,
-              })
-              if (checkout.status === 'preparing') {
-                phase = checkoutActivityText(checkout)
-                activity.classList.add('checking-out')
-                updateActivity()
-              } else {
-                answer.turn
-                  .querySelector('.role')
-                  ?.insertAdjacentHTML('afterend', checkoutWarningHtml(checkout))
-              }
-              return
-            }
-            if (event.event === 'tool') {
-              const id = String(field('id') ?? '')
-              const previous = tools.get(id)
-              const title = String(field('title') ?? 'tool')
-              tools.delete(id)
-              tools.set(id, {
-                title: title === 'tool' && previous ? previous.title : title,
-                status: String(field('status') ?? 'pending'),
-              })
-              toolDetails.hidden = false
-              const latest = tools.get(id)
-              toolDetails.innerHTML = `<summary>${esc(latest.title)} · ${esc(latest.status)} (${tools.size} tool calls)</summary><ul>${[...tools.values()].map(t => `<li>${esc(t.title)} · ${esc(t.status)}</li>`).join('')}</ul>`
-              return
-            }
-            const chunk = field('text')
-            if (event.event === 'chunk' && typeof chunk === 'string') {
-              text += chunk
-              // An answer growing out of sight is one thing to catch up on, however many chunks
-              // it arrives in; catching up clears the count, so drifting away again counts anew.
-              if (!scroll.pinned && scroll.unseen === 0) {
-                dispatch({ type: 'append', id: turnKey, belowFold: true })
-              }
-              scheduleRender(answer.body, () => renderAnswer(text, turnKey))
-              return
-            }
-            if (event.event === 'error') {
-              showCommandError(stopButton, String(field('message') ?? 'the agent failed'))
-              return
-            }
-            if (event.event === 'cancelled') {
-              answer.turn.insertAdjacentHTML('beforeend', '<p class="muted small">stopped</p>')
-            }
-          },
-        }
+        { signal: inFlight.signal, onEvent: live.onEvent }
       )
     } finally {
       inFlight = null
-      stopActivity()
-      toolDetails.open = false
-      const toolSummary = toolDetails.querySelector('summary')
-      if (toolSummary) toolSummary.textContent = `${tools.size} tool calls`
-      activity.textContent = `Elapsed: ${Math.floor((Date.now() - started) / 1000)}s`
-      if (frame !== 0) {
-        cancelFrame(frame)
-        frame = 0
-      }
       setStreaming(false)
-      answer.body.innerHTML =
-        text === '' ? '<span class="muted">no answer</span>' : renderAnswer(text, turnKey)
-      if (scroll.pinned) {
-        scrollToBottom('follow')
-      }
+      live.finish()
     }
   }
 
@@ -965,13 +836,9 @@ export function wireChat(options) {
       void runCommand(sendButton, send, { pendingLabel: 'sending…' })
     },
     stop() {
-      stopActivity()
+      stopLive()
       inFlight?.abort()
       inFlight = null
-      if (frame !== 0) {
-        cancelFrame(frame)
-        frame = 0
-      }
       form.removeEventListener('submit', onSubmit)
       root.removeEventListener('click', onClick)
       log.removeEventListener('scroll', onScroll)
