@@ -110,7 +110,8 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const reviewer = await tourReviewer(ctx, key, found.pr)
     const reader = await readReaderState(ctx, found.headSha, found.artifact, reviewer.author)
     // The diff of the tour's own commit, so a stale tour is grilled on the code it describes.
-    const derived = await ctx.derived.readOrBuild(found.headSha, found.artifact.mergeBaseSha)
+    const diff = { headSha: found.headSha, mergeBaseSha: found.artifact.mergeBaseSha }
+    const derived = await ctx.derived.readOrBuild(diff)
     if (derived === null) {
       throw new AppError(
         'NOT_FOUND',
@@ -126,9 +127,10 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
         tour: { artifact: found.artifact, reader },
         files: derived.files,
         patches: derived.patches,
-        derivedDir: ctx.derived.derivedDir(found.headSha),
-        readLines: (side, filePath, from, to) =>
-          ctx.derived.readLines(found.headSha, side, filePath, from, to),
+        derivedDir: ctx.derived.derivedDir(diff),
+        readLines: (side, filePath, from, to) => ctx.derived.readLines(diff, side, filePath, from, to),
+        // A tour asks the reader to restate, never to resolve a canvas's points.
+        readerResolves: false,
       },
       { message: input.message, context: input.context }
     )

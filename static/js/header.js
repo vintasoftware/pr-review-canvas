@@ -2,15 +2,16 @@
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').RiskTag} RiskTag */
 import { setDisabledReason } from './composer.js'
+import { diffstatHtml, testChanges } from './diffstat.js'
 import { esc, timeAgo } from './dom.js'
+import { generationMode } from './generate.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
 import { canvasHiddenLines, getFoldLevel, refreshRail } from './layers.js'
-import { pendingBarHtml, pendingCount } from './pending.js'
+import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { approveBlockedReason } from './signoff.js'
-import { skinLabel } from './skin.js'
-import { themeLabel } from './theme.js'
+import { headerBarHtml } from './header-bar.js'
 
 /**
  * @param {ReadonlyArray<RiskTag>} risk
@@ -64,8 +65,40 @@ export function statePill(pr) {
 }
 
 /**
+ * The one generate command in the header, named for what it does on this screen. With an agent,
+ * the page generates the first canvas, updates an outdated one, or writes the current one again.
+ * Without one, it shows the skill command, which needs a canvas to regenerate. While a job runs,
+ * `generate.js` puts the job on this button instead.
  * @param {PrBundle} bundle
- * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date }} opts
+ * @param {boolean} hasCanvas
+ * @returns {{ label: string, title: string, disabled: boolean }}
+ */
+export function generateCommand(bundle, hasCanvas) {
+  if (!bundle.chat.enabled) {
+    const what = bundle.local !== undefined ? 'this local work' : 'this PR'
+    return { label: 'regenerate', title: `Generate a new canvas for ${what}`, disabled: !hasCanvas }
+  }
+  const { label, title } = generationMode(bundle)
+  return { label, title, disabled: false }
+}
+
+/** @typedef {import('./header-bar.js').ProjectLink} ProjectLink */
+/** @typedef {import('./header-bar.js').BarOptions} BarOptions */
+
+/**
+ * The header of a page that could not load its review: the bar with no commands of its own, so
+ * the reader can still leave for another review or project, or change the look.
+ * @param {BarOptions} opts
+ * @returns {string}
+ */
+export function bareHeaderHtml(opts) {
+  return `<header class="hdr">${headerBarHtml(opts, '')}<div class="stripe" aria-hidden="true"></div></header>`
+}
+
+/**
+ * @param {PrBundle} bundle
+ * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date, project?: ProjectLink | undefined }} opts
+ *   The wordmark links to the project list; the project, when the page has one, gets a link home.
  * @returns {string}
  */
 export function renderHeader(bundle, opts) {
@@ -73,6 +106,7 @@ export function renderHeader(bundle, opts) {
   const ready = bundle.status === 'ready' && artifact !== undefined
   // A stale canvas can be exported and regenerated too, so both commands stay live for it.
   const hasCanvas = artifact !== undefined && (bundle.status === 'ready' || bundle.status === 'stale')
+  const generate = generateCommand(bundle, hasCanvas)
   const agent = ready
     ? `<span class="pill agent" title="The agent, model, and harness that generated this canvas">canvas by ${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''} · ${esc(artifact.generator.harness)}</span><span>generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`
     : ''
@@ -86,7 +120,7 @@ export function renderHeader(bundle, opts) {
   const refreshTitle = local
     ? 'Snapshot the working tree again and redraw'
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
-  const progress = ready ? progressHtml(artifact, bundle.state, pr.headSha) : ''
+  const progress = ready ? progressHtml(artifact, bundle.state, pr) : ''
   const level = getFoldLevel()
   const reading = ready
     ? foldLevelControlHtml(
@@ -98,6 +132,7 @@ export function renderHeader(bundle, opts) {
             comments: bundle.comments.reviewComments,
             state: bundle.state,
             headSha: pr.headSha,
+            mergeBaseSha: pr.mergeBaseSha,
           },
           level
         )
@@ -106,23 +141,21 @@ export function renderHeader(bundle, opts) {
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
-    `<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
-    '<div class="hdr-actions" role="group" aria-label="Canvas actions">' +
-    `<a class="cmd" id="tour-link" href="/tour/${esc(bundle.local ?? String(pr.number))}" title="Take the tour of this change: landmarks, decisions, and a quiz">tour</a>` +
-    `<button class="cmd" type="button" id="regenerate" title="Generate a new canvas for ${local ? 'this local work' : 'this PR'}" aria-haspopup="dialog"${hasCanvas ? '' : ' disabled'}>regenerate</button>` +
-    `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
-    `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
-    '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +
-    '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
-    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
-    `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
-    '</div></div>' +
+    headerBarHtml(
+      opts,
+      `<a class="cmd" id="tour-link" href="${esc(opts.project?.home ?? '/')}tour/${esc(bundle.local ?? String(pr.number))}" title="Take the tour of this change: landmarks, decisions, and a quiz">tour</a>` +
+        `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
+        `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
+        `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
+        '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +
+        '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>'
+    ) +
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
     `<div class="title"><h1>${number}${esc(pr.title)}</h1>${forgeLink}</div>` +
     `<p class="meta"><span>by ${authorHtml(pr.author, local)}</span>` +
     `<span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>${statePill(pr)}` +
-    `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
+    `${diffstatHtml(pr, ready ? testChanges(artifact, bundle.files) : undefined)}${agent}</p>` +
     `${largePrNoticeHtml(bundle)}${risk}${reading}${progress}</div></header>`
   )
 }
@@ -134,8 +167,9 @@ export function renderHeader(bundle, opts) {
  * change set was read in full.
  * @param {import('./contract-types.js').ReviewArtifact} artifact
  * @param {import('./contract-types.js').PrState} state
+ * @param {import('./pending.js').DiffOnScreen} [on] the diff the page's drafts belong to
  */
-export function progressHtml(artifact, state, headSha = artifact.pr.headSha) {
+export function progressHtml(artifact, state, on = artifact.pr) {
   const p = progressSummary(artifact, state)
   const blocked = approveBlockedReason(artifact, state)
   const approveTitle = `Write and preview an approving review on ${esc(hostLabel())}`
@@ -148,7 +182,7 @@ export function progressHtml(artifact, state, headSha = artifact.pr.headSha) {
     `<span class="ptext">${p.done} of ${p.total} layers reviewed</span></div>` +
     `<div class="pending-bar-host${pendingCount(state) > 0 ? ' has-pending' : ''}">${pendingBarHtml(
       pendingCount(state),
-      state.pending.filter(draft => draft.headSha !== headSha)
+      draftsByCommit(state, on).earlier.length
     )}</div>` +
     `<div class="signoff">${approve}` +
     `<button class="cmd" type="button" id="request-changes" data-tooltip="Write and preview a review requesting changes on ${esc(hostLabel())}" title="Write and preview a review requesting changes on ${esc(hostLabel())}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post>request changes</button>` +

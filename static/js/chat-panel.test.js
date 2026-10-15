@@ -16,7 +16,7 @@ function screen(isNarrow, isMobile) {
 
 function shell() {
   document.body.innerHTML =
-    '<div id="root"><div class="layout"><button id="chat-launcher">open</button><dialog id="chat-dialog"></dialog><aside><button id="chat-minimize">close</button><textarea>keep my draft</textarea><button disabled>disabled</button><a href="#" tabindex="-1">skip</a><button id="last">send</button></aside></div></div>'
+    '<div id="root"><div class="layout"><button id="chat-launcher">open</button><dialog id="chat-dialog"></dialog><aside><button id="chat-minimize">close</button><textarea>keep my draft</textarea><button disabled>disabled</button><a href="#" tabindex="-1">skip</a><a id="canvas-link" href="#line:src/app.ts:3">line 3</a><button id="last">send</button></aside></div></div>'
   const root = /** @type {HTMLElement} */ (document.querySelector('#root'))
   const pane = /** @type {HTMLElement} */ (root.querySelector('aside'))
   const dialog = /** @type {HTMLDialogElement} */ (root.querySelector('dialog'))
@@ -112,4 +112,34 @@ it('traps Tab inside the mobile dialog while skipping disabled, hidden, and nega
   minimize.click()
   expect(key().defaultPrevented).toBe(false)
   panel.stop()
+})
+
+it('steps a floating pane aside for the canvas, from a canvas link in it or when asked', () => {
+  const { narrow } = screen(true, false)
+  const { root, pane, dialog, launcher } = shell()
+  const panel = wireChatPanel(root, pane)
+  const link = /** @type {HTMLAnchorElement} */ (root.querySelector('#canvas-link'))
+  launcher.click()
+  expect(dialog.open).toBe(true)
+  // A modified click asks the browser for a new tab, and a plain link is not a canvas link.
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }))
+  pane.querySelector('a[href="#"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  expect(dialog.open).toBe(true)
+  link.click()
+  expect(dialog.open).toBe(false)
+  expect(launcher.hidden).toBe(false)
+  launcher.click()
+  panel.uncover()
+  expect(dialog.open).toBe(false)
+  // Minimized already, or docked beside the canvas: there is nothing to step aside.
+  panel.uncover()
+  Object.assign(narrow, { matches: false })
+  narrow.dispatchEvent(new Event('change'))
+  launcher.click()
+  link.click()
+  panel.uncover()
+  expect(pane.hidden).toBe(false)
+  panel.stop()
+  launcher.click()
+  link.click()
 })

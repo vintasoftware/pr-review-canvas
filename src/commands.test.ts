@@ -86,7 +86,7 @@ describe('prepare, publish, validate through the CLI layer', () => {
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
-      reviewUrl: 'http://localhost:3010/review/42',
+      reviewUrl: 'http://localhost:3010/r/acme/widgets/review/42',
     })
     // validate also reads a stored review.json, converting it back to the model's shape.
     const reviewIo = fakeIo()
@@ -567,8 +567,9 @@ describe('export and import through the CLI layer', () => {
     expect(describeImport({ ...base, status: 'stale', relation: 'unrelated' })).toBe(
       'Imported the canvas for aaaaaaa, but the head is now ccccccc, which does not contain it. The canvas is stale.'
     )
-    expect(describeImport({ ...base, status: 'stale' })).toBe(
-      'Imported the canvas for aaaaaaa, but the head is now ccccccc. The canvas is stale.'
+    const otherBase = { canvasMergeBaseSha: 'b'.repeat(40), currentMergeBaseSha: '9'.repeat(40) }
+    expect(describeImport({ ...base, status: 'stale', relation: 'other-base', ...otherBase })).toBe(
+      'Imported the canvas for aaaaaaa, diffed from bbbbbbb, but the pull request changed its base and the diff now runs from 9999999. The canvas is stale.'
     )
   })
 
@@ -633,7 +634,7 @@ describe('export and import through the CLI layer', () => {
 
 describe('clean', () => {
   async function useCheckout(key: number): Promise<void> {
-    const lease = await t.ctx.checkouts.lease(key)
+    const lease = await t.ctx.checkouts.lease(key, 'chat')
     await lease.moveTo(HEAD_SHA)
     await lease.release()
   }
@@ -659,7 +660,7 @@ describe('clean', () => {
       'Would remove 1 review checkout:',
       expect.stringMatching(new RegExp(`^  #42 at ${HEAD_SHA.slice(0, 7)}, last used .+: /`)),
     ])
-    const lease = await t.ctx.checkouts.lease(42)
+    const lease = await t.ctx.checkouts.lease(42, 'chat')
     const busy = fakeIo(false)
     expect(await runClean(t.ctx, ['--all'], busy)).toBe(EXIT.ok)
     expect(busy.out[0]).toBe('No review checkouts to remove.')
@@ -672,6 +673,19 @@ describe('clean', () => {
     const off = fakeIo(false)
     expect(await runClean(t.ctx, [], off)).toBe(EXIT.ok)
     expect(off.out).toEqual([])
+  })
+
+  it("names a linked worktree's branch checkout by its folder, so it reads apart from the main one", async () => {
+    t = await makeTestContext({ repoRoot: '/trees/fix' })
+    const lease = await t.ctx.checkouts.lease('branch', 'chat')
+    await lease.moveTo(HEAD_SHA)
+    await lease.release()
+    const text = fakeIo(false)
+    expect(await runClean(t.ctx, ['--all', '--dry-run'], text)).toBe(EXIT.ok)
+    expect(text.out[1]).toMatch(new RegExp(`^  branch~fix at ${HEAD_SHA.slice(0, 7)}, last used .+: /`))
+    const json = fakeIo()
+    expect(await runClean(t.ctx, ['--all'], json)).toBe(EXIT.ok)
+    expect(lastJson(json)).toMatchObject({ removed: [{ key: 'branch', worktree: 'fix' }] })
   })
 
   it('removes nothing with idle cleanup off, and says to use --all', async () => {

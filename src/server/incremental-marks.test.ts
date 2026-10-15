@@ -97,8 +97,8 @@ const bundle = async (): Promise<PrBundle> =>
 
 /** Marks the reviewer made on the basis canvas: the app file, its test, and the whole layer. */
 async function markedOnBasis(): Promise<void> {
-  await t.ctx.state.setReviewed(42, APP, true, { canvasSha: OLD_SHA })
-  await t.ctx.state.setReviewed(42, APP_TEST, true, { canvasSha: OLD_SHA })
+  await t.ctx.state.setReviewed(42, APP, true, { canvas: { headSha: OLD_SHA, mergeBaseSha: BASE_SHA } })
+  await t.ctx.state.setReviewed(42, APP_TEST, true, { canvas: { headSha: OLD_SHA, mergeBaseSha: BASE_SHA } })
 }
 
 /**
@@ -163,7 +163,9 @@ describe('marks following a line of three canvases', () => {
 
   it('carries a whole-layer mark, and the sign-off route counts it, so approval is not asked twice', async () => {
     await withChain()
-    await t.ctx.state.setReviewed(42, RUN_PATH, true, { canvasSha: OLD_SHA })
+    await t.ctx.state.setReviewed(42, RUN_PATH, true, {
+      canvas: { headSha: OLD_SHA, mergeBaseSha: BASE_SHA },
+    })
     const b = await bundle()
     expect(b.state.reviewed).toEqual({ [RUN_PATH]: true })
     // The sign-off route reads the marks the same way, so the one semantic layer counts as read.
@@ -178,7 +180,9 @@ describe('marks following a line of three canvases', () => {
     await withChain()
     // A canvas of the head generated from nothing: the line of descent never reaches OLD_SHA.
     await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), manifest(HEAD_SHA), 42)
-    await t.ctx.state.setReviewed(42, APP_TEST, true, { canvasSha: OLD_SHA })
+    await t.ctx.state.setReviewed(42, APP_TEST, true, {
+      canvas: { headSha: OLD_SHA, mergeBaseSha: BASE_SHA },
+    })
     const b = await bundle()
     expect(b.state.reviewed).toEqual({})
     expect(b.marksCarriedFrom).toBeUndefined()
@@ -224,7 +228,7 @@ describe('a canvas generated from the canvas of an earlier commit', () => {
 
   it('leaves marks made on the new canvas alone, and stops naming a basis once they are its own', async () => {
     await withIncrementalCanvas()
-    await t.ctx.state.setReviewed(42, APP, true, { canvasSha: HEAD_SHA })
+    await t.ctx.state.setReviewed(42, APP, true, { canvas: { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA } })
     const b = await bundle()
     expect(b.state.reviewed).toEqual({ [APP]: true })
     expect(b.marksCarriedFrom).toBeUndefined()

@@ -61,7 +61,7 @@ describe('prepare', () => {
     })
     expect(o.phases).toEqual(['fetch-pr', 'fetch-refs', 'collect-diffs', 'prompt'])
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
-    const derived = t.ctx.derived.derivedDir(HEAD_SHA)
+    const derived = t.ctx.derived.derivedDir({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     expect(context).toEqual({
       version: 1,
       target: { kind: 'pr', number: 42 },
@@ -96,7 +96,7 @@ describe('prepare', () => {
     expect(prompt).not.toContain('{{')
     // The PR is cached for the server, and derived/ is on disk for the browser.
     expect(await t.ctx.prs.readPr(42)).toEqual(syntheticArtifact().pr)
-    expect(await t.ctx.derived.read(HEAD_SHA)).not.toBeNull()
+    expect(await t.ctx.derived.read({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).not.toBeNull()
   })
 
   it('reports exists when a canvas is already stored for the head, and rebuilds with --force', async () => {
@@ -144,7 +144,7 @@ describe('prepare', () => {
     // The old canvas keeps serving until publish replaces it.
     expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(true)
     expect(await t.ctx.canvases.readArtifact(HEAD_SHA)).toEqual(artifact)
-    expect(await t.ctx.derived.read(HEAD_SHA)).not.toBeNull()
+    expect(await t.ctx.derived.read({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).not.toBeNull()
   })
 
   it('describes a change set from two refs with fallbacks for the PR fields', async () => {
@@ -325,8 +325,8 @@ describe('prepare with a basis canvas', () => {
       if (missing === 'manifest') vi.spyOn(t.ctx.canvases, 'readManifest').mockResolvedValue(null)
       if (missing === 'diff') {
         const read = t.ctx.derived.readOrBuild.bind(t.ctx.derived)
-        vi.spyOn(t.ctx.derived, 'readOrBuild').mockImplementation((sha, base) =>
-          sha === OLD ? Promise.resolve(null) : read(sha, base)
+        vi.spyOn(t.ctx.derived, 'readOrBuild').mockImplementation(diff =>
+          diff.headSha === OLD ? Promise.resolve(null) : read(diff)
         )
       }
       const result = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())

@@ -72,7 +72,7 @@ for (const receipt of ['available', 'unavailable']) {
     await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
     await closeChat()
     await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
-    await page.locator('[data-act="pending-delete"]').click()
+    await page.locator('tr.pending-row [data-act="pending-delete"]').click()
     await openChat()
     await expect(card.locator('[data-act="proposed-queue"]')).toBeVisible()
     await card.locator('[data-act="proposed-queue"]').click()
@@ -83,10 +83,16 @@ for (const receipt of ['available', 'unavailable']) {
     await expect(page.locator('.proposed').nth(2)).toContainText('in your review')
     await expect(page.locator('.proposed').nth(3)).toContainText('in your review')
     await closeChat()
-    await page.locator('[data-act="pending-finish"]').click()
+    await page.locator('.pending-bar [data-act="pending-finish"]').click()
     await page.locator('[data-act="signoff-post"]').click()
-    await expect(page.locator('.signoff-result')).toContainText('Posted')
-    await page.locator('[data-act="signoff-close"]').click()
+    await expect(page.locator('.toast')).toContainText('review posted with 2 comments')
+    if (receipt === 'available') {
+      await expect(page.locator('#signoff-dialog')).toBeHidden()
+    } else {
+      // The receipt could not be read: the dialog stays open with the warning.
+      await expect(page.locator('.signoff-result')).toContainText('could not be loaded')
+      await page.locator('[data-act="signoff-close"]').click()
+    }
     await openChat()
     if (receipt === 'available') {
       await expect(card.locator('a[href$="discussion_r8001"]')).toHaveCount(1)
@@ -162,7 +168,7 @@ test('settling with sharing disabled and the reason unchecked stays local across
   await point.locator('[data-act="settle-save"]').click()
   await expect(page.locator('.toast')).toContainText('canvas comment is off')
   await page.reload()
-  await expect(point).toBeHidden()
+  await expect(point).toHaveAttribute('data-status', 'resolved')
   expect((await ctx.canvases.readArtifact(syntheticArtifact().pr.headSha))?.settled?.['fp-1']?.reason).toBe(
     'This decision stays in the local canvas.'
   )
@@ -262,36 +268,30 @@ test('a failed settlement preserves the reason for retry', async ({ page, selfRe
   await expect(point.locator('[data-act="settle-save"]')).toBeEnabled()
   await page.unroute('**/api/prs/42/points/fp-1/settled')
   await point.locator('[data-act="settle-save"]').click()
-  await expect(point).toBeHidden()
+  await expect(point).toHaveAttribute('data-status', 'resolved')
 })
 
-test('self-review ignores personal dismissals and offers only resolve for author points', async ({
+test('self-review offers dismiss as a personal hide that leaves every point unresolved', async ({
   page,
   selfReviewUrl,
 }) => {
   await page.goto(selfReviewUrl)
-  // Simulate marks saved by an earlier version, before self-review stopped offering dismiss.
-  for (const fingerprint of ['fp-1', 'fp-2', 'fp-3']) {
-    await page.evaluate(async fp => {
-      const response = await fetch(`/api/prs/42/points/${fp}/dismissed`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ dismissed: true }),
-      })
-      if (!response.ok) throw new Error(await response.text())
-    }, fingerprint)
-  }
-  await page.reload()
-  await expect(page.locator('.self-review-note')).toContainText('3 points are marked yours')
-  await expect(page.locator('[data-act="point-dismiss"]')).toHaveCount(0)
-  await expect(page.locator('[data-act="point-restore"]')).toHaveCount(0)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await expect(card.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
-  await page.keyboard.press(']')
-  await page.keyboard.press('d')
-  await expect(card).toBeVisible()
-  await expect(page.locator('.dismissed-list')).toBeHidden()
-  await expect(page.locator('.self-review-note')).not.toContainText('Self-review done')
+  await card.locator('[data-act="point-dismiss"]').click()
+  await expect(card).toHaveAttribute('data-status', 'dismissed')
+  await expect(page.locator('.point-statuses')).toContainText('1 dismissed')
+  // The page shows the dismissal before the server saves it, so the reload waits for the save.
+  await expect(page.locator('.toast')).toHaveText('attention point dismissed')
+  await page.reload()
+  await expect(card).toHaveAttribute('data-status', 'dismissed')
+  await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
+  await expect(page.locator('.self-review-note')).toContainText('1 point goes to the reviewer')
+  await card.locator('[data-act="point-expand"]').click()
+  await expect(card.getByRole('button', { name: 'resolve', exact: true })).toHaveCount(0)
+  await card.locator('[data-act="point-restore"]').click()
+  await expect(card).toHaveAttribute('data-status', 'open')
+  await expect(card.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
 })
 
 test('settings tabs are usable at a phone width', async ({ page, chatServer }) => {
@@ -319,7 +319,7 @@ test('Recent labels prepared PRs without a canvas and pages serve the SVG favico
 }) => {
   const { url, ctx } = await chatServer()
   await ctx.prs.writePr(42, syntheticArtifact().pr)
-  await page.goto(new URL('/', url).href)
+  await page.goto(new URL('../', url).href)
   await expect(page.locator('footer')).toContainText(
     'GitHub operations and AI requests contact their services'
   )

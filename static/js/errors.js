@@ -126,7 +126,23 @@ export const ERROR_CARDS = {
   },
   CHAT_BUSY: {
     title: 'The chat is answering another message',
-    action: 'Wait for the answer, or stop it, then send again.',
+    action: 'Wait for the answer, or stop it from the page that asked, then send again.',
+  },
+  GENERATION_BUSY: {
+    title: 'A canvas is already being generated',
+    action: 'Open the generation dialog to follow it, or stop it, then start again.',
+  },
+  GENERATION_FAILED: {
+    title: 'The canvas could not be generated',
+    action: 'Follow the hint, or run the skill from Claude Code or Codex.',
+  },
+  SERVER_NOT_RUNNING: {
+    title: 'No review server is running',
+    action: 'Start one with pr-review serve in any terminal, then run pr-review open again.',
+  },
+  SERVER_TOKEN_INVALID: {
+    title: 'The review server refused the command',
+    action: 'Run the command as the user who started pr-review serve, or restart the server.',
   },
   CHECKOUT_BUSY: {
     title: 'The review checkout is in use',

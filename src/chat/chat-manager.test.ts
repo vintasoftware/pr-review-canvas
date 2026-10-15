@@ -14,13 +14,14 @@ import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
 import { createFakeCheckoutGit, type FakeCheckoutGit, makeTempDir } from '../testing/fakes.js'
 import { HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import {
+  type RunningTurns,
   ChatBusyError,
   type ChatManager,
   type ChatTarget,
   createChatManager,
   STOPPED_TURN_WAIT_MS,
 } from './chat-manager.js'
-import { CheckoutBusyError, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
+import { CheckoutBusyError, checkoutsFor, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
 import { createTranscriptStore, type TranscriptStore } from './threads.js'
 
 const artifact = syntheticArtifact()
@@ -47,6 +48,7 @@ function target(): ChatTarget {
     patches,
     derivedDir: '/data/derived',
     readLines: async () => ['a line'],
+    readerResolves: false,
   }
 }
 
@@ -55,16 +57,20 @@ function build(
     runner?: FakeRunner
     overrides?: { chatAgent?: 'claude' | 'codex'; chatModel?: string }
     checkoutGit?: FakeCheckoutGit
+    turns?: RunningTurns
   } = {}
 ) {
   runner = opts.runner ?? createFakeRunner()
   checkoutGit = opts.checkoutGit ?? createFakeCheckoutGit()
-  checkouts = createReviewCheckouts({
-    root: path.join(dataDir, 'checkouts'),
-    git: checkoutGit,
-    now: () => new Date('2026-09-11T10:00:00.000Z'),
-  })
-  const prs = createPrStore(dataDir)
+  checkouts = checkoutsFor(
+    createReviewCheckouts({
+      root: path.join(dataDir, 'checkouts'),
+      git: checkoutGit,
+      now: () => new Date('2026-09-11T10:00:00.000Z'),
+    }),
+    null
+  )
+  const prs = createPrStore(dataDir, null)
   state = createStateStore(prs, () => new Date('2026-09-11T10:00:00.000Z'))
   settings = createSettingsStore(dataDir)
   transcripts = createTranscriptStore(number => prs.prDir(number))
@@ -76,11 +82,12 @@ function build(
     repo: REPO,
     repoRoot: '/repo',
     overrides: opts.overrides ?? {},
-    loadSeedTemplate: async () => 'SEED for {{PR_META}}',
+    loadSeedTemplate: async () => 'SEED for {{PR_META}}\n{{READER}}',
     loadTourSeedTemplate: async () => 'TOUR SEED for {{PR_META}}\n{{DECISIONS}}',
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
+    turns: opts.turns,
   })
 }
 
@@ -145,6 +152,19 @@ describe('createChatManager().send', () => {
       seeded: true,
     })
     expect(runner.runs[2]?.prompt).toContain('SEED for')
+  })
+
+  it('seeds again when the reader gains or loses the right to resolve on the same commit', async () => {
+    const author = { ...target(), readerResolves: true }
+    await collect(manager.send(author, { message: 'one', context: { kind: 'pr' } }))
+    expect(runner.runs[0]?.prompt).toContain('may resolve its attention points')
+
+    // The author pushed, and the canvas on screen is now outdated: same commit, no resolving.
+    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    expect(runner.runs[1]?.prompt).toContain('may not resolve attention points here')
+
+    await collect(manager.send(target(), { message: 'three', context: { kind: 'pr' } }))
+    expect(runner.runs[2]?.prompt).not.toContain('SEED for')
   })
 
   it.each([
@@ -247,7 +267,7 @@ describe('createChatManager().send', () => {
     const iterator = stream[Symbol.asyncIterator]()
     // The lock is taken by the time the first event comes back.
     await iterator.next()
-    expect(manager.busy(42)).toBe(true)
+    expect(manager.running()).toContain(42)
     await expect(
       collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
     ).rejects.toBeInstanceOf(ChatBusyError)
@@ -256,7 +276,7 @@ describe('createChatManager().send', () => {
         break
       }
     }
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('reports a turn that was stopped as cancelled and saves what was said', async () => {
@@ -277,6 +297,73 @@ describe('createChatManager().send', () => {
     expect(events.at(-1)).toEqual({ event: 'cancelled' })
     const turns = await transcripts.read(42, T1)
     expect(turns.at(-1)).toMatchObject({ role: 'assistant', incomplete: 'cancelled' })
+  })
+
+  it('lists the reviews with a turn running', async () => {
+    build({ runner: createFakeRunner({ delayMs: 5 }) })
+    expect(manager.running()).toEqual([])
+    const turn = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    expect(manager.running()).toEqual([42])
+    await advanceTo(iterator, 'done')
+    await iterator.next()
+    expect(manager.running()).toEqual([])
+  })
+
+  it('refuses a turn on a review a manager over the same data dir is running one for', async () => {
+    const turns: RunningTurns = new Map()
+    build({ runner: createFakeRunner({ delayMs: 5 }), turns })
+    const first = manager
+    build({ turns })
+    const second = manager
+    const secondRunner = runner
+    const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    expect([...turns.keys()]).toEqual(['42'])
+    await expect(
+      collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
+    expect(secondRunner.runs).toEqual([])
+    // A pull request's turn is every sibling's: the second manager counts it as running.
+    expect(second.running()).toEqual([42])
+    await advanceTo(iterator, 'done')
+    await iterator.next()
+    expect([...turns.keys()]).toEqual([])
+    expect(
+      (await collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))).at(-1)
+    ).toEqual({ event: 'done', stopReason: 'end_turn' })
+    expect([...turns.keys()]).toEqual([])
+  })
+
+  it('refuses a second turn on the same review in one manager, which keeps its own set', async () => {
+    build({ runner: createFakeRunner({ delayMs: 5 }) })
+    const turn = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    await expect(
+      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
+    await advanceTo(iterator, 'done')
+    await iterator.next()
+  })
+
+  it('stops, from a manager over the same data dir, the turn another one started', async () => {
+    const turns: RunningTurns = new Map()
+    build({ runner: createFakeRunner({ delayMs: 5 }), turns })
+    const first = manager
+    build({ turns })
+    const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const iterator = turn[Symbol.asyncIterator]()
+    await iterator.next()
+    expect(await manager.cancel(42)).toBe(true)
+    let step = await iterator.next()
+    while (step.done !== true) {
+      step = await iterator.next()
+    }
+    expect(first.running()).toEqual([])
+    expect([...turns.keys()]).toEqual([])
   })
 
   it('says there is nothing to cancel when no turn is running', async () => {
@@ -480,7 +567,7 @@ describe('two turns that arrive together', () => {
     await iterator.next()
     await iterator.return?.(undefined)
     expect(runner.cancelled).toEqual([T1])
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('frees the chat when the reader goes away before the first event', async () => {
@@ -490,7 +577,7 @@ describe('two turns that arrive together', () => {
     const started = iterator.next()
     await iterator.return?.(undefined)
     await started.catch(() => undefined)
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 })
 
@@ -553,7 +640,7 @@ describe('a stop that arrives before the agent has started', () => {
     ])
     // No agent was started at all, so there was nothing left to cancel.
     expect(runner.runs).toEqual([])
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('leaves the thread unseeded, because the seed never went anywhere', async () => {
@@ -627,7 +714,7 @@ describe('a turn sent while a stopped one is still finishing', () => {
     }
     openGate()
     await left
-    expect(manager.busy(42)).toBe(false)
+    expect(manager.running()).not.toContain(42)
   })
 
   it('is still refused while the running turn was not stopped', async () => {
@@ -786,13 +873,13 @@ describe('the review checkout a turn reads', () => {
   })
 
   it('is busy while another process holds the checkout, and free again after the turn', async () => {
-    const held = await checkouts.lease(42)
+    const held = await checkouts.lease(42, 'chat')
     await expect(
       collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
     ).rejects.toThrow(CheckoutBusyError)
     await held.release()
     await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
-    const again = await checkouts.lease(42)
+    const again = await checkouts.lease(42, 'chat')
     await again.release()
   })
 

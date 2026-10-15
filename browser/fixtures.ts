@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { serve } from '@hono/node-server'
 import { test as base, expect, type Page } from '@playwright/test'
-import { createApp } from '../src/server/app.js'
+import { createHubApp } from '../src/hub/hub-app.js'
+import { createHub } from '../src/hub/hub.js'
 import { resolveVendorRoots } from '../src/server/context.js'
 import { DEFAULT_PROJECT_CONFIG } from '../src/project-config.js'
 import { createFakeRunner, type FakeRunnerOptions } from '../src/testing/fake-runner.js'
@@ -35,6 +36,8 @@ export interface ChatServerOptions {
   checkout?: { delayMs?: number; fail?: string }
   /** Runs against the server's context before the page loads, e.g. to save settings. */
   setup?: (t: TestContext) => Promise<void>
+  /** Serve PR 42 with no canvas, so the page starts on the empty screen. */
+  noCanvas?: boolean
 }
 
 /** A review server with AI Chat on, driven by a fake agent and fake review checkouts. */
@@ -70,6 +73,7 @@ export const test = base.extend<{
   reviewUrl: string
   selfReviewUrl: string
   tourUrl: string
+  noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
   chatServer: async ({ page }, use) => {
@@ -83,6 +87,7 @@ export const test = base.extend<{
         },
         runner: createFakeRunner(options.runner),
         checkoutGit: createFakeCheckoutGit(options.checkout),
+        ...(options.noCanvas ? { fixtureArtifact: null } : {}),
       })
       stops.push(server.stop)
       await options.setup?.(server.t)
@@ -90,6 +95,21 @@ export const test = base.extend<{
     })
     for (const stop of stops) {
       await stop()
+    }
+  },
+  /** PR #42 with AI Chat turned off, so the side pane holds the review alone. */
+  noChatUrl: async ({ page }, use) => {
+    const server = await startServer(page, {
+      projectConfig: {
+        config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
+        warnings: [],
+        source: null,
+      },
+    })
+    try {
+      await use(server.url)
+    } finally {
+      await server.stop()
     }
   },
   reviewUrl: async ({ page }, use) => {
@@ -133,7 +153,7 @@ export const test = base.extend<{
     })
     try {
       await server.t.ctx.tours.write(HEAD_SHA, await fixtureTour())
-      await use(`${new URL(server.url).origin}/tour/42`)
+      await use(new URL('../tour/42', server.url).href)
     } finally {
       await server.stop()
     }
@@ -166,14 +186,7 @@ export const test = base.extend<{
       fixtureArtifact: null,
     })
     try {
-      // The drawn point, fp-1, is marked for the author so it can be settled.
-      const synthetic = syntheticArtifact()
-      const artifact = {
-        ...synthetic,
-        points: synthetic.points.map(p =>
-          p.fingerprint === 'fp-1' ? { ...p, audience: 'author' as const } : p
-        ),
-      }
+      const artifact = syntheticArtifact()
       await server.t.ctx.canvases.write(artifact.pr.headSha, artifact, {
         formatVersion: 1,
         tool: { name: 'pr-review', version: '0.0.0-test' },
@@ -252,23 +265,58 @@ async function startServer(
     vendorRoots: resolveVendorRoots(),
     ...extra,
   })
-  const server = serve({ fetch: createApp(t.ctx).fetch, port: 0, hostname: '127.0.0.1' })
+  // Closing the server drops the sockets, not the handlers: a request the page fired and the test
+  // never waited for (a rebuild of `derived/` behind a reload or refresh) keeps writing into the
+  // data dir. `stop` waits for every handler to return before that dir is removed, or `rm` races
+  // the write and fails with ENOTEMPTY.
+  // Served as the shared server serves it: under the project's base path, behind the hub's front.
+  let port = 0
+  const hub = await createHub({ registry: t.dataDir, load: async () => t.ctx, log: () => undefined })
+  // As `open` does: with the shell's environment, so the project runs under it.
+  await hub.register({ repoRoot: t.ctx.config.repoRoot, env: process.env })
+  const app = createHubApp({
+    hub,
+    home: t.dataDir,
+    token: 'test-token',
+    version: t.ctx.version,
+    port: () => port,
+    staticDir: t.ctx.staticDir,
+    vendorRoots: t.ctx.vendorRoots,
+    log: () => undefined,
+  })
+  const inFlight = new Set<Request>()
+  const settled: Array<() => void> = []
+  const fetch = async (request: Request): Promise<Response> => {
+    inFlight.add(request)
+    try {
+      return await app.fetch(request)
+    } finally {
+      inFlight.delete(request)
+      if (inFlight.size === 0) settled.splice(0).forEach(resolve => resolve())
+    }
+  }
+  const server = serve({ fetch, port: 0, hostname: '127.0.0.1' })
   await once(server, 'listening')
   const address = server.address()
   if (address === null || typeof address === 'string') {
     throw new Error('test server did not bind a port')
   }
+  port = address.port
   const origin = `http://127.0.0.1:${address.port}`
   const stop = async (): Promise<void> => {
     try {
+      hub.close()
       if ('closeAllConnections' in server) {
         server.closeAllConnections()
       }
       await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
+      if (inFlight.size > 0) {
+        await new Promise<void>(resolve => settled.push(resolve))
+      }
     } finally {
       await t.cleanup()
     }
     expect(errors).toEqual([])
   }
-  return { url: `${origin}/review/42`, t, stop }
+  return { url: `${origin}${t.ctx.config.basePath}review/42`, t, stop }
 }

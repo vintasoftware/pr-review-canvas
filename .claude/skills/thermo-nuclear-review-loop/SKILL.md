@@ -1,9 +1,11 @@
 ---
 name: thermo-nuclear-review-loop
 description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer explicitly approves it under a strict code-quality standard. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without growing defensive code.
+metadata:
+  version: "4"
 ---
 
-# Thermo-Nuclear Review Loop v2
+# Thermo-Nuclear Review Loop v4
 
 You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, independently verify its findings, fix the justified ones, and repeat until it explicitly approves. There is no separate fixer agent.
 
@@ -21,7 +23,9 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
 ## Spawn the reviewer
 
-**Model**: an Opus-like model, meaning the highest or second-highest model on the default plan for that agent (Claude: Opus; Codex: the top or second reasoning model at `xhigh` effort), at its highest reasoning effort. Name the tier, never a specific model id.
+**Model**: an Opus-like model, meaning the highest or second-highest model on the default plan for that agent (Claude: Opus; Codex: the top or second reasoning model). Name the tier, never a specific model id.
+
+**Reasoning effort**: a Claude reviewer runs at its highest effort. A Codex reviewer runs at `high` or lower throughout the loop; configure that explicitly when spawning a subagent or starting a cross-host session, including when the host uses a higher effort setting.
 
 **Host**: when the reviewer runs on the same agent as the host, spawn a subagent with a stable name (`tnr-reviewer`) and keep it for the whole loop so later passes reuse its context. When the reviewer runs on a different agent, use `acpx` with a named persistent session (see Host notes). The user chooses; default to the same host.
 
@@ -31,7 +35,9 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
 Prompt template:
 
-> Read `<REVIEW.md or Review Standard path/paste>` and apply it to `<resolved scope>` in the current working tree, compared against `<baseline>`. The stated requirement is: `<original request verbatim, or "none recorded">`. Be ambitious about structural simplification and code-judo opportunities. Verify every claim against code, history, tests, and repository instructions; behavior claims need a file:line citation, not an inference from naming. Do not edit. Return concrete blockers with evidence and remedies, or explicitly approve if the implementation meets the standard.
+> Read `<REVIEW.md or Review Standard path/paste>` and apply it to `<resolved scope>` in the current working tree, compared against `<baseline>`. The stated requirement is: `<original request verbatim, or "none recorded">`. Be ambitious about structural simplification and code-judo opportunities. Verify every claim against code, history, tests, and repository instructions; behavior claims need a file:line citation, not an inference from naming. Do not edit. Return concrete blockers with evidence and remedies, or explicitly approve if the implementation meets the standard. Open your reply with a line naming the standard you applied (`REVIEW.md` or `Review Standard`) and quoting its first and last lines verbatim.
+
+Check that the verdict's opening line names the right standard and quotes lines that exist in it. A verdict without that line means the reviewer did not read the standard: ask it to read the standard and resend before acting on any finding.
 
 Wait for the verdict; the loop cannot proceed without it. If the verdict does not arrive as a message, check your inbox and ask the reviewer to resend before doing anything else.
 
@@ -84,7 +90,7 @@ Adding a lint rule, tightening typing, or adding a script counts as a fix and ne
 
 **Verify.** Run the repository's build and test commands, plus focused checks the affected code warrants (sanitizers, concurrency checks, format and lint). Separate environment-only failures from regressions; report both.
 
-**Commit.** One commit per iteration on the current branch, message naming the iteration and the findings it addresses, so each cycle stays reviewable. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
+**Commit.** One commit per iteration on the current branch, so each cycle stays reviewable. Write the message for a reader of `git log` who never saw the review. The subject follows the repository's own convention (type and scope where it uses them) and says what the code does differently now; the body gives each change with the behavior it alters and why, in the project's words, and records a settled decision by the trade-off it settles and its date. The iteration number, the pass, and the reviewer's finding numbers belong to the iteration report, so they stay out of the message. Run uncommitted only if the user asked for that or the tree held unrelated changes at the start. Never push or publish unless the user asks.
 
 **Iteration report** (to the user, every iteration): findings fixed, gated, rejected with counter-evidence; the reason for each new file; verification results.
 
@@ -168,4 +174,4 @@ Approve when the scope has: no verified correctness or security defect, no rule 
     acpx --approve-reads --non-interactive-permissions deny <agent> -s tnr-reviewer -f review-prompt.md
     ```
 
-    `<agent>` is `claude` or `codex`. Use `--model` to request the Opus-like tier when the adapter advertises models (Codex also takes `--config-option reasoning_effort=xhigh`). From a Codex host, acpx needs network, which the default sandbox blocks: expect one approval prompt. Paste the Review Standard (or `REVIEW.md`) into the prompt file when the reviewer agent cannot read this skill. The tree-integrity check in Spawn the reviewer is the real guard; the flags reduce the chance of needing it.
+    `<agent>` is `claude` or `codex`. Use `--model` to request the Opus-like tier when the adapter advertises models (Codex also takes `--config-option reasoning_effort=high`). From a Codex host, acpx needs network, which the default sandbox blocks: expect one approval prompt. Paste the Review Standard (or `REVIEW.md`) into the prompt file when the reviewer agent cannot read this skill. The tree-integrity check in Spawn the reviewer is the real guard; the flags reduce the chance of needing it.

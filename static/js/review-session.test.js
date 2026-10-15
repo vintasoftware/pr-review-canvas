@@ -19,6 +19,7 @@ function session(api, onState) {
     state: BASE,
     capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
     headSha: artifact.pr.headSha,
+    mergeBaseSha: artifact.pr.mergeBaseSha,
     api,
     ...(onState === undefined ? {} : { onState }),
   })
@@ -55,6 +56,8 @@ describe('createReviewSession', () => {
     const served = {
       ...BASE,
       reviewed: { 'layer:run-path': /** @type {const} */ (true) },
+      // The route keys every mark it writes to the commit the page sent.
+      reviewedCanvasSha: artifact.pr.headSha,
       updatedAt: 'server',
     }
     const s = session(
@@ -140,7 +143,41 @@ describe('createReviewSession', () => {
     })
     const answer = await s.postComment({ kind: 'issue', body: 'x' })
     expect(answer.comment.id).toBe(5001)
-    expect(s.state).toBe(posted)
+    expect(s.state).toEqual(posted)
+  })
+
+  it('takes the marks of an answer only when they are keyed to its own commit', async () => {
+    // The page was drawn with the marks fitted to its commit: none, since the stored mark was made
+    // on another one. A draft's answer carries the stored mark all the same.
+    /** @type {import('./contract-types.js').PrState} */
+    const stored = {
+      ...BASE,
+      rev: 1,
+      reviewed: { 'layer:run-path': true },
+      reviewedCanvasSha: 'f'.repeat(40),
+    }
+    // A mark write keys the stored marks to the commit the page sent, the head without a canvas.
+    /** @type {import('./contract-types.js').PrState} */
+    const marked = {
+      ...stored,
+      rev: 3,
+      reviewed: { 'layer:other': true },
+      reviewedCanvasSha: artifact.pr.headSha,
+    }
+    const s = session({
+      addPending: async () => answers({ ...stored, rev: 2 }),
+      putReviewed: async () => answers(marked),
+      deletePending: async () => answers({ ...marked, rev: 4, reviewed: {} }),
+    })
+    await s.addPending({ path: 'src/app.ts', line: 4, side: 'new', body: 'x' })
+    expect(s.state.rev).toBe(2)
+    expect(s.state.reviewed).toEqual({})
+    await s.setReviewed('layer:other', true)
+    expect(s.state.reviewed).toEqual({ 'layer:other': true })
+    // From then on every answer is keyed to this commit, so its marks are taken whatever the
+    // write: here the marks a cascade on the server cleared.
+    await s.deletePending('d1')
+    expect(s.state.reviewed).toEqual({})
   })
 
   it('posts a review with and without an edited body', async () => {
@@ -162,13 +199,19 @@ describe('createReviewSession', () => {
     await s.postReview('REQUEST_CHANGES', 'edited')
     await s.postReview('COMMENT', 'no verdict', { includePending: false })
     expect(sent).toEqual([
-      { event: 'APPROVE', headSha: artifact.pr.headSha },
-      { event: 'REQUEST_CHANGES', body: 'edited', headSha: artifact.pr.headSha },
+      { event: 'APPROVE', headSha: artifact.pr.headSha, mergeBaseSha: artifact.pr.mergeBaseSha },
+      {
+        event: 'REQUEST_CHANGES',
+        body: 'edited',
+        headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
+      },
       {
         event: 'COMMENT',
         body: 'no verdict',
         includePending: false,
         headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
       },
     ])
   })
@@ -186,6 +229,7 @@ describe('createReviewSession', () => {
       },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: () => Promise.reject(new Error('offline')),
         putDismissed: () => Promise.reject(new Error('offline')),
@@ -229,6 +273,7 @@ describe('changes that overlap', () => {
       state: BASE,
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: () =>
           new Promise((_resolve, reject) => {
@@ -249,7 +294,7 @@ describe('changes that overlap', () => {
     /** @type {Array<() => void>} */
     const finish = []
     // The server clears the file marks with the layer, and answers with what it wrote.
-    const cleared = { ...BASE, rev: 9, reviewed: {} }
+    const cleared = { ...BASE, rev: 9, reviewed: {}, reviewedCanvasSha: artifact.pr.headSha }
     const s = createReviewSession({
       prNumber: 42,
       artifact,
@@ -258,9 +303,11 @@ describe('changes that overlap', () => {
         ...BASE,
         rev: 7,
         reviewed: { 'layer:run-path': true, 'layer:run-path/file:src_app_ts': true },
+        reviewedCanvasSha: artifact.pr.headSha,
       },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: (_pr, id) =>
           id === 'layer:run-path'
@@ -288,6 +335,7 @@ describe('changes that overlap', () => {
       state: BASE,
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: () =>
           new Promise((_resolve, reject) => {
@@ -325,6 +373,7 @@ describe('changes that overlap', () => {
       state: { ...BASE, rev: 8 },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: async (_pr, id) =>
           answers({ ...BASE, rev: revs.shift() ?? 0, reviewed: { [id]: /** @type {const} */ (true) } }),
@@ -347,6 +396,7 @@ describe('changes that overlap', () => {
       state: { ...BASE, dismissed: { 'fp-1': before } },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: { putDismissed: () => Promise.reject(new Error('offline')) },
     })
     await expect(s.setDismissed('fp-1', false)).rejects.toThrow('offline')
@@ -363,6 +413,7 @@ describe('changes that overlap', () => {
       state: { ...BASE, rev: 4 },
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: () =>
           new Promise(resolve => {
@@ -391,6 +442,7 @@ describe('changes that overlap', () => {
       state: BASE,
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: () =>
           new Promise(resolve => {
@@ -414,6 +466,38 @@ describe('changes that overlap', () => {
   })
 })
 
+it('names the canvas diff with every mark, and keeps its own marks over ones keyed to another base', async () => {
+  const canvas = { canvasSha: 'c'.repeat(40), canvasMergeBaseSha: 'm'.repeat(40) }
+  /** @type {Array<string | undefined>} */
+  const answerBases = ['o'.repeat(40), canvas.canvasMergeBaseSha]
+  const s = createReviewSession({
+    prNumber: 42,
+    artifact,
+    files: artifact.files,
+    state: BASE,
+    capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
+    headSha: artifact.pr.headSha,
+    mergeBaseSha: artifact.pr.mergeBaseSha,
+    ...canvas,
+    api: {
+      putReviewed: async (_pr, id, _reviewed, input) => {
+        expect(input).toMatchObject(canvas)
+        return answers({
+          ...BASE,
+          reviewed: { [id]: true, 'layer:from-elsewhere': true },
+          reviewedCanvasSha: canvas.canvasSha,
+          reviewedMergeBaseSha: answerBases.shift(),
+        })
+      },
+    },
+  })
+  // The first answer's marks are keyed to another diff of the canvas's commit, so the page keeps its own.
+  await s.setReviewed('layer:run-path', true)
+  expect(s.state.reviewed).toEqual({ 'layer:run-path': true })
+  await s.setReviewed('layer:other', true)
+  expect(s.state.reviewed).toEqual({ 'layer:other': true, 'layer:from-elsewhere': true })
+})
+
 it('accepts legacy state without a revision or pending list and sends the viewed canvas SHA', async () => {
   const { rev: _rev, pending: _pending, ...legacy } = BASE
   const s = createReviewSession({
@@ -423,10 +507,15 @@ it('accepts legacy state without a revision or pending list and sends the viewed
     state: /** @type {import('./contract-types.js').PrState} */ (legacy),
     capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
     headSha: artifact.pr.headSha,
+    mergeBaseSha: artifact.pr.mergeBaseSha,
     canvasSha: 'older-canvas',
     api: {
       putReviewed: async (_pr, id, reviewed, input) => {
-        expect(input).toEqual({ headSha: artifact.pr.headSha, canvasSha: 'older-canvas' })
+        expect(input).toEqual({
+          headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
+          canvasSha: 'older-canvas',
+        })
         return answers({ ...legacy, pending: [], reviewed: reviewed ? { [id]: true } : {} })
       },
     },

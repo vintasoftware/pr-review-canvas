@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { mkdir, realpath } from 'node:fs/promises'
 import { lock } from 'proper-lockfile'
-import type { CarriedOverInfo } from '../contract/api.js'
+import type { CarriedOverInfo, StaleRelation } from '../contract/api.js'
 import {
   type CanvasIndex,
   CanvasIndexSchema,
@@ -13,42 +13,56 @@ import { isLocalKey, type LocalKey, type ReviewKey } from '../contract/review-ke
 import type { Git } from '../git/git.js'
 import { readJson, readText, writeJsonAtomic } from './atomic-json.js'
 
-/** A canvas of a commit the head was built on, and how many commits the head gained since. */
-export interface AncestorCanvas {
-  status: 'stale'
-  headSha: string
-  relation: 'ancestor'
-  commitsBehind: number
-}
-
 export type CanvasLookup =
   /** `headSha` is the canvas's own commit: the head, or another commit with an identical diff. */
   { status: 'ready'; headSha: string; carriedOver?: CarriedOverInfo } | StaleCanvas | { status: 'missing' }
 
-/** A canvas of another commit: one the head was built on, or one from a line the head no longer contains. */
-export type StaleCanvas = AncestorCanvas | { status: 'stale'; headSha: string; relation: 'unrelated' }
+/** A canvas of another diff than the head's, and how it relates to the head. */
+export type StaleCanvas = { status: 'stale'; headSha: string } & StaleRelation
+
+/**
+ * How a canvas of another commit relates to the head: built on by it, with the commits the head
+ * gained since, or off a line the head no longer contains.
+ */
+export async function relateToHead(
+  git: Git,
+  sha: string,
+  headSha: string
+): Promise<Extract<StaleRelation, { relation: 'ancestor' | 'unrelated' }>> {
+  return (await git.isAncestor(sha, headSha))
+    ? { relation: 'ancestor', commitsBehind: await git.countCommitsBetween(sha, headSha) }
+    : { relation: 'unrelated' }
+}
 
 /** One canvas as `index.json` lists it. */
 export type CanvasEntry = CanvasIndex['canvases'][string]
 
 /**
  * Whether a canvas is one of this target's. A canvas belongs to a pull request when it was
- * generated for it or before it existed; to a local review when it belongs to no pull request. A
- * snapshot of uncommitted work sits on no branch, so only the `uncommitted` review claims it.
+ * generated for it or before it existed; to a local review when it belongs to no pull request and
+ * was made in the same checkout (`worktree` is the linked worktree's label, null for the main
+ * checkout). A snapshot of uncommitted work sits on no branch, so only the `uncommitted` review
+ * claims it.
  *
- * Every consumer asks through here: the lookups that pick the canvas to show, and the routes that
- * accept a canvas a mark was made on. Two answers to this question is how marks end up keyed to a
- * canvas their review will never show.
+ * Every consumer asks through here, by way of the store's `belongsTo`: the lookups that pick the
+ * canvas to show, and the routes that accept a canvas a mark was made on. Two answers to this
+ * question is how marks end up keyed to a canvas their review will never show.
  */
-export function canvasBelongsTo(entry: CanvasEntry, key: ReviewKey): boolean {
+export function canvasBelongsTo(entry: CanvasEntry, key: ReviewKey, worktree: string | null): boolean {
   if (isLocalKey(key)) {
-    return entry.prNumber === undefined && (key === 'uncommitted' || entry.worktree !== true)
+    return (
+      entry.prNumber === undefined &&
+      (entry.checkout ?? null) === worktree &&
+      (key === 'uncommitted' || entry.worktree !== true)
+    )
   }
   return entry.worktree !== true && (entry.prNumber === undefined || entry.prNumber === key)
 }
 
 export interface CanvasStore {
   readonly root: string
+  /** `canvasBelongsTo` for this store's checkout. */
+  belongsTo(entry: CanvasEntry, key: ReviewKey): boolean
   canvasDir(headSha: string): string
   readIndex(): Promise<CanvasIndex>
   /** True when a review.json exists for the sha, whatever its format. */
@@ -84,7 +98,8 @@ export interface CanvasStore {
 
 const SHA_RE = /^[0-9a-f]{40}$/
 
-export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
+/** `worktree` is the label of the linked worktree the store serves; null for the main checkout. */
+export function createCanvasStore(repoRoot: string, git: Git, worktree: string | null): CanvasStore {
   const indexFile = path.join(repoRoot, 'index.json')
   const canvasDir = (headSha: string): string => {
     if (!SHA_RE.test(headSha)) {
@@ -131,14 +146,11 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
     )
     const ranked: Array<{ generatedAt: string; found: StaleCanvas }> = []
     for (const [sha, entry] of candidates) {
-      const found: StaleCanvas = (await git.isAncestor(sha, currentHeadSha))
-        ? {
-            status: 'stale',
-            headSha: sha,
-            relation: 'ancestor',
-            commitsBehind: await git.countCommitsBetween(sha, currentHeadSha),
-          }
-        : { status: 'stale', headSha: sha, relation: 'unrelated' }
+      const found: StaleCanvas = {
+        status: 'stale',
+        headSha: sha,
+        ...(await relateToHead(git, sha, currentHeadSha)),
+      }
       ranked.push({ generatedAt: entry.generatedAt, found })
     }
     ranked.sort((a, b) => {
@@ -182,10 +194,17 @@ export function createCanvasStore(repoRoot: string, git: Git): CanvasStore {
         if (flags?.worktree === true) {
           entry.worktree = true
         }
+        // A local review is this checkout's own; a pull request's canvas is every worktree's.
+        if (number === undefined && worktree !== null) {
+          entry.checkout = worktree
+        }
         index.canvases[headSha] = entry
       }),
-    findForPr: (prNumber, currentHeadSha) => rank(currentHeadSha, entry => canvasBelongsTo(entry, prNumber)),
-    findForLocal: (key, currentHeadSha) => rank(currentHeadSha, entry => canvasBelongsTo(entry, key)),
+    belongsTo: (entry, key) => canvasBelongsTo(entry, key, worktree),
+    findForPr: (prNumber, currentHeadSha) =>
+      rank(currentHeadSha, entry => canvasBelongsTo(entry, prNumber, worktree)),
+    findForLocal: (key, currentHeadSha) =>
+      rank(currentHeadSha, entry => canvasBelongsTo(entry, key, worktree)),
     revise: (headSha, artifact) =>
       updateIndex(async index => {
         const entry = index.canvases[headSha]

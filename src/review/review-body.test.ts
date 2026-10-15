@@ -3,7 +3,13 @@
 import type { CommentsPayload } from '../contract/comments.js'
 import { emptyState, type PrState } from '../contract/state.js'
 import { HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
-import { buildReviewBody, inlineText, REVIEW_BODY_FOOTER, unreviewedLayers } from './review-body.js'
+import {
+  buildReviewBody,
+  inlineText,
+  REVIEW_BODY_FOOTER,
+  stateForCanvas,
+  unreviewedLayers,
+} from './review-body.js'
 
 const COMMENTS: CommentsPayload = {
   fetchedAt: '2026-09-10T12:00:00.000Z',
@@ -31,6 +37,22 @@ const COMMENTS: CommentsPayload = {
 function stateWith(partial: Partial<PrState>): PrState {
   return { ...emptyState('2026-09-10T12:00:00.000Z'), ...partial }
 }
+
+describe('stateForCanvas', () => {
+  it('keeps the marks made on this canvas diff and drops the ones made on another', () => {
+    const canvas = { headSha: HEAD_SHA, mergeBaseSha: 'b'.repeat(40) }
+    const marked = {
+      ...emptyState('2026-09-10T12:00:00.000Z'),
+      reviewed: { 'layer:x': true as const },
+      reviewedCanvasSha: HEAD_SHA,
+    }
+    expect(stateForCanvas({ ...marked, reviewedMergeBaseSha: canvas.mergeBaseSha }, canvas)).toEqual({
+      ...marked,
+      reviewedMergeBaseSha: canvas.mergeBaseSha,
+    })
+    expect(stateForCanvas({ ...marked, reviewedMergeBaseSha: 'c'.repeat(40) }, canvas).reviewed).toEqual({})
+  })
+})
 
 describe('unreviewedLayers', () => {
   it('counts only the layers that are not Other', () => {

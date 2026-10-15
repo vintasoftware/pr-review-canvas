@@ -40,8 +40,13 @@ The script exits non-zero on a page error. This step is done when every scene ha
 
 ## 5. Render and check
 
+Render into the main checkout's `release-video/`, not the current worktree's. A linked worktree's `release-video/` is deleted with the worktree. Keep a copy of the page there too, so the video can be edited later:
+
 ```bash
-node .claude/skills/release-demo-video/scripts/render.mjs release-video/index.html release-video/<name>.mp4
+main=$(git worktree list --porcelain | awk 'NR==1 { print $2 }')
+mkdir -p "$main/release-video"
+node .claude/skills/release-demo-video/scripts/render.mjs release-video/index.html "$main/release-video/pr-review-canvas-<version>.mp4"
+cp release-video/index.html "$main/release-video/pr-review-canvas-<version>.html"
 ```
 
 Pull 3–4 frames from the MP4 with `ffmpeg -ss <t> -i <mp4> -frames:v 1 <png>` and look at them, including at least one mid-click. Report the path, duration (`ffprobe`), and size. List any assumptions the user should confirm, such as the version number. The video has no audio track.

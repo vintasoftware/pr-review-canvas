@@ -1,0 +1,464 @@
+// @vitest-environment node
+// The generate routes through Hono: start, status, stop, and the refusals before a job starts.
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { Hono } from 'hono'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Capabilities, ErrorEnvelope } from '../../contract/api.js'
+import type {
+  GenerationJob,
+  GenerationResponse,
+  GenerationSkill,
+  GenerationSkillResponse,
+} from '../../contract/generation.js'
+import { GenerationBusyError, type GenerationManager } from '../../generate/generation-manager.js'
+import { DEFAULT_PROJECT_CONFIG } from '../../project-config.js'
+import { SKILL_SOURCE_DIR } from '../../review/install-skill.js'
+import { artifactToModelOutput } from '../../review/normalize.js'
+import { createFakeRunner } from '../../testing/fake-runner.js'
+import {
+  createFakeGh,
+  createFakeGit,
+  ghError,
+  ghHandler,
+  makeTempDir,
+  makeTestContext,
+  type TestContext,
+} from '../../testing/fakes.js'
+import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../../testing/synthetic.js'
+import { createApp } from '../app.js'
+import { AppError, toAppError } from '../errors.js'
+import { generateRoutes } from './generate-routes.js'
+
+const LOCAL = { host: '127.0.0.1:3010' }
+const POST = { ...LOCAL, origin: 'http://127.0.0.1:3010', 'content-type': 'application/json' }
+
+const JOB: GenerationJob = {
+  key: 42,
+  force: false,
+  agent: 'claude',
+  model: 'opus',
+  skill: { source: 'default', version: '0.0.0-test' },
+  phase: 'preparing',
+  round: 1,
+  maxRounds: 4,
+  startedAt: '2026-10-05T12:00:00.000Z',
+  activity: [],
+}
+
+let t: TestContext
+
+afterEach(async () => {
+  await t.cleanup()
+})
+
+async function context(opts: { chat?: boolean; acpx?: string | null } = {}): Promise<TestContext> {
+  t = await makeTestContext({
+    // A host CLI that is logged in, so a PR's canvas could be shared.
+    gh: ghFor42(),
+    runner: createFakeRunner({ acpxVersion: opts.acpx === undefined ? '0.19.4' : opts.acpx }),
+    projectConfig: {
+      config: { ...DEFAULT_PROJECT_CONFIG, chat: { enabled: opts.chat ?? true } },
+      warnings: [],
+      source: null,
+    },
+  })
+  return t
+}
+
+function fakeManager(over: Partial<GenerationManager> = {}) {
+  return {
+    start: vi.fn<GenerationManager['start']>(
+      over.start ?? (async (key, opts) => ({ ...JOB, key, force: opts.force }))
+    ),
+    status: vi.fn<GenerationManager['status']>(over.status ?? (() => null)),
+    cancel: vi.fn<GenerationManager['cancel']>(over.cancel ?? (async () => false)),
+    running: vi.fn<GenerationManager['running']>(() => null),
+    nextSkill: vi.fn<GenerationManager['nextSkill']>(
+      over.nextSkill ?? (async () => ({ source: 'default', version: '0.0.0-test' }))
+    ),
+  }
+}
+
+/** The routes over a fake manager, with the envelope the app answers errors with. */
+function appWith(manager: ReturnType<typeof fakeManager>): Hono {
+  const app = new Hono()
+  app.onError((err, c) => {
+    const mapped = toAppError(err)
+    return c.json(mapped.toEnvelope(), mapped.status)
+  })
+  t.ctx.generation = manager
+  app.route('/api', generateRoutes(t.ctx))
+  return app
+}
+
+describe('generate routes', () => {
+  it('answers no job for a review the server never generated', async () => {
+    await context()
+    const res = await createApp(t.ctx).request('/api/prs/42/generate', { headers: LOCAL })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ job: null })
+  })
+
+  it('starts a job with the force the page asked for', async () => {
+    await context()
+    const manager = fakeManager()
+    const app = appWith(manager)
+    const res = await app.request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: JSON.stringify({ force: true }),
+    })
+    expect(res.status).toBe(202)
+    expect(((await res.json()) as GenerationResponse).job).toMatchObject({ key: 42, force: true })
+    expect(manager.start).toHaveBeenCalledWith(42, { force: true })
+
+    // A local review is a target like any other.
+    await app.request('/api/prs/branch/generate', { method: 'POST', headers: POST, body: '{"force":false}' })
+    expect(manager.start).toHaveBeenLastCalledWith('branch', { force: false })
+  })
+
+  it('passes on the base, agent, model, and sharing a terminal run names', async () => {
+    await context()
+    const manager = fakeManager()
+    const app = appWith(manager)
+    const input = { force: false, base: 'release', agent: 'codex', model: 'gpt-x', share: false }
+    const res = await app.request('/api/prs/branch/generate', {
+      method: 'POST',
+      headers: POST,
+      body: JSON.stringify(input),
+    })
+    expect(res.status).toBe(202)
+    expect(manager.start).toHaveBeenCalledWith('branch', input)
+  })
+
+  it('refuses a base for a pull request, which has its own', async () => {
+    await context()
+    const manager = fakeManager()
+    const res = await appWith(manager).request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: JSON.stringify({ force: false, base: 'release' }),
+    })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as ErrorEnvelope).error.message).toMatch(/branch and uncommitted/)
+    expect(manager.start).not.toHaveBeenCalled()
+  })
+
+  it('refuses a body that is not the one it reads', async () => {
+    await context()
+    const app = appWith(fakeManager())
+    for (const body of [
+      '',
+      '{}',
+      'not json',
+      JSON.stringify({ force: 'yes' }),
+      JSON.stringify({ force: true, x: 1 }),
+      JSON.stringify({ force: true, agent: 'gemini' }),
+      JSON.stringify({ force: true, model: ' ' }),
+      JSON.stringify({ force: true, share: 'no' }),
+    ]) {
+      const res = await app.request('/api/prs/42/generate', { method: 'POST', headers: POST, body })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorEnvelope).error.code).toBe('BAD_REQUEST')
+    }
+  })
+
+  it('refuses a second job while one runs', async () => {
+    await context()
+    const app = appWith(
+      fakeManager({
+        start: async () => {
+          throw new GenerationBusyError(43)
+        },
+      })
+    )
+    const res = await app.request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: '{"force":false}',
+    })
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+      code: 'GENERATION_BUSY',
+      message: 'a canvas is already being generated for #43, and one runs at a time',
+      hint: 'wait for it to finish, or stop it from the review page that started it',
+    })
+  })
+
+  it('refuses to start without acpx', async () => {
+    await context({ acpx: null })
+    const manager = fakeManager()
+    const res = await appWith(manager).request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: '{"force":false}',
+    })
+    expect(res.status).toBe(503)
+    expect(((await res.json()) as ErrorEnvelope).error).toMatchObject({
+      code: 'GENERATION_FAILED',
+      message: 'acpx is not installed',
+    })
+    expect(manager.start).not.toHaveBeenCalled()
+  })
+
+  describe('the host login a shared canvas needs', () => {
+    const start = (app: Hono, key: string | number = 42) =>
+      app.request(`/api/prs/${key}/generate`, { method: 'POST', headers: POST, body: '{"force":false}' })
+
+    /** The capability probe, answering what the test says; `refreshes` counts the fresh reads. */
+    function probe(caps: Capabilities): { refreshes: number } {
+      const seen = { refreshes: 0 }
+      t.ctx.capabilities = {
+        get: async opts => {
+          seen.refreshes += opts?.refresh === true ? 1 : 0
+          return caps
+        },
+      }
+      return seen
+    }
+
+    it('refuses before any agent time a login that cannot post, as posting a comment does', async () => {
+      await context()
+      // What the probe reads from a logged-out gh: no user, and a repository call that fails.
+      const seen = probe({
+        canComment: false,
+        tokenKind: 'unknown',
+        login: null,
+        reason: 'gh: To get started with GitHub CLI, please run:  gh auth login',
+        hint: 'run `gh auth status` and log in again',
+      })
+      const manager = fakeManager()
+      const res = await start(appWith(manager))
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'COMMENT_FORBIDDEN',
+        message: 'gh: To get started with GitHub CLI, please run:  gh auth login',
+        hint: 'run `gh auth status` and log in again, or turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+      })
+      expect(manager.start).not.toHaveBeenCalled()
+      // The probe is read fresh, so a login made since the page loaded counts.
+      expect(seen.refreshes).toBe(1)
+      // A probe with no reason or hint of its own still names the way out.
+      probe({ canComment: false, tokenKind: 'classic', login: 'octocat' })
+      expect(((await (await start(appWith(fakeManager()))).json()) as ErrorEnvelope).error).toEqual({
+        code: 'COMMENT_FORBIDDEN',
+        message: 'this GitHub login cannot post on this repository',
+        hint: 'turn sharing off with `canvasComment: false` in .pr-review/settings.yml',
+      })
+    })
+
+    it('lets through a login whose rights the probe cannot read, named or not', async () => {
+      await context()
+      probe({ canComment: 'unknown', tokenKind: 'fine-grained', login: 'octocat' })
+      expect((await start(appWith(fakeManager()))).status).toBe(202)
+      // An app token cannot read /user, so the probe names nobody; publish can still share.
+      probe({ canComment: 'unknown', tokenKind: 'fine-grained', login: null })
+      expect((await start(appWith(fakeManager()))).status).toBe(202)
+    })
+
+    it('needs no login for a local review, or with sharing off', async () => {
+      await context()
+      const seen = probe({ canComment: false, tokenKind: 'unknown', login: null })
+      expect((await start(appWith(fakeManager()), 'uncommitted')).status).toBe(202)
+      const quiet = await appWith(fakeManager()).request('/api/prs/42/generate', {
+        method: 'POST',
+        headers: POST,
+        body: '{"force":false,"share":false}',
+      })
+      expect(quiet.status).toBe(202)
+      await writeFile(t.ctx.settings.file, 'canvasComment: false\n')
+      expect((await start(appWith(fakeManager()), 42)).status).toBe(202)
+      expect(seen.refreshes).toBe(0)
+    })
+  })
+
+  it('stops a job and answers where it is', async () => {
+    await context()
+    const manager = fakeManager({ cancel: async () => true, status: () => ({ ...JOB, stopping: true }) })
+    const res = await appWith(manager).request('/api/prs/42/generate', { method: 'DELETE', headers: POST })
+    expect(await res.json()).toEqual({ cancelled: true, job: { ...JOB, stopping: true } })
+    expect(manager.cancel).toHaveBeenCalledWith(42)
+  })
+
+  it('does not exist when the project turns agents off', async () => {
+    await context({ chat: false })
+    const app = createApp(t.ctx)
+    for (const method of ['GET', 'POST', 'DELETE']) {
+      const res = await app.request('/api/prs/42/generate', { method, headers: POST })
+      expect(res.status).toBe(404)
+    }
+    const manager = fakeManager()
+    expect((await appWith(manager).request('/api/generate/skill', { headers: LOCAL })).status).toBe(404)
+    expect(manager.nextSkill).not.toHaveBeenCalled()
+    expect((await app.request('/api/generate/target', { headers: LOCAL })).status).toBe(404)
+  })
+
+  describe('the review a run with no target generates', () => {
+    const PULLS = 'repos/acme/widgets/pulls'
+    const target = async (gh: ReturnType<typeof createFakeGh>, branch: string | null) => {
+      t = await makeTestContext({
+        gh,
+        git: createFakeGit({ branch }),
+        projectConfig: {
+          config: { ...DEFAULT_PROJECT_CONFIG, chat: { enabled: true } },
+          warnings: [],
+          source: null,
+        },
+      })
+      return createApp(t.ctx).request('/api/generate/target', { headers: LOCAL })
+    }
+
+    it('answers the open PR of the checked-out branch, or none', async () => {
+      const gh = () =>
+        createFakeGh({
+          routes: {
+            [PULLS]: ghHandler(params => (params['head'] === 'acme:feature' ? [{ number: 42 }] : [])),
+          },
+        })
+      expect(await (await target(gh(), 'feature')).json()).toEqual({ prNumber: 42 })
+      await t.cleanup()
+      expect(await (await target(gh(), 'main')).json()).toEqual({ prNumber: null })
+      await t.cleanup()
+      const detached = gh()
+      expect(await (await target(detached, null)).json()).toEqual({ prNumber: null })
+      expect(detached.calls).toEqual([])
+    })
+
+    it('answers why when the lookup fails', async () => {
+      const res = await target(
+        createFakeGh({ routes: { [PULLS]: ghError(new Error('offline')) } }),
+        'feature'
+      )
+      expect(res.status).toBeGreaterThanOrEqual(400)
+      expect(((await res.json()) as ErrorEnvelope).error.message).toContain('offline')
+    })
+  })
+
+  describe('the skill a run would follow', () => {
+    it("answers the manager's next skill", async () => {
+      await context()
+      const skill: GenerationSkill = {
+        source: 'project',
+        path: '.agents/skills/pr-review-canvas',
+        state: 'edited',
+      }
+      const manager = fakeManager({ nextSkill: async () => skill })
+      const res = await appWith(manager).request('/api/generate/skill', { headers: LOCAL })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ skill })
+      expect(manager.nextSkill).toHaveBeenCalledTimes(1)
+    })
+
+    it('answers the error a skill that cannot be read raises', async () => {
+      await context()
+      const manager = fakeManager({
+        nextSkill: async () => {
+          throw new AppError('GENERATION_FAILED', 'unreadable', 500, 'run `pr-review install-skill --force`')
+        },
+      })
+      const res = await appWith(manager).request('/api/generate/skill', { headers: LOCAL })
+      expect(res.status).toBe(500)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'GENERATION_FAILED',
+        message: 'unreadable',
+        hint: 'run `pr-review install-skill --force`',
+      })
+    })
+
+    it('answers the default skill of the server version for a project with none', async () => {
+      await context()
+      const res = await createApp(t.ctx).request('/api/generate/skill', { headers: LOCAL })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ skill: { source: 'default', version: '0.0.0-test' } })
+    })
+
+    it("answers the project's own copy, read from its checkout", async () => {
+      const repoRoot = await makeTempDir('pr-review-skill-route-')
+      try {
+        const dir = path.join(repoRoot, '.claude/skills/pr-review-canvas')
+        await mkdir(dir, { recursive: true })
+        const shipped = await readFile(path.join(SKILL_SOURCE_DIR, 'SKILL.md'), 'utf8')
+        await writeFile(path.join(dir, 'SKILL.md'), `${shipped}\nOur own rule.\n`)
+        await context()
+        // The checkout the context serves is the folder that holds the copy.
+        t.ctx.config.repoRoot = repoRoot
+        const res = await createApp(t.ctx).request('/api/generate/skill', { headers: LOCAL })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as GenerationSkillResponse
+        expect(body).toEqual({
+          skill: { source: 'project', path: '.claude/skills/pr-review-canvas', state: 'edited' },
+        })
+      } finally {
+        await rm(repoRoot, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it('refuses a target that is not a review', async () => {
+    await context()
+    const res = await createApp(t.ctx).request('/api/prs/nope/generate', { headers: LOCAL })
+    expect(res.status).toBe(400)
+  })
+
+  it('generates a canvas end to end: a rejected first answer, the fixes, and a published second', async () => {
+    const model = artifactToModelOutput(syntheticArtifact())
+    // Over its cap, so the fix step shortens it and the repair prompt names the fix.
+    const firstTitle = `${model.layers[0]?.title ?? 'x'}: ${'and more '.repeat(20)}`
+    const answers = [
+      JSON.stringify({
+        ...model,
+        layers: model.layers.map((l, i) => (i === 0 ? { ...l, title: firstTitle } : l)).slice(0, 1),
+      }),
+      JSON.stringify(model),
+    ]
+    const runner = createFakeRunner({
+      script: options => [
+        { type: 'chunk', text: answers[runner.runs.indexOf(options)] ?? '' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    })
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42(), runner })
+    const app = createApp(t.ctx)
+    const started = await app.request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: POST,
+      body: '{"force":false}',
+    })
+    expect(started.status).toBe(202)
+
+    let job: GenerationJob | null = null
+    for (let i = 0; i < 200; i++) {
+      job = (
+        (await (await app.request('/api/prs/42/generate', { headers: LOCAL })).json()) as GenerationResponse
+      ).job
+      if (
+        job !== null &&
+        !['preparing', 'checkout', 'generating', 'publishing', 'repairing'].includes(job.phase)
+      ) {
+        break
+      }
+      await new Promise(resolve => setTimeout(resolve, 5))
+    }
+    // The fake forge refuses the comment, so publish falls back to the ZIP to upload by hand.
+    expect(job).toMatchObject({ phase: 'done', round: 2, headSha: HEAD_SHA, sharing: { status: 'failed' } })
+    expect(runner.runs[0]?.prompt).toContain('The pr-review server runs this generation')
+    // A project with no skill of its own follows the one this server ships.
+    expect(job?.skill).toEqual({ source: 'default', version: '0.0.0-test' })
+    expect(runner.runs[0]?.prompt).toContain('(the one pr-review 0.0.0-test ships)')
+    expect(runner.runs[0]?.prompt).toContain('# The pr-review-canvas skill\n\n# pr-review-canvas\n')
+    expect(runner.runs[1]?.prompt).toMatch(/HUNK_UNASSIGNED/)
+    expect(runner.runs[1]?.prompt).toContain('keep them')
+    expect(await t.ctx.canvases.findForPr(42, HEAD_SHA)).toEqual({ status: 'ready', headSha: HEAD_SHA })
+  })
+
+  it('rejects a cross-site start', async () => {
+    await context()
+    const res = await createApp(t.ctx).request('/api/prs/42/generate', {
+      method: 'POST',
+      headers: { ...POST, origin: 'https://evil.example' },
+      body: '{"force":false}',
+    })
+    expect(res.status).toBe(403)
+  })
+})

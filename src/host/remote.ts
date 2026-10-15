@@ -20,10 +20,11 @@ export function splitGitRemote(url: string): { hostname: string; path: string } 
 
 /**
  * Classifies origin. github.com is GitHub; gitlab.com, a hostname that contains "gitlab", or any
- * other host when `PR_REVIEW_HOST=gitlab` is set (a self-hosted GitLab whose name does not say
- * so) is GitLab. A GitLab path may nest groups, which become the owner with slashes.
+ * other host when `hostOverride` is `gitlab` (the shell's `PR_REVIEW_HOST`, for a self-hosted
+ * GitLab whose name does not say so) is GitLab. A GitLab path may nest groups, which become the
+ * owner with slashes.
  */
-export function parseOriginRemote(url: string, env: NodeJS.ProcessEnv = {}): OriginRemote | null {
+export function parseOriginRemote(url: string, hostOverride?: string): OriginRemote | null {
   const split = splitGitRemote(url)
   if (split === null) {
     return null
@@ -37,6 +38,6 @@ export function parseOriginRemote(url: string, env: NodeJS.ProcessEnv = {}): Ori
   if (split.hostname === 'github.com') {
     return parts.length === 2 ? { host: GITHUB_HOST, repo } : null
   }
-  const forced = env['PR_REVIEW_HOST']?.trim().toLowerCase() === 'gitlab'
+  const forced = hostOverride?.trim().toLowerCase() === 'gitlab'
   return forced || split.hostname.includes('gitlab') ? { host: gitlabHost(split.hostname), repo } : null
 }

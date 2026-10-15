@@ -2,7 +2,7 @@
 // submitted, the way a pending review works on the forge's own page.
 import { z } from 'zod'
 import { SideSchema } from './review-artifact.js'
-import { COMMENT_BODY_MAX } from './comments.js'
+import { COMMENT_BODY_MAX, PageDiffShape } from './comments.js'
 
 /**
  * One comment waiting in the pending review. It names a line the way a posted inline comment
@@ -23,6 +23,11 @@ export const PendingCommentSchema = z.object({
   proposalFingerprint: z.string().min(1).max(300).optional(),
   /** The commit the reviewer was reading when they wrote it. */
   headSha: z.string(),
+  /**
+   * The merge base that commit's diff ran from. Absent in drafts of older tool versions, which
+   * read as written on the pull request's current base.
+   */
+  mergeBaseSha: z.string().optional(),
   /** Receipt scope after submission, for recovering comment links on refresh. */
   reviewId: z.number().int().optional(),
   createdAt: z.string(),
@@ -40,10 +45,7 @@ export const AddPendingInputSchema = z.object({
   body: z.string().min(1).max(COMMENT_BODY_MAX),
   pointFingerprint: z.string().min(1).optional(),
   proposalFingerprint: z.string().min(1).max(300).optional(),
-  headSha: z
-    .string()
-    .regex(/^[0-9a-f]{40}$/)
-    .optional(),
+  ...PageDiffShape,
 })
 export type AddPendingInput = z.infer<typeof AddPendingInputSchema>
 

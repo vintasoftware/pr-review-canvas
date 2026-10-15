@@ -28,6 +28,13 @@ export type {
   ChatTurn,
   TourGrillContext,
 } from '../../src/contract/chat.js'
+export type {
+  AgentPulse,
+  GenerationJob,
+  GenerationResponse,
+  GenerationSkill,
+  GenerationSkillResponse,
+} from '../../src/contract/generation.js'
 export type { ReviewKey } from '../../src/contract/review-key.js'
 export type { CanvasSharing, SettleInput, SettleResponse } from '../../src/contract/self-review.js'
 export type {

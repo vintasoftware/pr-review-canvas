@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CHECKOUT_IDLE_NEVER, DEFAULT_SETTINGS, type Settings } from '../contract/settings.js'
-import type { ReviewCheckouts, SweepOptions } from './checkouts.js'
+import type { CheckoutStore, SweepOptions } from './checkouts.js'
 import { startCheckoutSweep } from './checkout-sweep.js'
 
-function fakeCheckouts(opts: { fail?: boolean } = {}): ReviewCheckouts & { sweeps: SweepOptions[] } {
+function fakeCheckouts(opts: { fail?: boolean } = {}): CheckoutStore & { sweeps: SweepOptions[] } {
   const sweeps: SweepOptions[] = []
   return {
     sweeps,
@@ -19,7 +19,17 @@ function fakeCheckouts(opts: { fail?: boolean } = {}): ReviewCheckouts & { sweep
         throw new Error('disk gone')
       }
       return {
-        removed: [{ key: 42, dir: '/data/checkouts/42', sha: 'a', lastUsedAt: 'then', locked: false }],
+        removed: [
+          {
+            key: 'branch',
+            worktree: 'fix',
+            folder: 'branch~fix',
+            dir: '/data/checkouts/branch~fix',
+            sha: 'a',
+            lastUsedAt: 'then',
+            locked: false,
+          },
+        ],
         skipped: [],
       }
     },
@@ -38,20 +48,22 @@ describe('startCheckoutSweep', () => {
   it('removes the base checkouts of merged and closed pull requests, and keeps the rest', async () => {
     const info = (key: number | 'branch', locked = false) => ({
       key,
+      worktree: null,
+      folder: String(key),
       dir: `/data/checkouts/base/${String(key)}`,
       sha: 'a',
       lastUsedAt: 'now',
       locked,
     })
-    const removed: Array<number | 'branch'> = []
+    const removed: string[] = []
     const base = {
       ...fakeCheckouts(),
       list: async () => [info(1), info(2), info(3), info(4), info(5, true), info('branch')],
-      remove: async (key: number | 'branch') => {
-        if (key === 4) {
+      remove: async (folder: string) => {
+        if (folder === '4') {
           throw new Error('busy')
         }
-        removed.push(key)
+        removed.push(folder)
         return true
       },
     }
@@ -77,7 +89,7 @@ describe('startCheckoutSweep', () => {
     await vi.advanceTimersByTimeAsync(0)
     // A branch review has no pull request, and a checkout in use is not asked about.
     expect(asked).toEqual([1, 2, 3, 4])
-    expect(removed).toEqual([1, 2])
+    expect(removed).toEqual(['1', '2'])
     expect(lines).toContain('removed the base checkout of #1: the pull request is merged')
     expect(lines).toContain('removed the base checkout of #2: the pull request is closed')
     // A state it cannot read leaves the checkout, and says why.
@@ -111,7 +123,7 @@ describe('startCheckoutSweep', () => {
     })
     await vi.advanceTimersByTimeAsync(0)
     expect(checkouts.sweeps).toEqual([{ olderThanDays: 3 }])
-    expect(lines).toEqual(['removed the idle review checkout of 42 (last used then)'])
+    expect(lines).toEqual(['removed the idle review checkout of branch~fix (last used then)'])
     // A change in the settings applies from the next sweep.
     settings = { ...settings, checkoutIdleDays: 1 }
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000 - 1)

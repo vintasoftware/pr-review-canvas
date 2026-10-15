@@ -32,6 +32,11 @@ export const CanvasIndexSchema = z.object({
       basisCanvasSha: z.string().optional(),
       /** A snapshot of uncommitted work: it sits on no branch, so no pull request can claim it. */
       worktree: z.boolean().optional(),
+      /**
+       * The linked worktree whose local review the canvas was made for. Absent for the main
+       * checkout's local reviews, and for a pull request's canvas, which every worktree shares.
+       */
+      checkout: z.string().optional(),
     })
   ),
 })

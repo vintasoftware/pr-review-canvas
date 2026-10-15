@@ -2,6 +2,7 @@
 // @vitest-environment happy-dom
 import { emptyState } from '../../src/contract/state.js'
 import {
+  draftsByCommit,
   pendingBarHtml,
   pendingComments,
   pendingCount,
@@ -14,6 +15,8 @@ import {
 
 const NOW = new Date('2026-09-10T12:00:00.000Z')
 const BASE = emptyState(NOW.toISOString())
+/** A diff on screen: `headSha` diffed from the merge base every draft here was written on. */
+const on = (/** @type {string} */ headSha) => ({ headSha, mergeBaseSha: 'b'.repeat(40) })
 
 /** @param {Partial<import('./contract-types.js').PendingComment>} [over] */
 function draft(over = {}) {
@@ -94,7 +97,7 @@ describe('pendingBarHtml', () => {
     expect(pendingBarHtml(0)).toBe('')
   })
 
-  it('says how many are waiting and offers both ways out', () => {
+  it('says how many are waiting, opens the list, and offers both ways out', () => {
     document.body.innerHTML = pendingBarHtml(2)
     const bar = document.querySelector('.pending-bar')
     expect(bar?.getAttribute('role')).toBe('status')
@@ -102,6 +105,7 @@ describe('pendingBarHtml', () => {
     // The reviewer is told plainly that nothing has left the machine yet.
     expect(bar?.textContent).toContain('until you submit it')
     expect([...(bar?.querySelectorAll('button') ?? [])].map(b => b.getAttribute('data-act'))).toEqual([
+      'show-review',
       'pending-finish',
       'pending-discard',
     ])
@@ -126,22 +130,30 @@ describe('refreshPendingBar', () => {
     expect(root.querySelector('.pending-bar')).toBeNull()
   })
 
-  it('keeps earlier-commit drafts separate and preserves the expanded list on other state changes', () => {
+  it('counts the drafts of earlier diffs, which the review tab lists, and redraws only on a change', () => {
     document.body.innerHTML = '<div class="pending-bar-host"></div>'
     const state = { ...BASE, pending: [draft()] }
-    const head = 'f'.repeat(40)
+    const head = on('f'.repeat(40))
     refreshPendingBar(document.body, state, head)
-    const details = document.querySelector('details')
-    expect(details?.textContent).toContain('Comments written on earlier commits')
-    expect(details?.textContent).toContain('src/app.ts:4')
-    expect(details?.querySelector('[data-act="pending-delete"]')).not.toBeNull()
-    expect(details?.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe(draft().body)
-    details?.setAttribute('open', '')
+    const bar = document.querySelector('.pending-bar')
+    expect(bar?.textContent).toContain(
+      '1 pending comment waiting in your review, 1 written on an earlier diff.'
+    )
+    expect(bar?.querySelector('[data-act="pending-delete"]')).toBeNull()
     refreshPendingBar(document.body, { ...state, reviewed: { 'layer:x': true } }, head)
-    expect(document.querySelector('details')).toBe(details)
-    expect(details?.open).toBe(true)
-    refreshPendingBar(document.body, { ...state, pending: [...state.pending, draft({ id: 'p2' })] }, head)
-    expect(document.querySelector('details')?.open).toBe(true)
+    expect(document.querySelector('.pending-bar')).toBe(bar)
+    refreshPendingBar(document.body, state, on(draft().headSha))
+    expect(document.querySelector('.pending-bar')?.textContent).not.toContain('earlier diff')
+  })
+
+  it('splits the drafts by the diff they were written on: the commit, and the merge base it ran from', () => {
+    const rebased = draft({ id: 'p3', mergeBaseSha: 'c'.repeat(40) })
+    const state = { ...BASE, pending: [draft(), draft({ id: 'p2', headSha: 'f'.repeat(40) }), rebased] }
+    const split = draftsByCommit(state, on(draft().headSha))
+    // A draft of an older tool version names no merge base, so it counts for the current one.
+    expect(split.current.map(d => d.id)).toEqual([draft().id])
+    expect(split.earlier.map(d => d.id)).toEqual(['p2', 'p3'])
+    expect(draftsByCommit(state).earlier).toEqual([])
   })
 
   it('does nothing when the page has no place for the bar', () => {

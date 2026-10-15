@@ -4,7 +4,7 @@
 // used them, and that pull request will not be toured again. The head checkouts stay to the idle
 // rule, since AI Chat still reads them after a merge.
 import { CHECKOUT_IDLE_NEVER, DEFAULT_SETTINGS, type Settings } from '../contract/settings.js'
-import type { ReviewCheckouts, SweepResult } from './checkouts.js'
+import type { CheckoutStore, SweepResult } from './checkouts.js'
 
 export interface CheckoutSweeper {
   /** Runs one sweep now; resolves to null when idle cleanup is off. */
@@ -16,11 +16,19 @@ export interface CheckoutSweeper {
 const DONE_STATES = new Set(['merged', 'closed'])
 
 export function startCheckoutSweep(opts: {
-  checkouts: ReviewCheckouts
+  checkouts: Pick<CheckoutStore, 'sweep'>
   readSettings: () => Promise<Settings>
   log: (line: string) => void
-  /** The base checkouts, and how to read a pull request's state (`open`, `merged`, `closed`). */
-  base?: { checkouts: ReviewCheckouts; prState: (number: number) => Promise<string> } | undefined
+  /**
+   * The clone's base checkouts, swept with the rest, and how to read a pull request's state
+   * (`open`, `merged`, `closed`).
+   */
+  base?:
+    | {
+        checkouts: Pick<CheckoutStore, 'sweep' | 'list' | 'remove'>
+        prState: (number: number) => Promise<string>
+      }
+    | undefined
 }): CheckoutSweeper {
   let timer: NodeJS.Timeout | undefined
   let stopped = false
@@ -29,12 +37,16 @@ export function startCheckoutSweep(opts: {
     if (settings.checkoutIdleDays === CHECKOUT_IDLE_NEVER) {
       return null
     }
-    const result = await opts.checkouts.sweep({ olderThanDays: settings.checkoutIdleDays })
-    for (const removed of result.removed) {
-      opts.log(`removed the idle review checkout of ${String(removed.key)} (last used ${removed.lastUsedAt})`)
+    const idle = { olderThanDays: settings.checkoutIdleDays }
+    const results = [
+      await opts.checkouts.sweep(idle),
+      ...(opts.base === undefined ? [] : [await opts.base.checkouts.sweep(idle)]),
+    ]
+    for (const removed of results.flatMap(r => r.removed)) {
+      opts.log(`removed the idle review checkout of ${removed.folder} (last used ${removed.lastUsedAt})`)
     }
-    const done = await sweepDoneBases()
-    return { removed: [...result.removed, ...done.removed], skipped: [...result.skipped, ...done.skipped] }
+    results.push(await sweepDoneBases())
+    return { removed: results.flatMap(r => r.removed), skipped: results.flatMap(r => r.skipped) }
   }
 
   /**
@@ -64,7 +76,7 @@ export function startCheckoutSweep(opts: {
         continue
       }
       try {
-        if (await base.checkouts.remove(info.key)) {
+        if (await base.checkouts.remove(info.folder)) {
           out.removed.push(info)
           opts.log(`removed the base checkout of #${info.key}: the pull request is ${state}`)
         }

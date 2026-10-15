@@ -3,6 +3,8 @@ import type { ReviewKey } from '../contract/review-key.js'
 import { emptyState, type PrState, PrStateSchema } from '../contract/state.js'
 import type { AddPendingInput, PendingComment } from '../contract/pending.js'
 import { readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
+import { marksOn } from '../../static/js/diff-identity.js'
+import type { DiffedCommit } from './derived-store.js'
 import type { PrStore } from './pr-store.js'
 
 /** What the canvas posted to GitHub, so the sign-off body can list it. */
@@ -22,17 +24,17 @@ export interface StateStore {
    */
   update(key: ReviewKey, mutate: (state: PrState) => PrState): Promise<PrState>
   /**
-   * Marks one layer or file. `canvasSha` is the commit of the canvas the page was showing: when it
-   * differs from the one the marks describe, the old marks are dropped, because they were about
-   * other code, and `carried` takes their place — the marks the caller worked out may follow that
-   * canvas from the one it was generated from.
+   * Marks one layer or file. `canvas` is the diff of the canvas the page was showing: when it
+   * differs from the one the marks describe, by its commit or by its merge base, the old marks are
+   * dropped, because they were about other code, and `carried` takes their place — the marks the
+   * caller worked out may follow that canvas from the one it was generated from.
    */
   setReviewed(key: ReviewKey, id: string, reviewed: boolean, opts?: SetReviewedOptions): Promise<PrState>
   setDismissed(key: ReviewKey, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
   setThreadHidden(key: ReviewKey, rootCommentId: number, hidden: boolean): Promise<PrState>
   addPosted(key: ReviewKey, entries: readonly PostedEntry[]): Promise<PrState>
   /** Adds one comment to the pending review and returns the state that holds it. */
-  addPending(key: ReviewKey, input: AddPendingInput, headSha: string): Promise<PrState>
+  addPending(key: ReviewKey, input: AddPendingInput, diff: DiffedCommit): Promise<PrState>
   /** Rewrites one draft's body. A draft that is no longer there leaves the state alone. */
   editPending(key: ReviewKey, id: string, body: string): Promise<PrState>
   removePending(key: ReviewKey, id: string): Promise<PrState>
@@ -47,8 +49,8 @@ export interface StateStore {
 }
 
 export interface SetReviewedOptions {
-  /** The commit of the canvas the page was showing. */
-  canvasSha?: string | undefined
+  /** The diff of the canvas the page was showing. */
+  canvas?: DiffedCommit | undefined
   /** Marks that follow `canvasSha` from the canvas it was generated from; used on the first write. */
   carried?: Readonly<Record<string, true>> | undefined
 }
@@ -104,11 +106,9 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
     update,
     setReviewed: (key, id, reviewed, opts) =>
       update(key, state => {
-        const canvasSha = opts?.canvasSha
+        const canvas = opts?.canvas
         const sameCanvas =
-          canvasSha === undefined ||
-          state.reviewedCanvasSha === undefined ||
-          state.reviewedCanvasSha === canvasSha
+          canvas === undefined || state.reviewedCanvasSha === undefined || marksOn(state, canvas)
         const next = sameCanvas ? { ...state.reviewed } : { ...opts?.carried }
         if (reviewed) {
           next[id] = true
@@ -121,9 +121,14 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
             }
           }
         }
-        return canvasSha === undefined
+        return canvas === undefined
           ? { ...state, reviewed: next }
-          : { ...state, reviewed: next, reviewedCanvasSha: canvasSha }
+          : {
+              ...state,
+              reviewed: next,
+              reviewedCanvasSha: canvas.headSha,
+              reviewedMergeBaseSha: canvas.mergeBaseSha,
+            }
       }),
     setDismissed: (key, fingerprint, dismissed, reason) =>
       update(key, state => {
@@ -156,7 +161,7 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
           posted: [...state.posted, ...added.map(entry => ({ ...entry, at: now().toISOString() }))],
         }
       }),
-    addPending: (key, input, headSha) => {
+    addPending: (key, input, diff) => {
       pendingSeq += 1
       const at = now().toISOString()
       const draft: PendingComment = {
@@ -170,7 +175,8 @@ export function createStateStore(prs: PrStore, now: () => Date): StateStore {
         ...(input.proposalFingerprint === undefined
           ? {}
           : { proposalFingerprint: input.proposalFingerprint }),
-        headSha,
+        headSha: diff.headSha,
+        mergeBaseSha: diff.mergeBaseSha,
         createdAt: at,
         updatedAt: at,
       }

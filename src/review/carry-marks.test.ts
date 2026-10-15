@@ -118,6 +118,7 @@ describe('marksForCanvas', () => {
     await t.ctx.canvases.write(HEAD_SHA, head, manifestOf(HEAD_SHA), 42)
   }
 
+  const HEAD = { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA }
   const stateOn = (canvasSha: string, reviewed: Record<string, true>): PrState => ({
     ...emptyState('2026-09-10T12:00:00.000Z'),
     reviewed,
@@ -127,8 +128,16 @@ describe('marksForCanvas', () => {
   it('leaves the marks alone when they were made on this very canvas', async () => {
     await withCanvases(TOUCHED_APP)
     const state = stateOn(HEAD_SHA, { [APP]: true })
-    const marks = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA, OLD), HEAD_SHA, state)
+    const marks = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA, OLD), HEAD, state)
     expect(marks).toEqual({ state })
+  })
+
+  it("drops the marks made on the commit's canvas of another merge base, which it replaced", async () => {
+    await withCanvases(TOUCHED_APP)
+    const state = { ...stateOn(HEAD_SHA, { [APP_TEST]: true }), reviewedMergeBaseSha: 'c'.repeat(40) }
+    const marks = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA, OLD), HEAD, state)
+    expect(marks.state.reviewed).toEqual({})
+    expect(marks.carriedFrom).toBeUndefined()
   })
 
   it('carries the marks of the basis canvas that the head leaves untouched, and names it', async () => {
@@ -136,7 +145,7 @@ describe('marksForCanvas', () => {
     const marks = await marksForCanvas(
       t.ctx,
       canvasOf(HEAD_SHA, OLD),
-      HEAD_SHA,
+      HEAD,
       stateOn(OLD, { [APP]: true, [APP_TEST]: true, [RUN_PATH]: true, [OTHER]: true })
     )
     expect(marks.carriedFrom).toBe(OLD)
@@ -147,9 +156,9 @@ describe('marksForCanvas', () => {
   it('drops the marks when the canvas names no basis, or another one', async () => {
     await withCanvases(TOUCHED_APP, null)
     const state = stateOn(OLD, { [APP_TEST]: true })
-    const none = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA), HEAD_SHA, state)
+    const none = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA), HEAD, state)
     expect(none).toEqual({ state: { ...state, reviewed: {} } })
-    const elsewhere = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA, 'c'.repeat(40)), HEAD_SHA, state)
+    const elsewhere = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA, 'c'.repeat(40)), HEAD, state)
     expect(elsewhere.state.reviewed).toEqual({})
     expect(elsewhere.carriedFrom).toBeUndefined()
   })
@@ -160,7 +169,7 @@ describe('marksForCanvas', () => {
     const marks = await marksForCanvas(
       t.ctx,
       canvasOf(HEAD_SHA, OLD),
-      HEAD_SHA,
+      HEAD,
       stateOn(OLD, { [APP_TEST]: true })
     )
     expect(marks.state.reviewed).toEqual({})
@@ -169,12 +178,7 @@ describe('marksForCanvas', () => {
 
   it('reports no carry when the head moved every file the reviewer had marked', async () => {
     await withCanvases(TOUCHED_APP)
-    const marks = await marksForCanvas(
-      t.ctx,
-      canvasOf(HEAD_SHA, OLD),
-      HEAD_SHA,
-      stateOn(OLD, { [APP]: true })
-    )
+    const marks = await marksForCanvas(t.ctx, canvasOf(HEAD_SHA, OLD), HEAD, stateOn(OLD, { [APP]: true }))
     expect(marks.state.reviewed).toEqual({})
     expect(marks.carriedFrom).toBeUndefined()
   })

@@ -12,7 +12,7 @@ import {
   SKILL_SOURCE_DIR,
   SkillDirExistsError,
 } from './install-skill.js'
-import { findSkillCopies } from './doctor.js'
+import { findSkillCopies } from './install-skill.js'
 
 /**
  * A package that ships two skills, the canvas skill and a companion with a guide beside its
@@ -144,18 +144,21 @@ describe('installSkill', () => {
     expect(await readFile(path.join(tour, COPY_MARKER), 'utf8')).toContain('managed')
     // The copies match the bundle, and both are found.
     const copies = await findSkillCopies(dir, undefined, skillsRoot)
-    expect(copies.map(c => [c.skill, c.kind, c.stale])).toEqual([
-      ['pr-review-canvas', 'claude', false],
-      ['pr-tour', 'claude', false],
+    expect(copies.map(c => [c.skill, c.kind, c.state])).toEqual([
+      ['pr-review-canvas', 'claude', 'current'],
+      ['pr-tour', 'claude', 'current'],
     ])
-    // A companion that goes missing, or whose guide is edited, is a stale copy; where the canvas
-    // skill is absent, nothing is reported for that directory at all.
+    // A companion whose guide is edited is another version; one that goes missing is missing;
+    // where the canvas skill is absent, nothing is reported for that directory at all.
     await writeFile(path.join(tour, 'scenes.md'), '# scenes\nold ideas\n')
-    expect((await findSkillCopies(dir, undefined, skillsRoot)).map(c => c.stale)).toEqual([false, true])
+    expect((await findSkillCopies(dir, undefined, skillsRoot)).map(c => c.state)).toEqual([
+      'current',
+      'other-version',
+    ])
     await rm(tour, { recursive: true })
-    expect((await findSkillCopies(dir, undefined, skillsRoot)).map(c => [c.skill, c.stale])).toEqual([
-      ['pr-review-canvas', false],
-      ['pr-tour', true],
+    expect((await findSkillCopies(dir, undefined, skillsRoot)).map(c => [c.skill, c.state])).toEqual([
+      ['pr-review-canvas', 'current'],
+      ['pr-tour', 'missing'],
     ])
     await rm(path.join(dir, '.claude', 'skills', 'pr-review-canvas'), { recursive: true })
     expect(await findSkillCopies(dir, undefined, skillsRoot)).toEqual([])

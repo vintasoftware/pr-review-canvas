@@ -3,19 +3,13 @@
 // the bundle's status, and keep the page current: the empty screen polls until a canvas is
 // published, and the regenerate dialog polls until a newer canvas replaces the one on screen.
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
-import {
-  fetchBundle,
-  fetchPatches,
-  fetchSharedCanvas,
-  importCanvas,
-  pollBundle,
-  saveAppearance,
-} from './api.js'
+import { fetchBundle, fetchPatches, fetchSharedCanvas, importCanvas, pollBundle, setApiBase } from './api.js'
 import { setChatEnabled } from './ask.js'
 import { setMentionCanvas } from './points.js'
 import { wireBarDismissal } from './bar-dismissal.js'
 import { readChatMinimized, readChatWidth, renderChatShell, wireChat } from './chat.js'
-import { runCommand, wireCopyCommands } from './commands.js'
+import { reviewPaneHtml, wireReviewPane } from './side-pane.js'
+import { runCommand, toast, wireCopyCommands } from './commands.js'
 import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
 import { esc, qs } from './dom.js'
@@ -28,9 +22,10 @@ import {
   staleBarHtml,
 } from './empty-state.js'
 import { bannerHtml, errorCardHtml, toEnvelopeError } from './errors.js'
-import { renderHeader } from './header.js'
+import { bareHeaderHtml, renderHeader } from './header.js'
+import { wireEnvBadge } from './header-bar.js'
 import { wireDropZone } from './import-zone.js'
-import { toast, wireReview } from './interactions.js'
+import { wireReview } from './interactions.js'
 import {
   defineLayerElements,
   pathSet,
@@ -42,13 +37,15 @@ import {
 import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
 import { wireQuickQuestions } from './quick-questions.js'
+import { createGeneration } from './generate.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
 import { setSelfReview } from './self-review.js'
 import { openSettingsDialog } from './settings.js'
-import { applySkin, DEFAULT_SKIN, nextSkin, readSkin, skinLabel } from './skin.js'
-import { applyTheme, nextTheme, readTheme, themeLabel } from './theme.js'
+import { wireAppearanceCommands } from './appearance-commands.js'
+import { readSkin } from './skin.js'
+import { readTheme } from './theme.js'
 import { hostLabel, setHost } from './host.js'
 
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
@@ -65,6 +62,15 @@ function readBootstrap() {
   } catch {
     return null
   }
+}
+
+/**
+ * The project as the header names it.
+ * @param {Bootstrap} bootstrap
+ * @returns {import('./header-bar.js').ProjectLink}
+ */
+function projectLinkOf(bootstrap) {
+  return { slug: bootstrap.project, home: bootstrap.base, reopenIn: bootstrap.reopenIn }
 }
 
 /**
@@ -102,10 +108,6 @@ export class PrAppElement extends HTMLElement {
   poller = null
   /** @type {Bootstrap | null} */
   bootstrap = null
-  /** @type {import('./theme.js').Theme} */
-  theme = 'auto'
-  /** @type {import('./skin.js').Skin} */
-  skin = DEFAULT_SKIN
   /** @type {{ stop: () => void } | null} */
   diagrams = null
   /** @type {{ stop: () => void } | null} */
@@ -125,17 +127,29 @@ export class PrAppElement extends HTMLElement {
   chat = null
   /** @type {{ stop: () => void } | null} */
   quickQuestions = null
+  /** The pane that holds the review alone, on a page without AI Chat. */
+  /** @type {ReturnType<typeof wireReviewPane>} */
+  reviewPane = null
   /** The reader asked to read the canvas of the older commit. */
   viewStale = false
+  /**
+   * The canvas generation this page can start and watch, made on the first screen that has an
+   * agent to run it. Kept across renders, like the job it follows.
+   * @type {ReturnType<typeof createGeneration> | null}
+   */
+  generation = null
 
   connectedCallback() {
     // Once per element: the content is re-rendered on every flip, the element itself is not.
     wireCopyCommands(this)
+    wireEnvBadge(this)
     void this.boot()
   }
 
   disconnectedCallback() {
     this.stopPolling()
+    this.generation?.stop()
+    this.generation = null
     this.diagrams?.stop()
     this.diagrams = null
     this.deepLinks?.stop()
@@ -154,6 +168,8 @@ export class PrAppElement extends HTMLElement {
     this.chat = null
     this.quickQuestions?.stop()
     this.quickQuestions = null
+    this.reviewPane?.stop()
+    this.reviewPane = null
   }
 
   async boot() {
@@ -163,8 +179,7 @@ export class PrAppElement extends HTMLElement {
       return
     }
     setHost(this.bootstrap.host)
-    this.theme = readTheme(document.documentElement)
-    this.skin = readSkin(document.documentElement)
+    setApiBase(this.bootstrap.base)
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
@@ -179,11 +194,28 @@ export class PrAppElement extends HTMLElement {
     try {
       bundle = await fetchBundle(this.bootstrap.prNumber)
     } catch (err) {
-      this.innerHTML = errorCardHtml(toEnvelopeError(err)) + footerHtml(this.bootstrap.version)
+      this.innerHTML =
+        bareHeaderHtml({
+          host: location.host,
+          project: projectLinkOf(this.bootstrap),
+          theme: readTheme(document.documentElement),
+          skin: readSkin(document.documentElement),
+        }) +
+        errorCardHtml(toEnvelopeError(err)) +
+        footerHtml(this.bootstrap.version)
       qs('#retry', this)?.addEventListener('click', () => void this.boot())
+      this.wireAppearance()
       return
     }
     await this.render(bundle, patchesPromise)
+    // The home page's generate button lands here with `?generate=1`: the dialog opens on the
+    // screen it asked for, and the flag leaves the URL so a reload does not open it again.
+    const url = new URL(location.href)
+    if (url.searchParams.has('generate')) {
+      url.searchParams.delete('generate')
+      history.replaceState(history.state, '', url)
+      this.generation?.open(bundle)
+    }
   }
 
   /**
@@ -227,7 +259,13 @@ export class PrAppElement extends HTMLElement {
     this.interactions = null
     this.stopChat()
     const now = new Date()
-    const header = renderHeader(bundle, { host: location.host, theme: this.theme, skin: this.skin, now })
+    const header = renderHeader(bundle, {
+      host: location.host,
+      theme: readTheme(document.documentElement),
+      skin: readSkin(document.documentElement),
+      now,
+      project: this.bootstrap ? projectLinkOf(this.bootstrap) : undefined,
+    })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
     const chatMinimized = chatEnabled && readChatMinimized(storage)
@@ -236,18 +274,20 @@ export class PrAppElement extends HTMLElement {
     setMentionCanvas(bundle.mentionCanvas)
     if (bundle.artifact && showsCanvas) {
       const { artifact } = bundle
-      // Only the author settles, and only on the canvas of the current head.
-      setSelfReview(bundle.selfReview && bundle.status === 'ready', artifact.settled, bundle.canvasComment)
+      // The server says whether this reader resolves points here: the author, on the current head's canvas.
+      setSelfReview(bundle.selfReview, artifact.settled, bundle.canvasComment)
       // A stale canvas describes its own commit, so its files and diffs come from that sha.
       const files = staleSha === undefined ? bundle.files : artifact.files
       const paths = pathSet(files)
       // The context is set before any <pr-file> connects, so each card renders once, when visible.
-      const headSha = staleSha ?? bundle.pr.headSha
+      // A stale canvas's drafts belong to its own diff, which its artifact names.
+      const on = staleSha === undefined ? bundle.pr : artifact.pr
       setRenderContext({
         artifact,
         files,
         patches,
-        headSha,
+        headSha: on.headSha,
+        mergeBaseSha: on.mergeBaseSha,
         comments: bundle.comments.reviewComments,
         state: bundle.state,
         now,
@@ -266,7 +306,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, headSha)}</main>${renderChatShell({ enabled: chatEnabled, width: readChatWidth(storage), minimized: chatMinimized })}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
         footerHtml(boot.version, bundle)
       // A bar the reader dismissed goes before the review wiring measures the outdated bar.
       wireBarDismissal(this, storage)
@@ -279,9 +319,10 @@ export class PrAppElement extends HTMLElement {
               canComment: /** @type {const} */ (false),
               tokenKind: bundle.capabilities.tokenKind,
               login: bundle.capabilities.login,
-              reason: 'this canvas is for an older commit; generate one for the current head to post',
+              reason: `this canvas is for ${bundle.stale?.relation === 'other-base' ? 'an older diff of this commit' : 'an older commit'}; generate one for the current head to post`,
             }
           : bundle.capabilities
+      const canvasManifest = bundle.canvas?.manifest ?? null
       const session = createReviewSession({
         prNumber: boot.prNumber,
         artifact,
@@ -289,11 +330,16 @@ export class PrAppElement extends HTMLElement {
         state: bundle.state,
         capabilities,
         headSha: bundle.pr.headSha,
-        // The marks are keyed to the canvas on the page, so every mark names it.
+        mergeBaseSha: bundle.pr.mergeBaseSha,
+        // The marks are keyed to the canvas on the page, so every mark names it, with the merge base
+        // its diff runs from.
         ...(bundle.canvas === undefined ? {} : { canvasSha: bundle.canvas.headSha }),
+        ...(canvasManifest === null ? {} : { canvasMergeBaseSha: canvasManifest.mergeBaseSha }),
       })
       const interactions = wireReview(this, session, {
         chat: () => this.chat,
+        openReview: () => (this.chat ?? this.reviewPane)?.openReview(),
+        uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
         openSettings: el =>
           void openSettingsDialog(this, el, {
             onSaved: data => this.layerView?.setView(data.settings.layerView),
@@ -306,6 +352,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
+          onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })
         this.quickQuestions = wireQuickQuestions(this, {
           onPick: (context, question) => {
@@ -316,6 +363,8 @@ export class PrAppElement extends HTMLElement {
             }
           },
         })
+      } else {
+        this.reviewPane = wireReviewPane(this)
       }
       if (bundle.status === 'stale') {
         this.startPolling(next => next.status === 'ready')
@@ -342,12 +391,13 @@ export class PrAppElement extends HTMLElement {
   }
 
   /**
-   * Writes the skin or the theme to `.pr-review/settings.yml`.
-   * @param {import('./contract-types.js').AppearanceInput} input
-   * @param {string} what the word the failure message names
+   * The header's skin and theme commands, on every screen and on the error screen too. A failed
+   * save says so in a toast, since the next load would come back in the old look.
    */
-  save(input, what) {
-    void saveAppearance(input).catch(() => toast(this, `could not save the ${what} to settings.yml`))
+  wireAppearance() {
+    wireAppearanceCommands(this, (what, saved) => {
+      if (!saved) toast(this, `could not save the ${what} to settings.yml`)
+    })
   }
 
   /** @param {PrBundle} bundle */
@@ -358,32 +408,32 @@ export class PrAppElement extends HTMLElement {
     if (settings instanceof HTMLElement && this.interactions === null) {
       settings.addEventListener('click', () => void openSettingsDialog(this, settings))
     }
-    // Both repaint the page under the click; the settings file catches up after the round trip,
-    // and each says so when it cannot, because the next load would come back in the old one.
-    const toggle = qs('#theme-toggle', this)
-    toggle?.addEventListener('click', () => {
-      this.theme = nextTheme(this.theme)
-      applyTheme(this.theme, document.documentElement)
-      toggle.textContent = themeLabel(this.theme)
-      this.save({ theme: this.theme }, 'theme')
-    })
-    const skinToggle = qs('#skin-toggle', this)
-    skinToggle?.addEventListener('click', () => {
-      this.skin = nextSkin(this.skin)
-      applySkin(this.skin, document.documentElement)
-      skinToggle.textContent = skinLabel(this.skin)
-      this.save({ skin: this.skin }, 'skin')
-    })
-    const openDialog = () => {
-      openRegenerateDialog(this, bundle.skillCommand)
-      this.startPolling(next => canvasChanged(bundle, next))
-    }
-    qs('#regenerate', this)?.addEventListener('click', openDialog)
-    qs('#stale-generate', this)?.addEventListener('click', openDialog)
+    this.wireAppearance()
     const boot = this.bootstrap
     if (!boot) {
       return
     }
+    // With an agent to run it, the page generates the canvas itself; without one, it gives the
+    // skill command to run in Claude Code or Codex and waits for the canvas that command publishes.
+    if (bundle.chat.enabled) {
+      this.generation ??= createGeneration(this, {
+        prNumber: boot.prNumber,
+        onEnded: job => this.generationEnded(job),
+        onError: message => toast(this, message),
+      })
+      this.generation.attach(bundle)
+    }
+    const generation = bundle.chat.enabled ? this.generation : null
+    const openDialog =
+      generation === null
+        ? () => {
+            openRegenerateDialog(this, bundle.skillCommand)
+            this.startPolling(next => canvasChanged(bundle, next))
+          }
+        : () => generation.open(bundle)
+    qs('#regenerate', this)?.addEventListener('click', openDialog)
+    qs('#stale-generate', this)?.addEventListener('click', openDialog)
+    qs('#generate-start', this)?.addEventListener('click', openDialog)
     const exportZip = qs('#export-zip', this)
     if (exportZip instanceof HTMLElement) {
       exportZip.addEventListener('click', () => {
@@ -427,6 +477,32 @@ export class PrAppElement extends HTMLElement {
         importImpl: importCanvas,
         onImported: () => void this.reload(),
       })
+    }
+  }
+
+  /**
+   * A job this page watched has ended. A published canvas is loaded; the dialog comes back over
+   * it when the reader had it open, or when sharing failed and the reader has an upload to do.
+   * @param {import('./contract-types.js').GenerationJob} job
+   */
+  async generationEnded(job) {
+    const wasOpen = this.querySelector('#generate-dialog')?.hasAttribute('open') === true
+    if (job.phase !== 'done') {
+      if (!wasOpen) {
+        toast(
+          this,
+          job.phase === 'cancelled'
+            ? 'canvas generation stopped'
+            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+        )
+      }
+      return
+    }
+    await this.reload().catch(() => undefined)
+    if (wasOpen || job.sharing?.status === 'failed') {
+      this.generation?.showLast()
+    } else {
+      toast(this, 'canvas published')
     }
   }
 

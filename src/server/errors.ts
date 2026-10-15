@@ -52,6 +52,11 @@ export class AppError extends Error {
   }
 }
 
+/** The AppError an error envelope describes, as a command reads it back from the server. */
+export function fromEnvelope(error: ErrorEnvelope['error'], status: ContentfulStatusCode): AppError {
+  return new AppError(error.code, error.message, status, error.hint, error.issues)
+}
+
 /** Maps every error the routes can see to one AppError, so the envelope is built in one place. */
 export function toAppError(err: unknown): AppError {
   if (err instanceof AppError) {

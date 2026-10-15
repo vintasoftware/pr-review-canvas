@@ -89,7 +89,7 @@ const POST_ROUTES: FakeGhOptions['postRoutes'] = {
 async function contextWithCanvas(gh: FakeGh): Promise<TestContext> {
   const t = await makeTestContext({ git: gitFor42(), gh })
   await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
-  await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+  await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
   return t
 }
 
@@ -432,7 +432,7 @@ describe('POST /api/prs/:n/comments', () => {
     expect(await json(res)).toEqual({
       error: {
         code: 'CANVAS_STALE',
-        message: 'the pull request has a new head commit since this page was drawn',
+        message: 'the pull request has a new head commit or base since this page was drawn',
         hint: 'reload the page and try again',
       },
     })
@@ -812,7 +812,7 @@ describe('the pending review', () => {
       t = await makeTestContext({ gh, git })
       const artifact = syntheticArtifact()
       await t.ctx.canvases.write(HEAD_SHA, artifact, MANIFEST, 42)
-      await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
       const app = createApp(t.ctx)
       await app.request(...post('/api/prs/42/pending', { ...DRAFT, headSha: HEAD_SHA }))
       for (const headSha of ['c'.repeat(40), 'd'.repeat(40)]) {
@@ -830,7 +830,7 @@ describe('the pending review', () => {
           { ...MANIFEST, headSha },
           42
         )
-        await t.ctx.derived.ensure(headSha, BASE_SHA)
+        await t.ctx.derived.ensure({ headSha: headSha, mergeBaseSha: BASE_SHA })
         await app.request('/api/prs/42?refresh=1', { headers: LOCAL })
         expect((await t.ctx.state.read(42)).pending[0]?.headSha).toBe(HEAD_SHA)
       }
@@ -849,7 +849,7 @@ describe('the pending review', () => {
     t = await makeTestContext({ gh, git })
     const artifact = syntheticArtifact()
     await t.ctx.canvases.write(HEAD_SHA, artifact, MANIFEST, 42)
-    await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     const app = createApp(t.ctx)
     await app.request(...post('/api/prs/42/pending', DRAFT))
     const headSha = 'c'.repeat(40)
@@ -866,10 +866,13 @@ describe('the pending review', () => {
       { ...MANIFEST, headSha },
       42
     )
-    await t.ctx.derived.ensure(headSha, BASE_SHA)
+    await t.ctx.derived.ensure({ headSha: headSha, mergeBaseSha: BASE_SHA })
     await app.request('/api/prs/42?refresh=1', { headers: LOCAL })
     if (condition === 'disabled') t.ctx.projectConfig.config.canvas.keepForIdenticalDiff = false
-    else await removeDirectory(t.ctx.derived.derivedDir(HEAD_SHA), { recursive: true })
+    else
+      await removeDirectory(t.ctx.derived.derivedDir({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA }), {
+        recursive: true,
+      })
     const response = await app.request(
       ...post('/api/prs/42/review', { event: 'COMMENT', headSha, body: 'a look' })
     )

@@ -11,7 +11,7 @@
   project's tour guide; `/pr-tour-apply` carries the confirmed plan out. `pr-review tour
 prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; scenes run in a
   sandboxed frame (ADR 0006).
-- The page is `/tour/<n|branch|uncommitted>`: every step a history entry, keyboard and phone
+- The page is `/r/<owner>/<repo>/tour/<n|branch|uncommitted>`, linked from the canvas header: every step a history entry, keyboard and phone
   parity, the code behind a landmark as a literate or raw diff, a note per landmark, and a plan
   that writes the re-implementation prompt and shares who toured on the pull request. A change
   pick is grilled through AI Chat in the tour's own thread, with a restatement card to approve,
@@ -24,7 +24,223 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
 - Skill install, doctor, and upgrade handle every bundled skill.
 - The generator works in review checkouts (`pr-review tour checkout <tourDir> head|base`) and
   removes the merge-base one when done (`base --remove`); `serve` also removes it once the pull
-  request is merged or closed. `publish` and `tour plan` link to the port the running `serve` uses.
+  request is merged or closed.
+
+### Generating from the terminal
+
+- `pr-review generate [<n>|branch|uncommitted]` generates a canvas from a terminal, with no skill
+  installed. The job runs in the running server, as one started from the review app does, so one
+  generation still runs at a time in a clone and the review page shows it. The command prints each
+  phase and waits for the end; **Ctrl+C** stops the wait, not the job. Without a review, it
+  generates for the open PR or MR of the current branch.
+- `--force` starts from a blank page, `--base <ref>` compares the branch or uncommitted review
+  against another ref, and `--agent` and `--model` choose the agent and model for that run.
+- `--out <file|dir>` posts nothing on the PR or MR for that run and writes the canvas zip, to send
+  to a reviewer, who loads it with `pr-review import`. Resolving a point on the review page later
+  shares the canvas, unless sharing is off.
+- `--open` opens the review when the canvas is published, and `--json` prints one JSON line. A
+  failed job exits as any other failure: `5` when publish rejected the model on every repair
+  attempt.
+- `generate` keeps the flags the project was opened with, such as `--chat-agent`, and takes the
+  shell's environment, as `open` does.
+
+### Reading
+
+- The rail shows the lines each layer adds and removes next to its file count. A file split across
+  layers counts only the chunks of each layer.
+- Hover the totals of the rail and the header for the split between code and tests, as in
+  `code +3 −2 · tests +2 −1`.
+
+### Attention points
+
+- Each attention point has one status: open, in your review, posted, resolved, or dismissed. A
+  point that is not open stays in its layer and on its diff line, collapsed to its title, a status
+  pill, and one line. **show** expands it with its outcome and the command that undoes it, and a
+  point in your review shows its drafts with **edit** and **delete**.
+- The overview's dismissed and resolved lists give way to one status line, with a switch that hides
+  the points acted on. Counts, the rail, and `]`/`[` cover open points only; `o` expands a
+  collapsed point.
+
+### Your review
+
+- The side pane has a **Your review** tab next to AI Chat. It lists every pending draft by file,
+  with where it came from, a link to its line, **edit**, **delete**, **finish your review**, and
+  **discard**. The pending bar's **see the list** opens it. Drafts written on earlier commits are
+  listed there too. With AI Chat off, the pane holds the review alone, minimized until opened.
+- A draft being edited in the tab keeps its text, focus, and selection while other drafts are
+  added, saved, or deleted.
+- **finish your review** and the header's sign-off commands wait while a draft edit on screen
+  differs from the saved draft: they say to save or cancel it first, and put the focus on it.
+- On a phone, or wherever the pane floats over the canvas, a line link in the pane minimizes the
+  pane so the line is not left under it. Posting a review minimizes it too, so the receipt and its
+  link to the forge are on top.
+
+### AI Chat
+
+- The context chip sits above the message box, and each question in the transcript names the
+  context it was asked with, after a reload too.
+- A proposed comment can name the attention point it acts on: its card says "about the point …",
+  with **unlink** until the comment is sent. Queuing, posting, or editing it acts on that point,
+  as the point's own **add to review** does.
+- When the reader wrote the pull request, AI Chat can propose resolving a point with a reason.
+  **resolve** saves the reason, posting nothing. **edit** opens the point's reason box with it,
+  where it can change and also be posted on the line. The box opens for a point of a collapsed
+  layer or a hidden acted-on point too, and a pane floating over the canvas steps aside for it.
+
+### Fixes
+
+- Reloading the page shows the canvas as outdated after a push made since the last load, and after
+  the pull request moved to another base branch. A canvas of the head itself is outdated when it
+  was generated against another merge base and the diff changed: it is shown with the diff it was
+  generated from, and the bar names both merge bases. A new base that leaves the diff identical
+  keeps the canvas, as a push with an identical diff does, unless `canvas.keepForIdenticalDiff`
+  is off.
+- After a move to another base, review marks and pending drafts follow the diff they were made
+  on: marks made on the old diff do not count for a canvas generated again on the new base, drafts
+  written on it are listed as written on an earlier diff and are refused on submit unless the diff
+  is unchanged, and a page drawn before the move cannot post or mark until it is reloaded.
+  `pr-review import` and a generation that finished after the move say so too.
+
+## 0.8.0
+
+Changes since 0.7.0.
+
+### One server for every project
+
+- One `pr-review serve` now serves every project. Start it once, in any folder, and run
+  `pr-review open` in a project to add it and open its review: the open PR or MR of the current
+  branch, or the project's home page. `pr-review open 123`, `open branch`, and `open uncommitted`
+  open that review.
+- Each project answers under `/r/<owner>/<repo>/`, and a linked worktree under
+  `/r/<owner>/<repo>~<worktree>/`, with git's name for the worktree, because its branch and
+  uncommitted work differ. The pages and features under that path are unchanged.
+- `http://localhost:3010/` lists the projects. **remove** takes one off the list; its canvases and
+  review state stay, and `pr-review open` adds it again. A project whose folder is gone leaves the
+  list by itself.
+- The logo leads to the project list. Next to it, the project's name leads to its home page.
+- The project list and each project's home page have the **skin** and **theme** commands of the
+  review page.
+- `pr-review serve` inside a project still adds and opens it. When a server already runs, it adds
+  the project to that server and exits, unless `--port` names another port.
+- The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
+  shell that ran `open` for it, kept in memory only. `--data-dir`, `--chat-agent`, and
+  `--chat-model` also work on `open`, per project, and are saved with it.
+- After a restart, a project opened from a bookmark runs with the server's environment, with the
+  data dir and `PR_REVIEW_HOST` it was opened with, which are saved with it. The server logs this,
+  and a **server env** badge next to the project's name opens a dialog: what may fail when the
+  project's shell sets its own token or `PATH`, and the command to give it the shell's again.
+- Each worktree of a clone has its own `branch` and `uncommitted` reviews: review progress,
+  chat threads, review checkout, and the earlier canvases they fall back on. A linked worktree's
+  go by `branch~<worktree>` in the clone's `.pr-review/`; local reviews a linked worktree prepared
+  before now are the main checkout's, so prepare them again there. A pull request's review stays shared by every worktree,
+  which run one generation at a time and one chat turn per pull request.
+- `publish` prints a `reviewUrl` under the project's path and on the running server's port.
+- The server keeps `server.json` (readable by its owner only), `projects.json`, and the project
+  list's look in `~/.pr-review`, or in `PR_REVIEW_HOME`. Only a command that can read
+  `server.json` can add a project.
+
+### Reading
+
+- Every code block in rendered text has a `copy` command: chat answers, proposed and pending
+  comments, attention points, layer notes, the summary, and GitHub comments and descriptions. It
+  copies the block as written. With a mouse, it shows when the pointer is over the block.
+- Every `copy` command says how it went. For two seconds the button shows `copied` (a check in the
+  GitHub skin) or `failed` (a cross), and a toast says "copied to clipboard" or, in red, "could not
+  copy". A failure's reason shows beside the button. A copy inside a modal dialog toasts in that
+  dialog.
+
+### Generating from the review app
+
+- A generation from the review app follows the project's own `pr-review-canvas` skill: the copy
+  in the agent's skills folder (`.claude/skills` or `.agents/skills`), else the other harness's,
+  else the skill pr-review ships. The start screen and the run's status say which, and whether the
+  project's copy was edited or was installed by a different pr-review version.
+- The generation dialog says what the agent is doing right now: waiting to start, thinking,
+  writing the answer (with how many characters so far), or running a tool, and how long ago it
+  last showed it was working. A run that writes the canvas for minutes without a tool call no
+  longer looks stuck; after three minutes with nothing from the agent, the dialog says it may be.
+
+### Fixes
+
+- A merged pull request whose base branch was deleted since, as a stacked PR's is once the PR
+  below it merges, failed to load with a git error. Its review now loads from its merge commit.
+
+### Upgrade from 0.7.0
+
+1. Stop every running `pr-review serve`. Then run `pr-review upgrade` in each project: the skill
+   now points at the project's path on the server. The canvas format did not change, so
+   teammates on 0.7.0 can still open the canvases.
+2. Start one `pr-review serve` and run `pr-review open` in each project to add it. Drop the
+   `--port` that gave each project its own server; `--port` now starts a separate server.
+3. Review pages moved under `/r/<owner>/<repo>/`. Old bookmarks such as
+   `http://localhost:3010/review/123` no longer open; reopen the review with `pr-review open 123`.
+4. Local `branch` and `uncommitted` reviews prepared in a linked worktree before this version
+   belong to the main checkout now. Prepare them again in the worktree.
+
+## 0.7.0
+
+Changes since 0.6.2.
+
+### Review server
+
+- `pr-review serve` opens the review of the open PR or MR whose head is the checked-out branch,
+  so a server started in a PR's worktree lands on that PR. Other branches open the home page.
+- The logo in the header links to the home page, where you enter another PR or MR number.
+
+### Generating from the review app
+
+- With `acpx` installed, the review app generates canvases itself. **generate canvas** on an empty
+  screen or on the home page starts the first generation, **generate for current head** updates an
+  outdated canvas, and **regenerate** writes the current one again from a blank page. The local
+  branch and uncommitted reviews work the same way.
+- The header's generate command is named for what it does: **generate** with no canvas,
+  **update** on an outdated one, **regenerate** on a current one. Without an agent it stays
+  **regenerate** and shows the skill command.
+- The generation dialog shows the phase, the elapsed time, the latest tool calls of the agent, and
+  the problems publish named, and **stop** cancels the run. While it runs, the header command
+  shows **generating** with the elapsed time and reopens the dialog, also after a reload. One
+  generation runs at a time.
+- When the canvas would be shared on the PR or MR, a start is refused unless `gh` or `glab` is
+  logged in with an account that can comment, so no agent time goes into a canvas that cannot
+  be shared. The dialog shows the reason and the command to run.
+- The server runs `prepare` and `publish` itself. The agent runs with the flags of AI Chat, which
+  deny every write, and answers with the model JSON, which the server writes, fixes, and publishes.
+
+### Project
+
+- Releases are also published to GitHub Packages, next to npm.
+
+### Upgrade from 0.6.2
+
+1. Run `pr-review upgrade` in each project, then restart `pr-review serve`. The skill and the
+   canvas format did not change, so teammates on 0.6.2 can still open the canvases.
+2. To generate from the review app, install `acpx` and pick the agent under `chatAgent` in
+   **settings**, as for [AI Chat](README.md#optional-ai-chat-install). Generation uses the model
+   that `generation.models` names for that agent.
+
+## 0.6.2
+
+Changes since 0.6.1.
+
+### AI Chat
+
+- **Ask** on an attention point is a button with a robot icon, as it is on a layer or file. The
+  **AI Chat** bubble wears the same icon.
+
+### Self-review
+
+- The author can **resolve** any attention point, a reviewer point too, such as a false positive.
+  Before, a reviewer point had no **resolve**, and the author could only answer it in a comment.
+- **Dismiss** is available in self-review as a personal hide. It does not resolve the point:
+  reviewers still see it, and the self-review note still counts it. Restore a dismissed point to
+  resolve it.
+
+### Incremental canvases
+
+- An attention point the generator wrote, whose body links to a file the new commits changed or
+  dropped, is decided again instead of being carried word for word with any resolution it had.
+- The update prompt tells the generator to check each carried point against the changed chunks,
+  and to drop or retitle one a chunk contradicts, so its old resolution does not follow.
 
 ## 0.6.1
 

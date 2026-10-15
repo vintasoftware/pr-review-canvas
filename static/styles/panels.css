@@ -111,6 +111,33 @@
   border-bottom: 1px solid var(--ink);
   font-size: 13px;
 }
+/* The badge next to a project's name that runs under the server's environment; it opens a dialog. */
+.env-badge {
+  align-self: center;
+  background: var(--warn-bg);
+  font-family: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+/* Each block is a paragraph and what it leads to: the list, or the command. */
+dialog.env p {
+  margin: 0;
+}
+dialog.env ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+dialog.env .cmdbox {
+  margin-top: 8px;
+  flex-wrap: nowrap;
+}
+/* A long folder wraps inside the box, so the copy command stays beside it. */
+dialog.env .cmdbox code {
+  flex: 1;
+  min-width: 0;
+}
 .error-card .body p {
   overflow-wrap: anywhere;
 }
@@ -148,6 +175,57 @@ dialog .cmdbox code {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+/* The generation dialog: what the agent did last, and what publish sent back. */
+dialog.gen {
+  max-width: 560px;
+}
+.gen-meta {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.gen-force {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+/* What the agent is doing right now; the dot turns to a warning while it says nothing. */
+.gen-pulse {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.gen-pulse::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.gen-pulse[data-quiet]::before {
+  background: var(--warn);
+}
+.gen-activity,
+.gen-problems ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.gen-activity li:last-child {
+  color: var(--fg);
+}
+.gen-problems summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.gen-running {
+  font-variant-numeric: tabular-nums;
 }
 footer {
   border-top: 1px solid var(--ink);

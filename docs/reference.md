@@ -20,16 +20,78 @@ For setup and the basic review workflow, see the [README](../README.md).
 | `--repo <dir>`                   | All commands                             | Uses the current directory when omitted; resolves the repository root from there                                 |
 | `--data-dir <dir>`               | All except `install-skill` and `upgrade` | Overrides `PR_REVIEW_DATA_DIR`, then the default `<main checkout>/.pr-review`                                    |
 | `--port <n>`                     | `serve`                                  | Overrides `PR_REVIEW_PORT`, then `3010`; accepts 1–65535                                                         |
-| `--no-open`                      | `serve`                                  | Does not open the canvas in the default browser at startup; the browser also stays closed when `CI` is set       |
-| `--chat-agent claude\|codex`     | `serve`                                  | Overrides the saved AI Chat agent for this run; not canvas generation. `--agent` is a deprecated alias           |
-| `--chat-model <id>`              | `serve`                                  | Overrides the saved AI Chat model for this run; not canvas generation. `--model` is a deprecated alias           |
+| `--no-open`                      | `serve`, `open`                          | Does not open the canvas in the default browser; the browser also stays closed when `CI` is set                  |
+| `--chat-agent claude\|codex`     | `serve`, `open`                          | Overrides the saved AI Chat agent for this project; not canvas generation. `--agent` is a deprecated alias       |
+| `--chat-model <id>`              | `serve`, `open`                          | Overrides the saved AI Chat model for this project; not canvas generation. `--model` is a deprecated alias       |
 | `--fixture-canvas <review.json>` | `serve`                                  | Development preview: uses the supplied canvas for every requested PR, with its head replaced by the live PR head |
 | `PR_REVIEW_HOST=gitlab`          | Environment                              | Treats a non-github.com origin as GitLab (self-hosted hosts whose name does not contain `gitlab`)                |
+| `PR_REVIEW_HOME=<dir>`           | Environment                              | Where the server keeps `server.json` and its project list; default `~/.pr-review`                                |
 
 Repository operations require an `origin` remote on **github.com** or **GitLab** (gitlab.com, a
 hostname that contains `gitlab`, or any host with `PR_REVIEW_HOST=gitlab`). GitHub Enterprise Server
 hosts are not supported. Fetching a PR or merge request does not check out its branch. Use `--pr`
 for both GitHub pull request numbers and GitLab merge request IIDs.
+
+### One server for every project
+
+```text
+pr-review serve [--port <n>]                    # in a project: starts the server and opens it
+pr-review open [<n>|branch|uncommitted]         # adds another project to the running server
+```
+
+`pr-review serve` in a project starts the server and opens that project, as it always did; one
+server then serves every project you add to it. Each project answers under its own path:
+`/r/<owner>/<repo>/` for the main checkout of a clone, and `/r/<owner>/<repo>~<worktree>/` for a
+linked worktree, because its branch and uncommitted work differ. `<worktree>` is git's name for
+the worktree: its folder's name, unless another worktree of the clone had that name first (see
+`.git/worktrees/`). The pages and features under that path are the same as before.
+
+`http://localhost:3010/` lists the projects by repository, one row per checkout, and the logo on
+every page leads there; the project's name next to the logo leads to its home page. Every page has
+the same header. The list's **health** (`/api/health`) gives the server's version and port and
+where each project's own health check answers (`<project>/api/health`: git, the host login, the
+chat agent). **remove** takes a project off the list: its
+canvases and review state stay in its `.pr-review/`, and `pr-review open` adds it again. A project
+whose folder no longer exists leaves the list by itself. The list and each project's home page
+have the **skin** and **theme** commands of the review page; a project saves its look in its
+`.pr-review/settings.yml`, and the list in `~/.pr-review/appearance.json`.
+
+- `pr-review serve` inside a repository adds that project and opens it. When a server already
+  runs, `serve` adds the project to it and exits, unless `--port` names another port, which starts
+  a second server. Outside a repository it starts the server alone.
+- `pr-review open` adds the checkout it runs in to the running server and opens it. With a number,
+  `branch`, or `uncommitted`, it opens that review. With no server running it fails with
+  `SERVER_NOT_RUNNING`. With `--json`, or on a pipe, it prints `{ url, project, dataDir, server }`.
+- The server runs git, `gh`, `glab`, and the agent of each project with the environment of the
+  shell that last ran `open`, `serve`, or `generate` for it, such as a project's own `GH_TOKEN`, ssh agent, or
+  `PATH`. It keeps that environment in memory only. After a restart, a project opened from a
+  bookmark runs with the server's own environment until you run `open` in it again. Its flags
+  (`--data-dir`, `--chat-agent`, `--chat-model`), the data dir it resolved, and the shell's
+  `PR_REVIEW_HOST` are saved with it and still apply, so it reads the same canvases and review
+  state. This matters only when the project's shell sets something of its own: a token for
+  another account can post comments as that other account, and a `PATH` of its own can leave the
+  agent or the host CLI not found. The server logs it, and a **server env** badge next to the
+  project's name in the page header opens a dialog that says so, with the command to run `open`
+  in the project's folder.
+- Running `open` again reloads `pr-review.config.yml` and takes the shell's environment again. A
+  chat turn or a generation that is running finishes under the settings it started with, and its
+  page keeps showing it. The flags given now replace the ones before; when that moves the project
+  to another data dir, `open` says where its canvases and review state until then are.
+  `generate` also takes the shell's environment again, but keeps the saved flags unless you pass
+  `--data-dir`, which replaces them as `open` does.
+- The worktrees of one clone share its `.pr-review/` data dir. One generation runs at a time across
+  them, and one chat turn per pull request; each worktree's `branch` and `uncommitted` reviews are
+  its own (see [worktrees](#reviewing-before-the-pull-request-exists)).
+- The server writes `~/.pr-review/server.json` (readable by its owner only), with its port and a
+  token. Commands read it to find the server; only a command that can read that file can add a
+  project. `projects.json` next to it lists the projects, so their URLs keep working after a
+  restart.
+- `publish` prints a `reviewUrl` under the project's path and on the running server's port.
+
+When the browser opens a project, the server asks the forge for an open PR or MR whose head is the
+checked-out branch. When one exists, the browser opens its review at `<project>/review/<number>`;
+otherwise, and on a detached HEAD or a failed lookup, it opens the project's home page. The lookup
+matches branches of this repository only, so a PR from a fork opens the home page.
 
 ### Prepare, validate, and publish
 
@@ -65,14 +127,15 @@ Run the installed skill in Claude Code or Codex:
 /pr-review-canvas uncommitted     # the same, with your working-tree edits and new files on top
 ```
 
-Start `pr-review serve` and open **http://localhost:3010/review/branch** or
-**http://localhost:3010/review/uncommitted**.
+With `pr-review serve` running, the project's home page links to them under **Before the pull
+request**; `pr-review open branch` or `pr-review open uncommitted` in the project's folder opens
+one directly.
 
 There are two reviews of the work in a clone, and they are separate targets:
 
 ```bash
-pr-review prepare --branch        # served at /review/branch
-pr-review prepare --uncommitted   # served at /review/uncommitted
+pr-review prepare --branch        # served at <project>/review/branch
+pr-review prepare --uncommitted   # served at <project>/review/uncommitted
 ```
 
 `--branch` describes the tip of the current branch. `--uncommitted` describes the working tree as
@@ -94,10 +157,15 @@ one never disturbs the other.
   reads the head again when it is opened and when `refresh` is pressed, and offers to regenerate.
   Its background polls answer about that same head, so they never contradict what the page shows;
   they read the work again only once a new canvas has been prepared.
-- **Worktrees.** The snapshot index and its anchor are per worktree, so two worktrees of one clone
-  never overwrite each other's snapshot. The review targets are not: `branch` and `uncommitted`
-  name one review per clone, so worktrees share their canvas, review progress and chat threads.
-  Review local work from one worktree at a time.
+- **Worktrees.** Each worktree of a clone has its own `branch` and `uncommitted` reviews: their
+  review progress, chat threads, review checkout, and the canvases they fall back on are that
+  checkout's own. A canvas belongs to its commit, so two checkouts at the same commit show the
+  same one, each with its own progress on it. In the clone's `.pr-review/`, a linked
+  worktree's local reviews go by `branch~<worktree>` and `uncommitted~<worktree>`, the same label
+  its path on the server carries; the main checkout's keep the bare names. The snapshot index and its
+  anchor are per worktree as well. A pull request's review is the same in every worktree.
+  Local reviews prepared in a linked worktree before this layout lived under the bare names, which
+  are now the main checkout's; prepare them again in the worktree.
 - **No forge side.** A local canvas posts nothing: comments, sign-off, canvas import, and
   attachment discovery are refused for it. The page draws no import drop zone and no shared-canvas
   callout, and the comment and sign-off commands stay disabled with the reason. A canvas of a working-tree
@@ -123,8 +191,7 @@ is shrunk around it (or dropped when that leaves no single range). Partly overla
 reversed ranges, and `FOLD_MISSING` still need the author.
 
 `publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl`
-for PR and local runs. The URL names the port of the `serve` running on the same data dir, which
-records it in `<data dir>/server.json` while it runs; with none running, the configured port.
+for PR and local runs.
 Its `--agent`, `--model`, and `--harness` describe who generated the canvas; they do not launch or
 select an agent, and they are unrelated to the chat settings. `--allow-stale` permits publishing for the prepared commit after the PR head has
 moved. Use it only when that older commit is the intended review target.
@@ -153,7 +220,8 @@ Check the `sharing` result even when the process exits successfully:
   Upload that ZIP into the PR/MR description in the browser and save; replace an older attachment
   link if present. A host failure can have an uncertain outcome, so check the comment before retrying.
 - `{ "status": "local" }`: a refs-only target has no PR/MR to publish to.
-- `{ "status": "off" }`: `sharing.canvasComment` is off, so nothing was posted. The canvas is
+- `{ "status": "off" }`: `sharing.canvasComment` is off, or `generate --out` turned sharing off for
+  the run, so nothing was posted. The canvas is
   saved locally and opens with `pr-review serve`; `pr-review export` makes a ZIP when you want to
   hand it over another way.
 
@@ -175,7 +243,9 @@ Set them for everyone in `pr-review.config.yml`, or for yourself as `canvasComme
 project's; `null` follows it.
 
 A scratch `--data-dir` or `PR_REVIEW_DATA_DIR` changes storage, not sharing. Disable
-`sharing.canvasComment` or personal `canvasComment` to keep a PR test run local.
+`sharing.canvasComment` or personal `canvasComment` to keep a PR test run local. For one run only,
+[`pr-review generate <n> --out <file|dir>`](#generating-from-the-terminal) posts nothing and writes
+the canvas zip.
 
 The entire comment must fit the host limit: 65,536 characters on GitHub and 1,000,000 on GitLab.
 Base64 uses roughly four characters per three compressed bytes, leaving slightly under 48 KiB
@@ -294,8 +364,8 @@ Preparation progress goes to stderr. `validate --human` prints text, and a faile
 validation diagnostics before its JSON error. `serve` stays running and writes its startup message
 to stderr.
 
-`install-skill`, `export`, `import`, `clean`, and `upgrade` print text at a terminal. With
-`--json`, or when stdout is a pipe, they print the JSON result instead, so scripts and agents
+`install-skill`, `generate`, `export`, `import`, `clean`, and `upgrade` print text at a terminal.
+With `--json`, or when stdout is a pipe, they print the JSON result instead, so scripts and agents
 read the same fields as before.
 
 `doctor` prints a checklist. Each check is `ok` or `failed`, and a failed check includes its
@@ -315,7 +385,7 @@ Validation failures from `validate` use its report format instead.
 | `1`       | Error, including a failed `doctor` check                                 |
 | `2`       | Command usage error, such as an unknown command or missing required flag |
 | `4`       | GitHub CLI (`gh`) or GitLab CLI (`glab`) missing or unauthenticated      |
-| `5`       | Validation failed in `validate` or `publish`                             |
+| `5`       | Validation failed in `validate`, `publish`, or `generate`                |
 
 `doctor` reports failed checks with exit `1`, including authentication failures.
 
@@ -448,7 +518,7 @@ assigned to its layer (`side` may also be `old`). Without an anchor, publish use
 changed row of the source matched by `testPath`, then falls back to the layer's first changed row.
 It never defaults to context. Optional `title` uses the point-title cap; otherwise the title is
 shortened at a word boundary. Published entries retain their title, audience, and anchor when
-carried, including older generated author points and their resolutions. Author and
+carried, including older generated points and their resolutions. Author and
 reviewer counts include these generated points, including counts reported for refs runs.
 
 For a small change set, one real layer is the default; optional Other is extra. A test whose
@@ -488,8 +558,10 @@ The data directory's `settings.yml` accepts these keys and values:
 | `tourComment`          | `null`   | `true`, `false`, or `null` to follow the project's `tour.share` (3)              |
 
 (1) A model ID names a family; see [Model families](#model-families).
-(2) AI Chat only. Canvas generation reads `generation.models` in the project config instead. A
-file written before these keys were renamed keeps working: `agent` and `model` are read as
+(2) `chatAgent` also picks the agent that [generates canvases from the review
+app](#generating-from-the-review-app). `chatModel` is AI Chat only: generation reads
+`generation.models` in the project config instead. A file written before these keys were renamed
+keeps working: `agent` and `model` are read as
 `chatAgent` and `chatModel`, and the next save renames them in the file.
 (3) Overrides `sharing.canvasComment` or `sharing.mentionCanvas` in the project config for you; see
 [turning sharing off](#turning-sharing-off). Edit these in the file; the settings dialog does not
@@ -543,7 +615,7 @@ Deleting the directory loses saved preferences, canvases, progress, and chat his
 
 ### Links to specific code
 
-Append a fragment to `/review/<pr-number>`:
+Append a fragment to `<project>/review/<pr-number>`:
 
 | Target              | Fragment example            |
 | ------------------- | --------------------------- |
@@ -640,6 +712,35 @@ refused.
 When automatic download fails, download the archive in GitHub or GitLab and use the page's drop
 zone or `pr-review import <zip> --pr <n>`.
 
+### Attention point status
+
+Each attention point shows where it stands for you. A point you have not acted on is **open**.
+Acting on it changes its status:
+
+- **in your review**: you added it, or a comment AI Chat tied to it, to the pending review. It goes
+  out when you submit. A point can hold more than one draft; the card lists them all.
+- **posted**: you posted it (or a comment AI Chat tied to it), or it went out with a submitted
+  review. Drafts for it that still wait show on its card too.
+- **resolved**: the author answered it with a reason. Every reader sees this status.
+- **dismissed**: you took it off your own list. Other readers still see it open.
+
+When more than one applies, the point shows the first one in this order: resolved, posted, in your
+review, dismissed.
+
+A point you acted on stays in its layer and on its line in the diff. It collapses to its title, its
+status, and one line: the start of the reason, the comment link, or a note that the draft waits.
+**show** expands it. You then see the point's text, what was done with it (the author's reason, or
+in the layer, your draft with **edit** and **delete**; in the diff the draft has its own row right
+under the point), and the commands that undo it: **reopen**, **restore**, or
+deleting the draft. The point collapses again when its status changes. A reload also collapses it.
+
+The counts in the rail, the layer headings, and the overview squares include only open points. The
+overview line **Attention points: 2 open · 1 in your review · …** counts each status. Its
+**hide the N acted on** command removes the collapsed points from the page until you click it
+again; **edit** on an AI Chat proposed resolution brings its point back while the reason box is
+open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
+it again.
+
 ### Self-review
 
 The author reads the canvas before asking for review. Every attention point names its audience:
@@ -649,33 +750,43 @@ The author reads the canvas before asking for review. Every attention point name
 - **reviewer**: a trade-off to agree on or a risk to verify, which needs someone else's judgment.
 
 When the login that runs `pr-review serve` wrote the pull request, or the review is of local work,
-each author point has a **resolve** command. A reviewer point has none: the author's answer does not
-close a question that needs someone else's judgment, so it stays on the reviewer's list and the
-author can answer it in a comment instead. Write why the point needs no reviewer decision and click
-**resolve**. On a pull request, **also post the reason as a comment on this line** is checked by
-default; the reason then also appears as a review comment on the point's line.
+every attention point has a **resolve** command. Resolve an author point you can answer, or a
+reviewer point that does not apply, such as a false positive. Leave a reviewer point that needs
+someone else's judgment open; it stays on the reviewer's list. Write why the point needs no
+reviewer decision and click **resolve**. On a pull request, **also post the reason as a comment on
+this line** is checked by default; the reason then also appears as a review comment on the point's
+line.
 
-Self-review offers **resolve** and **reopen** for author points. **Dismiss** is available only
-in reviewer mode. Earlier personal dismissals do not hide points or count as resolutions in
-self-review.
+**Dismiss** is available to every reader, the author too. It collapses the point on your own page
+only. It does not resolve the point: reviewers still see it, and the self-review note still counts
+it. To resolve a point you dismissed, **restore** it first.
 
 A resolution is written into the canvas itself:
 
-- The point leaves every reader's list. The overview lists it under **N resolved by the author**
-  with its reason and, when posted, a link to the comment.
+- The point leaves every reader's open list and collapses where it is, with the author's reason
+  and, when posted, a link to the comment. A reason posted as a comment does not mark the point
+  posted, so a reopened point is open again.
 - The canvas comment is shared again at once, with the new counts. Reviewers click **refresh** to
   load it. The author's Conversation card updates immediately and stays current after reload.
   When sharing fails, the resolution stays in your local canvas and the message says why.
   With [`canvasComment` off](#turning-sharing-off), nothing is shared and reviewers do not see it.
-- **reopen** in that list takes a resolution back and shares the canvas again. A posted comment
+- **reopen** on the expanded point takes a resolution back and shares the canvas again. A posted comment
   stays on the forge.
 - Regenerating the canvas for the same commit keeps each resolution whose point comes back with the
-  same kind, path, and title and is still an author point. An
-  [incremental canvas](#incremental-canvases) keeps the resolutions of the author points it
-  carries.
+  same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the
+  resolutions of the points it carries.
+- When you tell AI Chat how you decided a point, it can propose a resolution instead of a comment:
+  a **proposed resolution** card names the point and the reason. **resolve** saves that reason as
+  it stands and does not post it as a comment; **edit** opens the point's own reason box with it,
+  where you can change it and choose to post it. The card offers these where the point itself
+  offers **resolve**: on a resolved point it says so, and on a dismissed one it asks you to restore
+  the point first. AI Chat proposes this only to a reader who may resolve: the author, on the
+  canvas of the current head. A thread learns this from its first message, and again when it
+  changes, as when a push leaves the canvas outdated. The page shows the card only to that reader
+  and only for a point of this canvas.
 
-Only the author can resolve, and only author points: the server refuses anyone else with
-`NOT_AUTHOR`, and a reviewer point with `BAD_REQUEST`. An outdated canvas offers no **resolve**:
+Only the author can resolve: the server refuses anyone else with `NOT_AUTHOR`. An outdated canvas
+offers no **resolve**:
 regenerate it for the current head first.
 
 ### Comments and sign-off
@@ -699,8 +810,9 @@ A pending review holds comments on your machine until you submit them together.
   publishes ahead of the review. Replies and pull-request comments are not part of a forge review,
   so they still post at once.
 - An attention point keeps both **post to github** and **add to review**, since its text is written
-  in advance. A point in the review shows **in your review**; edit or remove it as the draft on its
-  line. After submission, the point shows the comment it became.
+  in advance. A point in the review collapses with **in your review**. Edit or delete its draft on the
+  expanded point in its layer, on its line, or in the review tab. After submission, the point collapses with
+  the comment it became.
 - A comment the AI Chat proposes works the same way: it offers **post to github** and **add to
   review**, and shows **in your review** once it is queued. After submission it shows **view
   comment** when the comment link is known, or **submitted** when the receipt could not be loaded.
@@ -711,13 +823,28 @@ A pending review holds comments on your machine until you submit them together.
   other turns share the same status. The fingerprint follows its draft and identifies the posted
   comment, so its link survives draft edits, GitHub edits, and later commits moving the lines.
   Delayed receipts and older records use GitHub's complete original range to find the comment.
+- AI Chat can tie a proposed comment to an attention point when the comment acts on it, for
+  example when it answers what the point asks you to decide. The card then says **about the
+  point "…"**. AI Chat decides this from the conversation: the context chip names where the talk
+  started, so when it has moved to another topic, the comment is not tied even if the chip still
+  names a point. The page ties a comment only to a point of this canvas. **unlink** on the card
+  takes the tie off before you send the comment. A tied comment acts on its point like the point's
+  own text: once you add it to the review, the point collapses as **in your review** and lists it
+  among its drafts, even when it sits on another line; once it is posted, the point shows
+  **posted**. The review tab says **proposed by AI Chat about the point "…"**.
 - A bar under the progress line shows how many drafts are waiting. Each draft appears on its line
   with a **pending** badge and edit and delete commands. Drafts are saved in the local review state
   and survive a reload. **discard** drops the whole review; nothing was sent to the forge.
-- Drafts from an earlier commit are listed separately in the bar with their original location and
-  commit. They are submitted only when the stored diff is identical to the current one and
-  `canvas.keepForIdenticalDiff` is on. Otherwise, copy the text, delete the draft, and comment on
-  the current code.
+- **see the list** in the bar opens the **Your review** tab of the side pane, next to **AI Chat**.
+  The tab lists the drafts of the current commit by file. Each draft shows its lines, where it
+  came from (an attention point, AI Chat, or you), and the same **edit** and **delete** commands.
+  The tab also has **finish your review** and **discard**. Its count shows how many drafts wait.
+  With AI Chat off, the pane holds the review alone. It stays minimized until you open it, and its
+  launcher shows only while drafts wait.
+- Drafts from an earlier commit are listed after them in the tab, with their original location,
+  commit, origin, and **copy** and **delete** commands; the bar counts them. They are submitted
+  only when the stored diff is identical to the current one and `canvas.keepForIdenticalDiff` is
+  on. Otherwise, copy the text, delete the draft, and comment on the current code.
 - A draft added or edited during submission stays pending.
 
 **finish your review** opens the sign-off dialog, which shows how many drafts go out with the
@@ -737,6 +864,10 @@ review with no verdict. Each opens a
 dialog previewing an editable review body summarizing reviewed layers, dismissed attention points,
 and comments posted from the canvas, so an approval or a rejection always carries a comment.
 With `sharing.mentionCanvas` off, the dialog opens with an empty body for you to write.
+
+Once the review is posted, the dialog closes and a message links to the review on the forge; the
+page already shows what it changed. When the forge answered with a warning, such as comments it
+could not load back, the dialog stays open with it.
 
 Approval requires every layer except **Other changes** to be reviewed for the current head.
 Requesting changes and a comment-only review do not require that completion. On GitLab,
@@ -794,10 +925,18 @@ text, shown by the head diff with the same `+`, `-`, or context marker as before
 only moved up or down. `prepare` finds the block by a line-by-line match of the file's two versions
 on the point's side, and the prompt gives the lines the point now sits on.
 
+A carried point's body is copied word for word, so it must still be true of every file it links
+to. A point the generator wrote whose body links to a file the head changed or dropped, with a
+`#file:`, `#hunk:`, or `#line:` link, is decided again wherever it sits. A `#layer:` link does not
+count. A missing-test point is rebuilt from its layer's tests entry instead, so it follows that
+entry. The generator also checks each carried point against the changed chunks. When a chunk
+contradicts the point, for example a new call to a function the point says nothing calls, the
+generator drops it or rewrites it under a new title, and the new title starts it unresolved.
+
 Everything else is decided again. The summary and risk tags are always rewritten. A carried
 attention point keeps its kind, path, and title, so it keeps its fingerprint and any dismissal.
 The author's resolution of a carried point follows it into the new canvas; a point that is decided
-again comes back unresolved, because its code changed.
+again comes back unresolved, because its code or the code it links to changed.
 Review marks do not follow a point: they follow files and layers, by the rules below.
 
 The canvas records only which basis it came from. Your server decides which review marks follow,
@@ -1034,18 +1173,20 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   review progress, and chat history go with it. They also appear in `git worktree list`.
 - If the checkout cannot be created or moved, the turn reads your checkout instead and the answer
   carries a warning naming your branch, also when the thread is reopened later.
-- Every worktree of one clone shares the checkouts. While one `pr-review serve` answers about a
-  review, a turn on the same review from another is refused with `CHAT_BUSY`; ask again once the
-  first answer is done.
+- Every worktree of one clone shares the checkouts folder. A pull request has one checkout for all
+  of them: while one worktree's project answers about it, a turn on the same pull request from
+  another worktree, or from a second `pr-review serve`, is refused with `CHAT_BUSY`; ask again once
+  the first answer is done. A linked worktree's branch review has a checkout of its own
+  (`checkouts/branch~<worktree>`).
 
 Merge-base checkouts that tours take are listed and removed with the others.
 
-`serve` removes checkouts with no chat turn for `checkoutIdleDays`, at startup and every
-`checkoutSweepMinutes`. On the same runs it removes the merge-base checkout of a pull request
-that has been merged or closed, whatever its age: only a tour's generator used it. It reads each
-one's state from the host; a state it cannot read leaves the checkout for the next run. The head
-checkout of a merged pull request stays to the idle rule, since AI Chat still reads it.
-`pr-review clean` removes idle checkouts on demand:
+The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
+clone and every `checkoutSweepMinutes` after. On the same runs it removes the merge-base checkout
+of a pull request that has been merged or closed, whatever its age: only a tour's generator used
+it. It reads each one's state from the host; a state it cannot read leaves the checkout for the
+next run. The head checkout of a merged pull request stays to the idle rule, since AI Chat still
+reads it. `pr-review clean` removes idle checkouts on demand:
 
 ```text
 pr-review clean [--all | --older-than <days>] [--dry-run]
@@ -1056,10 +1197,121 @@ Cleanup never touches canvases or review state. The **Checkouts** tab of the set
 lists the current checkouts and edits these settings. Set `checkoutEnabled: false` to read your
 own checkout, as before review checkouts existed.
 
+## Generating from the review app
+
+When `acpx` and the chat agent are installed, the review app can generate a canvas itself, so you
+do not have to run the skill in Claude Code or Codex:
+
+- **generate canvas** on the screen of a PR, MR, or local review with no canvas starts the first
+  generation. The home page has a **generate canvas** button beside **open**, a **generate** link
+  next to each recent PR with no canvas, and links for the branch and uncommitted reviews.
+- **generate for current head** on an outdated canvas updates it as an
+  [incremental canvas](#incremental-canvases). Tick **Start from a blank page** to start over, as
+  `--force` does.
+- The header has one generate command, named for what it does on the screen: **generate** when
+  there is no canvas, **update** on an outdated canvas, and **regenerate** on a current one, which
+  writes it again from a blank page.
+
+The dialog names the agent and says whether publishing shares the canvas on the PR or MR. Click
+**start**. When publishing would share it, the server first checks that `gh` or `glab` is logged
+in with an account that can comment, and refuses with what to do, so no agent time goes into a
+canvas that could not be shared. A token whose rights cannot be read, such as a fine-grained or
+app token, is let through, and the host decides at publish time. Local reviews, and sharing
+turned off, need no login.
+
+One generation runs at a time across the worktrees of a clone; projects of other clones run their
+own. The job runs in the server, so you can close the dialog
+or reload the page; while it runs, the header command reads **generating** with the elapsed time
+and opens the dialog again.
+The dialog shows the phase, the latest tool calls of the agent, and any validation issues. It
+says when the agent is automatically correcting them and hides them once the canvas is published.
+Issues remain visible if generation fails or is stopped. While the agent works, a line says what
+it is doing (waiting to start, thinking, writing the answer with its length so far, or running a
+tool) and how long ago it last showed it was working, so a long stretch with no tool call does not
+look stuck. After three minutes with nothing from the agent, the dialog says it may be stuck.
+**stop** cancels the agent. When the canvas is published, the page loads it.
+
+The agent follows the project's own copy of the `pr-review-canvas` skill, so a project that
+tailored its skill gets the canvas it would get from a terminal: `.claude/skills/pr-review-canvas`
+for Claude and `.agents/skills/pr-review-canvas` for Codex, the other harness's copy when the
+agent's own is missing, and the skill your pr-review ships when the project has none. The start
+screen and the run's status say which, and whether the project's copy was edited or was installed
+by a different pr-review version (`pr-review upgrade` refreshes it). The skill's text goes to the
+agent ahead of the task prepare wrote; the steps the server does itself (prepare, the model
+choice, writing `model.json`, validate, and publish) are named in the prompt as done by the
+server, so a step a project added to its skill that writes a file or runs a command does not run
+from the review app.
+
+The server runs the same `prepare` and `publish` as the skill, with the chat agent from
+**settings** and the model that [`generation.models`](#project-config) names for that agent. The
+agent runs with the same flags as AI Chat: acpx approves reads and denies every other permission
+request, and the agent is told to write nothing. The agent's own rules still decide what needs a
+request: Claude Code, for example, runs shell commands it counts as read-only, such as `grep`,
+without asking. See [network access and permissions](#network-access-and-permissions). The agent reads
+code from the [review checkout](#review-checkouts) at the head, or your working tree for the
+uncommitted review, and answers with the model JSON. The server writes `model.json`, applies
+the fixes of `validate --fix`, publishes, and sends the problems back to the agent, up to
+`maxRepairRounds` times. While a generation holds a review's checkout, chat turns on that review
+answer `CHAT_BUSY`. Each agent turn can run for 30 minutes.
+
+With `chat.enabled: false`, or without `acpx`, the review app shows the skill command to copy
+instead.
+
+### Generating from the terminal
+
+`pr-review generate` starts the same generation from a terminal, with no skill installed:
+
+```text
+pr-review generate [<n>|branch|uncommitted] [--force] [--base <ref>]
+                   [--agent claude|codex] [--model <id>] [--out <file|dir>] [--open] [--json]
+```
+
+- Without a review, it generates for the open PR or MR of the current branch, found as
+  [`open`](#one-server-for-every-project) finds it. When the branch has none, it fails and asks
+  for a number, `branch`, or `uncommitted`.
+- It needs what the review app needs (`acpx`, the agent, and `chat.enabled`) and a running server
+  (`pr-review serve`). Like `open`, it adds the checkout to the server with the shell's
+  environment, then starts the job there. Unlike `open`, it keeps the flags the project was opened
+  with, such as `--chat-agent` and `--data-dir`, unless you pass `--data-dir`. The job is the one
+  the review page shows: one runs at a time across the worktrees of a clone, and a second fails
+  with `GENERATION_BUSY`.
+- `--force` starts from a blank page, as **Start from a blank page** does. Without it, an
+  outdated canvas is updated as an [incremental canvas](#incremental-canvases).
+- `--base <ref>` compares the `branch` or `uncommitted` review against another ref, as
+  `prepare --base` does. A PR or MR has its own base, so `--base` with a number is a usage error.
+- `--agent` and `--model` choose the agent and the model for this run only. Without them, the run
+  uses the chat agent from **settings** and the model that `generation.models` names for it.
+  The server reads a `--model` ID as it reads the one in `generation.models`.
+- `--out <file|dir>` keeps the canvas off the PR or MR for this run, whatever the
+  [sharing settings](#turning-sharing-off) say, and writes the canvas zip there. A path that ends in
+  `.zip`, or that is not a folder, is the file; a folder gets the zip under its own name. Send the
+  file to a reviewer, who loads it with [`pr-review import`](#export-and-import-options). The
+  canvas is also published locally, so its review page works on your machine. This holds for the
+  run only: [resolving](#self-review) a point on the review page later shares the canvas, unless
+  sharing is off.
+- `--open` opens the review in the browser when the canvas is published, except when `CI` is set.
+
+The command waits for the job to end and writes each phase to stderr: preparing, the review
+checkout, the agent writing, publishing, and each repair attempt with the number of problems.
+**Ctrl+C** stops the wait, not the job: the job runs in the server, and you stop it from the
+review page.
+
+At a terminal, it prints the review URL and what publishing did with the canvas: the comment link,
+`kept local` when sharing is off, the path of the fallback zip when sharing failed, or the path of
+the `--out` zip. With `--json`, or on a pipe, it prints one line:
+`{ status, review, headSha, url, agent, model, attempts, sharing, zipPath? }`. A job that fails
+reports its error and exits as any other failure does (see
+[output and exit codes](#output-and-exit-codes)): `5` with `MODEL_INVALID` after publish rejected
+the model on every repair attempt, with the problems of the last attempt on stderr, and `4` when
+`gh` or `glab` is missing or logged out.
+
 ## Network access and permissions
 
 The server binds to `127.0.0.1` and rejects browser writes from other origins. It is intended for
-local use with your GitHub or GitLab login.
+local use with your GitHub or GitLab login. One server serves every project you open with
+`pr-review open`, so any page it serves can read the review data of each of them. Projects are
+added only by a command that can read `~/.pr-review/server.json`, which is readable by its owner
+only; the browser cannot add one.
 
 Publishing sends the canvas as a PR/MR comment. Host requests also fetch PR or MR data and
 attachments and submit the comments or reviews you choose to
@@ -1072,34 +1324,38 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 
 ## Troubleshooting
 
-| Symptom or code                         | Next step                                                                                                                                             |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NOT_A_REPO`                            | Run inside a Git clone or pass `--repo <dir>`                                                                                                         |
-| `NO_ORIGIN`                             | Check that `origin` points to github.com or GitLab; for self-hosted GitLab set `PR_REVIEW_HOST=gitlab`                                                |
-| `GH_MISSING` / `GH_UNAUTHENTICATED`     | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server              |
-| `GITHUB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                                      |
-| `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server |
-| `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                      |
-| `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                      |
-| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                  |
-| `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                            |
-| `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                          |
-| `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own              |
-| `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                           |
-| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                               |
-| `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                  |
-| `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                               |
-| `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                             |
-| `CHAT_BUSY`                             | Wait for the running reply or press **stop**; when another `pr-review serve` holds the review checkout, ask again once its answer is done             |
-| `CHECKOUT_BUSY`                         | A chat answer holds the review checkout `tour checkout` needs; run it again once the answer is done                                                   |
-| `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                  |
-| `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                               |
-| `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                        |
-| `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                          |
-| `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                               |
-| `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                               |
-| `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                  |
-| `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                              |
+| Symptom or code                         | Next step                                                                                                                                                                                               |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_A_REPO`                            | Run inside a Git clone or pass `--repo <dir>`                                                                                                                                                           |
+| `NO_ORIGIN`                             | Check that `origin` points to github.com or GitLab; for self-hosted GitLab set `PR_REVIEW_HOST=gitlab`                                                                                                  |
+| `GH_MISSING` / `GH_UNAUTHENTICATED`     | Install [GitHub CLI](https://cli.github.com), run `gh auth login`, and check authentication in the same environment that runs the server                                                                |
+| `GITHUB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitHub service problems                                                                                                        |
+| `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server                                                   |
+| `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                                                                        |
+| `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                                                                        |
+| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                                                                    |
+| `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                                                                              |
+| `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                                                                            |
+| `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                                                                |
+| `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                                                                             |
+| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                                                                 |
+| `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                                                                    |
+| `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |
+| `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                                                               |
+| `CHAT_BUSY`                             | Wait for the running reply, or press **stop** on the page that asked; when a canvas generation, another worktree of the clone, or another `pr-review serve` holds the review, ask again once it is done |
+| `CHECKOUT_BUSY`                         | A chat answer or a canvas generation holds the review checkout `tour checkout` needs; run it again once it is done                                                                                      |
+| `GENERATION_BUSY`                       | One generation runs at a time; open the running one from its review page to follow or stop it, then start again                                                                                         |
+| `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                                                                    |
+| `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                                                                    |
+| `AGENT_MISSING` or missing chat pane    | Check `chat.enabled` and confirm the server can find `acpx` and the selected agent; run `pr-review doctor --all-checks`                                                                                 |
+| `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                                                                          |
+| `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                                                                            |
+| `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                                                                                 |
+| `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                                                                                 |
+| `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                                                                    |
+| `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                                                                |
+| `SERVER_NOT_RUNNING`                    | Start the server with `pr-review serve` in any terminal, then run `pr-review open` again                                                                                                                |
+| `SERVER_TOKEN_INVALID`                  | Run the command as the user who started the server, or restart it so `~/.pr-review/server.json` is written again                                                                                        |
 
 ### Validation diagnostics
 

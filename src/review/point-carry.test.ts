@@ -24,8 +24,10 @@ const point: Point = {
   origin: 'model',
 }
 const delta = { changed: ['a.ts'], unchanged: [], added: [], removed: [] }
-const basis = { sha: 'before', derived: { files: [file], patches: { a_ts: patch } } }
-const head = { ...basis, sha: 'after' }
+const BEFORE = { headSha: 'before', mergeBaseSha: 'base' }
+const AFTER = { headSha: 'after', mergeBaseSha: 'base' }
+const basis = { diff: BEFORE, derived: { files: [file], patches: { a_ts: patch } } }
+const head = { ...basis, diff: AFTER }
 
 it('re-judges when an imported basis is missing files, patches, or materialized text', async () => {
   const readLines = vi.fn(async () => ['same', 'stable'])
@@ -42,7 +44,7 @@ it('re-judges when an imported basis is missing files, patches, or materialized 
   )
   expect(
     await carriedPointLines(
-      { readLines: async sha => (sha === 'before' ? ['same', 'stable'] : null) },
+      { readLines: async diff => (diff === BEFORE ? ['same', 'stable'] : null) },
       [point],
       delta,
       basis,
@@ -67,8 +69,8 @@ it('reads a deleted-side point using the old path of a renamed file', async () =
   const result = await carriedPointLines({ readLines }, [old], delta, basis, renamed)
   expect(result.get(old)).toEqual({ side: 'old', line: 1, endLine: 1 })
   expect(readLines.mock.calls).toEqual([
-    ['before', 'base', 'a.ts', 1, Number.MAX_SAFE_INTEGER],
-    ['after', 'base', 'old.ts', 1, Number.MAX_SAFE_INTEGER],
+    [BEFORE, 'base', 'a.ts', 1, Number.MAX_SAFE_INTEGER],
+    [AFTER, 'base', 'old.ts', 1, Number.MAX_SAFE_INTEGER],
   ])
 })
 

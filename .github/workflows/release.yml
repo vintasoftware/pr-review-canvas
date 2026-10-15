@@ -24,6 +24,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -66,6 +67,18 @@ jobs:
         env:
           DIST_TAG: ${{ steps.version.outputs.dist-tag }}
         run: npm publish "$RELEASE_ARCHIVE" --ignore-scripts --provenance --access public --tag "$DIST_TAG"
+
+      # GitHub Packages has no provenance support. The CLI --registry flag overrides publishConfig.registry,
+      # and the throwaway userconfig keeps the token away from the npmjs publish above.
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'push'
+        env:
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/github-packages.npmrc
+        run: |
+          echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$NPM_CONFIG_USERCONFIG"
+          npm publish "$RELEASE_ARCHIVE" --ignore-scripts --registry https://npm.pkg.github.com --tag "$DIST_TAG"
 
       - name: Create GitHub release
         if: github.event_name == 'push'

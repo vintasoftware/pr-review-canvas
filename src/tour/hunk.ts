@@ -4,7 +4,8 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { TourContext } from '../contract/tour.js'
-import { type ParsedHunk, splitHunks } from '../git/patch-lines.js'
+import { splitHunks } from '../git/patch-lines.js'
+import type { ParsedHunk } from '../../static/js/hunks.js'
 
 export interface ChunkRange {
   /** First new-side line kept. */

@@ -143,6 +143,12 @@ export interface TourBootstrap {
   key: ReviewKey
   owner: string
   repo: string
+  /** Where the project's pages and API live on the server, with a trailing slash. */
+  base: string
+  /** The project's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
+  project: string
+  /** The checkout's folder when the project runs under the server's environment, not the shell's. */
+  reopenIn?: string
   version: string
   host: PublicHost
   preview: boolean

@@ -52,10 +52,14 @@ export type CommentsPayload = z.infer<typeof CommentsPayloadSchema>
 export const COMMENT_BODY_MAX = 65536
 
 const BodySchema = z.string().min(1).max(COMMENT_BODY_MAX)
-const HeadShaSchema = z
-  .string()
-  .regex(/^[0-9a-f]{40}$/)
-  .optional()
+const ShaSchema = z.string().regex(/^[0-9a-f]{40}$/)
+
+/**
+ * The diff the page was showing: the head, and the merge base its diff ran from. The server
+ * refuses a write once the pull request moved to another head or another base, so it never lands
+ * on code the reader did not see. Either may be absent, from a page of an older tool version.
+ */
+export const PageDiffShape = { headSha: ShaSchema.optional(), mergeBaseSha: ShaSchema.optional() }
 
 /** What the page sends to `POST /api/prs/:n/comments`. */
 export const PostCommentInputSchema = z.discriminatedUnion('kind', [
@@ -69,16 +73,15 @@ export const PostCommentInputSchema = z.discriminatedUnion('kind', [
     /** Set when the comment comes from an attention point, so the sign-off body can name it. */
     pointFingerprint: z.string().min(1).optional(),
     proposalFingerprint: z.string().min(1).max(300).optional(),
-    /** The commit the page was showing. The server refuses the post when the head moved on. */
-    headSha: HeadShaSchema,
+    ...PageDiffShape,
   }),
   z.object({
     kind: z.literal('reply'),
     inReplyToId: z.number().int().positive(),
     body: BodySchema,
-    headSha: HeadShaSchema,
+    ...PageDiffShape,
   }),
-  z.object({ kind: z.literal('issue'), body: BodySchema, headSha: HeadShaSchema }),
+  z.object({ kind: z.literal('issue'), body: BodySchema, ...PageDiffShape }),
 ])
 export type PostCommentInput = z.infer<typeof PostCommentInputSchema>
 

@@ -34,15 +34,14 @@ import {
   readContext,
   validationInput,
 } from './review/publish.js'
-import { applyFoldFixes, describeFoldFix, type FoldFix } from './review/fix-folds.js'
 import { formatTourError } from './contract/tour.js'
+import { describeFixes, fixModel } from './review/fix-model.js'
 import { namedTourDir } from './tour/named-dir.js'
 import { TourInvalidError } from './tour/publish.js'
-import { applyTitleTrims, type TitleTrim } from './review/trim-caps.js'
 import { validateModelOutput } from './review/validate.js'
 import type { AppContext } from './server/context.js'
 import { AppError, CLI_SETUP_CODES, toAppError } from './server/errors.js'
-import { readText, writeTextAtomic } from './store/atomic-json.js'
+import { readText } from './store/atomic-json.js'
 
 export interface CliIo {
   stdout(line: string): void
@@ -148,6 +147,9 @@ export function reportFailure(io: CliIo, err: unknown): number {
   }
   const appErr = toAppError(err)
   printErrorEnvelope(io, appErr.code, appErr.message, appErr.hint)
+  if (appErr.code === 'MODEL_INVALID') {
+    return EXIT.invalid
+  }
   return CLI_SETUP_CODES.has(appErr.code) ? EXIT.gh : EXIT.error
 }
 
@@ -312,25 +314,19 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
   }
   const fixed =
     values.fix === true
-      ? await fixModel(
-          path.resolve(file),
-          text,
-          context,
-          (await ctx.derived.ensure(context.headSha, context.mergeBaseSha)).patches
-        )
+      ? await fixModel(path.resolve(file), text, context, (await ctx.derived.ensure(context)).patches)
       : { text, trims: [], folds: [] }
   const report = await validateFile(ctx, parseModelText(fixed.text, path.basename(file)), context)
   if (values.human !== true) {
     printJson(io, values.fix === true ? { ...report, fixed: [...fixed.folds, ...fixed.trims] } : report)
     return report.ok ? EXIT.ok : EXIT.invalid
   }
-  for (const fold of fixed.folds) {
-    io.stdout(`fixed ${fold.where}: ${describeFoldFix(fold)}`)
+  // The fixes in the words the generation in the review app hands its agent, then what is left.
+  for (const line of describeFixes(fixed)) {
+    io.stdout(`fixed ${line}`)
   }
   for (const trim of fixed.trims) {
-    if (trim.outcome === 'fixed') {
-      io.stdout(`fixed ${trim.where}: "${trim.from}" -> "${trim.to}"`)
-    } else {
+    if (trim.outcome === 'unfixable') {
       io.stdout(
         `unfixable ${trim.where}: ${trim.length} visible chars, cap ${trim.cap}, ${trim.reason}; rewrite by hand`
       )
@@ -344,38 +340,6 @@ export async function runValidate(ctx: AppContext, argv: string[], io: CliIo): P
     }
   }
   return report.ok ? EXIT.ok : EXIT.invalid
-}
-
-/**
- * Trims the over-cap titles of a model file, repairs its mechanically broken folds, and writes it
- * back. Returns the text to validate, unchanged when nothing needed fixing, so a file that is
- * already fine is never rewritten. A stored review.json keeps the folds it was published with.
- */
-async function fixModel(
-  file: string,
-  text: string,
-  context: GenerationContext,
-  patches: Readonly<Record<string, string>>
-): Promise<{ text: string; trims: TitleTrim[]; folds: FoldFix[] }> {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    // An unparseable file has nothing to fix; the validator reports the syntax error.
-    return { text, trims: [], folds: [] }
-  }
-  // Folds first, so every reported path, a trimmed fold title's included, is one into the file
-  // as written back.
-  const folds = ReviewArtifactSchema.safeParse(parsed).success
-    ? []
-    : applyFoldFixes(parsed, context.files, patches)
-  const trims = applyTitleTrims(parsed, context.caps)
-  if (!trims.some(trim => trim.outcome === 'fixed') && folds.length === 0) {
-    return { text, trims, folds }
-  }
-  const next = `${JSON.stringify(parsed, null, 2)}\n`
-  await writeTextAtomic(file, next)
-  return { text: next, trims, folds }
 }
 
 function parseHarness(raw: string | undefined): (typeof HARNESSES)[number] {
@@ -631,13 +595,14 @@ export function describeImport(result: ImportResult): string {
   if (result.status === 'ready') {
     return `Imported the canvas for ${canvas}.`
   }
+  if (result.relation === 'other-base') {
+    return `Imported the canvas for ${canvas}, diffed from ${shortSha(result.canvasMergeBaseSha)}, but the pull request changed its base and the diff now runs from ${shortSha(result.currentMergeBaseSha)}. The canvas is stale.`
+  }
   const head = shortSha(result.currentHeadSha)
   const behind =
-    result.relation === 'ancestor' && result.commitsBehind !== undefined
+    result.relation === 'ancestor'
       ? `, ${plural(result.commitsBehind, 'commit')} ahead of it`
-      : result.relation === 'unrelated'
-        ? ', which does not contain it'
-        : ''
+      : ', which does not contain it'
   return `Imported the canvas for ${canvas}, but the head is now ${head}${behind}. The canvas is stale.`
 }
 
@@ -682,12 +647,13 @@ export async function runClean(ctx: AppContext, argv: string[], io: CliIo): Prom
   const dryRun = values['dry-run'] === true
   if (io.json) {
     const brief = (list: CheckoutInfo[]) =>
-      list.map(({ key, sha, lastUsedAt, dir }) => ({ key, sha, lastUsedAt, dir }))
+      list.map(({ key, worktree, sha, lastUsedAt, dir }) => ({ key, worktree, sha, lastUsedAt, dir }))
     printJson(io, { removed: brief(result.removed), skipped: brief(result.skipped), dryRun })
     return EXIT.ok
   }
-  const checkoutLine = ({ key, sha, lastUsedAt, dir }: CheckoutInfo) =>
-    `  ${typeof key === 'number' ? `#${key}` : key} at ${shortSha(sha)}, last used ${lastUsedAt}: ${dir}`
+  // A linked worktree's branch review is named by its folder, `branch~<worktree>`.
+  const checkoutLine = ({ key, folder, sha, lastUsedAt, dir }: CheckoutInfo) =>
+    `  ${typeof key === 'number' ? `#${key}` : folder} at ${shortSha(sha)}, last used ${lastUsedAt}: ${dir}`
   if (result.removed.length === 0) {
     io.stdout('No review checkouts to remove.')
   } else {

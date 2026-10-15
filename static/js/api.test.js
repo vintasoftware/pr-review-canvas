@@ -449,6 +449,9 @@ it('pins reviewed-state writes to the selected canvas commit', async () => {
   const f = fakeFetch(200, {})
   await putReviewed(42, 'layer:1', true, { headSha: 'abc123', fetchImpl: f.impl })
   expect(JSON.parse(String(f.calls[0]?.init?.body))).toEqual({ reviewed: true, headSha: 'abc123' })
+  const diff = { mergeBaseSha: 'b'.repeat(40), canvasSha: 'c'.repeat(40), canvasMergeBaseSha: 'd'.repeat(40) }
+  await putReviewed(42, 'layer:1', true, { headSha: 'abc123', ...diff, fetchImpl: f.impl })
+  expect(JSON.parse(String(f.calls[1]?.init?.body))).toEqual({ reviewed: true, headSha: 'abc123', ...diff })
 })
 
 it('streams chat using the browser fetch when no override is supplied', async () => {

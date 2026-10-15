@@ -1,9 +1,11 @@
 ---
 name: thermo-nuclear-review-loop
 description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer explicitly approves it under a strict code-quality standard. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without growing defensive code.
+metadata:
+  version: "3"
 ---
 
-# Thermo-Nuclear Review Loop v2
+# Thermo-Nuclear Review Loop v3
 
 You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, independently verify its findings, fix the justified ones, and repeat until it explicitly approves. There is no separate fixer agent.
 
@@ -23,7 +25,7 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
 **Model**: an Opus-like model, meaning the highest or second-highest model on the default plan for that agent (Claude: Opus; Codex: the top or second reasoning model). Name the tier, never a specific model id.
 
-**Reasoning effort**: use `high` or lower throughout the loop. Explicitly configure the reviewer at `high` or lower when spawning a subagent or starting a cross-host session, including when the host uses a higher effort setting.
+**Reasoning effort**: a Claude reviewer runs at its highest effort. A Codex reviewer runs at `high` or lower throughout the loop; configure that explicitly when spawning a subagent or starting a cross-host session, including when the host uses a higher effort setting.
 
 **Host**: when the reviewer runs on the same agent as the host, spawn a subagent with a stable name (`tnr-reviewer`) and keep it for the whole loop so later passes reuse its context. When the reviewer runs on a different agent, use `acpx` with a named persistent session (see Host notes). The user chooses; default to the same host.
 
@@ -33,7 +35,9 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
 Prompt template:
 
-> Read `<REVIEW.md or Review Standard path/paste>` and apply it to `<resolved scope>` in the current working tree, compared against `<baseline>`. The stated requirement is: `<original request verbatim, or "none recorded">`. Be ambitious about structural simplification and code-judo opportunities. Verify every claim against code, history, tests, and repository instructions; behavior claims need a file:line citation, not an inference from naming. Do not edit. Return concrete blockers with evidence and remedies, or explicitly approve if the implementation meets the standard.
+> Read `<REVIEW.md or Review Standard path/paste>` and apply it to `<resolved scope>` in the current working tree, compared against `<baseline>`. The stated requirement is: `<original request verbatim, or "none recorded">`. Be ambitious about structural simplification and code-judo opportunities. Verify every claim against code, history, tests, and repository instructions; behavior claims need a file:line citation, not an inference from naming. Do not edit. Return concrete blockers with evidence and remedies, or explicitly approve if the implementation meets the standard. Open your reply with a line naming the standard you applied (`REVIEW.md` or `Review Standard`) and quoting its first and last lines verbatim.
+
+Check that the verdict's opening line names the right standard and quotes lines that exist in it. A verdict without that line means the reviewer did not read the standard: ask it to read the standard and resend before acting on any finding.
 
 Wait for the verdict; the loop cannot proceed without it. If the verdict does not arrive as a message, check your inbox and ask the reviewer to resend before doing anything else.
 

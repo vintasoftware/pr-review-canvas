@@ -9,7 +9,7 @@ import {
 } from '../contract/comments.js'
 import { type DiscoveryCache, DiscoveryCacheSchema } from '../contract/discovery.js'
 import { type LocalPrepareTarget, LocalPrepareTargetSchema } from '../contract/generation-context.js'
-import { isLocalKey, keyToString, type LocalKey, type ReviewKey } from '../contract/review-key.js'
+import { isLocalKey, type LocalKey, type ReviewKey, reviewFolder } from '../contract/review-key.js'
 import { type Pr, PrSchema } from '../contract/review-artifact.js'
 import { readJson, readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
 
@@ -37,12 +37,16 @@ export interface PrStore {
   writeLocalTarget(key: LocalKey, target: LocalPrepareTarget): Promise<void>
 }
 
-export function createPrStore(repoRoot: string): PrStore {
+/**
+ * `worktree` is the label of the linked worktree the store serves; null for the main checkout. A
+ * pull request's files are every worktree's; a local review's are its own checkout's.
+ */
+export function createPrStore(repoRoot: string, worktree: string | null): PrStore {
   const prDir = (key: ReviewKey): string => {
     if (!isLocalKey(key) && (!Number.isInteger(key) || key <= 0)) {
       throw new Error(`not a pull request number: ${String(key)}`)
     }
-    return path.join(repoRoot, 'prs', keyToString(key))
+    return path.join(repoRoot, 'prs', reviewFolder(key, worktree))
   }
   const commentsFile = (number: number) => path.join(prDir(number), 'comments.json')
   const readComments = (number: number) => readJson(commentsFile(number), CommentsPayloadSchema)

@@ -108,7 +108,7 @@ export async function prepareTour(
   }
 
   opts.log('collect-diffs')
-  const derived = await ctx.derived.ensure(pr.headSha, pr.mergeBaseSha)
+  const derived = await ctx.derived.ensure(pr)
   const additions = derived.files.reduce((n, f) => n + f.additions, 0)
   const deletions = derived.files.reduce((n, f) => n + f.deletions, 0)
   const blastRadius = blastRadiusOf(derived.files, config.highRisk, matchesGlob)
@@ -119,7 +119,7 @@ export async function prepareTour(
 
   opts.log('prompt')
   const fullPr = await completeTargetPr(ctx, target, pr, derived)
-  const derivedDir = ctx.derived.derivedDir(pr.headSha)
+  const derivedDir = ctx.derived.derivedDir(pr)
   const tryIt = config.tour.tryIt === 'auto' ? guideHasRunRecipe(guideText) : config.tour.tryIt === 'on'
   const context: TourContext = {
     version: 1,

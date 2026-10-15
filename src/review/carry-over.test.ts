@@ -85,6 +85,36 @@ describe('standsForHead and lookupCanvas', () => {
     expect(git.calls).toEqual([])
   })
 
+  it('reads the head from another merge base like any other diff: current only when identical', async () => {
+    const RETARGETED = '9'.repeat(40)
+    const moved = { ...PR, mergeBaseSha: RETARGETED }
+    await context(history(SYNTHETIC_DIFF))
+    Object.assign(git.options.refs ?? {}, { release: RETARGETED })
+    git.options.diffs = { ...git.options.diffs, [`${RETARGETED}..${HEAD_SHA}`]: SYNTHETIC_DIFF_MOVED_BY_BASE }
+    expect(await standsForHead(t.ctx, moved, { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).toBe(false)
+    await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), manifestOf(HEAD_SHA), 42)
+    expect(await lookupCanvas(t.ctx, 42, moved)).toEqual({
+      status: 'stale',
+      headSha: HEAD_SHA,
+      relation: 'other-base',
+      canvasMergeBaseSha: BASE_SHA,
+      currentMergeBaseSha: RETARGETED,
+    })
+    expect(await lookupCanvas(t.ctx, 42, PR)).toEqual({ status: 'ready', headSha: HEAD_SHA })
+    // A new base that leaves the diff byte for byte the same keeps the canvas, as a push would.
+    const SAME_DIFF = '8'.repeat(40)
+    Object.assign(git.options.refs ?? {}, { renamed: SAME_DIFF })
+    git.options.diffs = { ...git.options.diffs, [`${SAME_DIFF}..${HEAD_SHA}`]: SYNTHETIC_DIFF }
+    expect(await lookupCanvas(t.ctx, 42, { ...PR, mergeBaseSha: SAME_DIFF })).toEqual({
+      status: 'ready',
+      headSha: HEAD_SHA,
+    })
+    await t.cleanup()
+    await context(history(SYNTHETIC_DIFF), STRICT)
+    expect(await standsForHead(t.ctx, moved, { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).toBe(false)
+    expect(git.calls).toEqual([])
+  })
+
   it('another commit stands for the head when the diffs are identical, whatever lies between them', async () => {
     await context(history(SYNTHETIC_DIFF))
     expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(true)

@@ -4,6 +4,29 @@
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').PatchesResponse} PatchesResponse */
 
+/**
+ * Where this project's API lives on the server: its base path, with a trailing slash. One server
+ * serves every project under `/r/<project>/`, so each call goes under the page's own project.
+ */
+let apiBase = '/'
+
+/**
+ * Set once from the page's bootstrap, before the first call.
+ * @param {string} base
+ */
+export function setApiBase(base) {
+  apiBase = base
+}
+
+/**
+ * A root path such as `/api/prs/42` under the project's base path.
+ * @param {string} path
+ * @returns {string}
+ */
+export function underBase(path) {
+  return `${apiBase}${path.replace(/^\//, '')}`
+}
+
 /** The server's error envelope as a thrown value. */
 export class ApiError extends Error {
   /**
@@ -69,7 +92,7 @@ export async function fetchJson(url, opts = {}) {
     init.headers = { ...init.headers, 'content-type': 'application/json' }
     init.body = JSON.stringify(opts.body)
   }
-  const res = await doFetch(url, init)
+  const res = await doFetch(underBase(url), init)
   /** @type {unknown} */
   let body = null
   try {
@@ -122,14 +145,16 @@ export function fetchState(prNumber, opts = {}) {
  * @param {ReviewKey} prNumber
  * @param {string} id `layer:<id>` or `layer:<id>/file:<key>`
  * @param {boolean} reviewed
- * @param {{ headSha?: string, canvasSha?: string, fetchImpl?: typeof fetch }} [opts]
+ * @param {{ headSha?: string, mergeBaseSha?: string, canvasSha?: string, canvasMergeBaseSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').StateResponse>}
  */
 export function putReviewed(prNumber, id, reviewed, opts = {}) {
   const body = {
     reviewed,
     ...(opts.headSha === undefined ? {} : { headSha: opts.headSha }),
+    ...(opts.mergeBaseSha === undefined ? {} : { mergeBaseSha: opts.mergeBaseSha }),
     ...(opts.canvasSha === undefined ? {} : { canvasSha: opts.canvasSha }),
+    ...(opts.canvasMergeBaseSha === undefined ? {} : { canvasMergeBaseSha: opts.canvasMergeBaseSha }),
   }
   return fetchJson(`/api/prs/${prNumber}/reviewed/${id}`, {
     method: 'PUT',
@@ -274,7 +299,7 @@ export function fetchReviewBody(prNumber, opts = {}) {
 
 /**
  * @param {ReviewKey} prNumber
- * @param {{ event: import('./contract-types.js').ReviewEvent, body?: string, headSha?: string, includePending?: boolean }} input
+ * @param {{ event: import('./contract-types.js').ReviewEvent, body?: string, headSha?: string, mergeBaseSha?: string, includePending?: boolean }} input
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').PostReviewResponse>}
  */
@@ -367,7 +392,7 @@ export function pollBundle(prNumber, opts = {}) {
 export function uploadForm(url, form, opts = {}) {
   const xhr = opts.xhrImpl ? opts.xhrImpl() : new XMLHttpRequest()
   return new Promise((resolve, reject) => {
-    xhr.open('POST', url)
+    xhr.open('POST', underBase(url))
     xhr.setRequestHeader('accept', 'application/json')
     const onProgress = opts.onProgress
     if (onProgress !== undefined) {
@@ -433,7 +458,9 @@ export function fetchSharedCanvas(prNumber, opts = {}) {
 export async function fetchCanvasZip(prNumber, opts = {}) {
   const doFetch = opts.fetchImpl ?? fetch
   const q = opts.headSha ? `?headSha=${encodeURIComponent(opts.headSha)}` : ''
-  const res = await doFetch(`/api/prs/${prNumber}/export${q}`, { headers: { accept: 'application/zip' } })
+  const res = await doFetch(underBase(`/api/prs/${prNumber}/export${q}`), {
+    headers: { accept: 'application/zip' },
+  })
   if (!res.ok) {
     throw await responseError(res)
   }
@@ -617,7 +644,7 @@ export async function streamEvents(url, input, opts) {
   if (opts.signal !== undefined) {
     init.signal = opts.signal
   }
-  const res = await doFetch(url, init)
+  const res = await doFetch(underBase(url), init)
   if (!res.ok) {
     throw await responseError(res)
   }

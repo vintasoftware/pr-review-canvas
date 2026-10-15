@@ -125,7 +125,7 @@ async function queueChangeRequests(
         proposalFingerprint,
         headSha,
       },
-      headSha
+      { headSha, mergeBaseSha: artifact.mergeBaseSha }
     )
     queued += 1
   }

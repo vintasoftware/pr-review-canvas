@@ -253,6 +253,7 @@ describe('a rendered review screen', () => {
     setRenderContext({
       artifact,
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       files: artifact.files,
       patches: toPatchMap(SYNTHETIC_FILES),
       comments: [],

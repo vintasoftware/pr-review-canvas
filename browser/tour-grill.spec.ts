@@ -49,8 +49,7 @@ test('grills something else through AI Chat, in the tour thread, and approves th
       )
     },
   })
-  const origin = new URL(url).origin
-  await page.goto(`${origin}/tour/42#decision-pipe-means-json`)
+  await page.goto(new URL('../tour/42#decision-pipe-means-json', url).href)
   await page.locator('.tour-option[data-pick="other"]').click()
   const dialog = page.locator('#tour-grill')
   await expect(dialog).toBeVisible()

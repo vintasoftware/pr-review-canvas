@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
@@ -92,7 +92,7 @@ function manifest(): CanvasManifest {
 
 describe('canvas-store', () => {
   it('starts empty and reports missing', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     expect(await store.readIndex()).toEqual({ canvases: {} })
     expect(await store.findForPr(42, HEAD_SHA)).toEqual({ status: 'missing' })
     expect(await store.readArtifact(HEAD_SHA)).toBeNull()
@@ -100,7 +100,7 @@ describe('canvas-store', () => {
   })
 
   it('writes review.json + manifest.json and indexes the canvas by sha', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     const artifact = { ...syntheticArtifact(), importedAt: '2026-09-10T11:30:00.000Z' }
     await store.write(HEAD_SHA, artifact, manifest())
     expect(await store.readArtifact(HEAD_SHA)).toEqual(artifact)
@@ -128,7 +128,7 @@ describe('canvas-store', () => {
   })
 
   it('revises a stored canvas in place, keeping the rest of its index entry, and refuses an unknown one', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     await store.write(HEAD_SHA, syntheticArtifact(), manifest(), 42, { worktree: true })
     const revised = { ...syntheticArtifact(), settled: {}, revisedAt: '2026-09-10T12:00:00.000Z' }
     await store.revise(HEAD_SHA, revised)
@@ -144,7 +144,7 @@ describe('canvas-store', () => {
   })
 
   it('takes the PR number argument over the manifest and omits it when neither has one', async () => {
-    const store = createCanvasStore(dir, createFakeGit())
+    const store = createCanvasStore(dir, createFakeGit(), null)
     await store.write(HEAD_SHA, syntheticArtifact(), manifest(), 7)
     const { prNumber: _ignored, ...noPr } = manifest()
     await store.write(BASE_SHA, syntheticArtifact(), noPr)
@@ -154,11 +154,14 @@ describe('canvas-store', () => {
   })
 
   it('refuses a sha that is not 40 hex chars', () => {
-    expect(() => createCanvasStore(dir, createFakeGit()).canvasDir('../etc')).toThrow(/not a commit sha/)
+    expect(() => createCanvasStore(dir, createFakeGit(), null).canvasDir('../etc')).toThrow(
+      /not a commit sha/
+    )
   })
 })
 
 describe('derived-store', () => {
+  const DIFF = { headSha: HEAD_SHA, mergeBaseSha: BASE_SHA }
   const git = () =>
     createFakeGit({
       refs: { head: HEAD_SHA, base: BASE_SHA },
@@ -168,11 +171,11 @@ describe('derived-store', () => {
 
   it('builds derived/ from git once and serves it from disk after', async () => {
     const g = git()
-    const store = createDerivedStore(createCanvasStore(dir, createFakeGit()), g, now)
-    expect(await store.derivable(HEAD_SHA, BASE_SHA)).toBe(true)
-    expect(await store.derivable(HEAD_SHA, 'c'.repeat(40))).toBe(false)
-    expect(await store.read(HEAD_SHA)).toBeNull()
-    const first = await store.ensure(HEAD_SHA, BASE_SHA)
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), g, now)
+    expect(await store.derivable({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).toBe(true)
+    expect(await store.derivable({ headSha: HEAD_SHA, mergeBaseSha: 'c'.repeat(40) })).toBe(false)
+    expect(await store.read(DIFF)).toBeNull()
+    const first = await store.ensure(DIFF)
     expect(first.files.map(f => f.key)).toEqual([
       'src_app_ts',
       'src_new_ts',
@@ -183,59 +186,92 @@ describe('derived-store', () => {
       'src_app_test_ts',
     ])
     expect(Object.keys(first.patches)).toEqual(first.files.map(f => f.key))
-    const derived = store.derivedDir(HEAD_SHA)
+    const derived = store.derivedDir(DIFF)
     expect(
       (await readFile(path.join(derived, 'patches', 'src_app_ts.diff'), 'utf8')).split('\n').slice(0, 2)
     ).toEqual(['### hunk src_app_ts#1', '@@ -1,4 +1,5 @@'])
     expect((await stat(path.join(derived, 'head', 'src', 'app.ts'))).isFile()).toBe(true)
     expect((await stat(path.join(derived, 'base', 'src', 'gone.ts'))).isFile()).toBe(true)
     const diffCalls = g.calls.filter(c => c[0] === 'diff').length
-    const second = await store.ensure(HEAD_SHA, BASE_SHA)
+    const second = await store.ensure(DIFF)
     expect(second).toEqual(first)
     expect(g.calls.filter(c => c[0] === 'diff').length).toBe(diffCalls)
-    expect(await store.read(HEAD_SHA)).toEqual(first)
+    expect(await store.read(DIFF)).toEqual(first)
     await rm(path.join(derived, 'files.json'))
-    expect(await store.read(HEAD_SHA)).toBeNull()
-    expect(await store.ensure(HEAD_SHA, BASE_SHA)).toEqual(first)
+    expect(await store.read(DIFF)).toBeNull()
+    expect(await store.ensure(DIFF)).toEqual(first)
   })
 
-  it('rebuilds when the merge base changed', async () => {
+  it('adopts the diff an earlier version kept directly in derived/, when the merge base is the one asked for', async () => {
+    const built = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), git(), now)
+    const first = await built.ensure(DIFF)
+    const legacy = path.dirname(built.derivedDir(DIFF))
+    /** Moves the diff back to the layout earlier versions wrote: the same files, directly in derived/. */
+    const toLegacy = async () => {
+      for (const entry of await readdir(built.derivedDir(DIFF))) {
+        await rename(path.join(built.derivedDir(DIFF), entry), path.join(legacy, entry))
+      }
+      await rm(built.derivedDir(DIFF), { recursive: true })
+    }
+    await toLegacy()
+    // The commits are gone from this clone, so the stored copy is the only diff there is.
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), createFakeGit(), now)
+    expect(await store.readOrBuild({ ...DIFF, mergeBaseSha: 'c'.repeat(40) })).toBeNull()
+    expect(await store.readOrBuild(DIFF)).toEqual(first)
+    expect(await store.readLines(DIFF, 'head', 'src/app.ts', 3, 3)).toEqual(['export function run() {'])
+    expect(await readdir(legacy)).toEqual([BASE_SHA])
+    // A diff the clone can build adopts it the same way, without building it again.
+    await toLegacy()
     const g = git()
+    const again = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), g, now)
+    expect(await again.ensure(DIFF)).toEqual(first)
+    expect(g.calls.filter(c => c[0] === 'diff')).toEqual([])
+    expect(await readdir(legacy)).toEqual([BASE_SHA])
+  })
+
+  it('keeps the diff from each merge base apart, so building one never replaces the other', async () => {
+    const g = git()
+    const other = { headSha: HEAD_SHA, mergeBaseSha: 'c'.repeat(40) }
     g.options.diffs = {
       ...g.options.diffs,
-      [`${'c'.repeat(40)}..${HEAD_SHA}`]: SYNTHETIC_DIFF.split('diff --git a/src/new.ts')[0] ?? '',
+      [`${other.mergeBaseSha}..${HEAD_SHA}`]: SYNTHETIC_DIFF.split('diff --git a/src/new.ts')[0] ?? '',
     }
-    const store = createDerivedStore(createCanvasStore(dir, createFakeGit()), g, now)
-    await store.ensure(HEAD_SHA, BASE_SHA)
-    const rebuilt = await store.ensure(HEAD_SHA, 'c'.repeat(40))
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), g, now)
+    const first = await store.ensure(DIFF)
+    const rebuilt = await store.ensure(other)
     expect(rebuilt.files.map(f => f.key)).toEqual(['src_app_ts'])
+    expect(store.derivedDir(other)).not.toBe(store.derivedDir(DIFF))
+    // The first merge base's diff is still on disk, untouched by the second build.
+    expect(await store.read(DIFF)).toEqual(first)
+    expect(await store.read(other)).toEqual(rebuilt)
+    expect(() => store.derivedDir({ headSha: HEAD_SHA, mergeBaseSha: '../x' })).toThrow('not a commit sha')
   })
 
   it('reads lines from materialized files and refuses traversal', async () => {
-    const store = createDerivedStore(createCanvasStore(dir, createFakeGit()), git(), now)
-    await store.ensure(HEAD_SHA, BASE_SHA)
-    expect(await store.readLines(HEAD_SHA, 'head', 'src/app.ts', 3, 4)).toEqual([
+    const store = createDerivedStore(createCanvasStore(dir, createFakeGit(), null), git(), now)
+    await store.ensure(DIFF)
+    expect(await store.readLines(DIFF, 'head', 'src/app.ts', 3, 4)).toEqual([
       'export function run() {',
       '  return a() + b()',
     ])
-    expect(await store.readLines(HEAD_SHA, 'base', 'src/app.ts', 1, 99)).toEqual([
+    expect(await store.readLines(DIFF, 'base', 'src/app.ts', 1, 99)).toEqual([
       "import { a } from './a'",
       'export function run() {',
       '  return a()',
       '}',
     ])
-    expect(await store.readLines(HEAD_SHA, 'base', 'src/gone.ts', 1, 5)).toEqual([
+    expect(await store.readLines(DIFF, 'base', 'src/gone.ts', 1, 5)).toEqual([
       'export const old = 1',
       '// bye',
     ])
-    expect(await store.readLines(HEAD_SHA, 'head', 'src/missing.ts', 1, 2)).toBeNull()
-    expect(await store.readLines(HEAD_SHA, 'head', '../../package.json', 1, 2)).toBeNull()
+    expect(await store.readLines(DIFF, 'head', 'src/missing.ts', 1, 2)).toBeNull()
+    expect(await store.readLines(DIFF, 'head', '../../package.json', 1, 2)).toBeNull()
   })
 })
 
 describe('pr-store and state-store', () => {
   it('caches pr.json and comments.json per PR and lists recent PRs newest first', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     expect(await prs.readPr(42)).toBeNull()
     expect(await prs.readComments(42)).toBeNull()
     expect(await prs.listRecent(5)).toEqual([])
@@ -258,13 +294,13 @@ describe('pr-store and state-store', () => {
   })
 
   it('refuses invalid PR numbers and meta filed under the wrong one', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     expect(() => prs.prDir(0)).toThrow(/not a pull request number/)
     await expect(prs.writePr(7, syntheticArtifact().pr)).rejects.toThrow(/cannot hold the meta of/)
   })
 
   it('files each local review under its own directory, out of the recent list', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     const pr = { ...syntheticArtifact().pr, number: null, title: 'Uncommitted work on feature' }
     for (const key of LOCAL_KEYS) {
       await prs.writePr(key, { ...pr, title: key })
@@ -279,7 +315,7 @@ describe('pr-store and state-store', () => {
   })
 
   it('reads state.json or falls back to defaults for missing, invalid JSON, and old shapes', async () => {
-    const prs = createPrStore(dir)
+    const prs = createPrStore(dir, null)
     const state = createStateStore(prs, now)
     expect(await state.read(42)).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
     const file = path.join(prs.prDir(42), 'state.json')
@@ -301,8 +337,8 @@ describe('pr-store and state-store', () => {
 })
 
 it('merges comments from independent store instances and leaves an absent cache for a full fetch', async () => {
-  const server = createPrStore(dir)
-  const cli = createPrStore(dir)
+  const server = createPrStore(dir, null)
+  const cli = createPrStore(dir, null)
   const comment = {
     id: 6001,
     author: 'octocat',

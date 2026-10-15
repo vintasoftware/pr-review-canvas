@@ -5,7 +5,7 @@
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./contract-types.js').ReviewBodyResponse} ReviewBodyResponse */
 import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
-import { esc } from './dom.js'
+import { esc, externalLink } from './dom.js'
 import { hostLabel } from './host.js'
 import { pendingLabel } from './pending.js'
 import { layerProgress } from './progress.js'
@@ -201,23 +201,6 @@ export function showSignoffResult(dialog, review) {
     result.append(externalLink(review.url, `see it on ${hostLabel()}`))
   }
   return result
-}
-
-/**
- * An anchor built as a node, with an href only when the target is an http(s) address. A link
- * that comes from an API is still untrusted input.
- * @param {string} url
- * @param {string} text
- */
-export function externalLink(url, text) {
-  const a = document.createElement('a')
-  a.textContent = text
-  if (/^https?:\/\//i.test(url)) {
-    a.href = url
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-  }
-  return a
 }
 
 /**

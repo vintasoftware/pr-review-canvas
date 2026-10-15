@@ -328,7 +328,7 @@ describe('importCanvas', () => {
     expect(stored?.source).toBe('import')
     expect(stored?.importedAt).toBe('2026-09-10T12:00:00.000Z')
     expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(42)
-    expect((await t.ctx.derived.read(HEAD_SHA))?.files.length).toBeGreaterThan(0)
+    expect((await t.ctx.derived.read(AT_HEAD))?.files.length).toBeGreaterThan(0)
   })
 
   it('stores a canvas of an earlier commit as current when the head has the identical diff', async () => {
@@ -372,9 +372,8 @@ describe('importCanvas', () => {
       bytes: buildCanvasZip(manifest(), artifact()),
       currentHead: { headSha: 'd'.repeat(40), mergeBaseSha: BASE_SHA },
     })
-    expect(result.status).toBe('stale')
-    expect(result.relation).toBe('unrelated')
-    expect(result.commitsBehind).toBeUndefined()
+    expect(result).toMatchObject({ status: 'stale', relation: 'unrelated' })
+    expect(result).not.toHaveProperty('commitsBehind')
   })
 
   it('keeps the stored canvas when the zip is not newer, and takes it when it is', async () => {

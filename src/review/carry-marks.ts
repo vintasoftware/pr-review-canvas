@@ -6,6 +6,8 @@ import { reviewedId } from '../contract/keys.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import type { PrState } from '../contract/state.js'
 import type { AppContext } from '../server/context.js'
+import type { DiffedCommit } from '../store/derived-store.js'
+import { marksOn } from '../../static/js/diff-identity.js'
 import { fileDelta } from './incremental.js'
 
 function samePaths(a: readonly string[], b: readonly string[]): boolean {
@@ -86,7 +88,9 @@ async function descendsFrom(
 }
 
 /**
- * The marks to show for one canvas. Marks made on it stand. Marks made on a canvas it descends
+ * The marks to show for one canvas, diffed from the merge base it was generated against. Marks made
+ * on it stand; marks made on its commit's canvas of another merge base count for nothing, since the
+ * canvas generated for the new base replaced the one they were made on. Marks made on a canvas it descends
  * from follow it for the parts of the diff those two canvases share, whatever the canvases in
  * between did: a mark says the reviewer read one patch, so the patch they read and the patch on
  * screen are compared directly, and a file the intervening canvases changed and changed back reads
@@ -96,28 +100,33 @@ async function descendsFrom(
 export async function marksForCanvas(
   ctx: AppContext,
   artifact: ReviewArtifact,
-  canvasSha: string,
+  canvas: DiffedCommit,
   stored: PrState
 ): Promise<MarksForCanvas> {
-  if (stored.reviewedCanvasSha === canvasSha) {
+  if (marksOn(stored, canvas)) {
     return { state: stored }
   }
+  const canvasSha = canvas.headSha
   const dropped: MarksForCanvas = { state: { ...stored, reviewed: {} } }
   const markedOn = stored.reviewedCanvasSha
-  if (markedOn === undefined || !(await descendsFrom(ctx, artifact.basisCanvasSha, markedOn))) {
+  if (
+    markedOn === undefined ||
+    markedOn === canvasSha ||
+    !(await descendsFrom(ctx, artifact.basisCanvasSha, markedOn))
+  ) {
     return dropped
   }
-  const [markedArtifact, markedManifest, manifest] = await Promise.all([
+  const [markedArtifact, markedManifest] = await Promise.all([
     ctx.canvases.readArtifact(markedOn),
     ctx.canvases.readManifest(markedOn),
-    ctx.canvases.readManifest(canvasSha),
   ])
-  if (markedArtifact === null || markedManifest === null || manifest === null) {
+  // That canvas generated again on another base is not the one the marks were made on.
+  if (markedArtifact === null || markedManifest === null || !marksOn(stored, markedManifest)) {
     return dropped
   }
   const [markedDiff, diff] = await Promise.all([
-    ctx.derived.readOrBuild(markedOn, markedManifest.mergeBaseSha),
-    ctx.derived.readOrBuild(canvasSha, manifest.mergeBaseSha),
+    ctx.derived.readOrBuild(markedManifest),
+    ctx.derived.readOrBuild(canvas),
   ])
   if (markedDiff === null || diff === null) {
     return dropped
@@ -127,5 +136,8 @@ export async function marksForCanvas(
   if (Object.keys(reviewed).length === 0) {
     return dropped
   }
-  return { state: { ...stored, reviewed, reviewedCanvasSha: canvasSha }, carriedFrom: markedOn }
+  return {
+    state: { ...stored, reviewed, reviewedCanvasSha: canvasSha, reviewedMergeBaseSha: canvas.mergeBaseSha },
+    carriedFrom: markedOn,
+  }
 }

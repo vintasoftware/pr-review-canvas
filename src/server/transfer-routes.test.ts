@@ -348,13 +348,13 @@ describe('transfer routes', () => {
       expect(bundle.status).toBe('stale')
       expect(bundle.files).toEqual(artifactFor(OLD_SHA).files)
       expect(bundle.artifact).toEqual(artifactFor(OLD_SHA))
-      expect(bundle.stale?.commitsBehind).toBeUndefined()
+      expect(bundle.stale).not.toHaveProperty('commitsBehind')
     })
 
     it('reports stale with the distance, carries the old artifact, and serves its patches', async () => {
       t = await contextFor()
       await t.ctx.canvases.write(OLD_SHA, artifactFor(OLD_SHA), manifest(OLD_SHA))
-      await t.ctx.derived.ensure(OLD_SHA, BASE_SHA)
+      await t.ctx.derived.ensure({ headSha: OLD_SHA, mergeBaseSha: BASE_SHA })
       const app = createApp(t.ctx)
       const bundle = await json<PrBundle>(await app.request('/api/prs/42', { headers: LOCAL }))
       expect(bundle.status).toBe('stale')

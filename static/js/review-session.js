@@ -10,6 +10,7 @@
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./contract-types.js').ReviewSummary} ReviewSummary */
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
+import { marksOn } from './diff-identity.js'
 import {
   addPending,
   deletePending,
@@ -46,7 +47,9 @@ import {
  *   state: PrState,
  *   capabilities: Capabilities,
  *   headSha: string,
+ *   mergeBaseSha: string,
  *   canvasSha?: string,
+ *   canvasMergeBaseSha?: string,
  *   api?: Partial<SessionApi>,
  *   onState?: (state: PrState) => void,
  * }} SessionOptions
@@ -103,6 +106,14 @@ export function createReviewSession(options) {
   /** @type {PrState | null} */
   let newestState = null
   let newestRev = 0
+  /**
+   * The canvas diff the marks on this page are keyed to, which the server keys every mark write to:
+   * its commit, and the merge base it runs from.
+   */
+  const marksCanvas = {
+    headSha: options.canvasSha ?? options.headSha,
+    mergeBaseSha: options.canvasMergeBaseSha ?? options.mergeBaseSha,
+  }
   /** The write count of the last answer this page took. */
   let takenRev = 0
 
@@ -145,12 +156,26 @@ export function createReviewSession(options) {
     }
   }
 
-  /** Takes the newest answer once every change has come back, unless an older one arrived. */
+  /**
+   * Takes the newest answer once every change has come back, unless an older one arrived.
+   *
+   * Every write answers with the marks as stored. Stored marks keyed to another commit describe
+   * an earlier canvas: the page was drawn with the marks fitted to its own (`stateForCanvas` and
+   * `marksForCanvas` on the server), so it keeps those until a mark write keys the stored ones to
+   * its canvas. Taking them would mark, and collapse, a layer the page shows as unread.
+   */
   const settle = () => {
     if (inFlight > 0 || newestState === null) {
       return
     }
-    const next = newestState
+    const next = marksOn(newestState, marksCanvas)
+      ? newestState
+      : {
+          ...newestState,
+          reviewed: state.reviewed,
+          reviewedCanvasSha: state.reviewedCanvasSha,
+          reviewedMergeBaseSha: state.reviewedMergeBaseSha,
+        }
     newestState = null
     newestRev = 0
     if ((next.rev ?? 0) >= takenRev) {
@@ -228,8 +253,9 @@ export function createReviewSession(options) {
     setCapabilities(next) {
       capabilities = next
     },
-    /** The commit this page was drawn for; every post names it. */
+    /** The diff this page was drawn for, its commit and merge base; every post names it. */
     headSha: options.headSha,
+    mergeBaseSha: options.mergeBaseSha,
     /** @param {string} key */
     pathForKey(key) {
       return keyToPath.get(key)
@@ -250,7 +276,11 @@ export function createReviewSession(options) {
         () =>
           api.putReviewed(options.prNumber, id, reviewed, {
             headSha: options.headSha,
+            mergeBaseSha: options.mergeBaseSha,
             ...(options.canvasSha === undefined ? {} : { canvasSha: options.canvasSha }),
+            ...(options.canvasMergeBaseSha === undefined
+              ? {}
+              : { canvasMergeBaseSha: options.canvasMergeBaseSha }),
           })
       )
     },
@@ -280,6 +310,7 @@ export function createReviewSession(options) {
         const answer = await api.putSettled(options.prNumber, fingerprint, {
           ...input,
           headSha: options.headSha,
+          mergeBaseSha: options.mergeBaseSha,
         })
         settled = answer.settled
         issueComments = answer.issueComments ?? null
@@ -306,7 +337,13 @@ export function createReviewSession(options) {
      * @returns {Promise<PostCommentResponse>}
      */
     async postComment(input) {
-      return run(() => api.postComment(options.prNumber, { ...input, headSha: options.headSha }))
+      return run(() =>
+        api.postComment(options.prNumber, {
+          ...input,
+          headSha: options.headSha,
+          mergeBaseSha: options.mergeBaseSha,
+        })
+      )
     },
     /** Comments returned by reviews submitted during this session. */
     get issueComments() {
@@ -326,7 +363,15 @@ export function createReviewSession(options) {
      * @returns {Promise<PrState>}
      */
     async addPending(input) {
-      return (await run(() => api.addPending(options.prNumber, { ...input, headSha: options.headSha }))).state
+      return (
+        await run(() =>
+          api.addPending(options.prNumber, {
+            ...input,
+            headSha: options.headSha,
+            mergeBaseSha: options.mergeBaseSha,
+          })
+        )
+      ).state
     },
     /**
      * @param {string} id
@@ -362,7 +407,11 @@ export function createReviewSession(options) {
         ...(opts.includePending === undefined ? {} : { includePending: opts.includePending }),
       }
       return run(async () => {
-        const answer = await api.postReview(options.prNumber, { ...input, headSha: options.headSha })
+        const answer = await api.postReview(options.prNumber, {
+          ...input,
+          headSha: options.headSha,
+          mergeBaseSha: options.mergeBaseSha,
+        })
         submittedComments = [...submittedComments, ...answer.comments]
         return answer
       })

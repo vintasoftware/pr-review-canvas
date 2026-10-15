@@ -111,9 +111,10 @@ export function sharedCanvasCalloutHtml(bundle) {
  * @returns {string}
  */
 function skillCommandHtml(bundle) {
+  const run = bundle.chat.enabled ? 'Or run this' : 'Run this'
   return (
-    '<p class="hint">Run this in Claude Code or Codex from this repo. The page updates when the canvas is published.</p>' +
-    `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd fill" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></div>`
+    `<p class="hint">${run} in Claude Code or Codex from this repo. The page updates when the canvas is published.</p>` +
+    `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd${bundle.chat.enabled ? '' : ' fill'}" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></div>`
   )
 }
 
@@ -150,6 +151,9 @@ export function renderEmptyState(bundle) {
     '<section class="panel empty" id="empty-state" aria-labelledby="es-h">' +
     `<div class="panel-h"><h2 id="es-h">${heading}</h2></div>` +
     '<div class="body center">' +
+    (bundle.chat.enabled
+      ? '<div class="cmdbox"><button class="cmd fill" type="button" id="generate-start" aria-haspopup="dialog">generate canvas</button></div>'
+      : '') +
     skillCommandHtml(bundle) +
     transfer +
     '</div></section>'
@@ -167,6 +171,11 @@ export function staleSummary(stale, local) {
   const head = stale.currentHeadSha.slice(0, 7)
   if (local !== undefined) {
     return `The canvas is for ${canvas}; your work has moved on to ${head} since it was generated.`
+  }
+  if (stale.relation === 'other-base') {
+    const from = stale.canvasMergeBaseSha.slice(0, 7)
+    const now = stale.currentMergeBaseSha.slice(0, 7)
+    return `The canvas is for ${canvas} diffed from ${from}; the pull request changed its base, and the diff now runs from ${now}.`
   }
   if (stale.relation === 'unrelated') {
     return `The canvas is for ${canvas}, which is not in this branch any more; the head is ${head}.`
@@ -196,8 +205,8 @@ function barHtml(kind, name, text) {
 export function staleBarHtml(stale, local) {
   return barHtml(
     'outdated-bar',
-    `outdated:${stale.canvasHeadSha}:${stale.currentHeadSha}`,
-    `<strong>Canvas is outdated.</strong> You are reading an older commit. ${esc(staleSummary(stale, local))} ` +
+    `outdated:${stale.canvasHeadSha}:${stale.currentHeadSha}${stale.relation === 'other-base' ? `:${stale.currentMergeBaseSha}` : ''}`,
+    `<strong>Canvas is outdated.</strong> You are reading ${stale.relation === 'other-base' ? 'an older diff' : 'an older commit'}. ${esc(staleSummary(stale, local))} ` +
       '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button>'
   )
 }

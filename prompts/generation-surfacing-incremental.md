@@ -35,6 +35,11 @@ explicit points. When the carried-point list prints moved lines, update the test
 
 - Start from the carried content and change it only where this list says to. Where you do depart
   from the basis canvas on an untouched file, you must have read the new code and have a reason.
+- Check each carried attention point against the changed chunks before you copy it. When a chunk
+  contradicts it (the point says nothing calls a function, and a new chunk calls it), decide it
+  again: drop it, or write what is true now under a new title and name that chunk in the body. A
+  new title starts the point unresolved, so the author's answer to the old claim does not follow.
+  Reword a carried point for no other reason.
 - A carried layer keeps its `key`. The key is how a reviewer's progress finds the layer again, so
   never rename a key to tidy it up, and never reuse a key for a different concern.
 - A new or changed file belongs wherever it fits best, which may be a carried layer. Adding a file

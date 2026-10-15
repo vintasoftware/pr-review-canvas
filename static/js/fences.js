@@ -1,8 +1,10 @@
 // @ts-check
-// Splits a markdown text around fenced blocks with one info string. Two callers: mermaid
+// Splits a markdown text around fenced blocks with chosen info strings. Two callers: mermaid
 // diagrams and the chat's proposed-comment cards.
 
-/** @typedef {{ type: 'markdown' | 'block', text: string }} FenceSegment */
+/** `info` is the info string of a block, lowercased.
+ * @typedef {{ type: 'markdown', text: string } | { type: 'block', text: string, info: string }} FenceSegment
+ */
 
 /** A fence line: up to three spaces, the marker, then the info string. */
 const FENCE_RE = /^([ \t]{0,3})(`{3,}|~{3,})[ \t]*(.*)$/
@@ -27,22 +29,22 @@ function fenceOf(line) {
 }
 
 /**
- * The pieces of a markdown text in order: prose and the blocks whose info string is `info`. A
+ * The pieces of a markdown text in order: prose and the blocks whose info string is one of `info`. A
  * fence inside another fence is plain code, and an unclosed block is prose again, opening line
  * and all, because the reader never sees it as a block either.
  * @param {string} markdown
- * @param {string} info the info string to pick out, compared case-insensitively
+ * @param {string | ReadonlyArray<string>} info the info strings to pick out, compared case-insensitively
  * @returns {FenceSegment[]}
  */
 export function splitFences(markdown, info) {
-  const wanted = info.toLowerCase()
+  const wanted = new Set((typeof info === 'string' ? [info] : info).map(i => i.toLowerCase()))
   /** @type {FenceSegment[]} */
   const out = []
   /** @type {string[]} */
   let prose = []
   /** @type {string[]} */
   let block = []
-  /** @type {{ marker: string, wanted: boolean, line: string } | null} */
+  /** @type {{ marker: string, wanted: boolean, info: string, line: string } | null} */
   let open = null
   const flushProse = () => {
     if (prose.length > 0) {
@@ -55,7 +57,8 @@ export function splitFences(markdown, info) {
     const fence = fenceOf(line)
     if (open === null) {
       if (fence !== null) {
-        open = { marker: fence.marker, wanted: fence.info.toLowerCase() === wanted, line }
+        const tag = fence.info.toLowerCase()
+        open = { marker: fence.marker, wanted: wanted.has(tag), info: tag, line }
         if (open.wanted) {
           block = []
           continue
@@ -69,7 +72,7 @@ export function splitFences(markdown, info) {
     if (closes) {
       if (open.wanted) {
         flushProse()
-        out.push({ type: 'block', text: block.join('\n') })
+        out.push({ type: 'block', text: block.join('\n'), info: open.info })
       } else {
         prose.push(line)
       }

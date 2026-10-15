@@ -157,7 +157,7 @@ describe('the copy command', () => {
     copy.click()
     await vi.waitFor(() => expect(written).toEqual(['```mermaid\nflowchart LR\n  A --> B\n```']))
     expect(written[0]).toBe(diagramMarkdown(SOURCE))
-    expect(copy.textContent).toBe('copy')
+    await vi.waitFor(() => expect(copy.textContent).toBe('copied'))
   })
 })
 

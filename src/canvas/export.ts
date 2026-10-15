@@ -98,14 +98,27 @@ export function defaultExportDir(ctx: AppContext): string {
   return path.join(ctx.config.dataDir, 'exports')
 }
 
+/**
+ * Writes a canvas zip where `out` says (see `resolveOutPath`), making its folder, and returns the
+ * file's path. `export` writes the zip it builds; `generate --out` the one the server sends.
+ */
+export async function writeCanvasZip(
+  out: string | undefined,
+  defaultDir: string,
+  zip: { name: string; bytes: Uint8Array }
+): Promise<string> {
+  const file = await resolveOutPath(out, defaultDir, zip.name)
+  await mkdir(path.dirname(file), { recursive: true })
+  await writeFile(file, zip.bytes)
+  return file
+}
+
 export async function exportCanvas(
   ctx: AppContext,
   opts: { headSha: string; prNumber?: number | undefined; out?: string | undefined }
 ): Promise<ExportResult> {
   const zip = await buildCanvasZipFor(ctx, opts.headSha, opts.prNumber)
-  const file = await resolveOutPath(opts.out, defaultExportDir(ctx), zip.name)
-  await mkdir(path.dirname(file), { recursive: true })
-  await writeFile(file, zip.bytes)
+  const file = await writeCanvasZip(opts.out, defaultExportDir(ctx), zip)
   const result: ExportResult = { status: 'exported', path: file, name: zip.name, headSha: zip.headSha }
   if (zip.prNumber !== undefined) {
     result.prNumber = zip.prNumber

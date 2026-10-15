@@ -32,6 +32,33 @@ export function keyToString(key: ReviewKey): string {
   return String(key)
 }
 
+/** What separates a linked worktree's label from the name it qualifies: a slug, a review folder. */
+export const WORKTREE_MARK = '~'
+
+/**
+ * The name a review's files go by in its clone's data dir. A pull request is the same review in
+ * every worktree of the clone, so its number is its name. A local review is the work of one
+ * checkout, so a linked worktree's carries the worktree's label, as the checkout's slug does; the
+ * main checkout's keeps the bare key.
+ */
+export function reviewFolder(key: ReviewKey, worktree: string | null): string {
+  return isLocalKey(key) && worktree !== null ? `${key}${WORKTREE_MARK}${worktree}` : keyToString(key)
+}
+
+/** The review and the worktree a folder name stands for; null for a name that is neither. */
+export function parseReviewFolder(name: string): { key: ReviewKey; worktree: string | null } | null {
+  const cut = name.indexOf(WORKTREE_MARK)
+  const key = parseReviewKey(cut === -1 ? name : name.slice(0, cut))
+  if (key === null) {
+    return null
+  }
+  if (cut === -1) {
+    return { key, worktree: null }
+  }
+  const worktree = name.slice(cut + 1)
+  return isLocalKey(key) && worktree !== '' ? { key, worktree } : null
+}
+
 /** What the page calls the target, for a title or a heading. */
 export function keyLabel(key: ReviewKey): string {
   if (key === 'branch') {

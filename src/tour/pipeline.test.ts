@@ -158,7 +158,7 @@ describe('tour publish', () => {
       status: 'published',
       headSha: HEAD_SHA,
       attempts: 1,
-      tourUrl: 'http://localhost:3010/tour/42',
+      tourUrl: 'http://localhost:3010/r/acme/widgets/tour/42',
       sharing: { status: 'shared', url: GH_ISSUE_COMMENTS[0]!.html_url },
     })
     const stored = TourArtifactSchema.parse(JSON.parse(await readFile(published.tourJsonPath, 'utf8')))
@@ -477,9 +477,9 @@ describe('the tour CLI', () => {
     const swept = await t.ctx.checkouts.sweep({ all: true })
     expect(swept.removed).toHaveLength(2)
     // The chat holds the head checkout: the tour waits rather than move it under the answer.
-    const lease = await t.ctx.checkouts.lease(42)
+    const lease = await t.ctx.checkouts.lease(42, 'chat')
     await expect(runTour(t.ctx, ['checkout', result.tourDir, 'head'], head.io)).rejects.toThrow(
-      'another pr-review process is using the review checkout of 42'
+      'a chat answer is using the review checkout of 42'
     )
     await lease.release()
     await expect(runTour(t.ctx, ['checkout', result.tourDir, 'side'], head.io)).rejects.toThrow(
@@ -533,7 +533,8 @@ describe('the tour prompt', () => {
   it('fills every token and refuses one it does not know', async () => {
     const result = await prepared()
     const context = TourContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
-    const patches = (await t.ctx.derived.ensure(HEAD_SHA, context.mergeBaseSha)).patches
+    const patches = (await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: context.mergeBaseSha }))
+      .patches
     const text = renderTourPrompt(
       context,
       patches,

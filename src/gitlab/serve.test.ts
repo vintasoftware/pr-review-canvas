@@ -202,7 +202,7 @@ describe('a GitLab origin', () => {
   it('posts an inline discussion, a reply into its thread, and a merge request note', async () => {
     const gh = glabFor42()
     t = await makeTestContext({ host: GL, gh, git: gitForMr42() })
-    await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
 
@@ -286,7 +286,7 @@ describe('a GitLab origin', () => {
   it.each(['APPROVE', 'REQUEST_CHANGES'] as const)('batch publishes a %s review', async event => {
     const gh = glabFor42()
     t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
-    const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    const derived = await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     const result = await GL.postReview(
       gh,
       TEST_REPO,
@@ -330,7 +330,7 @@ describe('a GitLab origin', () => {
     async failure => {
       const gh = glabFor42()
       t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
-      const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      const derived = await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
       const input = {
         event: 'COMMENT' as const,
         body: 'summary',
@@ -405,7 +405,7 @@ describe('a GitLab origin', () => {
     async failure => {
       const gh = glabFor42()
       t = await makeTestContext({ git: gitForMr42(), gh, host: GL })
-      const derived = await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      const derived = await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
       const originalPost = gh.post
       const originalApi = gh.api
       let published = false
@@ -454,7 +454,7 @@ describe('a GitLab origin', () => {
   it('submits locally saved drafts through the review route and returns their published threads', async () => {
     const gh = glabFor42()
     t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
-    await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+    await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
     const draft = await app.request(
@@ -486,7 +486,7 @@ describe('a GitLab origin', () => {
     async failure => {
       const gh = glabFor42()
       t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
-      await t.ctx.derived.ensure(HEAD_SHA, BASE_SHA)
+      await t.ctx.derived.ensure({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })
       const app = createApp(t.ctx)
       await app.request('/api/prs/42', { headers: LOCAL })
       expect(

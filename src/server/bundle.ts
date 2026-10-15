@@ -14,14 +14,15 @@ import { resolveSharing } from '../contract/settings.js'
 import { isLocalKey, type LocalKey, type ReviewKey } from '../contract/review-key.js'
 import { describeLocalWork, resolveLocalBase } from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
-import { toPr } from '../host/pr.js'
+import { type PrMeta, toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
 import { marksForCanvas } from '../review/carry-marks.js'
-import { reviewedCommit, stateForCanvas } from '../review/review-body.js'
-import { isAuthor } from '../review/self-review.js'
+import { reviewedDiff, stateForCanvas } from '../review/review-body.js'
+import { readerResolves } from '../review/self-review.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
+import type { DiffedCommit } from '../store/derived-store.js'
 import type { AppContext } from './context.js'
 import { AppError } from './errors.js'
 import { postedFromPending } from '../review/posted-comments.js'
@@ -29,10 +30,11 @@ import { postedFromPending } from '../review/posted-comments.js'
 export interface BundleOptions {
   refresh: boolean
   /**
-   * The background poller asked, rather than a reader opening or refreshing the page. A local
-   * review answers a poll from the head it last resolved: snapshotting the working tree every few
-   * seconds would stat the whole tree again and again, and every edit in between would leave
-   * another commit and another `derived/` tree behind it.
+   * The background poller asked, rather than a reader opening or refreshing the page. A poll is
+   * answered from the head last resolved: a PR's from `prs/<n>/` once this process has read it, at
+   * no forge call, and a local review's from memory, since snapshotting the working tree every few
+   * seconds would stat the whole tree again and again, and every edit in between would leave another
+   * commit and another `derived/` tree behind it.
    */
   poll?: boolean
 }
@@ -76,7 +78,10 @@ export async function runDiscovery(
 
 /**
  * Live PR meta and comments. The first request for a PR in this process always asks GitHub;
- * later ones answer from `prs/<n>/` unless `refresh` is set, so polling stays cheap.
+ * later ones answer from `prs/<n>/` unless `refresh` is set, so polling stays cheap. Opening or
+ * reloading the page still asks for the PR's head and base branch, one call, and reads everything
+ * again when either changed, so a push, or a move to another base branch, made since the last load
+ * shows the canvas as outdated. A base branch rewritten under the same name is read on Refresh.
  */
 export function createPrLoader(ctx: AppContext) {
   const refreshed = new Set<number>()
@@ -102,11 +107,24 @@ export function createPrLoader(ctx: AppContext) {
     return stored
   }
 
-  async function refreshPr(
+  async function fetchMeta(number: number): Promise<PrMeta> {
+    return ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)
+  }
+
+  /** What this process last read for a PR, or null when it has not read it or a file is gone. */
+  async function readCached(
     number: number
+  ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] } | null> {
+    if (!refreshed.has(number)) return null
+    const [pr, comments] = await Promise.all([ctx.prs.readPr(number), ctx.prs.readComments(number)])
+    return pr !== null && comments !== null ? { pr, comments, warnings: [] } : null
+  }
+
+  async function refreshPr(
+    number: number,
+    meta: PrMeta
   ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
     const { host, repo } = ctx.config
-    const meta = await host.fetchPrMeta(ctx.gh, repo, number)
     const shas = await fetchPrRefs(ctx.git, host, meta)
     const pr = toPr(meta, repo, shas)
     await ctx.prs.writePr(number, pr)
@@ -133,16 +151,19 @@ export function createPrLoader(ctx: AppContext) {
       number: number,
       opts: BundleOptions
     ): Promise<{ pr: Pr; comments: CommentsPayload; warnings: string[] }> {
-      if (!opts.refresh && refreshed.has(number)) {
-        const [pr, comments] = await Promise.all([ctx.prs.readPr(number), ctx.prs.readComments(number)])
-        if (pr !== null && comments !== null) {
-          return { pr, comments, warnings: [] }
-        }
+      const cached = opts.refresh ? null : await readCached(number)
+      if (cached !== null && opts.poll === true) return cached
+      const meta = await fetchMeta(number)
+      // A pull request moved to another base branch reviews another diff of the same head. Settled
+      // 2026-10-09: a base rewritten under the same name waits for Refresh, rather than a git fetch
+      // on every load.
+      if (cached !== null && meta.headSha === cached.pr.headSha && meta.baseRef === cached.pr.baseRef) {
+        return cached
       }
-      return refreshPr(number)
+      return refreshPr(number, meta)
     },
     async refreshComments(number: number): Promise<{ comments: CommentsPayload; warnings: string[] }> {
-      const pr = (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
+      const pr = (await ctx.prs.readPr(number)) ?? (await refreshPr(number, await fetchMeta(number))).pr
       const { host, repo } = ctx.config
       const { payload, warnings } = await ctx.prs.refreshComments(number, () =>
         host.fetchComments(ctx.gh, repo, number, pr.headSha, ctx.now)
@@ -150,7 +171,7 @@ export function createPrLoader(ctx: AppContext) {
       return { comments: payload, warnings }
     },
     async currentPr(number: number): Promise<Pr> {
-      return (await ctx.prs.readPr(number)) ?? (await refreshPr(number)).pr
+      return (await ctx.prs.readPr(number)) ?? (await refreshPr(number, await fetchMeta(number))).pr
     },
     /**
      * The head a local review describes. Every request but a poll reads the work again, so opening
@@ -171,7 +192,9 @@ export function createPrLoader(ctx: AppContext) {
     },
     /** The head of either kind of target, so the routes both kinds serve need no branch. */
     async currentTarget(key: ReviewKey): Promise<Pr> {
-      return isLocalKey(key) ? localPr(key) : ((await ctx.prs.readPr(key)) ?? (await refreshPr(key)).pr)
+      return isLocalKey(key)
+        ? localPr(key)
+        : ((await ctx.prs.readPr(key)) ?? (await refreshPr(key, await fetchMeta(key))).pr)
     },
   }
 }
@@ -256,18 +279,16 @@ interface ShownDiff {
 }
 
 /**
- * The diffs of the canvas on screen, which is the one `found` names rather than the target's
- * current head: a stale canvas describes an older commit, and its own files are what the reader
- * is looking at.
+ * The diffs of the canvas on screen, `canvas` (see `reviewedDiff`), rather than the target's
+ * current diff: a stale canvas describes an older commit or an older base, and its own files are
+ * what the reader is looking at.
  */
 async function shownDiff(
   ctx: AppContext,
-  pr: Pr,
-  found: CanvasLookup,
+  canvas: DiffedCommit,
   loaded: LoadedCanvas | null
 ): Promise<ShownDiff> {
-  const mergeBaseSha = loaded?.canvas.manifest?.mergeBaseSha ?? pr.mergeBaseSha
-  const derived = await ctx.derived.readOrBuild(reviewedCommit(found, pr), mergeBaseSha)
+  const derived = await ctx.derived.readOrBuild(canvas)
   if (derived !== null) {
     return { files: derived.files, derivable: true, warning: null }
   }
@@ -314,15 +335,8 @@ function canvasScreen(
       ? { status: 'ready', skillCommand }
       : { status: 'ready', skillCommand, carriedOver: found.carriedOver }
   }
-  const stale: StaleInfo = {
-    canvasHeadSha: found.headSha,
-    currentHeadSha: pr.headSha,
-    relation: found.relation,
-  }
-  if (found.relation === 'ancestor') {
-    stale.commitsBehind = found.commitsBehind
-  }
-  return { status: 'stale', skillCommand, stale }
+  const { status: _status, headSha: canvasHeadSha, ...relation } = found
+  return { status: 'stale', skillCommand, stale: { canvasHeadSha, currentHeadSha: pr.headSha, ...relation } }
 }
 
 /** Everything a bundle holds that does not depend on which canvas was found. */
@@ -335,10 +349,12 @@ async function bundleBase(
     /** A promise, so probing the forge runs alongside the chat and state reads. */
     capabilities: Promise<Capabilities>
     diff: ShownDiff
-    /** The commit of the canvas on screen: the marks the page shows are the ones made on it. */
-    canvasSha: string
+    /** The diff of the canvas on screen: the marks the page shows are the ones made on it. */
+    canvas: DiffedCommit
     /** The canvas on screen, when there is one: marks may follow the line of descent onto it. */
     artifact: ReviewArtifact | null
+    /** Whether that canvas describes the current head, the only one whose points are resolved. */
+    canvasCurrent: boolean
     warnings: string[]
   }
 ): Promise<Omit<PrBundle, 'status' | 'skillCommand'>> {
@@ -357,8 +373,8 @@ async function bundleBase(
   // marks made on a canvas it descends from follow it wherever the diff is untouched.
   const marks =
     input.artifact === null
-      ? { state: stateForCanvas(stored, input.canvasSha), carriedFrom: undefined }
-      : await marksForCanvas(ctx, input.artifact, input.canvasSha, stored)
+      ? { state: stateForCanvas(stored, input.canvas), carriedFrom: undefined }
+      : await marksForCanvas(ctx, input.artifact, input.canvas, stored)
   const sharing = resolveSharing(ctx.projectConfig.config.sharing, personal)
   return {
     pr: input.pr,
@@ -368,7 +384,7 @@ async function bundleBase(
     state: marks.state,
     ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
     capabilities,
-    selfReview: isLocalKey(key) || isAuthor(capabilities.login, input.pr),
+    selfReview: readerResolves(key, capabilities.login, input.pr, input.canvasCurrent),
     chat: {
       enabled: chatEnabled && acpx.installed,
       acpx: acpx.installed,
@@ -414,7 +430,8 @@ export async function resolveLocalBundle(
 
   const found = await ctx.canvases.findForLocal(key, head.headSha)
   const loaded = found.status === 'missing' ? null : await loadCanvas(ctx, found)
-  const diff = await shownDiff(ctx, head, found, loaded)
+  const canvas = reviewedDiff(found, head, loaded?.canvas.manifest ?? null)
+  const diff = await shownDiff(ctx, canvas, loaded)
   if (diff.warning !== null && loaded !== null) {
     warnings.push(diff.warning)
   }
@@ -429,8 +446,9 @@ export async function resolveLocalBundle(
     comments: noComments(pr.headSha, ctx.now),
     capabilities: Promise.resolve(LOCAL_CAPABILITIES),
     diff,
-    canvasSha: reviewedCommit(found, pr),
+    canvas,
     artifact: loaded?.artifact ?? null,
+    canvasCurrent: screen.status === 'ready',
     warnings,
   })
   const { warning: _screenWarning, ...screenFields } = screen
@@ -449,7 +467,7 @@ export async function resolveBundle(
 
   if (ctx.fixtureArtifact !== null) {
     const artifact = rekeyFixture(ctx.fixtureArtifact, pr)
-    const live = await shownDiff(ctx, pr, { status: 'missing' }, null)
+    const live = await shownDiff(ctx, pr, null)
     if (live.warning !== null) {
       warnings.push(live.warning)
     }
@@ -460,8 +478,9 @@ export async function resolveBundle(
       comments,
       capabilities,
       diff,
-      canvasSha: pr.headSha,
+      canvas: pr,
       artifact: null,
+      canvasCurrent: true,
       warnings,
     })
     const canvas: CanvasInfo = { headSha: pr.headSha, source: 'fixture', manifest: null }
@@ -492,7 +511,8 @@ export async function resolveBundle(
   }
 
   const loaded = found.status === 'missing' ? null : await loadCanvas(ctx, found)
-  const diff = await shownDiff(ctx, pr, found, loaded)
+  const canvas = reviewedDiff(found, pr, loaded?.canvas.manifest ?? null)
+  const diff = await shownDiff(ctx, canvas, loaded)
   if (diff.warning !== null) {
     warnings.push(diff.warning)
   }
@@ -505,8 +525,9 @@ export async function resolveBundle(
     comments,
     capabilities,
     diff,
-    canvasSha: reviewedCommit(found, pr),
+    canvas,
     artifact: loaded?.artifact ?? null,
+    canvasCurrent: screen.status === 'ready',
     warnings,
   })
   const shared = sharedCanvas === null ? {} : { sharedCanvas }

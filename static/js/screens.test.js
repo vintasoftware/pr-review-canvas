@@ -7,7 +7,15 @@ import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
-import { progressHtml, refreshProgress, renderHeader, riskLineHtml, statePill } from './header.js'
+import {
+  bareHeaderHtml,
+  generateCommand,
+  progressHtml,
+  refreshProgress,
+  renderHeader,
+  riskLineHtml,
+  statePill,
+} from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
 import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
@@ -138,6 +146,66 @@ describe('review history', () => {
 })
 
 describe('header', () => {
+  it('links the wordmark to the project list, and names the project next to it with a link home', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: { slug: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
+    })
+    const wordmark = document.querySelector('a.brand-wordmark')
+    expect(wordmark?.getAttribute('href')).toBe('/')
+    expect(wordmark?.getAttribute('title')).toBe('All projects')
+    const project = document.querySelector('.brand a.mono.muted')
+    expect(project?.getAttribute('href')).toBe('/r/acme/widgets~fix/')
+    expect(project?.textContent).toBe('acme/widgets~fix')
+    expect(document.querySelector('.brand span.mono.muted')).toBeNull()
+  })
+
+  it('shows the host next to the wordmark when the page has no project', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: undefined,
+    })
+    expect(document.querySelector('.brand span.mono.muted')?.textContent).toBe('localhost:3010')
+    expect(document.querySelector('.brand a.mono.muted')).toBeNull()
+    document.body.innerHTML = bareHeaderHtml({ host: 'localhost:3010', theme: 'dark', skin: 'olive' })
+    expect(document.querySelector('.brand span.mono.muted')?.textContent).toBe('localhost:3010')
+  })
+
+  it('escapes the project name and its link', () => {
+    document.body.innerHTML = renderHeader(bundle(), {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+      project: { slug: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
+    })
+    const project = document.querySelector('.brand a.mono.muted')
+    expect(project?.textContent).toBe('acme/<b>"x')
+    expect(project?.getAttribute('href')).toBe('/r/acme/<b>"x/')
+    expect(document.querySelector('.brand b')).toBeNull()
+  })
+
+  it('keeps the wordmark and the project link on a page whose review did not load', () => {
+    document.body.innerHTML = bareHeaderHtml({
+      host: 'localhost:3010',
+      project: { slug: 'acme/widgets', home: '/r/acme/widgets/' },
+      theme: 'dark',
+      skin: 'olive',
+    })
+    expect(document.querySelector('a.brand-wordmark')?.getAttribute('href')).toBe('/')
+    expect(document.querySelector('.brand a.mono.muted')?.getAttribute('href')).toBe('/r/acme/widgets/')
+    expect([...document.querySelectorAll('.hdr button')].map(b => b.textContent)).toEqual([
+      'skin: olive',
+      'theme: dark',
+    ])
+  })
+
   it('renders brand, commands, title, meta, risk line, progress, and the sign-off gate for a ready bundle', () => {
     document.body.innerHTML = renderHeader(bundle(), {
       host: 'localhost:3010',
@@ -147,6 +215,7 @@ describe('header', () => {
     })
     const hdr = document.querySelector('header.hdr')
     expect(hdr?.querySelector('.brand-wordmark')?.textContent).toBe('PR review canvas')
+    expect(hdr?.querySelector('a.brand-wordmark')?.getAttribute('href')).toBe('/')
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
       'tour',
       'regenerate',
@@ -185,7 +254,7 @@ describe('header', () => {
       'https://github.com/acme/widgets/pull/42'
     )
     expect(hdr?.querySelector('.meta .pill.open')?.textContent).toBe('open')
-    expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5')
+    expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5 (code +5 −4 · tests +2 −1)')
     expect(hdr?.querySelector('.pill.agent')?.textContent).toBe(
       'canvas by claude · claude-opus-4-1 · claude-code'
     )
@@ -240,6 +309,14 @@ describe('header', () => {
       now: NOW,
     })
     expect(document.querySelector('.pill.agent')).toBeNull()
+    // With an agent, the header generates the first canvas; without one, it has nothing to regenerate.
+    expect(document.querySelector('#regenerate')?.textContent).toBe('generate')
+    expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
+    document.body.innerHTML = renderHeader(
+      bundle({ status: 'missing', artifact: undefined, chat: { enabled: false, acpx: false } }),
+      { host: 'h', theme: 'dark', skin: 'github', now: NOW }
+    )
+    expect(document.querySelector('#regenerate')?.textContent).toBe('regenerate')
     expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(true)
     expect(document.querySelector('.touches')).toBeNull()
     expect(document.querySelector('.progress')).toBeNull()
@@ -311,7 +388,7 @@ describe('header', () => {
       percent: 0,
     })
   })
-  it('keeps export and regenerate live on a stale canvas', () => {
+  it('keeps export and regenerate live on a stale canvas, where generating updates it', () => {
     document.body.innerHTML = renderHeader(bundle({ status: 'stale' }), {
       host: 'localhost:3010',
       theme: 'auto',
@@ -320,6 +397,30 @@ describe('header', () => {
     })
     expect(document.querySelector('#export-zip')?.hasAttribute('disabled')).toBe(false)
     expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
+    expect(document.querySelector('#regenerate')?.textContent).toBe('update')
+  })
+
+  it('names the generate command for what it does, and falls back to regenerate without an agent', () => {
+    const noAgent = { enabled: false, acpx: false }
+    expect(generateCommand(bundle(), true)).toEqual({
+      label: 'regenerate',
+      title: 'Generate the canvas of this PR again from a blank page',
+      disabled: false,
+    })
+    expect(generateCommand(bundle({ status: 'missing', local: 'branch' }), false)).toEqual({
+      label: 'generate',
+      title: 'Generate a canvas for this local work',
+      disabled: false,
+    })
+    expect(generateCommand(bundle({ status: 'stale' }), true).title).toBe(
+      'Update the canvas of this PR for its current head'
+    )
+    expect(generateCommand(bundle({ status: 'stale', chat: noAgent }), true)).toEqual({
+      label: 'regenerate',
+      title: 'Generate a new canvas for this PR',
+      disabled: false,
+    })
+    expect(generateCommand(bundle({ status: 'missing', chat: noAgent }), false).disabled).toBe(true)
   })
 
   it('drops the forge link and speaks of local work when the canvas has no pull request', () => {
@@ -338,7 +439,7 @@ describe('header', () => {
       'Snapshot the working tree again and redraw'
     )
     expect(hdr?.querySelector('#regenerate')?.getAttribute('title')).toBe(
-      'Generate a new canvas for this local work'
+      'Generate the canvas of this local work again from a blank page'
     )
     expect(hdr?.querySelector('.pill')?.textContent).toBe('uncommitted')
   })
@@ -417,8 +518,14 @@ describe('overview', () => {
 describe('empty state', () => {
   it('shows the skill command with one filled copy command, a live drop zone, and no callout', () => {
     document.body.innerHTML = renderEmptyState(
-      bundle({ status: 'missing', artifact: undefined, skillCommand: '/pr-review-canvas 42' })
+      bundle({
+        status: 'missing',
+        artifact: undefined,
+        skillCommand: '/pr-review-canvas 42',
+        chat: { enabled: false, acpx: false },
+      })
     )
+    expect(document.querySelector('#generate-start')).toBeNull()
     expect(document.querySelector('.cmdbox code')?.textContent).toBe('/pr-review-canvas 42')
     const copy = document.querySelector('.cmdbox .cmd.fill')
     expect(copy?.textContent).toBe('copy')
@@ -426,6 +533,17 @@ describe('empty state', () => {
     expect(document.querySelectorAll('.cmd.fill').length).toBe(1)
     expect(document.querySelector('.drop input')?.hasAttribute('disabled')).toBe(false)
     expect(document.querySelector('.callout')).toBeNull()
+  })
+
+  it('makes generate the filled command when an agent can run, and keeps the skill command to copy', () => {
+    document.body.innerHTML = renderEmptyState(
+      bundle({ status: 'missing', artifact: undefined, skillCommand: '/pr-review-canvas 42' })
+    )
+    const fills = document.querySelectorAll('.cmd.fill')
+    expect(fills.length).toBe(1)
+    expect(fills[0]?.id).toBe('generate-start')
+    expect(document.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('/pr-review-canvas 42')
+    expect(document.querySelector('.hint')?.textContent).toMatch(/^Or run this/)
   })
 
   it('renders the shared-canvas callout in both states', () => {

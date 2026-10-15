@@ -493,7 +493,7 @@ describe('GET /tour/:n and the home page', () => {
     expect(html).toContain('<script type="module" src="/static/js/tour/tour.js"></script>')
     expect(html).not.toContain('<link rel="modulepreload" href="/vendor/')
     expect(html).toContain(
-      '{"key":42,"owner":"acme","repo":"widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"preview":true,"landmark":"world"}</script>'
+      '{"key":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"preview":true,"landmark":"world"}</script>'
     )
     expect(html).toContain('<title>Tour · PR #42 · acme/widgets</title>')
     const local = await (await get('/tour/branch')).text()
@@ -516,7 +516,7 @@ describe('GET /tour/:n and the home page', () => {
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
     const before = await (await get('/')).text()
-    expect(before).not.toContain('href="/tour/42"')
+    expect(before).not.toContain('href="/r/acme/widgets/tour/42"')
     expect(before).toContain('/pr-tour &lt;number&gt;')
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     await t.ctx.tours.write(
@@ -525,8 +525,8 @@ describe('GET /tour/:n and the home page', () => {
     )
     await t.ctx.prs.writePr('branch', { ...syntheticTour().pr, number: null })
     const after = await (await get('/')).text()
-    expect(after).toContain('href="/tour/42"')
-    expect(after).toContain('href="/tour/branch"')
+    expect(after).toContain('href="/r/acme/widgets/tour/42"')
+    expect(after).toContain('href="/r/acme/widgets/tour/branch"')
   })
 })
 
@@ -633,7 +633,7 @@ describe('the grilling routes', () => {
       request.destroy()
       await new Promise(resolve => setTimeout(resolve, 50))
       openGate()
-      await vi.waitFor(() => expect(t.ctx.chat.busy(42)).toBe(false), { timeout: 1000 })
+      await vi.waitFor(() => expect(t.ctx.chat.running()).not.toContain(42), { timeout: 1000 })
       const again = await post('back')
       expect(again.status).toBe(200)
       expect(await again.text()).toContain('event: done')
@@ -771,7 +771,7 @@ describe('pr-review tour plan', () => {
       status: 'unfinished',
       headSha: HEAD_SHA,
       tourDir: t.ctx.tours.tourDir(HEAD_SHA),
-      tourUrl: 'http://localhost:3010/tour/42',
+      tourUrl: 'http://localhost:3010/r/acme/widgets/tour/42',
     })
     await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
     await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
@@ -795,7 +795,7 @@ describe('pr-review tour plan', () => {
     await t.ctx.tours.write(HEAD_SHA, syntheticTour({ pr: { ...syntheticTour().pr, number: null } }))
     expect(await plan('--branch')).toMatchObject({
       status: 'unfinished',
-      tourUrl: 'http://localhost:3010/tour/branch',
+      tourUrl: 'http://localhost:3010/r/acme/widgets/tour/branch',
     })
   })
 })

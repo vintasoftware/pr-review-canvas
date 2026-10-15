@@ -12,11 +12,11 @@ import type {
 } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
-import type { ReviewKey } from '../contract/review-key.js'
+import { parseReviewFolder, type ReviewKey, reviewFolder } from '../contract/review-key.js'
 import type { ChatThread } from '../contract/state.js'
 import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
-import type { CheckoutLease, ReviewCheckouts } from './checkouts.js'
+import { type CheckoutLease, readCodeAt, type ReviewCheckouts } from './checkouts.js'
 import { type ContextSources, renderChatContext, type TourSources } from './context.js'
 import { type CodeSource, renderSeed, type SeedPaths } from './seed.js'
 import { renderTourSeed } from './tour-seed.js'
@@ -57,7 +57,19 @@ export interface ChatManagerDeps {
   /** The branch the reader's checkout is on, for the warning when a turn falls back to it. */
   currentBranch: () => Promise<string | null>
   now: () => Date
+  /**
+   * The turns running over this data dir, in this manager or any other over it. The worktrees of
+   * one clone share a pull request's threads and review checkout, and so its turn: each of their
+   * managers sees and stops it. Each worktree's local reviews are its own. A manager of its own
+   * has turns of its own.
+   */
+  turns?: RunningTurns | undefined
+  /** The linked worktree the manager's checkout is, null for the main checkout: it names which local reviews are its own. */
+  worktree?: string | null | undefined
 }
+
+/** The turns running over one data dir, by review folder (`reviewFolder`). */
+export type RunningTurns = Map<string, RunningTurn>
 
 /** Everything about the review target one turn needs, resolved by the route. */
 export interface ChatTarget {
@@ -72,6 +84,8 @@ export interface ChatTarget {
   /** `<canvas>/derived`, which holds head/, base/ and patches/. */
   derivedDir: string
   readLines: ContextSources['readLines']
+  /** Whether the reader may resolve the points of this canvas, so the agent may propose it. */
+  readerResolves: boolean
 }
 
 export interface ChatSendInput {
@@ -90,11 +104,16 @@ export interface ChatManager {
   tourHistory(key: ReviewKey): Promise<ChatHistoryResponse>
   /** True when a turn was running and has been asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
-  busy(key: ReviewKey): boolean
+  /**
+   * The reviews with a turn running that are this checkout's: a pull request's, which every
+   * worktree of the clone shares, or one of its own local reviews. The server checks it before it
+   * removes the project.
+   */
+  running(): ReviewKey[]
 }
 
 /** The slot a turn holds while it runs. The handle is filled in once the agent has started. */
-interface RunningTurn {
+export interface RunningTurn {
   run: { cancel: () => Promise<void> } | null
   /** The review checkout this turn holds, released when the turn ends. */
   lease: CheckoutLease | null
@@ -128,7 +147,9 @@ async function modelForTurn(
 }
 
 export function createChatManager(deps: ChatManagerDeps): ChatManager {
-  const running = new Map<ReviewKey, RunningTurn>()
+  const turns: RunningTurns = deps.turns ?? new Map()
+  const worktree = deps.worktree ?? null
+  const folderOf = (key: ReviewKey): string => reviewFolder(key, worktree)
 
   const effectiveSettings = async (): Promise<Settings> => {
     const saved = await deps.settings.read()
@@ -222,6 +243,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     assistant: ChatTurn,
     seededHeadSha: string,
     seededCwd: string,
+    seededReaderResolves: boolean,
     reached: boolean
   ): Promise<void> => {
     await deps.transcripts.append(key, thread.name, assistant)
@@ -239,6 +261,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
                 rev: t.rev + 1,
                 seededHeadSha,
                 seededCwd,
+                seededReaderResolves,
                 // The first turn of a thread gives it its title.
                 title: t.rev === 0 ? threadTitle(userText) : t.title,
               }
@@ -264,7 +287,8 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
-    const held = running.get(target.key)
+    const folder = folderOf(target.key)
+    const held = turns.get(folder)
     if (held !== undefined) {
       if (!held.stopped) {
         throw new ChatBusyError()
@@ -272,7 +296,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       // A stopped turn is only finishing up, as when the reader left and came back: this turn
       // waits for it rather than being refused.
       await settlesWithin(held.ended, STOPPED_TURN_WAIT_MS)
-      if (running.has(target.key)) {
+      if (turns.has(folder)) {
         throw new ChatBusyError()
       }
     }
@@ -283,50 +307,44 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       end = resolve
     })
     const slot: RunningTurn = { run: null, stopped: false, lease: null, ended }
-    running.set(target.key, slot)
+    turns.set(folder, slot)
     try {
       yield* runTurn(target, input, slot)
     } finally {
       // The lock goes first, so a slot that looks free always has a free checkout behind it.
       await slot.lease?.release().catch(() => undefined)
-      running.delete(target.key)
+      turns.delete(folder)
       end()
     }
   }
 
   /**
-   * Where the agent reads code for this turn, and the events that say so. The uncommitted review,
-   * and a reader who turned checkouts off, read the reader's own checkout. Otherwise the review
-   * checkout is leased before the first event, so another process holding it is a refusal, and
-   * then put at the turn's commit; a checkout that fails falls back to the reader's checkout with
-   * a warning rather than failing the turn.
+   * Where the agent reads code for this turn (see `readCodeAt`), and the events that say so. The
+   * checkout is leased before the first event, so a holder elsewhere refuses the turn.
    */
   async function* prepareCode(
     target: ChatTarget,
     settings: Settings,
     slot: RunningTurn
   ): AsyncGenerator<ChatEvent, CodeSource> {
-    if (target.key === 'uncommitted') {
-      return { kind: 'working-tree', cwd: deps.repoRoot }
-    }
-    if (!settings.checkoutEnabled) {
-      return { kind: 'reader-checkout', cwd: deps.repoRoot }
-    }
-    const lease = await deps.checkouts.lease(target.key)
-    slot.lease = lease
-    if (lease.head !== target.headSha) {
-      yield { event: 'checkout', status: 'preparing', sha: target.headSha, creating: lease.head === null }
-    }
-    try {
-      await lease.moveTo(target.headSha)
-      return { kind: 'checkout', cwd: lease.dir, sha: target.headSha }
-    } catch (err) {
-      const fallback = {
-        message: err instanceof Error ? err.message : String(err),
-        branch: await deps.currentBranch().catch(() => null),
+    const steps = readCodeAt({
+      key: target.key,
+      headSha: target.headSha,
+      checkoutEnabled: settings.checkoutEnabled,
+      holder: 'chat',
+      checkouts: deps.checkouts,
+      repoRoot: deps.repoRoot,
+      currentBranch: deps.currentBranch,
+      onLease: lease => {
+        slot.lease = lease
+      },
+    })
+    for (;;) {
+      const next = await steps.next()
+      if (next.done === true) {
+        return next.value
       }
-      yield { event: 'checkout', status: 'fallback', ...fallback }
-      return { kind: 'fallback', cwd: deps.repoRoot, ...fallback }
+      yield { event: 'checkout', ...next.value }
     }
   }
 
@@ -355,7 +373,10 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       code.kind === 'fallback' ? { fallback: { message: code.message, branch: code.branch } } : {}
     // acpx scopes a session by its folder, so a thread whose session ran elsewhere starts over.
     const sameSession = thread.seededHeadSha !== '' && (thread.seededCwd ?? deps.repoRoot) === cwd
-    const seeded = !sameSession || thread.seededHeadSha !== target.headSha
+    const seeded =
+      !sameSession ||
+      thread.seededHeadSha !== target.headSha ||
+      thread.seededReaderResolves !== target.readerResolves
     const seed = seeded ? `${await renderSubjectSeed(deps, target, code)}\n\n` : ''
     const prompt = `${seed}${contextBlock}\n\n## Question\n\n${input.message}\n`
 
@@ -386,6 +407,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         { role: 'assistant', text: '', at: deps.now().toISOString(), incomplete: 'cancelled', ...fallback },
         target.headSha,
         cwd,
+        target.readerResolves,
         // The seed never went anywhere, so the thread stays where it was.
         false
       )
@@ -488,6 +510,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         },
         target.headSha,
         cwd,
+        target.readerResolves,
         // An error before the agent said anything means the turn never reached it.
         answer !== '' || incomplete === undefined || incomplete === 'cancelled'
       )
@@ -537,7 +560,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       return { name, turns: await deps.transcripts.read(key, name) }
     },
     async cancel(key) {
-      const slot = running.get(key)
+      const slot = turns.get(folderOf(key))
       if (slot === undefined) {
         return false
       }
@@ -547,7 +570,11 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       await slot.run?.cancel()
       return true
     },
-    busy: key => running.has(key),
+    running: () =>
+      [...turns.keys()].flatMap(folder => {
+        const review = parseReviewFolder(folder)
+        return review !== null && folderOf(review.key) === folder ? [review.key] : []
+      }),
   }
 }
 
@@ -564,7 +591,9 @@ async function renderSubjectSeed(
   if (target.artifact === undefined) {
     throw new Error('a chat turn needs a canvas or a tour')
   }
-  return renderSeed(await deps.loadSeedTemplate(), target.artifact, paths)
+  return renderSeed(await deps.loadSeedTemplate(), target.artifact, paths, {
+    readerResolves: target.readerResolves,
+  })
 }
 
 function seedPaths(deps: ChatManagerDeps, target: ChatTarget, code: CodeSource): SeedPaths {

@@ -5,7 +5,8 @@
 /**
  * The URL of a scene frame. `headSha` names the tour on the page; a preview reads the model
  * instead. The skin and the theme ride along, so the frame is painted like the page.
- * @param {{ key: string, landmark: string, kind: 'scene' | 'micro', headSha: string, preview: boolean, skin: string, theme: string }} opts
+ * @param {{ base: string, key: string, landmark: string, kind: 'scene' | 'micro', headSha: string, preview: boolean, skin: string, theme: string }} opts
+ *   `base` is the project's base path on the server, with its trailing slash.
  */
 export function frameUrl(opts) {
   const params = new URLSearchParams({ skin: opts.skin, theme: opts.theme })
@@ -14,7 +15,7 @@ export function frameUrl(opts) {
   } else {
     params.set('headSha', opts.headSha)
   }
-  return `/tour-scene/${encodeURIComponent(opts.key)}/${encodeURIComponent(opts.landmark)}/${opts.kind}?${params}`
+  return `${opts.base}tour-scene/${encodeURIComponent(opts.key)}/${encodeURIComponent(opts.landmark)}/${opts.kind}?${params}`
 }
 
 /**

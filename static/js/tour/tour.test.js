@@ -38,7 +38,7 @@ function fakeServer(bundle, opts = {}) {
       if (url.endsWith('/grill/history')) {
         return json({ name: 't0', turns: [] })
       }
-      if (url.startsWith('/api/tours/') && method === 'GET') {
+      if (url.startsWith('/r/acme/widgets/api/tours/') && method === 'GET') {
         return json(typeof bundle === 'function' ? bundle() : bundle)
       }
       if (url.endsWith('/reader') && method === 'PUT') {
@@ -61,7 +61,7 @@ function fakeServer(bundle, opts = {}) {
         }
         return json({ finished, record: { touredBy: [] }, reader: { ...reader, finished } })
       }
-      if (url === '/api/appearance') {
+      if (url.endsWith('/api/appearance')) {
         return json(JSON.parse(String(init?.body)))
       }
       if (url.endsWith('/grill') && method === 'POST') {
@@ -85,6 +85,8 @@ function mount(over = {}) {
     key: 42,
     owner: 'acme',
     repo: 'widgets',
+    base: '/r/acme/widgets/',
+    project: 'acme/widgets',
     version: '0.0.0-test',
     host: { kind: 'github', label: 'GitHub', webBase: 'https://github.com' },
     preview: false,
@@ -255,7 +257,9 @@ describe('the tour page', () => {
     expect(document.querySelector('.toast')?.textContent).toBe(
       'prompt written · record shared on the pull request'
     )
-    expect(server.calls.filter(c => c.startsWith('POST'))).toEqual(['POST /api/tours/42/finish'])
+    expect(server.calls.filter(c => c.startsWith('POST'))).toEqual([
+      'POST /r/acme/widgets/api/tours/42/finish',
+    ])
     const last = server.saved.at(-1)
     expect(last?.notes).toEqual({ world: 'rename b' })
     expect(last?.picks).toEqual({ 'sum-over-product': { pick: 'keep', approved: true } })
@@ -424,7 +428,7 @@ describe('the tour page', () => {
     click('.tour-rail-seg[data-step="7"]')
     expect(location.hash).toBe('#plan')
     expect(text()).toContain('A preview is not finished')
-    expect(server.calls).toEqual(['GET /api/tours/42?preview=1'])
+    expect(server.calls).toEqual(['GET /r/acme/widgets/api/tours/42?preview=1'])
     // An unknown landmark falls back to the cover.
     document.body.innerHTML = ''
     history.replaceState(null, '', '/tour/42')
@@ -448,7 +452,9 @@ describe('the tour page', () => {
     expect(document.querySelector('iframe.tour-frame')?.getAttribute('src')).toContain(
       'skin=olive&theme=light'
     )
-    await vi.waitFor(() => expect(server.calls.filter(c => c === 'PUT /api/appearance')).toHaveLength(2))
+    await vi.waitFor(() =>
+      expect(server.calls.filter(c => c === 'PUT /r/acme/widgets/api/appearance')).toHaveLength(2)
+    )
     expect(nextTourSkin('olive')).toBe('github')
     expect(nextTourSkin('terminal')).toBe('github')
   })
@@ -510,7 +516,7 @@ describe('the tour page', () => {
     const el = mount({ key: 'branch' })
     await drawn('.tour-options')
     expect(document.title).toBe('Tour · feat/b feat: add b')
-    expect(server.calls[0]).toBe('GET /api/tours/branch')
+    expect(server.calls[0]).toBe('GET /r/acme/widgets/api/tours/branch')
     press('Escape')
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
     const note = document.createElement('textarea')
@@ -598,7 +604,7 @@ describe('the tour page', () => {
     }
     await vi.waitFor(() => expect(dialog.querySelector('.tour-plan-card')).not.toBeNull())
     expect(dialog.querySelector('.tour-plan-card')?.textContent).toContain('Sum over product?')
-    expect(server.calls).toContain('POST /api/tours/42/grill')
+    expect(server.calls).toContain('POST /r/acme/widgets/api/tours/42/grill')
     click('[data-act="close-grill"]')
     expect(dialog.open).toBe(false)
   })

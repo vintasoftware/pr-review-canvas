@@ -8,7 +8,7 @@ import { diffArrays } from 'diff'
 import type { BasisPointLines, FileDelta } from '../contract/generation-context.js'
 import type { Point, Side } from '../contract/review-artifact.js'
 import { hunkForLine, splitHunks } from '../git/patch-lines.js'
-import type { Derived, DerivedStore } from '../store/derived-store.js'
+import type { Derived, DerivedStore, DiffedCommit } from '../store/derived-store.js'
 
 /** One side of one file: its text, and the patch whose rows say how the diff shows each line. */
 export interface SideText {
@@ -100,7 +100,7 @@ export function pointLinesInHead(
 }
 
 interface DiffOf {
-  sha: string
+  diff: DiffedCommit
   derived: Derived
 }
 
@@ -118,8 +118,8 @@ async function sideText(
   }
   const lines =
     side === 'new'
-      ? await store.readLines(diff.sha, 'head', file.path, 1, Number.MAX_SAFE_INTEGER)
-      : await store.readLines(diff.sha, 'base', file.oldPath ?? file.path, 1, Number.MAX_SAFE_INTEGER)
+      ? await store.readLines(diff.diff, 'head', file.path, 1, Number.MAX_SAFE_INTEGER)
+      : await store.readLines(diff.diff, 'base', file.oldPath ?? file.path, 1, Number.MAX_SAFE_INTEGER)
   return lines === null ? null : { lines, patch }
 }
 

@@ -137,7 +137,7 @@ export function initials(login) {
 export async function copyToClipboard(text, clipboard) {
   const target = clipboard === undefined ? globalThis.navigator?.clipboard : clipboard
   if (!target || typeof target.writeText !== 'function') {
-    throw new Error('clipboard is not available; copy the command by hand')
+    throw new Error('clipboard is not available; select the text and copy it by hand')
   }
   await target.writeText(text)
 }
@@ -149,4 +149,21 @@ export function avatarHtml(comment) {
     return `<img class="av" src="${esc(url)}" alt="${esc(comment.author)} avatar" width="24" height="24" loading="lazy" referrerpolicy="no-referrer">`
   }
   return `<span class="av" aria-hidden="true">${esc(initials(comment.author))}</span>`
+}
+
+/**
+ * An anchor built as a node, with an href only when the target is an http(s) address. A link
+ * that comes from an API is still untrusted input.
+ * @param {string} url
+ * @param {string} text
+ */
+export function externalLink(url, text) {
+  const a = document.createElement('a')
+  a.textContent = text
+  if (/^https?:\/\//i.test(url)) {
+    a.href = url
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+  }
+  return a
 }

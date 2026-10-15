@@ -1,5 +1,6 @@
 node_modules/
 .pr-review/
+.pr-review-dev/
 .claude/worktrees/
 .env
 .env.*

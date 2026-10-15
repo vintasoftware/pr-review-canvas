@@ -87,7 +87,7 @@ describe('publish', () => {
       headSha: HEAD_SHA,
       reviewJsonPath: path.join(canvasDir, 'review.json'),
       attempts: 1,
-      reviewUrl: 'http://localhost:3010/review/42',
+      reviewUrl: 'http://localhost:3010/r/acme/widgets/review/42',
     })
     const context = await readContext(canvasDir)
     const stored = ReviewArtifactSchema.parse(JSON.parse(await readFile(result.reviewJsonPath, 'utf8')))
@@ -258,6 +258,18 @@ describe('publish', () => {
     expect(shareCanvas).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the canvas local when the run turns sharing off, whatever the settings say', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    const shareCanvas = vi.fn()
+    t.ctx.config.host = { ...t.ctx.config.host, shareCanvas }
+
+    const result = await publish(t.ctx, canvasDir, { ...OPTS, share: false })
+    expect(result.sharing).toEqual({ status: 'off' })
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(true)
+    expect(shareCanvas).not.toHaveBeenCalled()
+  })
+
   it('refuses an invalid model with the report, logs the attempt, and writes no review.json', async () => {
     const canvasDir = await prepared()
     const output = artifactToModelOutput(syntheticArtifact())
@@ -396,13 +408,13 @@ describe('publish', () => {
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.basisCanvasSha).toBe(basis)
   })
 
-  it('keeps the author’s settlements when the same commit is generated again, for the author points still there', async () => {
+  it('keeps the author’s settlements when the same commit is generated again, for the points still there', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     await publish(t.ctx, canvasDir, OPTS)
     const first = await t.ctx.canvases.readArtifact(HEAD_SHA)
     const kept = fingerprint({ kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' })
-    // A reviewer point takes no settlement, whatever a stored canvas says.
+    // A reviewer point keeps its settlement too: the author may resolve any point.
     const reviewer = fingerprint({ kind: 'decision', path: 'src/app.ts', title: 'Sum instead of product' })
     const settlement = { reason: 'Nothing imports it.', at: '2026-09-10T12:00:00.000Z' }
     await t.ctx.canvases.revise(HEAD_SHA, {
@@ -411,7 +423,10 @@ describe('publish', () => {
       revisedAt: settlement.at,
     })
     await publish(t.ctx, canvasDir, OPTS)
-    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({ [kept]: settlement })
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({
+      [kept]: settlement,
+      [reviewer]: settlement,
+    })
   })
 
   it('regenerates over a canvas of a format it no longer reads, keeping no settlement from it', async () => {
@@ -491,6 +506,34 @@ describe('publish', () => {
     expect(result.status).toBe('published')
     // The canvas is stored under the commit it was prepared for, which the merged head stands for.
     expect(result.headSha).toBe(HEAD_SHA)
+  })
+
+  it('refuses a canvas whose pull request moved to another base while it was prepared, unless the diff is identical', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    // Each base has a merge base of its own: one diff per merge base, as git would give.
+    const retarget = (release: string, diff: string) => {
+      Object.assign(clone.options.refs ?? {}, { 'refs/heads/release': release })
+      moveFakeHead(clone, {
+        headRef: 'pull/42/head',
+        baseRef: 'refs/pr/42/base',
+        headSha: HEAD_SHA,
+        mergeBaseSha: release,
+        diff,
+      })
+      t.ctx.gh = createFakeGh({
+        routes: {
+          'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, base: { ...GH_PULL.base, ref: 'release' } }),
+        },
+      })
+    }
+    retarget('9'.repeat(40), SYNTHETIC_DIFF_MOVED_BY_BASE)
+    await expect(publish(t.ctx, canvasDir, OPTS)).rejects.toMatchObject({
+      code: 'CANVAS_STALE',
+      message: `the pull request moved to another base while this canvas was prepared for ${HEAD_SHA.slice(0, 7)}`,
+    })
+    retarget('8'.repeat(40), SYNTHETIC_DIFF)
+    expect((await publish(t.ctx, canvasDir, OPTS)).status).toBe('published')
   })
 
   it('refuses a canvas whose PR head moved unless --allow-stale, and checks refs targets against the ref', async () => {

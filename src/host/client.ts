@@ -130,7 +130,10 @@ interface ExecResult {
 
 export interface CliExecOptions {
   binary?: string
+  /** Variables on top of `base`; glab learns its instance here. */
   env?: Record<string, string>
+  /** The environment the child runs under; this process's when omitted. */
+  base?: NodeJS.ProcessEnv
   /** Written to the child's stdin, for `api --input -`. */
   input?: string
 }
@@ -140,7 +143,7 @@ export function execCli(args: string[], opts: CliExecOptions = {}): Promise<Exec
     const child = execFile(
       opts.binary ?? 'gh',
       args,
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...opts.env } },
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...(opts.base ?? process.env), ...opts.env } },
       (error, stdout, stderr) => {
         const missingBinary = error !== null && 'code' in error && error.code === 'ENOENT'
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
@@ -155,6 +158,11 @@ export function execCli(args: string[], opts: CliExecOptions = {}): Promise<Exec
 }
 
 export type CliExec = typeof execCli
+
+/** The host CLI under `env` instead of this process's: the shell a project was opened from. */
+export function execCliIn(env: NodeJS.ProcessEnv): CliExec {
+  return (args, opts = {}) => execCli(args, { ...opts, base: env })
+}
 
 export const GH_CLI: HostCliSpec = { cli: 'gh', env: {}, tokenArgs: ['auth', 'token'] }
 

@@ -10,7 +10,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   for (const button of await page.locator('.hdr button').all()) {
     await expect(button).toHaveAttribute('title', /\S.+/)
   }
-  await expect(page.locator('#canvas-link')).toHaveAttribute('href', '/review/42')
+  await expect(page.locator('#canvas-link')).toHaveAttribute('href', '/r/acme/widgets/review/42')
   await page.locator('.tour-cover-actions [data-nav="next"]').click()
   await expect(page).toHaveURL(/#landmark-l0$/)
   await expect(page.locator('.tour-stage-tag')).toHaveText('Before this change')
@@ -92,7 +92,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
   await page.reload()
   await expect(page).toHaveURL(/#plan$/)
   await expect(page.locator('#prompt')).toContainText('the pipe rule surprised me')
-  const bundle = await (await page.request.get(`${new URL(tourUrl).origin}/api/tours/42`)).json()
+  const bundle = await (await page.request.get(new URL('../api/tours/42', tourUrl).href)).json()
   expect(bundle.tour.record.touredBy.map((t: { login: string }) => t.login)).toEqual(['octocat'])
   expect(bundle.tour.record.author.picks['pipe-means-json']).toEqual({ pick: 'keep' })
 })
@@ -117,11 +117,10 @@ test('takes something else through the drawer and stays on the decision it settl
 })
 
 test('the home page and the canvas header link to the tour', async ({ page, tourUrl }) => {
-  const origin = new URL(tourUrl).origin
-  await page.goto(`${origin}/review/42`)
-  await expect(page.locator('#tour-link')).toHaveAttribute('href', '/tour/42')
-  await page.goto(`${origin}/`)
-  await expect(page.locator('a[href="/tour/42"]')).toBeVisible()
+  await page.goto(new URL('../review/42', tourUrl).href)
+  await expect(page.locator('#tour-link')).toHaveAttribute('href', '/r/acme/widgets/tour/42')
+  await page.goto(new URL('../', tourUrl).href)
+  await expect(page.locator('a[href="/r/acme/widgets/tour/42"]')).toBeVisible()
 })
 
 test('the tour offers the github and olive skins and paints its frames with the theme', async ({

@@ -10,7 +10,8 @@ import { envWithoutRepo } from '../src/git/environment.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const temp = await mkdtemp(path.join(os.tmpdir(), 'pr-review-package-'))
-const env = envWithoutRepo()
+// The server's own files go in the temp dir, never in the user's ~/.pr-review.
+const env = { ...envWithoutRepo(), PR_REVIEW_HOME: path.join(temp, 'pr-review-home') }
 
 const run = (command, args, cwd = temp) => {
   const result = spawnSync(command, args, {
@@ -103,8 +104,9 @@ try {
   const origin = await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => finish(new Error(`Server startup timed out: ${logs}`)), 15_000)
     const poll = setInterval(() => {
-      const match = logs.match(/http:\/\/localhost:\d+/)
-      if (match) finish(null, match[0])
+      // The project answers once the server has added it, which it logs after binding the port.
+      const match = logs.match(/serving \S+ at (http:\/\/localhost:\d+)\//)
+      if (match) finish(null, match[1])
     }, 50)
     const onError = error => finish(error)
     const onExit = code => finish(new Error(`Server exited (${code}): ${logs}`))
@@ -123,6 +125,7 @@ try {
   assert.match(logs, /pr-review install-skill/)
   for (const route of [
     '/',
+    '/r/acme/widgets/',
     '/static/styles.css',
     '/static/js/app.js',
     '/vendor/marked.js',

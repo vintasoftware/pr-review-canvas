@@ -1,8 +1,8 @@
 // One import path for the three ways a canvas arrives: the drop zone, `pr-review import`, and a
 // zip discovered on the pull request. Everything is checked here, so no caller can skip a step.
-import type { CanvasRelation, ImportResult } from '../contract/api.js'
+import type { ImportResult } from '../contract/api.js'
 import { canvasRevision } from '../contract/canvas-manifest.js'
-import { type DiffedCommit, standsForHead } from '../review/carry-over.js'
+import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
@@ -42,19 +42,19 @@ async function ensureDerived(
   mergeBaseSha: string,
   warnings: string[]
 ): Promise<boolean> {
-  if (!(await ctx.derived.derivable(headSha, mergeBaseSha))) {
+  if (!(await ctx.derived.derivable({ headSha, mergeBaseSha }))) {
     try {
       await ctx.git.fetch('origin', [headSha, mergeBaseSha])
     } catch {
       // Servers may refuse a fetch by sha; the next check reports the canvas as not derivable.
     }
   }
-  if (!(await ctx.derived.derivable(headSha, mergeBaseSha))) {
+  if (!(await ctx.derived.derivable({ headSha, mergeBaseSha }))) {
     warnings.push(`${headSha.slice(0, 7)} is not in this clone, so the diffs are not available`)
     return false
   }
   try {
-    await ctx.derived.ensure(headSha, mergeBaseSha)
+    await ctx.derived.ensure({ headSha, mergeBaseSha })
     return true
   } catch (err) {
     warnings.push(`the diffs for ${headSha.slice(0, 7)} could not be rebuilt: ${errorText(err)}`)
@@ -64,17 +64,6 @@ async function ensureDerived(
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
-}
-
-async function relateToHead(
-  ctx: AppContext,
-  headSha: string,
-  currentHeadSha: string
-): Promise<{ relation: CanvasRelation; commitsBehind?: number }> {
-  if (!(await ctx.git.isAncestor(headSha, currentHeadSha))) {
-    return { relation: 'unrelated' }
-  }
-  return { relation: 'ancestor', commitsBehind: await ctx.git.countCommitsBetween(headSha, currentHeadSha) }
 }
 
 /**
@@ -137,26 +126,13 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   if (keepStored) {
     return { status: 'exists', headSha, currentHeadSha, derivable, warnings }
   }
-  // The same rule the page reads: a canvas of another commit is current when the head's diff is
-  // identical to the one it was generated from, so the CLI never calls stale what the page shows
-  // as carried over.
-  if (
-    opts.currentHead === undefined ||
-    (await standsForHead(ctx, opts.currentHead, { headSha, mergeBaseSha }))
-  ) {
+  // The same rules the page reads: a canvas of another diff is current when the head's diff is
+  // identical to the one it was generated from, and otherwise relates to the head as the page says,
+  // so the CLI never calls stale what the page shows as carried over, nor the other way round.
+  const canvas = { headSha, mergeBaseSha }
+  if (opts.currentHead === undefined || (await standsForHead(ctx, opts.currentHead, canvas))) {
     return { status: 'ready', headSha, currentHeadSha, derivable, warnings }
   }
-  const related = await relateToHead(ctx, headSha, currentHeadSha)
-  const result: ImportResult = {
-    status: 'stale',
-    headSha,
-    currentHeadSha,
-    relation: related.relation,
-    derivable,
-    warnings,
-  }
-  if (related.commitsBehind !== undefined) {
-    result.commitsBehind = related.commitsBehind
-  }
-  return result
+  const relation = await staleRelation(ctx, opts.currentHead, canvas)
+  return { status: 'stale', headSha, currentHeadSha, derivable, warnings, ...relation }
 }

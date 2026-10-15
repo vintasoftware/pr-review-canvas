@@ -1,6 +1,7 @@
 // @ts-check
-// Hunk header parsing and the hunk-for-line lookup. One implementation for the browser and the
-// server (src/git/patch-lines.ts re-exports it), so both sides agree on which hunk owns a line.
+// Hunk header parsing, patch splitting and the hunk-for-line lookup. One implementation for the
+// browser and the server (src/git/patch-lines.ts re-exports it), so both sides agree on where a
+// hunk starts and which hunk owns a line.
 /** @typedef {import('./contract-types.js').Side} Side */
 /** @typedef {{ oldStart: number, oldLines: number, newStart: number, newLines: number }} HunkRange */
 
@@ -67,4 +68,33 @@ export function hunkLineRanges(hunks, side) {
     return start === end ? `${start}` : `${start}-${end}`
   })
   return `${side}-side lines ${ranges.length ? ranges.join(', ') : 'none'}`
+}
+
+/** @typedef {HunkRange & { header: string, lines: string[] }} ParsedHunk lines keep their marker (`+`, `-`, ` `, `\`) */
+
+/**
+ * Splits a patch (starting at its first `@@`) into hunks. Lines before the first header are dropped.
+ * @param {string} patch
+ * @returns {ParsedHunk[]}
+ */
+export function splitHunks(patch) {
+  /** @type {ParsedHunk[]} */
+  const out = []
+  if (patch === '') {
+    return out
+  }
+  /** @type {ParsedHunk | null} */
+  let cur = null
+  for (const line of patch.split('\n')) {
+    const head = parseHunkHeader(line)
+    if (head !== null) {
+      cur = { ...head, header: line, lines: [] }
+      out.push(cur)
+      continue
+    }
+    if (cur !== null) {
+      cur.lines.push(line)
+    }
+  }
+  return out
 }

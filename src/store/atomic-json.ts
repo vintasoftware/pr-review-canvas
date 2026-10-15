@@ -7,12 +7,13 @@ export async function writeJsonAtomic(file: string, value: unknown): Promise<voi
   return writeTextAtomic(file, `${JSON.stringify(value, null, 2)}\n`)
 }
 
-export async function writeTextAtomic(file: string, text: string): Promise<void> {
+/** `mode` sets the new file's permissions, as with writeFile; the default leaves them to the umask. */
+export async function writeTextAtomic(file: string, text: string, mode?: number): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true })
   const temporaryDir = await mkdtemp(`${file}.`)
   try {
     const tmp = path.join(temporaryDir, 'content')
-    await writeFile(tmp, text, 'utf8')
+    await writeFile(tmp, text, mode === undefined ? 'utf8' : { encoding: 'utf8', mode })
     await rename(tmp, file)
   } finally {
     await rm(temporaryDir, { recursive: true, force: true })

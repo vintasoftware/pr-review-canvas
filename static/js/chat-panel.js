@@ -1,4 +1,5 @@
 // @ts-check
+import { clickedCanvasLink } from './deep-link.js'
 
 /** Keeps the same chat mounted while switching between the sidebar and floating panel.
  *
@@ -64,6 +65,23 @@ export function wireChatPanel(root, pane, opts = {}) {
     launcher.focus()
   }
 
+  /**
+   * Minimizes the pane while it floats over the canvas, so what the reader is sent to on the
+   * canvas is not left under it. A docked pane covers nothing.
+   */
+  function uncover() {
+    if (narrow.matches && floating) close()
+  }
+
+  /**
+   * A canvas link in the pane leads to the canvas, so the pane steps aside before the page scrolls
+   * there. The pane is inside the page, so this runs before the page follows the link.
+   * @param {MouseEvent} event
+   */
+  function onLinkClick(event) {
+    if (clickedCanvasLink(event) !== null) uncover()
+  }
+
   /** @param {Event} event */
   function cancel(event) {
     event.preventDefault()
@@ -95,6 +113,7 @@ export function wireChatPanel(root, pane, opts = {}) {
 
   launcher.addEventListener('click', open)
   minimize.addEventListener('click', close)
+  pane.addEventListener('click', onLinkClick)
   dialog.addEventListener('cancel', cancel)
   dialog.addEventListener('keydown', trapFocus)
   narrow.addEventListener('change', sync)
@@ -103,10 +122,12 @@ export function wireChatPanel(root, pane, opts = {}) {
 
   return {
     open,
+    uncover,
     stop() {
       if (dialog.open) dialog.close()
       launcher.removeEventListener('click', open)
       minimize.removeEventListener('click', close)
+      pane.removeEventListener('click', onLinkClick)
       dialog.removeEventListener('cancel', cancel)
       dialog.removeEventListener('keydown', trapFocus)
       narrow.removeEventListener('change', sync)

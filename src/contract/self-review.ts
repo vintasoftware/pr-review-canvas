@@ -1,13 +1,7 @@
 import { z } from 'zod'
-import type { IssueComment } from './comments.js'
+import { type IssueComment, PageDiffShape } from './comments.js'
 import { SETTLEMENT_REASON_MAX, type Settlement } from './review-artifact.js'
 import type { PrState } from './state.js'
-
-/** The commit the page was showing. The server refuses the change when the head moved on. */
-const HeadShaSchema = z
-  .string()
-  .regex(/^[0-9a-f]{40}$/)
-  .optional()
 
 /**
  * The author settles a point with a reason, or reopens it. `comment` also posts the reason on the
@@ -18,9 +12,9 @@ export const SettleInputSchema = z.discriminatedUnion('settled', [
     settled: z.literal(true),
     reason: z.string().trim().min(1).max(SETTLEMENT_REASON_MAX),
     comment: z.boolean().default(false),
-    headSha: HeadShaSchema,
+    ...PageDiffShape,
   }),
-  z.object({ settled: z.literal(false), headSha: HeadShaSchema }),
+  z.object({ settled: z.literal(false), ...PageDiffShape }),
 ])
 export type SettleInput = z.input<typeof SettleInputSchema>
 
@@ -28,7 +22,7 @@ export type SettleInput = z.input<typeof SettleInputSchema>
 export type CanvasSharing =
   | { status: 'shared'; url: string }
   | { status: 'failed'; warning: string; zipPath: string }
-  /** The config turns the canvas comment off: nothing was posted. */
+  /** The config, or the run (`generate --out`), turns the canvas comment off: nothing was posted. */
   | { status: 'off' }
 
 /** The answer of `PUT /prs/:n/points/:fingerprint/settled`. */

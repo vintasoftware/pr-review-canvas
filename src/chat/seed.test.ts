@@ -19,10 +19,11 @@ const PATHS = {
   repoRoot: '/repo',
   code: { kind: 'reader-checkout', cwd: '/repo' },
 } as const
+const REVIEWER = { readerResolves: false }
 
 describe('renderSeed', () => {
   it('fills every token of the shipped template', async () => {
-    const seed = renderSeed(await loadSeedTemplate(), artifact, PATHS)
+    const seed = renderSeed(await loadSeedTemplate(), artifact, PATHS, REVIEWER)
     expect(seed).not.toMatch(/\{\{[A-Z_]+\}\}/)
     expect(seed).toContain('#42 **feat: add b** by octocat')
     expect(seed).toContain('- **Run path**')
@@ -31,24 +32,40 @@ describe('renderSeed', () => {
   })
 
   it('states the length rule and the answer protocol the chat depends on', async () => {
-    const seed = renderSeed(await loadSeedTemplate(), artifact, PATHS)
+    const seed = renderSeed(await loadSeedTemplate(), artifact, PATHS, REVIEWER)
     expect(seed).toContain('At most six sentences')
     expect(seed).toContain('No, and it should be.')
     expect(seed).toContain('```comment')
+    expect(seed).toContain('```resolve')
     expect(seed).toContain('Do not invent problems')
   })
 
+  it('tells the agent whether the reader may resolve attention points', async () => {
+    const template = await loadSeedTemplate()
+    expect(renderSeed(template, artifact, PATHS, REVIEWER)).toContain(
+      'The reader may not resolve attention points here.'
+    )
+    expect(renderSeed(template, artifact, PATHS, { readerResolves: true })).toContain(
+      'The reader wrote this pull request and may resolve its attention points: they answer them; they do not review them.'
+    )
+  })
+
   it('leaves a token the data does not name alone, so a template typo is visible', () => {
-    expect(renderSeed('{{NOPE}}', artifact, PATHS)).toBe('{{NOPE}}')
+    expect(renderSeed('{{NOPE}}', artifact, PATHS, REVIEWER)).toBe('{{NOPE}}')
   })
 })
 
 describe('where the code is', () => {
   it('names the review checkout as the working directory, and the lockfile caveat', async () => {
-    const seed = renderSeed(await loadSeedTemplate(), artifact, {
-      ...PATHS,
-      code: { kind: 'checkout', cwd: '/data/checkouts/42', sha: 'b'.repeat(40) },
-    })
+    const seed = renderSeed(
+      await loadSeedTemplate(),
+      artifact,
+      {
+        ...PATHS,
+        code: { kind: 'checkout', cwd: '/data/checkouts/42', sha: 'b'.repeat(40) },
+      },
+      REVIEWER
+    )
     expect(seed).toContain('Your working directory, `/data/checkouts/42`, is a checkout of the')
     expect(seed).toContain('Git submodules are not checked out')
     expect(seed).toContain('`bbbbbbb`')
@@ -58,15 +75,20 @@ describe('where the code is', () => {
   })
 
   it('says the working tree is the work under review for uncommitted work', async () => {
-    const seed = renderSeed(await loadSeedTemplate(), artifact, {
-      ...PATHS,
-      code: { kind: 'working-tree', cwd: '/repo' },
-    })
+    const seed = renderSeed(
+      await loadSeedTemplate(),
+      artifact,
+      {
+        ...PATHS,
+        code: { kind: 'working-tree', cwd: '/repo' },
+      },
+      REVIEWER
+    )
     expect(seed).toContain('uncommitted edits included')
   })
 
   it("warns that the reader's checkout may be on another branch without a review checkout", async () => {
-    const seed = renderSeed(await loadSeedTemplate(), artifact, PATHS)
+    const seed = renderSeed(await loadSeedTemplate(), artifact, PATHS, REVIEWER)
     expect(seed).toContain('may be on')
     expect(seed).toContain('another branch')
   })
@@ -87,9 +109,9 @@ describe('the seed sections', () => {
   it('lists the attention points with their level, kind, audience, anchor, and the author’s answer', () => {
     const settled = { ...artifact, settled: { 'fp-1': { reason: 'The spec says sum.', at: 'now' } } }
     expect(pointsMarkdown(settled).split('\n')).toEqual([
-      '- decide · decision · for the reviewer · Sum instead of product (`src/app.ts:4`) — settled by the author: The spec says sum.',
-      '- check · tests · for the author · other() has no test (`src/app.ts:13`)',
-      '- fyi · debt · for the author · Deleted file had no owner (`src/gone.ts:1`)',
+      '- decide · decision · for the reviewer · Sum instead of product (`src/app.ts:4`) · point `fp-1` — settled by the author: The spec says sum.',
+      '- check · tests · for the author · other() has no test (`src/app.ts:13`) · point `fp-2`',
+      '- fyi · debt · for the author · Deleted file had no owner (`src/gone.ts:1`) · point `fp-3`',
     ])
   })
 

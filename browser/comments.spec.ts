@@ -34,28 +34,29 @@ test('opens the editor below the code line and links to the posted comment', asy
   await expect(link).toHaveAttribute('href', postedUrl)
 })
 
-test('replaces point posting buttons with comment links across dismissal and reload', async ({
+test('collapses a posted point to its comment link, everywhere it shows and after reload', async ({
   page,
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await card.locator('[data-act="point-post"]').click()
+  await expect(card).toHaveAttribute('data-status', 'posted')
+  await expect(card.locator('.prose')).toBeHidden()
   await expect(card.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
   await expect(card.locator('[data-act="point-post"]')).toHaveCount(0)
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
   await file.scrollIntoViewIfNeeded()
   const inline = file.locator('tr.ifind[data-fingerprint="fp-1"]')
+  await expect(inline).toHaveAttribute('data-status', 'posted')
   await expect(inline.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
 
-  await card.locator('[data-act="point-dismiss"]').click()
-  await expect(page.locator('.toast')).toHaveText('attention point dismissed')
-  const dismissed = page.locator('.dismissed-list')
-  await dismissed.locator('[data-act="show-dismissed"]').click()
-  await expect(dismissed.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
-  await dismissed.locator('[data-act="point-restore"]').click()
-  await expect(page.locator('.toast')).toHaveText('attention point restored')
+  // Expanded, the point shows its text again with the commands left to it.
+  await card.locator('[data-act="point-expand"]').click()
+  await expect(card.locator('.prose')).toBeVisible()
+  await expect(card.locator('.tbtns').getByRole('link', { name: /view comment/ })).toBeVisible()
   await page.reload()
+  await expect(card).toHaveAttribute('data-status', 'posted')
   await expect(card.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
   await expect(card.locator('[data-act="point-post"]')).toHaveCount(0)
 })

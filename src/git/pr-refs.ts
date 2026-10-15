@@ -25,10 +25,18 @@ export async function fetchPrRefs(
   host: Host,
   meta: PrMeta
 ): Promise<{ headSha: string; mergeBaseSha: string }> {
-  await git.fetch('origin', [
-    `+${host.remoteHeadRef(meta.number)}:${prHeadRef(meta.number)}`,
-    `+refs/heads/${meta.baseRef}:${prBaseRef(meta.number)}`,
-  ])
+  const head = `+${host.remoteHeadRef(meta.number)}:${prHeadRef(meta.number)}`
+  try {
+    await git.fetch('origin', [head, `+refs/heads/${meta.baseRef}:${prBaseRef(meta.number)}`])
+  } catch (err) {
+    // A merged PR's diff needs only its merge commit, which the forge still serves by its sha when
+    // the base branch is gone, as a stacked PR's is once the PR below it merges. Whatever failed,
+    // that fetch is tried; it fails in turn when the remote itself is the problem.
+    if (meta.mergeCommitSha === null) {
+      throw err
+    }
+    await git.fetch('origin', [head, meta.mergeCommitSha])
+  }
   const headSha = await git.revParse(prHeadRef(meta.number))
   const base = meta.mergeCommitSha === null ? prBaseRef(meta.number) : `${meta.mergeCommitSha}^1`
   const mergeBaseSha = await git.mergeBase(base, headSha)

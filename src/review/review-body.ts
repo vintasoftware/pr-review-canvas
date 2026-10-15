@@ -2,8 +2,11 @@
 import { layerProgress } from '../../static/js/progress.js'
 import type { CommentsPayload } from '../contract/comments.js'
 import type { Layer, Pr, ReviewArtifact } from '../contract/review-artifact.js'
+import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { PrState } from '../contract/state.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
+import type { DiffedCommit } from '../store/derived-store.js'
+import { marksOn } from '../../static/js/diff-identity.js'
 
 export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost).'
 
@@ -19,22 +22,25 @@ export function inlineText(text: string): string {
 }
 
 /**
- * The state as it applies to one canvas. Marks made on another canvas, and marks whose canvas
- * is unknown, describe other code, so they count for nothing here.
+ * The state as it applies to one canvas diff. Marks made on another canvas or another diff of it,
+ * and marks whose canvas is unknown, describe other code, so they count for nothing here.
  */
-export function stateForCanvas(state: PrState, canvasSha: string): PrState {
-  return state.reviewedCanvasSha === canvasSha ? state : { ...state, reviewed: {} }
+export function stateForCanvas(state: PrState, canvas: DiffedCommit): PrState {
+  return marksOn(state, canvas) ? state : { ...state, reviewed: {} }
 }
 
 /**
- * The commit the marks on this page describe: the commit of the canvas on the page, whether it is
- * current, carried over, or read as outdated, since its diff is what the reviewer looked at. The
- * head only when there is no canvas. Keyed this way, a carried-over canvas keeps its marks however
- * often the head moves, and marks made on an outdated canvas never credit a later one. The page
- * sends this commit back with every mark it makes, as `bundle.canvas.headSha`.
+ * The diff the marks on this page describe: the canvas on the page, whether it is current, carried
+ * over, or read as outdated, diffed from the merge base it was generated against, since that diff is
+ * what the reviewer looked at. The head's own diff only when there is no canvas. Keyed this way, a
+ * carried-over canvas keeps its marks however often the head moves, and marks made on an outdated
+ * canvas never credit a later one, nor a canvas generated again for its commit on a new base. The
+ * page sends this canvas back with every mark it makes, as `bundle.canvas`.
  */
-export function reviewedCommit(found: CanvasLookup, pr: Pr): string {
-  return found.status === 'missing' ? pr.headSha : found.headSha
+export function reviewedDiff(found: CanvasLookup, pr: Pr, manifest: CanvasManifest | null): DiffedCommit {
+  return found.status === 'missing'
+    ? { headSha: pr.headSha, mergeBaseSha: pr.mergeBaseSha }
+    : { headSha: found.headSha, mergeBaseSha: manifest?.mergeBaseSha ?? pr.mergeBaseSha }
 }
 
 /** The layers a human still has to look at. Empty means approve is allowed. */

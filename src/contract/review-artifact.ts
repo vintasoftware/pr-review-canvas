@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SETTLEMENT_REASON_MAX } from '../../static/js/proposed-comment.js'
 import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 
 /** Character caps applied to model output. Numbers, so the prompt can print them. */
@@ -324,8 +325,9 @@ export const PointSchema = z.object({
 })
 export type Point = z.infer<typeof PointSchema>
 
-/** The longest reason the author may give for settling a point. */
-export const SETTLEMENT_REASON_MAX = 600
+// The longest reason the author may give for settling a point lives with the proposal parser, so a
+// resolution AI Chat proposes is checked against the same limit the route enforces.
+export { SETTLEMENT_REASON_MAX }
 
 /**
  * The author's answer to a point, given before review. A settled point leaves the reviewer's list,

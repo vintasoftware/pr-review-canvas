@@ -7,12 +7,12 @@
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 /** @typedef {import('../contract-types.js').Decision} Decision */
 /** @typedef {import('./steps.js').Step} Step */
-import { saveAppearance } from '../api.js'
-import { wireCopyCommands } from '../commands.js'
+import { saveAppearance, setApiBase } from '../api.js'
+import { toast, wireCopyCommands } from '../commands.js'
 import { copyToClipboard, esc, qs, scrollIntoViewSafe } from '../dom.js'
 import { bannerHtml, errorCardHtml, toEnvelopeError } from '../errors.js'
+import { wireEnvBadge } from '../header-bar.js'
 import { hostLabel, setHost } from '../host.js'
-import { toast } from '../interactions.js'
 import { isTypingTarget } from '../keyboard.js'
 import { applySkin, DEFAULT_SKIN, readSkin, skinLabel } from '../skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from '../theme.js'
@@ -87,6 +87,7 @@ export class PrTourElement extends HTMLElement {
 
   connectedCallback() {
     wireCopyCommands(this)
+    wireEnvBadge(this)
     void this.boot()
   }
 
@@ -110,6 +111,8 @@ export class PrTourElement extends HTMLElement {
       return
     }
     setHost(this.bootstrap.host)
+    // The tour's API lives under the project's path on the shared server, as the review's does.
+    setApiBase(this.bootstrap.base)
     this.key = String(this.bootstrap.key)
     this.theme = readTheme(document.documentElement)
     this.skin = readSkin(document.documentElement)
@@ -135,7 +138,14 @@ export class PrTourElement extends HTMLElement {
     this.unwire?.()
     this.bundle = bundle
     const now = new Date()
-    const header = tourHeaderHtml(bundle, { host: location.host, theme: this.theme, skin: this.skin, now })
+    const project = { slug: boot.project, home: boot.base, reopenIn: boot.reopenIn }
+    const header = tourHeaderHtml(bundle, {
+      host: location.host,
+      theme: this.theme,
+      skin: this.skin,
+      now,
+      project,
+    })
     const what = bundle.pr.number === null ? bundle.pr.headRef : `#${bundle.pr.number}`
     document.title = `Tour · ${what} ${bundle.pr.title}`
     if (bundle.tour === undefined) {
@@ -257,6 +267,7 @@ export class PrTourElement extends HTMLElement {
     } else if (step.kind === 'landmark') {
       stage.innerHTML = landmarkHtml(bundle, this.steps, step.landmark)
       mountFrames(stage, {
+        base: /** @type {TourBootstrap} */ (this.bootstrap).base,
         key: this.key,
         headSha: bundle.tour.headSha,
         preview: bundle.preview,

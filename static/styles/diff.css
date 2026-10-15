@@ -117,6 +117,9 @@ tr.ifind.decide .x {
 tr.ifind.fyi .x {
   box-shadow: inset 4px 0 0 var(--sev-minor);
 }
+tr.ifind.is-handled:not([data-expanded]) .x {
+  padding: 6px 14px;
+}
 tr.thread .x {
   background: var(--panel-2);
 }

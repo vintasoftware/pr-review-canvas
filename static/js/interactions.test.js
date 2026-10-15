@@ -16,7 +16,7 @@ import { wireFoldReveal } from './code-folds.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
 import { carriedOverBarHtml } from './empty-state.js'
-import { askTargetFor, nextUnreviewedTarget, padUnderStickyBar, toast, wireReview } from './interactions.js'
+import { askTargetFor, nextUnreviewedTarget, padUnderStickyBar, wireReview } from './interactions.js'
 import { renderChatShell, wireChat } from './chat.js'
 import {
   cardOf,
@@ -49,6 +49,7 @@ const authored = {
   ),
 }
 const HEAD = artifact.pr.headSha
+const MERGE_BASE = artifact.pr.mergeBaseSha
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -63,11 +64,17 @@ function bundleFor(state, canvas = artifact) {
     files,
     derivable: true,
     artifact: canvas,
-    canvas: { headSha: artifact.pr.headSha, source: 'local', manifest: null },
+    canvas: {
+      headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
+      source: 'local',
+      manifest: null,
+    },
     skillCommand: '/pr-review-canvas 42',
     comments: {
       fetchedAt: NOW.toISOString(),
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       reviewComments: comments,
       issueComments,
     },
@@ -84,7 +91,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -96,6 +103,7 @@ function setup(opts = {}) {
   const ctx = {
     artifact: canvas,
     headSha: artifact.pr.headSha,
+    mergeBaseSha: artifact.pr.mergeBaseSha,
     files,
     patches,
     comments: threadComments,
@@ -283,12 +291,14 @@ function setup(opts = {}) {
     state,
     capabilities: opts.capabilities ?? { canComment: true, tokenKind: 'classic', login: 'octocat' },
     headSha: artifact.pr.headSha,
+    mergeBaseSha: artifact.pr.mergeBaseSha,
     api,
   })
   const wiring = wireReview(root, session, {
     ...(opts.fetchReviewBody ? { fetchReviewBody: opts.fetchReviewBody } : {}),
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
+    ...(opts.uncover ? { uncover: opts.uncover } : {}),
   })
   wirings.push(wiring)
   return { root, session, calls, wiring }
@@ -514,6 +524,7 @@ describe('reviewed state', () => {
   it('opens the file cards the server reopened with their layer', async () => {
     const reviewed = {
       ...BASE,
+      reviewedCanvasSha: artifact.pr.headSha,
       reviewed: {
         'layer:run-path': /** @type {const} */ (true),
         'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
@@ -631,21 +642,50 @@ describe('reviewed state', () => {
 })
 
 describe('attention points', () => {
-  it('dismisses a point everywhere it shows, and counts only the active ones', async () => {
+  const layerCard = (/** @type {HTMLElement} */ root, /** @type {string} */ fp) =>
+    root.querySelector(`section.layer li.finding[data-fingerprint="${fp}"]`)
+
+  it('dismisses a point everywhere it shows, collapses it in place, and counts only the open ones', async () => {
     const { root, calls } = setup()
     expect(root.querySelector('.sevsum')?.textContent).toContain('1')
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
     await flush()
     expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: true }]])
-    expect(
-      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
-    ).toBe(true)
-    expect(root.querySelector('tr.ifind[data-fingerprint="fp-1"]')?.hasAttribute('hidden')).toBe(true)
+    for (const el of [layerCard(root, 'fp-1'), root.querySelector('tr.ifind[data-fingerprint="fp-1"]')]) {
+      expect(el?.hasAttribute('hidden')).toBe(false)
+      expect(el?.getAttribute('data-status')).toBe('dismissed')
+      expect(el?.hasAttribute('data-expanded')).toBe(false)
+    }
     expect(root.querySelector('.point-count')?.textContent).toBe('0')
-    expect(root.querySelector('.dismissed-line')?.textContent).toContain('1 dismissed')
+    expect(root.querySelector('.point-statuses')?.textContent).toContain('1 dismissed')
   })
 
-  it('lets the author settle a point with a reason, and hides it with the reason listed', async () => {
+  it('expands a collapsed point and collapses it again', async () => {
+    const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
+    const card = layerCard(root, 'fp-1')
+    const toggle = click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-expand"]')
+    expect(card?.hasAttribute('data-expanded')).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    // The row in the diff keeps its own view.
+    expect(root.querySelector('tr.ifind[data-fingerprint="fp-1"]')?.hasAttribute('data-expanded')).toBe(false)
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-expand"]')
+    expect(card?.hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('switches the points acted on off the page and back from the overview', () => {
+    const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
+    const toggle = () => root.querySelector('[data-act="toggle-handled"]')
+    click(root, '[data-act="toggle-handled"]')
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('true')
+    expect(toggle()?.textContent).toBe('show the 1 acted on')
+    // The switch is drawn again from the state, and keeps the focus.
+    expect(document.activeElement).toBe(toggle())
+    click(root, '[data-act="toggle-handled"]')
+    expect(toggle()?.getAttribute('aria-pressed')).toBe('false')
+    expect(toggle()?.textContent).toBe('hide the 1 acted on')
+  })
+
+  it('lets the author settle a point with a reason, and collapses it with the reason', async () => {
     const { root, calls } = setup({ selfReview: true, artifact: authored })
     expect(root.querySelector('.self-review-note')?.textContent).toContain('3 points are marked yours')
     click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-settle"]')
@@ -672,17 +712,16 @@ describe('attention points', () => {
           reason: 'Covered by the e2e suite.',
           comment: true,
           headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
         },
       ],
     ])
     expect(root.querySelector('.settle-box')).toBeNull()
-    expect(
-      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
-    ).toBe(true)
-    expect(root.querySelector('.settled-list .dismissed-line')?.textContent).toContain(
-      '1 resolved by the author'
-    )
-    expect(root.querySelector('.settled-reason')?.textContent).toContain('Covered by the e2e suite.')
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('resolved')
+    expect(card?.querySelector('.p-summary')?.textContent).toContain('Covered by the e2e suite.')
+    expect(card?.querySelector('.settled-reason')?.textContent).toContain('Covered by the e2e suite.')
+    expect(root.querySelector('.point-statuses')?.textContent).toContain('1 resolved')
     expect(root.querySelector('.self-review-note')?.textContent).toContain('2 points are marked yours')
     expect(root.querySelector('.toast')?.textContent).toContain('canvas comment is updated')
   })
@@ -690,20 +729,24 @@ describe('attention points', () => {
   it('reopens a settled point for the author, and offers settle on it again', async () => {
     const settled = { 'fp-1': { reason: 'Covered.', at: NOW.toISOString() } }
     const { root, calls } = setup({ selfReview: true, artifact: { ...authored, settled } })
-    expect(
-      root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')?.hasAttribute('hidden')
-    ).toBe(true)
-    click(root, '[data-act="show-settled"]')
-    expect(root.querySelector('.findings.settled')?.hasAttribute('hidden')).toBe(false)
-    click(root, '[data-act="point-unsettle"]')
+    expect(layerCard(root, 'fp-1')?.getAttribute('data-status')).toBe('resolved')
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-unsettle"]')
     await flush()
     expect(calls).toEqual([
-      ['settled', { fingerprint: 'fp-1', settled: false, headSha: artifact.pr.headSha }],
+      [
+        'settled',
+        {
+          fingerprint: 'fp-1',
+          settled: false,
+          headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
+        },
+      ],
     ])
-    const card = root.querySelector('section.layer li.finding[data-fingerprint="fp-1"]')
-    expect(card?.hasAttribute('hidden')).toBe(false)
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('open')
     expect(card?.querySelector('[data-act="point-settle"]')).not.toBeNull()
-    expect(root.querySelector('.settled-list')?.hasAttribute('hidden')).toBe(true)
+    expect(root.querySelector('.point-statuses')?.textContent).not.toContain('resolved')
   })
 
   it('shows a reviewer what the author settled, with no way to settle or reopen', () => {
@@ -718,10 +761,146 @@ describe('attention points', () => {
     expect(root.querySelector('[data-act="point-settle"]')).toBeNull()
     expect(root.querySelector('[data-act="point-unsettle"]')).toBeNull()
     expect(root.querySelector('.self-review-note')?.hasAttribute('hidden')).toBe(true)
-    expect(root.querySelector('.settled-list a')?.getAttribute('href')).toBe(settled['fp-1'].commentUrl)
-    expect(root.querySelector('.findings [data-fingerprint="fp-1"] .pill.audience')?.textContent).toBe(
-      'author'
+    const card = layerCard(root, 'fp-1')
+    expect(card?.querySelector('.tbtns a')?.getAttribute('href')).toBe(settled['fp-1'].commentUrl)
+    expect(card?.querySelector('.pill.audience')?.textContent).toBe('author')
+  })
+
+  it('offers resolve on a point the author dismissed only after it is restored', async () => {
+    const { root, calls } = setup({ selfReview: true, artifact })
+    expect(layerCard(root, 'fp-1')?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+    await flush()
+    expect(layerCard(root, 'fp-1')?.getAttribute('data-status')).toBe('dismissed')
+    expect(layerCard(root, 'fp-1')?.querySelector('[data-act="point-settle"]')).toBeNull()
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-restore"]')
+    await flush()
+    expect(calls).toEqual([
+      ['dismissed', { fingerprint: 'fp-1', dismissed: true }],
+      ['dismissed', { fingerprint: 'fp-1', dismissed: false }],
+    ])
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('open')
+    expect(card?.querySelector('[data-act="point-settle"]')).not.toBeNull()
+    expect(card?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
+  })
+
+  it.each([false, true])(
+    'keeps the card open and shows why when the server refuses a dismissal (self-review %s)',
+    async selfReview => {
+      const { root } = setup({
+        selfReview,
+        artifact,
+        api: { putDismissed: () => Promise.reject(new Error('offline')) },
+      })
+      click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+      await flush()
+      const card = layerCard(root, 'fp-1')
+      expect(card?.getAttribute('data-status')).toBe('open')
+      expect(card?.querySelector('.cmd-err')?.textContent).toBe('offline')
+    }
+  )
+
+  it('shows why a restore failed next to the restore command', async () => {
+    const { root } = setup({
+      state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } },
+      api: { putDismissed: () => Promise.reject(new Error('offline')) },
+    })
+    click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-restore"]')
+    await flush()
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('dismissed')
+    expect(card?.querySelector('[data-act="point-restore"] + .cmd-err')?.textContent).toBe('offline')
+  })
+
+  it.each([false, true])(
+    'restores a dismissed point with its usual commands (self-review %s)',
+    async selfReview => {
+      const { root } = setup({ selfReview, artifact })
+      click(root, '.findings [data-fingerprint="fp-1"] [data-act="point-dismiss"]')
+      await flush()
+      click(root, 'section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-restore"]')
+      await flush()
+      const card = layerCard(root, 'fp-1')
+      expect(card?.classList.contains('is-handled')).toBe(false)
+      expect(card?.querySelector('[data-act="point-restore"]')).toBeNull()
+      expect(card?.querySelector('[data-act="point-dismiss"]')).not.toBeNull()
+      expect(card?.querySelector('[data-act="point-settle"]') !== null).toBe(selfReview)
+    }
+  )
+
+  it('resolves a point with the reason AI Chat proposed, posting nothing', async () => {
+    const { root, calls, wiring } = setup({ selfReview: true, artifact: authored })
+    const button = document.createElement('button')
+    root.append(button)
+    wiring.onProposedResolution(
+      'save',
+      { point: { fingerprint: 'fp-1', title: 't' }, reason: 'We keep it.' },
+      button
     )
+    await flush()
+    expect(calls).toEqual([
+      [
+        'settled',
+        {
+          fingerprint: 'fp-1',
+          settled: true,
+          reason: 'We keep it.',
+          comment: false,
+          headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
+        },
+      ],
+    ])
+    expect(layerCard(root, 'fp-1')?.getAttribute('data-status')).toBe('resolved')
+  })
+
+  it("opens the point's own reason box with the reason AI Chat proposed", () => {
+    // The point waits in the review, so it is collapsed; the box opens on the expanded point.
+    const { root, calls, wiring } = setup({
+      selfReview: true,
+      artifact: authored,
+      state: {
+        ...BASE,
+        pending: [
+          {
+            id: 'd1',
+            path: 'src/app.ts',
+            line: 4,
+            side: 'new',
+            body: 'x',
+            pointFingerprint: 'fp-1',
+            headSha: artifact.pr.headSha,
+            mergeBaseSha: artifact.pr.mergeBaseSha,
+            createdAt: NOW.toISOString(),
+            updatedAt: NOW.toISOString(),
+          },
+        ],
+      },
+    })
+    const button = document.createElement('button')
+    root.append(button)
+    wiring.onProposedResolution(
+      'edit',
+      { point: { fingerprint: 'fp-1', title: 't' }, reason: 'We keep it.' },
+      button
+    )
+    const card = layerCard(root, 'fp-1')
+    expect(card?.hasAttribute('data-expanded')).toBe(true)
+    const reason = card?.querySelector('.settle-box textarea')
+    if (!(reason instanceof HTMLTextAreaElement)) throw new Error('no reason box')
+    expect(reason.value).toBe('We keep it.')
+    expect(card?.querySelector('input[name="settle-comment"]')).not.toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it('says so when the point has no commands on the page to open the reason box under', () => {
+    const { root, wiring } = setup({ selfReview: true, artifact: authored })
+    const button = document.createElement('button')
+    root.append(button)
+    const resolution = { point: { fingerprint: 'fp-unknown', title: 'x' }, reason: 'x' }
+    wiring.onProposedResolution('edit', resolution, button)
+    expect(root.querySelector('.cmd-err')?.textContent).toBe('that point is not on this page')
   })
 
   it('closes the reason box on cancel', () => {
@@ -731,15 +910,7 @@ describe('attention points', () => {
     expect(root.querySelector('.settle-box')).toBeNull()
   })
 
-  it('closes the dismissed list again on a second click', () => {
-    const { root } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
-    const show = click(root, '[data-act="show-dismissed"]')
-    click(root, '[data-act="show-dismissed"]')
-    expect(show.textContent).toBe('show')
-    expect(root.querySelector('.findings.dismissed')?.hasAttribute('hidden')).toBe(true)
-  })
-
-  it('keeps the link of a point that was posted before it was dismissed', () => {
+  it('shows a point that was posted before it was dismissed as posted, with its link', () => {
     const { root } = setup({
       state: {
         ...BASE,
@@ -747,28 +918,18 @@ describe('attention points', () => {
         posted: [{ commentId: 1001, pointFingerprint: 'fp-1', at: NOW.toISOString() }],
       },
     })
-    click(root, '[data-act="show-dismissed"]')
-    expect(root.querySelector('.findings.dismissed .tbtns a')?.getAttribute('href')).toBe(
+    const card = layerCard(root, 'fp-1')
+    expect(card?.getAttribute('data-status')).toBe('posted')
+    expect(card?.querySelector('.tbtns a')?.getAttribute('href')).toBe(
       'https://github.com/acme/widgets/pull/42#discussion_r1001'
     )
-  })
-
-  it('shows the dismissed list and restores a point from it', async () => {
-    const { root, calls } = setup({ state: { ...BASE, dismissed: { 'fp-1': { at: NOW.toISOString() } } } })
-    expect(root.querySelector('.findings.dismissed')?.hasAttribute('hidden')).toBe(true)
-    const show = click(root, '[data-act="show-dismissed"]')
-    expect(root.querySelector('.findings.dismissed')?.hasAttribute('hidden')).toBe(false)
-    expect(show.textContent).toBe('hide')
-    click(root, '.findings.dismissed [data-act="point-restore"]')
-    await flush()
-    expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: false }]])
-    expect(root.querySelector('.dismissed-list')?.hasAttribute('hidden')).toBe(true)
   })
 
   it('posts a point anchored on the old side', async () => {
     setRenderContext({
       artifact,
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       files,
       patches,
       comments,
@@ -790,6 +951,7 @@ describe('attention points', () => {
       state: BASE,
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         postComment: async (_pr, input) => {
           sent.push(input)
@@ -809,6 +971,7 @@ describe('attention points', () => {
         body: expect.stringContaining('Deleted file had no owner'),
         pointFingerprint: 'fp-3',
         headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
       },
     ])
   })
@@ -828,6 +991,7 @@ describe('attention points', () => {
           body: expect.stringContaining('**Sum instead of product**'),
           pointFingerprint: 'fp-1',
           headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
         },
       ],
     ])
@@ -870,7 +1034,15 @@ describe('comment composers', () => {
     expect(calls).toEqual([
       [
         'comment',
-        { kind: 'inline', path: 'src/app.ts', line: 4, side: 'new', body: 'look here', headSha: HEAD },
+        {
+          kind: 'inline',
+          path: 'src/app.ts',
+          line: 4,
+          side: 'new',
+          body: 'look here',
+          headSha: HEAD,
+          mergeBaseSha: MERGE_BASE,
+        },
       ],
     ])
     expect(root.querySelector('tr.composer')).toBeNull()
@@ -1026,7 +1198,18 @@ describe('comment composers', () => {
     click(root, 'tr.composer [data-act="composer-post"]')
     await flush()
     expect(calls).toEqual([
-      ['comment', { kind: 'inline', path: 'src/app.ts', line: 3, side: 'old', body: 'why', headSha: HEAD }],
+      [
+        'comment',
+        {
+          kind: 'inline',
+          path: 'src/app.ts',
+          line: 3,
+          side: 'old',
+          body: 'why',
+          headSha: HEAD,
+          mergeBaseSha: MERGE_BASE,
+        },
+      ],
     ])
   })
 
@@ -1056,7 +1239,12 @@ describe('comment composers', () => {
     area.value = 'agreed'
     click(root, '.thread-full [data-act="composer-post"]')
     await flush()
-    expect(calls).toEqual([['comment', { kind: 'reply', inReplyToId: 1001, body: 'agreed', headSha: HEAD }]])
+    expect(calls).toEqual([
+      [
+        'comment',
+        { kind: 'reply', inReplyToId: 1001, body: 'agreed', headSha: HEAD, mergeBaseSha: MERGE_BASE },
+      ],
+    ])
     expect(root.querySelector('.thread-full .composer-box')).toBeNull()
     expect(
       [...root.querySelectorAll('tr.thread[data-thread="1001"] .cmt .prose')].at(-1)?.textContent
@@ -1073,7 +1261,9 @@ describe('comment composers', () => {
     area.value = 'looks fine'
     click(root, '.pr-composer-host [data-act="composer-post"]')
     await flush()
-    expect(calls).toEqual([['comment', { kind: 'issue', body: 'looks fine', headSha: HEAD }]])
+    expect(calls).toEqual([
+      ['comment', { kind: 'issue', body: 'looks fine', headSha: HEAD, mergeBaseSha: MERGE_BASE }],
+    ])
     expect([...root.querySelectorAll('.conversation > .cmt .prose')].at(-1)?.textContent).toContain(
       'looks fine'
     )
@@ -1097,7 +1287,16 @@ describe('what the page remembers after a reload', () => {
     const { root, session } = setup({
       capabilities: { canComment: false, tokenKind: 'classic', login: 'octocat', reason: 'no repo scope' },
     })
-    const ctx = { artifact, headSha: artifact.pr.headSha, files, patches, comments, state: BASE, now: NOW }
+    const ctx = {
+      artifact,
+      headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
+      files,
+      patches,
+      comments,
+      state: BASE,
+      now: NOW,
+    }
     const card = root.querySelector('article.file#file-src_new_name_ts')
     if (!(card instanceof HTMLElement)) {
       throw new Error('no card')
@@ -1247,6 +1446,22 @@ describe('keyboard', () => {
     // The focus moved to a file, so there is no point to dismiss any more.
     expect(calls).toEqual([])
     expect(root.querySelector('.is-focused')?.id).toBe('file-src_app_ts')
+  })
+
+  it('dismisses the point in focus with d, then opens and collapses it with o', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key('d')
+    await flush()
+    expect(calls).toEqual([['dismissed', { fingerprint: 'fp-1', dismissed: true }]])
+    const card = root.querySelector('#point-p-1')
+    expect(card?.getAttribute('data-status')).toBe('dismissed')
+    key('o')
+    expect(card?.hasAttribute('data-expanded')).toBe(true)
+    // The point's file card stays as it was.
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(false)
+    key('o')
+    expect(card?.hasAttribute('data-expanded')).toBe(false)
   })
 
   it('moves the keyboard focus with the ring', () => {
@@ -1548,6 +1763,27 @@ describe('keyboard', () => {
     }
   })
 
+  it('draws the diff of a point not drawn yet and opens its box on the canvas, past a floating pane', () => {
+    const uncover = vi.fn()
+    try {
+      const { root, wiring } = setup({ selfReview: true, drawn: false, uncover })
+      expect(root.querySelector('tr.ifind[data-fingerprint="fp-3"]')).toBeNull()
+      const button = document.createElement('button')
+      root.append(button)
+      wiring.onProposedResolution(
+        'edit',
+        { point: { fingerprint: 'fp-3', title: 't' }, reason: 'Unused.' },
+        button
+      )
+      const reason = root.querySelector('tr.ifind[data-fingerprint="fp-3"] .settle-box textarea')
+      expect(reason instanceof HTMLTextAreaElement && reason.value).toBe('Unused.')
+      expect(root.querySelector('.cmd-err')).toBeNull()
+      expect(uncover).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('stops listening once the screen is torn down', () => {
     const { root, wiring } = setup()
     wiring.stop()
@@ -1572,6 +1808,7 @@ describe('capability gating and sign-off', () => {
   it('shows the generated body and posts the review', async () => {
     const preview = {
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       body: 'Reviewed 1 of 1 layer.',
       unreviewed: [],
       pending: 0,
@@ -1587,12 +1824,16 @@ describe('capability gating and sign-off', () => {
     expect(dialog?.querySelector('.signoff-target')?.textContent).toContain('on commit aaaaaaa')
     click(root, '[data-act="signoff-post"]')
     await flush()
-    expect(calls).toEqual([['review', { event: 'APPROVE', body: 'Reviewed 1 of 1 layer.', headSha: HEAD }]])
-    expect(dialog?.querySelector('.signoff-result a')?.getAttribute('href')).toContain(
-      'pullrequestreview-7001'
-    )
-    click(root, '[data-act="signoff-close"]')
+    expect(calls).toEqual([
+      [
+        'review',
+        { event: 'APPROVE', body: 'Reviewed 1 of 1 layer.', headSha: HEAD, mergeBaseSha: MERGE_BASE },
+      ],
+    ])
+    // Posted with nothing to warn about: the dialog closes, and the toast links to the review.
     expect(dialog instanceof HTMLDialogElement && dialog.open).toBe(false)
+    expect(root.querySelector('.toast')?.textContent).toBe('approved · see it on GitHub')
+    expect(root.querySelector('.toast a')?.getAttribute('href')).toContain('pullrequestreview-7001')
   })
 
   it('announces the returned outcome when comments publish but approval fails', async () => {
@@ -1622,7 +1863,9 @@ describe('capability gating and sign-off', () => {
     await flush()
     click(root, '[data-act="signoff-post"]')
     await flush()
-    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment')
+    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
+    // A warning is still to read, so the dialog stays open with it.
+    expect(root.querySelector('#signoff-dialog')?.hasAttribute('open')).toBe(true)
     expect(root.querySelector('.signoff-result')?.textContent).toContain(warning)
   })
 
@@ -1630,6 +1873,7 @@ describe('capability gating and sign-off', () => {
     const { root, calls } = setup({
       fetchReviewBody: async () => ({
         headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
         body: 'body',
         unreviewed: ['Run path'],
         pending: 0,
@@ -1644,8 +1888,8 @@ describe('capability gating and sign-off', () => {
     area.value = '   '
     click(root, '[data-act="signoff-post"]')
     await flush()
-    expect(calls).toEqual([['review', { event: 'REQUEST_CHANGES', headSha: HEAD }]])
-    expect(root.querySelector('.toast')?.textContent).toBe('changes requested')
+    expect(calls).toEqual([['review', { event: 'REQUEST_CHANGES', headSha: HEAD, mergeBaseSha: MERGE_BASE }]])
+    expect(root.querySelector('.toast')?.textContent).toBe('changes requested · see it on GitHub')
   })
 
   it('says inside the dialog when the body could not be read', async () => {
@@ -1665,6 +1909,7 @@ describe('capability gating and sign-off', () => {
       api: { postReview: () => Promise.reject(new Error('502 github is down')) },
       fetchReviewBody: async () => ({
         headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
         body: 'body',
         unreviewed: ['Run path'],
         pending: 0,
@@ -1717,47 +1962,6 @@ describe('padUnderStickyBar', () => {
   })
 })
 
-describe('toast', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => {
-    vi.clearAllTimers()
-    vi.useRealTimers()
-  })
-
-  it('clears the dismissal notification after five seconds', () => {
-    const root = document.createElement('div')
-    const box = toast(root, 'attention point dismissed')
-
-    vi.advanceTimersByTime(4999)
-    expect(box.textContent).toBe('attention point dismissed')
-    vi.advanceTimersByTime(1)
-    expect(box.textContent).toBe('')
-  })
-
-  it('gives a replacement notification its own five seconds', () => {
-    const root = document.createElement('div')
-    const box = toast(root, 'attention point dismissed')
-    vi.advanceTimersByTime(3000)
-    toast(root, 'attention point restored')
-
-    vi.advanceTimersByTime(2000)
-    expect(box.textContent).toBe('attention point restored')
-    vi.advanceTimersByTime(3000)
-    expect(box.textContent).toBe('')
-  })
-
-  it('reuses one live region', () => {
-    document.body.innerHTML = '<div id="root"></div>'
-    const root = document.querySelector('#root')
-    if (!(root instanceof HTMLElement)) {
-      throw new Error('no root')
-    }
-    expect(toast(root, 'one').getAttribute('aria-live')).toBe('polite')
-    expect(toast(root, 'two').textContent).toBe('two')
-    expect(root.querySelectorAll('.toast').length).toBe(1)
-  })
-})
-
 describe('a page that lost the elements a command expects', () => {
   /**
    * The same wiring over a bare page: every handler must give up quietly instead of throwing.
@@ -1767,6 +1971,7 @@ describe('a page that lost the elements a command expects', () => {
     setRenderContext({
       artifact,
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       files,
       patches,
       comments,
@@ -1787,6 +1992,7 @@ describe('a page that lost the elements a command expects', () => {
       state: BASE,
       capabilities: { canComment: true, tokenKind: 'classic', login: 'octocat' },
       headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
       api: {
         putReviewed: async (_pr, id, reviewed) => {
           calls.push(['reviewed', { id, reviewed }])
@@ -1837,7 +2043,7 @@ describe('a page that lost the elements a command expects', () => {
         '<button data-act="point-restore">restore</button>' +
         '<button data-act="mark-layer">mark</button>' +
         '<button data-act="comment-line" data-key="src_app_ts" data-side="new" data-line="4">+</button>' +
-        '<button data-act="show-dismissed">show</button>' +
+        '<button data-act="point-expand">show</button>' +
         '<button data-act="comment-line" data-key="nope" data-line="0">+</button>' +
         '<button data-act="comment-selection">comment</button>' +
         '<button data-act="composer-post">post</button>' +
@@ -2060,6 +2266,7 @@ describe('the AI Chat commands', () => {
           side: 'new',
           body: 'Rename.',
           headSha: HEAD,
+          mergeBaseSha: MERGE_BASE,
           proposalFingerprint: 'proposal:45747567ecdc439b',
         },
       ],
@@ -2085,6 +2292,7 @@ describe('the AI Chat commands', () => {
           side: 'new',
           body: 'One line.',
           headSha: HEAD,
+          mergeBaseSha: MERGE_BASE,
           proposalFingerprint: 'proposal:ef576f5b6d27a0fa',
         },
       ],
@@ -2350,7 +2558,17 @@ describe('the pending review', () => {
     await flush()
 
     expect(calls).toEqual([
-      ['pending-add', { path: 'src/app.ts', line: 4, side: 'new', body: 'needs a guard', headSha: HEAD }],
+      [
+        'pending-add',
+        {
+          path: 'src/app.ts',
+          line: 4,
+          side: 'new',
+          body: 'needs a guard',
+          headSha: HEAD,
+          mergeBaseSha: MERGE_BASE,
+        },
+      ],
     ])
     expect(session.pending).toHaveLength(1)
     // The draft is on the diff, marked as not posted.
@@ -2406,6 +2624,7 @@ describe('the pending review', () => {
           startLine: 2,
           body: 'this whole block',
           headSha: HEAD,
+          mergeBaseSha: MERGE_BASE,
         },
       ],
     ])
@@ -2575,6 +2794,7 @@ describe('the pending review', () => {
     const { root, calls, session } = setup({
       fetchReviewBody: async () => ({
         headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
         body: 'a look',
         unreviewed: [],
         pending: 1,
@@ -2599,11 +2819,54 @@ describe('the pending review', () => {
 
     click(root, '[data-act="signoff-post"]')
     await flush()
-    expect(calls.at(-1)).toEqual(['review', { event: 'COMMENT', body: 'a look', headSha: HEAD }])
+    expect(calls.at(-1)).toEqual([
+      'review',
+      { event: 'COMMENT', body: 'a look', headSha: HEAD, mergeBaseSha: MERGE_BASE },
+    ])
     expect(session.pending).toEqual([])
     expect(root.querySelector('tr.pending-row')).toBeNull()
     expect(root.querySelector('.pending-bar')).toBeNull()
-    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment')
+    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
+  })
+
+  it('holds the review until a draft edit on screen is saved, and steps a floating pane aside after', async () => {
+    const uncover = vi.fn()
+    const { root, calls } = setup({
+      uncover,
+      fetchReviewBody: async () => ({ headSha: HEAD, body: '', unreviewed: [], pending: 1 }),
+    })
+    write(root, 'one')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '[data-act="pending-edit"]')
+    const area = root.querySelector('.pending-cmt textarea')
+    if (!(area instanceof HTMLTextAreaElement)) {
+      throw new Error('no textarea')
+    }
+    const dialog = () => root.querySelector('#signoff-dialog[open]')
+    // An edit that changes nothing loses nothing.
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    expect(dialog()).not.toBeNull()
+    click(root, '[data-act="signoff-close"]')
+
+    area.value = 'one, revised'
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    expect(dialog()).toBeNull()
+    expect(root.querySelector('.pending-bar .cmd-err')?.textContent).toBe(
+      'save or cancel the draft you are editing first'
+    )
+    expect(document.activeElement).toBe(area)
+
+    click(root, '[data-act="pending-save"]')
+    await flush()
+    click(root, '.pending-bar [data-act="pending-finish"]')
+    await flush()
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(calls.at(-1)?.[0]).toBe('review')
+    expect(uncover).toHaveBeenCalledOnce()
   })
 
   it('keeps the draft on the page when the server refuses to take it', async () => {

@@ -38,6 +38,9 @@ const JSON_POST = { ...SAME_ORIGIN, 'content-type': 'application/json' }
 /** The commit the canvas was generated for; HEAD_SHA merged the base onto it afterwards. */
 const OLD_SHA = 'e'.repeat(40)
 
+/** A commit's diff from BASE_SHA, the merge base every canvas here was generated against. */
+const on = (headSha: string, mergeBaseSha = BASE_SHA) => ({ headSha, mergeBaseSha })
+
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T
 }
@@ -261,6 +264,29 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect(body.unreviewed).toEqual([])
   })
 
+  it('reads a push made since the last load as outdated on reload, while polls answer from cache', async () => {
+    await withOldCanvas()
+    // One app is one server process: its loader remembers which pull requests it has read.
+    const app = createApp(t.ctx)
+    const load = async (q = ''): Promise<PrBundle> =>
+      json<PrBundle>(await app.request(`/api/prs/42${q}`, { headers: LOCAL }))
+    expect((await load()).status).toBe('ready')
+    const pushed = 'c'.repeat(40)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: pushed,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF_MOVED_BY_BASE,
+      ahead: { [OLD_SHA]: 5 },
+    })
+    prNowAt(pushed)
+    expect((await load('?poll=1')).pr.headSha).toBe(HEAD_SHA)
+    const reloaded = await load()
+    expect(reloaded.status).toBe('stale')
+    expect(reloaded.stale?.currentHeadSha).toBe(pushed)
+  })
+
   it('shows the marks made on an outdated canvas with it, and never credits them to a later canvas', async () => {
     await withOldCanvas({ keepForIdenticalDiff: false })
     // The outdated view shows the older canvas and its diff, so a mark made there is the older canvas's.
@@ -327,7 +353,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
 
   it('lets the sign-off routes use the canvas and the carried-over marks without a page load first', async () => {
     await withOldCanvas()
-    await t.ctx.state.setReviewed(42, 'layer:run-path', true, { canvasSha: OLD_SHA })
+    await t.ctx.state.setReviewed(42, 'layer:run-path', true, { canvas: on(OLD_SHA) })
     const app = createApp(t.ctx)
     const body = await json<ReviewBodyResponse>(
       await app.request('/api/prs/42/review/body', { headers: LOCAL })
@@ -362,6 +388,168 @@ async function sendChat(): Promise<Response> {
   })
 }
 
+describe('a pull request moved to another base under the same head', () => {
+  const RELEASE = '9'.repeat(40)
+
+  /** The head's own canvas, generated against BASE_SHA, and one app: one server process. */
+  async function withHeadCanvas() {
+    await withOldCanvas()
+    await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), manifest(HEAD_SHA), 42)
+    const app = createApp(t.ctx)
+    const load = async (q = ''): Promise<PrBundle> =>
+      json<PrBundle>(await app.request(`/api/prs/42${q}`, { headers: LOCAL }))
+    return { app, load }
+  }
+
+  /** GitHub now says the pull request merges into `release`, whose merge base with the head is RELEASE. */
+  function retargeted(): void {
+    Object.assign(git.options.refs ?? {}, { 'refs/heads/release': RELEASE })
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: HEAD_SHA,
+      mergeBaseSha: RELEASE,
+      diff: SYNTHETIC_DIFF_MOVED_BY_BASE,
+    })
+    t.ctx.gh = ghFor42({
+      routes: {
+        'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, base: { ...GH_PULL.base, ref: 'release' } }),
+      },
+    })
+  }
+
+  it('reads the head canvas as outdated on reload, with the merge base it was generated against', async () => {
+    const { load } = await withHeadCanvas()
+    expect((await load()).status).toBe('ready')
+    retargeted()
+    // A poll answers about what the page shows; the next load asks GitHub and sees the new base.
+    expect((await load('?poll=1')).status).toBe('ready')
+    const reloaded = await load()
+    expect(reloaded.pr.baseRef).toBe('release')
+    expect(reloaded.pr.mergeBaseSha).toBe(RELEASE)
+    expect(reloaded.status).toBe('stale')
+    expect(reloaded.stale).toEqual({
+      canvasHeadSha: HEAD_SHA,
+      currentHeadSha: HEAD_SHA,
+      relation: 'other-base',
+      canvasMergeBaseSha: BASE_SHA,
+      currentMergeBaseSha: RELEASE,
+    })
+    // Regenerating the same commit replaces its canvas.
+    expect(reloaded.skillCommand).toBe('/pr-review-canvas 42 --force')
+    // The outdated canvas is shown with the diff it was generated from.
+    expect(reloaded.files.map(f => f.path)).toEqual(artifactFor(HEAD_SHA).files.map(f => f.path))
+    expect((await load('?refresh=1')).status).toBe('stale')
+  })
+
+  it('serves the outdated canvas its own patches and refuses a sign-off on it', async () => {
+    const { app, load } = await withHeadCanvas()
+    await load()
+    retargeted()
+    await load()
+    const res = await app.request(`/api/prs/42/patches?headSha=${HEAD_SHA}`, { headers: LOCAL })
+    const own = Object.values((await json<{ patches: Record<string, string> }>(res)).patches).join('\n')
+    // Built from BASE_SHA, as the canvas was: the hunks sit where the canvas says they do.
+    const moved: string[] = SYNTHETIC_DIFF_MOVED_BY_BASE.match(/^@@ .* @@/gm) ?? []
+    const kept: string[] = SYNTHETIC_DIFF.match(/^@@ .* @@/gm) ?? []
+    expect(moved.filter(h => !kept.includes(h))).not.toEqual([])
+    for (const header of kept) expect(own).toContain(header)
+    for (const header of moved.filter(h => !kept.includes(h))) expect(own).not.toContain(header)
+    const signoff = await app.request('/api/prs/42/review/body', { headers: LOCAL })
+    expect(signoff.status).toBe(409)
+    expect((await json<ErrorEnvelope>(signoff)).error.code).toBe('SIGNOFF_INCOMPLETE')
+  })
+
+  it("keeps the outdated page's diff and the regeneration's diff apart while the page polls", async () => {
+    const { load } = await withHeadCanvas()
+    await load()
+    retargeted()
+    await load()
+    // Regenerating builds the new base's diff, as prepare does, while the outdated page polls.
+    const fresh = await t.ctx.derived.ensure(on(HEAD_SHA, RELEASE))
+    expect((await load('?poll=1')).status).toBe('stale')
+    // Each poll read the old base's diff from a directory of its own, so the agent's is untouched.
+    expect(await t.ctx.derived.read(on(HEAD_SHA, RELEASE))).toEqual(fresh)
+    expect(await t.ctx.derived.read(on(HEAD_SHA))).not.toEqual(fresh)
+  })
+
+  it('drops the marks of the canvas a regeneration for the new base replaced, and keeps the next ones', async () => {
+    const { app, load } = await withHeadCanvas()
+    const mark = (id: string, body: Record<string, unknown>) =>
+      app.request(`/api/prs/42/reviewed/${id}`, {
+        method: 'PUT',
+        headers: JSON_POST,
+        body: JSON.stringify(body),
+      })
+    await load()
+    const page = { reviewed: true, headSha: HEAD_SHA, mergeBaseSha: BASE_SHA, canvasSha: HEAD_SHA }
+    expect((await mark('layer:run-path', { ...page, canvasMergeBaseSha: BASE_SHA })).status).toBe(200)
+    retargeted()
+    // The outdated canvas is still the one these marks were made on.
+    expect((await load()).state.reviewed).toEqual({ 'layer:run-path': true })
+    // A write from a page drawn before the move names the old base, and is refused.
+    const late = await mark('layer:run-path', { ...page, reviewed: false })
+    expect(late.status).toBe(409)
+    expect((await json<ErrorEnvelope>(late)).error.code).toBe('CANVAS_STALE')
+    // The canvas generated for the new base replaces it under the same commit.
+    await t.ctx.canvases.write(
+      HEAD_SHA,
+      artifactFor(HEAD_SHA),
+      { ...manifest(HEAD_SHA), mergeBaseSha: RELEASE },
+      42
+    )
+    const regenerated = await load()
+    expect(regenerated.status).toBe('ready')
+    expect(regenerated.state.reviewed).toEqual({})
+    // The old page's canvas is gone, so its marks are refused too.
+    const old = await mark('layer:run-path', { ...page, mergeBaseSha: RELEASE, canvasMergeBaseSha: BASE_SHA })
+    expect(old.status).toBe(409)
+    // Marks made on the new canvas stand, on this load and the next.
+    const next = { ...page, mergeBaseSha: RELEASE, canvasMergeBaseSha: RELEASE }
+    expect((await mark('layer:run-path', next)).status).toBe(200)
+    expect((await mark('layer:run-path/file:src_app_ts', next)).status).toBe(200)
+    expect((await load()).state.reviewed).toEqual({
+      'layer:run-path': true,
+      'layer:run-path/file:src_app_ts': true,
+    })
+    expect((await t.ctx.state.read(42)).reviewedMergeBaseSha).toBe(RELEASE)
+  })
+
+  it('refuses a draft written on the old base once the review would land on the new one', async () => {
+    const { app, load } = await withHeadCanvas()
+    await load()
+    const draft = { path: 'src/app.ts', line: 4, side: 'new', body: 'needs a guard' }
+    const add = (mergeBaseSha: string) =>
+      app.request('/api/prs/42/pending', {
+        method: 'POST',
+        headers: JSON_POST,
+        body: JSON.stringify({ ...draft, headSha: HEAD_SHA, mergeBaseSha }),
+      })
+    expect((await add(BASE_SHA)).status).toBe(201)
+    expect((await t.ctx.state.read(42)).pending[0]?.mergeBaseSha).toBe(BASE_SHA)
+    retargeted()
+    await load()
+    // A page drawn before the move cannot add to the review either.
+    expect((await add(BASE_SHA)).status).toBe(409)
+    await t.ctx.canvases.write(
+      HEAD_SHA,
+      artifactFor(HEAD_SHA),
+      { ...manifest(HEAD_SHA), mergeBaseSha: RELEASE },
+      42
+    )
+    await load()
+    const res = await app.request('/api/prs/42/review', {
+      method: 'POST',
+      headers: JSON_POST,
+      body: JSON.stringify({ event: 'COMMENT', body: 'a look', headSha: HEAD_SHA, mergeBaseSha: RELEASE }),
+    })
+    expect(res.status).toBe(409)
+    expect((await json<ErrorEnvelope>(res)).error.message).toBe(
+      'pending comments were written on a different diff'
+    )
+  })
+})
+
 describe('the chat after the head moved', () => {
   it('talks about the canvas with the diff of the head when only merges came in', async () => {
     await withOldCanvas()
@@ -372,8 +560,8 @@ describe('the chat after the head moved', () => {
     await res.text()
     expect(runner.runs).toHaveLength(1)
     // The agent reads the head's diffs, from the head's derived directory.
-    expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(HEAD_SHA))
-    expect(runner.runs[0]?.prompt).not.toContain(t.ctx.derived.derivedDir(OLD_SHA))
+    expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(on(HEAD_SHA)))
+    expect(runner.runs[0]?.prompt).not.toContain(t.ctx.derived.derivedDir(on(OLD_SHA)))
     // The seed header names that same commit: the diffs and the words about them agree.
     expect(runner.runs[0]?.prompt).toContain(`head \`${HEAD_SHA.slice(0, 7)}\``)
     expect(runner.runs[0]?.prompt).not.toContain(`head \`${OLD_SHA.slice(0, 7)}\``)
@@ -386,11 +574,11 @@ describe('the chat after the head moved', () => {
     expect(res.status).toBe(200)
     await res.text()
     expect(runner.runs).toHaveLength(1)
-    expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(OLD_SHA))
+    expect(runner.runs[0]?.prompt).toContain(t.ctx.derived.derivedDir(on(OLD_SHA)))
     // The canvas is read with its own commit's diff, so the header names that commit.
     expect(runner.runs[0]?.prompt).toContain(`head \`${OLD_SHA.slice(0, 7)}\``)
     // The diffs of the older commit were built from the clone on the way.
-    expect(await t.ctx.derived.read(OLD_SHA)).not.toBeNull()
+    expect(await t.ctx.derived.read(on(OLD_SHA))).not.toBeNull()
   })
 
   it('says so when the outdated canvas has no diff on this machine', async () => {
@@ -406,6 +594,14 @@ describe('the chat after the head moved', () => {
       code: 'NOT_FOUND',
       message: expect.stringContaining('not available locally'),
     })
+  })
+
+  it('says so when the outdated canvas has lost the manifest naming its merge base', async () => {
+    await withOldCanvas({ keepForIdenticalDiff: false })
+    await rm(path.join(t.ctx.canvases.canvasDir(OLD_SHA), 'manifest.json'))
+    const res = await sendChat()
+    expect(res.status).toBe(404)
+    expect((await json<ErrorEnvelope>(res)).error.code).toBe('NOT_FOUND')
   })
 
   it('says so when the index names a canvas whose review.json is gone', async () => {

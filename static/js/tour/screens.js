@@ -13,8 +13,7 @@
 /** @typedef {import('./steps.js').Step} Step */
 import { esc, timeAgo } from '../dom.js'
 import { authorProfileUrl, currentHost } from '../host.js'
-import { skinLabel } from '../skin.js'
-import { themeLabel } from '../theme.js'
+import { headerBarHtml } from '../header-bar.js'
 import {
   minutesOf,
   nextLabel,
@@ -81,7 +80,8 @@ export function inline(text) {
 
 /**
  * @param {TourBundle} bundle
- * @param {{ host: string, theme: import('../theme.js').Theme, skin: import('../skin.js').Skin, now: Date }} opts
+ * @param {{ host: string, theme: import('../theme.js').Theme, skin: import('../skin.js').Skin, now: Date, project?: import('../header-bar.js').ProjectLink | undefined }} opts
+ *   The wordmark links to the project list, the project to its home, and canvas to the review.
  */
 export function tourHeaderHtml(bundle, opts) {
   const { pr, tour } = bundle
@@ -100,13 +100,11 @@ export function tourHeaderHtml(bundle, opts) {
     : ''
   return (
     '<header class="hdr">' +
-    `<div class="hdr-bar"><div class="brand"><span class="brand-wordmark"><img class="brand-icon" src="/static/brand.svg" width="32" height="32" alt="">PR review canvas</span><span class="mono muted">${esc(opts.host)}</span></div>` +
-    '<div class="hdr-actions" role="group" aria-label="Tour actions">' +
-    `<a class="cmd" id="canvas-link" href="/review/${esc(key)}" title="Open the review canvas of this change">canvas</a>` +
-    '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and how a tour works" aria-haspopup="dialog">help</button>' +
-    `<button class="cmd" type="button" id="skin-toggle" title="Switch between GitHub and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
-    `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
-    '</div></div>' +
+    headerBarHtml(
+      { ...opts, skinTitle: 'Switch between GitHub and Olive styling' },
+      `<a class="cmd" id="canvas-link" href="${esc(opts.project?.home ?? '/')}review/${esc(key)}" title="Open the review canvas of this change">canvas</a>` +
+        '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and how a tour works" aria-haspopup="dialog">help</button>'
+    ) +
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
     `<div class="title"><h1><span class="tour-word">Tour</span> ${number}${esc(pr.title)}</h1>${forgeLink}</div>` +

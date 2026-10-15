@@ -15,6 +15,12 @@ export const ChatThreadSchema = z.object({
   seededCwd: z.string().optional(),
   /** The tour's own thread: the grilling runs in it, and the canvas's pane never lists it. */
   tour: z.boolean().optional(),
+  /**
+   * Whether the seed told the agent the reader may resolve attention points. An outdated canvas
+   * keeps its commit but takes that right away, so a change sends the seed again. Threads from
+   * before it have none and are seeded once more.
+   */
+  seededReaderResolves: z.boolean().optional(),
 })
 
 export type ChatThread = z.infer<typeof ChatThreadSchema>
@@ -54,6 +60,12 @@ export const PrStateSchema = z.preprocess(
      * untouched. Absent in state files of older tool versions.
      */
     reviewedCanvasSha: z.string().optional(),
+    /**
+     * The merge base that canvas's diff ran from. A canvas generated again for its commit after the
+     * pull request moved to another base describes another diff, so the marks start again. Absent
+     * in state files of older tool versions, whose marks count for the canvas's diff, whichever it is.
+     */
+    reviewedMergeBaseSha: z.string().optional(),
     hiddenThreads: z.record(z.string(), z.object({ at: z.string() })),
     posted: z.array(
       z.object({

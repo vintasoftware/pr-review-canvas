@@ -5,6 +5,7 @@ export { postedFromPending } from '../../review/posted-comments.js'
 import { z } from 'zod'
 import type { ReviewBodyResponse, StateResponse } from '../../contract/api.js'
 import {
+  PageDiffShape,
   type PostCommentInput,
   PostCommentInputSchema,
   type PostCommentResult,
@@ -17,11 +18,11 @@ import { checkInlineTarget } from '../../git/patch-lines.js'
 import { PostReviewInputSchema } from '../../contract/reviews.js'
 import { lookupCanvas, samePatches } from '../../review/carry-over.js'
 import { marksForCanvas } from '../../review/carry-marks.js'
-import { buildReviewBody, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
+import { buildReviewBody, reviewedDiff, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
-import { canvasBelongsTo } from '../../store/canvas-store.js'
 import { isReviewedId } from '../../store/state-store.js'
-import type { Derived } from '../../store/derived-store.js'
+import { draftDiff, marksOn, sameDiff } from '../../../static/js/diff-identity.js'
+import type { Derived, DiffedCommit } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
@@ -29,11 +30,7 @@ import { parseTargetKey, requirePrNumber } from './api.js'
 
 const ReviewedBodySchema = z.object({
   reviewed: z.boolean(),
-  /** The commit the page was showing; a mark made on another commit is refused. */
-  headSha: z
-    .string()
-    .regex(/^[0-9a-f]{40}$/)
-    .optional(),
+  ...PageDiffShape,
   /**
    * The commit of the canvas on the page, which the marks are keyed to. The head when absent. Any
    * other value must be a canvas indexed for this pull request.
@@ -42,19 +39,31 @@ const ReviewedBodySchema = z.object({
     .string()
     .regex(/^[0-9a-f]{40}$/)
     .optional(),
+  /**
+   * The merge base of that canvas's diff, as the page drew it. A mark is refused once the canvas was
+   * generated again for another base, since the page shows the diff that canvas replaced.
+   */
+  canvasMergeBaseSha: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
 })
 const DismissedBodySchema = z.object({ dismissed: z.boolean(), reason: z.string().max(500).optional() })
 const HiddenBodySchema = z.object({ hidden: z.boolean() })
 
 /**
- * The page says which commit it was showing. When the pull request has moved on, the post is
- * refused instead of landing on code the reader never saw.
+ * The page says which diff it was showing. When the pull request has moved on to another head or
+ * another base, the write is refused instead of landing on code the reader never saw.
  */
-export function requireSameHead(expected: string | undefined, current: string): void {
-  if (expected !== undefined && expected !== current) {
+export function requireSameDiff(
+  page: { headSha?: string | undefined; mergeBaseSha?: string | undefined },
+  current: DiffedCommit
+): void {
+  const moved = (seen: string | undefined, now: string) => seen !== undefined && seen !== now
+  if (moved(page.headSha, current.headSha) || moved(page.mergeBaseSha, current.mergeBaseSha)) {
     throw new AppError(
       'CANVAS_STALE',
-      'the pull request has a new head commit since this page was drawn',
+      'the pull request has a new head commit or base since this page was drawn',
       409,
       'reload the page and try again'
     )
@@ -80,7 +89,7 @@ export async function readBody<T>(request: Request, schema: z.ZodType<T>, expect
 async function requireCanvasOf(ctx: AppContext, key: ReviewKey, canvasSha: string): Promise<void> {
   const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
   // The same rule the lookups use, so a mark can only be keyed to a canvas this target shows.
-  if (entry === undefined || !canvasBelongsTo(entry, key)) {
+  if (entry === undefined || !ctx.canvases.belongsTo(entry, key)) {
     throw new AppError(
       'CANVAS_NOT_FOUND',
       `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,
@@ -101,52 +110,56 @@ async function canvasForSignOff(
 ): Promise<{ artifact: ReviewArtifact; state: PrState }> {
   const stored = await ctx.state.read(number)
   if (ctx.fixtureArtifact !== null) {
-    return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForCanvas(stored, pr.headSha) }
+    return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForCanvas(stored, pr) }
   }
   const found = await lookupCanvas(ctx, number, pr)
   if (found.status !== 'ready') {
     throw new AppError(
       'SIGNOFF_INCOMPLETE',
-      'the canvas on screen was generated for another commit',
+      'the canvas on screen was generated for another commit or another base',
       409,
       'regenerate the canvas for the current head, then review its layers'
     )
   }
-  const artifact = await ctx.canvases.readArtifact(found.headSha)
+  const [artifact, manifest] = await Promise.all([
+    ctx.canvases.readArtifact(found.headSha),
+    ctx.canvases.readManifest(found.headSha),
+  ])
   if (artifact === null) {
     throw new AppError('CANVAS_NOT_FOUND', `no canvas for pull request ${number}`, 404, 'generate one first')
   }
-  return { artifact, state: (await marksForCanvas(ctx, artifact, found.headSha, stored)).state }
+  const canvas = reviewedDiff(found, pr, manifest)
+  return { artifact, state: (await marksForCanvas(ctx, artifact, canvas, stored)).state }
 }
 
 /**
- * The marks the state should start from when the next write keys it to `canvasSha`: none when the
+ * The marks the state should start from when the next write keys it to `canvas`: none when the
  * marks already describe that canvas, otherwise the ones that may follow it from its basis. The
  * same rule the bundle showed the reviewer, recomputed here rather than taken from the page.
  */
 async function adoptedMarks(
   ctx: AppContext,
   key: ReviewKey,
-  canvasSha: string
+  canvas: DiffedCommit
 ): Promise<Record<string, true> | undefined> {
   const stored = await ctx.state.read(key)
-  if (stored.reviewedCanvasSha === canvasSha) {
+  if (marksOn(stored, canvas)) {
     return undefined
   }
-  const artifact = await ctx.canvases.readArtifact(canvasSha)
+  const artifact = await ctx.canvases.readArtifact(canvas.headSha)
   if (artifact === null) {
     return undefined
   }
-  return (await marksForCanvas(ctx, artifact, canvasSha, stored)).state.reviewed
+  return (await marksForCanvas(ctx, artifact, canvas, stored)).state.reviewed
 }
 
 /**
- * The diff of this head as it is stored locally, which every inline target is checked against.
- * Without it the line a comment names cannot be checked, so the comment is refused rather than
- * sent to a coordinate nobody verified.
+ * The diff of the pull request as it is stored locally, which every inline target is checked
+ * against. Without it the line a comment names cannot be checked, so the comment is refused rather
+ * than sent to a coordinate nobody verified.
  */
-async function requireDerived(ctx: AppContext, headSha: string): Promise<Derived> {
-  const derived = await ctx.derived.read(headSha)
+async function requireDerived(ctx: AppContext, diff: DiffedCommit): Promise<Derived> {
+  const derived = await ctx.derived.read(diff)
   if (derived === null) {
     throw new AppError(
       'NOT_FOUND',
@@ -171,15 +184,24 @@ export async function mentionsCanvas(ctx: AppContext): Promise<boolean> {
   return resolveSharing(ctx.projectConfig.config.sharing, await ctx.settings.read()).mentionCanvas
 }
 
-/** Posting is refused here as well as in the UI, so a stale page cannot post either. */
-async function requirePosting(ctx: AppContext): Promise<void> {
-  const caps = await ctx.capabilities.get()
+/**
+ * Posting is refused here as well as in the UI, so a stale page cannot post either. A login whose
+ * rights the probe cannot read is let through, and the host decides. `refresh` reads the login
+ * afresh instead of from the cache; `otherwise` is a way out the caller offers besides the probe's
+ * own hint.
+ */
+export async function requirePosting(
+  ctx: AppContext,
+  opts: { refresh?: boolean; otherwise?: string } = {}
+): Promise<void> {
+  const caps = await ctx.capabilities.get(opts.refresh === true ? { refresh: true } : {})
   if (caps.canComment === false) {
+    const hints = [caps.hint, opts.otherwise].filter(hint => hint !== undefined)
     throw new AppError(
       'COMMENT_FORBIDDEN',
       caps.reason ?? `this ${ctx.config.host.label} login cannot post on this repository`,
       403,
-      caps.hint
+      hints.length === 0 ? undefined : hints.join(', or ')
     )
   }
 }
@@ -196,10 +218,10 @@ export async function postOnPr(
 ): Promise<PostCommentResult & { state: PrState }> {
   await requirePosting(ctx)
   const pr = await loader.currentPr(number)
-  requireSameHead(input.headSha, pr.headSha)
+  requireSameDiff(input, pr)
   let diff: Derived = { files: [], patches: {} }
   if (input.kind === 'inline') {
-    diff = await requireDerived(ctx, pr.headSha)
+    diff = await requireDerived(ctx, pr)
     requireInlineTarget(diff, input)
   }
   const posted = await ctx.prs.postComments(number, async () => {
@@ -247,18 +269,29 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     // page was drawn from, not whatever the working tree holds a keystroke later.
     const pr = await loader.currentTarget(key)
     if (!isLocalKey(key)) {
-      requireSameHead(body.headSha, pr.headSha)
+      requireSameDiff(body, pr)
     }
-    // The page sends back the canvas commit the bundle keyed its marks to, so a toggle costs no
-    // git work; the index, not git, says the commit is a canvas of this target.
+    // The page sends back the canvas the bundle keyed its marks to, so a toggle costs no git work;
+    // the index, not git, says the commit is a canvas of this target, and its manifest which merge
+    // base its diff runs from.
     const canvasSha = body.canvasSha ?? pr.headSha
     if (canvasSha !== pr.headSha) {
       await requireCanvasOf(ctx, key, canvasSha)
     }
+    const manifest = await ctx.canvases.readManifest(canvasSha)
+    const canvas = { headSha: canvasSha, mergeBaseSha: manifest?.mergeBaseSha ?? pr.mergeBaseSha }
+    if (body.canvasMergeBaseSha !== undefined && body.canvasMergeBaseSha !== canvas.mergeBaseSha) {
+      throw new AppError(
+        'CANVAS_STALE',
+        'the canvas was generated again for another base since this page was drawn',
+        409,
+        'reload the page and try again'
+      )
+    }
     // The first mark on a canvas adopts the marks that followed it from the canvas it descends
     // from, so the page's carried ticks survive the write instead of being replaced.
-    const carried = await adoptedMarks(ctx, key, canvasSha)
-    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, { canvasSha, carried })))
+    const carried = await adoptedMarks(ctx, key, canvas)
+    return c.json(stateBody(key, await ctx.state.setReviewed(key, id, body.reviewed, { canvas, carried })))
   })
 
   api.put('/prs/:n/points/:fingerprint/dismissed', async c => {
@@ -299,11 +332,11 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'a pending review comment')
     const input = await readBody(c.req.raw, AddPendingInputSchema, 'a comment on a line of the diff')
     const pr = await loader.currentPr(number)
-    requireSameHead(input.headSha, pr.headSha)
+    requireSameDiff(input, pr)
     // A draft is checked against the diff when it is written, so a line that cannot take a comment
     // is refused while the reviewer is still looking at it, not when the review is submitted.
-    requireInlineTarget(await requireDerived(ctx, pr.headSha), input)
-    const state = await ctx.state.addPending(number, input, pr.headSha)
+    requireInlineTarget(await requireDerived(ctx, pr), input)
+    const state = await ctx.state.addPending(number, input, pr)
     return c.json(stateBody(number, state), 201)
   })
 
@@ -354,7 +387,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const input = await readBody(c.req.raw, PostReviewInputSchema, '{ "event": "APPROVE" }')
     await requirePosting(ctx)
     const pr = await loader.currentPr(number)
-    requireSameHead(input.headSha, pr.headSha)
+    requireSameDiff(input, pr)
     const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     if (input.event === 'APPROVE') {
       const missing = unreviewedLayers(artifact, state)
@@ -381,10 +414,15 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     // pending review instead of being dropped by the clear below.
     const pending = input.includePending ? (await ctx.state.read(number)).pending : []
     // GitLab needs the diff to position its draft notes.
-    const diff = pending.length === 0 ? { files: [], patches: {} } : await requireDerived(ctx, pr.headSha)
-    for (const head of new Set(pending.map(p => p.headSha))) {
-      if (head === pr.headSha) continue
-      const original = await ctx.derived.read(head)
+    const diff = pending.length === 0 ? { files: [], patches: {} } : await requireDerived(ctx, pr)
+    // A draft written on another diff, of an earlier commit or of another base, goes out only when
+    // that diff is identical to the one the review lands on.
+    const written = new Map(
+      pending.map(p => draftDiff(p, pr)).map(d => [`${d.headSha}..${d.mergeBaseSha}`, d])
+    )
+    for (const other of written.values()) {
+      if (sameDiff(other, pr)) continue
+      const original = await ctx.derived.readOrBuild(other)
       if (
         !ctx.projectConfig.config.canvas.keepForIdenticalDiff ||
         original === null ||
@@ -394,7 +432,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
           'CANVAS_STALE',
           'pending comments were written on a different diff',
           409,
-          'copy or delete the earlier-commit drafts in the pending review, then comment on the current code'
+          'copy or delete the drafts written on an earlier diff in the pending review, then comment on the current code'
         )
       }
     }

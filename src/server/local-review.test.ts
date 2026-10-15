@@ -135,7 +135,7 @@ describe('the local reviews', () => {
       allowStale: false,
     })
     expect(published.sharing).toEqual({ status: 'local' })
-    expect(published.reviewUrl).toBe('http://localhost:3010/review/uncommitted')
+    expect(published.reviewUrl).toBe('http://localhost:3010/r/acme/widgets/review/uncommitted')
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
     expect(buildManifest(context, syntheticArtifact(), '0.0.0-test').prNumber).toBeUndefined()
   })
@@ -202,8 +202,8 @@ describe('the local reviews', () => {
     expect(await home()).toContain('/pr-review-canvas branch')
     await publishLocal(t, 'uncommitted')
     const listed = await home()
-    expect(listed).toContain('href="/review/uncommitted"')
-    expect(listed).not.toContain('href="/review/branch"')
+    expect(listed).toContain('href="/r/acme/widgets/review/uncommitted"')
+    expect(listed).not.toContain('href="/r/acme/widgets/review/branch"')
   })
 
   it('offers the skill command when the review has not been prepared yet', async () => {

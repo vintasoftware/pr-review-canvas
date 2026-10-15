@@ -8,20 +8,6 @@ export function viewCommentHtml(url) {
   return `<a class="cmd" href="${esc(url)}" target="_blank" rel="noopener noreferrer">view comment</a>`
 }
 
-/** @param {HTMLElement} button @param {string} url */
-export function replacePostButton(button, url) {
-  const template = button.ownerDocument.createElement('template')
-  template.innerHTML = viewCommentHtml(url)
-  const link = template.content.firstElementChild
-  if (link instanceof HTMLAnchorElement) {
-    const focused = button.ownerDocument.activeElement === button
-    button.replaceWith(link)
-    if (focused) {
-      link.focus()
-    }
-  }
-}
-
 /**
  * Whether two comments sit on the same lines of the same side and say the same thing.
  * @param {{ path: string, line: number | null, side: string, startLine?: number | undefined, body: string }} a

@@ -37,11 +37,11 @@ The author's pass over their own canvas before asking for review, resolving the 
 _Avoid_: Self-approval, pre-review
 
 **Resolved point**:
-An author attention point answered with a reason saved in the canvas. It leaves the open-point list and stays readable with its reason for anyone loading that canvas.
+An attention point the author answered with a reason saved in the canvas. The author may resolve any point, a reviewer point too when it does not apply. It leaves the open-point list and stays in place, collapsed with its reason, for anyone loading that canvas.
 _Avoid_: Dismissed, approved, closed
 
 **Dismissal**:
-A reviewer's personal mark that hides an attention point from their own list. It does not answer the point for other readers or complete the author's self-review.
+A reader's personal mark that takes an attention point off their own open list; on their page the point stays in place, collapsed. Anyone may dismiss, the author too. It does not answer the point for other readers or complete the author's self-review.
 _Avoid_: Resolution, approval
 
 **Review progress**:
@@ -71,15 +71,15 @@ The earlier canvas an incremental canvas is built from: the newest one generated
 _Avoid_: Parent canvas, carried-over canvas
 
 **Carried**:
-Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched. An attention point whose own lines are unchanged is carried even when they moved; only its line numbers follow them.
+Content of the basis canvas reused as it stands, because the head's diff leaves the code it is anchored to untouched. An attention point whose own lines are unchanged is carried even when they moved; only its line numbers follow them. A point the generator wrote is carried only when every file its body links to is untouched too.
 _Avoid_: Cached, approved, still valid
 
 **Re-judged**:
-Content of the basis canvas that the head's diff touched, which the generator decides anew. It may come back the same, changed, or not at all.
+Content of the basis canvas that the head's diff touched, or a point the generator wrote whose body links to a file the head touched. The generator decides it anew. It may come back the same, changed, or not at all.
 _Avoid_: Invalidated, rejected, expired
 
 **Outdated canvas**:
-A canvas of another commit of the pull request that the head's diff no longer matches, shown with the diff of its own commit and a bar saying so. Review marks made on it stay with it and never count for a later canvas.
+A canvas whose diff the head's diff no longer matches: of another commit of the pull request, or of the head itself diffed from a merge base the pull request no longer has, as after it moved to another base branch. It is shown with its own diff and a bar saying so. Review marks made on it stay with it and never count for a later canvas, a canvas generated again for the same commit on the new base included.
 _Avoid_: Stale review, expired canvas
 
 **Review checkout**:

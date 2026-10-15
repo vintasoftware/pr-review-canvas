@@ -7,6 +7,7 @@ import { parseReviewKey } from '../../contract/review-key.js'
 import { lookupTour, tourAt } from '../../tour/lookup.js'
 import { inlineIcons } from '../../tour/scene.js'
 import { createPrLoader } from '../bundle.js'
+import type { ProjectLink } from '../../../static/js/header-bar.js'
 import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
@@ -33,7 +34,7 @@ function parseTourKey(raw: string) {
   return key
 }
 
-export function tourPageRoutes(ctx: AppContext): Hono<AppEnv> {
+export function tourPageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
   const loader = createPrLoader(ctx)
 
@@ -47,6 +48,9 @@ export function tourPageRoutes(ctx: AppContext): Hono<AppEnv> {
           key,
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
+          base: ctx.config.basePath,
+          project: ctx.config.slug,
+          ...(project.reopenIn === undefined ? {} : { reopenIn: project.reopenIn }),
           version: ctx.version,
           host: ctx.config.host,
           preview: c.req.query('preview') !== undefined,

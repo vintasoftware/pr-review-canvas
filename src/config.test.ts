@@ -76,16 +76,41 @@ describe('loadRuntimeConfig', () => {
       dataDir: '/work/repo/.pr-review',
       repo: { owner: 'acme', name: 'widgets' },
       host: GITHUB_HOST,
+      worktree: null,
+      slug: 'acme/widgets',
+      basePath: '/r/acme/widgets/',
       fixtureCanvasPath: null,
       chatOverrides: {},
-      openBrowser: true,
     })
   })
 
-  it('opens the browser unless --no-open is passed or CI is set', async () => {
-    expect(await loadRuntimeConfig({ noOpen: true }, {}, git(), '/cwd')).toMatchObject({ openBrowser: false })
-    expect(await loadRuntimeConfig({}, { CI: 'true' }, git(), '/cwd')).toMatchObject({ openBrowser: false })
-    expect(await loadRuntimeConfig({}, { CI: '' }, git(), '/cwd')).toMatchObject({ openBrowser: false })
+  it("gives a linked worktree a base path of its own, under git's name for it", async () => {
+    const worktree = createFakeGit({
+      topLevel: '/work/trees/fix login',
+      commonDir: '/work/repo/.git',
+      gitDir: '/work/repo/.git/worktrees/fix-login',
+      remotes: { origin: 'git@github.com:acme/widgets.git' },
+    })
+    expect(await loadRuntimeConfig({}, {}, worktree, '/cwd')).toMatchObject({
+      worktree: 'fix-login',
+      slug: 'acme/widgets~fix-login',
+      basePath: '/r/acme/widgets~fix-login/',
+    })
+  })
+
+  it('classifies origin with the saved host override before the environment', async () => {
+    const company = createFakeGit({
+      topLevel: '/work/repo',
+      commonDir: '/work/repo/.git',
+      remotes: { origin: 'git@git.company.com:acme/widgets.git' },
+    })
+    await expect(loadRuntimeConfig({}, {}, company, '/cwd')).rejects.toMatchObject({ code: 'NO_ORIGIN' })
+    expect(await loadRuntimeConfig({}, { PR_REVIEW_HOST: 'gitlab' }, company, '/cwd')).toMatchObject({
+      host: { kind: 'gitlab', hostname: 'git.company.com' },
+    })
+    expect(await loadRuntimeConfig({ host: 'gitlab' }, {}, company, '/cwd')).toMatchObject({
+      host: { kind: 'gitlab', hostname: 'git.company.com' },
+    })
   })
 
   it('classifies a GitLab origin', async () => {

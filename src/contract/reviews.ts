@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PageDiffShape } from './comments.js'
 
 /**
  * `COMMENT` leaves a review with no verdict, the way a thread-level review does: the body and the
@@ -17,10 +18,6 @@ export const PostReviewInputSchema = z.object({
    * a reviewer who wrote drafts never submits a review that silently leaves them behind.
    */
   includePending: z.boolean().default(true),
-  /** The commit the dialog named. The server refuses the review when the head moved on. */
-  headSha: z
-    .string()
-    .regex(/^[0-9a-f]{40}$/)
-    .optional(),
+  ...PageDiffShape,
 })
 export type PostReviewInput = z.infer<typeof PostReviewInputSchema>

@@ -128,9 +128,12 @@ function foldRows(card, key, fold) {
  * @returns {string}
  */
 function foldLabel(rows, fold) {
-  const note = rows.find(row => row.matches('[data-decoration="note"]'))
-  const text = note?.querySelector('.prose')?.textContent?.trim()
-  return text === undefined || text === '' ? fold.title : text
+  const prose = rows.find(row => row.matches('[data-decoration="note"]'))?.querySelector('.prose')
+  // The note's text without its commands: a code block's copy button is not part of the annotation.
+  const text = /** @type {Element | undefined} */ (prose?.cloneNode(true))
+  text?.querySelectorAll('button').forEach(button => button.remove())
+  const label = text?.textContent?.trim()
+  return label === undefined || label === '' ? fold.title : label
 }
 
 /**

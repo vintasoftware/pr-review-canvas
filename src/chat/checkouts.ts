@@ -4,15 +4,78 @@
 import { lstat, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { execGit, GitError, type GitExec } from '../git/git.js'
-import { keyToString, parseReviewKey, type ReviewKey } from '../contract/review-key.js'
+import { parseReviewFolder, type ReviewKey, reviewFolder } from '../contract/review-key.js'
+import type { CodeSource } from './seed.js'
 
 /** A lock older than this is left over from a process that died without letting go. */
 export const STALE_LOCK_MS = 2 * 60 * 60 * 1000
 
+/** Who in this process reads code from a review checkout: a chat turn, or a canvas generation. */
+export type CheckoutHolder = 'chat' | 'generation' | 'tour'
+
+const HOLDER_WORDS: Record<CheckoutHolder, string> = {
+  chat: 'a chat answer',
+  generation: 'a canvas generation',
+  tour: 'a tour generation',
+}
+
 export class CheckoutBusyError extends Error {
-  constructor(key: ReviewKey) {
-    super(`another pr-review process is using the review checkout of ${keyToString(key)}`)
+  /** Who holds it in this process, or null when another pr-review process does. */
+  readonly holder: CheckoutHolder | null
+
+  /** `folder` is the checkout's name in the clone's checkouts, as `reviewFolder` gives it. */
+  constructor(folder: string, holder: CheckoutHolder | null) {
+    const who = holder === null ? 'another pr-review process' : HOLDER_WORDS[holder]
+    super(`${who} is using the review checkout of ${folder}`)
     this.name = 'CheckoutBusyError'
+    this.holder = holder
+  }
+}
+
+/** A step on the way to the code: the checkout being made or moved, or the fallback taken. */
+export type CodeSourceStep =
+  | { status: 'preparing'; sha: string; creating: boolean }
+  | { status: 'fallback'; message: string; branch: string | null }
+
+/**
+ * Where an agent reads the code of `key` at `headSha`, for the chat and for a generation alike.
+ * The uncommitted review, and a reader who turned checkouts off, read the reader's own checkout.
+ * Otherwise the review checkout is leased first, so a holder elsewhere is a refusal, and then put
+ * at the commit; a checkout that fails falls back to the reader's checkout rather than failing.
+ * It yields each step a reader may want to see, and returns the source.
+ */
+export async function* readCodeAt(input: {
+  key: ReviewKey
+  headSha: string
+  checkoutEnabled: boolean
+  holder: CheckoutHolder
+  checkouts: ReviewCheckouts
+  repoRoot: string
+  currentBranch: () => Promise<string | null>
+  /** Gets the lease the moment it is taken, so the caller releases it whatever happens next. */
+  onLease: (lease: CheckoutLease) => void
+}): AsyncGenerator<CodeSourceStep, CodeSource> {
+  if (input.key === 'uncommitted') {
+    return { kind: 'working-tree', cwd: input.repoRoot }
+  }
+  if (!input.checkoutEnabled) {
+    return { kind: 'reader-checkout', cwd: input.repoRoot }
+  }
+  const lease = await input.checkouts.lease(input.key, input.holder)
+  input.onLease(lease)
+  if (lease.head !== input.headSha) {
+    yield { status: 'preparing', sha: input.headSha, creating: lease.head === null }
+  }
+  try {
+    await lease.moveTo(input.headSha)
+    return { kind: 'checkout', cwd: lease.dir, sha: input.headSha }
+  } catch (err) {
+    const fallback = {
+      message: err instanceof Error ? err.message : String(err),
+      branch: await input.currentBranch().catch(() => null),
+    }
+    yield { status: 'fallback', ...fallback }
+    return { kind: 'fallback', cwd: input.repoRoot, ...fallback }
   }
 }
 
@@ -69,6 +132,10 @@ export interface CheckoutLease {
 
 export interface CheckoutInfo {
   key: ReviewKey
+  /** The linked worktree whose local review it is; null for a pull request's or the main checkout's. */
+  worktree: string | null
+  /** Its name among the clone's checkouts. */
+  folder: string
   dir: string
   /** The commit it was last moved to. */
   sha: string
@@ -90,21 +157,51 @@ export interface SweepResult {
   skipped: CheckoutInfo[]
 }
 
-export interface ReviewCheckouts {
+/** What every view of a clone's checkouts shares. */
+interface CheckoutsCommon {
   /** The folder all checkouts of this repository live in. */
   root: string
-  /** Takes the checkout of `key` for one turn; throws CheckoutBusyError when another process has it. */
-  lease(key: ReviewKey): Promise<CheckoutLease>
   list(): Promise<CheckoutInfo[]>
   /** Removes idle checkouts, or every one with `all`. A checkout in use is never removed. */
   sweep(options: SweepOptions): Promise<SweepResult>
-  /**
-   * Removes the checkout of `key` now; false when there was none. Throws CheckoutBusyError while a
-   * turn holds it.
-   */
-  remove(key: ReviewKey): Promise<boolean>
   /** Bytes the checkout takes on disk, `.git` excluded; the settings dialog lists it. */
   size(dir: string): Promise<number>
+}
+
+/**
+ * The checkouts of one clone, which every worktree of it shares, each named by its review folder.
+ * One store per clone is what lets a holder in this process be named to every worktree.
+ */
+export interface CheckoutStore extends CheckoutsCommon {
+  /**
+   * Takes the checkout named `folder` for `holder`; throws CheckoutBusyError, naming who has it,
+   * when a holder in this process or another process has it.
+   */
+  lease(folder: string, holder: CheckoutHolder): Promise<CheckoutLease>
+  /**
+   * Removes the checkout named `folder` now; false when there was none. Throws CheckoutBusyError
+   * while someone holds it.
+   */
+  remove(folder: string): Promise<boolean>
+}
+
+/** The clone's checkouts as one checkout sees them: a local review's is that checkout's own. */
+export interface ReviewCheckouts extends CheckoutsCommon {
+  lease(key: ReviewKey, holder: CheckoutHolder): Promise<CheckoutLease>
+  /** Removes the checkout of `key` now; false when there was none. */
+  remove(key: ReviewKey): Promise<boolean>
+}
+
+/** `worktree` is the checkout's linked-worktree label; null for the clone's main checkout. */
+export function checkoutsFor(store: CheckoutStore, worktree: string | null): ReviewCheckouts {
+  return {
+    root: store.root,
+    list: () => store.list(),
+    sweep: options => store.sweep(options),
+    size: dir => store.size(dir),
+    lease: (key, holder) => store.lease(reviewFolder(key, worktree), holder),
+    remove: key => store.remove(reviewFolder(key, worktree)),
+  }
 }
 
 interface CheckoutMeta {
@@ -135,16 +232,18 @@ export function createReviewCheckouts(opts: {
   root: string
   git: CheckoutGit
   now: () => Date
-}): ReviewCheckouts {
+}): CheckoutStore {
   const { root, git, now } = opts
-  const dirOf = (key: ReviewKey): string => path.join(root, keyToString(key))
-  const metaOf = (key: ReviewKey): string => `${dirOf(key)}.json`
-  const lockOf = (key: ReviewKey): string => `${dirOf(key)}.lock`
+  const dirOf = (folder: string): string => path.join(root, folder)
+  /** Who holds each checkout leased in this process. */
+  const holders = new Map<string, CheckoutHolder>()
+  const metaOf = (folder: string): string => `${dirOf(folder)}.json`
+  const lockOf = (folder: string): string => `${dirOf(folder)}.lock`
 
   /** The metadata this module wrote, or null when the checkout has none (or it was cut short). */
-  const readMeta = async (key: ReviewKey): Promise<CheckoutMeta | null> => {
+  const readMeta = async (folder: string): Promise<CheckoutMeta | null> => {
     try {
-      return JSON.parse(await readFile(metaOf(key), 'utf8')) as CheckoutMeta
+      return JSON.parse(await readFile(metaOf(folder), 'utf8')) as CheckoutMeta
     } catch {
       return null
     }
@@ -165,9 +264,9 @@ export function createReviewCheckouts(opts: {
   }
 
   /** True when the lock was taken. */
-  const tryLock = async (key: ReviewKey): Promise<boolean> => {
+  const tryLock = async (folder: string): Promise<boolean> => {
     await mkdir(root, { recursive: true })
-    const file = lockOf(key)
+    const file = lockOf(folder)
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const handle = await open(file, 'wx')
@@ -184,17 +283,17 @@ export function createReviewCheckouts(opts: {
     return false
   }
 
-  const unlock = (key: ReviewKey): Promise<void> => rm(lockOf(key), { force: true })
+  const unlock = (folder: string): Promise<void> => rm(lockOf(folder), { force: true })
 
-  const isLocked = async (key: ReviewKey): Promise<boolean> =>
-    (await exists(lockOf(key))) && !(await lockIsStale(lockOf(key)))
+  const isLocked = async (folder: string): Promise<boolean> =>
+    (await exists(lockOf(folder))) && !(await lockIsStale(lockOf(folder)))
 
-  const removeCheckout = async (key: ReviewKey): Promise<void> => {
-    const dir = dirOf(key)
+  const removeCheckout = async (folder: string): Promise<void> => {
+    const dir = dirOf(folder)
     await git.remove(dir)
     // git leaves the folder when the worktree was never registered or was half created.
     await rm(dir, { recursive: true, force: true })
-    await rm(metaOf(key), { force: true })
+    await rm(metaOf(folder), { force: true })
   }
 
   const list = async (): Promise<CheckoutInfo[]> => {
@@ -209,12 +308,13 @@ export function createReviewCheckouts(opts: {
       if (!name.endsWith('.json')) {
         continue
       }
-      const key = parseReviewKey(name.slice(0, -'.json'.length))
-      const meta = key === null ? null : await readMeta(key)
-      if (key === null || meta === null) {
+      const folder = name.slice(0, -'.json'.length)
+      const review = parseReviewFolder(folder)
+      const meta = review === null ? null : await readMeta(folder)
+      if (review === null || meta === null) {
         continue
       }
-      out.push({ key, dir: dirOf(key), ...meta, locked: await isLocked(key) })
+      out.push({ ...review, folder, dir: dirOf(folder), ...meta, locked: await isLocked(folder) })
     }
     return out.sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
   }
@@ -247,16 +347,28 @@ export function createReviewCheckouts(opts: {
 
   return {
     root,
-    async lease(key) {
-      if (!(await tryLock(key))) {
-        throw new CheckoutBusyError(key)
+    async lease(folder, holder) {
+      // A holder in this process is asked first: its lock file names this very pid, which the
+      // stale check cannot tell from a lock this process forgot, so only its age would decide.
+      const current = holders.get(folder)
+      if (current !== undefined) {
+        throw new CheckoutBusyError(folder, current)
       }
-      const dir = dirOf(key)
+      holders.set(folder, holder)
+      if (!(await tryLock(folder))) {
+        holders.delete(folder)
+        throw new CheckoutBusyError(folder, null)
+      }
+      const dir = dirOf(folder)
+      const release = async (): Promise<void> => {
+        holders.delete(folder)
+        await unlock(folder)
+      }
       let head: string | null
       try {
         head = await git.head(dir)
       } catch (err) {
-        await unlock(key)
+        await release()
         throw err
       }
       return {
@@ -271,25 +383,29 @@ export function createReviewCheckouts(opts: {
             await git.move(dir, sha)
           }
           head = sha
-          await writeFile(metaOf(key), JSON.stringify({ sha, lastUsedAt: now().toISOString() }))
+          await writeFile(metaOf(folder), JSON.stringify({ sha, lastUsedAt: now().toISOString() }))
         },
-        release: () => unlock(key),
+        release,
       }
     },
     list,
     size,
-    async remove(key) {
-      if (!(await tryLock(key))) {
-        throw new CheckoutBusyError(key)
+    async remove(folder) {
+      const current = holders.get(folder)
+      if (current !== undefined) {
+        throw new CheckoutBusyError(folder, current)
+      }
+      if (!(await tryLock(folder))) {
+        throw new CheckoutBusyError(folder, null)
       }
       try {
-        const had = (await exists(metaOf(key))) || (await exists(dirOf(key)))
+        const had = (await exists(metaOf(folder))) || (await exists(dirOf(folder)))
         if (had) {
-          await removeCheckout(key)
+          await removeCheckout(folder)
         }
         return had
       } finally {
-        await unlock(key)
+        await unlock(folder)
       }
     },
     async sweep(options) {
@@ -309,15 +425,15 @@ export function createReviewCheckouts(opts: {
           continue
         }
         // Holding the lock while removing keeps a turn from starting in a folder that is going away.
-        if (!(await tryLock(info.key))) {
+        if (holders.has(info.folder) || !(await tryLock(info.folder))) {
           skipped.push({ ...info, locked: true })
           continue
         }
         try {
-          await removeCheckout(info.key)
+          await removeCheckout(info.folder)
           removed.push(info)
         } finally {
-          await unlock(info.key)
+          await unlock(info.folder)
         }
       }
       return { removed, skipped }
@@ -333,7 +449,7 @@ export function combineCheckouts(primary: ReviewCheckouts, ...others: ReviewChec
   const all = [primary, ...others]
   return {
     root: primary.root,
-    lease: key => primary.lease(key),
+    lease: (key, holder) => primary.lease(key, holder),
     async list() {
       const lists = await Promise.all(all.map(c => c.list()))
       return lists.flat().sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))

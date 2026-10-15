@@ -11,7 +11,6 @@ import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { PublishError } from '../review/publish.js'
 import { createPrLoader } from '../server/bundle.js'
 import type { AppContext } from '../server/context.js'
-import { localUrl } from '../server/server-file.js'
 import { tourReviewer } from './bundle.js'
 import { lookupTour } from './lookup.js'
 import { planOf } from './plan.js'
@@ -107,7 +106,7 @@ async function runTourPlan(ctx: AppContext, argv: string[], io: CliIo): Promise<
       status: 'unfinished',
       headSha: found.headSha,
       tourDir,
-      tourUrl: await localUrl(ctx, `/tour/${keyToString(key)}`),
+      tourUrl: `http://localhost:${ctx.config.port}${ctx.config.basePath}tour/${keyToString(key)}`,
     })
     return EXIT.ok
   }
@@ -279,7 +278,7 @@ async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Prom
   const sha = side === 'head' ? context.headSha : context.mergeBaseSha
   let lease
   try {
-    lease = await (side === 'head' ? ctx.checkouts : ctx.baseCheckouts).lease(key)
+    lease = await (side === 'head' ? ctx.checkouts : ctx.baseCheckouts).lease(key, 'tour')
   } catch (err) {
     throw busy(err)
   }

@@ -23,16 +23,49 @@ interface CommandHelp {
 const COMMANDS: CommandHelp[] = [
   {
     name: 'serve',
-    summary: 'Start the local review server.',
+    summary: 'Start the local review server, which serves every project you open.',
     flags: [
       { form: '--port <n>', detail: `default ${DEFAULT_PORT}` },
       { form: '--fixture-canvas <review.json>', detail: 'preview this canvas for every pull request' },
       { form: '--no-open', detail: 'leave the browser closed (also when CI is set)' },
-      { form: '--chat-agent claude|codex', detail: 'the AI Chat agent for this run' },
-      { form: '--chat-model <id>', detail: 'the AI Chat model for this run' },
+      { form: '--chat-agent claude|codex', detail: 'the AI Chat agent for this project' },
+      { form: '--chat-model <id>', detail: 'the AI Chat model for this project' },
     ],
     notes: [
+      'Run it in any folder. Inside a repository it also adds that project and opens its review. When a server already runs, serve adds the project to it and exits, unless --port names another port.',
+      "Each project answers under /r/<owner>/<repo>/, and a linked worktree under /r/<owner>/<repo>~<worktree>/, with git's name for the worktree.",
       '--chat-agent and --chat-model win over .pr-review/settings.yml. They set AI Chat only, not canvas generation. --agent and --model are deprecated aliases.',
+    ],
+  },
+  {
+    name: 'open [<n>|branch|uncommitted]',
+    summary: 'Open this project in the running server.',
+    flags: [
+      { form: '--no-open', detail: 'print the URL, leave the browser closed (also when CI is set)' },
+      { form: '--chat-agent claude|codex', detail: 'the AI Chat agent for this project' },
+      { form: '--chat-model <id>', detail: 'the AI Chat model for this project' },
+      { form: '--json', detail: 'one JSON line, as on a pipe' },
+    ],
+    notes: [
+      'Without a review, opens the open pull request of the current branch, or the project home page. The server runs git, the host CLI, and the agent for this project with the environment of the shell you ran open in; it keeps it in memory only, and saves the flags with the project.',
+    ],
+  },
+  {
+    name: 'generate [<n>|branch|uncommitted]',
+    summary: 'Generate a canvas in the running server, as the review app does, and wait for it.',
+    flags: [
+      { form: '--force', detail: 'start from a blank page, not from the earlier canvas' },
+      { form: '--base <ref>', detail: 'with branch or uncommitted, another base' },
+      { form: '--agent claude|codex', detail: 'the agent for this run; default: the chat agent' },
+      { form: '--model <id>', detail: 'the model for this run; default: generation.models' },
+      { form: '--out <file|dir>', detail: 'write the canvas zip there and post nothing' },
+      { form: '--open', detail: 'open the review in the browser when the canvas is published' },
+      { form: '--json', detail: 'one JSON line, as on a pipe' },
+    ],
+    notes: [
+      'Without a review, generates for the open pull request of the current branch. Needs a running server (`pr-review serve`) and acpx; it adds the project to the server, as open does.',
+      'Publishing shares the canvas on the pull request unless sharing is off. With --out it keeps the canvas local for that run and writes the zip, for `pr-review import` on another machine; resolving a point on the review page later shares it, unless sharing is off.',
+      'Progress goes to stderr. Ctrl+C stops the wait, not the generation: stop that from the review page.',
     ],
   },
   {
@@ -47,7 +80,7 @@ const COMMANDS: CommandHelp[] = [
       { form: '--force' },
     ],
     notes: [
-      '--branch and --uncommitted are for work with no pull request yet. They show at /review/branch and /review/uncommitted.',
+      '--branch and --uncommitted are for work with no pull request yet. They show at review/branch and review/uncommitted under the path of the project on the server.',
     ],
   },
   {
