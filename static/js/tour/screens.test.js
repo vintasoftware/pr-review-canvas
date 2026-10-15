@@ -10,6 +10,8 @@ import {
   decisionHtml,
   helpHtml,
   inline,
+  plain,
+  tryItStepHtml,
   landmarkHtml,
   literateHtml,
   missingHtml,
@@ -21,7 +23,7 @@ import {
   staleBarHtml,
   tourHeaderHtml,
 } from './screens.js'
-import { buildSteps } from './steps.js'
+import { buildSteps, planBasis } from './steps.js'
 
 const NOW = new Date('2026-09-10T13:00:00.000Z')
 const LOOK = /** @type {const} */ ({ host: 'localhost:3010', theme: 'auto', skin: 'github', now: NOW })
@@ -47,7 +49,17 @@ beforeEach(() => {
 
 describe('inline', () => {
   it('escapes, then turns backtick spans into code', () => {
-    expect(inline('a `<b>` & c')).toBe('a <code>&lt;b&gt;</code> &amp; c')
+    expect(inline('a `<b>` & c')).toBe('a <code class="nw">&lt;b&gt;</code> &amp; c')
+  })
+
+  it('keeps short code and flags whole, and lets long code wrap', () => {
+    const long = 'x'.repeat(41)
+    expect(inline(`run \`${long}\``)).toBe(`run <code>${long}</code>`)
+    expect(inline('Text by default; JSON only with --json (or -q)')).toBe(
+      'Text by default; JSON only with <span class="nw">--json</span> (or <span class="nw">-q</span>)'
+    )
+    // A hyphen inside a word is not a flag.
+    expect(plain('human-readable <x>')).toBe('human-readable &lt;x&gt;')
   })
 })
 
@@ -81,9 +93,39 @@ describe('tourHeaderHtml', () => {
 describe('railHtml and navHtml', () => {
   it('marks the steps done, current, open, and ahead, and labels the groups', () => {
     const bundle = bundleWith({ picks: { 'sum-over-product': { pick: 'keep', approved: true } } })
+    const states = () =>
+      [...document.querySelectorAll('.tour-rail-seg')].map(s => s.getAttribute('data-state'))
+    // A landmark passed without being on screen stays open: only a seen one is done.
     document.body.innerHTML = railHtml(stepsOf(bundle), 2, bundle.reader, tourOf(bundle))
-    const states = [...document.querySelectorAll('.tour-rail-seg')].map(s => s.getAttribute('data-state'))
-    expect(states).toEqual(['done', 'done', 'current', 'open', 'open', 'done', 'open', 'ahead'])
+    expect(states()).toEqual(['done', 'open', 'current', 'open', 'open', 'done', 'open', 'ahead'])
+    const firstLandmark = tourOf(bundle).landmarks[0]?.id ?? ''
+    bundle.reader.seen[firstLandmark] = true
+    document.body.innerHTML = railHtml(stepsOf(bundle), 2, bundle.reader, tourOf(bundle))
+    expect(states()).toEqual(['done', 'done', 'current', 'open', 'open', 'done', 'open', 'ahead'])
+    // A decision taken back is open again, even with the reader past it.
+    const undone = {
+      ...bundle.reader,
+      picks: {},
+      quiz: { [tourOf(bundle).quiz[0]?.id ?? '']: { answered: 0, right: true } },
+    }
+    document.body.innerHTML = railHtml(stepsOf(bundle), 7, undone, tourOf(bundle))
+    expect(states()[5]).toBe('open')
+    // The plan is done once confirmed as it stands, and open again when it changed after.
+    const finished = {
+      at: 'x',
+      promptPath: 'p',
+      prompt: 'q',
+      sharing: /** @type {const} */ ({ status: 'off' }),
+    }
+    const confirmed = {
+      ...bundle.reader,
+      finished: { ...finished, basis: planBasis(tourOf(bundle), bundle.reader) },
+    }
+    document.body.innerHTML = railHtml(stepsOf(bundle), 0, confirmed, tourOf(bundle))
+    expect(states()[7]).toBe('done')
+    const changed = { ...confirmed, picks: {} }
+    document.body.innerHTML = railHtml(stepsOf(bundle), 0, changed, tourOf(bundle))
+    expect(states()[7]).not.toBe('done')
     expect([...document.querySelectorAll('.tour-rail-label')].map(l => l.textContent)).toEqual([
       '',
       '4 landmarks',
@@ -244,6 +286,28 @@ describe('landmarkHtml', () => {
 })
 
 describe('decisionHtml', () => {
+  it('marks the side the tour recommends, keep or the alternative', () => {
+    const bundle = bundleWith()
+    const decision = tourOf(bundle).decisions[0]
+    if (decision === undefined) {
+      throw new Error('no decision')
+    }
+    const recommended = () =>
+      [...document.querySelectorAll('.tour-option[data-recommended]')].map(o => o.getAttribute('data-pick'))
+    document.body.innerHTML = decisionHtml(bundle, stepsOf(bundle), decision)
+    expect(recommended()).toEqual(['keep'])
+    document.body.innerHTML = decisionHtml(bundle, stepsOf(bundle), { ...decision, recommended: 'change' })
+    expect(recommended()).toEqual(['change'])
+    expect(document.querySelector('[data-pick="change"] .rec')?.textContent).toBe('the tour recommends')
+  })
+
+  it('shows a bare try-it command as code, and a step in words as prose with code in it', () => {
+    expect(tryItStepHtml('pnpm install')).toBe('<li><code>pnpm install</code></li>')
+    expect(tryItStepHtml('Open `/review/68` and pick layer 1')).toBe(
+      '<li>Open <code class="nw">/review/68</code> and pick layer 1</li>'
+    )
+  })
+
   it('offers three options with nothing chosen', () => {
     const bundle = bundleWith({ notes: { sum: 'my note' } })
     const decision = tourOf(bundle).decisions[0]

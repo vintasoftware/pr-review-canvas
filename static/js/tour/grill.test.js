@@ -10,6 +10,7 @@ import {
   formGrillHtml,
   grillsWithChat,
   openingMessage,
+  PLAN_CARD_MESSAGE,
   PLAN_MESSAGE,
   readRestatement,
   restatementCardHtml,
@@ -36,6 +37,13 @@ function fakeApi(opts = {}) {
   /** @type {true[]} */
   const cancels = []
   const answers = [...(opts.answers ?? [])]
+  /** What the thread holds, as the server keeps it: the history, then each turn as it is answered. */
+  const thread = [...(opts.history ?? [])]
+  /** @param {string} message @param {unknown} context @param {string} text @param {string} [incomplete] */
+  const keep = (message, context, text, incomplete) => {
+    thread.push({ role: 'user', text: message, at: 'x', context: /** @type {any} */ (context) })
+    thread.push({ role: 'assistant', text, at: 'x', ...(incomplete === undefined ? {} : { incomplete }) })
+  }
   return {
     sent,
     cancels,
@@ -45,17 +53,19 @@ function fakeApi(opts = {}) {
         if (opts.fail) {
           throw new Error('no thread')
         }
-        return { name: 't0', turns: opts.history ?? [] }
+        return { name: 't0', turns: thread.map(t => ({ ...t })) }
       },
       /** @type {typeof import('./tour-api.js').streamGrill} */
       streamGrill: async (_key, input, streamOpts) => {
         sent.push(input)
         const answer = answers.shift() ?? 'Noted.'
         if (answer === 'ERROR') {
+          keep(input.message, input.context, '', 'AGENT_FAILED')
           streamOpts.onEvent({ event: 'error', data: { code: 'AGENT_FAILED', message: 'boom' } })
           return
         }
         if (answer === 'CANCEL') {
+          keep(input.message, input.context, '', 'cancelled')
           streamOpts.onEvent({ event: 'cancelled', data: {} })
           return
         }
@@ -70,6 +80,7 @@ function fakeApi(opts = {}) {
           streamOpts.onEvent({ event: 'chunk', data: { text: `${piece} ` } })
         }
         streamOpts.onEvent({ event: 'done', data: { stopReason: 'end_turn' } })
+        keep(input.message, input.context, answer)
       },
       cancelGrill: async () => {
         cancels.push(true)
@@ -138,13 +149,14 @@ describe('the form without an agent', () => {
     unchanged.value = '  The callers.  '
     expect(readRestatement(form)).toBeNull()
     what.value = 'Product'
-    where.value = 'src/app.ts, , src/b.ts '
+    // A place is a line, so one that names something with a comma in it stays whole.
+    where.value = 'src/app.ts (reads it, or main passes it in)\n\n src/b.ts '
     expect(readRestatement(form)).toEqual({
       what: 'Product',
-      where: ['src/app.ts', 'src/b.ts'],
+      where: ['src/app.ts (reads it, or main passes it in)', 'src/b.ts'],
       unchanged: 'The callers.',
     })
-    where.value = ' , '
+    where.value = ' \n '
     expect(readRestatement(form)).toBeNull()
     document.body.innerHTML = formGrillHtml(decision, RESTATEMENT)
     expect(document.querySelector('textarea[name="what"]')?.textContent).toBe('Multiply.')
@@ -355,14 +367,16 @@ describe('the grilling with an agent', () => {
     await vi.waitFor(() => expect(dialog.querySelector('#grill-log')?.textContent).toContain('boom'))
     composer().value = 'y'
     form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    // Cancelled before a word: the reader is told, and offered to send the message again.
     await vi.waitFor(() =>
-      expect(dialog.querySelector('#grill-log')?.textContent).toContain('stopped early (cancelled)')
+      expect(dialog.querySelector('#grill-log')?.textContent).toContain('stopped before it answered')
     )
-    composer().value = 'z'
-    form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    expect(dialog.querySelector('.tour-grill-guide')?.textContent).toContain('has not read your last message')
+    click('[data-act="resend"]')
     await vi.waitFor(() =>
       expect(dialog.querySelector('#grill-log')?.textContent).toContain('stopped early (offline)')
     )
+    expect(server.sent[4]?.message).toBe('y')
     // An empty message goes nowhere.
     composer().value = '  '
     form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -509,6 +523,113 @@ describe('the grilling with an agent', () => {
     // Still no card: the way out comes back.
     await vi.waitFor(() => expect(dialog.querySelector('[data-act="ask-card"]')).not.toBeNull())
     grill.stop()
+  })
+
+  it('lets only the newest card be approved, and shows an edit the reader approved over it', async () => {
+    const dialog = mountDialog()
+    const card = (/** @type {string} */ what) =>
+      `Here.\n\`\`\`restatement\n{ "what": "${what}", "where": ["src/app.ts:4"], "unchanged": "Callers." }\n\`\`\``
+    const ctx = { kind: /** @type {const} */ ('tour-decision'), key: decision.key }
+    const server = fakeApi({
+      history: [
+        { role: 'user', text: 'opening', at: 'x', context: ctx },
+        { role: 'assistant', text: card('Add.'), at: 'x' },
+        { role: 'user', text: 'No, that is not it: multiply', at: 'x', context: ctx },
+        { role: 'assistant', text: card('Multiply.'), at: 'x' },
+      ],
+    })
+    const onApprove = vi.fn()
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove,
+      onReader: () => {},
+      api: server.api,
+    })
+    // Reopened on what the agent last said: the earlier card is kept for reading, without commands.
+    await grill.open(decision, RESTATEMENT)
+    const cards = () => [...dialog.querySelectorAll('.tour-restate[data-restatement]')]
+    expect(cards()).toHaveLength(2)
+    expect(cards()[0]?.classList.contains('earlier')).toBe(true)
+    expect(cards()[0]?.querySelector('h4')?.textContent).toBe('An earlier restatement')
+    expect(cards()[0]?.querySelector('[data-act="approve"]')).toBeNull()
+    expect(cards()[1]?.querySelector('[data-act="approve"]')).not.toBeNull()
+    grill.close()
+    // Reopened on an edit the reader approved: it is the card in the plan, theirs to edit again.
+    const edited = { ...RESTATEMENT, unchanged: 'Callers, and the cache.' }
+    await grill.open(decision, edited)
+    expect(cards()).toHaveLength(3)
+    expect(cards().at(-1)?.querySelector('h4')?.textContent).toBe('What you approved')
+    expect(dialog.querySelectorAll('[data-act="approve"]')).toHaveLength(0)
+    click('.tour-approved [data-act="edit"]')
+    const form = dialog.querySelector('form[data-act="restate"]')
+    if (!(form instanceof HTMLFormElement)) {
+      throw new Error('no form')
+    }
+    expect(form.querySelector('textarea[name="unchanged"]')?.textContent).toBe('Callers, and the cache.')
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    expect(onApprove).toHaveBeenCalledWith(decision, edited)
+    expect(server.sent).toHaveLength(0)
+    grill.stop()
+  })
+
+  it('asks again for the plan card when the plan comes back in prose', async () => {
+    const dialog = mountDialog()
+    const server = fakeApi({
+      answers: ['The plan, in words.', '```plan\n{ "changes": [], "kept": ["sum-over-product"] }\n```'],
+    })
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove: () => {},
+      onReader: () => {},
+      api: server.api,
+    })
+    await grill.openPlan()
+    expect(server.sent[0]?.message).toBe(PLAN_MESSAGE)
+    expect(dialog.querySelector('.tour-grill-guide')?.textContent).toContain('without a plan card')
+    expect(dialog.querySelector('[data-act="write-own"]')).toBeNull()
+    click('[data-act="ask-card"]')
+    await vi.waitFor(() => expect(dialog.querySelector('.tour-plan-card')).not.toBeNull())
+    expect(server.sent[1]?.message).toBe(PLAN_CARD_MESSAGE)
+    expect(dialog.querySelector('.tour-grill-guide')).toBeNull()
+    grill.stop()
+  })
+
+  it('reads the thread again on each open, so turns sent from another tab show', async () => {
+    const server = fakeApi({ answers: ['What should happen to the callers?', 'Noted, they stay.'] })
+    const options = { key: '42', bundle: chatBundle(), onApprove: () => {}, onReader: () => {} }
+    // Two tabs on one tour: two drawers on the one thread.
+    document.body.innerHTML = '<dialog id="a"></dialog><dialog id="b"></dialog>'
+    const a = /** @type {HTMLDialogElement} */ (document.querySelector('#a'))
+    const b = /** @type {HTMLDialogElement} */ (document.querySelector('#b'))
+    const tabA = createGrill({ ...options, dialog: a, api: server.api })
+    const tabB = createGrill({ ...options, dialog: b, api: server.api })
+    await tabA.open(decision, undefined)
+    // Tab B opens after A asked: it shows A's exchange and sends no second opening.
+    await tabB.open(decision, undefined)
+    expect(server.sent).toHaveLength(1)
+    expect(b.querySelector('#grill-log')?.textContent).toContain('What should happen to the callers?')
+    tabB.close()
+    // A answers; B, opened again, has it.
+    const box = /** @type {HTMLTextAreaElement} */ (a.querySelector('#composer'))
+    box.value = 'They stay.'
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await vi.waitFor(() => expect(a.querySelector('#grill-log')?.textContent).toContain('they stay'))
+    await tabB.open(decision, undefined)
+    expect(b.querySelector('#grill-log')?.textContent).toContain('Noted, they stay.')
+    // A tab whose thread cannot be read now keeps what it had.
+    server.api.fetchGrillHistory = async () => {
+      throw new Error('offline')
+    }
+    tabB.close()
+    await tabB.open(decision, undefined)
+    expect(b.querySelector('#grill-log')?.textContent).toContain('Noted, they stay.')
+    expect(server.sent).toHaveLength(2)
+    tabA.stop()
+    tabB.stop()
   })
 
   it('sends the opening again when the decision was asked but never answered', async () => {

@@ -43,6 +43,8 @@ export const TourFinishedSchema = z.object({
   sharing: TourSharingSchema,
   /** A reviewer's approved changes added to their pending review, this time. */
   queued: z.number().int().nonnegative().optional(),
+  /** The page's summary of the picks and notes the prompt was written from. */
+  basis: z.string().optional(),
 })
 export type TourFinished = z.infer<typeof TourFinishedSchema>
 
@@ -59,6 +61,8 @@ export const TourReaderStateSchema = z.object({
     .default({}),
   /** A thought per landmark, written while reading, carried into the plan and the prompt. */
   notes: z.record(z.string(), z.string().max(4000)).default({}),
+  /** The landmarks the reader has had on screen, so the rail marks only those as read. */
+  seen: z.record(z.string(), z.boolean()).default({}),
   codeOpen: z.record(z.string(), z.boolean()).default({}),
   codeView: z.record(z.string(), z.enum(['literate', 'raw'])).default({}),
   /** The step a jump came from, so the page can offer the way back. */
@@ -82,7 +86,11 @@ export const TourReaderInputSchema = z.object({
 export type TourReaderInput = z.infer<typeof TourReaderInputSchema>
 
 /** The body of `POST /api/tours/:n/finish`. */
-export const TourFinishInputSchema = z.object({ headSha: z.string().regex(/^[0-9a-f]{40}$/) })
+export const TourFinishInputSchema = z.object({
+  headSha: z.string().regex(/^[0-9a-f]{40}$/),
+  /** What the plan was made of when confirmed, as the page sums it up; stored to tell a later change. */
+  basis: z.string().max(200_000).optional(),
+})
 
 export interface TourFinishResponse {
   finished: TourFinished

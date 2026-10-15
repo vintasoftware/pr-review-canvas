@@ -33,13 +33,14 @@ export function saveReader(key, headSha, reader, opts = {}) {
 /**
  * @param {string} key
  * @param {string} headSha
+ * @param {string} basis what the plan is made of, from `planBasis`
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<TourFinishResponse>}
  */
-export function finishTour(key, headSha, opts = {}) {
+export function finishTour(key, headSha, basis, opts = {}) {
   return fetchJson(`/api/tours/${encodeURIComponent(key)}/finish`, {
     method: 'POST',
-    body: { headSha },
+    body: { headSha, basis },
     fetchImpl: opts.fetchImpl,
   })
 }

@@ -77,6 +77,7 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
         reader,
         reviewer,
         current: found.status === 'ready',
+        basis: input.basis,
       })
     })
     return c.json(answer)

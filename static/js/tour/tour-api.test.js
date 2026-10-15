@@ -31,7 +31,7 @@ describe('the tour requests', () => {
     await fetchTour('branch', { preview: true, fetchImpl: f.impl })
     const reader = freshReaderState()
     await saveReader('42', 'a'.repeat(40), reader, { fetchImpl: f.impl })
-    await finishTour('42', 'a'.repeat(40), { fetchImpl: f.impl })
+    await finishTour('42', 'a'.repeat(40), '{"picks":[]}', { fetchImpl: f.impl })
     expect(f.calls.map(c => [c.url, c.init?.method ?? 'GET'])).toEqual([
       ['/api/tours/42', 'GET'],
       ['/api/tours/branch?preview=1', 'GET'],
@@ -39,7 +39,10 @@ describe('the tour requests', () => {
       ['/api/tours/42/finish', 'POST'],
     ])
     expect(JSON.parse(String(f.calls[2]?.init?.body))).toEqual({ headSha: 'a'.repeat(40), reader })
-    expect(JSON.parse(String(f.calls[3]?.init?.body))).toEqual({ headSha: 'a'.repeat(40) })
+    expect(JSON.parse(String(f.calls[3]?.init?.body))).toEqual({
+      headSha: 'a'.repeat(40),
+      basis: '{"picks":[]}',
+    })
   })
 })
 

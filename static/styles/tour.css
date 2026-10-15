@@ -516,11 +516,16 @@ pr-tour {
   text-transform: uppercase;
   color: var(--fg-muted);
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   align-items: baseline;
 }
 .tour-option-k .now {
   color: var(--here-c);
+  font-weight: 700;
+}
+.tour-option-k .rec {
+  color: var(--ok);
   font-weight: 700;
 }
 .tour-option-l {
@@ -700,6 +705,12 @@ pr-tour {
   color: var(--fg-muted);
   margin-top: 4px;
 }
+.tour-plan-list li .stays {
+  display: block;
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-top: 6px;
+}
 .tour-kept {
   margin: 0;
   padding: 0;
@@ -718,11 +729,8 @@ pr-tour {
   border-bottom: 0;
 }
 .tour-kept .place {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12.5px;
   color: var(--fg-muted);
-  white-space: nowrap;
 }
 .tour-prompt {
   position: relative;
@@ -819,6 +827,15 @@ pr-tour {
   inset: 0 0 0 auto;
   width: min(440px, 100vw);
   display: flex;
+}
+/* A long decision title wraps beside close, not over it. */
+.tour-chat .chat-h {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+.tour-chat .chat-h h2 {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .tour-chat-box {
   flex: 1 1 auto;
@@ -950,6 +967,35 @@ pr-tour {
   .tour-kept li {
     grid-template-columns: 1fr;
   }
+  /* A phone's height goes to the step: past the cover, the header keeps only the title. */
+  pr-tour .hdr-title {
+    padding: 10px 16px 12px;
+  }
+  pr-tour .hdr-title h1 {
+    font-size: 17px;
+  }
+  pr-tour:not([data-at='cover']) .hdr-title .meta {
+    display: none;
+  }
+  /* And the drawer's to the conversation: its fixed parts shrink. */
+  .tour-chat .ctx-line {
+    display: none;
+  }
+  .tour-chat .chat-h h2 {
+    font-size: 15px;
+  }
+  .tour-grill-steps {
+    padding: 6px 14px;
+  }
+  .tour-grill-guide {
+    padding: 8px 14px;
+    font-size: 12.5px;
+  }
+}
+
+/* The cover is the title page: the header does not say the title above it again. */
+pr-tour[data-at='cover'] .hdr-title .title {
+  display: none;
 }
 
 /* ---- The grilling: the canvas's chat, with the mic and the agent's cards ---- */
@@ -1068,4 +1114,22 @@ pr-tour {
   .tour-writing {
     animation: none;
   }
+}
+.tour-plan-changed {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-bg);
+}
+.tour-restate.earlier {
+  border-style: dashed;
+  border-color: var(--line);
+  opacity: 0.75;
+}
+.tour-restate.earlier h4 {
+  color: var(--fg-muted);
+}
+/* A short code span or a command-line flag stays on one line: a line may break after a hyphen. */
+.nw {
+  white-space: nowrap;
 }

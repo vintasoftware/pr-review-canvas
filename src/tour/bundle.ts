@@ -1,6 +1,11 @@
 // The bundle the tour page opens with: the tour for the key, the reader's state, and who is reading.
 import type { ChatStatus } from '../contract/api.js'
-import type { TourBundle, TourPageLandmark, TourPageTour } from '../contract/tour-api.js'
+import {
+  freshReaderState,
+  type TourBundle,
+  type TourPageLandmark,
+  type TourPageTour,
+} from '../contract/tour-api.js'
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { TourArtifact } from '../contract/tour.js'
 import { isAuthor } from '../review/self-review.js'
@@ -59,17 +64,7 @@ export async function resolveTourBundle(
     status: found.status,
     key,
     pr: found.pr,
-    reader: {
-      step: 0,
-      picks: {},
-      quiz: {},
-      notes: {},
-      codeOpen: {},
-      codeView: {},
-      returnTo: null,
-      audioNoticeSeen: false,
-      audioOff: false,
-    },
+    reader: freshReaderState(),
     reviewer,
     preview: found.preview,
     shares: !isLocalKey(key) && !found.preview && (await tourSharingOn(ctx)),

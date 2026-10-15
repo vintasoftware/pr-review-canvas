@@ -343,7 +343,7 @@ describe('POST /api/tours/:n/finish', () => {
     const res = await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
     expect(res.status).toBe(200)
     const body = await json<TourFinishResponse>(res)
-    const promptPath = path.join(t.ctx.tours.tourDir(HEAD_SHA), 'prompt.md')
+    const promptPath = path.join(t.ctx.tours.tourDir(HEAD_SHA), 'plan-prompt.md')
     expect(body.finished).toEqual({
       at: '2026-09-10T12:00:00.000Z',
       promptPath,
@@ -779,7 +779,7 @@ describe('pr-review tour plan', () => {
     expect(done).toMatchObject({
       status: 'finished',
       headSha: HEAD_SHA,
-      promptPath: path.join(t.ctx.tours.tourDir(HEAD_SHA), 'prompt.md'),
+      promptPath: path.join(t.ctx.tours.tourDir(HEAD_SHA), 'plan-prompt.md'),
       finishedAt: '2026-09-10T12:00:00.000Z',
       changes: 0,
       kept: 1,

@@ -16,7 +16,7 @@ import { esc, qs } from '../dom.js'
 import { openFence } from '../fences.js'
 import { renderMarkdown } from '../markdown.js'
 import { splitGrillAnswer } from './grill-cards.js'
-import { inline } from './screens.js'
+import { inline, plain } from './screens.js'
 import { cancelGrill, fetchGrillHistory, streamGrill } from './tour-api.js'
 
 export const GRILL_DIALOG_ID = 'tour-grill'
@@ -35,7 +35,11 @@ export const CARD_MESSAGE =
   'Put that restatement in one fenced ```restatement block of JSON with "what", "where", and "unchanged", so I can approve it.'
 
 export const PLAN_MESSAGE =
-  'Restate the whole plan as one plan block: every change I approved and every decision I kept.'
+  'Restate the whole plan as one fenced ```plan block of JSON with "changes" and "kept": every change I approved and every decision I kept.'
+
+/** Sent when the plan came back without its block, so the reader has a card to read it from. */
+export const PLAN_CARD_MESSAGE =
+  'Put that plan in one fenced ```plan block of JSON with "changes" (key, what, where, unchanged) and "kept" (decision keys).'
 
 /**
  * @typedef {{
@@ -97,7 +101,7 @@ export function restatementFormHtml(d, draft, opts = { cancel: 'close-grill' }) 
   return `<form class="tour-restate" data-act="restate">
         <h4>What you want instead</h4>
         <label><b>What changes</b><textarea name="what" required maxlength="2000">${esc(r.what)}</textarea></label>
-        <label><b>Where</b> <span class="tour-hint">paths or places, comma separated</span><textarea name="where" required maxlength="2000">${esc(r.where.join(', '))}</textarea></label>
+        <label><b>Where</b> <span class="tour-hint">paths or places, one per line</span><textarea name="where" required maxlength="2000">${esc(r.where.join('\n'))}</textarea></label>
         <label><b>Stays the same</b><textarea name="unchanged" required maxlength="2000" placeholder="What this change must not touch">${esc(r.unchanged)}</textarea></label>
         <div class="tour-actions"><button class="cmd fill" type="submit">approve · into the plan</button><button class="cmd" type="button" data-act="${esc(opts.cancel)}">cancel</button></div>
       </form>`
@@ -121,7 +125,8 @@ export function formGrillHtml(d, draft) {
 }
 
 /**
- * The restatement the form holds, or null while a field is empty.
+ * The restatement the form holds, or null while a field is empty. A place is one line, so a place
+ * that names something with a comma in it stays one place.
  * @param {HTMLFormElement} form
  * @returns {Restatement | null}
  */
@@ -130,7 +135,7 @@ export function readRestatement(form) {
   const what = String(data.get('what') ?? '').trim()
   const unchanged = String(data.get('unchanged') ?? '').trim()
   const where = String(data.get('where') ?? '')
-    .split(',')
+    .split('\n')
     .map(s => s.trim())
     .filter(s => s !== '')
   if (what === '' || unchanged === '' || where.length === 0) {
@@ -148,6 +153,17 @@ export function restatementCardHtml(r, key) {
   return `<div class="tour-restate" data-restatement="${esc(String(key))}"><h4>Here is what I understood</h4>
     <b>What changes</b>${inline(r.what)}<b>Where</b><div class="where">${r.where.map(w => `<span>${esc(w)}</span>`).join('')}</div><b>Stays the same</b>${inline(r.unchanged)}
     <div class="tour-actions"><button class="cmd fill" type="button" data-act="approve" data-restatement="${esc(String(key))}">approve</button><button class="cmd" type="button" data-act="edit" data-restatement="${esc(String(key))}">edit</button><button class="cmd" type="button" data-act="reject">no, that is not it</button></div></div>`
+}
+
+/**
+ * The restatement the reader approved after editing it: the one in the plan, which they may edit
+ * again.
+ * @param {Restatement} r
+ */
+export function approvedCardHtml(r) {
+  return `<div class="tour-restate tour-approved" data-restatement="approved"><h4>What you approved</h4>
+    <b>What changes</b>${inline(r.what)}<b>Where</b><div class="where">${r.where.map(w => `<span>${esc(w)}</span>`).join('')}</div><b>Stays the same</b>${inline(r.unchanged)}
+    <div class="tour-actions"><button class="cmd" type="button" data-act="edit" data-restatement="approved">edit</button></div></div>`
 }
 
 /**
@@ -234,6 +250,9 @@ export function createGrill(options) {
   let refused = ''
   /** True when the answer to finish came back without a card to approve. */
   let missed = false
+  /** The restatement the reader approved before, when it is not the agent's last card: an edit. */
+  /** @type {Restatement | null} */
+  let approved = null
 
   const log = () => /** @type {HTMLElement | null} */ (qs('#grill-log', dialog))
   const composer = () => /** @type {HTMLTextAreaElement | null} */ (qs('#composer', dialog))
@@ -242,7 +261,7 @@ export function createGrill(options) {
   const headerHtml = d => {
     const agent = bundle.chat.agent ?? 'agent'
     const model = bundle.chat.model ? ` · ${esc(bundle.chat.model)}` : ''
-    const title = d === null ? 'The plan' : `Grilling · ${esc(d.title)}`
+    const title = d === null ? 'The plan' : `Grilling · ${plain(d.title)}`
     return `<div class="chat-h"><h2>${title}</h2><button class="cmd" type="button" data-act="close-grill">close</button></div><p class="ctx-line">${esc(agent)}${model} · read-only · one thread per tour</p>`
   }
 
@@ -276,10 +295,14 @@ export function createGrill(options) {
     return last?.role === 'assistant' && hasCard(last.text) ? 'approve' : 'talk'
   }
 
-  /** @param {string} text */
+  /**
+   * True when an answer holds the card asked for: a restatement on a decision, the plan on the plan.
+   * @param {string} text
+   */
   const hasCard = text => {
     const keys = new Set((bundle.tour?.decisions ?? []).map(d => d.key))
-    return splitGrillAnswer(text, keys).some(s => s.type === 'restatement')
+    const kind = decision === null ? 'plan' : 'restatement'
+    return splitGrillAnswer(text, keys).some(s => s.type === kind)
   }
 
   /** The three steps of a grilling, the one the reader is on marked. */
@@ -299,6 +322,12 @@ export function createGrill(options) {
     if (now === 'finish') {
       return '<div class="tour-grill-guide" role="status"><p>The agent is restating what you want from the conversation…</p></div>'
     }
+    if (!streaming && unanswered() !== null) {
+      return '<div class="tour-grill-guide" role="status"><p>The answer stopped before it began, so the agent has not read your last message.</p><button class="cmd fill" type="button" data-act="resend">send it again</button></div>'
+    }
+    if (missed && decision === null) {
+      return '<div class="tour-grill-guide" role="status"><p>The agent answered without a plan card.</p><button class="cmd fill" type="button" data-act="ask-card">ask for the card</button></div>'
+    }
     if (now === 'talk' && missed) {
       return '<div class="tour-grill-guide" role="status"><p>The agent answered without a card to approve.</p><button class="cmd fill" type="button" data-act="ask-card">ask for the card</button><button class="cmd" type="button" data-act="write-own">write it myself</button></div>'
     }
@@ -312,6 +341,31 @@ export function createGrill(options) {
   const stoppedHtml = incomplete =>
     incomplete === undefined ? '' : `<p class="muted small">the answer stopped early (${esc(incomplete)})</p>`
 
+  const NOT_ANSWERED = '<span class="muted">stopped before it answered</span>'
+
+  /**
+   * True for an answer stopped before a word, by the reader or by a cancel; an error keeps its note.
+   * @param {ChatTurn} turn
+   */
+  const stoppedEarly = turn =>
+    turn.text.trim() === '' && (turn.incomplete === 'stopped' || turn.incomplete === 'cancelled')
+
+  /**
+   * The reader's last message, when the answer to it stopped before a word: the one to send again.
+   * @returns {string | null}
+   */
+  const unanswered = () => {
+    const turns = visible()
+    const last = turns.at(-1)
+    const asked = turns.at(-2)
+    return last?.role === 'assistant' &&
+      last.text.trim() === '' &&
+      last.incomplete !== undefined &&
+      asked?.role === 'user'
+      ? asked.text
+      : null
+  }
+
   /** @param {ChatTurn} turn */
   const turnHtml = turn => {
     const i = history.indexOf(turn)
@@ -321,7 +375,9 @@ export function createGrill(options) {
     if (drawn.has(turn)) {
       return `<div data-keep="${i}"></div>`
     }
-    return `<div class="turn a" data-turn="${i}"><span class="role">AI Chat</span><div class="prose">${answerHtml(turn.text, bundle, restatements, `t${i}`)}</div>${stoppedHtml(turn.incomplete)}</div>`
+    const body = stoppedEarly(turn) ? NOT_ANSWERED : answerHtml(turn.text, bundle, restatements, `t${i}`)
+    const note = stoppedEarly(turn) ? '' : stoppedHtml(turn.incomplete)
+    return `<div class="turn a" data-turn="${i}"><span class="role">AI Chat</span><div class="prose">${body}</div>${note}</div>`
   }
 
   /**
@@ -337,6 +393,19 @@ export function createGrill(options) {
       return answerHtml(text, bundle, restatements, turnKey)
     }
     return `${answerHtml(open.before, bundle, restatements, turnKey)}<p class="tour-writing" role="status">writing the ${open.info === 'plan' ? 'plan' : 'restatement'}…</p>`
+  }
+
+  /**
+   * Only the newest card is one to act on: an earlier one, before a correction or an edit, loses
+   * its commands, so the reader cannot approve what they already said was wrong.
+   */
+  const markEarlierCards = () => {
+    const cards = [...(log()?.querySelectorAll('.tour-restate[data-restatement]') ?? [])]
+    for (const card of cards.slice(0, -1)) {
+      card.classList.add('earlier')
+      card.querySelector('h4')?.replaceChildren('An earlier restatement')
+      card.querySelector('.tour-actions')?.remove()
+    }
   }
 
   const scrollToEnd = () => {
@@ -369,22 +438,32 @@ export function createGrill(options) {
     // What the reader typed survives a redraw.
     const typed = composer()?.value ?? ''
     const steps = decision === null ? '' : stepsHtml()
-    const guide = decision === null && refused === '' ? '' : guideHtml()
+    const guide =
+      decision === null && refused === '' && !missed && (streaming || unanswered() === null)
+        ? ''
+        : guideHtml()
     const box = `<div class="tour-chat-box">${headerHtml(decision)}${steps}<div class="transcript" id="grill-log" role="log" aria-label="Transcript">${visible().map(turnHtml).join('')}${
       historyLoaded ? '' : '<p class="empty">Opening this thread…</p>'
     }</div>${guide}${composerHtml()}</div>`
     dialog.innerHTML = box
+    if (approved !== null && decision !== null && historyLoaded) {
+      restatements.set('approved', approved)
+      log()?.insertAdjacentHTML('beforeend', approvedCardHtml(approved))
+    }
     for (const slot of dialog.querySelectorAll('[data-keep]')) {
       const kept = drawn.get(/** @type {ChatTurn} */ (history[Number(slot.getAttribute('data-keep'))]))
       if (kept !== undefined) {
         slot.replaceWith(kept)
       }
     }
+    markEarlierCards()
     scrollToEnd()
     const next = composer()
     if (next !== null) {
       next.value = typed
-      if (!streaming && !listening) {
+      // On a touch screen focus would open the keyboard over the conversation the reader came to read.
+      const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+      if (!streaming && !listening && !touch) {
         next.focus()
       }
     }
@@ -433,7 +512,9 @@ export function createGrill(options) {
         history.splice(history.indexOf(answer) - 1, 2)
         drawn.delete(answer)
         refused = message
-      } else if (!(err instanceof Error && err.name === 'AbortError')) {
+      } else if (err instanceof Error && err.name === 'AbortError') {
+        answer.incomplete ??= 'stopped'
+      } else {
         answer.incomplete = err instanceof Error ? err.message : String(err)
       }
     } finally {
@@ -443,7 +524,18 @@ export function createGrill(options) {
       stopLive = () => {}
       answer.text = live.text()
       live.finish()
-      turn.insertAdjacentHTML('beforeend', stoppedHtml(answer.incomplete))
+      if (stoppedEarly(answer)) {
+        const body = turn.querySelector('.prose')
+        if (body !== null) {
+          body.innerHTML = NOT_ANSWERED
+        }
+      } else {
+        turn.insertAdjacentHTML('beforeend', stoppedHtml(answer.incomplete))
+      }
+      // A new card from the agent is the one to act on now, over an edit approved before.
+      if (hasCard(answer.text)) {
+        approved = null
+      }
       // Finish asks for a card; an answer without one gets a way to ask again or write it.
       missed = asked && answer.incomplete === undefined && drawn.has(answer) && !hasCard(answer.text)
       render()
@@ -523,9 +615,15 @@ export function createGrill(options) {
       } else {
         render()
       }
+    } else if (act === 'resend') {
+      const message = unanswered()
+      if (message !== null) {
+        finishing = message === DONE_MESSAGE
+        void send(message)
+      }
     } else if (act === 'ask-card') {
       finishing = true
-      void send(CARD_MESSAGE)
+      void send(decision === null ? PLAN_CARD_MESSAGE : CARD_MESSAGE)
     } else if (act === 'write-own' && decision !== null) {
       missed = false
       render()
@@ -620,16 +718,21 @@ export function createGrill(options) {
   dialog.addEventListener('submit', onSubmit)
   dialog.addEventListener('keydown', onKeydown)
 
-  /** The thread, read once per page; later turns are appended as they are sent. */
+  /**
+   * The thread, read again each time the drawer opens: another tab, or the canvas's AI Chat, may
+   * have added to it since.
+   */
   const loadHistory = async () => {
-    if (historyLoaded) {
-      return
-    }
     try {
       history = (await api.fetchGrillHistory(key)).turns
     } catch {
-      history = []
+      // A thread that cannot be read now keeps what this page already had.
+      if (!historyLoaded) {
+        history = []
+      }
     }
+    // The answers drawn live belonged to the turns read before; the thread read now replaces them.
+    drawn.clear()
     historyLoaded = true
   }
 
@@ -637,6 +740,20 @@ export function createGrill(options) {
    * True when the agent already answered about the open decision, so the opening is not sent again.
    * An exchange whose answers all stopped before a word gets the opening again.
    */
+  /**
+   * True when the agent's last card in this exchange says what `r` says.
+   * @param {Restatement} r
+   */
+  const lastCardIs = r => {
+    const keys = new Set((bundle.tour?.decisions ?? []).map(d => d.key))
+    const cards = visible().flatMap(t =>
+      t.role === 'assistant'
+        ? splitGrillAnswer(t.text, keys).flatMap(seg => (seg.type === 'restatement' ? [seg.restatement] : []))
+        : []
+    )
+    return JSON.stringify(cards.at(-1) ?? null) === JSON.stringify(r)
+  }
+
   const answeredBefore = () => visible().some(t => t.role === 'assistant' && t.text.trim() !== '')
 
   return {
@@ -654,9 +771,11 @@ export function createGrill(options) {
         dialog.querySelector('textarea')?.focus()
         return
       }
+      approved = null
       render()
       dialog.showModal()
       await loadHistory()
+      approved = draft !== undefined && !lastCardIs(draft) ? draft : null
       render()
       if (!answeredBefore()) {
         await send(openingMessage(d))
@@ -671,6 +790,7 @@ export function createGrill(options) {
       dialog.showModal()
       await loadHistory()
       render()
+      finishing = true
       await send(PLAN_MESSAGE)
     },
     close,

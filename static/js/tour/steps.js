@@ -42,6 +42,40 @@ export function pickSettled(pick) {
 }
 
 /**
+ * What the plan's prompt is written from, summed up: each settled decision's pick and restatement,
+ * and each note. The finished record keeps it, so a pick or a note changed after confirming shows
+ * as a plan to confirm again.
+ * @param {Pick<TourPageTour, 'decisions' | 'landmarks'>} tour
+ * @param {TourReaderState} reader
+ */
+export function planBasis(tour, reader) {
+  const picks = tour.decisions.flatMap(d => {
+    const p = reader.picks[d.key]
+    if (!pickSettled(p) || p === undefined) {
+      return []
+    }
+    const r = p.restatement
+    return [[d.key, p.pick, r === undefined ? null : [r.what, r.where, r.unchanged]]]
+  })
+  const notes = tour.landmarks.flatMap(l => {
+    const text = (reader.notes[l.id] ?? '').trim()
+    return text === '' ? [] : [[l.id, text]]
+  })
+  return JSON.stringify({ picks, notes })
+}
+
+/**
+ * True when the plan changed after it was confirmed: its prompt no longer says what the reader
+ * settled.
+ * @param {Pick<TourPageTour, 'decisions' | 'landmarks'>} tour
+ * @param {TourReaderState} reader
+ */
+export function planChanged(tour, reader) {
+  const basis = reader.finished?.basis
+  return basis !== undefined && basis !== planBasis(tour, reader)
+}
+
+/**
  * The option a decision shows as chosen: a settled side, or something else while it is talked
  * through. Nothing is chosen until the reader picks.
  * @param {ReaderPick | undefined} pick

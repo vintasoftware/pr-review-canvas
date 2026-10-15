@@ -23,6 +23,8 @@ function fakeServer(bundle, opts = {}) {
   const saved = []
   /** @type {string[]} */
   const calls = []
+  /** @type {Array<{ headSha: string, basis?: string }>} */
+  const finishes = []
   const impl = /** @type {typeof fetch} */ (
     async (input, init) => {
       const url = String(input)
@@ -49,11 +51,13 @@ function fakeServer(bundle, opts = {}) {
           return opts.finish()
         }
         const reader = saved.at(-1) ?? freshReaderState()
+        finishes.push(JSON.parse(String(init?.body)))
         const finished = {
           at: '2026-09-10T12:00:00.000Z',
-          promptPath: '/data/tours/x/prompt.md',
+          promptPath: '/data/tours/x/plan-prompt.md',
           prompt: '# Keep PR #42 as the tour settled it',
           sharing: { status: 'shared', url: 'https://github.com/acme/widgets/pull/42#issuecomment-1' },
+          basis: JSON.parse(String(init?.body)).basis,
         }
         return json({ finished, record: { touredBy: [] }, reader: { ...reader, finished } })
       }
@@ -70,7 +74,7 @@ function fakeServer(bundle, opts = {}) {
       return json({ error: { code: 'NOT_FOUND', message: url } }, 404)
     }
   )
-  return { impl, saved, calls }
+  return { impl, saved, calls, finishes }
 }
 
 /**
@@ -205,8 +209,8 @@ describe('the tour page', () => {
     click('.tour-rail-seg[data-step="6"]')
     expect(location.hash).toBe('#decision-sum-over-product')
 
-    // Nothing is chosen at first. `k` keeps and `a` takes the alternative, each settling it; a
-    // change of mind, or a click outside the options, takes the pick back.
+    // Nothing is chosen at first. `k` keeps and `a` takes the alternative, each settling it; undo
+    // takes the pick back, and a click on the decision's text leaves it alone.
     const chosen = () =>
       document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')
     expect(chosen()).toBeUndefined()
@@ -217,7 +221,8 @@ describe('the tour page', () => {
     press('a')
     expect(document.querySelector('.tour-state')?.textContent).toBe('✓ alternative · in the plan')
     click('.tour-lead')
-    expect(chosen()).toBeUndefined()
+    expect(chosen()).toBe('change')
+    click('[data-act="unsettle"]')
     press('ArrowRight')
     expect(location.hash).toBe('#decision-sum-over-product')
     click('.tour-option[data-pick="keep"]')
@@ -264,6 +269,25 @@ describe('the tour page', () => {
     click('[data-act="copy"]')
     await vi.waitFor(() => expect(document.querySelector('[data-act="copy"]')?.textContent).toBe('copied'))
     expect(writeText).toHaveBeenCalledWith('# Keep PR #42 as the tour settled it')
+
+    // A pick changed after confirming leaves the prompt behind: the plan asks to confirm again.
+    expect(text()).not.toContain('confirm again')
+    expect(document.querySelector('.tour-rail-seg[data-step="7"]')?.getAttribute('data-state')).toBe(
+      'current'
+    )
+    click('.tour-rail-seg[data-step="5"]')
+    click('[data-act="unsettle"]')
+    press('a')
+    click('.tour-rail-seg[data-step="7"]')
+    expect(document.querySelector('.tour-plan-changed')?.textContent).toContain('You changed the plan')
+    expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('confirm again')
+    expect(text()).toContain('Confirmed before')
+    click('[data-act="confirm"]')
+    await vi.waitFor(() => expect(server.finishes).toHaveLength(2))
+    expect(JSON.parse(server.finishes[1]?.basis ?? '{}').picks).toEqual([
+      ['sum-over-product', 'change', null],
+    ])
+    await vi.waitFor(() => expect(document.querySelector('.tour-plan-changed')).toBeNull())
     el.remove()
   })
 
@@ -305,7 +329,7 @@ describe('the tour page', () => {
     )
     expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ change approved · in the plan')
     expect(document.querySelector('.tour-restated')?.textContent).toContain('The callers.')
-    // A click outside the options leaves something else alone.
+    // A click on the decision's text leaves the pick alone.
     click('.tour-lead')
     expect(document.querySelector('.tour-state.change')).not.toBeNull()
     // Reopening keeps the draft, and closing it keeps the change approved.

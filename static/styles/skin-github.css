@@ -171,9 +171,9 @@
     padding: 8px 20px;
     font-size: 14px;
   }
-  .cmd.fill:hover,
-  .cmd.big:hover,
-  .cmd.fill:active {
+  .cmd.fill:not(:disabled):hover,
+  .cmd.big:not(:disabled):hover,
+  .cmd.fill:not(:disabled):active {
     background: var(--btn-primary-hover);
     transform: none;
     box-shadow: none;
@@ -224,6 +224,7 @@
     &:is(:disabled, [aria-disabled='true']) {
       background: var(--btn-bg);
       color: var(--fg-dim);
+      opacity: 0.6;
     }
     /* The primary action of its block: approving the review, saving the author's reason, a tour's
      filled command. */

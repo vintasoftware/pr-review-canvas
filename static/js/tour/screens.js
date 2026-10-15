@@ -20,6 +20,7 @@ import {
   nextLabel,
   chosenPick,
   pickSettled,
+  planChanged,
   plural,
   positionLabel,
   reachable,
@@ -42,12 +43,40 @@ export const CATEGORY_LABEL = {
   spec: 'Spec fidelity',
 }
 
+/** Code no longer than this stays on one line; longer code wraps, so it never overflows a phone. */
+const NOWRAP_CODE_MAX = 40
+
 /**
- * Prose with `code` spans, the one bit of markup the generator's text carries.
+ * Escaped text whose command-line flags stay whole: a line may break after a hyphen, so `--json`
+ * would end one line with `--`.
+ * @param {string} html escaped already
+ */
+function keepFlags(html) {
+  return html.replace(/(^|[\s(])(--?[A-Za-z][\w-]*)/g, '$1<span class="nw">$2</span>')
+}
+
+/**
+ * Plain text from the generator, escaped, with its flags kept whole: titles and labels.
+ * @param {string} text
+ */
+export function plain(text) {
+  return keepFlags(esc(text))
+}
+
+/**
+ * Prose with `code` spans, the one bit of markup the generator's text carries. A short span stays
+ * on one line, so `<pr-file>` is not cut after its hyphen.
  * @param {string} text
  */
 export function inline(text) {
-  return esc(text).replace(/`([^`]+)`/g, '<code>$1</code>')
+  return esc(text)
+    .split(/`([^`]+)`/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? `<code${part.length <= NOWRAP_CODE_MAX ? ' class="nw"' : ''}>${part}</code>`
+        : keepFlags(part)
+    )
+    .join('')
 }
 
 /**
@@ -111,23 +140,45 @@ export function railHtml(steps, current, reader, tour, opts = {}) {
         if (step.kind !== g.kind) {
           continue
         }
-        // A landmark ahead is open, not done: only an answered decision or question is done early.
-        const answered = (step.kind === 'decision' || step.kind === 'quiz') && settled(step, reader)
         const state =
           i === current
             ? 'current'
-            : i < current || answered
+            : stepDone(step, i, current, reader, tour)
               ? 'done'
               : opts.preview === true || reachable(steps, i, reader)
                 ? 'open'
                 : 'ahead'
-        const title = esc(stepTitle(step))
+        // A tooltip shows text as it is, so the backticks that mark code in prose go.
+        const title = esc(stepTitle(step).replaceAll('`', ''))
         segs += `<button class="tour-rail-seg" type="button" data-step="${i}" data-state="${state}" title="${title}" aria-label="${title}"${state === 'ahead' ? ' disabled' : ''}></button>`
       }
       const kind = g.kind === 'landmark' ? 'landmarks' : g.kind === 'decision' ? 'decisions' : g.kind
       return `<div class="tour-rail-group" data-kind="${kind}"><span class="tour-rail-label">${esc(g.label)}</span><div class="tour-rail-segs">${segs}</div></div>`
     })
     .join('')}</nav>`
+}
+
+/**
+ * Done means done, not passed: a landmark the reader had on screen, a settled decision, a question
+ * answered right, the cover once left, and a plan confirmed as it stands. A jump past a landmark
+ * leaves it open, and a decision taken back is open again.
+ * @param {Step} step
+ * @param {number} i
+ * @param {number} current
+ * @param {TourReaderState} reader
+ * @param {TourPageTour} tour
+ */
+function stepDone(step, i, current, reader, tour) {
+  if (step.kind === 'cover') {
+    return i < current
+  }
+  if (step.kind === 'landmark') {
+    return reader.seen[step.landmark.id] === true
+  }
+  if (step.kind === 'plan') {
+    return reader.finished !== undefined && !planChanged(tour, reader)
+  }
+  return settled(step, reader)
 }
 
 /**
@@ -254,7 +305,7 @@ export function landmarkHtml(bundle, steps, landmark) {
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
     <p class="tour-eyebrow"><span class="tour-stage-tag">${esc(STAGE_LABEL[landmark.stage])}</span><span>landmark ${n} of ${tour.landmarks.length}</span>${landmark.state ? '<span class="tour-state-tag">state landmark</span>' : ''}</p>
-    <h2 class="tour-title">${esc(landmark.title)}</h2>
+    <h2 class="tour-title">${plain(landmark.title)}</h2>
     <p class="tour-lead">${inline(landmark.lead)}</p>
     ${figure}
     <div class="tour-body">${landmark.body.map(p => `<p>${inline(p)}</p>`).join('')}</div>
@@ -328,7 +379,7 @@ export function decisionHtml(bundle, steps, d) {
       : `<a href="#landmark-${esc(landmark.id)}" data-act="landmark" data-landmark="${esc(landmark.id)}">from landmark ${landmarkIndex}: ${esc(landmark.title)}</a>`
   const tryIt = d.tryIt
     ? `<div class="tour-card tour-tryit"><div class="tour-card-h"><span>try it${d.tryIt.verified ? ' · verified when this tour was generated' : ''}</span></div>
-       <ol>${d.tryIt.steps.map(s => `<li><code>${esc(s)}</code></li>`).join('')}</ol>
+       <ol>${d.tryIt.steps.map(tryItStepHtml).join('')}</ol>
        <ul>${d.tryIt.look.map(s => `<li>${inline(s)}</li>`).join('')}</ul>
        <label><input type="checkbox" data-act="tried"${p?.tried ? ' checked' : ''}> I tried it</label></div>`
     : ''
@@ -350,18 +401,27 @@ export function decisionHtml(bundle, steps, d) {
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
     <p class="tour-eyebrow"><span class="tour-stage-tag">${esc(CATEGORY_LABEL[d.category] ?? d.category)}</span><span>decision ${n} of ${tour.decisions.length}</span>${from}</p>
-    <h2 class="tour-title">${esc(d.title)}</h2>
+    <h2 class="tour-title">${plain(d.title)}</h2>
     <p class="tour-lead">${inline(d.context)}</p>
     <p class="tour-anchor"><span class="mono">${esc(d.anchor.path)}:${d.anchor.line}</span></p>
     ${note === '' ? '' : `<div class="tour-landmark-note"><b>Your note on landmark ${landmarkIndex}</b>${esc(note)}</div>`}
     <div class="tour-options" role="radiogroup" aria-label="Keep, the alternative, or something else">
-      ${optionHtml('keep', d.keep, chosen === 'keep', true)}
-      ${optionHtml('change', d.change, chosen === 'change', false)}
-      ${optionHtml('other', other, chosen === 'other', false)}
+      ${optionHtml('keep', d.keep, chosen === 'keep', { isNow: true, recommended: d.recommended === 'keep' })}
+      ${optionHtml('change', d.change, chosen === 'change', { isNow: false, recommended: d.recommended === 'change' })}
+      ${optionHtml('other', other, chosen === 'other', { isNow: false, recommended: false })}
     </div>
     ${tryIt}
     <div class="tour-actions">${actions}</div>
     ${done && p?.pick === 'other' && p.restatement ? restatedHtml(p.restatement) : ''}`
+}
+
+/**
+ * A try-it step: a bare command is one code line; a step in words marks its commands with
+ * backticks, and reads as prose with code in it.
+ * @param {string} step
+ */
+export function tryItStepHtml(step) {
+  return step.includes('`') ? `<li>${inline(step)}</li>` : `<li><code>${esc(step)}</code></li>`
 }
 
 const OPTION_LABEL = { keep: 'keep', change: 'alternative', other: 'something else' }
@@ -370,12 +430,12 @@ const OPTION_LABEL = { keep: 'keep', change: 'alternative', other: 'something el
  * @param {'keep' | 'change' | 'other'} kind
  * @param {{ label: string, consequence: string }} side
  * @param {boolean} checked
- * @param {boolean} isNow
+ * @param {{ isNow: boolean, recommended: boolean }} marks what the code does, and what the tour advises
  */
-function optionHtml(kind, side, checked, isNow) {
-  return `<button class="tour-option" type="button" role="radio" aria-checked="${checked}" data-act="pick" data-pick="${kind}">
-    <span class="tour-option-k"><span>${OPTION_LABEL[kind]}</span>${isNow ? '<span class="now">what the code does</span>' : ''}</span>
-    <span class="tour-option-l">${esc(side.label)}</span>
+function optionHtml(kind, side, checked, marks) {
+  return `<button class="tour-option" type="button" role="radio" aria-checked="${checked}" data-act="pick" data-pick="${kind}"${marks.recommended ? ' data-recommended' : ''}>
+    <span class="tour-option-k"><span>${OPTION_LABEL[kind]}</span>${marks.isNow ? '<span class="now">what the code does</span>' : ''}${marks.recommended ? '<span class="rec">the tour recommends</span>' : ''}</span>
+    <span class="tour-option-l">${plain(side.label)}</span>
     <span class="tour-option-c">${inline(side.consequence)}</span></button>`
 }
 
@@ -448,8 +508,15 @@ export function planHtml(bundle) {
   const lead = changes.length
     ? `Read it once. When you confirm, the prompt is written${bundle.shares ? ' and the record is shared' : ''}. No further plan review.`
     : `When you confirm, ${bundle.shares ? 'the record is shared and ' : ''}the prompt carries the intent and the kept decisions for whoever touches this next.`
+  const changed = finished !== undefined && planChanged(tour, reader)
+  const confirm = `<div class="tour-actions"><button class="cmd fill" type="button" data-act="confirm">${changed ? 'confirm again' : 'confirm the plan'}</button><span class="tour-hint">writes the prompt${bundle.shares ? ', shares the record' : ''}</span>${
+    bundle.chat.enabled && bundle.options.grill !== 'off'
+      ? '<button class="cmd" type="button" data-act="grill-plan">restate the plan with the agent</button>'
+      : ''
+  }</div>`
   const done = finished
-    ? `<h3 class="tour-section-h">Done</h3><ul class="tour-sharing">
+    ? `${changed ? `<p class="tour-plan-changed" role="status">You changed the plan after you confirmed it. Confirm again to write the prompt from it; the one below is from before.</p>${confirm}` : ''}
+       <h3 class="tour-section-h">${changed ? 'Confirmed before' : 'Done'}</h3><ul class="tour-sharing">
          ${sharingLine(finished.sharing)}
          ${finished.queued === undefined ? '' : `<li>${finished.queued === 0 ? 'Nothing new for your pending review.' : `${plural(finished.queued, 'change request')} added to your pending review; it goes out with your verdict.`}</li>`}
          ${bundle.options.finalQuiz === 'off' ? '' : `<li class="private">Quiz ${right} of ${tour.quiz.length}, kept on this machine.</li>`}
@@ -459,16 +526,12 @@ export function planHtml(bundle) {
        <div class="tour-prompt"><div class="tour-actions"><button class="cmd" type="button" data-act="copy">copy</button></div><pre id="prompt">${esc(finished.prompt)}</pre></div>`
     : bundle.preview
       ? '<div class="tour-actions"><span class="tour-hint">A preview is not finished: publish the tour first.</span></div>'
-      : `<div class="tour-actions"><button class="cmd fill" type="button" data-act="confirm">confirm the plan</button><span class="tour-hint">writes the prompt${bundle.shares ? ', shares the record' : ''}</span>${
-          bundle.chat.enabled && bundle.options.grill !== 'off'
-            ? '<button class="cmd" type="button" data-act="grill-plan">restate the plan with the agent</button>'
-            : ''
-        }</div>`
+      : confirm
   return `
     <p class="tour-eyebrow"><span class="tour-stage-tag">The plan</span></p>
     <h2 class="tour-title">${esc(title)}</h2>
     <p class="tour-lead">${esc(lead)}</p>
-    ${changes.length ? `<h3 class="tour-section-h">Changes</h3><ol class="tour-plan-list">${changes.map(({ d, r }) => `<li><b>${esc(d.title)}</b><br>${inline(r.what)} <span class="where">${r.where.map(esc).join(' · ')}</span>${r.unchanged === undefined ? '' : `<span class="where">stays: ${inline(r.unchanged)}</span>`}</li>`).join('')}</ol>` : ''}
+    ${changes.length ? `<h3 class="tour-section-h">Changes</h3><ol class="tour-plan-list">${changes.map(({ d, r }) => `<li><b>${esc(d.title)}</b><br>${inline(r.what)} <span class="where">${r.where.map(esc).join(' · ')}</span>${r.unchanged === undefined ? '' : `<span class="stays">Stays the same: ${inline(r.unchanged)}</span>`}</li>`).join('')}</ol>` : ''}
     ${notes.length ? `<h3 class="tour-section-h">Your notes while reading</h3><ul class="tour-kept">${notes.map(({ l, text }) => `<li><span>landmark ${tour.landmarks.indexOf(l) + 1}</span><span>${esc(text)}</span><span class="place">${esc(l.title)}</span></li>`).join('')}</ul>` : ''}
     <h3 class="tour-section-h">Kept</h3>
     <ul class="tour-kept">${kept.map(({ d }) => `<li><span>${esc(d.keep.label)}</span><span>${inline(d.keep.consequence)}</span></li>`).join('') || '<li>none</li>'}</ul>

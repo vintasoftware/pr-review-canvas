@@ -20,6 +20,8 @@ export interface FinishTourInput {
   reviewer: { login: string | null; author: boolean }
   /** True when the tour describes the pull request's head, so its lines are the head's lines. */
   current?: boolean | undefined
+  /** The page's summary of what the plan was made of, kept so the page can tell a later change. */
+  basis?: string | undefined
 }
 
 /** A reviewer's approved change as the comment their pending review will carry. */
@@ -81,7 +83,8 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
   }
   const at = ctx.now().toISOString()
   const prompt = buildTourPrompt(artifact, reader, keyToString(key))
-  const promptPath = path.join(ctx.tours.tourDir(headSha), 'prompt.md')
+  // prompt.md beside it is the generation prompt prepare wrote; this one is the reader's plan.
+  const promptPath = path.join(ctx.tours.tourDir(headSha), 'plan-prompt.md')
   await writeFile(promptPath, `${prompt}\n`, 'utf8')
   const record = finishedRecord(artifact.record, input, prompt, at)
   // A reviewer's changes go into their pending review, only for the tour of the head: a line of an
@@ -92,6 +95,7 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
   const sharing: TourSharing = isLocalKey(key) ? { status: 'local' } : await shareTourOnPr(ctx, headSha, key)
   const finished: TourFinished = { at, promptPath, prompt, sharing }
   if (queues) finished.queued = queued
+  if (input.basis !== undefined) finished.basis = input.basis
   const next: TourReaderState = { ...reader, finished }
   await writeReaderState(ctx, headSha, next)
   return { finished, record, reader: next }

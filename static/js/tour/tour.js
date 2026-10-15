@@ -33,7 +33,7 @@ import {
   staleBarHtml,
   tourHeaderHtml,
 } from './screens.js'
-import { buildSteps, reachable, stepFromHash, stepHash, stepIndexOf } from './steps.js'
+import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf } from './steps.js'
 import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
 
 export const POLL_MS = 5000
@@ -246,6 +246,12 @@ export class PrTourElement extends HTMLElement {
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))
     const nav = /** @type {HTMLElement} */ (qs('#nav', this))
     const step = /** @type {Step} */ (this.steps[this.current])
+    // The kind of step on screen, for the layout: the cover drops the header's title.
+    this.dataset['at'] = step.kind
+    if (step.kind === 'landmark' && bundle.reader.seen[step.landmark.id] !== true) {
+      bundle.reader.seen[step.landmark.id] = true
+      this.save()
+    }
     if (step.kind === 'cover') {
       stage.innerHTML = coverHtml(bundle)
     } else if (step.kind === 'landmark') {
@@ -309,31 +315,6 @@ export class PrTourElement extends HTMLElement {
       pick.approved = true
       delete pick.restatement
     })
-  }
-
-  /**
-   * A click on the decision page outside its options and controls takes back a side picked there.
-   * Something else stays: it holds a conversation, and "undo" drops it.
-   * @param {EventTarget | null} clicked
-   */
-  clearChoiceOn(clicked) {
-    const decision = this.decisionStep()?.decision ?? null
-    const stage = this.querySelector('#stage')
-    if (
-      decision === null ||
-      !(clicked instanceof Node) ||
-      stage === null ||
-      !stage.contains(clicked) ||
-      (clicked instanceof Element && clicked.closest('a, button, input, label, textarea, select') !== null)
-    ) {
-      return
-    }
-    const pick = /** @type {TourBundle} */ (this.bundle).reader.picks[decision.key]
-    if (pick?.approved && pick.pick !== 'other') {
-      this.updatePick(decision, p => {
-        p.approved = false
-      })
-    }
   }
 
   /**
@@ -440,7 +421,7 @@ export class PrTourElement extends HTMLElement {
     button.textContent = 'writing the prompt…'
     try {
       await this.saver?.settle()
-      const result = await finishTour(this.key, bundle.tour.headSha)
+      const result = await finishTour(this.key, bundle.tour.headSha, planBasis(bundle.tour, bundle.reader))
       bundle.reader = result.reader
       bundle.tour.record = result.record
       this.renderStep()
@@ -479,7 +460,6 @@ export class PrTourElement extends HTMLElement {
       const target =
         e.target instanceof Element ? e.target.closest('[data-act], [data-nav], .tour-rail-seg') : null
       if (!(target instanceof HTMLElement)) {
-        this.clearChoiceOn(e.target)
         return
       }
       const bundle = /** @type {TourBundle} */ (this.bundle)
