@@ -10,7 +10,7 @@ import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { readText } from '../store/atomic-json.js'
 import { tourBelongsTo } from '../store/tour-store.js'
-import { readTourContext, readTourModel, tourValidationInput } from './publish.js'
+import { readTourContext, readTourModel, tourArtifactOf, tourValidationInput } from './publish.js'
 import { validateTourModel } from './validate.js'
 
 export type TourLookupResult =
@@ -45,24 +45,11 @@ export async function previewArtifact(ctx: AppContext, pr: Pr): Promise<TourArti
       result.errors.map(formatTourError)
     )
   }
-  return {
-    version: 1,
-    pr: context.pr,
-    repo: context.repo,
-    headSha: context.headSha,
-    mergeBaseSha: context.mergeBaseSha,
-    blastRadius: context.blastRadius,
-    budget: context.budget,
-    guide: context.guide.path,
-    landmarks: result.output.landmarks,
-    decisions: result.output.decisions,
-    quiz: result.output.quiz,
-    notToured: result.output.notToured,
+  return tourArtifactOf(context, result.output, {
     generatedAt: ctx.now().toISOString(),
     generator: { agent: 'preview', harness: 'other', attempts: 0 },
-    source: 'local',
     record: { touredBy: [] },
-  }
+  })
 }
 
 export async function lookupTour(

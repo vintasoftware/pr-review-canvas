@@ -6,7 +6,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { HARNESSES } from '../contract/review-artifact.js'
 import { budgetLimits, formatTourError } from '../contract/tour.js'
-import { type CliIo, EXIT, parsePrepareTarget, printJson, UsageError } from '../commands.js'
+import { type CliIo, EXIT, PREPARE_OPTIONS, parsePrepareTarget, printJson, UsageError } from '../commands.js'
 import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { PublishError } from '../review/publish.js'
 import { createPrLoader } from '../server/bundle.js'
@@ -125,18 +125,7 @@ function tourUrlOf(ctx: AppContext, key: ReviewKey): string {
 }
 
 async function runTourPrepare(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
-  const { values } = parseArgs({
-    args: argv,
-    options: {
-      pr: { type: 'string' },
-      base: { type: 'string' },
-      head: { type: 'string' },
-      branch: { type: 'boolean' },
-      uncommitted: { type: 'boolean' },
-      force: { type: 'boolean' },
-    },
-    strict: true,
-  })
+  const { values } = parseArgs({ args: argv, options: PREPARE_OPTIONS, strict: true })
   const result = await prepareTour(ctx, parsePrepareTarget(values), {
     force: values.force === true,
     log: phase => io.stderr(phase),
@@ -353,8 +342,6 @@ async function runTourPublish(ctx: AppContext, argv: string[], io: CliIo): Promi
   printJson(io, result)
   return EXIT.ok
 }
-
-export { PublishError }
 
 /** A port nothing listens on now, picked by the system. */
 function freePort(): Promise<number> {

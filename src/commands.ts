@@ -234,19 +234,18 @@ export function parsePrepareTarget(values: PrepareFlags): PrepareTargetInput {
   throw new UsageError(`prepare needs a target: ${LOCAL_FLAGS}`)
 }
 
+/** The flags of `prepare` and `tour prepare`: the target, and `--force` to prepare again. */
+export const PREPARE_OPTIONS = {
+  pr: { type: 'string' },
+  base: { type: 'string' },
+  head: { type: 'string' },
+  branch: { type: 'boolean' },
+  uncommitted: { type: 'boolean' },
+  force: { type: 'boolean' },
+} as const
+
 export async function runPrepare(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
-  const { values } = parseArgs({
-    args: argv,
-    options: {
-      pr: { type: 'string' },
-      base: { type: 'string' },
-      head: { type: 'string' },
-      branch: { type: 'boolean' },
-      uncommitted: { type: 'boolean' },
-      force: { type: 'boolean' },
-    },
-    strict: true,
-  })
+  const { values } = parseArgs({ args: argv, options: PREPARE_OPTIONS, strict: true })
   const result = await prepare(ctx, parsePrepareTarget(values), {
     force: values.force === true,
     log: phase => io.stderr(phase),

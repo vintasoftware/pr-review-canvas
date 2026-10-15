@@ -3,6 +3,7 @@
 // what to do, and offers a retry. Every code in the server's list has one; errors.test.js checks
 // that, so a new code cannot ship without its card.
 /** @typedef {import('./contract-types.js').ErrorEnvelope} ErrorEnvelope */
+import { ApiError } from './api.js'
 import { esc } from './dom.js'
 
 /** @typedef {{ title: string, action: string }} ErrorCard */
@@ -160,4 +161,28 @@ export function errorCardHtml(error) {
     `<p>${esc(card.action)}</p>` +
     '<p><button class="cmd fill" type="button" id="retry">retry</button></p></div></section></main>'
   )
+}
+
+/**
+ * Any thrown value as the server's error shape, so an error card or a toast can show it.
+ * @param {unknown} err
+ * @returns {ErrorEnvelope['error']}
+ */
+export function toEnvelopeError(err) {
+  if (!(err instanceof ApiError)) {
+    return { code: 'INTERNAL', message: String(err) }
+  }
+  return err.hint === undefined
+    ? { code: err.code, message: err.message }
+    : { code: err.code, message: err.message, hint: err.hint }
+}
+
+/**
+ * The page's warnings in one banner, or nothing.
+ * @param {ReadonlyArray<string>} warnings
+ */
+export function bannerHtml(warnings) {
+  return warnings.length === 0
+    ? ''
+    : `<div class="banner" role="status">${warnings.map(w => esc(w)).join(' · ')}</div>`
 }

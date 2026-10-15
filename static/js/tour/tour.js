@@ -7,10 +7,10 @@
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 /** @typedef {import('../contract-types.js').Decision} Decision */
 /** @typedef {import('./steps.js').Step} Step */
-import { ApiError, saveAppearance } from '../api.js'
+import { saveAppearance } from '../api.js'
 import { wireCopyCommands } from '../commands.js'
 import { copyToClipboard, esc, qs, scrollIntoViewSafe } from '../dom.js'
-import { errorCardHtml } from '../errors.js'
+import { bannerHtml, errorCardHtml, toEnvelopeError } from '../errors.js'
 import { hostLabel, setHost } from '../host.js'
 import { toast } from '../interactions.js'
 import { isTypingTarget } from '../keyboard.js'
@@ -55,26 +55,6 @@ function readBootstrap() {
   } catch {
     return null
   }
-}
-
-/**
- * @param {unknown} err
- * @returns {import('../contract-types.js').ErrorEnvelope['error']}
- */
-function toEnvelopeError(err) {
-  if (!(err instanceof ApiError)) {
-    return { code: 'INTERNAL', message: String(err) }
-  }
-  return err.hint === undefined
-    ? { code: err.code, message: err.message }
-    : { code: err.code, message: err.message, hint: err.hint }
-}
-
-/** @param {ReadonlyArray<string>} warnings */
-function bannerHtml(warnings) {
-  return warnings.length === 0
-    ? ''
-    : `<div class="banner" role="status">${warnings.map(w => esc(w)).join(' · ')}</div>`
 }
 
 /** @param {string} version */

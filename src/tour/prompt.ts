@@ -4,7 +4,13 @@ import { z } from 'zod'
 import type { TourContext } from '../contract/tour.js'
 import { DECISION_CATEGORIES, TOUR_LIMITS, tourModelSchema } from '../contract/tour.js'
 import { labelPatch } from '../git/patch-lines.js'
-import { bodyMarkdown, embedMarkdown, manifestMarkdown, patchLineCount } from '../review/prompt.js'
+import {
+  bodyMarkdown,
+  embedMarkdown,
+  manifestMarkdown,
+  metaMarkdown,
+  patchLineCount,
+} from '../review/prompt.js'
 
 const INLINE_DIFF_MAX_LINES = 1500
 
@@ -17,23 +23,6 @@ const CATEGORY_TEXT: Record<(typeof DECISION_CATEGORIES)[number], string> = {
   pokayoke: 'Pokayoke: what the change makes impossible to get wrong, and where it lacks such a structure.',
   nfr: "The project's non-functional requirements, as the guide names them.",
   spec: 'Spec fidelity: where the change departs from the spec or the design it was built from.',
-}
-
-function metaMarkdown(ctx: TourContext): string {
-  const pr = ctx.pr
-  const number = pr.number === null ? 'no pull request yet' : `#${pr.number}`
-  return [
-    `- Repository: ${ctx.repo.owner}/${ctx.repo.name}`,
-    ...(ctx.target.kind === 'refs'
-      ? ['- Ref comparison']
-      : [
-          `- ${ctx.target.kind === 'pr' ? 'Pull request' : 'Change set'}: ${number} — ${pr.title}`,
-          `- Author: ${pr.author} · state: ${pr.state}${pr.draft ? ' (draft)' : ''}`,
-        ]),
-    `- Base: \`${pr.baseRef}\` → head: \`${pr.headRef}\``,
-    `- Head: \`${ctx.headSha}\` · merge base: \`${ctx.mergeBaseSha}\``,
-    `- Size: ${pr.changedFiles} files, +${pr.additions} −${pr.deletions}`,
-  ].join('\n')
 }
 
 function diffsMarkdown(ctx: TourContext, patches: Record<string, string>): string {

@@ -136,7 +136,10 @@ function highRiskMarkdown(ctx: GenerationContext): string {
   return ctx.highRisk.map(r => `- \`${r.pattern}\` → **${r.label}**`).join('\n')
 }
 
-function metaMarkdown(ctx: GenerationContext): string {
+/** The pull request's facts, as the review and the tour prompts both list them. */
+export function metaMarkdown(
+  ctx: Pick<GenerationContext, 'repo' | 'target' | 'pr' | 'headSha' | 'mergeBaseSha'>
+): string {
   const pr = ctx.pr
   const number = pr.number === null ? 'no pull request yet' : `#${pr.number}`
   return [

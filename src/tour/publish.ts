@@ -1,6 +1,5 @@
 // `pr-review tour publish`: read the model and the scene files, validate them against
 // context.json, store the tour, and share it on the pull request. An invalid tour is never stored.
-import { appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { CanvasSharing } from '../contract/self-review.js'
 import type { Generator } from '../contract/review-artifact.js'
@@ -13,7 +12,7 @@ import {
   type TourValidationReport,
 } from '../contract/tour.js'
 import { UNCOMMITTED_STATE } from '../git/local-target.js'
-import { currentHead, parseModelText, PublishError } from '../review/publish.js'
+import { currentHead, parseModelText, PublishError, recordAttempt } from '../review/publish.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { shareTourOnPr } from './share.js'
@@ -109,22 +108,31 @@ export function tourValidationInput(context: TourContext): TourValidationInput {
   }
 }
 
-/** Publish runs since prepare last wrote a context, this one included. */
-function attemptsSince(log: string): number {
-  const lines = log.split('\n').filter(l => l !== '')
-  const lastPrepared = lines.map(l => l.split(' ')[1] === 'prepared').lastIndexOf(true)
-  return lines.length - (lastPrepared + 1)
-}
-
-async function recordAttempt(tourDir: string, now: string, result: TourValidationReport): Promise<number> {
-  const file = path.join(tourDir, 'tour.log')
-  const attempts = attemptsSince((await readText(file)) ?? '') + 1
-  const codes = result.errors.map(e => e.code).join(',')
-  const line = result.ok
-    ? `${now} published attempts=${attempts}`
-    : `${now} invalid attempts=${attempts} errors=${result.errors.length}${codes === '' ? '' : ` ${codes}`}`
-  await appendFile(file, `${line}\n`, 'utf8')
-  return attempts
+/**
+ * The stored tour: the prepared context and the validated model, with when, by whom, and the
+ * record. Publishing and the preview build it the same way.
+ */
+export function tourArtifactOf(
+  context: TourContext,
+  model: TourModel,
+  rest: Pick<TourArtifact, 'generatedAt' | 'generator' | 'record'>
+): TourArtifact {
+  return {
+    version: 1,
+    pr: context.pr,
+    repo: context.repo,
+    headSha: context.headSha,
+    mergeBaseSha: context.mergeBaseSha,
+    blastRadius: context.blastRadius,
+    budget: context.budget,
+    guide: context.guide.path,
+    landmarks: model.landmarks,
+    decisions: model.decisions,
+    quiz: model.quiz,
+    notToured: model.notToured,
+    source: 'local',
+    ...rest,
+  }
 }
 
 /**
@@ -179,30 +187,17 @@ export async function publishTour(
         }
       : validateTourModel(model.raw, tourValidationInput(context))
   const now = ctx.now().toISOString()
-  const attempts = await recordAttempt(tourDir, now, result)
+  const attempts = await recordAttempt(path.join(tourDir, 'tour.log'), now, result)
   if (!result.ok || result.output === null)
     throw new TourInvalidError({ ok: false, errors: result.errors }, attempts)
   const generator: Generator = { agent: opts.agent, harness: opts.harness, attempts }
   if (opts.model !== undefined) generator.model = opts.model
   const previous = await ctx.tours.read(context.headSha).catch(() => null)
-  const artifact: TourArtifact = {
-    version: 1,
-    pr: context.pr,
-    repo: context.repo,
-    headSha: context.headSha,
-    mergeBaseSha: context.mergeBaseSha,
-    blastRadius: context.blastRadius,
-    budget: context.budget,
-    guide: context.guide.path,
-    landmarks: result.output.landmarks,
-    decisions: result.output.decisions,
-    quiz: result.output.quiz,
-    notToured: result.output.notToured,
+  const artifact = tourArtifactOf(context, result.output, {
     generatedAt: now,
     generator,
-    source: 'local',
     record: carriedRecord(previous, result.output),
-  }
+  })
   const worktree = context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE
   await ctx.tours.write(context.headSha, artifact, { worktree })
   if (worktree) await ctx.git.anchorCommit(context.headSha)

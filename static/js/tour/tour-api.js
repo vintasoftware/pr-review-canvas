@@ -1,9 +1,9 @@
 // @ts-check
-// The tour's three requests: the bundle, the reader's state, and finishing.
+// The tour's requests: the bundle, the reader's state, finishing, and the grilling.
 /** @typedef {import('../contract-types.js').TourBundle} TourBundle */
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 /** @typedef {import('../contract-types.js').TourFinishResponse} TourFinishResponse */
-import { ApiError, fetchJson, readSseFrames } from '../api.js'
+import { fetchJson, streamEvents } from '../api.js'
 
 /**
  * @param {string} key
@@ -141,60 +141,6 @@ export function cancelGrill(key, opts = {}) {
  * @param {{ onEvent: (event: { event: string, data: unknown }) => void, signal?: AbortSignal, fetchImpl?: typeof fetch }} opts
  * @returns {Promise<void>}
  */
-export async function streamGrill(key, input, opts) {
-  const doFetch = opts.fetchImpl ?? fetch
-  /** @type {RequestInit} */
-  const init = {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-    body: JSON.stringify(input),
-  }
-  if (opts.signal !== undefined) {
-    init.signal = opts.signal
-  }
-  const res = await doFetch(`/api/tours/${encodeURIComponent(key)}/grill`, init)
-  if (!res.ok) {
-    /** @type {unknown} */
-    let body = null
-    try {
-      body = await res.json()
-    } catch {
-      body = null
-    }
-    throw isEnvelope(body)
-      ? new ApiError(body.error, res.status)
-      : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
-  }
-  const reader = res.body?.getReader()
-  if (reader === undefined) {
-    return
-  }
-  const decoder = new TextDecoder()
-  let buffer = ''
-  for (;;) {
-    const { value, done } = await reader.read()
-    if (done) {
-      break
-    }
-    const read = readSseFrames(buffer, decoder.decode(value, { stream: true }))
-    buffer = read.buffer
-    for (const event of read.events) {
-      opts.onEvent(event)
-    }
-  }
-}
-
-/**
- * @param {unknown} body
- * @returns {body is import('../contract-types.js').ErrorEnvelope}
- */
-function isEnvelope(body) {
-  return (
-    typeof body === 'object' &&
-    body !== null &&
-    'error' in body &&
-    typeof body.error === 'object' &&
-    body.error !== null &&
-    'code' in body.error
-  )
+export function streamGrill(key, input, opts) {
+  return streamEvents(`/api/tours/${encodeURIComponent(key)}/grill`, input, opts)
 }

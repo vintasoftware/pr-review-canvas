@@ -38,6 +38,23 @@ function isEnvelope(body) {
 }
 
 /**
+ * The ApiError a refused response carries: its envelope's, or INTERNAL with the status.
+ * @param {Response} res
+ */
+async function responseError(res) {
+  /** @type {unknown} */
+  let body = null
+  try {
+    body = await res.json()
+  } catch {
+    body = null
+  }
+  return isEnvelope(body)
+    ? new ApiError(body.error, res.status)
+    : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
+}
+
+/**
  * GET/PUT/POST JSON. Non-2xx answers with the envelope become ApiError; anything else INTERNAL.
  * @template T
  * @param {string} url
@@ -418,16 +435,7 @@ export async function fetchCanvasZip(prNumber, opts = {}) {
   const q = opts.headSha ? `?headSha=${encodeURIComponent(opts.headSha)}` : ''
   const res = await doFetch(`/api/prs/${prNumber}/export${q}`, { headers: { accept: 'application/zip' } })
   if (!res.ok) {
-    /** @type {unknown} */
-    let body = null
-    try {
-      body = await res.json()
-    } catch {
-      body = null
-    }
-    throw isEnvelope(body)
-      ? new ApiError(body.error, res.status)
-      : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
+    throw await responseError(res)
   }
   return { blob: await res.blob(), filename: filenameFromDisposition(res.headers.get('content-disposition')) }
 }
@@ -586,10 +594,11 @@ export function readSseFrames(buffer, chunk) {
 }
 
 /**
- * Sends one chat message and calls `onEvent` for every frame until the turn ends. Rejects with
- * an ApiError when the server refuses the message (a busy chat, a context it cannot resolve).
- * @param {ReviewKey} prNumber
- * @param {{ message: string, context: import('./chat-context.js').ChatContext, thread?: string }} input
+ * Posts `input` to an SSE endpoint and calls `onEvent` for every frame until the stream ends.
+ * Rejects with an ApiError when the server refuses the request. AI Chat and the tour's grilling
+ * both stream their turns through it.
+ * @param {string} url
+ * @param {unknown} input
  * @param {{
  *   onEvent: (event: { event: string, data: unknown }) => void,
  *   signal?: AbortSignal,
@@ -597,7 +606,7 @@ export function readSseFrames(buffer, chunk) {
  * }} opts
  * @returns {Promise<void>}
  */
-export async function streamChat(prNumber, input, opts) {
+export async function streamEvents(url, input, opts) {
   const doFetch = opts.fetchImpl ?? fetch
   /** @type {RequestInit} */
   const init = {
@@ -608,18 +617,9 @@ export async function streamChat(prNumber, input, opts) {
   if (opts.signal !== undefined) {
     init.signal = opts.signal
   }
-  const res = await doFetch(`/api/prs/${prNumber}/chat`, init)
+  const res = await doFetch(url, init)
   if (!res.ok) {
-    /** @type {unknown} */
-    let body = null
-    try {
-      body = await res.json()
-    } catch {
-      body = null
-    }
-    throw isEnvelope(body)
-      ? new ApiError(body.error, res.status)
-      : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
+    throw await responseError(res)
   }
   const reader = res.body?.getReader()
   if (reader === undefined) {
@@ -638,4 +638,16 @@ export async function streamChat(prNumber, input, opts) {
       opts.onEvent(event)
     }
   }
+}
+
+/**
+ * Sends one chat message and calls `onEvent` for every frame until the turn ends. Rejects with
+ * an ApiError when the server refuses the message (a busy chat, a context it cannot resolve).
+ * @param {ReviewKey} prNumber
+ * @param {{ message: string, context: import('./chat-context.js').ChatContext, thread?: string }} input
+ * @param {Parameters<typeof streamEvents>[2]} opts
+ * @returns {Promise<void>}
+ */
+export function streamChat(prNumber, input, opts) {
+  return streamEvents(`/api/prs/${prNumber}/chat`, input, opts)
 }
