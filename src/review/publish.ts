@@ -11,6 +11,7 @@ import { UNCOMMITTED_STATE, resolveLocalHead } from '../git/local-target.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 import type { AppContext } from '../server/context.js'
+import { localUrl } from '../server/server-file.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { standsForHead } from './carry-over.js'
 import { normalize } from './normalize.js'
@@ -285,10 +286,10 @@ export async function publish(
     attempts,
   }
   if (context.target.kind === 'local') {
-    published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.source}`
+    published.reviewUrl = await localUrl(ctx, `/review/${context.target.source}`)
   }
   if (context.target.kind === 'pr') {
-    published.reviewUrl = `http://localhost:${ctx.config.port}/review/${context.target.number}`
+    published.reviewUrl = await localUrl(ctx, `/review/${context.target.number}`)
     published.sharing = await shareCanvasOnPr(ctx, context.headSha, context.target.number)
   }
   return published

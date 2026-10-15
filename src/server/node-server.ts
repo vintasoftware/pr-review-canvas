@@ -5,12 +5,16 @@ import { startCheckoutSweep } from '../chat/checkout-sweep.js'
 import { createApp } from './app.js'
 import type { AppContext } from './context.js'
 import { openBrowser } from './open-browser.js'
+import { removeServerFile, writeServerFile } from './server-file.js'
 
 /** Binds 127.0.0.1 only. The Host allowlist in security.ts covers the rest. */
 export function startServer(ctx: AppContext, log: (line: string) => void): { close: () => void } {
   const app = createApp({ ...ctx, log })
   const server = serve({ fetch: app.fetch, port: ctx.config.port, hostname: '127.0.0.1' }, info => {
     const url = `http://localhost:${info.port}/`
+    void writeServerFile(ctx.config.dataDir, info.port).catch(err =>
+      log(`warning: could not record the port in ${ctx.config.dataDir}: ${String(err)}`)
+    )
     log(`pr-review ${ctx.version} · ${url} · ${ctx.config.repo.owner}/${ctx.config.repo.name}`)
     if (ctx.config.openBrowser) {
       openBrowser(url, log)
@@ -28,6 +32,10 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
     checkouts: ctx.checkouts,
     readSettings: () => ctx.settings.read(),
     log,
+    base: {
+      checkouts: ctx.baseCheckouts,
+      prState: async number => (await ctx.config.host.fetchPrMeta(ctx.gh, ctx.config.repo, number)).state,
+    },
   })
   let closed = false
   const close = (): void => {
@@ -36,6 +44,7 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
     }
     closed = true
     sweeper.stop()
+    void removeServerFile(ctx.config.dataDir).catch(() => undefined)
     // A browser holds its keep-alive socket open, and `close()` alone waits for it, so Ctrl-C
     // would look like a hung process. Dropping the sockets ends the wait. HTTP/2 servers have no
     // such method, and this one never is one.
@@ -49,7 +58,10 @@ export function startServer(ctx: AppContext, log: (line: string) => void): { clo
   const onSignal = (): void => {
     close()
     log('stopped')
-    process.exit(0)
+    // The record goes before the exit, so a publish run next does not link to a dead port.
+    void removeServerFile(ctx.config.dataDir)
+      .catch(() => undefined)
+      .finally(() => process.exit(0))
   }
   process.once('SIGINT', onSignal)
   process.once('SIGTERM', onSignal)

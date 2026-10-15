@@ -465,6 +465,15 @@ describe('the tour CLI', () => {
       sha: BASE_SHA,
     })
     expect((await t.ctx.checkouts.list()).map(c => c.dir).sort()).toEqual([headOut.dir, baseOut.dir].sort())
+    // Done with it, the generator takes the base away; the head stays, for AI Chat.
+    const removed = capture()
+    expect(await runTour(t.ctx, ['checkout', result.tourDir, 'base', '--remove'], removed.io)).toBe(0)
+    expect(JSON.parse(removed.out[0]!)).toEqual({ side: 'base', removed: true })
+    expect((await t.ctx.checkouts.list()).map(c => c.dir)).toEqual([headOut.dir])
+    await expect(
+      runTour(t.ctx, ['checkout', result.tourDir, 'head', '--remove'], removed.io)
+    ).rejects.toThrow('the head checkout stays')
+    await runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)
     const swept = await t.ctx.checkouts.sweep({ all: true })
     expect(swept.removed).toHaveLength(2)
     // The chat holds the head checkout: the tour waits rather than move it under the answer.

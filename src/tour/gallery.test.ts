@@ -41,7 +41,7 @@ describe('renderGallery', () => {
     const result = await renderGallery(
       [],
       { env: {}, platform: 'linux', screenshot: async () => undefined },
-      { dir }
+      { dir, outDir: path.join(dir, 'out') }
     )
     expect(result).toEqual({
       status: 'listed',
@@ -81,23 +81,25 @@ describe('renderGallery', () => {
       '<main class="scene-root"><div class="scene-fit"><div class="scene" data-technique="sequence">'
     )
     expect(frame).toContain('window.parent.postMessage')
-    // Without --out, each run draws into a new private directory of its own.
+    // The pictures land in the folder the command names, made when missing.
     const deps = { env: browserEnv, platform: 'linux' as const, screenshot: async () => undefined }
-    const first = await renderGallery(['sequence'], deps, { dir })
-    const second = await renderGallery(['sequence'], deps, { dir })
-    const firstDir = path.dirname(first.entries[0]?.png ?? '')
-    expect(path.basename(firstDir)).toMatch(/^pr-review-gallery-/)
-    expect(path.dirname(second.entries[0]?.png ?? '')).not.toBe(firstDir)
+    const nested = path.join(dir, 'drawn', 'gallery')
+    const drawn = await renderGallery(['sequence'], deps, { dir, outDir: nested })
+    expect(drawn.entries[0]?.png).toBe(path.join(nested, 'sequence.png'))
   })
 
   it('names an unknown entry, and says where to look without a browser', async () => {
     const dir = await tempGallery()
     const deps = { env: {}, platform: 'linux' as const, screenshot: async () => undefined }
-    const unknown = await renderGallery(['nope'], deps, { dir })
+    const unknown = await renderGallery(['nope'], deps, { dir, outDir: path.join(dir, 'out') })
     expect(unknown.status).toBe('unknown')
     expect(unknown.hint).toBe('no gallery entry nope; pick from the entries listed')
     expect(unknown.entries).toHaveLength(2)
-    const blind = await renderGallery(['sequence'], { ...deps, env: { PATH: '' } }, { dir })
+    const blind = await renderGallery(
+      ['sequence'],
+      { ...deps, env: { PATH: '' } },
+      { dir, outDir: path.join(dir, 'out') }
+    )
     expect(blind.status).toBe('no-browser')
     expect(blind.entries).toEqual([{ slug: 'sequence', kind: 'scene' }])
     expect(blind.hint).toMatch(/open the HTML files beside the README/)

@@ -11,6 +11,7 @@ import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { PublishError } from '../review/publish.js'
 import { createPrLoader } from '../server/bundle.js'
 import type { AppContext } from '../server/context.js'
+import { localUrl } from '../server/server-file.js'
 import { tourReviewer } from './bundle.js'
 import { lookupTour } from './lookup.js'
 import { planOf } from './plan.js'
@@ -70,7 +71,7 @@ export async function runTour(ctx: AppContext, argv: string[], io: CliIo): Promi
     case 'plan':
       return runTourPlan(ctx, rest, io)
     case 'gallery':
-      return runTourGallery(rest, io)
+      return runTourGallery(ctx, rest, io)
     case 'hunk':
       return runTourHunk(rest, io)
     case 'checkout':
@@ -102,7 +103,12 @@ async function runTourPlan(ctx: AppContext, argv: string[], io: CliIo): Promise<
   const tourDir = ctx.tours.tourDir(found.headSha)
   const finished = reader.finished
   if (finished === undefined) {
-    printJson(io, { status: 'unfinished', headSha: found.headSha, tourDir, tourUrl: tourUrlOf(ctx, key) })
+    printJson(io, {
+      status: 'unfinished',
+      headSha: found.headSha,
+      tourDir,
+      tourUrl: await localUrl(ctx, `/tour/${keyToString(key)}`),
+    })
     return EXIT.ok
   }
   const plan = planOf(found.artifact, reader)
@@ -118,10 +124,6 @@ async function runTourPlan(ctx: AppContext, argv: string[], io: CliIo): Promise<
     stale: found.status === 'stale',
   })
   return EXIT.ok
-}
-
-function tourUrlOf(ctx: AppContext, key: ReviewKey): string {
-  return `http://localhost:${ctx.config.port}/tour/${keyToString(key)}`
 }
 
 async function runTourPrepare(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
@@ -206,10 +208,11 @@ async function runTourPreview(ctx: AppContext, argv: string[], io: CliIo): Promi
 }
 
 /**
- * `tour gallery [<slug>…]`: the scene gallery's entries, or the named ones drawn as pictures for
- * the generator to look at before it draws its own.
+ * `tour gallery [<slug>…] [--out <dir>]`: the scene gallery's entries, or the named ones drawn as
+ * pictures for the generator to look at before it draws its own, into `<data dir>/gallery` unless
+ * `--out` names another folder.
  */
-async function runTourGallery(argv: string[], io: CliIo): Promise<number> {
+async function runTourGallery(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
   const { values, positionals } = parseArgs({
     args: argv,
     options: { out: { type: 'string' } },
@@ -219,27 +222,38 @@ async function runTourGallery(argv: string[], io: CliIo): Promise<number> {
   const result = await renderGallery(
     positionals,
     { env: process.env, platform: process.platform, screenshot: headlessScreenshot },
-    values.out === undefined ? {} : { outDir: path.resolve(values.out) }
+    { outDir: values.out === undefined ? path.join(ctx.config.dataDir, 'gallery') : path.resolve(values.out) }
   )
   printJson(io, result)
   return result.status === 'unknown' ? EXIT.invalid : EXIT.ok
 }
 
 /**
- * `tour checkout <tourDir> <head|base>`: a git worktree at the tour's head or merge base, where the
- * generator runs a try-it recipe or a script the change touches, never in the reader's checkout.
- * The head is the review's own checkout, the one AI Chat reads; the base has one of its own. A
- * ref comparison has no review, so it has no checkout. Prints `{ side, dir, sha, port, scratch }`:
- * a port nothing listens on, and an empty folder in the tour dir for the run's state, so a server
- * started there touches neither the reader's ports nor their data dir, which every worktree of
- * the clone shares.
+ * `tour checkout <tourDir> <head|base> [--remove]`: a git worktree at the tour's head or merge base,
+ * where the generator runs a try-it recipe or a script the change touches, never in the reader's
+ * checkout. The head is the review's own checkout, the one AI Chat reads; the base has one of its
+ * own. A ref comparison has no review, so it has no checkout. Prints `{ side, dir, sha, port,
+ * scratch }`: a port nothing listens on, and an empty folder in the tour dir for the run's state, so
+ * a server started there touches neither the reader's ports nor their data dir, which every
+ * worktree of the clone shares. `base --remove` takes the base checkout away once the generator is
+ * done with it; the head stays, for AI Chat.
  */
 async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
-  const { positionals } = parseArgs({ args: argv, options: {}, allowPositionals: true, strict: true })
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { remove: { type: 'boolean' } },
+    allowPositionals: true,
+    strict: true,
+  })
   const [tourDir, side] = positionals
   if (tourDir === undefined || (side !== 'head' && side !== 'base') || positionals.length > 2) {
     throw new UsageError(
-      'tour checkout takes a tour directory and a side: pr-review tour checkout <tourDir> <head|base>'
+      'tour checkout takes a tour directory and a side: pr-review tour checkout <tourDir> <head|base> [--remove]'
+    )
+  }
+  if (values.remove === true && side === 'head') {
+    throw new UsageError(
+      'the head checkout stays: AI Chat reads it, and the idle sweep removes it once unused; remove the base only'
     )
   }
   const context = await readTourContext(path.resolve(tourDir))
@@ -250,20 +264,24 @@ async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Prom
     )
   }
   const key = target.kind === 'pr' ? target.number : target.source
+  const busy = (err: unknown): unknown =>
+    err instanceof CheckoutBusyError
+      ? new AppError('CHECKOUT_BUSY', err.message, 409, 'wait for what holds it to finish, then run it again')
+      : err
+  if (values.remove === true) {
+    const removed = await ctx.baseCheckouts.remove(key).catch((err: unknown) => {
+      throw busy(err)
+    })
+    await rm(path.join(context.tourDir, 'scratch', 'base'), { recursive: true, force: true })
+    printJson(io, { side, removed })
+    return EXIT.ok
+  }
   const sha = side === 'head' ? context.headSha : context.mergeBaseSha
   let lease
   try {
     lease = await (side === 'head' ? ctx.checkouts : ctx.baseCheckouts).lease(key)
   } catch (err) {
-    if (err instanceof CheckoutBusyError) {
-      throw new AppError(
-        'CHECKOUT_BUSY',
-        err.message,
-        409,
-        'wait for the chat answer on this review to finish, then run it again'
-      )
-    }
-    throw err
+    throw busy(err)
   }
   try {
     await lease.moveTo(sha)

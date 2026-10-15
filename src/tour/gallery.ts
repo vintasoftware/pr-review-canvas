@@ -1,8 +1,7 @@
 // The scene gallery the generation skill looks at before drawing: real pull requests drawn well.
 // It ships as HTML beside the scene guide and is drawn into pictures on demand, by the same browser
 // the preview uses, so the skill copy a project installs carries no images.
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { PACKAGE_ROOT } from '../paths.js'
@@ -39,8 +38,8 @@ export interface GalleryResult {
 
 export interface GalleryOptions {
   dir?: string
-  /** Where the pictures go; by default a new private directory in the system's temp dir. */
-  outDir?: string
+  /** Where the pictures go: `tour gallery` passes the data dir's `gallery` folder. */
+  outDir: string
 }
 
 /**
@@ -50,7 +49,7 @@ export interface GalleryOptions {
 export async function renderGallery(
   slugs: readonly string[],
   deps: Pick<PreviewDeps, 'env' | 'platform' | 'screenshot'>,
-  opts: GalleryOptions = {}
+  opts: GalleryOptions
 ): Promise<GalleryResult> {
   const dir = opts.dir ?? GALLERY_DIR
   const all = await galleryEntries(dir)
@@ -77,9 +76,7 @@ export async function renderGallery(
       hint: `${NO_BROWSER_HINT}; or open the HTML files beside the README in a browser tool`,
     }
   }
-  // A fresh private directory per run: a fixed path under the shared temp dir could be a link
-  // another user planted.
-  const outDir = opts.outDir ?? (await mkdtemp(path.join(tmpdir(), 'pr-review-gallery-')))
+  const { outDir } = opts
   await mkdir(outDir, { recursive: true })
   const [kit, runtime] = await Promise.all([
     readFile(path.join(PACKAGE_ROOT, 'static', 'styles', 'scene.css'), 'utf8'),

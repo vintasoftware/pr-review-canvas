@@ -161,6 +161,21 @@ describe('the idle sweep', () => {
   })
 })
 
+describe('removing one checkout', () => {
+  it('removes it now, says when there was none, and waits for a turn holding it', async () => {
+    await use(42, 'a'.repeat(40))
+    const held = await checkouts.lease(42)
+    await expect(checkouts.remove(42)).rejects.toThrow(CheckoutBusyError)
+    await held.release()
+    expect(await checkouts.remove(42)).toBe(true)
+    expect(await checkouts.list()).toEqual([])
+    expect(await checkouts.remove(42)).toBe(false)
+    // The lock goes with it: the next lease is free.
+    const again = await checkouts.lease(42)
+    await again.release()
+  })
+})
+
 describe('createCheckoutGit', () => {
   const git = (cwd: string, ...args: string[]): string =>
     execFileSync('git', args, { cwd, env: envWithoutRepo(), encoding: 'utf8' }).trim()

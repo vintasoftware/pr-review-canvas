@@ -22,6 +22,9 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   categories, sharing, models, guide); `tourComment` in `.pr-review/settings.yml`; prompt
   templates `tour.md` and `tour-grill.md`.
 - Skill install, doctor, and upgrade handle every bundled skill.
+- The generator works in review checkouts (`pr-review tour checkout <tourDir> head|base`) and
+  removes the merge-base one when done (`base --remove`); `serve` also removes it once the pull
+  request is merged or closed. `publish` and `tour plan` link to the port the running `serve` uses.
 
 ## 0.6.1
 

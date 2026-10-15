@@ -98,6 +98,11 @@ export interface ReviewCheckouts {
   list(): Promise<CheckoutInfo[]>
   /** Removes idle checkouts, or every one with `all`. A checkout in use is never removed. */
   sweep(options: SweepOptions): Promise<SweepResult>
+  /**
+   * Removes the checkout of `key` now; false when there was none. Throws CheckoutBusyError while a
+   * turn holds it.
+   */
+  remove(key: ReviewKey): Promise<boolean>
   /** Bytes the checkout takes on disk, `.git` excluded; the settings dialog lists it. */
   size(dir: string): Promise<number>
 }
@@ -273,6 +278,20 @@ export function createReviewCheckouts(opts: {
     },
     list,
     size,
+    async remove(key) {
+      if (!(await tryLock(key))) {
+        throw new CheckoutBusyError(key)
+      }
+      try {
+        const had = (await exists(metaOf(key))) || (await exists(dirOf(key)))
+        if (had) {
+          await removeCheckout(key)
+        }
+        return had
+      } finally {
+        await unlock(key)
+      }
+    },
     async sweep(options) {
       const cutoff =
         options.olderThanDays === undefined
@@ -324,5 +343,9 @@ export function combineCheckouts(primary: ReviewCheckouts, ...others: ReviewChec
       return { removed: results.flatMap(r => r.removed), skipped: results.flatMap(r => r.skipped) }
     },
     size: dir => primary.size(dir),
+    async remove(key) {
+      const results = await Promise.all(all.map(c => c.remove(key)))
+      return results.some(Boolean)
+    },
   }
 }

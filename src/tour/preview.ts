@@ -9,6 +9,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { findOnPath } from '../acpx/acpx.js'
 import type { AppContext } from '../server/context.js'
+import { localUrl } from '../server/server-file.js'
 
 export interface Viewport {
   width: number
@@ -162,7 +163,7 @@ export async function previewTour(
       hint: 'a --base/--head tour has no page; publish it and open it once a pull request exists',
     }
   }
-  const previewUrl = `http://localhost:${ctx.config.port}/tour/${key}?preview`
+  const previewUrl = await localUrl(ctx, `/tour/${key}?preview`)
   const browser = findBrowser(deps.env, deps.platform)
   if (browser === null)
     return { ...base, status: 'no-browser', screenshots: [], previewUrl, hint: NO_BROWSER_HINT }

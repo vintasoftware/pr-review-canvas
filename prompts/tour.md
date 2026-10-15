@@ -25,8 +25,12 @@ tests.
   take a checkout: `pr-review tour checkout <tourDir> head` (or `base`) prints
   `{ "dir", "port", "scratch" }`: a git worktree at that commit, a free port, and an empty folder.
   Run there and nowhere else. It holds tracked files only: install dependencies in it first, the
-  way the guide says. A server you start there listens on `port` and keeps all its state (a data
-  directory, a database file, a HOME) in `scratch`, never in the reader's; stop it when you are done.
+  way the guide says. A server you start there listens on the `port` that checkout printed (the
+  head and the base each print their own) and keeps all its state (a data directory, a database
+  file, a HOME) in `scratch`, never in the reader's; stop it when you are done. To draw the screen
+  before the change, run the base checkout the same way. Before you publish, remove the base
+  checkout with `pr-review tour checkout <tourDir> base --remove`; leave the head, which AI Chat
+  reads.
 - The {{TARGET_WORD}} head is **not** checked out. Read a changed file as it is at the head from
   `<head>/<path>` and at the merge base from `<base>/<path>`. Read untouched files with
   `git show {{HEAD_SHA}}:<path>` from the repository root. Use `git show {{MERGE_BASE_SHA}}:<path>`
@@ -36,10 +40,13 @@ tests.
   script that assembles the JSON, from `tour hunk` output for example, is fine too; never retype a
   chunk by hand.
 - The guide below is an allowlist of what you may run. Inside a checkout you may also run the code
-  the diff adds or changes, at either side: its scripts, and the project's own commands it changes.
-  To show what a new script reports before the change, copy it into the base checkout and run it
-  there. Any other action is asked first. Output you draw from a script comes from
-  running it, never from working it out by hand.
+  the diff adds or changes, at either side: its scripts, and the project's own commands it changes,
+  run from that checkout's source (a CLI command the diff rewords is run there, with its HOME and
+  data in `scratch`; files it writes inside the checkout are fine). To show what a new script
+  reports before the change, copy it into the base checkout and run it there. To measure a claim
+  (a lint rule turned on, an old selector put back), a throwaway edit inside a checkout is fine;
+  undo it after. Nothing runs outside the checkouts, and any other action is asked first. Output
+  you draw from a script comes from running it, never from working it out by hand.
 - No secrets, credentials, or protected health information, even as sample data.
 - **Say exactly what the code does, no more.** When you state a behavior, state its edge: what it
   covers and what it does not (a cache cleared on logout but not on a password change; a limit

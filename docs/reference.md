@@ -123,7 +123,8 @@ is shrunk around it (or dropped when that leaves no single range). Partly overla
 reversed ranges, and `FOLD_MISSING` still need the author.
 
 `publish` returns `status`, `headSha`, `reviewJsonPath`, `attempts`, `sharing`, and a `reviewUrl`
-for PR and local runs.
+for PR and local runs. The URL names the port of the `serve` running on the same data dir, which
+records it in `<data dir>/server.json` while it runs; with none running, the configured port.
 Its `--agent`, `--model`, and `--harness` describe who generated the canvas; they do not launch or
 select an agent, and they are unrelated to the chat settings. `--allow-stale` permits publishing for the prepared commit after the PR head has
 moved. Use it only when that older commit is the intended review target.
@@ -833,7 +834,7 @@ pr-review tour publish <tourDir> --agent <id> [--model <id>] --harness claude-co
 pr-review tour plan (--pr <n> | --branch | --uncommitted)
 pr-review tour gallery [<slug>…] [--out <dir>]
 pr-review tour hunk <tourDir> <hunk id> [--from <line> --to <line>]
-pr-review tour checkout <tourDir> head|base
+pr-review tour checkout <tourDir> head|base [--remove]
 ```
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
@@ -863,7 +864,7 @@ widths, and every decision and question, using Chrome, Chromium, or Edge from th
 
 `tour gallery` lists the scene gallery the skill ships beside its scene guide: real pull requests,
 each drawn with one technique. With slugs, it draws those entries as pictures with the same
-browser, into `--out` (by default a new private directory in the system's temp dir), and prints
+browser, into `--out` (by default `<data dir>/gallery`), and prints
 their paths.
 
 `tour hunk` prints one code chunk for the model, `{ "path", "diff" }`, read from the prepared
@@ -878,7 +879,10 @@ Try-it recipes run in the head checkout on that port with their state in that fo
 the change touches runs in either checkout, so nothing runs in your own checkout or writes your
 review state. A
 ref comparison has no review, so it has no checkout; while a chat turn holds the head checkout,
-the command answers `CHECKOUT_BUSY`.
+the command answers `CHECKOUT_BUSY`. `base --remove` takes the base checkout away once the
+generator is done, and prints `{ "side": "base", "removed" }`; the head stays, for AI Chat, until
+the idle sweep removes it (`checkoutIdleDays`, which covers both, and removes a base checkout as
+soon as its pull request is merged or closed).
 
 `tour plan` prints the plan a finished tour settled on, for the
 [pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),
@@ -921,7 +925,8 @@ On the plan, **restate the plan with the agent** asks for one fenced `plan` bloc
 (`tour.audio`): the browser's Web Speech API turns it into text, the page says once where the
 audio goes, and the reader can turn audio off for themselves. Without chat, the reader writes the
 restatement in the same card. **confirm the plan** (`POST /api/tours/<n>/finish`) writes
-the re-implementation prompt to `tours/<headSha>/prompt.md`, records the reader in the tour's
+the re-implementation prompt to `tours/<headSha>/plan-prompt.md` (the generation prompt beside it,
+`prompt.md`, stays as prepare wrote it), records the reader in the tour's
 record (and the author's picks, so a regenerated tour carries them by decision key), and shares
 the record on the pull request once. On the tour of the pull request's head, a reviewer's approved
 changes go into their pending review as comments on their decisions' lines, once each, and leave
@@ -1036,7 +1041,11 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
 Merge-base checkouts that tours take are listed and removed with the others.
 
 `serve` removes checkouts with no chat turn for `checkoutIdleDays`, at startup and every
-`checkoutSweepMinutes`. `pr-review clean` does the same on demand:
+`checkoutSweepMinutes`. On the same runs it removes the merge-base checkout of a pull request
+that has been merged or closed, whatever its age: only a tour's generator used it. It reads each
+one's state from the host; a state it cannot read leaves the checkout for the next run. The head
+checkout of a merged pull request stays to the idle rule, since AI Chat still reads it.
+`pr-review clean` removes idle checkouts on demand:
 
 ```text
 pr-review clean [--all | --older-than <days>] [--dry-run]

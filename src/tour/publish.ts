@@ -14,6 +14,7 @@ import {
 import { UNCOMMITTED_STATE } from '../git/local-target.js'
 import { currentHead, parseModelText, PublishError, recordAttempt } from '../review/publish.js'
 import type { AppContext } from '../server/context.js'
+import { localUrl } from '../server/server-file.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { shareTourOnPr } from './share.js'
 import { type TourValidationInput, validateTourModel } from './validate.js'
@@ -209,10 +210,10 @@ export async function publishTour(
     sharing: { status: 'local' },
   }
   if (context.target.kind === 'local') {
-    published.tourUrl = `http://localhost:${ctx.config.port}/tour/${context.target.source}`
+    published.tourUrl = await localUrl(ctx, `/tour/${context.target.source}`)
   }
   if (context.target.kind === 'pr') {
-    published.tourUrl = `http://localhost:${ctx.config.port}/tour/${context.target.number}`
+    published.tourUrl = await localUrl(ctx, `/tour/${context.target.number}`)
     published.sharing = await shareTourOnPr(ctx, context.headSha, context.target.number)
   }
   return published
