@@ -5,7 +5,7 @@ import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
 import { tourBelongsTo } from '../../store/tour-store.js'
-import { homePage, reviewPage } from '../html.js'
+import { homePage, homeTab, reviewPage } from '../html.js'
 import { startPage } from '../start-page.js'
 import type { ProjectLink } from '../../../static/js/header-bar.js'
 
@@ -67,6 +67,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           base: ctx.config.basePath,
           host: ctx.config.host,
           canGenerate: acpx.installed,
+          tab: homeTab(c.req.query('tab')),
         },
         c.get('cspNonce'),
         await appearanceFor(ctx, appearanceQuery(c))
@@ -85,6 +86,12 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
     // The form's generate button carries the flag on to the review page, which opens the dialog.
     const generate = c.req.query('generate') === '1' ? '?generate=1' : ''
     return c.redirect(`${ctx.config.basePath}review/${encodeURIComponent(raw)}${generate}`, 303)
+  })
+
+  // Where the tours tab's form lands, as `/review` is for the canvases tab.
+  app.get('/tour', c => {
+    const raw = c.req.query('n') ?? ''
+    return c.redirect(`${ctx.config.basePath}tour/${encodeURIComponent(raw)}`, 303)
   })
 
   app.get('/review/:n', async c => {

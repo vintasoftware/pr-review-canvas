@@ -154,27 +154,110 @@ const LOCAL_GENERATE: Record<LocalKey, string> = {
   uncommitted: 'generate for uncommitted work',
 }
 
-export function homePage(
-  data: HomeData & {
-    owner: string
-    repo: string
-    version: string
-    /** The project as the header names it. */
-    project: ProjectLink
-    /** The project's base path on the server, with a trailing slash. */
-    base: string
-    host: Host
-    /** The local reviews prepared here, so the home page can link straight to them. */
-    localReviews: readonly LocalKey[]
-    /** The local reviews with a tour. */
-    localTours: readonly LocalKey[]
-    /** An agent can run here, so the page offers to generate a canvas as well as to open one. */
-    canGenerate: boolean
-  },
-  nonce: string,
-  appearance: Appearance
-): Html {
-  const { noun, nounShort, label } = data.host
+/** The home page's two tabs: what the project's canvases offer, and what its tours offer. */
+export const HOME_TABS = ['canvases', 'tours'] as const
+export type HomeTab = (typeof HOME_TABS)[number]
+
+/** The tab a `?tab` query names; the canvases one for anything else. */
+export function homeTab(query: string | undefined): HomeTab {
+  return query === 'tours' ? 'tours' : 'canvases'
+}
+
+type HomePageData = HomeData & {
+  owner: string
+  repo: string
+  version: string
+  /** The project as the header names it. */
+  project: ProjectLink
+  /** The project's base path on the server, with a trailing slash. */
+  base: string
+  host: Host
+  /** The local reviews prepared here, so the home page can link straight to them. */
+  localReviews: readonly LocalKey[]
+  /** The local reviews with a tour. */
+  localTours: readonly LocalKey[]
+  /** An agent can run here, so the page offers to generate a canvas as well as to open one. */
+  canGenerate: boolean
+  tab: HomeTab
+}
+
+/**
+ * The tabs are links, not a scripted tab list: the page has no script of its own, and a link keeps
+ * the tab across a reload and in the address bar.
+ */
+function homeTabsHtml(data: HomePageData): Html {
+  const tab = (id: HomeTab, label: string) =>
+    html`<a class="home-tab" href="${data.base}${id === 'canvases' ? '' : `?tab=${id}`}"${data.tab === id ? raw(' aria-current="page"') : ''}>${label}</a>`
+  return html`<nav class="home-tabs" aria-label="What to open">${tab('canvases', 'Canvases')}${tab('tours', 'Tours')}</nav>`
+}
+
+function canvasesTabHtml(data: HomePageData): Html {
+  const { noun, nounShort } = data.host
+  return html`<section class="panel"><div class="panel-h"><h2>Open a ${noun}</h2></div>
+<form class="body home-form" method="get" action="${data.base}review">
+<label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
+<button class="cmd fill" type="submit">open</button>
+${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the ${noun} and generate its canvas with the chat agent">generate canvas</button>` : ''}
+</form></section>
+<section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
+<div class="body">${
+    data.localReviews.length === 0
+      ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>`
+      : html`<ul class="plain">${data.localReviews.map(
+          key =>
+            html`<li><a href="${data.base}review/${key}">${keyLabel(key)}</a> <span class="muted">${data.base}review/${key}</span>${data.localTours.includes(key) ? html` · <a href="${data.base}tour/${key}">tour</a>` : ''}</li>`
+        )}</ul>`
+  }${
+    // Each local review not started here yet can be, whether or not the other one was.
+    data.canGenerate && data.localReviews.length < LOCAL_KEYS.length
+      ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !data.localReviews.includes(key)).map(
+          key => html`<a class="cmd" href="${data.base}review/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
+        )}</p>`
+      : ''
+  }</div></section>
+<section class="panel"><div class="panel-h"><h2>Recent</h2></div>
+${
+  data.recentPrs.length === 0
+    ? html`<div class="body muted">No ${noun}s opened yet.</div>`
+    : html`<ul class="plain body">${data.recentPrs.map(
+        p =>
+          html`<li><a href="${data.base}review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasCanvas === false ? html` <span class="muted">no canvas yet</span>${data.canGenerate ? html` <a class="cmd" href="${data.base}review/${String(p.number)}?generate=1">generate</a>` : ''}` : ''}${p.hasTour === true ? html` · <a href="${data.base}tour/${String(p.number)}">tour</a>` : ''}</li>`
+      )}</ul>`
+}
+</section>`
+}
+
+function toursTabHtml(data: HomePageData): Html {
+  const { noun, nounShort } = data.host
+  return html`<section class="panel"><div class="panel-h"><h2>Take a tour</h2></div>
+<form class="body home-form" method="get" action="${data.base}tour">
+<label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
+<button class="cmd fill" type="submit">open</button>
+</form>
+<div class="body"><p class="muted">The recommended pass before a review: read the change as landmarks, keep or change its decisions, and take the quiz. Run <code>/pr-tour &lt;number&gt;</code> in your agent to generate one.</p></div></section>
+<section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
+<div class="body">${
+    data.localTours.length === 0
+      ? html`<p class="muted">No tour of local work yet. Run <code>/pr-tour branch</code> to tour the current branch against the default one, or <code>/pr-tour uncommitted</code> to tour it with your working-tree edits on top.</p>`
+      : html`<ul class="plain">${data.localTours.map(
+          key =>
+            html`<li><a href="${data.base}tour/${key}">${keyLabel(key)}</a> <span class="muted">${data.base}tour/${key}</span>${data.localReviews.includes(key) ? html` · <a href="${data.base}review/${key}">canvas</a>` : ''}</li>`
+        )}</ul>`
+  }</div></section>
+<section class="panel"><div class="panel-h"><h2>Recent</h2></div>
+${
+  data.recentPrs.length === 0
+    ? html`<div class="body muted">No ${noun}s opened yet.</div>`
+    : html`<ul class="plain body">${data.recentPrs.map(
+        p =>
+          html`<li><a href="${data.base}tour/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasTour === true ? '' : html` <span class="muted">no tour yet</span>`}${p.hasCanvas === true ? html` · <a href="${data.base}review/${String(p.number)}">canvas</a>` : ''}</li>`
+      )}</ul>`
+}
+</section>`
+}
+
+export function homePage(data: HomePageData, nonce: string, appearance: Appearance): Html {
+  const { noun, label } = data.host
   return pageShell({
     title: 'PR review canvas',
     bootstrap: {
@@ -193,43 +276,11 @@ export function homePage(
 ${raw(headerBarHtml({ project: data.project, ...appearance }, `<a class="cmd" id="health" href="${esc(data.base)}api/health" title="Check git, the host login, and the chat agent for this project">health</a>`))}
 <div class="stripe" aria-hidden="true"></div>
 <div class="hdr-title"><div class="title"><h1>${data.owner}/${data.repo}</h1></div>
-<p class="meta"><span>Open a ${noun} by number. Diffs come from your local clone; the canvas from a published review.</span></p></div>
+<p class="meta"><span>${data.tab === 'tours' ? `Take the tour of a ${noun}: a guided pass that builds your theory of the change.` : `Open a ${noun} by number. Diffs come from your local clone; the canvas from a published review.`}</span></p></div>
 </header>
 <main id="main" class="home">
-<section class="panel"><div class="panel-h"><h2>Open a ${noun}</h2></div>
-<form class="body home-form" method="get" action="${data.base}review">
-<label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
-<button class="cmd fill" type="submit">open</button>
-${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the ${noun} and generate its canvas with the chat agent">generate canvas</button>` : ''}
-</form></section>
-<section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
-<div class="body">${
-      data.localReviews.length === 0
-        ? html`<p class="muted">Nothing reviewed here yet. Run <code>/pr-review-canvas branch</code> to read the current branch against the default one, or <code>/pr-review-canvas uncommitted</code> to read it with your working-tree edits on top, before opening a ${noun}.</p>`
-        : html`<ul class="plain">${data.localReviews.map(
-            key =>
-              html`<li><a href="${data.base}review/${key}">${keyLabel(key)}</a> <span class="muted">${data.base}review/${key}</span>${data.localTours.includes(key) ? html` · <a href="${data.base}tour/${key}">tour</a>` : ''}</li>`
-          )}</ul>`
-    }${
-      // Each local review not started here yet can be, whether or not the other one was.
-      data.canGenerate && data.localReviews.length < LOCAL_KEYS.length
-        ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !data.localReviews.includes(key)).map(
-            key => html`<a class="cmd" href="${data.base}review/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
-          )}</p>`
-        : ''
-    }</div></section>
-<section class="panel"><div class="panel-h"><h2>Recent</h2></div>
-${
-  data.recentPrs.length === 0
-    ? html`<div class="body muted">No ${noun}s opened yet.</div>`
-    : html`<ul class="plain body">${data.recentPrs.map(
-        p =>
-          html`<li><a href="${data.base}review/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasCanvas === false ? html` <span class="muted">no canvas yet</span>${data.canGenerate ? html` <a class="cmd" href="${data.base}review/${String(p.number)}?generate=1">generate</a>` : ''}` : ''}${p.hasTour === true ? html` · <a href="${data.base}tour/${String(p.number)}">tour</a>` : ''}</li>`
-      )}</ul>`
-}
-</section>
-<section class="panel"><div class="panel-h"><h2>The tour</h2></div>
-<div class="body"><p class="muted">The recommended pass before a review: run <code>/pr-tour &lt;number&gt;</code> in your agent, then open <code>/tour/&lt;number&gt;</code> to read the change as landmarks, keep or change its decisions, and take the quiz.</p></div></section>
+${homeTabsHtml(data)}
+${data.tab === 'tours' ? toursTabHtml(data) : canvasesTabHtml(data)}
 </main>
 <footer><span>pr-review ${data.version}</span><span>local review app · ${label} operations and AI requests contact their services</span></footer>
 </div>`,

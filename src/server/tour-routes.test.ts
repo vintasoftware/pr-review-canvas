@@ -517,7 +517,7 @@ describe('GET /tour/:n and the home page', () => {
     await app.request('/api/prs/42', { headers: LOCAL })
     const before = await (await get('/')).text()
     expect(before).not.toContain('href="/r/acme/widgets/tour/42"')
-    expect(before).toContain('/pr-tour &lt;number&gt;')
+    expect(await (await get('/?tab=tours')).text()).toContain('/pr-tour &lt;number&gt;')
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     await t.ctx.tours.write(
       OTHER_SHA,
