@@ -36,6 +36,7 @@ export const ERROR_CODES = [
   'COMMENT_LINE_NOT_IN_DIFF',
   'SIGNOFF_INCOMPLETE',
   'CHAT_BUSY',
+  'CHECKOUT_BUSY',
   'GENERATION_BUSY',
   'GENERATION_FAILED',
   'SERVER_NOT_RUNNING',
@@ -252,7 +253,13 @@ export interface ChatStatus {
 }
 
 export interface HomeData {
-  recentPrs: Array<{ number: number; title: string; updatedAt: string; hasCanvas?: boolean }>
+  recentPrs: Array<{
+    number: number
+    title: string
+    updatedAt: string
+    hasCanvas?: boolean
+    hasTour?: boolean
+  }>
 }
 
 /** The JSON the review page carries in its bootstrap script; the app reads it before any request. */

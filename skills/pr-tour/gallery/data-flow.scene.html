@@ -1,0 +1,86 @@
+<div class="scene" data-technique="data-flow">
+  <svg class="df-defs" aria-hidden="true"><defs>
+    <marker id="df-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="df-hb" d="M0 0 10 5 0 10z"/></marker>
+    <marker id="df-w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="df-hw" d="M0 0 10 5 0 10z"/></marker>
+  </defs></svg>
+  <svg class="df df-d" viewBox="0 0 1000 290" role="img" aria-label="A forged X-Forwarded-For used to reach the upstream; now a trusted_proxies check stops it">
+    <g>
+      <text class="df-row" x="20" y="83">before</text>
+      <rect class="df-box" x="110" y="10" width="270" height="110" rx="10"/>
+      <text class="df-nm" x="126" y="40">client <tspan class="df-mono">203.0.113.9</tspan></text>
+      <rect class="df-chip" x="124" y="58" width="246" height="40" rx="6"/><text class="df-mono df-fg" x="136" y="83">X-Forwarded-For: 198.51.100.7</text>
+      <path class="df-w df-bad" d="M380 78H466" marker-end="url(#df-b)"/>
+      <rect class="df-box" x="470" y="28" width="170" height="100" rx="10"/>
+      <text class="df-nm" x="555" y="70" text-anchor="middle">Caddy</text><text class="df-mono" x="555" y="94" text-anchor="middle">reverse_proxy</text>
+      <path class="df-w df-bad" d="M640 78H726" marker-end="url(#df-b)"/>
+      <rect class="df-box" x="730" y="10" width="250" height="110" rx="10"/>
+      <text class="df-nm" x="746" y="40">upstream app</text><text class="df-mono" x="746" y="68">X-Forwarded-For</text>
+      <text class="df-val" x="746" y="96"><tspan class="df-gone">198.51.100.7</tspan>, 203.0.113.9</text>
+    </g>
+    <g transform="translate(0 160)">
+      <text class="df-row" x="20" y="83">after</text>
+      <rect class="df-box" x="110" y="10" width="270" height="110" rx="10"/>
+      <text class="df-nm" x="126" y="40">client <tspan class="df-mono">203.0.113.9</tspan></text>
+      <rect class="df-chip" x="124" y="58" width="246" height="40" rx="6"/><text class="df-mono df-fg" x="136" y="83">X-Forwarded-For: 198.51.100.7</text>
+      <path class="df-w df-bad" d="M380 78H444"/><text class="df-x" x="454" y="84" text-anchor="middle">✕</text>
+      <rect class="df-box" x="470" y="28" width="170" height="100" rx="10"/>
+      <rect class="df-gate" x="466" y="24" width="9" height="108" rx="4"/>
+      <text class="df-nm" x="557" y="70" text-anchor="middle">Caddy</text><text class="df-mono df-ok" x="557" y="94" text-anchor="middle">trusted_proxies</text>
+      <path class="df-w df-chg" d="M640 78H726" marker-end="url(#df-w)"/><text class="df-mono" x="685" y="66" text-anchor="middle">RemoteAddr</text>
+      <rect class="df-box" x="730" y="10" width="250" height="110" rx="10"/>
+      <text class="df-nm" x="746" y="40">upstream app</text><text class="df-mono" x="746" y="68">X-Forwarded-For</text>
+      <text class="df-val df-new" x="746" y="96">203.0.113.9</text>
+    </g>
+  </svg>
+  <svg class="df df-p" viewBox="0 0 340 700" role="img" aria-label="A forged X-Forwarded-For used to reach the upstream; now a trusted_proxies check stops it">
+    <g>
+      <text class="df-row" x="14" y="20">before</text>
+      <rect class="df-box" x="14" y="32" width="312" height="82" rx="9"/>
+      <text class="df-nm" x="28" y="56">client <tspan class="df-mono">203.0.113.9</tspan></text>
+      <rect class="df-chip" x="28" y="68" width="284" height="34" rx="6"/><text class="df-mono df-fg" x="40" y="90">X-Forwarded-For: 198.51.100.7</text>
+      <path class="df-w df-bad" d="M170 114V150" marker-end="url(#df-b)"/>
+      <rect class="df-box" x="80" y="154" width="180" height="60" rx="9"/>
+      <text class="df-nm" x="170" y="179" text-anchor="middle">Caddy</text><text class="df-mono" x="170" y="202" text-anchor="middle">reverse_proxy</text>
+      <path class="df-w df-bad" d="M170 214V250" marker-end="url(#df-b)"/>
+      <rect class="df-box" x="14" y="254" width="312" height="80" rx="9"/>
+      <text class="df-nm" x="28" y="277">upstream app</text><text class="df-mono" x="28" y="299">X-Forwarded-For</text>
+      <text class="df-val" x="28" y="323"><tspan class="df-gone">198.51.100.7</tspan>, 203.0.113.9</text>
+    </g>
+    <g transform="translate(0 360)">
+      <text class="df-row" x="14" y="20">after</text>
+      <rect class="df-box" x="14" y="32" width="312" height="82" rx="9"/>
+      <text class="df-nm" x="28" y="56">client <tspan class="df-mono">203.0.113.9</tspan></text>
+      <rect class="df-chip" x="28" y="68" width="284" height="34" rx="6"/><text class="df-mono df-fg" x="40" y="90">X-Forwarded-For: 198.51.100.7</text>
+      <path class="df-w df-bad" d="M170 114V132"/><text class="df-x" x="170" y="146" text-anchor="middle">✕</text>
+      <rect class="df-box" x="80" y="154" width="180" height="60" rx="9"/>
+      <rect class="df-gate" x="76" y="150" width="188" height="8" rx="4"/>
+      <text class="df-nm" x="170" y="181" text-anchor="middle">Caddy</text><text class="df-mono df-ok" x="170" y="203" text-anchor="middle">trusted_proxies</text>
+      <path class="df-w df-chg" d="M170 214V250" marker-end="url(#df-w)"/><text class="df-mono" x="182" y="237">RemoteAddr</text>
+      <rect class="df-box" x="14" y="254" width="312" height="80" rx="9"/>
+      <text class="df-nm" x="28" y="277">upstream app</text><text class="df-mono" x="28" y="299">X-Forwarded-For</text>
+      <text class="df-val df-new" x="28" y="323">203.0.113.9</text>
+    </g>
+  </svg>
+  <style>
+    .df-defs { position: absolute; width: 0; height: 0; }
+    .df { width: 100%; height: auto; overflow: visible; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .df-p { display: none; max-width: 26rem; margin: 0 auto; }
+    @media (max-width: 40rem) { .df-d { display: none; } .df-p { display: block; } }
+    .df-row { fill: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .df-box { fill: var(--paper); stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.5; }
+    .df-chip { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+    .df-nm { fill: var(--fg); font-size: 15px; font-weight: 700; }
+    .df-mono { fill: var(--muted); font: 600 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .df-fg { fill: var(--fg); }
+    .df-ok { fill: var(--good); font-weight: 800; }
+    .df-val { fill: var(--fg); font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .df-gone { fill: var(--bad); text-decoration: line-through; }
+    .df-new { fill: var(--warn); }
+    .df-w { fill: none; stroke-width: 2.4; }
+    .df-bad { stroke: var(--bad); stroke-dasharray: 7 5; }
+    .df-chg { stroke: var(--warn); }
+    .df-hb { fill: var(--bad); } .df-hw { fill: var(--warn); }
+    .df-x { fill: var(--bad); font-size: 20px; font-weight: 900; }
+    .df-gate { fill: var(--good); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 70%, transparent)); }
+  </style>
+</div>

@@ -46,6 +46,7 @@ export function dropReducer(state, event) {
  * server: enough to catch the wrong file before it is uploaded, never a second copy of the check.
  */
 const CANVAS_NAME_RE = /^(?:pr-([1-9]\d*)|ref)-.+-canvas\.zip$/i
+const TOUR_NAME_RE = /^(?:pr-([1-9]\d*)|ref)-.+-tour\.zip$/i
 
 /**
  * The file the user picked has to be a canvas zip for this pull request. The name is only a first
@@ -56,16 +57,38 @@ const CANVAS_NAME_RE = /^(?:pr-([1-9]\d*)|ref)-.+-canvas\.zip$/i
  * @returns {string | null} the problem, or null when the name is fine
  */
 export function validateCanvasFilename(filename, prNumber) {
+  return validateZipName(filename, prNumber, CANVAS_NAME_RE, 'canvas', 'review canvas')
+}
+
+/**
+ * The same first check for a tour zip on the tour page.
+ * @param {string} filename
+ * @param {number} prNumber the PR the page is on
+ * @returns {string | null}
+ */
+export function validateTourFilename(filename, prNumber) {
+  return validateZipName(filename, prNumber, TOUR_NAME_RE, 'tour', 'tour')
+}
+
+/**
+ * @param {string} filename
+ * @param {number} prNumber
+ * @param {RegExp} pattern
+ * @param {string} noun
+ * @param {string} kind the export's name, as `review canvas`
+ * @returns {string | null}
+ */
+function validateZipName(filename, prNumber, pattern, noun, kind) {
   if (!filename.toLowerCase().endsWith('.zip')) {
     return 'that is not a zip file'
   }
-  const match = CANVAS_NAME_RE.exec(filename)
+  const match = pattern.exec(filename)
   if (!match) {
-    return 'that zip is not a review canvas export'
+    return `that zip is not a ${kind} export`
   }
   const named = match[1] === undefined ? undefined : Number(match[1])
   if (named !== undefined && named !== prNumber) {
-    return `that canvas was exported for PR #${named}, not #${prNumber}`
+    return `that ${noun} was exported for PR #${named}, not #${prNumber}`
   }
   return null
 }
@@ -128,11 +151,15 @@ const LOCAL_HEADINGS = {
   uncommitted: 'No review canvas for your uncommitted work yet',
 }
 
-/** @returns {string} */
-function dropZoneHtml() {
+/**
+ * The zone a zip is dropped on: a canvas's on the review page, a tour's on the tour page.
+ * @param {'canvas' | 'tour'} [what]
+ * @returns {string}
+ */
+export function dropZoneHtml(what = 'canvas') {
   return (
-    '<p class="hint">or import a canvas a teammate attached to the PR</p>' +
-    `<label class="drop" for="${DROP_ZONE_ID}">Drop a canvas zip here or <span class="link">choose file</span>` +
+    `<p class="hint">or import a ${what} a teammate attached to the PR</p>` +
+    `<label class="drop" for="${DROP_ZONE_ID}">Drop a ${what} zip here or <span class="link">choose file</span>` +
     `<input class="sr" id="${DROP_ZONE_ID}" type="file" accept=".zip"></label>` +
     '<p class="drop-status" role="status" aria-live="polite"></p>'
   )

@@ -13,6 +13,8 @@ export const ChatThreadSchema = z.object({
    * review checkouts ran in the reader's checkout and have none.
    */
   seededCwd: z.string().optional(),
+  /** The tour's own thread: the grilling runs in it, and the canvas's pane never lists it. */
+  tour: z.boolean().optional(),
   /**
    * Whether the seed told the agent the reader may resolve attention points. An outdated canvas
    * keeps its commit but takes that right away, so a change sends the seed again. Threads from

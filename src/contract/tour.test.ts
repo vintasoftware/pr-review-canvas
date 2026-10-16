@@ -1,0 +1,195 @@
+// @vitest-environment node
+import { DEFAULT_SETTINGS, resolveTourSharing } from './settings.js'
+import { DEFAULT_PROJECT_CONFIG, mergeProjectConfig } from '../project-config.js'
+import { matchesGlob } from '../review/glob.js'
+import { syntheticTour, syntheticTourModel } from '../testing/synthetic-tour.js'
+import {
+  blastRadiusOf,
+  budgetLimits,
+  computeBudget,
+  effectiveTourCaps,
+  formatTourError,
+  stateRequiredFor,
+  TOUR_CAPS,
+  TourArtifactSchema,
+  TourBudgetSchema,
+  TourModelSchema,
+} from './tour.js'
+
+describe('the tour budget', () => {
+  const ceilings = DEFAULT_PROJECT_CONFIG.tour.budget
+
+  it('budgets one why landmark per 400 lines, one more with a blast radius, under the ceilings', () => {
+    const budget = (why: number) => ({ why, whyMax: 4, decisions: 5, quiz: 5 })
+    expect(computeBudget(0, [], ceilings)).toEqual(budget(1))
+    expect(computeBudget(300, [], ceilings)).toEqual(budget(1))
+    expect(computeBudget(1000, [], ceilings)).toEqual(budget(3))
+    expect(computeBudget(300, ['auth'], ceilings)).toEqual(budget(2))
+    expect(computeBudget(5000, ['auth', 'schema'], ceilings)).toEqual(budget(4))
+  })
+
+  it('reads a budget recorded before why landmarks were budgeted apart', () => {
+    expect(TourBudgetSchema.parse({ landmarks: 6, decisions: 5, quiz: 5 })).toEqual({
+      why: 3,
+      whyMax: 3,
+      decisions: 5,
+      quiz: 5,
+    })
+  })
+
+  it('limits decisions to one more than the why landmarks, and questions to one fewer than all', () => {
+    const budget = { why: 2, whyMax: 4, decisions: 5, quiz: 5 }
+    expect(budgetLimits(budget, 4, 1)).toEqual({ decisions: 2, quiz: 3 })
+    expect(budgetLimits(budget, 3, 0)).toEqual({ decisions: 1, quiz: 2 })
+    expect(budgetLimits(budget, 7, 4)).toEqual({ decisions: 5, quiz: 5 })
+  })
+
+  it('names the high-risk labels the changed paths touch, once each, in config order', () => {
+    const rules = [
+      { pattern: '**/migrations/**', label: 'schema' },
+      { pattern: '**/*auth*', label: 'auth' },
+      { pattern: 'db/**', label: 'schema' },
+    ]
+    const files = [{ path: 'db/migrations/001.sql' }, { path: 'src/auth.ts' }, { path: 'README.md' }]
+    expect(blastRadiusOf(files, rules, matchesGlob)).toEqual(['schema', 'auth'])
+    expect(blastRadiusOf([{ path: 'README.md' }], rules, matchesGlob)).toEqual([])
+  })
+
+  it('requires a state landmark when a label speaks of stored data', () => {
+    expect(stateRequiredFor(['schema'])).toBe(true)
+    expect(stateRequiredFor(['Database migrations'])).toBe(true)
+    expect(stateRequiredFor(['auth', 'design system'])).toBe(false)
+    // Without a state label, a migration or schema file in the change still asks for one.
+    expect(stateRequiredFor([], ['netbox/dcim/migrations/0230_constraints.py'])).toBe(true)
+    expect(stateRequiredFor([], ['db/migrate/20260101_add_eol.rb', 'app/models/user.rb'])).toBe(true)
+    expect(stateRequiredFor([], ['prisma/schema.prisma'])).toBe(true)
+    expect(stateRequiredFor([], ['sql/seed.SQL'])).toBe(true)
+    expect(stateRequiredFor([], ['src/app.ts', 'docs/migrations-guide.md'])).toBe(false)
+  })
+})
+
+describe('the tour schemas', () => {
+  it('read a stored tour written before not-toured groups and before guards were dropped', () => {
+    const stored = syntheticTour()
+    const old = {
+      ...stored,
+      landmarks: stored.landmarks.map(l => ({
+        ...l,
+        guards: [{ testPath: 'src/app.test.ts', behavior: 'x' }],
+      })),
+      notToured: [{ title: 'The renamed file', path: 'src/new-name.ts' }],
+    }
+    const parsed = TourArtifactSchema.parse(old)
+    expect(parsed.notToured).toEqual([{ title: 'The renamed file', paths: ['src/new-name.ts'] }])
+    expect(parsed.landmarks[0]).not.toHaveProperty('guards')
+  })
+
+  it('group not-toured files under one reason, one to twenty paths', () => {
+    const entry = (paths: string[]) =>
+      TourModelSchema.safeParse({ ...syntheticTourModel(), notToured: [{ title: 'Notation only', paths }] })
+        .success
+    expect(entry(['a.css', 'b.css'])).toBe(true)
+    expect(entry([])).toBe(false)
+    expect(entry(Array.from({ length: 21 }, (_, i) => `f${i}.css`))).toBe(false)
+  })
+
+  it('accept the synthetic tour as a model and as a stored artifact', () => {
+    const model = syntheticTourModel()
+    expect(TourModelSchema.safeParse(model).success).toBe(true)
+    const artifact = TourArtifactSchema.safeParse({
+      version: 1,
+      pr: {
+        number: 42,
+        title: 't',
+        body: '',
+        author: 'octocat',
+        url: 'https://github.com/acme/widgets/pull/42',
+        state: 'open',
+        draft: false,
+        baseRef: 'main',
+        headRef: 'feat/b',
+        headSha: 'a'.repeat(40),
+        mergeBaseSha: 'b'.repeat(40),
+        additions: 1,
+        deletions: 0,
+        changedFiles: 1,
+        repo: { owner: 'acme', name: 'widgets' },
+      },
+      repo: { owner: 'acme', name: 'widgets' },
+      headSha: 'a'.repeat(40),
+      mergeBaseSha: 'b'.repeat(40),
+      blastRadius: [],
+      budget: { why: 1, whyMax: 4, decisions: 1, quiz: 1 },
+      guide: null,
+      ...model,
+      generatedAt: '2026-09-10T12:00:00.000Z',
+      generator: { agent: 'claude', harness: 'claude-code', attempts: 1 },
+      source: 'local',
+      record: { touredBy: [] },
+    })
+    expect(artifact.success).toBe(true)
+  })
+
+  it('refuses an id that is not a slug, a fourth quiz option, and an over-ceiling text', () => {
+    const model = syntheticTourModel()
+    expect(
+      TourModelSchema.safeParse({
+        ...model,
+        landmarks: [{ ...model.landmarks[0], id: 'Not A Slug' }, ...model.landmarks.slice(1)],
+      }).success
+    ).toBe(false)
+    expect(
+      TourModelSchema.safeParse({ ...model, quiz: [{ ...model.quiz[0], options: ['a', 'b', 'c', 'd'] }] })
+        .success
+    ).toBe(false)
+    expect(
+      TourModelSchema.safeParse({
+        ...model,
+        landmarks: [
+          { ...model.landmarks[0], title: 'x'.repeat(TOUR_CAPS.landmarkTitle * 4 + 1) },
+          ...model.landmarks.slice(1),
+        ],
+      }).success
+    ).toBe(false)
+  })
+
+  it('has caps a project may raise, and formats an error as code then message', () => {
+    expect(effectiveTourCaps({ lead: 200 })).toEqual({ ...TOUR_CAPS, lead: 200 })
+    expect(formatTourError({ code: 'LANDMARK_ORDER', message: 'landmarks: x' })).toBe(
+      'LANDMARK_ORDER landmarks: x'
+    )
+  })
+})
+
+describe('tour settings', () => {
+  it('reads the tour block of the project config with defaults for what is left out', () => {
+    const { config } = mergeProjectConfig({
+      tour: { budget: { whyLandmarks: 2 }, finalQuiz: 'required', categories: ['product'] },
+    })
+    expect(config.tour).toEqual({
+      ...DEFAULT_PROJECT_CONFIG.tour,
+      budget: { ...DEFAULT_PROJECT_CONFIG.tour.budget, whyLandmarks: 2 },
+      finalQuiz: 'required',
+      categories: ['product'],
+    })
+    expect(mergeProjectConfig({}).config.tour).toEqual(DEFAULT_PROJECT_CONFIG.tour)
+  })
+
+  it('shares a tour as the personal file, then tour.share, then canvas sharing say', () => {
+    const sharing = { canvasComment: true, mentionCanvas: true }
+    expect(resolveTourSharing({ sharing, tourShare: 'auto' }, DEFAULT_SETTINGS)).toBe(true)
+    expect(
+      resolveTourSharing(
+        { sharing: { ...sharing, canvasComment: false }, tourShare: 'auto' },
+        DEFAULT_SETTINGS
+      )
+    ).toBe(false)
+    expect(resolveTourSharing({ sharing, tourShare: 'off' }, DEFAULT_SETTINGS)).toBe(false)
+    expect(
+      resolveTourSharing({ sharing, tourShare: 'off' }, { ...DEFAULT_SETTINGS, tourComment: true })
+    ).toBe(true)
+    expect(
+      resolveTourSharing({ sharing, tourShare: 'on' }, { ...DEFAULT_SETTINGS, tourComment: false })
+    ).toBe(false)
+  })
+})

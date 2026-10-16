@@ -91,14 +91,20 @@ export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill)
       hint: 'run `pr-review upgrade` or `pr-review install-skill`',
     }
   }
-  if (copies.length === 0) {
+  if (copies.every(copy => copy.skill !== SKILL_NAME)) {
     return {
       ok: false,
       detail: `${SKILL_NAME} is in neither ${CLAUDE_SKILLS_DIR} nor ${CODEX_SKILLS_DIR}`,
       hint: 'run `pr-review install-skill`',
     }
   }
-  return { ok: true, detail: copies.map(copy => copy.path).join(', ') }
+  return {
+    ok: true,
+    detail: copies
+      .filter(copy => copy.skill === SKILL_NAME)
+      .map(copy => copy.path)
+      .join(', '),
+  }
 }
 
 async function checkAcpx(deps: DoctorDeps): Promise<DoctorCheck> {

@@ -143,7 +143,8 @@ export function renderHeader(bundle, opts) {
     '<header class="hdr">' +
     headerBarHtml(
       opts,
-      `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
+      `<a class="cmd" id="tour-link" href="${esc(opts.project?.home ?? '/')}tour/${esc(bundle.local ?? String(pr.number))}" title="Take the tour of this change: landmarks, decisions, and a quiz">tour</a>` +
+        `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
         `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
         `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
         '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, and the AI Chat agent, model, and limits">settings</button>' +

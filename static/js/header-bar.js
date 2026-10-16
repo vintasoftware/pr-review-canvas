@@ -20,7 +20,8 @@ import { themeLabel } from './theme.js'
  *   project?: ProjectLink | undefined,
  *   theme: import('./theme.js').Theme,
  *   skin: import('./skin.js').Skin,
- * }} BarOptions
+ *   skinTitle?: string | undefined,
+ * }} BarOptions `skinTitle` names the skins the skin command cycles, when a page offers fewer
  */
 
 const BRAND_HTML =
@@ -120,7 +121,7 @@ export function headerBarHtml(opts, commands = '') {
     `<div class="hdr-bar"><div class="brand">${BRAND_HTML}${contextHtml(opts)}</div>` +
     '<div class="hdr-actions" role="group" aria-label="Page actions">' +
     commands +
-    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
+    `<button class="cmd" type="button" id="skin-toggle" title="${esc(opts.skinTitle ?? 'Switch between Terminal, GitHub, and Olive styling')}">${esc(skinLabel(opts.skin))}</button>` +
     `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
     '</div></div>' +
     envDialogHtml(opts)

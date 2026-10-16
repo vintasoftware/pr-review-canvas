@@ -1,9 +1,15 @@
 // One turn at a time per pull request: build the prompt, run the agent, stream what it says,
 // and keep the transcript. The lock is what makes `CHAT_BUSY` a real answer rather than two
 // agents writing into one thread.
-import type { AgentRunner } from '../acpx/acpx.js'
+import { type AgentRunner, CANCEL_TIMEOUT_SEC, KILL_GRACE_MS } from '../acpx/acpx.js'
 import { latestModel } from '../acpx/models.js'
-import type { ChatContext, ChatEvent, ChatThreadsResponse, ChatTurn } from '../contract/chat.js'
+import type {
+  ChatContext,
+  ChatEvent,
+  ChatHistoryResponse,
+  ChatThreadsResponse,
+  ChatTurn,
+} from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
 import { parseReviewFolder, type ReviewKey, reviewFolder } from '../contract/review-key.js'
@@ -11,8 +17,9 @@ import type { ChatThread } from '../contract/state.js'
 import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
 import { type CheckoutLease, readCodeAt, type ReviewCheckouts } from './checkouts.js'
-import { type ContextSources, renderChatContext } from './context.js'
+import { type ContextSources, renderChatContext, type TourSources } from './context.js'
 import { type CodeSource, renderSeed, type SeedPaths } from './seed.js'
+import { renderTourSeed } from './tour-seed.js'
 import {
   NEW_THREAD_TITLE,
   nextThreadIndex,
@@ -28,6 +35,12 @@ export class ChatBusyError extends Error {
   }
 }
 
+/**
+ * How long a new turn waits for a stopped one to let go before it is refused: as long as the
+ * runner gives a stopped agent to end.
+ */
+export const STOPPED_TURN_WAIT_MS = CANCEL_TIMEOUT_SEC * 1000 + KILL_GRACE_MS
+
 export interface ChatManagerDeps {
   runner: AgentRunner
   settings: SettingsStore
@@ -38,6 +51,8 @@ export interface ChatManagerDeps {
   /** `serve --chat-agent/--chat-model`, which win over the settings file. */
   overrides: SettingsOverrides
   loadSeedTemplate: () => Promise<string>
+  /** The seed of a tour's grilling thread. */
+  loadTourSeedTemplate: () => Promise<string>
   checkouts: ReviewCheckouts
   /** The branch the reader's checkout is on, for the warning when a turn falls back to it. */
   currentBranch: () => Promise<string | null>
@@ -60,7 +75,10 @@ export type RunningTurns = Map<string, RunningTurn>
 export interface ChatTarget {
   key: ReviewKey
   headSha: string
-  artifact: ReviewArtifact
+  /** The canvas the chat talks about; absent for a tour's grilling. */
+  artifact?: ReviewArtifact | undefined
+  /** The tour the grilling talks about: it runs in the tour's own thread with the tour's seed. */
+  tour?: TourSources | undefined
   files: FileEntry[]
   patches: Record<string, string>
   /** `<canvas>/derived`, which holds head/, base/ and patches/. */
@@ -82,6 +100,8 @@ export interface ChatManager {
   createThread(key: ReviewKey): Promise<ChatThread>
   selectThread(key: ReviewKey, name: string): Promise<ChatThread | null>
   send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent>
+  /** The transcript of the tour's thread, empty before the first grilling. */
+  tourHistory(key: ReviewKey): Promise<ChatHistoryResponse>
   /** True when a turn was running and has been asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
   /**
@@ -99,6 +119,8 @@ export interface RunningTurn {
   lease: CheckoutLease | null
   /** True once a stop arrived, which can be before the agent has started. */
   stopped: boolean
+  /** Settles once the turn has let go of the lock. */
+  ended: Promise<void>
 }
 
 /**
@@ -159,15 +181,44 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     return created
   }
 
+  /**
+   * The tour's one thread for this agent, `t0`, which no canvas thread is ever numbered. It is
+   * created when the first grilling turn needs it, and never made the active thread: the canvas's
+   * pane does not list it.
+   */
+  const tourThread = async (key: ReviewKey, agent: string): Promise<ChatThread> => {
+    const name = threadName(deps.repo, key, agent, 0)
+    const state = await deps.state.read(key)
+    const found = state.chat.threads.find(t => t.name === name)
+    if (found !== undefined) {
+      return found
+    }
+    const thread: ChatThread = {
+      name,
+      agent,
+      rev: 0,
+      title: 'The tour',
+      createdAt: deps.now().toISOString(),
+      seededHeadSha: '',
+      tour: true,
+    }
+    await deps.state.update(key, current => ({
+      ...current,
+      chat: { ...current.chat, threads: [...current.chat.threads, thread] },
+    }))
+    return thread
+  }
+
   /** The thread a message goes to: the one asked for, the active one, or a fresh one. */
   const resolveThread = async (key: ReviewKey, agent: string, wanted?: string): Promise<ChatThread> => {
     const state = await deps.state.read(key)
-    const byName = wanted === undefined ? undefined : state.chat.threads.find(t => t.name === wanted)
+    const byName =
+      wanted === undefined ? undefined : state.chat.threads.find(t => t.name === wanted && t.tour !== true)
     const active =
       byName ??
       (state.chat.activeThread === undefined
         ? undefined
-        : state.chat.threads.find(t => t.name === state.chat.activeThread))
+        : state.chat.threads.find(t => t.name === state.chat.activeThread && t.tour !== true))
     // Changing the agent starts a new thread: the old session belongs to the old agent.
     if (active === undefined || active.agent !== agent) {
       return newThread(key, agent)
@@ -237,12 +288,25 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
 
   async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
     const folder = folderOf(target.key)
-    if (turns.has(folder)) {
-      throw new ChatBusyError()
+    const held = turns.get(folder)
+    if (held !== undefined) {
+      if (!held.stopped) {
+        throw new ChatBusyError()
+      }
+      // A stopped turn is only finishing up, as when the reader left and came back: this turn
+      // waits for it rather than being refused.
+      await settlesWithin(held.ended, STOPPED_TURN_WAIT_MS)
+      if (turns.has(folder)) {
+        throw new ChatBusyError()
+      }
     }
-    // The slot is taken before the first await, so a second request that arrives while this one
-    // is still reading the settings sees a busy chat rather than starting a second agent.
-    const slot: RunningTurn = { run: null, stopped: false, lease: null }
+    // The slot is taken with no await since the check, so a second request that arrives while
+    // this one is still reading the settings sees a busy chat rather than starting a second agent.
+    let end = (): void => undefined
+    const ended = new Promise<void>(resolve => {
+      end = resolve
+    })
+    const slot: RunningTurn = { run: null, stopped: false, lease: null, ended }
     turns.set(folder, slot)
     try {
       yield* runTurn(target, input, slot)
@@ -250,6 +314,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       // The lock goes first, so a slot that looks free always has a free checkout behind it.
       await slot.lease?.release().catch(() => undefined)
       turns.delete(folder)
+      end()
     }
   }
 
@@ -289,10 +354,14 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     slot: RunningTurn
   ): AsyncIterable<ChatEvent> {
     const settings = await effectiveSettings()
-    const thread = await resolveThread(target.key, settings.chatAgent, input.thread)
+    const thread =
+      target.tour === undefined
+        ? await resolveThread(target.key, settings.chatAgent, input.thread)
+        : await tourThread(target.key, settings.chatAgent)
     const at = deps.now().toISOString()
     const contextBlock = await renderChatContext(input.context, {
       artifact: target.artifact,
+      tour: target.tour,
       files: target.files,
       patches: target.patches,
       readLines: target.readLines,
@@ -308,11 +377,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       !sameSession ||
       thread.seededHeadSha !== target.headSha ||
       thread.seededReaderResolves !== target.readerResolves
-    const seed = seeded
-      ? `${renderSeed(await deps.loadSeedTemplate(), target.artifact, seedPaths(deps, target, code), {
-          readerResolves: target.readerResolves,
-        })}\n\n`
-      : ''
+    const seed = seeded ? `${await renderSubjectSeed(deps, target, code)}\n\n` : ''
     const prompt = `${seed}${contextBlock}\n\n## Question\n\n${input.message}\n`
 
     if (!sameSession) {
@@ -460,12 +525,14 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     async threads(key) {
       const [state, settings] = await Promise.all([deps.state.read(key), effectiveSettings()])
       return {
-        threads: state.chat.threads.map(t => ({
-          name: t.name,
-          agent: t.agent,
-          title: t.title,
-          createdAt: t.createdAt,
-        })),
+        threads: state.chat.threads
+          .filter(t => t.tour !== true)
+          .map(t => ({
+            name: t.name,
+            agent: t.agent,
+            title: t.title,
+            createdAt: t.createdAt,
+          })),
         activeThread: state.chat.activeThread ?? null,
         agent: settings.chatAgent,
       }
@@ -487,6 +554,11 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       return thread
     },
     send,
+    async tourHistory(key) {
+      const settings = await effectiveSettings()
+      const name = threadName(deps.repo, key, settings.chatAgent, 0)
+      return { name, turns: await deps.transcripts.read(key, name) }
+    },
     async cancel(key) {
       const slot = turns.get(folderOf(key))
       if (slot === undefined) {
@@ -506,6 +578,24 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 }
 
+/** The seed of the subject: the tour's for a grilling, the canvas's for the chat. */
+async function renderSubjectSeed(
+  deps: ChatManagerDeps,
+  target: ChatTarget,
+  code: CodeSource
+): Promise<string> {
+  const paths = seedPaths(deps, target, code)
+  if (target.tour !== undefined) {
+    return renderTourSeed(await deps.loadTourSeedTemplate(), target.tour.artifact, paths)
+  }
+  if (target.artifact === undefined) {
+    throw new Error('a chat turn needs a canvas or a tour')
+  }
+  return renderSeed(await deps.loadSeedTemplate(), target.artifact, paths, {
+    readerResolves: target.readerResolves,
+  })
+}
+
 function seedPaths(deps: ChatManagerDeps, target: ChatTarget, code: CodeSource): SeedPaths {
   return {
     headDir: `${target.derivedDir}/head`,
@@ -514,6 +604,18 @@ function seedPaths(deps: ChatManagerDeps, target: ChatTarget, code: CodeSource):
     repoRoot: deps.repoRoot,
     code,
   }
+}
+
+/** Waits for `promise`, but no longer than `ms`. */
+async function settlesWithin(promise: Promise<void>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    promise,
+    new Promise<void>(resolve => {
+      timer = setTimeout(resolve, ms)
+    }),
+  ])
+  clearTimeout(timer)
 }
 
 function hintFor(code: string): { hint?: string } {

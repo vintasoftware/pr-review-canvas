@@ -4,7 +4,8 @@ import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
-import { homePage, reviewPage } from '../html.js'
+import { tourBelongsTo } from '../../store/tour-store.js'
+import { homePage, homeTab, reviewPage } from '../html.js'
 import { startPage } from '../start-page.js'
 import type { ProjectLink } from '../../../static/js/header-bar.js'
 
@@ -48,14 +49,17 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
       ...LOCAL_KEYS.map(key => ctx.prs.readPr(key)),
     ])
     const canvases = Object.values((await ctx.canvases.readIndex()).canvases)
+    const tours = Object.values((await ctx.tours.readIndex()).tours)
     return c.html(
       homePage(
         {
           recentPrs: recentPrs.map(p => ({
             ...p,
             hasCanvas: canvases.some(canvas => canvas.prNumber === p.number),
+            hasTour: tours.some(tour => tourBelongsTo(tour, p.number)),
           })),
           localReviews: LOCAL_KEYS.filter((_, i) => localPrs[i] !== null && localPrs[i] !== undefined),
+          localTours: LOCAL_KEYS.filter(key => tours.some(tour => tourBelongsTo(tour, key))),
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
           version: ctx.version,
@@ -63,6 +67,8 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           base: ctx.config.basePath,
           host: ctx.config.host,
           canGenerate: acpx.installed,
+          canGenerateTours: acpx.installed && ctx.projectConfig.config.tour.generate !== 'off',
+          tab: homeTab(c.req.query('tab')),
         },
         c.get('cspNonce'),
         await appearanceFor(ctx, appearanceQuery(c))
@@ -72,7 +78,9 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
 
   // Where `pr-review open` and `serve` point the browser. The lookup runs here rather than in the
   // command, so the browser opens at once and lands on the branch's open review when it is found.
-  app.get('/start', async c => c.redirect(await startPage(ctx, ctx.log), 302))
+  app.get('/start', async c =>
+    c.redirect(await startPage(ctx, ctx.log, c.req.query('page') === 'tour' ? 'tour' : 'review'), 302)
+  )
 
   // Where the home page's form lands. It is a plain GET form, so the page needs no script of its
   // own and the number arrives as a query parameter.
@@ -81,6 +89,13 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
     // The form's generate button carries the flag on to the review page, which opens the dialog.
     const generate = c.req.query('generate') === '1' ? '?generate=1' : ''
     return c.redirect(`${ctx.config.basePath}review/${encodeURIComponent(raw)}${generate}`, 303)
+  })
+
+  // Where the tours tab's form lands, as `/review` is for the canvases tab.
+  app.get('/tour', c => {
+    const raw = c.req.query('n') ?? ''
+    const generate = c.req.query('generate') === '1' ? '?generate=1' : ''
+    return c.redirect(`${ctx.config.basePath}tour/${encodeURIComponent(raw)}${generate}`, 303)
   })
 
   app.get('/review/:n', async c => {

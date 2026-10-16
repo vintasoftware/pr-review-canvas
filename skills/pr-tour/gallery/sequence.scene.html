@@ -1,0 +1,73 @@
+<div class="scene" data-technique="sequence">
+  <div class="sq-pair">
+    <figure class="sq-panel">
+      <span class="chip bad">before</span>
+      <svg viewBox="0 0 360 240" role="img" aria-label="before: t_a never joins the queue, t_b is woken first">
+        <defs>
+          <marker id="sq-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+          <marker id="sq-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--bad)"/></marker>
+        </defs>
+        <g class="sq-heads">
+          <line x1="50" y1="42" x2="50" y2="228"/><line x1="150" y1="42" x2="150" y2="228"/><line x1="260" y1="42" x2="260" y2="228"/>
+          <rect x="22" y="14" width="56" height="28" rx="6"/><text x="50" y="33">t_a</text>
+          <rect x="122" y="14" width="56" height="28" rx="6"/><text x="150" y="33">t_b</text>
+          <rect x="222" y="14" width="76" height="28" rx="6"/><text x="260" y="33">Mutex</text>
+          <text class="sq-sm" x="268" y="58">held by t0</text><text class="sq-sm" x="268" y="76">queue</text>
+        </g>
+        <g class="sq-msg bad hero"><line x1="50" y1="88" x2="232" y2="88" stroke-dasharray="7 6"/><text class="sq-x" x="240" y="94">✕</text><text x="140" y="78">lock(), budget spent</text></g>
+        <text class="sq-q bad" x="268" y="93">[ ]</text>
+        <g class="sq-msg muted" style="animation-delay: 0.7s"><line x1="150" y1="140" x2="258" y2="140" marker-end="url(#sq-m)"/><text x="204" y="130">lock()</text></g>
+        <text class="sq-q muted" x="268" y="145" style="animation-delay: 0.7s">[t_b]</text>
+        <g class="sq-msg bad" style="animation-delay: 1.4s"><line x1="260" y1="196" x2="152" y2="196" marker-end="url(#sq-b)"/><text x="206" y="186">wake t_b</text></g>
+      </svg>
+    </figure>
+    <figure class="sq-panel">
+      <span class="chip good">after</span>
+      <svg viewBox="0 0 360 240" role="img" aria-label="after: t_a joins the queue first and is woken first">
+        <defs>
+          <marker id="sq-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+          <marker id="sq-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--good)"/></marker>
+        </defs>
+        <g class="sq-heads">
+          <line x1="50" y1="42" x2="50" y2="228"/><line x1="150" y1="42" x2="150" y2="228"/><line x1="260" y1="42" x2="260" y2="228"/>
+          <rect x="22" y="14" width="56" height="28" rx="6"/><text x="50" y="33">t_a</text>
+          <rect x="122" y="14" width="56" height="28" rx="6"/><text x="150" y="33">t_b</text>
+          <rect x="222" y="14" width="76" height="28" rx="6"/><text x="260" y="33">Mutex</text>
+          <text class="sq-sm" x="268" y="58">held by t0</text><text class="sq-sm" x="268" y="76">queue</text>
+        </g>
+        <g class="sq-msg good hero"><line x1="50" y1="88" x2="256" y2="88" marker-end="url(#sq-g)"/><text x="140" y="78">lock(), budget spent</text></g>
+        <text class="sq-q good" x="268" y="93">[t_a]</text>
+        <g class="sq-msg muted" style="animation-delay: 0.7s"><line x1="150" y1="140" x2="258" y2="140" marker-end="url(#sq-m2)"/><text x="204" y="130">lock()</text></g>
+        <text class="sq-q muted" x="268" y="145" style="animation-delay: 0.7s">[t_a, t_b]</text>
+        <g class="sq-msg good" style="animation-delay: 1.4s"><line x1="260" y1="196" x2="52" y2="196" marker-end="url(#sq-g)"/><text x="156" y="186">wake t_a</text></g>
+      </svg>
+    </figure>
+  </div>
+  <style>
+    .sq-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 30rem)); justify-content: center; gap: 1.5rem 4rem; width: 100%; }
+    .sq-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; margin: 0; min-width: 0; }
+    .sq-panel svg { width: 100%; height: auto; overflow: visible; }
+    .sq-panel text { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--fg); text-anchor: middle; }
+    .sq-heads line { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+    .sq-heads rect { fill: var(--paper); stroke: var(--fg); stroke-width: 1.6; }
+    .sq-heads text { font-weight: 700; }
+    .sq-panel .sq-sm { text-anchor: start; font-size: 11.5px; font-weight: 500; fill: var(--muted); }
+    .sq-msg { --c: var(--muted); }
+    .sq-msg.bad { --c: var(--bad); } .sq-msg.good { --c: var(--good); }
+    .sq-msg line { stroke: var(--c); stroke-width: 2; }
+    .sq-panel .sq-msg text { fill: var(--c); }
+    .sq-msg.muted text { fill: var(--fg); font-weight: 500; }
+    .sq-msg.hero line { stroke-width: 4; }
+    .sq-msg.good.hero line { filter: drop-shadow(0 0 4px var(--good)); }
+    .sq-panel .sq-x { font: 900 16px ui-sans-serif, system-ui, sans-serif; }
+    .sq-panel .sq-q { text-anchor: start; font-weight: 700; }
+    .sq-panel .sq-q.bad { fill: var(--bad); } .sq-panel .sq-q.good { fill: var(--good); } .sq-panel .sq-q.muted { fill: var(--muted); }
+    .sq-msg, .sq-q { animation: sq-in 0.5s ease-out both; }
+    @keyframes sq-in { from { opacity: 0; } }
+    @media (max-width: 40rem) {
+      .sq-pair { grid-template-columns: minmax(0, 1fr); }
+      .sq-panel text { font-size: 14px; }
+      .sq-panel .sq-sm, .sq-panel .sq-q { font-size: 13.5px; }
+    }
+  </style>
+</div>

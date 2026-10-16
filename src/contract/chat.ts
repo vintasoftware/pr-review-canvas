@@ -24,6 +24,9 @@ export const ChatContextSchema = z.discriminatedUnion('kind', [
     end: z.number().int().positive(),
   }),
   z.object({ kind: z.literal('point'), fingerprint: z.string().min(1).max(200) }),
+  // The tour's grilling: one decision the reader wants changed, or the plan as a whole.
+  z.object({ kind: z.literal('tour-decision'), key: z.string().min(1).max(40) }),
+  z.object({ kind: z.literal('tour-plan') }),
 ])
 
 /** A message longer than this is a paste, not a question. */
@@ -36,6 +39,19 @@ export const ChatSendSchema = z.object({
   thread: z.string().min(1).max(200).optional(),
 })
 export type ChatSendInput = z.infer<typeof ChatSendSchema>
+
+/** The contexts a grilling turn may name; the canvas's kinds have no tour to point at. */
+export const TourGrillContextSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('tour-decision'), key: z.string().min(1).max(40) }),
+  z.object({ kind: z.literal('tour-plan') }),
+])
+export type TourGrillContext = z.infer<typeof TourGrillContextSchema>
+
+export const TourGrillSendSchema = z.object({
+  message: z.string().min(1).max(CHAT_MESSAGE_MAX),
+  context: TourGrillContextSchema,
+})
+export type TourGrillSendInput = z.infer<typeof TourGrillSendSchema>
 
 export const ChatThreadInputSchema = z.object({ agent: z.string().min(1).max(40).optional() })
 

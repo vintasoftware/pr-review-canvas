@@ -1,0 +1,72 @@
+<div class="scene" data-technique="impact-map">
+  <svg class="im-defs" aria-hidden="true"><defs>
+    <marker id="im-m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="im-hm" d="M0 0 10 5 0 10z"/></marker>
+    <marker id="im-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="im-hg" d="M0 0 10 5 0 10z"/></marker>
+  </defs></svg>
+  <svg class="im im-d" viewBox="0 0 1000 300" role="img" aria-label="Four matchers call equals, whose Error case is now isErrorEqual">
+    <text class="im-cap" x="40" y="26">callers in <tspan class="im-code">jest-expect.ts</tspan></text>
+    <rect class="im-pill" x="40" y="40" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="65" text-anchor="middle">toEqual</text>
+    <rect class="im-pill" x="40" y="100" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="125" text-anchor="middle">toStrictEqual</text>
+    <rect class="im-pill" x="40" y="160" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="185" text-anchor="middle">toHaveBeenCalledWith</text>
+    <rect class="im-pill im-chg" x="40" y="220" width="220" height="40" rx="20"/><text class="im-fn" x="150" y="245" text-anchor="middle">toThrowError</text>
+    <text class="im-sm" x="150" y="288" text-anchor="middle">+ 14 more calls</text>
+    <path class="im-w" d="M260 60C370 60 360 104 462 104" marker-end="url(#im-m)"/>
+    <path class="im-w" d="M260 120C370 120 360 124 462 124" marker-end="url(#im-m)"/>
+    <path class="im-w" d="M260 180C370 180 360 144 462 144" marker-end="url(#im-m)"/>
+    <path class="im-w im-new" d="M260 240C370 240 360 164 460 164" marker-end="url(#im-g)"/>
+    <text class="im-sm im-good" x="276" y="264">new call</text>
+    <text class="im-cap" x="470" y="62"><tspan class="im-code">jest-utils.ts</tspan></text>
+    <rect class="im-box" x="470" y="72" width="270" height="140" rx="10"/>
+    <text class="im-fn im-b" x="488" y="102">equals(a, b)</text>
+    <rect class="im-hero" x="486" y="118" width="238" height="78" rx="8"/>
+    <text class="im-fn im-b" x="502" y="148">isErrorEqual</text><text class="im-sm im-fg" x="502" y="176">name · message · cause · props</text>
+    <text class="im-gone" x="488" y="240">a.message === b.message</text>
+    <text class="im-cap" x="800" y="62">e.g. <tspan class="im-code">toEqual</tspan></text>
+    <rect class="im-box" x="800" y="72" width="180" height="140" rx="10"/>
+    <text class="im-fn" x="816" y="104">MyError('hi', 'a')</text><text class="im-sm" x="816" y="126">vs</text><text class="im-fn" x="816" y="148">MyError('hi', 'b')</text>
+    <text class="im-sm" x="816" y="190">before ✓</text><text class="im-v" x="900" y="190">now ✕</text>
+  </svg>
+  <svg class="im im-p" viewBox="0 0 340 530" role="img" aria-label="Four matchers call equals, whose Error case is now isErrorEqual">
+    <text class="im-cap" x="14" y="20">callers in <tspan class="im-code">jest-expect.ts</tspan></text>
+    <rect class="im-pill" x="14" y="30" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="52" text-anchor="middle">toEqual</text>
+    <rect class="im-pill" x="14" y="72" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="94" text-anchor="middle">toStrictEqual</text>
+    <rect class="im-pill" x="14" y="114" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="136" text-anchor="middle">toHaveBeenCalledWith</text>
+    <rect class="im-pill im-chg" x="14" y="156" width="236" height="34" rx="17"/><text class="im-fn" x="132" y="178" text-anchor="middle">toThrowError</text>
+    <text class="im-sm" x="14" y="214">+ 14 more calls</text>
+    <path class="im-w" d="M250 47H280Q290 47 290 57V242" marker-end="url(#im-m)"/>
+    <path class="im-w" d="M250 89H280Q290 89 290 99"/><path class="im-w" d="M250 131H280Q290 131 290 141"/>
+    <path class="im-w im-new" d="M250 173H306Q316 173 316 183V240" marker-end="url(#im-g)"/>
+    <text class="im-cap" x="14" y="242"><tspan class="im-code">jest-utils.ts</tspan></text>
+    <rect class="im-box" x="14" y="250" width="312" height="120" rx="9"/>
+    <text class="im-fn im-b" x="30" y="276">equals(a, b)</text>
+    <rect class="im-hero" x="28" y="288" width="284" height="68" rx="8"/>
+    <text class="im-fn im-b" x="42" y="314">isErrorEqual</text><text class="im-sm im-fg" x="42" y="340">name · message · cause · props</text>
+    <text class="im-gone" x="30" y="394">a.message === b.message</text>
+    <text class="im-cap" x="14" y="426">e.g. <tspan class="im-code">toEqual</tspan></text>
+    <rect class="im-box" x="14" y="434" width="312" height="84" rx="9"/>
+    <text class="im-fn" x="30" y="458">MyError('hi', 'a')</text><text class="im-fn" x="30" y="480"><tspan class="im-sm">vs </tspan>MyError('hi', 'b')</text>
+    <text class="im-sm" x="30" y="506">before ✓</text><text class="im-v" x="112" y="506">now ✕</text>
+  </svg>
+  <style>
+    .im-defs { position: absolute; width: 0; height: 0; }
+    .im { width: 100%; height: auto; overflow: visible; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .im-p { display: none; max-width: 26rem; margin: 0 auto; }
+    @media (max-width: 40rem) { .im-d { display: none; } .im-p { display: block; } }
+    .im-cap { fill: var(--muted); font-size: 13px; font-weight: 600; }
+    .im-code { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .im-pill, .im-box { fill: var(--paper); stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.5; }
+    .im-pill.im-chg { fill: color-mix(in srgb, var(--warn) 9%, var(--paper)); stroke: var(--warn); stroke-width: 2; }
+    .im-fn { fill: var(--fg); font: 600 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .im-b { font-weight: 800; font-size: 15px; }
+    .im-sm { fill: var(--muted); font-size: 13px; }
+    .im-fg { fill: var(--fg); }
+    .im-good { fill: var(--good); font-weight: 700; }
+    .im-v { fill: var(--bad); font-size: 13px; font-weight: 800; }
+    .im-w { fill: none; stroke: color-mix(in srgb, var(--muted) 70%, transparent); stroke-width: 1.8; }
+    .im-w.im-new { stroke: var(--good); stroke-width: 2.6; }
+    .im-hm { fill: var(--muted); } .im-hg { fill: var(--good); }
+    .im-hero { fill: color-mix(in srgb, var(--good) 10%, var(--paper)); stroke: var(--good); stroke-width: 2.6; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--good) 55%, transparent)); }
+    .im-gone { fill: var(--bad); opacity: 0.75; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: line-through; }
+    .im-p .im-fn { font-size: 12.5px; }
+  </style>
+</div>

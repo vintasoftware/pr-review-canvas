@@ -31,23 +31,24 @@ pr-review doctor --all-checks
 ```
 
 `doctor --all-checks` checks your repository, host CLI login, local storage, the project's
-skill, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
+skills, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
 If only `acpx` is missing, you can still review canvases; install it below to enable chat.
 If only the skill is missing, you can still generate from the review app or with
 `pr-review generate`, which use the skill pr-review ships.
 
 ### Optional: install the skill
 
-Install the generation skill to run `/pr-review-canvas` in Claude Code or Codex, or to
-customize it for the project:
+Install the skills to run `/pr-review-canvas` and `/pr-tour` in Claude Code or Codex, or to
+customize them for the project:
 
 ```bash
 pr-review install-skill
 ```
 
-`install-skill` copies the skill to `.claude/skills/pr-review-canvas` and
-`.agents/skills/pr-review-canvas`. Commit these copies so your team can use them. Restart your
-coding agent if the skill does not appear. Repeat this for each project.
+`install-skill` copies every skill the package ships to `.claude/skills/` and `.agents/skills/`,
+each in its own directory: `pr-review-canvas`, and the tour's `pr-tour`, `pr-tour-setup`, and
+`pr-tour-apply`. Commit these copies so your team can use them. Restart your coding agent if the
+skills do not appear. Repeat this for each project.
 
 Generations from the review app follow the project's copy when there is one, with any changes
 the project made to it. `pr-review upgrade` replaces a changed copy with the shipped skill, so
@@ -67,12 +68,35 @@ Install and sign in to Claude Code or Codex on the same machine. Start or restar
 review server, then choose the **Chat agent** in **settings**. Chat uses that agent's account.
 See [AI Chat](docs/reference.md#ai-chat) for model settings and review checkouts.
 
-## Generate and review a canvas
+## Take the tour, then review
 
-### Self-reviewing your PRs
+### The tour: the recommended pass before review
 
-With the [skill installed](#optional-install-the-skill), run it in Claude Code or Codex,
+A tour is a guided pass over one change that builds your theory of it: landmarks that explain
+the change with a picture each, the decisions it makes for you to keep or change, and a short
+quiz. The author takes it before asking for review; each reviewer takes the same tour. With the
+[skills installed](#optional-install-the-skill), run the tour skill in Claude Code or Codex,
 replacing `123` with your PR or MR number:
+
+```text
+/pr-tour 123
+```
+
+The skill reads the project's tour guide (`/pr-tour-setup` writes one, once per project),
+generates the tour, checks every landmark as a screenshot, and shares the tour in a PR or MR
+comment. Open the tour URL it prints, or **tour** in the review's header: read the landmarks,
+keep each decision, take the tour's alternative, or ask for something else (that opens the
+grilling, where AI Chat restates what you want in your words), take the quiz, and confirm the
+plan. The tour writes a re-implementation prompt and records that you toured;
+`/pr-tour-apply 123` carries the plan out. Tours of local work (`/pr-tour branch`,
+`/pr-tour uncommitted`) stay on your machine. See [the tour](docs/reference.md#the-tour) for the
+whole flow and its settings.
+
+### Generate a canvas
+
+A canvas is the review itself: the diff grouped into layers with annotations, attention points,
+and a test map. With the [skill installed](#optional-install-the-skill), run it in Claude Code or
+Codex, replacing `123` with your PR or MR number:
 
 ```text
 /pr-review-canvas 123
@@ -88,9 +112,9 @@ Start the server from your project; it opens the review in the browser:
 pr-review serve
 ```
 
-Open the review URL. For each attention point marked **yours**, click **resolve** and
-explain why it needs no reviewer decision. Your reason stays visible to reviewers.
-Then request review from your team.
+Open the review URL. Optionally, self-review on the canvas too: for each attention point
+marked **yours**, click **resolve** and explain why it needs no reviewer decision. Your reason
+stays visible to reviewers. Then request review from your team.
 
 After pushing new commits, run `/pr-review-canvas 123` again to update the canvas.
 Reviewers click **refresh** to load it.
@@ -151,6 +175,7 @@ One server serves all your projects:
 ## Documentation
 
 - [CLI and configuration reference](docs/reference.md): command options and troubleshooting.
+- [The tour](docs/reference.md#the-tour): generating, taking, grilling, and applying a tour; the tour guide.
 - [Project settings](docs/reference.md#project-config) and [prompt templates](docs/reference.md#prompt-templates): customize generation and review rules.
 - [Review controls](docs/reference.md#review-controls): navigation, comments, and sign-off.
 - [AI Chat](docs/reference.md#ai-chat): setup and review checkouts.

@@ -32,6 +32,8 @@ export const SHOW_TIMEOUT_SEC = 20
 /** The runner's deadline sits this far past acpx's, so acpx reports its own timeout first. */
 export const DEADLINE_SLACK_MS = 15_000
 
+export type AgentAccess = 'read' | 'write'
+
 export interface AgentRunOptions {
   agent: string
   /** The acpx session name, which is what a chat thread is. */
@@ -41,6 +43,12 @@ export interface AgentRunOptions {
   timeoutSec: number
   model?: string | undefined
   maxTurns?: number | undefined
+  /**
+   * `read` (the default) approves reads and searches and denies the rest, with no terminal: the
+   * chat and the canvas generation. `write` approves every request and offers a terminal: the tour
+   * generation, whose skill writes scene files and runs commands.
+   */
+  access?: AgentAccess | undefined
   /**
    * Every acpx line the raw event log may keep. The scrubbing happens here rather than in the
    * caller, so no caller can write a file's content to disk by mistake.
@@ -81,14 +89,18 @@ export interface AgentRunner {
 }
 
 /**
- * The flags every acpx call carries: read-only tool policy, no terminal, JSON on stdout, and
- * file contents kept out of the stream.
+ * The flags every acpx call carries: the tool policy `access` names (read-only with no terminal by
+ * default), JSON on stdout, and file contents kept out of the stream.
  *
  * `--auth-policy fail` is deliberately absent. The spike showed codex refusing to start under
  * it while `codex login status` reported a signed-in account; a real auth failure still arrives
  * as an `AUTH_REQUIRED` error line.
  */
-export function commonAcpxArgs(cwd: string, timeoutSec: number): string[] {
+export function commonAcpxArgs(cwd: string, timeoutSec: number, access: AgentAccess = 'read'): string[] {
+  const policy =
+    access === 'write'
+      ? ['--approve-all']
+      : ['--approve-reads', '--non-interactive-permissions', 'deny', '--no-terminal']
   return [
     '--cwd',
     cwd,
@@ -96,17 +108,14 @@ export function commonAcpxArgs(cwd: string, timeoutSec: number): string[] {
     'json',
     '--json-strict',
     '--suppress-reads',
-    '--approve-reads',
-    '--non-interactive-permissions',
-    'deny',
-    '--no-terminal',
+    ...policy,
     '--timeout',
     String(timeoutSec),
   ]
 }
 
 export function buildPromptArgs(options: AgentRunOptions): string[] {
-  const args = commonAcpxArgs(options.cwd, options.timeoutSec)
+  const args = commonAcpxArgs(options.cwd, options.timeoutSec, options.access)
   if (options.model !== undefined && options.model !== '') {
     args.push('--model', options.model)
   }

@@ -1,7 +1,9 @@
 // @vitest-environment node
+import { freshReaderState } from '../contract/tour-api.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
 import type { ChatEvent } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
@@ -17,6 +19,7 @@ import {
   type ChatManager,
   type ChatTarget,
   createChatManager,
+  STOPPED_TURN_WAIT_MS,
 } from './chat-manager.js'
 import { CheckoutBusyError, checkoutsFor, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
 import { createTranscriptStore, type TranscriptStore } from './threads.js'
@@ -80,6 +83,7 @@ function build(
     repoRoot: '/repo',
     overrides: opts.overrides ?? {},
     loadSeedTemplate: async () => 'SEED for {{PR_META}}\n{{READER}}',
+    loadTourSeedTemplate: async () => 'TOUR SEED for {{PR_META}}\n{{DECISIONS}}',
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -662,6 +666,73 @@ describe('a stop that arrives before the agent has started', () => {
   })
 })
 
+describe('a turn sent while a stopped one is still finishing', () => {
+  /** A turn the reader left while it was still setting up: stopped, with its return queued. */
+  async function abandonDuringSetup(gate: Promise<void>): Promise<{ left: Promise<unknown> }> {
+    build({ runner: createFakeRunner({ ensureGate: gate }) })
+    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const abandoned = stream[Symbol.asyncIterator]()
+    await advanceTo(abandoned, 'checkout')
+    const setup = abandoned.next()
+    await manager.cancel(42)
+    return { left: Promise.all([setup, abandoned.return?.(undefined)]) }
+  }
+
+  it('waits for the stopped turn to let go, then answers', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    const { left } = await abandonDuringSetup(gate)
+    const back = collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    openGate()
+    await left
+    expect((await back).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
+    const turns = await transcripts.read(42, T1)
+    expect(turns.map(turn => [turn.role, turn.text, turn.incomplete])).toEqual([
+      ['user', 'one', undefined],
+      ['assistant', '', 'cancelled'],
+      ['user', 'two', undefined],
+      ['assistant', 'Yes. The behavior is covered at `src/a.ts:10`.', undefined],
+    ])
+  })
+
+  it('is refused when the stopped turn outstays the wait', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    const { left } = await abandonDuringSetup(gate)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const back = manager.send(target(), { message: 'two', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+      const refused = expect(back.next()).rejects.toBeInstanceOf(ChatBusyError)
+      await vi.advanceTimersByTimeAsync(STOPPED_TURN_WAIT_MS)
+      await refused
+    } finally {
+      vi.useRealTimers()
+    }
+    openGate()
+    await left
+    expect(manager.running()).not.toContain(42)
+  })
+
+  it('is still refused while the running turn was not stopped', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    build({ runner: createFakeRunner({ ensureGate: gate }) })
+    const running = collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await vi.waitFor(() => expect(runner.ensured).toHaveLength(1))
+    await expect(
+      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    ).rejects.toBeInstanceOf(ChatBusyError)
+    openGate()
+    await running
+  })
+})
+
 describe('an answer the reader walked out on', () => {
   it('is kept as an incomplete answer, not as one the agent finished', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
@@ -756,6 +827,7 @@ describe('the review checkout a turn reads', () => {
       repoRoot: '/repo',
       overrides: {},
       loadSeedTemplate: async () => '{{CODE_LOCATION}}',
+      loadTourSeedTemplate: async () => '{{CODE_LOCATION}}',
       checkouts,
       currentBranch: async () => 'main',
       now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -843,5 +915,57 @@ describe('the review checkout a turn reads', () => {
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[1]?.prompt).toContain('SEED for')
     expect(runner.runs[1]?.cwd).toBe(checkoutDir())
+  })
+})
+
+describe("createChatManager() and the tour's grilling", () => {
+  const T0 = 'pr-review-acme-widgets-42-claude-t0'
+
+  function tourTarget(): ChatTarget {
+    const { artifact: _artifact, ...rest } = target()
+    return { ...rest, tour: { artifact: syntheticTour(), reader: freshReaderState() } }
+  }
+
+  it('runs in the tour thread with the tour seed, which the canvas pane never lists', async () => {
+    const events = await collect(
+      manager.send(tourTarget(), {
+        message: 'I want to change this',
+        context: { kind: 'tour-decision', key: 'sum-over-product' },
+      })
+    )
+    expect(events.find(e => e.event === 'turn')).toEqual({
+      event: 'turn',
+      thread: T0,
+      agent: 'claude',
+      seeded: true,
+    })
+    const prompt = runner.runs[0]?.prompt ?? ''
+    expect(prompt).toContain('TOUR SEED for')
+    expect(prompt).toContain('`sum-over-product` · trade-off')
+    expect(prompt).toContain('## Context: decision `sum-over-product`')
+    expect(prompt).not.toContain('SEED for {{')
+    expect(runner.runs[0]?.session).toBe(T0)
+    expect((await manager.threads(42)).threads).toEqual([])
+    expect((await manager.threads(42)).activeThread).toBeNull()
+    const history = await manager.tourHistory(42)
+    expect(history.name).toBe(T0)
+    expect(history.turns.map(t => t.role)).toEqual(['user', 'assistant'])
+    // The second turn reuses the thread and the session, so the seed is not sent again.
+    await collect(manager.send(tourTarget(), { message: 'more', context: { kind: 'tour-plan' } }))
+    expect(runner.runs[1]?.prompt).not.toContain('TOUR SEED')
+    expect(runner.runs[1]?.prompt).toContain('## Context: the plan')
+    // A canvas thread made afterwards is numbered from one, and the tour thread stays out of the list.
+    const canvas = await manager.createThread(42)
+    expect(canvas.name).toBe(T1)
+    expect((await manager.threads(42)).threads.map(t => t.name)).toEqual([T1])
+    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' }, thread: T0 }))
+    expect(runner.runs[2]?.session).toBe(T1)
+  })
+
+  it('refuses a turn with neither a canvas nor a tour', async () => {
+    const { artifact: _artifact, ...bare } = target()
+    await expect(collect(manager.send(bare, { message: 'x', context: { kind: 'pr' } }))).rejects.toThrow(
+      'a chat turn needs a canvas or a tour'
+    )
   })
 })

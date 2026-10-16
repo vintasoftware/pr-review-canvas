@@ -10,10 +10,12 @@ import {
   fetchCanvasZip,
   fetchSharedCanvas,
   filenameFromDisposition,
+  fetchTourZip,
   importCanvas,
+  importTour,
   uploadForm,
 } from './api.js'
-import { exportCanvasZip, saveBlob } from './download.js'
+import { exportCanvasZip, exportTourZip, saveBlob } from './download.js'
 import {
   dropReducer,
   INITIAL_DROP_STATE,
@@ -24,6 +26,7 @@ import {
   staleBarHtml,
   staleSummary,
   validateCanvasFilename,
+  validateTourFilename,
 } from './empty-state.js'
 import { dropStatusText, wireDropZone } from './import-zone.js'
 
@@ -125,7 +128,13 @@ describe('drop zone', () => {
       importImpl: async (prNumber, file, opts) => {
         sent.push([prNumber, file.name])
         opts?.onProgress?.(0.5)
-        return { status: 'ready', headSha: HEAD, currentHeadSha: HEAD, derivable: true, warnings: [] }
+        return {
+          status: /** @type {const} */ ('ready'),
+          headSha: HEAD,
+          currentHeadSha: HEAD,
+          derivable: true,
+          warnings: [],
+        }
       },
       onImported: result => sent.push([0, result.status]),
     })
@@ -167,7 +176,13 @@ describe('drop zone', () => {
       prNumber: 42,
       importImpl: async () => {
         called++
-        return { status: 'ready', headSha: HEAD, currentHeadSha: HEAD, derivable: true, warnings: [] }
+        return {
+          status: /** @type {const} */ ('ready'),
+          headSha: HEAD,
+          currentHeadSha: HEAD,
+          derivable: true,
+          warnings: [],
+        }
       },
       onImported: () => undefined,
     })
@@ -189,7 +204,13 @@ describe('drop zone', () => {
       prNumber: 42,
       importImpl: async (_pr, file) => {
         sent.push(file.name)
-        return { status: 'ready', headSha: HEAD, currentHeadSha: HEAD, derivable: true, warnings: [] }
+        return {
+          status: /** @type {const} */ ('ready'),
+          headSha: HEAD,
+          currentHeadSha: HEAD,
+          derivable: true,
+          warnings: [],
+        }
       },
       onImported: () => undefined,
     })
@@ -217,7 +238,13 @@ describe('drop zone', () => {
       prNumber: 42,
       importImpl: async (_pr, file) => {
         sent.push(file.name)
-        return { status: 'ready', headSha: HEAD, currentHeadSha: HEAD, derivable: true, warnings: [] }
+        return {
+          status: /** @type {const} */ ('ready'),
+          headSha: HEAD,
+          currentHeadSha: HEAD,
+          derivable: true,
+          warnings: [],
+        }
       },
       onImported: () => undefined,
     })
@@ -547,4 +574,42 @@ it('uses the browser upload transport without forcing a cross-repository import'
   } finally {
     vi.unstubAllGlobals()
   }
+})
+
+describe('the tour zip', () => {
+  it('checks a tour zip by its name, and tells it from a canvas zip', () => {
+    expect(validateTourFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip', 42)).toBeNull()
+    expect(validateTourFilename('ref-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip', 42)).toBeNull()
+    expect(validateTourFilename('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', 42)).toBe(
+      'that zip is not a tour export'
+    )
+    expect(validateTourFilename('pr-7-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip', 42)).toBe(
+      'that tour was exported for PR #7, not #42'
+    )
+  })
+
+  it('exports the tour on screen and uploads a dropped one to the tour routes', async () => {
+    /** @type {string[]} */
+    const asked = []
+    /** @type {typeof fetch} */
+    const fetchImpl = async url => {
+      asked.push(String(url))
+      return new Response(new Uint8Array([1]).buffer, {
+        headers: { 'content-disposition': 'attachment; filename="pr-42-x-tour.zip"' },
+      })
+    }
+    const urls = { createObjectURL: () => 'blob:1', revokeObjectURL: () => undefined }
+    expect(await exportTourZip(42, { headSha: HEAD, fetchImpl, doc: document, urls })).toBe(
+      'pr-42-x-tour.zip'
+    )
+    expect(asked).toEqual([`/api/tours/42/export?headSha=${HEAD}`])
+    expect((await fetchTourZip('branch', { fetchImpl })).filename).toBe('pr-42-x-tour.zip')
+
+    const xhr = fakeXhr(200, JSON.stringify({ status: 'imported', headSha: HEAD, warnings: [] }))
+    const file = new File([new Uint8Array([1])], 'pr-42-x-tour.zip')
+    const xhrImpl = () => /** @type {XMLHttpRequest} */ (/** @type {unknown} */ (xhr))
+    expect(await importTour(42, file, { force: true, xhrImpl })).toMatchObject({ status: 'imported' })
+    expect([xhr.method, xhr.url]).toEqual(['POST', '/api/tours/42/import'])
+    expect(xhr.sent?.get('force')).toBe('1')
+  })
 })

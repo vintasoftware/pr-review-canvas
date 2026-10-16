@@ -61,6 +61,23 @@ function isEnvelope(body) {
 }
 
 /**
+ * The ApiError a refused response carries: its envelope's, or INTERNAL with the status.
+ * @param {Response} res
+ */
+async function responseError(res) {
+  /** @type {unknown} */
+  let body = null
+  try {
+    body = await res.json()
+  } catch {
+    body = null
+  }
+  return isEnvelope(body)
+    ? new ApiError(body.error, res.status)
+    : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
+}
+
+/**
  * GET/PUT/POST JSON. Non-2xx answers with the envelope become ApiError; anything else INTERNAL.
  * @template T
  * @param {string} url
@@ -425,6 +442,21 @@ export function importCanvas(prNumber, file, opts = {}) {
 
 /**
  * @param {ReviewKey} prNumber
+ * @param {File} file
+ * @param {{ force?: boolean, onProgress?: (fraction: number) => void, xhrImpl?: () => XMLHttpRequest }} [opts]
+ * @returns {Promise<import('./contract-types.js').TourImportResult>}
+ */
+export function importTour(prNumber, file, opts = {}) {
+  const form = new FormData()
+  form.append('file', file)
+  if (opts.force) {
+    form.append('force', '1')
+  }
+  return uploadForm(`/api/tours/${prNumber}/import`, form, opts)
+}
+
+/**
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').SharedCanvasFetchResponse>}
  */
@@ -433,28 +465,48 @@ export function fetchSharedCanvas(prNumber, opts = {}) {
 }
 
 /**
+ * Looks on the pull request for a tour someone shared, and imports the best one.
+ * @param {ReviewKey} prNumber
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').SharedTourFetchResponse>}
+ */
+export function fetchSharedTour(prNumber, opts = {}) {
+  return fetchJson(`/api/tours/${prNumber}/shared-tour/fetch`, { method: 'POST', fetchImpl: opts.fetchImpl })
+}
+
+/**
  * The zip as a blob plus the name the server chose, ready to hand to the browser.
  * @param {ReviewKey} prNumber
  * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ blob: Blob, filename: string }>}
  */
-export async function fetchCanvasZip(prNumber, opts = {}) {
+export function fetchCanvasZip(prNumber, opts = {}) {
+  return fetchZip(`/api/prs/${prNumber}/export`, opts)
+}
+
+/**
+ * The tour's zip, as `fetchCanvasZip` fetches the canvas's.
+ * @param {ReviewKey} prNumber
+ * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ blob: Blob, filename: string }>}
+ */
+export function fetchTourZip(prNumber, opts = {}) {
+  return fetchZip(`/api/tours/${prNumber}/export`, opts)
+}
+
+/**
+ * @param {string} route
+ * @param {{ headSha?: string, fetchImpl?: typeof fetch }} opts
+ * @returns {Promise<{ blob: Blob, filename: string }>}
+ */
+async function fetchZip(route, opts) {
   const doFetch = opts.fetchImpl ?? fetch
   const q = opts.headSha ? `?headSha=${encodeURIComponent(opts.headSha)}` : ''
-  const res = await doFetch(underBase(`/api/prs/${prNumber}/export${q}`), {
+  const res = await doFetch(underBase(`${route}${q}`), {
     headers: { accept: 'application/zip' },
   })
   if (!res.ok) {
-    /** @type {unknown} */
-    let body = null
-    try {
-      body = await res.json()
-    } catch {
-      body = null
-    }
-    throw isEnvelope(body)
-      ? new ApiError(body.error, res.status)
-      : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
+    throw await responseError(res)
   }
   return { blob: await res.blob(), filename: filenameFromDisposition(res.headers.get('content-disposition')) }
 }
@@ -613,10 +665,11 @@ export function readSseFrames(buffer, chunk) {
 }
 
 /**
- * Sends one chat message and calls `onEvent` for every frame until the turn ends. Rejects with
- * an ApiError when the server refuses the message (a busy chat, a context it cannot resolve).
- * @param {ReviewKey} prNumber
- * @param {{ message: string, context: import('./chat-context.js').ChatContext, thread?: string }} input
+ * Posts `input` to an SSE endpoint and calls `onEvent` for every frame until the stream ends.
+ * Rejects with an ApiError when the server refuses the request. AI Chat and the tour's grilling
+ * both stream their turns through it.
+ * @param {string} url
+ * @param {unknown} input
  * @param {{
  *   onEvent: (event: { event: string, data: unknown }) => void,
  *   signal?: AbortSignal,
@@ -624,7 +677,7 @@ export function readSseFrames(buffer, chunk) {
  * }} opts
  * @returns {Promise<void>}
  */
-export async function streamChat(prNumber, input, opts) {
+export async function streamEvents(url, input, opts) {
   const doFetch = opts.fetchImpl ?? fetch
   /** @type {RequestInit} */
   const init = {
@@ -635,18 +688,9 @@ export async function streamChat(prNumber, input, opts) {
   if (opts.signal !== undefined) {
     init.signal = opts.signal
   }
-  const res = await doFetch(underBase(`/api/prs/${prNumber}/chat`), init)
+  const res = await doFetch(underBase(url), init)
   if (!res.ok) {
-    /** @type {unknown} */
-    let body = null
-    try {
-      body = await res.json()
-    } catch {
-      body = null
-    }
-    throw isEnvelope(body)
-      ? new ApiError(body.error, res.status)
-      : new ApiError({ code: 'INTERNAL', message: `${res.status} ${res.statusText}` }, res.status)
+    throw await responseError(res)
   }
   const reader = res.body?.getReader()
   if (reader === undefined) {
@@ -665,4 +709,16 @@ export async function streamChat(prNumber, input, opts) {
       opts.onEvent(event)
     }
   }
+}
+
+/**
+ * Sends one chat message and calls `onEvent` for every frame until the turn ends. Rejects with
+ * an ApiError when the server refuses the message (a busy chat, a context it cannot resolve).
+ * @param {ReviewKey} prNumber
+ * @param {{ message: string, context: import('./chat-context.js').ChatContext, thread?: string }} input
+ * @param {Parameters<typeof streamEvents>[2]} opts
+ * @returns {Promise<void>}
+ */
+export function streamChat(prNumber, input, opts) {
+  return streamEvents(`/api/prs/${prNumber}/chat`, input, opts)
 }

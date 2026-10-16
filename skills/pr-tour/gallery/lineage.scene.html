@@ -1,0 +1,94 @@
+<div class="scene" data-technique="lineage">
+  <svg class="ln ln-wide" viewBox="0 0 1120 330" role="img" aria-label="Three copies of the content handling merge into encode_content">
+    <defs>
+      <marker id="ln-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path class="ln-head" d="M0,0 L10,5 L0,10 Z"/></marker>
+    </defs>
+    <text class="ln-file ln-gone" x="60" y="34">_content_streams.py</text>
+    <text class="ln-note bad" x="60" y="56">deleted</text>
+    <text class="ln-file" x="720" y="34">_content.py</text>
+    <text class="ln-note good" x="720" y="56">new</text>
+
+    <g class="ln-old">
+      <rect x="60" y="78" width="330" height="58" rx="8"/>
+      <text class="ln-name" x="80" y="103">PlainByteStream</text>
+      <text class="ln-sub" x="80" y="124">bytes → Content-Length</text>
+      <rect x="60" y="156" width="330" height="58" rx="8"/>
+      <text class="ln-name" x="80" y="181">encode_request</text>
+      <text class="ln-sub" x="80" y="202">bytes → Content-Length</text>
+      <rect x="60" y="234" width="330" height="58" rx="8"/>
+      <text class="ln-name" x="80" y="259">encode_response</text>
+      <text class="ln-sub" x="80" y="280">bytes → Content-Length</text>
+    </g>
+
+    <g class="ln-wire">
+      <path d="M390,107 C540,107 560,160 716,166"/>
+      <path d="M390,185 C540,185 560,185 716,185"/>
+      <path d="M390,263 C540,263 560,210 716,204"/>
+    </g>
+    <text class="ln-say" x="465" y="168" text-anchor="middle">3 copies → 1</text>
+
+    <g class="ln-hero">
+      <rect x="720" y="146" width="340" height="78" rx="10"/>
+      <text class="ln-name ln-big" x="742" y="180">encode_content</text>
+      <text class="ln-sub" x="742" y="206">"hello" → Content-Length: 5</text>
+    </g>
+  </svg>
+
+  <svg class="ln ln-tall" viewBox="0 0 360 430" role="img" aria-label="Three copies of the content handling merge into encode_content">
+    <text class="ln-file ln-gone" x="14" y="22">_content_streams.py</text>
+    <text class="ln-note bad" x="14" y="40">deleted</text>
+    <g class="ln-old">
+      <rect x="14" y="54" width="240" height="50" rx="8"/>
+      <text class="ln-name" x="28" y="75">PlainByteStream</text>
+      <text class="ln-sub" x="28" y="94">bytes → Content-Length</text>
+      <rect x="14" y="116" width="240" height="50" rx="8"/>
+      <text class="ln-name" x="28" y="137">encode_request</text>
+      <text class="ln-sub" x="28" y="156">bytes → Content-Length</text>
+      <rect x="14" y="178" width="240" height="50" rx="8"/>
+      <text class="ln-name" x="28" y="199">encode_response</text>
+      <text class="ln-sub" x="28" y="218">bytes → Content-Length</text>
+    </g>
+    <g class="ln-wire">
+      <path d="M254,79 H306 V286"/>
+      <path class="ln-stub" d="M254,141 H306"/>
+      <path class="ln-stub" d="M254,203 H306"/>
+    </g>
+    <text class="ln-say" x="300" y="250" text-anchor="end">3 → 1</text>
+    <text class="ln-file" x="14" y="276">_content.py</text>
+    <text class="ln-note good" x="120" y="276">new</text>
+    <g class="ln-hero">
+      <rect x="14" y="292" width="332" height="74" rx="10"/>
+      <text class="ln-name ln-big" x="30" y="324">encode_content</text>
+      <text class="ln-sub" x="30" y="350">"hello" → Content-Length: 5</text>
+    </g>
+  </svg>
+  <style>
+    .ln { width: 100%; height: auto; overflow: visible; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .ln-tall { display: none; }
+    .ln text { fill: var(--fg); }
+    .ln-file, .ln-name, .ln-sub { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .ln-file { font-size: 15px; font-weight: 700; }
+    .ln-gone { opacity: 0.7; text-decoration: line-through; }
+    .ln-note { font-size: 13px; font-weight: 600; }
+    .ln .bad { fill: var(--bad); }
+    .ln .good { fill: var(--good); }
+    .ln-name { font-size: 16px; font-weight: 650; }
+    .ln-big { font-size: 20px; }
+    .ln-sub { font-size: 13px; }
+    .ln .ln-sub { fill: var(--muted); }
+    .ln-old rect { fill: color-mix(in srgb, var(--bad) 5%, var(--paper)); stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .ln-old text { opacity: 0.75; }
+    .ln-wire path { fill: none; stroke: var(--good); stroke-width: 3; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--good) 60%, transparent)); marker-end: url(#ln-ah); }
+    .ln-wire .ln-stub { marker-end: none; }
+    .ln-head { fill: var(--good); }
+    .ln-say { font-size: 14px; font-weight: 700; }
+    .ln .ln-say { fill: var(--good); }
+    .ln-hero rect { fill: color-mix(in srgb, var(--good) 10%, var(--paper)); stroke: var(--good); stroke-width: 3; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--good) 45%, transparent)); animation: ln-glow 2.4s ease-in-out infinite; }
+    .ln-hero .ln-sub { fill: var(--fg); }
+    @keyframes ln-glow { 50% { filter: drop-shadow(0 0 14px color-mix(in srgb, var(--good) 60%, transparent)); } }
+    @media (max-width: 40rem) {
+      .ln-wide { display: none; }
+      .ln-tall { display: block; }
+    }
+  </style>
+</div>

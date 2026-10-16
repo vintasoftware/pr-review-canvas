@@ -11,14 +11,13 @@ export async function shareGitlabCanvas(
   repo: Repo,
   number: number,
   body: string,
-  webBase: string
+  webBase: string,
+  marker: string = CANVAS_COMMENT_MARKER
 ): Promise<IssueComment> {
   const user = z.object({ username: z.string() }).parse(await client.api('user'))
   const base = `${gitlabProjectApi(repo)}/merge_requests/${number}/notes`
   const notes = (await fetchAllPages(client, base)).map(raw => GlNoteSchema.parse(raw))
-  const existing = notes.find(
-    n => n.author?.username === user.username && n.body?.includes(CANVAS_COMMENT_MARKER)
-  )
+  const existing = notes.find(n => n.author?.username === user.username && n.body?.includes(marker))
   const response =
     existing === undefined
       ? await client.post(base, { body })

@@ -1,7 +1,10 @@
+import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { serve } from '@hono/node-server'
 import { removeServerInfo, type ServerInfo, writeServerInfo } from '../hub/home.js'
 import type { Hub } from '../hub/hub.js'
+import { createApp } from './app.js'
+import type { AppContext } from './context.js'
 
 export interface HubServerOptions {
   fetch: (request: Request) => Response | Promise<Response>
@@ -65,4 +68,38 @@ export async function startHubServer(opts: HubServerOptions): Promise<HubServer>
   process.once('SIGINT', onSignal)
   process.once('SIGTERM', onSignal)
   return { port, close }
+}
+
+/**
+ * A quiet copy of one project's app on a free port, for `tour preview` to load pages from while it
+ * runs. It answers under the project's base path, as the shared server does, and at the root, so a
+ * page and the API calls it makes under its base path both resolve. It sweeps nothing and opens no
+ * browser of its own.
+ */
+export async function startQuietServer(
+  ctx: AppContext
+): Promise<{ origin: string; close: () => Promise<void> }> {
+  const app = createApp(ctx)
+  const base = ctx.config.basePath
+  const fetch = (request: Request): Response | Promise<Response> => {
+    const url = new URL(request.url)
+    if (!url.pathname.startsWith(base)) {
+      return app.fetch(request)
+    }
+    url.pathname = `/${url.pathname.slice(base.length)}`
+    return app.fetch(new Request(url, request))
+  }
+  const server = serve({ fetch, port: 0, hostname: '127.0.0.1' })
+  await once(server, 'listening')
+  const { port } = server.address() as AddressInfo
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
+          server.closeAllConnections()
+        }
+        server.close(err => (err === undefined ? resolve() : reject(err)))
+      }),
+  }
 }

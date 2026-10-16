@@ -26,10 +26,12 @@ export type {
   ChatHistoryResponse,
   ChatThreadsResponse,
   ChatTurn,
+  TourGrillContext,
 } from '../../src/contract/chat.js'
 export type {
   AgentPulse,
   GenerationJob,
+  GenerationKind,
   GenerationResponse,
   GenerationSkill,
   GenerationSkillResponse,
@@ -73,5 +75,20 @@ export type {
   Theme,
 } from '../../src/contract/settings.js'
 export type { PrState } from '../../src/contract/state.js'
+export type { CodeChunk, Decision, QuizQuestion, TourPick, TourRecord } from '../../src/contract/tour.js'
+export type {
+  ReaderPick,
+  Restatement,
+  TourBootstrap,
+  TourBundle,
+  TourFinished,
+  TourFinishResponse,
+  TourImportResult,
+  SharedTourFetchResponse,
+  TourPageLandmark,
+  TourPageTour,
+  TourReaderState,
+  TourSharing,
+} from '../../src/contract/tour-api.js'
 export type { AddPendingInput, PendingComment } from '../../src/contract/pending.js'
 export type { ReviewEvent } from '../../src/contract/reviews.js'

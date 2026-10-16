@@ -3,15 +3,7 @@
 // the bundle's status, and keep the page current: the empty screen polls until a canvas is
 // published, and the regenerate dialog polls until a newer canvas replaces the one on screen.
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
-import {
-  ApiError,
-  fetchBundle,
-  fetchPatches,
-  fetchSharedCanvas,
-  importCanvas,
-  pollBundle,
-  setApiBase,
-} from './api.js'
+import { fetchBundle, fetchPatches, fetchSharedCanvas, importCanvas, pollBundle, setApiBase } from './api.js'
 import { setChatEnabled } from './ask.js'
 import { setMentionCanvas } from './points.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -29,7 +21,7 @@ import {
   renderStaleState,
   staleBarHtml,
 } from './empty-state.js'
-import { errorCardHtml } from './errors.js'
+import { bannerHtml, errorCardHtml, toEnvelopeError } from './errors.js'
 import { bareHeaderHtml, renderHeader } from './header.js'
 import { wireEnvBadge } from './header-bar.js'
 import { wireDropZone } from './import-zone.js'
@@ -90,26 +82,6 @@ function footerHtml(version, bundle) {
     ? `<span>canvas <span class="mono">${esc(bundle.canvas.headSha.slice(0, 7))}</span> · ${esc(bundle.canvas.source)}</span>`
     : ''
   return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>local review app · ${esc(hostLabel())} operations and AI requests contact their services</span></footer>`
-}
-
-/** @param {ReadonlyArray<string>} warnings */
-function bannerHtml(warnings) {
-  return warnings.length === 0
-    ? ''
-    : `<div class="banner" role="status">${warnings.map(w => esc(w)).join(' · ')}</div>`
-}
-
-/**
- * @param {unknown} err
- * @returns {import('./contract-types.js').ErrorEnvelope['error']}
- */
-function toEnvelopeError(err) {
-  if (!(err instanceof ApiError)) {
-    return { code: 'INTERNAL', message: String(err) }
-  }
-  return err.hint === undefined
-    ? { code: err.code, message: err.message }
-    : { code: err.code, message: err.message, hint: err.hint }
 }
 
 /**

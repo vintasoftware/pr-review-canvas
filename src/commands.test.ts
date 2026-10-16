@@ -23,7 +23,7 @@ import { ConfigError } from './config.js'
 import { GitError } from './git/git.js'
 import { HostCliError } from './host/client.js'
 import { PrNotFoundError } from './host/pr.js'
-import { SkillDirExistsError } from './review/install-skill.js'
+import { listBundledSkills, SkillDirExistsError } from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
 import { ModelInvalidError, PublishError } from './review/publish.js'
 import { makeTempDir, makeTestContext, type TestContext } from './testing/fakes.js'
@@ -501,11 +501,14 @@ describe('install-skill at a terminal', () => {
       const io = fakeIo(false)
       expect(await runInstallSkill({ repoRoot, cwd: repoRoot }, [], io)).toBe(EXIT.ok)
       const root = await realpath(repoRoot)
-      expect(io.out).toEqual([
-        'Copied the pr-review-canvas skill to:',
-        `  claude  ${path.join(root, '.claude', 'skills', 'pr-review-canvas')}`,
-        `  codex   ${path.join(root, '.agents', 'skills', 'pr-review-canvas')}`,
-      ])
+      // Every bundled skill, the canvas skill first, each with both directories.
+      expect(io.out).toEqual(
+        (await listBundledSkills()).flatMap(name => [
+          `Copied the ${name} skill to:`,
+          `  claude  ${path.join(root, '.claude', 'skills', name)}`,
+          `  codex   ${path.join(root, '.agents', 'skills', name)}`,
+        ])
+      )
     } finally {
       await rm(repoRoot, { recursive: true, force: true })
     }

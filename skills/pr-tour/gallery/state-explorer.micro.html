@@ -1,0 +1,202 @@
+<div class="scene" data-technique="state-explorer">
+<div class="controls">
+  <fieldset><legend>send to the transaction</legend><div class="row"><button type="button" data-op="query">query</button><button type="button" data-op="commit">commit</button><button type="button" data-op="rollback">rollback</button></div></fieldset>
+  <fieldset><legend>time</legend><div class="row"><button type="button" data-op="wait">wait 500 ms</button><span class="small se-clock"></span></div></fieldset>
+  <fieldset><legend>elsewhere</legend><div class="row"><button type="button" data-op="evict">100 newer transactions close</button><button type="button" data-op="start">start over</button></div></fieldset>
+</div>
+<div class="se-m">
+  <svg class="se-w" aria-hidden="true"><defs><marker id="se-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z"/></marker><marker id="se-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z"/></marker></defs><g></g></svg>
+  <section class="se-z"><span class="label">clients · open actors</span>
+    <div class="se-n" data-s="Open"><b>Open</b><span class="bar muted se-t"></span><span class="small">timeout 1000 ms</span></div>
+    <div class="se-n se-gone"><b>Aborted</b><span class="small">CachedTx::Aborted · never set, removed</span></div>
+  </section>
+  <section class="se-z se-hero"><span class="label">closed_txs · the last 100 closed</span>
+    <code class="code">LruCache&lt;TxId, <span class="bad strike">()</span> <span class="warn">Option&lt;ClosedTx&gt;</span>&gt;</code>
+    <div class="se-n" data-s="Committed"><b>Committed</b><span class="se-via small">after commit</span><code class="good">Some(ClosedTx::Committed)</code></div>
+    <div class="se-n" data-s="RolledBack"><b>Rolled back</b><span class="se-via small">after rollback</span><code class="good">Some(ClosedTx::RolledBack)</code></div>
+    <div class="se-n" data-s="Expired"><b>Expired</b><span class="se-via small">after the timeout</span><code class="good">Some(ClosedTx::Expired { start_time, timeout })</code></div>
+  </section>
+  <section class="se-z"><span class="label">neither map</span>
+    <div class="se-n" data-s="NotFound"><b>not found</b><span class="small">evicted: 100 newer transactions closed after it</span></div>
+  </section>
+</div>
+<div class="term se-log" data-title="query engine · one interactive transaction · clock simulated"></div>
+<p class="small">Timeout and queries from the PR's test tx_expiration_cycle; every message is the code's.</p>
+<style>
+.se-m{position:relative;display:grid;grid-template-columns:1fr 1.7fr .9fr;column-gap:7rem;width:100%;margin-top:.6rem}
+.se-z{position:relative;display:flex;flex-direction:column;justify-content:center;gap:.8rem;padding:1.9rem .8rem .8rem;border:.12rem dashed var(--line);border-radius:.8rem}
+.se-z>.label{position:absolute;top:.5rem;left:.8rem}
+.se-z>.code{align-self:flex-start;font-size:.85rem}
+.se-hero{border:.2rem solid var(--warn);box-shadow:0 0 0 .35rem color-mix(in srgb,var(--warn) 16%,transparent)}
+.se-n{position:relative;z-index:1;display:flex;flex-direction:column;gap:.25rem;padding:.5rem .75rem;border:.14rem solid var(--line);border-radius:.6rem;background:var(--paper);text-align:left}
+.se-n b{font-size:1.05rem}.se-n code{font:.78rem ui-monospace,monospace;color:var(--c)}
+.se-n .bar{--v:0%;height:.5rem}
+.se-n.on{border:.26rem solid var(--fg);box-shadow:0 .3rem 1rem color-mix(in srgb,var(--fg) 22%,transparent)}
+.se-n.on b::after{content:' ● here';font-size:.72rem}
+.se-gone{border-style:dashed;border-color:var(--bad);opacity:.5}
+.se-gone b{color:var(--bad);text-decoration:line-through}
+.se-via{display:none}
+.se-x{position:absolute;right:-.7rem;top:-.95rem;z-index:2}
+.se-w{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.se-w g path{fill:none;stroke:var(--muted);stroke-width:1.6}
+.se-w g path.hot{stroke:var(--fg);stroke-width:3.2}
+#se-a path{fill:var(--muted)} #se-b path{fill:var(--fg)}
+.se-l{position:absolute;z-index:1;translate:-50% -50%;padding:0 .25rem;background:var(--paper);font-size:.78rem;font-weight:650;color:var(--muted);white-space:nowrap}
+.se-l.hot{color:var(--fg)}
+.se-log{max-width:none;min-height:9.5rem;margin-top:.4rem}
+.se-log .was{color:var(--bad);text-decoration:line-through;opacity:.75}
+.se-chip{position:absolute;left:0;top:0;z-index:3}
+@media (max-width:700px){
+  .se-m{grid-template-columns:1fr;row-gap:1.4rem}
+  .se-z{padding:1.9rem 2.6rem .8rem}
+  .se-z>.label{left:2.6rem}
+  .se-n[data-s=Open]{margin-top:1.4rem}
+  .se-l:not(.q){display:none}
+  .se-via{display:block}
+}
+</style>
+<script>
+// The model: query-engine/core/src/interactive_transactions at the PR head.
+const TIMEOUT = 1000 // ms, as tx_expiration_cycle starts it: start_tx(5000, 1000)
+const CLOSED_TX_CACHE_SIZE = 100
+// TransactionActorManager::get_client: an open actor runs the operation; else the closed_txs
+// entry says why it cannot; else the transaction is not found. `was` is the message before.
+function refusal(state, op, now) {
+  if (state === 'Open') return null
+  if (state === 'NotFound') return {
+    was: 'Transaction not found.',
+    now: "Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.",
+  }
+  return { was: `Transaction already closed: A ${op} cannot be executed on a closed transaction..`, now: `Transaction already closed: ${reason(state, op, now)}.` }
+}
+function reason(state, op, now) {
+  if (state === 'Committed') return `A ${op} cannot be executed on a committed transaction`
+  if (state === 'RolledBack') return `A ${op} cannot be executed on a transaction that was rolled back`
+  return `A ${op} cannot be executed on an expired transaction. The timeout for this transaction was ${TIMEOUT} ms, however ${now} ms passed since the start of the transaction. Consider increasing the interactive transaction timeout or doing less work in the transaction`
+}
+// ITXServer: commit and rollback finish the actor; its sleep(timeout) rolls back as Expired.
+const AFTER = { commit: 'Committed', rollback: 'RolledBack', timeout: 'Expired' }
+
+const $ = q => document.querySelector(q)
+const node = s => $(`.se-n[data-s="${s}"]`)
+let tx
+const say = (call, out = '') => tx.log.push({ t: tx.now, call, out })
+function start() {
+  tx = { state: 'Open', now: 0, log: [] }
+  say('start_tx(5000, 1000, None)')
+  say('createOneTestModel(data: { id: 1 })', '{"id":1}')
+}
+const close = via => Object.assign(tx, { state: AFTER[via], via })
+function fire(op) {
+  tx.refused = null
+  if (op === 'start') return start()
+  if (op === 'wait') {
+    const then = tx.now + 500
+    if (tx.state === 'Open' && then >= TIMEOUT) {
+      tx.now = TIMEOUT
+      close('timeout')
+      say('timeout: the engine rolls back', 'Expired')
+    }
+    return (tx.now = then)
+  }
+  if (op === 'evict') {
+    const call = `${CLOSED_TX_CACHE_SIZE} newer transactions close`
+    if (tx.state === 'Open') return say(call, 'no effect: an open one lives in clients')
+    if (tx.state !== 'NotFound') Object.assign(tx, { from: tx.state, state: 'NotFound', via: 'evict' })
+    return say(call, 'evicted from closed_txs')
+  }
+  const no = refusal(tx.state, op, tx.now)
+  const call = op === 'query' ? 'findManyTestModel { id }' : `${op}_tx(tx_id)`
+  if (no) {
+    tx.refused = op
+    return tx.log.push({ t: tx.now, call, err: no, at: tx.state })
+  }
+  if (op === 'query') return say(call, '[{"id":1}]')
+  close(op)
+  say(call, 'ok')
+}
+
+// Drawing. A refusal shows on the state that refused it and, in full, in the log: the part
+// this PR changed in amber, the message before it struck through.
+function line(e) {
+  const t = `<span class="muted">${String(e.t).padStart(5)} ms</span>  `
+  if (!e.err) return `<span>${t}${e.call}${e.out ? `  <span class="muted">→ ${e.out}</span>` : ''}</span>`
+  const { was, now } = e.err
+  let i = 0
+  while (was[i] === now[i]) i++
+  if (i < was.length) i = now.lastIndexOf(' ', i) + 1
+  const where = e.at === 'NotFound' ? 'in neither map' : `closed_txs.peek(tx_id) → Some(ClosedTx::${e.at})`
+  return `<span>${t}${e.call}  <span class="bad">✕ P2028</span>  <span class="muted">${where}</span></span>` +
+    `<span>Transaction API error: ${now.slice(0, i)}<b class="warn">${now.slice(i)}</b></span>` +
+    `<span class="was">before: Transaction API error: ${was}</span>`
+}
+function render() {
+  document.querySelectorAll('.se-n').forEach(n => n.classList.toggle('on', n.dataset.s === tx.state))
+  document.querySelectorAll('.se-x').forEach(x => x.remove())
+  if (tx.refused) {
+    const here = node(tx.state)
+    here.insertAdjacentHTML('beforeend', `<span class="chip bad se-x">✕ ${tx.refused} refused · P2028</span>`)
+    if (!scene.reducedMotion) here.animate([{ translate: '-.3rem' }, { translate: '.3rem' }, { translate: '0' }], 300)
+  }
+  $('.se-t').style.setProperty('--v', `${Math.min(tx.now / TIMEOUT, 1) * 100}%`)
+  $('.se-clock').textContent = `clock: ${tx.now} ms`
+  $('.se-log').innerHTML = tx.log.slice(-5).map(line).join('')
+  wires()
+}
+
+// Wires, drawn from the laid-out boxes so they follow the desktop row and the phone column:
+// curves across the gaps on a desktop, a bus down the side on a phone.
+const machine = $('.se-m')
+const EDGES = [['Open', 'Committed', 'commit'], ['Open', 'RolledBack', 'rollback'], ['Open', 'Expired', 'timeout · 1000 ms'], ['Committed', 'NotFound'], ['RolledBack', 'NotFound'], ['Expired', 'NotFound']]
+function box(s) {
+  const m = machine.getBoundingClientRect(), r = node(s).getBoundingClientRect()
+  return { l: r.left - m.left, r: r.right - m.left, t: r.top - m.top, y: (r.top + r.bottom) / 2 - m.top }
+}
+function path(a, b, i) {
+  if (b.l > a.r) {
+    const x = (a.r + b.l) / 2
+    return [`M${a.r} ${a.y}C${x} ${a.y} ${x} ${b.y} ${b.l - 3} ${b.y}`, x, (a.y + b.y) / 2]
+  }
+  const left = i < 3, bus = left ? 14 : machine.clientWidth - 14
+  return [`M${left ? a.l : a.r} ${a.y}H${bus}V${b.y}H${left ? b.l - 3 : b.r + 3}`]
+}
+const label = (x, y, text, cls) => machine.insertAdjacentHTML('beforeend', `<span class="se-l ${cls}" style="left:${x}px;top:${y}px">${text}</span>`)
+function wires() {
+  machine.querySelectorAll('.se-l').forEach(l => l.remove())
+  const o = box('Open'), up = 2.2 * parseFloat(getComputedStyle(document.documentElement).fontSize), x = o.r - 90
+  let svg = `<path d="M${x} ${o.t}C${x} ${o.t - up} ${x + 60} ${o.t - up} ${x + 60} ${o.t - 3}" marker-end="url(#se-a)"/>`
+  label(x + 30, o.t - up * 0.78, 'query', 'q')
+  EDGES.forEach(([from, to, say], i) => {
+    const hot = tx.via === 'evict' ? from === tx.from && i > 2 : from === 'Open' && to === AFTER[tx.via]
+    const [d, x, y] = path(box(from), box(to), i)
+    svg += `<path class="${hot ? 'hot' : ''}" d="${d}" marker-end="url(#se-${hot ? 'b' : 'a'})"/>`
+    if (say && x) label(x, y, say, hot ? 'hot' : '')
+  })
+  $('.se-w g').innerHTML = svg
+}
+// The event of a transition rides its wire.
+function travel(from, to, text) {
+  const i = EDGES.findIndex(([f, t]) => f === from && t === to)
+  if (i < 0 || scene.reducedMotion) return
+  const chip = document.createElement('span')
+  chip.className = 'chip se-chip'
+  chip.textContent = text
+  chip.style.offsetPath = `path('${path(box(from), box(to), i)[0]}')`
+  machine.append(chip)
+  chip.animate([{ offsetDistance: '0%' }, { offsetDistance: '100%' }], { duration: 700, easing: 'ease-in-out' }).finished.then(() => chip.remove())
+}
+
+$('.controls').addEventListener('click', e => {
+  const op = e.target.closest('button')?.dataset.op
+  if (!op) return
+  const before = tx.state
+  fire(op)
+  render()
+  travel(before, tx.state, { wait: 'timeout', evict: 'evicted' }[op] ?? op)
+})
+new ResizeObserver(wires).observe(machine)
+// A telling start, the test's timeline: the transaction expires at 1000 ms, commit comes at 1500.
+start(); fire('wait'); fire('wait'); fire('wait'); fire('commit')
+render()
+</script>
+</div>

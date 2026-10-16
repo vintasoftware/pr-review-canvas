@@ -15,6 +15,7 @@ import {
   type TestContext,
 } from '../testing/fakes.js'
 import { BASE_SHA, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import { headerBarHtml } from '../../static/js/header-bar.js'
 import { createApp } from './app.js'
 import { rekeyFixture } from './bundle.js'
@@ -134,6 +135,73 @@ describe('createApp', () => {
       expect(html).toContain('no canvas yet')
       expect(html).toContain('rel="icon" type="image/svg+xml" href="/static/brand.svg"')
       expect(html).toContain('acme/widgets')
+    })
+
+    it('splits the home page into canvases and tours tabs, picked by ?tab', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const canvases = await (await app.request('/', { headers: LOCAL })).text()
+      expect(canvases).toContain(
+        '<a class="home-tab" href="/r/acme/widgets/" aria-current="page">Canvases</a>'
+      )
+      expect(canvases).toContain('<a class="home-tab" href="/r/acme/widgets/?tab=tours">Tours</a>')
+      expect(canvases).toContain('action="/r/acme/widgets/review"')
+      expect(canvases).not.toContain('action="/r/acme/widgets/tour"')
+
+      const tours = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(tours).toContain(
+        '<a class="home-tab" href="/r/acme/widgets/?tab=tours" aria-current="page">Tours</a>'
+      )
+      expect(tours).toContain('action="/r/acme/widgets/tour"')
+      expect(tours).toContain('href="/r/acme/widgets/tour/42"')
+      expect(tours).toContain('no tour yet')
+      expect(tours).toContain('No tour of local work yet.')
+      expect(tours).not.toContain('action="/r/acme/widgets/review"')
+
+      // An unknown tab reads as the canvases one.
+      const other = await (await app.request('/?tab=nope', { headers: LOCAL })).text()
+      expect(other).toContain('href="/r/acme/widgets/" aria-current="page"')
+
+      const redirect = await app.request('/tour?n=42', { headers: LOCAL })
+      expect(redirect.status).toBe(303)
+      expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42')
+    })
+
+    it('offers to generate a tour on the tours tab, and carries the flag to the tour page', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const html = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).toContain(
+        '<button class="cmd" type="submit" name="generate" value="1" title="Open the tour page'
+      )
+      expect(html).toContain('href="/r/acme/widgets/tour/42?generate=1"')
+      expect(html).toContain('href="/r/acme/widgets/tour/branch?generate=1"')
+      expect(html).toContain('href="/r/acme/widgets/tour/uncommitted?generate=1"')
+      const redirect = await app.request('/tour?n=42&generate=1', { headers: LOCAL })
+      expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42?generate=1')
+    })
+
+    it('offers no tour generation on the tours tab when tour.generate is off', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const config = t.ctx.projectConfig.config
+      t.ctx.projectConfig = {
+        ...t.ctx.projectConfig,
+        config: { ...config, tour: { ...config.tour, generate: 'off' } },
+      }
+      const html = await (await createApp(t.ctx).request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).not.toContain('?generate=1')
+      expect(html).not.toContain('generate tour</button>')
+    })
+
+    it('lists the local tours on the tours tab, with a link to their canvas', async () => {
+      const app = createApp(t.ctx)
+      await t.ctx.prs.writePr('branch', syntheticArtifact().pr)
+      await t.ctx.tours.write(HEAD_SHA, syntheticTour({ pr: { ...syntheticArtifact().pr, number: null } }))
+      const html = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).toContain('<a href="/r/acme/widgets/tour/branch">')
+      expect(html).toContain(' · <a href="/r/acme/widgets/review/branch">canvas</a>')
+      expect(html).not.toContain('No tour of local work yet.')
     })
 
     it('offers to generate a canvas when an agent can run, and carries the flag to the review page', async () => {

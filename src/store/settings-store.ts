@@ -57,6 +57,10 @@ canvasComment: null
 # Whether what the review page posts names the canvas. null follows sharing.mentionCanvas
 # in pr-review.config.yml; true or false wins over it for you.
 mentionCanvas: null
+
+# Whether tour publish posts the tour as a PR/MR comment. null follows tour.share in
+# pr-review.config.yml; true or false wins over it for you.
+tourComment: null
 `
 
 export interface SettingsStore {

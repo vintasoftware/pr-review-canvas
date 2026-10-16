@@ -21,7 +21,7 @@ import {
   CLAUDE_SKILLS_DIR,
   CODEX_SKILLS_DIR,
   ignoreLocalSettings,
-  installSkill,
+  installBundledSkills,
   SkillDirExistsError,
 } from './review/install-skill.js'
 import { artifactToModelOutput } from './review/normalize.js'
@@ -34,7 +34,10 @@ import {
   readContext,
   validationInput,
 } from './review/publish.js'
+import { formatTourError } from './contract/tour.js'
 import { describeFixes, fixModel } from './review/fix-model.js'
+import { namedTourDir } from './tour/named-dir.js'
+import { TourInvalidError } from './tour/publish.js'
 import { validateModelOutput } from './review/validate.js'
 import type { AppContext } from './server/context.js'
 import { AppError, CLI_SETUP_CODES, toAppError } from './server/errors.js'
@@ -48,7 +51,7 @@ export interface CliIo {
 }
 
 /** The steps of review generation: the skill reads their JSON, so they print nothing else. */
-const AGENT_COMMANDS: ReadonlySet<string> = new Set(['prepare', 'validate', 'publish'])
+const AGENT_COMMANDS: ReadonlySet<string> = new Set(['prepare', 'validate', 'publish', 'tour'])
 
 /**
  * Takes `--json` out of a command's arguments and decides whether the command prints JSON: with
@@ -94,7 +97,7 @@ export function printErrorEnvelope(io: CliIo, code: ErrorCode, message: string, 
   printJson(io, { error })
 }
 
-function shortSha(sha: string): string {
+export function shortSha(sha: string): string {
   return sha.slice(0, 7)
 }
 
@@ -122,6 +125,16 @@ export function reportFailure(io: CliIo, err: unknown): number {
       io.stdout(formatValidationError(e))
     }
     printErrorEnvelope(io, 'MODEL_INVALID', err.message, 'fix model.json and run publish again')
+    return EXIT.invalid
+  }
+  if (err instanceof TourInvalidError) {
+    for (const e of err.report.errors) io.stdout(formatTourError(e))
+    printErrorEnvelope(
+      io,
+      'MODEL_INVALID',
+      err.message,
+      'fix tour-model.json and the scene files, then publish again'
+    )
     return EXIT.invalid
   }
   if (err instanceof PublishError) {
@@ -180,7 +193,7 @@ export function splitCommonFlags(argv: string[]): {
   }
 }
 
-function parsePrNumber(raw: string): number {
+export function parsePrNumber(raw: string): number {
   const n = Number(raw)
   if (!Number.isInteger(n) || n <= 0) {
     throw new UsageError(`--pr must be a positive integer, got "${raw}"`)
@@ -223,19 +236,18 @@ export function parsePrepareTarget(values: PrepareFlags): PrepareTargetInput {
   throw new UsageError(`prepare needs a target: ${LOCAL_FLAGS}`)
 }
 
+/** The flags of `prepare` and `tour prepare`: the target, and `--force` to prepare again. */
+export const PREPARE_OPTIONS = {
+  pr: { type: 'string' },
+  base: { type: 'string' },
+  head: { type: 'string' },
+  branch: { type: 'boolean' },
+  uncommitted: { type: 'boolean' },
+  force: { type: 'boolean' },
+} as const
+
 export async function runPrepare(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
-  const { values } = parseArgs({
-    args: argv,
-    options: {
-      pr: { type: 'string' },
-      base: { type: 'string' },
-      head: { type: 'string' },
-      branch: { type: 'boolean' },
-      uncommitted: { type: 'boolean' },
-      force: { type: 'boolean' },
-    },
-    strict: true,
-  })
+  const { values } = parseArgs({ args: argv, options: PREPARE_OPTIONS, strict: true })
   const result = await prepare(ctx, parsePrepareTarget(values), {
     force: values.force === true,
     log: phase => io.stderr(phase),
@@ -367,6 +379,9 @@ export function namedCanvasDir(command: string, argv: string[]): string | undefi
     return parseArgs({ args: argv, options: PUBLISH_OPTIONS, allowPositionals: true, strict: false })
       .positionals[0]
   }
+  if (command === 'tour') {
+    return namedTourDir(argv)
+  }
   return undefined
 }
 
@@ -441,7 +456,7 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: 
   })
   const resolve = (flag: string | undefined, fallback: string): string =>
     flag === undefined ? path.join(env.repoRoot, fallback) : path.resolve(env.cwd, flag)
-  const result = await installSkill({
+  const result = await installBundledSkills({
     force: values.force === true,
     targets: [
       { kind: 'claude', dir: resolve(values['claude-dir'], CLAUDE_SKILLS_DIR) },
@@ -453,8 +468,10 @@ export async function runInstallSkill(env: InstallSkillEnv, argv: string[], io: 
     printJson(io, result)
     return EXIT.ok
   }
-  io.stdout(`Copied the ${result.skill} skill to:`)
-  for (const target of result.targets) io.stdout(`  ${target.kind.padEnd(6)}  ${target.path}`)
+  for (const skill of [result, ...result.companions]) {
+    io.stdout(`Copied the ${skill.skill} skill to:`)
+    for (const target of skill.targets) io.stdout(`  ${target.kind.padEnd(6)}  ${target.path}`)
+  }
   return EXIT.ok
 }
 
@@ -506,12 +523,12 @@ export async function runExport(ctx: AppContext, argv: string[], io: CliIo): Pro
  * grows between the check and the read, and a named pipe that reports no size at all, both stop
  * at the cap instead of filling memory.
  */
-async function readZipFile(zipPath: string, shown: string): Promise<Uint8Array> {
+export async function readZipFile(zipPath: string, shown: string): Promise<Uint8Array> {
   let handle: FileHandle
   try {
     handle = await open(zipPath, 'r')
   } catch {
-    throw new PublishError('NOT_FOUND', `${shown} does not exist`, 'pass the canvas zip to import')
+    throw new PublishError('NOT_FOUND', `${shown} does not exist`, 'pass the zip to import')
   }
   const tooLarge = new AppError(
     'CANVAS_TOO_LARGE',

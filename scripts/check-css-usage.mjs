@@ -13,14 +13,25 @@ import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 
-/** @type {Array<{ name: string, css: string[], sources: string[], dynamic: RegExp[] }>} */
+/** The scene kit: generated scenes write its classes, and the scene guide is where they are taught. */
+const SCENE_KIT = 'static/styles/scene.css'
+
+/** @type {Array<{ name: string, css: string[], exclude?: string[], sources: string[], dynamic: RegExp[] }>} */
 const SCOPES = [
   {
     name: 'app',
     css: ['static/styles/*.css'],
+    exclude: [SCENE_KIT],
     sources: ['static/js/**/*.js', 'src/**/*.ts'],
     // highlight.js writes its token classes at run time.
     dynamic: [/^hljs(-|$)/, /^(function|class)_$/],
+  },
+  {
+    // A kit class no guide example or kit entry names is one no generator will ever write.
+    name: 'scene',
+    css: [SCENE_KIT],
+    sources: ['skills/pr-tour/scenes.md', 'static/js/scene-runtime.js', 'src/server/html.ts'],
+    dynamic: [],
   },
   {
     name: 'site',
@@ -30,12 +41,12 @@ const SCOPES = [
   },
 ]
 
-/** @param {string[]} patterns */
-async function files(patterns) {
+/** @param {string[]} patterns @param {string[]} [exclude] */
+async function files(patterns, exclude = []) {
   const out = []
   for (const pattern of patterns) {
     for await (const file of glob(pattern, { cwd: ROOT })) {
-      if (!/\.test\.[jt]s$/.test(file) && !file.includes('__fixtures__')) {
+      if (!/\.test\.[jt]s$/.test(file) && !file.includes('__fixtures__') && !exclude.includes(file)) {
         out.push(file)
       }
     }
@@ -88,7 +99,7 @@ function tokenPattern(name) {
 
 const problems = []
 for (const scope of SCOPES) {
-  const sheets = await read(await files(scope.css))
+  const sheets = await read(await files(scope.css, scope.exclude))
   const sources = await read(await files(scope.sources))
   const markup = sources.map(s => s.text).join('\n')
   // Prefixes of names built from templates, like `move-${side}` or `var(--s${n})`.

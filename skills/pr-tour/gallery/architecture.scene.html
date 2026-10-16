@@ -1,0 +1,66 @@
+<div class="scene" data-technique="architecture">
+  <svg class="ar-defs" aria-hidden="true">
+    <defs>
+      <marker id="ar-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path class="hg" d="M0 0 10 5 0 10z"/></marker>
+      <marker id="ar-m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="hm" d="M0 0 10 5 0 10z"/></marker>
+    </defs>
+  </svg>
+  <svg class="ar ar-d" viewBox="0 0 1000 290" role="img" aria-label="A browser error travels over the HMR WebSocket to the dev server's terminal">
+    <rect class="zone" x="20" y="20" width="330" height="250" rx="14"/><text class="zl" x="38" y="46">browser tab</text>
+    <rect class="zone" x="630" y="20" width="350" height="250" rx="14"/><text class="zl" x="648" y="46">vite dev server · Node</text>
+    <rect class="ctx" x="40" y="62" width="290" height="62" rx="9"/>
+    <text class="nm" x="56" y="88">src/main.ts</text><text class="cd" x="56" y="111">throw new Error('this is test error')</text>
+    <path class="w" d="M185 124V166" marker-end="url(#ar-g)"/><text class="lb good" x="197" y="150">window 'error'</text>
+    <rect class="add" x="40" y="174" width="290" height="74" rx="9"/>
+    <text class="nm" x="56" y="203">shared/forwardConsole.ts</text><text class="lb good" x="56" y="228">new · captures, sends</text>
+    <path class="pipe" d="M350 146H630M350 262H630"/><text class="zl" x="490" y="138" text-anchor="middle">HMR WebSocket</text>
+    <path class="w old" d="M612 178H368" marker-end="url(#ar-m)"/><text class="lb" x="490" y="170" text-anchor="middle">update · full-reload</text>
+    <path class="w hero" d="M330 211H638" marker-end="url(#ar-g)"/><text class="lane" x="490" y="240" text-anchor="middle">vite:forward-console</text>
+    <rect class="tm" x="650" y="58" width="310" height="84" rx="8"/>
+    <text class="tl bad" x="664" y="82">[vite] (client) [Unhandled error]</text><text class="tl bad" x="664" y="103">Error: this is test error</text><text class="tl" x="664" y="126">  &gt; testError src/main.ts:20:8</text>
+    <path class="w" d="M805 174V152" marker-end="url(#ar-g)"/>
+    <rect class="add" x="650" y="174" width="310" height="74" rx="9"/>
+    <text class="nm" x="666" y="203">plugins/forwardConsole.ts</text><text class="lb good" x="666" y="228">new · source-maps the stack</text>
+  </svg>
+  <svg class="ar ar-p" viewBox="0 0 340 654" role="img" aria-label="A browser error travels over the HMR WebSocket to the dev server's terminal">
+    <rect class="zone" x="10" y="10" width="320" height="236" rx="12"/><text class="zl" x="24" y="32">browser tab</text>
+    <rect class="ctx" x="24" y="44" width="292" height="60" rx="8"/>
+    <text class="nm" x="36" y="68">src/main.ts</text><text class="cd" x="36" y="91">throw new Error('this is test error')</text>
+    <path class="w" d="M170 104V142" marker-end="url(#ar-g)"/><text class="lb good" x="182" y="128">window 'error'</text>
+    <rect class="add" x="24" y="150" width="292" height="64" rx="8"/>
+    <text class="nm" x="36" y="176">shared/forwardConsole.ts</text><text class="lb good" x="36" y="200">new · captures, sends</text>
+    <rect class="zone" x="10" y="392" width="320" height="252" rx="12"/><text class="zl" x="24" y="414">dev server · Node</text>
+    <path class="pipe" d="M40 246V392M300 246V392"/><text class="zl" x="52" y="270">HMR WebSocket</text>
+    <path class="w old" d="M70 380V286" marker-end="url(#ar-m)"/><text class="lb" x="80" y="320">update ·</text><text class="lb" x="80" y="338">full-reload</text>
+    <path class="w hero" d="M190 214V414" marker-end="url(#ar-g)"/><text class="lane" x="202" y="330">vite:forward-</text><text class="lane" x="202" y="348">console</text>
+    <rect class="add" x="24" y="424" width="292" height="64" rx="8"/>
+    <text class="nm" x="36" y="450">plugins/forwardConsole.ts</text><text class="lb good" x="36" y="474">new · source-maps the stack</text>
+    <path class="w" d="M170 488V528" marker-end="url(#ar-g)"/>
+    <rect class="tm" x="24" y="536" width="292" height="90" rx="8"/>
+    <text class="tl bad" x="36" y="562">[vite] (client) [Unhandled error]</text><text class="tl bad" x="36" y="584">Error: this is test error</text><text class="tl" x="36" y="608">  &gt; testError src/main.ts:20:8</text>
+  </svg>
+  <style>
+    .ar-defs { position: absolute; width: 0; height: 0; }
+    .ar { width: 100%; height: auto; overflow: visible; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .ar-p { display: none; max-width: 26rem; margin: 0 auto; }
+    @media (max-width: 40rem) { .ar-d { display: none; } .ar-p { display: block; } }
+    .zone { fill: color-mix(in srgb, var(--muted) 6%, var(--paper)); stroke: var(--line); stroke-width: 1.5; }
+    .zl { fill: var(--muted); font-size: 12.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .ctx { fill: var(--paper); stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.5; }
+    .add { fill: color-mix(in srgb, var(--good) 9%, var(--paper)); stroke: var(--good); stroke-width: 2; }
+    .nm { fill: var(--fg); font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cd { fill: var(--muted); font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .lb { fill: var(--muted); font-size: 13px; }
+    .lb.good { fill: var(--good); font-weight: 650; }
+    .w { fill: none; stroke: var(--good); stroke-width: 2.2; }
+    .w.old { stroke: color-mix(in srgb, var(--muted) 70%, transparent); stroke-width: 1.8; }
+    .w.hero { stroke-width: 5; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 60%, transparent)); }
+    .hg { fill: var(--good); } .hm { fill: var(--muted); }
+    .pipe { fill: none; stroke: var(--line); stroke-width: 3; }
+    .lane { fill: var(--good); font: 800 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .tm { fill: #0d1117; }
+    .tl { fill: #e6edf3; font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+    .tl.bad { fill: #ff7b72; }
+    .ar-p .tl { font-size: 12px; }
+  </style>
+</div>

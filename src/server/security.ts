@@ -58,7 +58,7 @@ export const securityMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => 
  * sets dynamic values that way (progress width, layer stripe colors) and mermaid injects a style
  * element per drawing; inline scripts are not, except the two the shell carries under its nonce.
  */
-export function contentSecurityPolicy(nonce: string): string {
+export function contentSecurityPolicy(nonce: string, opts: { frames?: boolean } = {}): string {
   return [
     "default-src 'none'",
     `script-src 'self' 'nonce-${nonce}'`,
@@ -66,9 +66,38 @@ export function contentSecurityPolicy(nonce: string): string {
     "img-src 'self' data: https:",
     "font-src 'self'",
     "connect-src 'self'",
+    // The tour page frames its landmarks' scenes from this server; a frame that navigates
+    // anywhere else is blocked by this too.
+    ...(opts.frames === true ? ["frame-src 'self'"] : []),
     "form-action 'self'",
     "base-uri 'none'",
     "frame-ancestors 'none'",
+    "object-src 'none'",
+  ].join('; ')
+}
+
+/** Where a landmark's scene or micro-world is served: `/tour-scene/<review>/<landmark>/<kind>`. */
+export const SCENE_FRAME_PREFIX = '/tour-scene/'
+/** The pages that frame scenes. */
+export const TOUR_PAGE_PREFIX = '/tour/'
+
+/**
+ * A scene frame's policy. A scene is generated HTML that may run its own scripts, so its frame is
+ * sandboxed with scripts alone: no origin (it cannot reach this server's pages, API, or storage),
+ * forms, popups, modals, or navigation of the tour page. Its styles and scripts are inline, the kit
+ * and the runtime included, so it loads nothing; it has no network, and it may be framed only here.
+ * A micro-world's controls work inside the sandbox: input needs no permission the frame lacks.
+ */
+export function sceneFramePolicy(): string {
+  return [
+    'sandbox allow-scripts',
+    "default-src 'none'",
+    "script-src 'unsafe-inline'",
+    "style-src 'unsafe-inline'",
+    'img-src data: blob:',
+    "form-action 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
     "object-src 'none'",
   ].join('; ')
 }
@@ -89,7 +118,13 @@ export function applyResponseHeaders(res: Response, path: string, nonce: string)
     res.headers.set('cache-control', 'no-store')
   }
   if ((res.headers.get('content-type') ?? '').startsWith('text/html')) {
-    res.headers.set('content-security-policy', contentSecurityPolicy(nonce))
+    const scene = path.startsWith(SCENE_FRAME_PREFIX)
+    res.headers.set(
+      'content-security-policy',
+      scene ? sceneFramePolicy() : contentSecurityPolicy(nonce, { frames: path.startsWith(TOUR_PAGE_PREFIX) })
+    )
+    // A scene's scripts could name a host to have it resolved; the policy does not cover that.
+    if (scene) res.headers.set('x-dns-prefetch-control', 'off')
   }
 }
 

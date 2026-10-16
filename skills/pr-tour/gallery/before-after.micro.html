@@ -1,0 +1,179 @@
+<div class="scene" data-technique="before-after">
+<style>
+.b-twin{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:repeat(9,auto);column-gap:.9rem;width:100%}
+.b-f{border-radius:.6rem;border:.14rem solid var(--c)}
+.b-f.bad{border-style:dashed}
+.b-twin>div{padding:.3rem .7rem}
+.b-k{display:grid;place-items:center;font:600 .72rem ui-monospace,monospace;color:var(--muted)}
+.b-c code{display:block;font:.7rem ui-monospace,monospace;color:var(--muted)}
+.b-c b{font:700 1rem ui-monospace,monospace}
+.b-c.warn{background:color-mix(in srgb,var(--warn) 13%,transparent)}
+.b-c.hero{box-shadow:0 0 0 .2rem var(--warn)}
+.b-c.hero b{font-size:1.6rem;color:var(--warn)}
+.b-c.why{font:.8rem/1.35 system-ui}
+.b-throw{align-self:center;font:600 .85rem ui-monospace,monospace;color:var(--warn)}
+.b-cals{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;width:100%}
+.b-cal{display:grid;grid-template-columns:2rem repeat(31,minmax(0,1fr));gap:.1rem;margin-top:.3rem;font:.6rem system-ui;color:var(--muted);text-align:center}
+.b-cal button{aspect-ratio:1;padding:0;border:0;border-radius:.15rem;background:color-mix(in srgb,var(--fg) 7%,var(--paper))}
+.b-cal .warn{background:color-mix(in srgb,var(--warn) calc(35% + var(--k) * 65%),var(--paper))}
+.b-cal .on{outline:.16rem solid var(--fg)}
+@media (max-width:640px){.b-c code{display:none}.b-n{visibility:hidden}.b-twin{grid-template-columns:1fr 4rem 1fr;column-gap:.3rem}.b-k{font-size:.55rem}.b-twin>div{padding:.25rem .4rem}.b-cals{grid-template-columns:1fr}}
+</style>
+<div class="controls">
+<fieldset><legend>interval</legend><div class="row"><label>start <input type="date" id="b-s"></label><label>end <input type="date" id="b-e"></label></div></fieldset>
+<fieldset><legend>cases from the PR's tests</legend><select id="b-p">
+<option value="2021-08-31 2021-09-30">issue 2611 · Aug 31 → Sep 30, 2021</option>
+<option value="2020-02-29 2020-03-29">issue 1778 · Feb 29 → Mar 29, 2020</option>
+<option value="2022-02-28 2022-04-30">issue 2910 · Feb 28 → Apr 30, 2022</option>
+<option value="2021-02-28 2021-08-31">issue 2470 · Feb 28 → Aug 31, 2021</option>
+<option value="2020-04-01 2020-03-01">start after end · Apr 1 → Mar 1, 2020</option>
+</select></fieldset>
+</div>
+<div class="b-twin" id="b-t"></div>
+<div class="b-cals">
+<div><span class="label">find the input: start dates in <b id="b-y"></b></span><div class="small" id="b-sn"></div><div class="b-cal" id="b-cs"></div></div>
+<div><span class="label">end dates, up to a year on</span><div class="small" id="b-en"></div><div class="b-cal" id="b-ce"></div></div>
+</div>
+<script>
+// The model: intervalToDuration before and after #2616, and the date-fns helpers it calls, at the
+// PR's head (83496d6). Dates are whole local days: hours, minutes, and seconds stay 0.
+const copy = d => new Date(d.getTime()) // toDate
+const compareAsc = (a, b) => Math.sign(a - b)
+function addMonths(date, amount) {
+  date = copy(date)
+  if (!amount) return date
+  const dayOfMonth = date.getDate(), endOfDesiredMonth = copy(date)
+  endOfDesiredMonth.setMonth(date.getMonth() + amount + 1, 0)
+  if (dayOfMonth >= endOfDesiredMonth.getDate()) return endOfDesiredMonth
+  date.setFullYear(endOfDesiredMonth.getFullYear(), endOfDesiredMonth.getMonth(), dayOfMonth)
+  return date
+}
+const addDays = (d, n) => { d = copy(d); if (n) d.setDate(d.getDate() + n); return d }
+const add = (d, { years = 0, months = 0 }) => (months || years ? addMonths(d, months + years * 12) : copy(d))
+const sub = (d, { years = 0, months = 0 }) => addMonths(d, -(months + years * 12))
+const isLastDayOfMonth = d => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() === d.getDate()
+const differenceInDays = (l, r) => Math.round((l - r) / 864e5) || 0 // whole days apart
+function differenceInYears(dirtyDateLeft, dirtyDateRight) {
+  const dateLeft = copy(dirtyDateLeft), dateRight = copy(dirtyDateRight)
+  const sign = compareAsc(dateLeft, dateRight)
+  const difference = Math.abs(dateLeft.getFullYear() - dateRight.getFullYear())
+  dateLeft.setFullYear(1584)
+  dateRight.setFullYear(1584)
+  const result = sign * (difference - Number(compareAsc(dateLeft, dateRight) === -sign))
+  return result === 0 ? 0 : result
+}
+// `log` keeps the branches taken, for the row that explains them
+function differenceInMonths(dirtyDateLeft, dateRight, log = {}) {
+  const dateLeft = copy(dirtyDateLeft)
+  const sign = compareAsc(dateLeft, dateRight)
+  const difference = Math.abs((dateLeft.getFullYear() - dateRight.getFullYear()) * 12 + dateLeft.getMonth() - dateRight.getMonth())
+  let result = 0
+  Object.assign(log, { dateLeft: copy(dateLeft), dateRight, sign, difference })
+  if (difference >= 1) {
+    if (dateLeft.getMonth() === 1 && dateLeft.getDate() > 27) {
+      dateLeft.setDate(30)
+      log.feb = true
+    }
+    dateLeft.setMonth(dateLeft.getMonth() - sign * difference)
+    let isLastMonthNotFull = (log.notFull = compareAsc(dateLeft, dateRight) === -sign)
+    if (isLastDayOfMonth(copy(dirtyDateLeft)) && difference === 1 && compareAsc(dirtyDateLeft, dateRight) === 1) {
+      isLastMonthNotFull = false
+      log.lastDay = true
+    }
+    log.moved = dateLeft
+    result = sign * (difference - Number(isLastMonthNotFull))
+  }
+  return result === 0 ? 0 : result
+}
+function before({ start: dateLeft, end: dateRight }, log) {
+  const sign = compareAsc(dateLeft, dateRight)
+  const years = Math.abs(differenceInYears(dateLeft, dateRight))
+  const remainingMonths = sub(dateLeft, { years: sign * years })
+  const months = Math.abs(differenceInMonths(remainingMonths, dateRight, log))
+  const remainingDays = sub(remainingMonths, { months: sign * months })
+  const days = Math.abs(differenceInDays(remainingDays, dateRight))
+  return { sign, years, remainingMonths, months, remainingDays, days }
+}
+function after({ start, end }, log) {
+  if (start > end) return { error: 'RangeError: The start of an interval cannot be after its end' }
+  const years = differenceInYears(end, start)
+  const remainingMonths = add(start, { years })
+  const months = differenceInMonths(end, remainingMonths, log)
+  const remainingDays = add(remainingMonths, { months })
+  const days = differenceInDays(end, remainingDays)
+  return { years, remainingMonths, months, remainingDays, days }
+}
+const same = (b, a) => res(b) === res(a)
+
+const $ = s => document.querySelector(s)
+const day = s => new Date(`${s}T00:00`)
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const fmt = (d, o = { month: 'short', day: 'numeric', year: 'numeric' }) => d?.toLocaleDateString('en-US', o)
+const res = r => r.error ?? `{ years: ${r.years}, months: ${r.months}, days: ${r.days} }`
+function inside(l, side) {
+  if (!l.difference) return 'Same calendar month: 0.'
+  const full = !l.notFull || l.lastDay, fwd = l.sign < 0
+  return `dateLeft is ${fmt(l.dateLeft)}, the ${side} date.${l.feb ? ' Late Feb: its day becomes 30 first.' : ''} Moved ${fwd ? '+' : '−'}${l.difference} month(s), it lands on ${fmt(l.moved)}, ${l.notFull ? '' : 'not '}${fwd ? 'after' : 'before'} ${fmt(l.dateRight)}${l.notFull ? ': the last month is not full' : ''}${l.lastDay ? `, but ${fmt(l.dateLeft)} is a month's last day, so it is full` : ''}. ${l.difference} − ${+!full} = ${l.difference - !full}.`
+}
+function twin(start, end) {
+  const lb = {}, la = {}, b = before({ start, end }, lb), a = after({ start, end }, la)
+  const rows = [
+    ['order', 'sign = compareAsc(dateLeft, dateRight)', b.sign, 'if (start > end) throw new RangeError(…)', a.error ? 'throws' : 'no'],
+    ['years', 'Math.abs(differenceInYears(dateLeft, dateRight))', b.years, 'differenceInYears(end, start)', a.years],
+    ['remaining<wbr>Months', 'sub(dateLeft, { years: sign * years })', fmt(b.remainingMonths), 'add(start, { years })', fmt(a.remainingMonths)],
+    ['months', 'Math.abs(differenceInMonths(remainingMonths, dateRight))', b.months, 'differenceInMonths(end, remainingMonths)', a.months],
+    ['inside <wbr>difference<wbr>In<wbr>Months', inside(lb, 'start'), , la.dateLeft && inside(la, 'end')],
+    ['remaining<wbr>Days', 'sub(remainingMonths, { months: sign * months })', fmt(b.remainingDays), 'add(remainingMonths, { months })', fmt(a.remainingDays)],
+    ['days', 'Math.abs(differenceInDays(remainingDays, dateRight))', b.days, 'differenceInDays(end, remainingDays)', a.days],
+    ['returns', 'duration', res(b), 'duration', res(a)],
+  ]
+  let hero = !a.error, html = '<i class="b-f bad" style="grid-area:1/1/-1"></i><i class="b-f good" style="grid-area:1/3/-1"></i><div class="label bad" style="grid-area:1/1">before #2616 · removed lines</div><div class="label good" style="grid-area:1/3">after #2616 · added lines</div>'
+  rows.forEach(([k, bc, bv, ac, av], n) => {
+    const why = n == 4, differs = a.error ? !n : n && (why ? b.months !== a.months : `${bv}` !== `${av}`)
+    const tone = differs ? (hero && n > 2 && !why ? ((hero = false), 'warn hero') : 'warn') : ''
+    const cell = (c, v, col) => `<div class="b-c ${tone}${why ? ' why' : ''}" style="grid-area:${n + 2}/${col}">${why ? c : `<code>${c}</code><b>${v}</b>`}</div>`
+    html += cell(bc, bv, 1) + `<div class="b-k" style="grid-area:${n + 2}/2">${k}</div>` + (a.error && n ? '' : cell(ac, av, 3))
+  })
+  $('#b-t').innerHTML = html + (a.error ? `<div class="b-throw" style="grid-area:3/3/-1">throws ${a.error}<br><span class="small">new in #2616</span></div>` : '')
+}
+// Find the input: which start dates, and which end dates for this start, come out different.
+const diffs = s => [...Array(367)].map((_, k) => addDays(s, k)).filter(e => !same(before({ start: s, end: e }), after({ start: s, end: e })))
+let cache = {}
+function cal(el, from, value, w) {
+  let html = '<span></span>' + [...Array(31)].map((_, k) => `<span class="b-n">${k + 1}</span>`).join('')
+  for (let m = 0; m < 12 + (w === 'e'); m++) {
+    const first = new Date(from.getFullYear(), from.getMonth() + m, 1)
+    html += `<span>${fmt(first, { month: 'short' })}</span>`
+    for (let d = 1; d <= 31; d++) {
+      const date = new Date(first.getFullYear(), first.getMonth(), d), v = date.getMonth() === first.getMonth() ? value(date) : null
+      html += v == null ? '<i></i>' : `<button type="button" data-d="${iso(date)}" data-w="${w}" class="${v ? 'warn' : ''}" style="--k:${Math.min(1, v / 10)}"></button>`
+    }
+  }
+  el.innerHTML = html
+}
+function render() {
+  const start = day($('#b-s').value), end = day($('#b-e').value), y = start.getFullYear(), C = (cache[y] ??= {})
+  if (isNaN(start) || isNaN(end)) return
+  twin(start, end)
+  for (let d = new Date(y, 0, 1); d.getFullYear() === y && !(iso(d) in C); d = addDays(d, 1)) C[iso(d)] = diffs(d).length
+  const hit = Object.keys(C).filter(k => C[k]), total = hit.reduce((x, k) => x + C[k], 0)
+  $('#b-y').textContent = y
+  $('#b-sn').textContent = `${total} of ${(Object.keys(C).length * 367).toLocaleString()} intervals differ${total ? `; each starts on day ${Math.min(...hit.map(k => +k.slice(8)))} of a month or later` : ''}`
+  cal($('#b-cs'), new Date(y, 0, 1), d => (d.getFullYear() === y ? C[iso(d)] : null), 's')
+  const ends = new Set(diffs(start).map(iso))
+  $('#b-en').textContent = `${ends.size} of 367 differ for ${fmt(start)}`
+  cal($('#b-ce'), start, d => (d >= start && d <= addDays(start, 366) ? 10 * ends.has(iso(d)) : null), 'e')
+  document.querySelectorAll(`[data-d="${iso(start)}"][data-w=s],[data-d="${iso(end)}"][data-w=e]`).forEach(b => b.classList.add('on'))
+}
+const pick = v => { [$('#b-s').value, $('#b-e').value] = v.split(' '); render() }
+$('#b-p').addEventListener('change', e => pick(e.target.value))
+$('#b-s').addEventListener('change', render)
+$('#b-e').addEventListener('change', render)
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-d]'), d = b && day(b.dataset.d)
+  if (b?.dataset.w === 'e') pick(`${$('#b-s').value} ${b.dataset.d}`)
+  else if (b) pick(`${b.dataset.d} ${iso(diffs(d)[0] ?? addDays(d, 30))}`)
+})
+pick($('#b-p').value)
+</script>
+</div>

@@ -12,6 +12,7 @@ import { stat } from 'node:fs/promises'
 import type { Hono } from 'hono'
 import { type CheckoutSweeper, startCheckoutSweep } from '../chat/checkout-sweep.js'
 import { readEnv, type RuntimeConfig } from '../config.js'
+import { createHostClient } from '../host/client.js'
 import type { ProjectFlags } from '../load-context.js'
 import { createApp } from '../server/app.js'
 import { type AppContext, type CloneShared, createCloneShared } from '../server/context.js'
@@ -171,6 +172,11 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
         checkouts: shared.checkouts,
         readSettings: () => settings.read(),
         log: line => opts.log(`[${name}] ${line}`),
+        base: {
+          checkouts: shared.baseCheckouts,
+          prState: async number =>
+            (await config.host.fetchPrMeta(createHostClient(config.host.cli), config.repo, number)).state,
+        },
       }),
     })
     return shared

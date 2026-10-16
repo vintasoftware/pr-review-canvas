@@ -150,7 +150,17 @@ export async function addToRunningServer(
   return { server, added }
 }
 
-export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): Promise<number> {
+/**
+ * `pr-review open` and `pr-review tour open`: adds the project to the running server and opens a
+ * review, or its tour, in the browser. Without a target, the open PR of the checked-out branch, or
+ * the project home (its tours tab for a tour).
+ */
+export async function runOpen(
+  deps: HubCommandDeps,
+  argv: string[],
+  io: CliIo,
+  page: 'review' | 'tour' = 'review'
+): Promise<number> {
   const { repo, dataDir, rest } = splitCommonFlags(argv)
   const { values, positionals } = parseArgs({
     args: rest,
@@ -162,13 +172,14 @@ export async function runOpen(deps: HubCommandDeps, argv: string[], io: CliIo): 
     allowPositionals: true,
     strict: true,
   })
-  const target = reviewTarget('open', positionals)
+  const target = reviewTarget(page === 'tour' ? 'tour open' : 'open', positionals)
   const { server, added } = await addToRunningServer(deps, io, repo, {
     dataDir,
     chatAgent: values['chat-agent'],
     chatModel: values['chat-model'],
   })
-  const url = `${server.origin}${added.basePath}${target === undefined ? 'start' : `review/${target}`}`
+  const start = page === 'tour' ? 'start?page=tour' : 'start'
+  const url = `${server.origin}${added.basePath}${target === undefined ? start : `${page}/${target}`}`
   if (shouldOpen(deps.env, values['no-open'])) {
     deps.openBrowser(url)
   }
