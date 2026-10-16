@@ -900,7 +900,7 @@ describe('the tour', () => {
     )
     expect(tourGenerationMode(syntheticTourBundle({ status: 'stale' }))).toMatchObject({
       label: 'update',
-      heading: 'Tour the current head',
+      heading: 'Update the tour',
     })
     expect(tourGenerationMode(syntheticTourBundle())).toMatchObject({ label: 'regenerate' })
   })
@@ -918,6 +918,12 @@ describe('the tour', () => {
     expect(text).toContain('Follows the default skill of pr-review 1.4.0')
     expect(document.querySelector('input[name="force"]')).toBeNull()
     expect(document.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('/pr-tour 42')
+    // An outdated tour is updated from the earlier one unless the reader asks for a blank page.
+    document.body.innerHTML = tourGenerationStartHtml(syntheticTourBundle({ status: 'stale' }))
+    expect(document.querySelector('input[name="force"]')?.hasAttribute('checked')).toBe(false)
+    expect(document.body.textContent).toContain(
+      'Start from a blank page instead of updating the earlier tour'
+    )
     expect(tourGenerationStartHtml(missingTourBundle({ shares: true, local: 'branch' }))).toContain(
       'nothing is posted'
     )

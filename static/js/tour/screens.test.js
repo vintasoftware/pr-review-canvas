@@ -636,7 +636,7 @@ describe('the other screens', () => {
       }),
     }
     document.body.innerHTML = staleBarHtml(stale)
-    expect(document.querySelector('#stale-generate')?.textContent).toBe('tour the current head')
+    expect(document.querySelector('#stale-generate')?.textContent).toBe('update the tour')
     expect(staleBarHtml({ ...stale, chat: { enabled: false, acpx: false } })).not.toContain('stale-generate')
 
     document.body.innerHTML = tourHeaderHtml({ ...bundleWith(), chat }, LOOK)
@@ -670,7 +670,15 @@ describe('the other screens', () => {
       ...bundle,
       stale: { tourHeadSha: 'a'.repeat(40), currentHeadSha: 'c'.repeat(40), relation: 'unrelated' },
     })
-    expect(unrelated).toContain('on a commit the head does not contain')
+    expect(unrelated).toContain('which is not in this branch any more')
+    expect(ancestor).toContain('<strong>Tour is outdated.</strong>')
+    expect(
+      staleBarHtml({
+        ...bundle,
+        local: 'branch',
+        stale: { tourHeadSha: 'a'.repeat(40), currentHeadSha: 'c'.repeat(40), relation: 'unrelated' },
+      })
+    ).toContain('your work has moved on to')
     document.body.innerHTML = helpHtml()
     expect(document.querySelectorAll('dt')).toHaveLength(6)
     expect(document.querySelector('[data-act="close-help"]')).not.toBeNull()

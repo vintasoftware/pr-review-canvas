@@ -97,6 +97,8 @@ export const TourConfigSchema = z.object({
    * every reader, `off` nobody: the pr-tour skill still runs from a terminal.
    */
   generate: z.enum(['on', 'author', 'off']),
+  /** A tour of a later commit updates the newest tour of an ancestor, rather than starting blank. */
+  incremental: z.boolean(),
 })
 export type TourConfig = z.infer<typeof TourConfigSchema>
 
@@ -119,6 +121,7 @@ const PartialTourConfigSchema = z.object({
   models: GenerationModelsSchema.optional(),
   guide: z.string().min(1).optional(),
   generate: z.enum(['on', 'author', 'off']).optional(),
+  incremental: z.boolean().optional(),
 })
 
 export const DEFAULT_TOUR_CONFIG: TourConfig = {
@@ -133,6 +136,7 @@ export const DEFAULT_TOUR_CONFIG: TourConfig = {
   models: {},
   guide: 'docs/pr-tour.md',
   generate: 'author',
+  incremental: true,
 }
 
 export const ProjectConfigSchema = z.object({
@@ -289,6 +293,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
       models: { ...user.tour?.models },
       guide: user.tour?.guide ?? DEFAULT_TOUR_CONFIG.guide,
       generate: user.tour?.generate ?? DEFAULT_TOUR_CONFIG.generate,
+      incremental: user.tour?.incremental ?? DEFAULT_TOUR_CONFIG.incremental,
     },
   }
   if (user.rulebook !== undefined) {

@@ -155,6 +155,14 @@ export function carriedRecord(previous: TourArtifact | null, model: TourModel): 
   return record
 }
 
+/**
+ * The record a tour that updates an earlier commit's starts with: the author's picks whose decision
+ * key survived. Who toured the earlier tour took another change, so nobody has toured this one yet.
+ */
+export function basisRecord(basis: TourArtifact | null, model: TourModel): TourRecord {
+  return { ...carriedRecord(basis, model), touredBy: [] }
+}
+
 export async function publishTour(
   ctx: AppContext,
   tourDir: string,
@@ -198,7 +206,10 @@ export async function publishTour(
   const artifact = tourArtifactOf(context, result.output, {
     generatedAt: now,
     generator,
-    record: carriedRecord(previous, result.output),
+    record:
+      previous === null && context.basis !== undefined
+        ? basisRecord(await ctx.tours.read(context.basis.tourSha).catch(() => null), result.output)
+        : carriedRecord(previous, result.output),
   })
   const worktree = context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE
   await ctx.tours.write(context.headSha, artifact, { worktree })

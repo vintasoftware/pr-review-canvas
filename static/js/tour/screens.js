@@ -619,15 +619,20 @@ export function staleBarHtml(bundle) {
   if (stale === undefined) {
     return ''
   }
-  const behind =
-    stale.relation === 'ancestor'
-      ? `${plural(stale.commitsBehind ?? 0, 'commit')} behind`
-      : 'on a commit the head does not contain'
+  const tour = `<span class="mono">${esc(stale.tourHeadSha.slice(0, 7))}</span>`
+  const head = `<span class="mono">${esc(stale.currentHeadSha.slice(0, 7))}</span>`
+  // The canvas's outdated bar says the same in the same words.
+  const summary =
+    bundle.local !== undefined
+      ? `The tour is for ${tour}; your work has moved on to ${head} since it was generated.`
+      : stale.relation === 'ancestor'
+        ? `The tour is for ${tour}, ${esc(plural(stale.commitsBehind ?? 0, 'commit'))} behind the head ${head}.`
+        : `The tour is for ${tour}, which is not in this branch any more; the head is ${head}.`
   const shared = bundle.local === undefined ? ` ${fetchSharedHtml()}` : ''
   const action = canGenerate(bundle)
-    ? ` <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">tour the current head</button> or run <code>${esc(bundle.skillCommand)}</code>; picks carry by decision key.`
-    : ` Run <code>${esc(bundle.skillCommand)}</code> for a tour of the current commit; picks carry by decision key.`
-  return `<div class="tour-stale" role="status">This tour is of <span class="mono">${esc(stale.tourHeadSha.slice(0, 7))}</span>, ${esc(behind)} the head <span class="mono">${esc(stale.currentHeadSha.slice(0, 7))}</span>.${action}${shared}</div>`
+    ? ` <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">update the tour</button> or run <code>${esc(bundle.skillCommand)}</code>; picks carry by decision key.`
+    : ` Run <code>${esc(bundle.skillCommand)}</code> to update it; picks carry by decision key.`
+  return `<div class="tour-stale" role="status"><strong>Tour is outdated.</strong> You are reading an older commit. ${summary}${action}${shared}</div>`
 }
 
 export function helpHtml() {

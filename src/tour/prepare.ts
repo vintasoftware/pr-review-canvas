@@ -1,18 +1,26 @@
 // `pr-review tour prepare`: fetch the target, build derived/, compute the budget and the blast
-// radius, and write prompt.md + context.json into the tour directory. The generation skill reads
+// radius, find the earlier tour this one updates, and write prompt.md + context.json into the tour
+// directory. The generation skill reads
 // those two files and writes the model and the scenes; `tour publish` reads context.json back.
-import { appendFile, mkdir, readdir, rm } from 'node:fs/promises'
+import { appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { PrepareTargetInput } from '../contract/generation-context.js'
-import type { LocalKey } from '../contract/review-key.js'
+import type { PrepareTarget, PrepareTargetInput } from '../contract/generation-context.js'
+import type { Pr } from '../contract/review-artifact.js'
+import type { LocalKey, ReviewKey } from '../contract/review-key.js'
 import { resolveTourSharing } from '../contract/settings.js'
 import {
   blastRadiusOf,
   computeBudget,
   effectiveTourCaps,
   stateRequiredFor,
+  type TourArtifact,
+  type TourBasis,
   type TourContext,
+  type TourModel,
 } from '../contract/tour.js'
+import type { Derived } from '../store/derived-store.js'
+import { fileDelta } from '../review/incremental.js'
+import { tourBelongsTo } from '../store/tour-store.js'
 import { UNCOMMITTED_STATE } from '../git/local-target.js'
 import { loadPromptFile } from '../prompt-files.js'
 import { PACKAGE_ROOT } from '../paths.js'
@@ -48,6 +56,8 @@ export interface TourPrepareResult {
   budget: TourContext['budget']
   /** The guide's path when the project has one; null says to run `/pr-tour-setup`. */
   guide: string | null
+  /** The earlier tour this one updates, when there is one: its model and its pictures. */
+  basis?: { tourSha: string; modelPath: string; scenesDir: string }
   local?: { review: LocalKey; base: string; headRef: string; uncommitted: boolean }
 }
 
@@ -64,6 +74,60 @@ async function clearTourDir(tourDir: string): Promise<void> {
   for (const name of names) {
     if (!KEPT_ON_PREPARE.has(name)) await rm(path.join(tourDir, name), { recursive: true, force: true })
   }
+}
+
+/** The review a target's tours are filed under; a ref comparison has none, so it has no basis. */
+function ownerOf(target: PrepareTarget): ReviewKey | null {
+  return target.kind === 'pr' ? target.number : target.kind === 'local' ? target.source : null
+}
+
+/** A stored tour as the model the generator writes: its pictures go to their own files. */
+export function tourModelOf(artifact: TourArtifact): TourModel {
+  return {
+    landmarks: artifact.landmarks.map(({ scene: _scene, micro: _micro, ...rest }) => rest),
+    decisions: artifact.decisions,
+    quiz: artifact.quiz,
+    notToured: artifact.notToured,
+  }
+}
+
+/**
+ * The tour this one updates: the newest tour of the same review whose head is an ancestor of this
+ * one, copied into `<tourDir>/basis/` as a model and its picture files. Null when the tour is written
+ * from a blank page: `--force`, `tour.incremental: false`, a ref comparison, no such tour, or one
+ * whose diff this clone can no longer read.
+ */
+async function resolveTourBasis(
+  ctx: AppContext,
+  target: PrepareTarget,
+  pr: Pr,
+  head: Derived,
+  tourDir: string
+): Promise<TourBasis | null> {
+  const owner = ownerOf(target)
+  if (owner === null) return null
+  const index = await ctx.tours.readIndex()
+  const candidates = Object.entries(index.tours)
+    .filter(([sha, entry]) => sha !== pr.headSha && tourBelongsTo(entry, owner))
+    .sort(([, a], [, b]) => (a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0))
+  for (const [sha] of candidates) {
+    if (!(await ctx.git.isAncestor(sha, pr.headSha))) continue
+    const artifact = await ctx.tours.read(sha)
+    if (artifact === null) return null
+    const basis = await ctx.derived.readOrBuild({ headSha: sha, mergeBaseSha: artifact.mergeBaseSha })
+    if (basis === null) return null
+    const dir = path.join(tourDir, 'basis')
+    const scenesDir = path.join(dir, 'scenes')
+    await mkdir(scenesDir, { recursive: true })
+    const modelPath = path.join(dir, 'tour-model.json')
+    await writeJsonAtomic(modelPath, tourModelOf(artifact))
+    for (const l of artifact.landmarks) {
+      if (l.scene !== undefined) await writeFile(path.join(scenesDir, `${l.id}.scene.html`), l.scene)
+      if (l.micro !== undefined) await writeFile(path.join(scenesDir, `${l.id}.micro.html`), l.micro)
+    }
+    return { tourSha: sha, modelPath, scenesDir, files: fileDelta(basis, head) }
+  }
+  return null
 }
 
 /** A guide has a run recipe when it says how to run the app under a heading that names it. */
@@ -154,6 +218,10 @@ export async function prepareTour(
   }
   await clearTourDir(tourDir)
   await mkdir(scenesDir, { recursive: true })
+  // `--force` means start over, so it never reads a basis, whatever the project config says.
+  const basis =
+    opts.force || !config.tour.incremental ? null : await resolveTourBasis(ctx, target, pr, derived, tourDir)
+  if (basis !== null) context.basis = basis
   const template =
     opts.template ??
     (await loadPromptFile('tour.md', undefined, { repoRoot: ctx.config.repoRoot, overrides: config.prompts }))
@@ -163,5 +231,9 @@ export async function prepareTour(
   )
   await writeJsonAtomic(result.contextPath, context)
   await appendFile(path.join(tourDir, 'tour.log'), `${context.preparedAt} prepared ${pr.headSha}\n`, 'utf8')
-  return { ...result, status: 'prepared', blastRadius, budget }
+  const prepared: TourPrepareResult = { ...result, status: 'prepared', blastRadius, budget }
+  if (basis !== null) {
+    prepared.basis = { tourSha: basis.tourSha, modelPath: basis.modelPath, scenesDir: basis.scenesDir }
+  }
+  return prepared
 }

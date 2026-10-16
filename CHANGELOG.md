@@ -33,6 +33,10 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   every permission approved, since it writes scene files, previews them, and runs try-it recipes.
   One generation of either kind runs at a time in a clone. `pr-review tour generate` does the same
   from a terminal, with `generate`'s flags.
+- A tour of a later commit updates the earlier one, as an incremental canvas does: what the new
+  commits left untouched carries, the rest is judged again, and the author's picks carry by decision
+  key (`tour.incremental`, on by default; `--force` starts blank). An outdated tour says so, as an
+  outdated canvas does, and offers the update, with a blank-page choice.
 - `tour.generate` (`author` by default, `on`, or `off`) decides who generates a tour from the review
   app. Its agent runs with every permission while reading a diff that could steer it, so by
   default only the pull request's author, or the owner of local work, may.

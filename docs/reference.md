@@ -991,6 +991,15 @@ runs `tour validate`, `preview`, and `checkout`, and runs try-it recipes. It cal
 up to `generation.maxRepairRounds` times. One generation of either kind runs at a time in a clone
 (`GET|POST|DELETE /api/tours/<n>/generate`).
 
+A tour of a later commit updates the newest tour of the same review whose head is an ancestor,
+as an incremental canvas updates its basis (`tour.incremental`, on by default; `--force` starts
+blank). Prepare copies that tour's model and pictures into `<tourDir>/basis/`, prints `basis`
+(`tourSha`, `modelPath`, `scenesDir`), and the prompt lists each file of the diff as unchanged,
+changed, new, or gone against it: what names only unchanged files carries, the rest is judged
+again, and a decision keeps its key while it still stands. Publishing such a tour carries the
+author's picks by decision key; nobody has toured it yet. A tour whose head moved shows as
+outdated, with an update command.
+
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
 `scenesDir`, `sceneGuidePath`, `models` (`tour.models` over `generation.models`), `sharing`,
 `blastRadius`, `budget`, `guide`, and `status`. The **blast radius** is the set of `highRisk`
@@ -1136,6 +1145,7 @@ Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-r
 | `tour.models`                  | `{}`              | Per agent id, over `generation.models`                                                                              |
 | `tour.guide`                   | `docs/pr-tour.md` | The committed guide, relative to the repository root                                                                |
 | `tour.generate`                | `author`          | Who generates a tour from the review app: `author` (the change's author, or local work), `on` (every reader), `off` |
+| `tour.incremental`             | `true`            | A later commit's tour updates the newest tour of an ancestor; `false` starts every tour blank                       |
 
 The prompt template is `prompts/tour.md`, and the grilling's seed is `prompts/tour-grill.md`; both
 are overridable as `prompts: { tour.md: <path>, tour-grill.md: <path> }` like the others. The scene guide the generator reads is `skills/pr-tour/scenes.md`.

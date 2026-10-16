@@ -186,19 +186,21 @@ export function generationStartHtml(bundle, refused = null, skill = null) {
 }
 
 /**
- * What generating does on the tour page: the first tour, one for the current head, or this head's
- * written again. A tour has no incremental run, so there is no blank-page choice.
+ * What generating does on the tour page: the first tour, an update of an outdated one, or this
+ * head's written again. Updating starts from the earlier tour, so the reader may pick a blank page
+ * instead; a head that has its own tour is always written again from one.
  * @param {TourBundle} bundle
- * @returns {{ label: string, title: string, heading: string, text: string }}
+ * @returns {{ label: string, title: string, heading: string, text: string, choice: boolean }}
  */
 export function tourGenerationMode(bundle) {
   const what = bundle.local ? 'this local work' : 'this PR'
   if (bundle.status === 'stale') {
     return {
       label: 'update',
-      title: `Generate the tour of ${what} for its current head`,
-      heading: 'Tour the current head',
-      text: 'The agent writes a tour of the current head. The tour of the earlier commit stays until the new one is published, and your picks carry by decision key.',
+      title: `Update the tour of ${what} for its current head`,
+      heading: 'Update the tour',
+      text: 'The agent updates the tour of the earlier commit for the current head: what the new commits left untouched is carried over, the rest is judged again, and your picks carry by decision key. The earlier tour stays until the new one is published.',
+      choice: true,
     }
   }
   if (bundle.status === 'ready') {
@@ -207,6 +209,7 @@ export function tourGenerationMode(bundle) {
       title: `Generate the tour of ${what} again`,
       heading: 'Regenerate the tour',
       text: 'The agent writes the tour of the current head again. The current tour stays until the new one is published.',
+      choice: false,
     }
   }
   return {
@@ -214,6 +217,7 @@ export function tourGenerationMode(bundle) {
     title: `Generate a tour of ${what}`,
     heading: 'Generate the tour',
     text: 'The agent reads the diff, draws a picture for each landmark, looks at them, and writes the tour. It usually takes ten minutes or more.',
+    choice: false,
   }
 }
 
@@ -240,6 +244,9 @@ export function tourGenerationStartHtml(bundle, refused = null, skill = null) {
     `<p class="hint">${esc(mode.text)}</p>` +
     `<p class="hint">It runs ${agent} through acpx with every permission approved, from this repository's folder: it writes the tour's files, runs pr-review's tour commands, and runs the project's try-it recipes in a checkout of its own. The model is the one the project config names for it. ${sharing}</p>` +
     (skill === null ? '' : skillHtml(skill)) +
+    (mode.choice
+      ? '<label class="gen-force"><input type="checkbox" name="force"> Start from a blank page instead of updating the earlier tour</label>'
+      : '') +
     skillFallbackHtml(bundle.skillCommand) +
     '<div class="dialog-actions">' +
     '<button class="cmd" type="submit" value="close">cancel</button>' +

@@ -15,7 +15,8 @@ Arguments: `<pr-number> [--force]`, `branch [--base <ref>] [--force]`,
 `uncommitted [--base <ref>] [--force]`, or `--base <ref> --head <ref> [--force]`. `--force`
 regenerates a tour that already exists for the head commit: prepare clears the tour directory but
 the published `tour.json` and the log, so you start fresh while the page keeps showing the old tour
-until your publish replaces it.
+until your publish replaces it. Without `--force`, a tour of a later commit updates the newest tour
+of an ancestor commit (`basis` below); `--force` writes it from a blank page.
 
 ## Model choice
 
@@ -75,6 +76,9 @@ Progress goes to stderr. The last stdout line is JSON:
   interview then, unless the user says to skip it, and run prepare again so the prompt carries the
   new guide. A tour without a guide has no try-it recipes and names non-functional
   requirements only where the code makes them plain.
+- `basis`, when present, is the earlier tour this one updates: `tourSha`, its model at `modelPath`,
+  and its pictures in `scenesDir`. The prompt's "The earlier tour" section says what carries and
+  what you judge again. Tell the user the tour updates the one of `tourSha`.
 - `status: "exists"` means a tour already exists for this head. Stop and tell the user: "tour
   already exists for <headSha>; run with --force to regenerate".
 - An `{ "error": … }` line means prepare failed. Report the code, message, and hint verbatim and

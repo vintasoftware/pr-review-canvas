@@ -3,7 +3,7 @@
 // decision, quiz, not toured, blast radius, guide.
 import { z } from 'zod'
 import { GeneratorSchema, PrSchema, RepoSchema, FileEntrySchema, type FileEntry } from './review-artifact.js'
-import { PrepareTargetSchema } from './generation-context.js'
+import { FileDeltaSchema, PrepareTargetSchema } from './generation-context.js'
 import { HighRiskRuleSchema } from '../project-config.js'
 
 /**
@@ -343,6 +343,16 @@ export const TourOptionsSchema = z.object({
  * `context.json` of a tour: everything the generator and `tour publish` need. Written by
  * `tour prepare`, so a config change between the two commands does not change the rules.
  */
+export const TourBasisSchema = z.object({
+  tourSha: z.string().regex(/^[0-9a-f]{40}$/),
+  /** The earlier tour as a model, the form `<model>` takes. */
+  modelPath: z.string().min(1),
+  /** Its scene and micro-world files, named as `<scenes>` names them. */
+  scenesDir: z.string().min(1),
+  files: FileDeltaSchema,
+})
+export type TourBasis = z.infer<typeof TourBasisSchema>
+
 export const TourContextSchema = z.object({
   version: z.literal(1),
   target: PrepareTargetSchema,
@@ -375,6 +385,11 @@ export const TourContextSchema = z.object({
   options: TourOptionsSchema,
   maxRepairRounds: z.number().int().positive(),
   preparedAt: z.string(),
+  /**
+   * The tour of an ancestor commit this one updates, when there is one (`tour.incremental`): its
+   * model and pictures copied into `basis/`, and how each file of the head's diff relates to its.
+   */
+  basis: TourBasisSchema.optional(),
 })
 export type TourContext = z.infer<typeof TourContextSchema>
 

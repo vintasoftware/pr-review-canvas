@@ -15,6 +15,7 @@ import {
   gitFor42,
   gitForLocal,
   HEAD_SHA,
+  SYNTHETIC_DIFF,
 } from '../testing/synthetic.js'
 import { syntheticTour, syntheticTourModel, writeTourFiles } from '../testing/synthetic-tour.js'
 import { buildTourComment, readTourComment, tourCommentSummary } from './comment.js'
@@ -579,5 +580,96 @@ describe('the tour prompt', () => {
       sceneGuidePath: '/g.md',
     })
     expect(long).toContain('not inlined')
+  })
+})
+
+describe('a tour that updates an earlier one', () => {
+  const OLD = 'e'.repeat(40)
+  let oldGit = gitFor42()
+
+  /** PR 42 whose head has an ancestor commit, of the same diff, with a tour the author took. */
+  async function withOldTour(incremental = true) {
+    const git = gitFor42()
+    Object.assign(git.options.refs ?? {}, { old: OLD })
+    Object.assign(git.options.diffs ?? {}, { [`${BASE_SHA}..${OLD}`]: SYNTHETIC_DIFF })
+    git.options.ancestors = { ...git.options.ancestors, [`${OLD}..${HEAD_SHA}`]: true }
+    t = await makeTestContext({ git, gh: ghFor42() })
+    oldGit = git
+    t.ctx.projectConfig = {
+      config: { ...DEFAULT_PROJECT_CONFIG, tour: { ...DEFAULT_PROJECT_CONFIG.tour, incremental } },
+      warnings: [],
+      source: null,
+    }
+    await t.ctx.tours.write(
+      OLD,
+      syntheticTour({
+        headSha: OLD,
+        generatedAt: '2026-09-09T12:00:00.000Z',
+        record: {
+          touredBy: [{ login: 'octocat', at: '2026-09-09T13:00:00.000Z' }],
+          author: {
+            finishedAt: '2026-09-09T13:00:00.000Z',
+            prompt: '# Keep it',
+            picks: { 'sum-over-product': { pick: 'keep' } },
+          },
+        },
+      })
+    )
+  }
+
+  const prepare = (force = false) =>
+    prepareTour(t.ctx, { kind: 'pr', number: 42 }, { force, log: () => undefined })
+
+  it('copies the earlier tour and its pictures, says how the files relate, and tells the agent what carries', async () => {
+    await withOldTour()
+    const result = await prepare()
+    const basisDir = path.join(result.tourDir, 'basis')
+    expect(result.basis).toEqual({
+      tourSha: OLD,
+      modelPath: path.join(basisDir, 'tour-model.json'),
+      scenesDir: path.join(basisDir, 'scenes'),
+    })
+    const model = JSON.parse(await readFile(result.basis!.modelPath, 'utf8'))
+    expect(model.landmarks.map((l: { id: string }) => l.id)).toEqual(
+      syntheticTourModel().landmarks.map(l => l.id)
+    )
+    expect(model.landmarks.every((l: object) => !('scene' in l))).toBe(true)
+    expect((await readdir(result.basis!.scenesDir)).sort()).toEqual(
+      syntheticTourModel()
+        .landmarks.map(l => `${l.id}.scene.html`)
+        .sort()
+    )
+    const context = TourContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
+    // The head's diff is the old commit's, so every file carries.
+    expect(context.basis?.files).toMatchObject({ changed: [], added: [], removed: [] })
+    expect(context.basis?.files.unchanged).toEqual(context.files.map(f => f.path).sort())
+    const prompt = await readFile(result.promptPath, 'utf8')
+    expect(prompt).toContain('## The earlier tour')
+    expect(prompt).toContain(`This head builds on \`${OLD}\``)
+    expect(prompt).toContain('; changed: none; new: none. These are gone from the diff: none.')
+  })
+
+  it("carries the author's picks by decision key on publish, and nobody's tour of the old commit", async () => {
+    await withOldTour()
+    const result = await prepare()
+    await writeTourFiles(result.tourDir, result.scenesDir)
+    await publishTour(t.ctx, result.tourDir, OPTS)
+    const record = (await t.ctx.tours.read(HEAD_SHA))?.record
+    expect(record?.author?.picks).toEqual({ 'sum-over-product': { pick: 'keep' } })
+    expect(record?.touredBy).toEqual([])
+  })
+
+  it('starts blank with --force, with tour.incremental off, and with no tour of an ancestor', async () => {
+    await withOldTour()
+    expect((await prepare(true)).basis).toBeUndefined()
+    await t.cleanup()
+    await withOldTour(false)
+    expect((await prepare()).basis).toBeUndefined()
+    await t.cleanup()
+    await withOldTour()
+    delete oldGit.options.ancestors?.[`${OLD}..${HEAD_SHA}`]
+    const unrelated = await prepare()
+    expect(unrelated.basis).toBeUndefined()
+    expect(await readFile(unrelated.promptPath, 'utf8')).not.toContain('## The earlier tour')
   })
 })

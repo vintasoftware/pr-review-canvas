@@ -118,3 +118,4 @@ tour:
   #   claude: opus
   guide: docs/pr-tour.md # the committed guide /pr-tour-setup writes
   generate: author # who may generate from the review app: author, on (every reader), or off
+  incremental: true # a later commit's tour updates the earlier tour; --force starts blank

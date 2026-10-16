@@ -86,6 +86,35 @@ function pathsMarkdown(ctx: TourContext): string {
   ].join('\n')
 }
 
+/** The files of one side of the delta, as inline code, or a word when there are none. */
+function pathList(paths: string[]): string {
+  return paths.length === 0 ? 'none' : paths.map(p => `\`${p}\``).join(', ')
+}
+
+/**
+ * The earlier tour this one updates, and how to update it; empty when the tour starts blank. A
+ * change the reader asked for in the earlier tour may have rebuilt the implementation, so nothing is
+ * kept because it was there: what the head left untouched carries, the rest is judged again.
+ */
+function basisMarkdown(ctx: TourContext): string {
+  const basis = ctx.basis
+  if (basis === undefined) return ''
+  const f = basis.files
+  return [
+    '## The earlier tour',
+    '',
+    `This head builds on \`${basis.tourSha}\`, an ancestor that already has a tour. Update that tour rather than writing one from a blank page. Its model is \`${basis.modelPath}\`, in the form \`<model>\` takes, and its pictures are in \`${basis.scenesDir}\`, named as \`<scenes>\` names them. Read both before you plan.`,
+    '',
+    `Against the earlier tour's diff, these files of this diff are unchanged: ${pathList(f.unchanged)}; changed: ${pathList(f.changed)}; new: ${pathList(f.added)}. These are gone from the diff: ${pathList(f.removed)}.`,
+    '',
+    "- **Carry** a landmark, decision, or question whose code names only unchanged files: keep its text, its id or key, and its picture (copy the file from the earlier tour's pictures into `<scenes>`). Its hunk ids and line numbers follow the head's diff.",
+    '- **Judge again** everything that names a changed, new, or gone file: rewrite it, redraw its picture, drop it, or write a new one. The new commits may have carried out a change a reader asked for in the earlier tour, and rebuilt the code around it.',
+    "- Keep the `key` of a decision that still stands, so the reader's pick carries to this tour. A decision the new commits settled, by taking its alternative or something else, is no longer open: drop it, or write the new trade-off under a new key.",
+    '- The background and the world landmarks describe the whole change as it is now, not what changed since the earlier tour.',
+    '- The budget, the caps, and every rule below hold as for a new tour; carried content counts against them.',
+  ].join('\n')
+}
+
 export function tourSchemaMarkdown(ctx: TourContext): string {
   const schema = z.toJSONSchema(tourModelSchema(ctx.caps))
   return `\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\``
@@ -130,6 +159,7 @@ export function renderTourPrompt(
       ? 'A product decision carries a `tryIt` recipe: the commands to run the change (from the guide, as the reader runs them), which synthetic data to use, and what to look at. Before publishing, run the recipe yourself in the head checkout, with its `port` and `scratch`, and set `verified: true` only when you saw what `look` describes; a recipe you could not run is left out. A step is one line: a bare command shows as code; a step in words (open a page, pick a layer) marks its commands with backticks.'
       : 'Try-it recipes are off (`tour.tryIt`, or the guide has no run recipe): write no `tryIt`.',
     MAX_REPAIR_ROUNDS: String(ctx.maxRepairRounds),
+    BASIS: basisMarkdown(ctx),
     SCHEMA: tourSchemaMarkdown(ctx),
   }
   return template.replace(/\{\{([A-Z_]+)\}\}/g, (_m, name: string) => {

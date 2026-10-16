@@ -98,6 +98,8 @@ Every changed file with its hunk ids and headers.
 
 {{DIFFS}}
 
+{{BASIS}}
+
 ## Blast radius and budget
 
 {{BUDGET}}
