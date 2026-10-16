@@ -166,7 +166,7 @@ describe('runGenerate', () => {
     expect(deps.calls.slice(1).every(c => c.path === 'prs/42/generate' && c.method === 'GET')).toBe(true)
     expect(deps.sleeps.every(ms => ms === GENERATE_POLL_MS)).toBe(true)
     expect(io.err).toEqual([
-      'pr-review generate: generating #42 with claude (opus) in acme/widgets; follow it at http://localhost:3010/r/acme/widgets/review/42',
+      'pr-review generate: generating the canvas of #42 with claude (opus) in acme/widgets; follow it at http://localhost:3010/r/acme/widgets/review/42',
       'pr-review generate: Ctrl+C stops waiting; the generation goes on in the server',
       'pr-review generate: Preparing the diff',
       'pr-review generate: Checking out the head',
@@ -180,6 +180,47 @@ describe('runGenerate', () => {
       'shared on the pull request: https://github.com/acme/widgets/pull/42#c1',
     ])
     expect(deps.opened).toEqual([])
+  })
+
+  it("generates a tour under the tour's routes, page, and words", async () => {
+    tmp = await makeTempDir()
+    const tourJob = (over: Partial<GenerationJob>) => job({ kind: 'tour', key: 'branch', ...over })
+    const deps = fakeDeps({
+      cwd: tmp,
+      started: tourJob({}),
+      polls: [
+        tourJob({ phase: 'generating' }),
+        tourJob({ ...DONE, kind: 'tour', key: 'branch', sharing: { status: 'off' } }),
+      ],
+    })
+    const io = fakeIo()
+    expect(await runGenerate(deps, ['branch', '--base', 'main', '--out', 'tour.zip'], io, 'tour')).toBe(0)
+    expect(deps.calls[0]).toEqual({
+      path: 'tours/branch/generate',
+      method: 'POST',
+      body: { force: false, base: 'main', share: false },
+    })
+    expect(deps.calls.at(-1)).toEqual({
+      path: `tours/branch/export?headSha=${HEAD}`,
+      method: 'GET',
+      body: undefined,
+    })
+    expect(io.err.slice(0, 3)).toEqual([
+      'pr-review tour generate: generating the tour of the branch review with claude (opus) in acme/widgets; follow it at http://localhost:3010/r/acme/widgets/tour/branch',
+      'pr-review tour generate: Ctrl+C stops waiting; the generation goes on in the server',
+      'pr-review tour generate: Preparing the diff',
+    ])
+    expect(io.err).toContain('pr-review tour generate: The agent is writing the tour')
+    expect(io.out).toEqual([
+      `published the tour of the branch review at ccccccc: http://localhost:3010/r/acme/widgets/tour/branch`,
+      `wrote ${path.join(tmp, 'tour.zip')}; open it with \`pr-review tour import <zip>\``,
+    ])
+    await expect(runGenerate(fakeDeps({ branchPr: null }), [], fakeIo(), 'tour')).rejects.toThrow(
+      'name a review, as `tour generate 42`, `tour generate branch`, or `tour generate uncommitted`'
+    )
+    await expect(runGenerate(fakeDeps(), ['42', '--base', 'main'], fakeIo(), 'tour')).rejects.toThrow(
+      '--base is for `tour generate branch` and `tour generate uncommitted`'
+    )
   })
 
   it('prints one JSON line with --json', async () => {

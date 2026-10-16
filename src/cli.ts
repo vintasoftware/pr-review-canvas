@@ -35,7 +35,7 @@ import {
   runningPort,
 } from './hub/client.js'
 import { type HubCommandDeps, runOpen, runServe, type StartedServer } from './hub/commands.js'
-import { runGenerate } from './hub/generate.js'
+import { type GenerateDeps, runGenerate } from './hub/generate.js'
 import { hubHome } from './hub/home.js'
 import { createHubApp } from './hub/hub-app.js'
 import { createHub, type ProjectRegistration } from './hub/hub.js'
@@ -252,6 +252,11 @@ async function upgradeCommand(argv: string[]): Promise<number> {
   )
 }
 
+/** What `generate` and `tour generate` run with: the hub's deps, and the calls to a project. */
+function generateDeps(): GenerateDeps {
+  return { ...hubDeps(), callProject, download: downloadFromProject, sleep: ms => sleep(ms) }
+}
+
 export async function main(argv: string[]): Promise<number> {
   // `pnpm review -- --port 3011` forwards the `--` itself; drop it so parseArgs sees the flags.
   const [command, ...args] = argv.filter(a => a !== '--')
@@ -276,16 +281,7 @@ export async function main(argv: string[]): Promise<number> {
       case 'open':
         return await runOpen(hubDeps(), rest, io)
       case 'generate':
-        return await runGenerate(
-          {
-            ...hubDeps(),
-            callProject,
-            download: downloadFromProject,
-            sleep: ms => sleep(ms),
-          },
-          rest,
-          io
-        )
+        return await runGenerate(generateDeps(), rest, io)
       case 'install-skill':
         return await installSkillCommand(rest)
       case 'doctor':
@@ -293,6 +289,11 @@ export async function main(argv: string[]): Promise<number> {
       case 'upgrade':
         return await upgradeCommand(rest)
       default: {
+        // `tour generate` talks to the running server, as `generate` does; the other tour steps
+        // work on this checkout's files.
+        if (command === 'tour' && rest[0] === 'generate') {
+          return await runGenerate(generateDeps(), rest.slice(1), io, 'tour')
+        }
         const { repo, dataDir, rest: own } = splitCommonFlags(rest)
         const ctx = await buildContext(repo, dataDir, {
           canvasDir: namedCanvasDir(command, own),

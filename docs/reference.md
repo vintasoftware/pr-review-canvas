@@ -966,6 +966,7 @@ same targets `prepare` takes. [pr-tour-setup](../skills/pr-tour-setup/SKILL.md) 
 the tour is generated with.
 
 ```text
+pr-review tour generate [<n>|branch|uncommitted] [--force] [--base <ref>] [--agent claude|codex] [--model <id>] [--out <file|dir>] [--open] [--json]
 pr-review tour prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
 pr-review tour validate <tour-model.json> --tour <dir> [--human]
 pr-review tour preview <tourDir> [--landmark <id>]
@@ -977,6 +978,15 @@ pr-review tour checkout <tourDir> head|base [--remove]
 pr-review tour export (--pr <n> | --branch | --uncommitted | --head <sha> [--pr <n>]) [--out <file|dir>]
 pr-review tour import <zip> [--pr <n>] [--force]
 ```
+
+`tour generate` is `generate` for the tour: it runs the job in the running server, as the tour
+page's generate command does, and waits for it. The server runs prepare and publish; between them
+the chat agent follows the pr-tour skill (the project's copy, else the shipped one) from the
+repository root, through acpx with every permission approved, because the skill writes scene files,
+runs `tour validate`, `preview`, and `checkout`, and runs try-it recipes. It calls this server's own
+`pr-review` over the server's data dir. A publish that rejects the tour sends the problems back,
+up to `generation.maxRepairRounds` times. One generation of either kind runs at a time in a clone
+(`GET|POST|DELETE /api/tours/<n>/generate`).
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
 `scenesDir`, `sceneGuidePath`, `models` (`tour.models` over `generation.models`), `sharing`,

@@ -31,7 +31,8 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   canvas: from the empty page, the stale bar, the header, or the tours tab. The server prepares
   and publishes; between those, the agent runs the pr-tour skill from the repository root with
   every permission approved, since it writes scene files, previews them, and runs try-it recipes.
-  One generation of either kind runs at a time in a clone.
+  One generation of either kind runs at a time in a clone. `pr-review tour generate` does the same
+  from a terminal, with `generate`'s flags.
 - Tours travel as zips like canvases: `pr-review tour export` and `tour import`, the tour page's
   export command, and a drop zone on a pull request with no tour.
 

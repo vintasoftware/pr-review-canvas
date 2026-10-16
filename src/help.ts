@@ -110,8 +110,12 @@ const COMMANDS: CommandHelp[] = [
   {
     name: 'tour <step>',
     summary:
-      'The tour, a guided pass over a change: the same steps as a canvas, apart from it. The steps: prepare, validate, preview, publish, plan, gallery, hunk, checkout, export, import.',
+      'The tour, a guided pass over a change: the same steps as a canvas, apart from it. The steps: generate, prepare, validate, preview, publish, plan, gallery, hunk, checkout, export, import.',
     flags: [
+      {
+        form: 'generate [<n>|branch|uncommitted]',
+        detail: 'in the running server, as generate does a canvas',
+      },
       { form: 'prepare --pr <n> [--force]', detail: 'or --branch, --uncommitted, --base <ref> --head <ref>' },
       { form: 'validate <model> --tour <dir>', detail: '[--human]' },
       { form: 'preview <dir> [--landmark <id>]', detail: 'screenshots of every landmark' },
@@ -126,6 +130,7 @@ const COMMANDS: CommandHelp[] = [
     ],
     notes: [
       'A tour is stored beside the canvases and shared as its own comment. The pr-tour skill runs these.',
+      'tour generate takes the flags generate does (--force, --base, --agent, --model, --out, --open, --json). Its agent runs the pr-tour skill from the repository root with every permission approved: it writes the scene files, runs these steps, and runs try-it recipes.',
     ],
   },
   {

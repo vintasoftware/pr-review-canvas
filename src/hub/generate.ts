@@ -1,6 +1,7 @@
-// `pr-review generate`: the review app's generate command, from a terminal. The job runs in the
-// running server, as one started from the page does, so one generation still runs at a time in a
-// clone and the page shows it; this command starts it, reports where it is, and waits for its end.
+// `pr-review generate` and `pr-review tour generate`: the review and tour pages' generate command,
+// from a terminal. The job runs in the running server, as one started from the page does, so one
+// generation still runs at a time in a clone and the page shows it; this command starts it,
+// reports where it is, and waits for its end.
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { writeCanvasZip } from '../canvas/export.js'
@@ -8,6 +9,7 @@ import { type CliIo, EXIT, printJson, splitCommonFlags, UsageError } from '../co
 import {
   type GenerateInput,
   type GenerationJob,
+  type GenerationKind,
   type GenerationResponse,
   type GenerationSharing,
   type GenerationTargetResponse,
@@ -22,6 +24,30 @@ import { addToRunningServer, type HubCommandDeps, reviewTarget, shouldOpen } fro
 
 /** How often the command asks the server where the job is. */
 export const GENERATE_POLL_MS = 2_000
+
+/** What differs between the canvas's command and the tour's: the words, the routes, and the page. */
+interface GenerateKind {
+  kind: GenerationKind
+  /** The command after `pr-review`, as messages name it. */
+  typed: string
+  /** The whole command, which prefixes its progress lines. */
+  command: string
+  /** The API folder of a review's job and zip. */
+  api: 'prs' | 'tours'
+  /** The page a review's artifact shows on. */
+  page: 'review' | 'tour'
+}
+
+const KINDS: Record<GenerationKind, GenerateKind> = {
+  canvas: { kind: 'canvas', typed: 'generate', command: 'pr-review generate', api: 'prs', page: 'review' },
+  tour: {
+    kind: 'tour',
+    typed: 'tour generate',
+    command: 'pr-review tour generate',
+    api: 'tours',
+    page: 'tour',
+  },
+}
 
 export interface GenerateDeps extends HubCommandDeps {
   /** A call to the project's API under its base path, as `prs/42/generate`. */
@@ -55,9 +81,10 @@ async function waitForEnd(
   io: CliIo,
   server: RunningServer,
   basePath: string,
-  started: GenerationJob
+  started: GenerationJob,
+  what: GenerateKind
 ): Promise<GenerationJob> {
-  const route = `prs/${keyToString(started.key)}/generate`
+  const route = `${what.api}/${keyToString(started.key)}/generate`
   let shown = ''
   for (let job = started; ;) {
     if (!isRunning(job)) {
@@ -65,7 +92,7 @@ async function waitForEnd(
     }
     const step = `${job.phase}:${job.round}`
     if (step !== shown) {
-      io.stderr(`pr-review generate: ${phaseLine(job)}`)
+      io.stderr(`${what.command}: ${phaseLine(job)}`)
       shown = step
     }
     await deps.sleep(GENERATE_POLL_MS)
@@ -75,9 +102,9 @@ async function waitForEnd(
         if (err instanceof AppError) throw err
         throw new AppError(
           'SERVER_NOT_RUNNING',
-          'the server stopped answering while the canvas was being generated',
+          `the server stopped answering while the ${what.kind} was being generated`,
           503,
-          'start it with `pr-review serve` and run generate again'
+          `start it with \`pr-review serve\` and run \`${what.command}\` again`
         )
       })
     // The server keeps each review's last job, so none means it restarted and lost this one.
@@ -86,7 +113,7 @@ async function waitForEnd(
         'GENERATION_FAILED',
         `the server no longer knows the generation of ${label(started.key)}; it may have restarted`,
         503,
-        'open the review page to see whether the canvas was published'
+        `open the ${what.page} page to see whether the ${what.kind} was published`
       )
     }
     // Another job of this review began since: this one ended, and its result is gone.
@@ -95,7 +122,7 @@ async function waitForEnd(
         'GENERATION_FAILED',
         `the generation of ${label(started.key)} was replaced by another one`,
         409,
-        'open the review page to see the one that runs now'
+        `open the ${what.page} page to see the one that runs now`
       )
     }
     job = answer.job
@@ -103,17 +130,29 @@ async function waitForEnd(
 }
 
 /** The review a run with no target generates for: the open PR of the checked-out branch. */
-async function branchReview(deps: GenerateDeps, server: RunningServer, basePath: string): Promise<ReviewKey> {
+async function branchReview(
+  deps: GenerateDeps,
+  server: RunningServer,
+  basePath: string,
+  what: GenerateKind
+): Promise<ReviewKey> {
   const { prNumber } = await deps.callProject<GenerationTargetResponse>(server, basePath, 'generate/target')
   if (prNumber === null) {
+    const { typed } = what
     throw new UsageError(
-      'this branch has no open pull request: name a review, as `generate 42`, `generate branch`, or `generate uncommitted`'
+      `this branch has no open pull request: name a review, as \`${typed} 42\`, \`${typed} branch\`, or \`${typed} uncommitted\``
     )
   }
   return prNumber
 }
 
-export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo): Promise<number> {
+export async function runGenerate(
+  deps: GenerateDeps,
+  argv: string[],
+  io: CliIo,
+  kind: GenerationKind = 'canvas'
+): Promise<number> {
+  const what = KINDS[kind]
   const { repo, dataDir, rest } = splitCommonFlags(argv)
   const { values, positionals } = parseArgs({
     args: rest,
@@ -128,11 +167,11 @@ export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo)
     allowPositionals: true,
     strict: true,
   })
-  const target = reviewTarget('generate', positionals)
+  const target = reviewTarget(what.typed, positionals)
   const input: GenerateInput = { force: values.force === true }
   if (values.base !== undefined) {
     if (target === undefined || !isLocalKey(target)) {
-      throw new UsageError('--base is for `generate branch` and `generate uncommitted`')
+      throw new UsageError(`--base is for \`${what.typed} branch\` and \`${what.typed} uncommitted\``)
     }
     input.base = values.base
   }
@@ -143,7 +182,7 @@ export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo)
     input.agent = values.agent
   }
   if (values.model !== undefined) input.model = values.model
-  // A canvas to send as a file stays off the pull request.
+  // A canvas or tour to send as a file stays off the pull request.
   if (values.out !== undefined) input.share = false
 
   // The project keeps the flags `open` or `serve` saved with it, unless this run names a data dir.
@@ -153,30 +192,30 @@ export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo)
     repo,
     dataDir === undefined ? undefined : { dataDir }
   )
-  const key = target ?? (await branchReview(deps, server, added.basePath))
+  const key = target ?? (await branchReview(deps, server, added.basePath, what))
   const { job: started } = await deps.callProject<GenerationResponse>(
     server,
     added.basePath,
-    `prs/${keyToString(key)}/generate`,
+    `${what.api}/${keyToString(key)}/generate`,
     { method: 'POST', body: JSON.stringify(input) }
   )
   if (started === null) {
     throw new AppError('INTERNAL', 'the server started no generation', 502)
   }
-  const url = `${server.origin}${added.basePath}review/${keyToString(key)}`
+  const url = `${server.origin}${added.basePath}${what.page}/${keyToString(key)}`
   io.stderr(
-    `pr-review generate: generating ${label(key)} with ${started.agent}${started.model === null ? '' : ` (${started.model})`} in ${added.slug}; follow it at ${url}`
+    `${what.command}: generating the ${kind} of ${label(key)} with ${started.agent}${started.model === null ? '' : ` (${started.model})`} in ${added.slug}; follow it at ${url}`
   )
-  io.stderr('pr-review generate: Ctrl+C stops waiting; the generation goes on in the server')
+  io.stderr(`${what.command}: Ctrl+C stops waiting; the generation goes on in the server`)
 
-  const job = await waitForEnd(deps, io, server, added.basePath, started)
-  const { headSha, sharing } = published(io, job)
+  const job = await waitForEnd(deps, io, server, added.basePath, started, what)
+  const { headSha, sharing } = published(io, job, what)
   let zipPath: string | undefined
   if (values.out !== undefined) {
     const zip = await deps.download(
       server,
       added.basePath,
-      `prs/${keyToString(key)}/export?headSha=${headSha}`
+      `${what.api}/${keyToString(key)}/export?headSha=${headSha}`
     )
     // The name is the server's: only its last part is taken, so it cannot point elsewhere.
     zipPath = await writeCanvasZip(path.resolve(deps.cwd, values.out), deps.cwd, {
@@ -201,7 +240,7 @@ export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo)
     })
     return EXIT.ok
   }
-  io.stdout(`published the canvas of ${label(key)} at ${headSha.slice(0, 7)}: ${url}`)
+  io.stdout(`published the ${kind} of ${label(key)} at ${headSha.slice(0, 7)}: ${url}`)
   if (sharing.status === 'shared') {
     io.stdout(`shared on the pull request: ${sharing.url}`)
   } else if (sharing.status === 'failed') {
@@ -211,7 +250,9 @@ export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo)
     io.stdout('kept local: sharing is off')
   }
   if (zipPath !== undefined) {
-    io.stdout(`wrote ${zipPath}; open it with \`pr-review import <zip>\``)
+    io.stdout(
+      `wrote ${zipPath}; open it with \`${kind === 'canvas' ? 'pr-review import' : 'pr-review tour import'} <zip>\``
+    )
   }
   return EXIT.ok
 }
@@ -220,13 +261,17 @@ export async function runGenerate(deps: GenerateDeps, argv: string[], io: CliIo)
  * What a job that ended published: its head, and what publish did with the canvas. A job that
  * ended any other way throws its error, which the command reports as it reports any failure.
  */
-function published(io: CliIo, job: GenerationJob): { headSha: string; sharing: GenerationSharing } {
+function published(
+  io: CliIo,
+  job: GenerationJob,
+  what: GenerateKind
+): { headSha: string; sharing: GenerationSharing } {
   if (job.phase === 'cancelled') {
     throw new AppError(
       'GENERATION_FAILED',
       `the generation of ${label(job.key)} was stopped`,
       409,
-      'start it again with `pr-review generate`'
+      `start it again with \`${what.command}\``
     )
   }
   if (job.phase === 'failed' && job.error !== undefined) {
