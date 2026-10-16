@@ -10,6 +10,8 @@ import { skillContent, skillState, stampSkill } from './skill-content.js'
 
 /** The canvas skill: the first one, and the one whose presence says a project is set up. */
 export const SKILL_NAME = 'pr-review-canvas'
+/** The tour skill, which a tour generation follows. */
+export const TOUR_SKILL_NAME = 'pr-tour'
 /** Where the package keeps the skills it ships: one directory with a SKILL.md per skill. */
 export const SKILLS_ROOT = path.join(PACKAGE_ROOT, 'skills')
 

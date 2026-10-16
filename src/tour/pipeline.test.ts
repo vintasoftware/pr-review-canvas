@@ -16,7 +16,7 @@ import {
   gitForLocal,
   HEAD_SHA,
 } from '../testing/synthetic.js'
-import { syntheticTourModel } from '../testing/synthetic-tour.js'
+import { syntheticTourModel, writeTourFiles } from '../testing/synthetic-tour.js'
 import { buildTourComment, readTourComment, tourCommentSummary } from './comment.js'
 import { namedTourDir, tourStepCreatesDataDir } from './named-dir.js'
 import { runTour } from './commands.js'
@@ -44,13 +44,6 @@ async function prepared(extra: Parameters<typeof makeTestContext>[0] = {}) {
 }
 
 /** The synthetic model with its scenes as files, the way the skill writes them. */
-async function writeModel(tourDir: string, scenesDir: string, model = syntheticTourModel()): Promise<void> {
-  const landmarks = model.landmarks.map(({ scene: _scene, ...l }) => l)
-  await writeFile(path.join(tourDir, 'tour-model.json'), JSON.stringify({ ...model, landmarks }))
-  await mkdir(scenesDir, { recursive: true })
-  for (const l of model.landmarks) await writeFile(path.join(scenesDir, `${l.id}.scene.html`), l.scene ?? '')
-}
-
 describe('tour prepare', () => {
   it('writes prompt.md, context.json, and an empty scenes dir, with the budget and the blast radius', async () => {
     const result = await prepared()
@@ -104,7 +97,7 @@ describe('tour prepare', () => {
     const context = TourContextSchema.parse(JSON.parse(await readFile(first.contextPath, 'utf8')))
     expect(context.options.tryIt).toBe(true)
     expect(await readFile(first.promptPath, 'utf8')).toContain('pnpm start')
-    await writeModel(first.tourDir, first.scenesDir)
+    await writeTourFiles(first.tourDir, first.scenesDir)
     await publishTour(t.ctx, first.tourDir, { ...OPTS })
     const again = await prepareTour(t.ctx, { kind: 'pr', number: 42 }, { force: false, log: () => undefined })
     expect(again.status).toBe('exists')
@@ -152,7 +145,7 @@ describe('tour publish', () => {
         },
       }),
     })
-    await writeModel(result.tourDir, result.scenesDir)
+    await writeTourFiles(result.tourDir, result.scenesDir)
     const published = await publishTour(t.ctx, result.tourDir, OPTS)
     expect(published).toMatchObject({
       status: 'published',
@@ -186,7 +179,7 @@ describe('tour publish', () => {
   it('refuses an invalid model with one line per problem and exits 5 through the CLI', async () => {
     const result = await prepared()
     const model = syntheticTourModel()
-    await writeModel(result.tourDir, result.scenesDir, { ...model, landmarks: model.landmarks.slice(1) })
+    await writeTourFiles(result.tourDir, result.scenesDir, { ...model, landmarks: model.landmarks.slice(1) })
     const err = await publishTour(t.ctx, result.tourDir, OPTS).catch(e => e)
     expect(err).toBeInstanceOf(TourInvalidError)
     const { io, out } = capture()
@@ -197,18 +190,22 @@ describe('tour publish', () => {
     expect(await readFile(path.join(result.tourDir, 'tour.log'), 'utf8')).toMatch(/invalid attempts=1/)
   })
 
-  it('keeps the tour local when sharing is off, and exports a zip when the post fails', async () => {
+  it('keeps the tour local when sharing or the run turns it off, and exports a zip when the post fails', async () => {
     const off = await prepared()
     t.ctx.projectConfig = {
       config: { ...DEFAULT_PROJECT_CONFIG, tour: { ...DEFAULT_PROJECT_CONFIG.tour, share: 'off' } },
       warnings: [],
       source: null,
     }
-    await writeModel(off.tourDir, off.scenesDir)
+    await writeTourFiles(off.tourDir, off.scenesDir)
     expect((await publishTour(t.ctx, off.tourDir, OPTS)).sharing).toEqual({ status: 'off' })
     await t.cleanup()
     const failing = await prepared()
-    await writeModel(failing.tourDir, failing.scenesDir)
+    await writeTourFiles(failing.tourDir, failing.scenesDir)
+    // A run that turns sharing off (`tour generate --out`) posts nothing, whatever the config says.
+    expect((await publishTour(t.ctx, failing.tourDir, { ...OPTS, share: false })).sharing).toEqual({
+      status: 'off',
+    })
     const published = await publishTour(t.ctx, failing.tourDir, OPTS)
     expect(published.sharing.status).toBe('failed')
     if (published.sharing.status === 'failed') {
@@ -240,7 +237,7 @@ describe('tour publish', () => {
 
   it('refuses a tour dir from another data dir, and a head that moved', async () => {
     const result = await prepared()
-    await writeModel(result.tourDir, result.scenesDir)
+    await writeTourFiles(result.tourDir, result.scenesDir)
     await expect(publishTour(t.ctx, path.join(t.dataDir, 'elsewhere'), OPTS)).rejects.toThrow(
       'has no context.json'
     )
@@ -273,7 +270,7 @@ describe('tour zip and comment', () => {
 
   it('exports a stored tour and summarises who toured it', async () => {
     const result = await prepared()
-    await writeModel(result.tourDir, result.scenesDir)
+    await writeTourFiles(result.tourDir, result.scenesDir)
     t.ctx.projectConfig = {
       config: { ...DEFAULT_PROJECT_CONFIG, tour: { ...DEFAULT_PROJECT_CONFIG.tour, share: 'off' } },
       warnings: [],
@@ -298,7 +295,7 @@ describe('tour zip and comment', () => {
 describe('tour preview', () => {
   it('screenshots every landmark on a desktop and a phone through a quiet server', async () => {
     const result = await prepared()
-    await writeModel(result.tourDir, result.scenesDir)
+    await writeTourFiles(result.tourDir, result.scenesDir)
     const shots: Array<{ url: string; width: number }> = []
     const preview = await previewTour(
       t.ctx,
@@ -385,7 +382,7 @@ describe('tour preview', () => {
       { kind: 'refs', base: 'main', head: 'feat/b' },
       { force: false, log: () => undefined }
     )
-    await writeModel(refs.tourDir, refs.scenesDir)
+    await writeTourFiles(refs.tourDir, refs.scenesDir)
     expect((await previewTour(t.ctx, refs.tourDir, deps)).status).toBe('no-page')
   })
 })
@@ -399,12 +396,12 @@ describe('the tour CLI', () => {
       source: null,
     }
     const model = path.join(result.tourDir, 'tour-model.json')
-    await writeModel(result.tourDir, result.scenesDir)
+    await writeTourFiles(result.tourDir, result.scenesDir)
     const invalid = capture()
     await writeFile(model, '{')
     expect(await runTour(t.ctx, ['validate', model, '--tour', result.tourDir], invalid.io)).toBe(5)
     expect(JSON.parse(invalid.out[0]!).errors[0].code).toBe('SCHEMA')
-    await writeModel(result.tourDir, result.scenesDir)
+    await writeTourFiles(result.tourDir, result.scenesDir)
     const human = capture()
     expect(await runTour(t.ctx, ['validate', model, '--tour', result.tourDir, '--human'], human.io)).toBe(0)
     expect(human.out[0]).toMatch(/^ok: tour-model\.json passes/)

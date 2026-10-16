@@ -1,5 +1,7 @@
 // A tour model of the synthetic pull request, valid against its diff: what the tour tests write
 // and what the validator is expected to pass.
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { TourArtifact, TourModel } from '../contract/tour.js'
 import { BASE_SHA, HEAD_SHA, syntheticArtifact } from './synthetic.js'
 
@@ -100,4 +102,16 @@ export function syntheticTour(over: Partial<TourArtifact> = {}): TourArtifact {
     record: { touredBy: [] },
     ...over,
   }
+}
+
+/** What the generator writes: the model without its scenes, and each scene in its own file. */
+export async function writeTourFiles(
+  tourDir: string,
+  scenesDir: string,
+  model: TourModel = syntheticTourModel()
+): Promise<void> {
+  const landmarks = model.landmarks.map(({ scene: _scene, ...l }) => l)
+  await writeFile(path.join(tourDir, 'tour-model.json'), JSON.stringify({ ...model, landmarks }))
+  await mkdir(scenesDir, { recursive: true })
+  for (const l of model.landmarks) await writeFile(path.join(scenesDir, `${l.id}.scene.html`), l.scene ?? '')
 }

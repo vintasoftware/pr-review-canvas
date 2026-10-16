@@ -33,6 +33,7 @@ const BASE_PATH = '/r/acme/widgets/'
 
 function job(over: Partial<GenerationJob> = {}): GenerationJob {
   return {
+    kind: 'canvas',
     key: 42,
     force: false,
     agent: 'claude',

@@ -16,9 +16,11 @@ import { hostLabel, setHost } from '../host.js'
 import { isTypingTarget } from '../keyboard.js'
 import { applySkin, DEFAULT_SKIN, readSkin, skinLabel } from '../skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from '../theme.js'
+import { createGeneration, GENERATE_DIALOG_ID, tourGenerationStartHtml } from '../generate.js'
 import { listenToFrames, mountFrames, tellFramesTheme } from './frames.js'
 import { createGrill, GRILL_DIALOG_ID } from './grill.js'
 import {
+  canGenerate,
   codeButtonHtml,
   codeViewHtml,
   coverHtml,
@@ -84,6 +86,11 @@ export class PrTourElement extends HTMLElement {
   grill = null
   /** @type {(() => void) | null} */
   unwire = null
+  /**
+   * The tour generation this page starts and follows, kept across renders.
+   * @type {ReturnType<typeof createGeneration<TourBundle>> | null}
+   */
+  generation = null
 
   connectedCallback() {
     wireCopyCommands(this)
@@ -93,6 +100,8 @@ export class PrTourElement extends HTMLElement {
 
   disconnectedCallback() {
     this.stopPolling()
+    this.generation?.stop()
+    this.generation = null
     this.grill?.stop()
     this.grill = null
     this.frames?.stop()
@@ -126,6 +135,70 @@ export class PrTourElement extends HTMLElement {
       return
     }
     this.render(bundle)
+    // The home page's generate links land here with `?generate=1`: the dialog opens, and the flag
+    // leaves the URL so a reload does not open it again.
+    const url = new URL(location.href)
+    if (url.searchParams.has('generate')) {
+      url.searchParams.delete('generate')
+      history.replaceState(history.state, '', url)
+      this.generation?.open(bundle)
+    }
+  }
+
+  /**
+   * With an agent to run it, the page generates the tour itself: the header's command, the empty
+   * screen's, and the stale bar's open the dialog. The render replaced them, so this runs after each.
+   * @param {TourBundle} bundle
+   */
+  wireGeneration(bundle) {
+    if (!canGenerate(bundle)) {
+      return
+    }
+    const generation = (this.generation ??= createGeneration(this, {
+      kind: 'tour',
+      prNumber: bundle.key,
+      startHtml: tourGenerationStartHtml,
+      onEnded: job => this.generationEnded(job),
+      onError: message => toast(this, message),
+    }))
+    generation.attach(bundle)
+    for (const id of ['#regenerate', '#generate-start', '#stale-generate']) {
+      qs(id, this)?.addEventListener('click', () => generation.open(bundle))
+    }
+  }
+
+  /**
+   * A job this page saw running ended: a published tour is loaded, and the dialog shows how it went
+   * when it was open, or when sharing failed; a failure the reader is not looking at is a toast.
+   * @param {import('../contract-types.js').GenerationJob} job
+   */
+  async generationEnded(job) {
+    const wasOpen = this.querySelector(`#${GENERATE_DIALOG_ID}`)?.hasAttribute('open') === true
+    if (job.phase !== 'done') {
+      if (!wasOpen) {
+        toast(
+          this,
+          job.phase === 'cancelled'
+            ? 'tour generation stopped'
+            : `tour generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+        )
+      }
+      return
+    }
+    const boot = this.bootstrap
+    if (boot === null) {
+      return
+    }
+    try {
+      this.render(await fetchTour(this.key, { preview: boot.preview }))
+    } catch {
+      return
+    }
+    if (wasOpen || job.sharing?.status === 'failed') {
+      this.generation?.showLast()
+    } else {
+      toast(this, 'tour published')
+    }
   }
 
   /** @param {TourBundle} bundle */
@@ -613,6 +686,9 @@ export class PrTourElement extends HTMLElement {
   }
 
   wireCommands() {
+    if (this.bundle !== null) {
+      this.wireGeneration(this.bundle)
+    }
     const toggle = qs('#theme-toggle', this)
     toggle?.addEventListener('click', () => {
       this.theme = nextTheme(this.theme)

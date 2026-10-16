@@ -91,7 +91,8 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
   // Where the tours tab's form lands, as `/review` is for the canvases tab.
   app.get('/tour', c => {
     const raw = c.req.query('n') ?? ''
-    return c.redirect(`${ctx.config.basePath}tour/${encodeURIComponent(raw)}`, 303)
+    const generate = c.req.query('generate') === '1' ? '?generate=1' : ''
+    return c.redirect(`${ctx.config.basePath}tour/${encodeURIComponent(raw)}${generate}`, 303)
   })
 
   app.get('/review/:n', async c => {

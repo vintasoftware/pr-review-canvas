@@ -31,6 +31,7 @@ export type {
 export type {
   AgentPulse,
   GenerationJob,
+  GenerationKind,
   GenerationResponse,
   GenerationSkill,
   GenerationSkillResponse,

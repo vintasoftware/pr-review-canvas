@@ -88,6 +88,16 @@ describe('argument building', () => {
     ])
   })
 
+  it('approves every request and offers a terminal only for a turn that asks for write access', () => {
+    const write = buildPromptArgs({ ...RUN, cwd: '/repo', access: 'write' })
+    expect(write).toContain('--approve-all')
+    expect(write).not.toContain('--approve-reads')
+    expect(write).not.toContain('--no-terminal')
+    const read = buildPromptArgs({ ...RUN, cwd: '/repo', access: 'read' })
+    expect(read).toEqual(buildPromptArgs({ ...RUN, cwd: '/repo' }))
+    expect(read).not.toContain('--approve-all')
+  })
+
   it('puts the model, the turn cap, the agent, and the session on the prompt command line', () => {
     expect(buildPromptArgs({ ...RUN, cwd: '/repo', model: 'claude-opus-5', maxTurns: 4 }).slice(-10)).toEqual(
       ['--model', 'claude-opus-5', '--max-turns', '4', 'claude', '-s', RUN.session, 'prompt', '-f', '-']

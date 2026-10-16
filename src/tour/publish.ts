@@ -23,6 +23,8 @@ export interface TourPublishOptions {
   model?: string | undefined
   harness: Generator['harness']
   allowStale: boolean
+  /** False keeps the tour off the pull request whatever the sharing settings say (`tour generate --out`). */
+  share?: boolean | undefined
 }
 
 export interface TourPublishResult {
@@ -213,7 +215,10 @@ export async function publishTour(
   }
   if (context.target.kind === 'pr') {
     published.tourUrl = `http://localhost:${ctx.config.port}${ctx.config.basePath}tour/${context.target.number}`
-    published.sharing = await shareTourOnPr(ctx, context.headSha, context.target.number)
+    published.sharing =
+      opts.share === false
+        ? { status: 'off' }
+        : await shareTourOnPr(ctx, context.headSha, context.target.number)
   }
   return published
 }

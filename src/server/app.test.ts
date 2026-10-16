@@ -167,6 +167,20 @@ describe('createApp', () => {
       expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42')
     })
 
+    it('offers to generate a tour on the tours tab, and carries the flag to the tour page', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const html = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).toContain(
+        '<button class="cmd" type="submit" name="generate" value="1" title="Open the tour page'
+      )
+      expect(html).toContain('href="/r/acme/widgets/tour/42?generate=1"')
+      expect(html).toContain('href="/r/acme/widgets/tour/branch?generate=1"')
+      expect(html).toContain('href="/r/acme/widgets/tour/uncommitted?generate=1"')
+      const redirect = await app.request('/tour?n=42&generate=1', { headers: LOCAL })
+      expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42?generate=1')
+    })
+
     it('lists the local tours on the tours tab, with a link to their canvas', async () => {
       const app = createApp(t.ctx)
       await t.ctx.prs.writePr('branch', syntheticArtifact().pr)

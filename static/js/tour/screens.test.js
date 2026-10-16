@@ -578,6 +578,38 @@ describe('the corners of the screens', () => {
 })
 
 describe('the other screens', () => {
+  it('offers to generate the tour where an agent runs, and only the skill command where none does', () => {
+    const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
+    document.body.innerHTML = missingHtml(missingTourBundle({ chat }))
+    expect(document.querySelector('#generate-start')?.textContent).toBe('generate tour')
+    expect(document.querySelector('button[data-copy]')?.getAttribute('data-copy')).toBe('/pr-tour 42')
+    document.body.innerHTML = missingHtml(missingTourBundle({ chat, preview: true }))
+    expect(document.querySelector('#generate-start')).toBeNull()
+    document.body.innerHTML = missingHtml(missingTourBundle())
+    expect(document.querySelector('#generate-start')).toBeNull()
+
+    const stale = {
+      ...bundleWith(),
+      chat,
+      stale: /** @type {const} */ ({
+        tourHeadSha: 'a'.repeat(40),
+        currentHeadSha: 'c'.repeat(40),
+        relation: 'unrelated',
+      }),
+    }
+    document.body.innerHTML = staleBarHtml(stale)
+    expect(document.querySelector('#stale-generate')?.textContent).toBe('tour the current head')
+    expect(staleBarHtml({ ...stale, chat: { enabled: false, acpx: false } })).not.toContain('stale-generate')
+
+    document.body.innerHTML = tourHeaderHtml({ ...bundleWith(), chat }, LOOK)
+    expect(document.querySelector('#regenerate')?.textContent).toBe('regenerate')
+    expect(document.querySelector('#regenerate')?.getAttribute('title')).toBe(
+      'Generate the tour of this PR again'
+    )
+    document.body.innerHTML = tourHeaderHtml(bundleWith(), LOOK)
+    expect(document.querySelector('#regenerate')).toBeNull()
+  })
+
   it('draws the missing screen, the stale bar, and the help', () => {
     const bundle = bundleWith()
     document.body.innerHTML = missingHtml(missingTourBundle())

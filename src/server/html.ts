@@ -148,10 +148,23 @@ export function tourPage(
   })
 }
 
-/** The home page's link that generates the first canvas of a local review. */
+/** The home page's link that generates the first canvas or tour of a local review. */
 const LOCAL_GENERATE: Record<LocalKey, string> = {
   branch: 'generate for this branch',
   uncommitted: 'generate for uncommitted work',
+}
+
+/** The local reviews `have` lacks, each a link that opens `page` and starts its generation. */
+function localGenerateHtml(
+  data: HomePageData,
+  page: 'review' | 'tour',
+  have: readonly LocalKey[]
+): Html | '' {
+  return data.canGenerate && have.length < LOCAL_KEYS.length
+    ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !have.includes(key)).map(
+        key => html`<a class="cmd" href="${data.base}${page}/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
+      )}</p>`
+    : ''
 }
 
 /** The home page's two tabs: what the project's canvases offer, and what its tours offer. */
@@ -176,7 +189,7 @@ type HomePageData = HomeData & {
   localReviews: readonly LocalKey[]
   /** The local reviews with a tour. */
   localTours: readonly LocalKey[]
-  /** An agent can run here, so the page offers to generate a canvas as well as to open one. */
+  /** An agent can run here, so the page offers to generate a canvas or a tour as well as to open one. */
   canGenerate: boolean
   tab: HomeTab
 }
@@ -209,11 +222,7 @@ ${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" valu
         )}</ul>`
   }${
     // Each local review not started here yet can be, whether or not the other one was.
-    data.canGenerate && data.localReviews.length < LOCAL_KEYS.length
-      ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !data.localReviews.includes(key)).map(
-          key => html`<a class="cmd" href="${data.base}review/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
-        )}</p>`
-      : ''
+    localGenerateHtml(data, 'review', data.localReviews)
   }</div></section>
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${
@@ -233,6 +242,7 @@ function toursTabHtml(data: HomePageData): Html {
 <form class="body home-form" method="get" action="${data.base}tour">
 <label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
 <button class="cmd fill" type="submit">open</button>
+${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the tour page of the ${noun} and generate its tour with the chat agent">generate tour</button>` : ''}
 </form>
 <div class="body"><p class="muted">The recommended pass before a review: read the change as landmarks, keep or change its decisions, and take the quiz. Run <code>/pr-tour &lt;number&gt;</code> in your agent to generate one.</p></div></section>
 <section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
@@ -243,14 +253,14 @@ function toursTabHtml(data: HomePageData): Html {
           key =>
             html`<li><a href="${data.base}tour/${key}">${keyLabel(key)}</a> <span class="muted">${data.base}tour/${key}</span>${data.localReviews.includes(key) ? html` · <a href="${data.base}review/${key}">canvas</a>` : ''}</li>`
         )}</ul>`
-  }</div></section>
+  }${localGenerateHtml(data, 'tour', data.localTours)}</div></section>
 <section class="panel"><div class="panel-h"><h2>Recent</h2></div>
 ${
   data.recentPrs.length === 0
     ? html`<div class="body muted">No ${noun}s opened yet.</div>`
     : html`<ul class="plain body">${data.recentPrs.map(
         p =>
-          html`<li><a href="${data.base}tour/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasTour === true ? '' : html` <span class="muted">no tour yet</span>`}${p.hasCanvas === true ? html` · <a href="${data.base}review/${String(p.number)}">canvas</a>` : ''}</li>`
+          html`<li><a href="${data.base}tour/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasTour === true ? '' : html` <span class="muted">no tour yet</span>${data.canGenerate ? html` <a class="cmd" href="${data.base}tour/${String(p.number)}?generate=1">generate</a>` : ''}`}${p.hasCanvas === true ? html` · <a href="${data.base}review/${String(p.number)}">canvas</a>` : ''}</li>`
       )}</ul>`
 }
 </section>`

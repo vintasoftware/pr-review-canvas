@@ -12,7 +12,7 @@ import {
   type GenerationSharing,
   type GenerationTargetResponse,
   isRunning,
-  PHASE_LABELS,
+  phaseLabel,
 } from '../contract/generation.js'
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import { isChatAgent } from '../contract/settings.js'
@@ -37,7 +37,7 @@ export interface GenerateDeps extends HubCommandDeps {
 
 /** What a running job is doing, in the words of the page's dialog, with the attempt it is on. */
 function phaseLine(job: GenerationJob): string {
-  const text = PHASE_LABELS[job.phase]
+  const text = phaseLabel(job)
   if (job.phase !== 'repairing') {
     return text
   }

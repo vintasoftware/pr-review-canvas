@@ -20,7 +20,7 @@ import {
   type CloneShared,
   createChatSet,
   createCloneShared,
-  createContextGeneration,
+  createContextGenerations,
   createStores,
   STATIC_DIR,
   type VendorRoots,
@@ -456,7 +456,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
   const gh = opts.gh ?? createFakeGh()
   const stores = createStores(dataDir, config, git, now)
   const clone = opts.clone ?? createCloneShared(config, now, opts.checkoutGit ?? createFakeCheckoutGit())
-  const parts: Omit<AppContext, 'generation'> = {
+  const parts: Omit<AppContext, 'generation' | 'tourGeneration'> = {
     log: () => undefined,
     clone,
     config,
@@ -490,7 +490,7 @@ export async function makeTestContext(opts: TestContextOptions = {}): Promise<Te
   }
   const ctx: AppContext = {
     ...parts,
-    generation: createContextGeneration(parts, clone.generationLane, () => ctx),
+    ...createContextGenerations(parts, clone.generationLane, () => ctx),
   }
   // A data dir the caller shares belongs to the caller, who removes it once.
   const cleanup =

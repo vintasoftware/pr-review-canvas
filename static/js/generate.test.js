@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
+import { missingTourBundle, syntheticTourBundle } from '../../src/testing/tour-page.js'
 import {
   createGeneration,
   elapsedText,
@@ -15,6 +16,8 @@ import {
   QUIET_MS,
   runningLabel,
   skillHtml,
+  tourGenerationMode,
+  tourGenerationStartHtml,
 } from './generate.js'
 import { isRunning } from './generation-phases.js'
 
@@ -60,6 +63,7 @@ function bundle(over = {}) {
  */
 function job(over = {}) {
   return {
+    kind: 'canvas',
     key: 42,
     force: false,
     agent: 'claude',
@@ -399,7 +403,7 @@ function fakeFetch(script) {
     if (method === 'DELETE' && script.del) {
       return script.del()
     }
-    if (String(url) === '/api/generate/skill') {
+    if (String(url).startsWith('/api/generate/skill')) {
       return script.skill === null
         ? new Response(JSON.stringify({ error: { code: 'GENERATION_FAILED', message: 'unreadable' } }), {
             status: 500,
@@ -881,5 +885,106 @@ describe('fetchGenerationSkill', () => {
     const fetches = fakeFetch({ gets: [], skill: PROJECT_SKILL })
     expect(await fetchGenerationSkill({ fetchImpl: fetches.impl })).toEqual({ skill: PROJECT_SKILL })
     expect(fetches.calls).toEqual([{ method: 'GET', url: '/api/generate/skill', body: undefined }])
+  })
+})
+
+describe('the tour', () => {
+  it('names what generating does for a missing, a stale, and a ready tour', () => {
+    expect(tourGenerationMode(missingTourBundle())).toMatchObject({
+      label: 'generate',
+      title: 'Generate a tour of this PR',
+      heading: 'Generate the tour',
+    })
+    expect(tourGenerationMode(missingTourBundle({ local: 'branch' })).title).toBe(
+      'Generate a tour of this local work'
+    )
+    expect(tourGenerationMode(syntheticTourBundle({ status: 'stale' }))).toMatchObject({
+      label: 'update',
+      heading: 'Tour the current head',
+    })
+    expect(tourGenerationMode(syntheticTourBundle())).toMatchObject({ label: 'regenerate' })
+  })
+
+  it('says the agent writes and runs commands, where the tour goes, and offers no blank-page choice', () => {
+    document.body.innerHTML = tourGenerationStartHtml(
+      missingTourBundle({ shares: true }),
+      null,
+      DEFAULT_SKILL
+    )
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('with every permission approved')
+    expect(text).toContain("runs the project's try-it recipes in a checkout of its own")
+    expect(text).toContain('Publishing shares the tour as a comment on the pull request')
+    expect(text).toContain('Follows the default skill of pr-review 1.4.0')
+    expect(document.querySelector('input[name="force"]')).toBeNull()
+    expect(document.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('/pr-tour 42')
+    expect(tourGenerationStartHtml(missingTourBundle({ shares: true, local: 'branch' }))).toContain(
+      'nothing is posted'
+    )
+    expect(
+      tourGenerationStartHtml(missingTourBundle({ shares: false }), { message: 'no', hint: 'login' })
+    ).toContain('no — login')
+  })
+
+  it("writes the status in the tour's words", () => {
+    document.body.innerHTML = generationStatusHtml(job({ kind: 'tour' }), NOW)
+    expect(document.querySelector('h2')?.textContent).toBe('The agent is writing the tour')
+    expect(document.body.textContent).toContain('The page loads the tour when it is published.')
+    document.body.innerHTML = generationStatusHtml(
+      job({ kind: 'tour', phase: 'done', sharing: { status: 'off' }, endedAt: NOW.toISOString() }),
+      NOW
+    )
+    expect(document.body.textContent).toContain('The tour is published. Sharing is off')
+  })
+
+  it("starts and stops the tour's job under its own path, with its own skill and start screen", async () => {
+    const root = page()
+    const fetches = fakeFetch({
+      gets: [null, job({ kind: 'tour', phase: 'preparing' })],
+      post: () =>
+        new Response(JSON.stringify({ job: job({ kind: 'tour', phase: 'preparing' }) }), { status: 202 }),
+      del: () =>
+        new Response(JSON.stringify({ cancelled: true, job: job({ kind: 'tour', stopping: true }) })),
+    })
+    const generation = createGeneration(root, {
+      kind: 'tour',
+      prNumber: 'branch',
+      startHtml: tourGenerationStartHtml,
+      onEnded: vi.fn(),
+      fetchImpl: fetches.impl,
+      now: () => NOW,
+      pollMs: 60_000,
+    })
+    const tour = missingTourBundle({ key: 'branch', local: 'branch' })
+    generation.attach(tour)
+    await flush()
+    generation.open(tour)
+    await flush()
+    const dialog = root.querySelector(`#${GENERATE_DIALOG_ID}`)
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Generate the tour')
+    root.querySelector('[data-gen="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    expect(root.querySelector('#regenerate')?.getAttribute('title')).toBe('Show the tour generation')
+    root.querySelector('[data-gen="stop"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    expect(fetches.calls.map(c => `${c.method} ${c.url}`)).toEqual([
+      'GET /api/tours/branch/generate',
+      'GET /api/generate/skill?kind=tour',
+      'POST /api/tours/branch/generate',
+      'DELETE /api/tours/branch/generate',
+    ])
+    generation.stop()
+  })
+})
+
+describe('stopping', () => {
+  it('asks nothing more once stopped, even for the poll the first attach queued', async () => {
+    const root = page()
+    const fetches = fakeFetch({ gets: [null] })
+    const generation = createGeneration(root, { prNumber: 42, onEnded: vi.fn(), fetchImpl: fetches.impl })
+    generation.stop()
+    generation.attach(bundle())
+    await flush()
+    expect(fetches.calls).toEqual([])
   })
 })

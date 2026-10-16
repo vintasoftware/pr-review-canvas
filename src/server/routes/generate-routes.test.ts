@@ -34,6 +34,7 @@ const LOCAL = { host: '127.0.0.1:3010' }
 const POST = { ...LOCAL, origin: 'http://127.0.0.1:3010', 'content-type': 'application/json' }
 
 const JOB: GenerationJob = {
+  kind: 'canvas',
   key: 42,
   force: false,
   agent: 'claude',
@@ -169,7 +170,7 @@ describe('generate routes', () => {
     const app = appWith(
       fakeManager({
         start: async () => {
-          throw new GenerationBusyError(43)
+          throw new GenerationBusyError(43, 'canvas')
         },
       })
     )
@@ -392,6 +393,112 @@ describe('generate routes', () => {
       } finally {
         await rm(repoRoot, { recursive: true, force: true })
       }
+    })
+  })
+
+  describe('the tour', () => {
+    /** The routes with a fake tour manager, and a canvas manager that must stay untouched. */
+    function tourApp(tours: ReturnType<typeof fakeManager>, canvases = fakeManager()): Hono {
+      t.ctx.tourGeneration = tours
+      return appWith(canvases)
+    }
+
+    it("starts, shows, and stops the tour's job, apart from the canvas's", async () => {
+      await context()
+      const tours = fakeManager({
+        status: () => ({ ...JOB, kind: 'tour' }),
+        cancel: async () => true,
+      })
+      const canvases = fakeManager()
+      const app = tourApp(tours, canvases)
+      const res = await app.request('/api/tours/branch/generate', {
+        method: 'POST',
+        headers: POST,
+        body: JSON.stringify({ force: true, base: 'main' }),
+      })
+      expect(res.status).toBe(202)
+      expect(tours.start).toHaveBeenCalledWith('branch', { force: true, base: 'main' })
+      expect(
+        (
+          (await (
+            await app.request('/api/tours/42/generate', { headers: LOCAL })
+          ).json()) as GenerationResponse
+        ).job
+      ).toMatchObject({ kind: 'tour' })
+      expect(tours.status).toHaveBeenCalledWith(42)
+      const stop = await app.request('/api/tours/42/generate', { method: 'DELETE', headers: POST })
+      expect(await stop.json()).toMatchObject({ cancelled: true })
+      expect(canvases.start).not.toHaveBeenCalled()
+      expect(canvases.status).not.toHaveBeenCalled()
+      expect(canvases.cancel).not.toHaveBeenCalled()
+    })
+
+    it('names the tour page when a job of either kind holds the lane', async () => {
+      await context()
+      const tours = fakeManager({
+        start: async () => {
+          throw new GenerationBusyError(43, 'canvas')
+        },
+      })
+      const res = await tourApp(tours).request('/api/tours/42/generate', {
+        method: 'POST',
+        headers: POST,
+        body: '{"force":false}',
+      })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as ErrorEnvelope).error).toEqual({
+        code: 'GENERATION_BUSY',
+        message: 'a canvas is already being generated for #43, and one runs at a time',
+        hint: 'wait for it to finish, or stop it from the tour page that started it',
+      })
+    })
+
+    it("answers the tour skill's for ?kind=tour", async () => {
+      await context()
+      const skill: GenerationSkill = { source: 'project', path: '.claude/skills/pr-tour', state: 'current' }
+      const tours = fakeManager({ nextSkill: async () => skill })
+      const canvases = fakeManager()
+      const res = await tourApp(tours, canvases).request('/api/generate/skill?kind=tour', { headers: LOCAL })
+      expect(await res.json()).toEqual({ skill })
+      expect(canvases.nextSkill).not.toHaveBeenCalled()
+    })
+
+    it("asks for a login that can post by the tour's own sharing setting", async () => {
+      await context()
+      t.ctx.capabilities = {
+        get: async () => ({ canComment: false, tokenKind: 'classic', login: 'octocat' }),
+      }
+      const start = () =>
+        tourApp(fakeManager()).request('/api/tours/42/generate', {
+          method: 'POST',
+          headers: POST,
+          body: '{"force":false}',
+        })
+      const refused = await start()
+      expect(refused.status).toBe(403)
+      expect(((await refused.json()) as ErrorEnvelope).error.hint).toBe(
+        'turn sharing off with `tourComment: false` in .pr-review/settings.yml'
+      )
+      // The tour's own setting wins over the canvas's.
+      await writeFile(t.ctx.settings.file, 'tourComment: false\n')
+      expect((await start()).status).toBe(202)
+    })
+
+    it('does not exist when the project turns agents off', async () => {
+      await context({ chat: false })
+      for (const method of ['GET', 'POST', 'DELETE']) {
+        expect(
+          (await createApp(t.ctx).request('/api/tours/42/generate', { method, headers: POST })).status
+        ).toBe(404)
+      }
+    })
+
+    it('answers no job for a review the server never toured, from the real manager', async () => {
+      await context()
+      const res = await createApp(t.ctx).request('/api/tours/42/generate', { headers: LOCAL })
+      expect(await res.json()).toEqual({ job: null })
+      const skill = await createApp(t.ctx).request('/api/generate/skill?kind=tour', { headers: LOCAL })
+      expect(await skill.json()).toEqual({ skill: { source: 'default', version: '0.0.0-test' } })
     })
   })
 

@@ -21,16 +21,23 @@ import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import {
+  canvasPipeline,
   createGenerationLane,
   createGenerationManager,
   type GenerationLane,
   type GenerationManager,
+  type GenerationManagerDeps,
+  type GenerationPipeline,
 } from '../generate/generation-manager.js'
 import { loadGenerationSkill } from '../generate/skill.js'
+import { tourPipeline } from '../generate/tour-pipeline.js'
+import { prepareTour } from '../tour/prepare.js'
+import { publishTour } from '../tour/publish.js'
 import { createGit, execGitIn, type Git } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { createHostClient, execCliIn, type HostClient } from '../host/client.js'
 import { describeFixes, fixModel } from '../review/fix-model.js'
+import { TOUR_SKILL_NAME } from '../review/install-skill.js'
 import { prepare } from '../review/prepare.js'
 import { publish, readContext } from '../review/publish.js'
 import { PACKAGE_ROOT, STATIC_DIR } from '../paths.js'
@@ -82,6 +89,8 @@ export interface AppContext {
   chat: ChatManager
   /** The canvas generation the review page starts. */
   generation: GenerationManager
+  /** The tour generation the tour page starts, in the same lane as the canvas's. */
+  tourGeneration: GenerationManager
   /** What the context shares with the other worktrees of its clone. */
   clone: CloneShared
   /** The acpx boundary, shared by the chat and the generation the review page starts. */
@@ -265,38 +274,66 @@ export function createChatSet(
   }
 }
 
+/** The pr-review the tour generator runs: this server's own, whatever is on the agent's PATH. */
+export const PR_REVIEW_BIN = path.join(PACKAGE_ROOT, 'bin', 'pr-review.mjs')
+
 /**
- * The generation manager over the real pipeline: the same prepare and publish the CLI runs. It is
- * built from the rest of the context, and its steps run over the whole context once it exists.
+ * The generation managers over the real pipelines: the same prepare and publish the CLI runs. They
+ * are built from the rest of the context, and their steps run over the whole context once it
+ * exists. Both share the clone's lane, so one generation of either kind runs at a time.
  */
-export function createContextGeneration(
-  ctx: Omit<AppContext, 'generation'>,
+export function createContextGenerations(
+  ctx: Omit<AppContext, 'generation' | 'tourGeneration'>,
   lane: GenerationLane,
   whole: () => AppContext
-): GenerationManager {
-  return createGenerationManager({
-    runner: ctx.runner,
-    checkouts: ctx.checkouts,
-    lane,
-    worktree: ctx.config.worktree,
-    steps: {
-      prepare: (input, opts) => prepare(whole(), input, opts),
-      publish: (canvasDir, opts) => publish(whole(), canvasDir, opts),
-      fix: async (canvasDir, modelPath, text) => {
-        const context = await readContext(canvasDir)
-        const { patches } = await ctx.derived.ensure(context)
-        return describeFixes(await fixModel(modelPath, text, context, patches))
-      },
-    },
-    settings: () => ctx.chat.effectiveSettings(),
-    skill: agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version),
-    generation: ctx.projectConfig.config.generation,
-    repo: ctx.config.repo,
-    repoRoot: ctx.config.repoRoot,
-    currentBranch: () => ctx.git.currentBranch(),
-    log: ctx.log,
-    now: ctx.now,
-  })
+): Pick<AppContext, 'generation' | 'tourGeneration'> {
+  const manager = (pipeline: GenerationPipeline, skill: GenerationManagerDeps['skill']) =>
+    createGenerationManager({
+      runner: ctx.runner,
+      checkouts: ctx.checkouts,
+      lane,
+      worktree: ctx.config.worktree,
+      pipeline,
+      settings: () => ctx.chat.effectiveSettings(),
+      skill,
+      generation: ctx.projectConfig.config.generation,
+      repo: ctx.config.repo,
+      repoRoot: ctx.config.repoRoot,
+      currentBranch: () => ctx.git.currentBranch(),
+      log: ctx.log,
+      now: ctx.now,
+    })
+  return {
+    generation: manager(
+      canvasPipeline({
+        prepare: (input, opts) => prepare(whole(), input, opts),
+        publish: (canvasDir, opts) => publish(whole(), canvasDir, opts),
+        fix: async (canvasDir, modelPath, text) => {
+          const context = await readContext(canvasDir)
+          const { patches } = await ctx.derived.ensure(context)
+          return describeFixes(await fixModel(modelPath, text, context, patches))
+        },
+      }),
+      agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version)
+    ),
+    tourGeneration: manager(
+      tourPipeline({
+        prepare: (input, opts) => prepareTour(whole(), input, opts),
+        publish: (tourDir, opts) => publishTour(whole(), tourDir, opts),
+        repoRoot: ctx.config.repoRoot,
+        cli: {
+          command: `${shellQuote(process.execPath)} ${shellQuote(PR_REVIEW_BIN)}`,
+          dataDirFlag: `--data-dir ${shellQuote(ctx.config.dataDir)}`,
+        },
+      }),
+      agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version, TOUR_SKILL_NAME)
+    ),
+  }
+}
+
+/** A path as one shell word, for a command the agent types. */
+function shellQuote(word: string): string {
+  return /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`
 }
 
 export function createAppContext(opts: CreateAppContextOptions): AppContext {
@@ -310,7 +347,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
   const runner = opts.runner ?? createAgentRunner({ env })
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
   const clone = opts.clone ?? createCloneShared(opts.config, now)
-  const parts: Omit<AppContext, 'generation'> = {
+  const parts: Omit<AppContext, 'generation' | 'tourGeneration'> = {
     config: opts.config,
     clone,
     log: opts.log ?? (line => process.stderr.write(`${line}\n`)),
@@ -329,7 +366,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
   }
   const ctx: AppContext = {
     ...parts,
-    generation: createContextGeneration(parts, clone.generationLane, () => ctx),
+    ...createContextGenerations(parts, clone.generationLane, () => ctx),
   }
   return ctx
 }

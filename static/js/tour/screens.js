@@ -12,6 +12,7 @@
 /** @typedef {import('../contract-types.js').Restatement} Restatement */
 /** @typedef {import('./steps.js').Step} Step */
 import { esc, timeAgo } from '../dom.js'
+import { GENERATE_BUTTON_ID, tourGenerationMode } from '../generate.js'
 import { authorProfileUrl, currentHost } from '../host.js'
 import { headerBarHtml } from '../header-bar.js'
 import {
@@ -103,6 +104,7 @@ export function tourHeaderHtml(bundle, opts) {
     headerBarHtml(
       { ...opts, skinTitle: 'Switch between GitHub and Olive styling' },
       `<a class="cmd" id="canvas-link" href="${esc(opts.project?.home ?? '/')}review/${esc(key)}" title="Open the review canvas of this change">canvas</a>` +
+        generateButtonHtml(bundle) +
         '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and how a tour works" aria-haspopup="dialog">help</button>'
     ) +
     '<div class="stripe" aria-hidden="true"></div>' +
@@ -554,10 +556,36 @@ function sharingLine(sharing) {
 /** @param {TourBundle} bundle */
 export function missingHtml(bundle) {
   const what = bundle.local === undefined ? 'this pull request' : 'this local work'
+  const command = `<p><code class="tour-cmd">${esc(bundle.skillCommand)}</code> <button class="cmd" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></p>`
+  const body = canGenerate(bundle)
+    ? `<p>Generate it here with the chat agent, or run the tour skill in your agent:</p>
+    <p><button class="cmd fill" type="button" id="generate-start" aria-haspopup="dialog">generate tour</button></p>
+    ${command}`
+    : `<p>Run the tour skill in your agent, then this page draws it:</p>
+    ${command}`
   return `<section class="panel tour-missing" aria-labelledby="missing-h"><div class="panel-h"><h2 id="missing-h">No tour yet for ${what}</h2></div>
-    <div class="body"><p>Run the tour skill in your agent, then this page draws it:</p>
-    <p><code class="tour-cmd">${esc(bundle.skillCommand)}</code> <button class="cmd" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></p>
+    <div class="body">${body}
     <p class="muted">This page checks again every few seconds.</p></div></section>`
+}
+
+/**
+ * Whether the page can generate the tour itself: an agent runs here, and this is no preview.
+ * @param {TourBundle} bundle
+ */
+export function canGenerate(bundle) {
+  return bundle.chat.enabled && !bundle.preview
+}
+
+/**
+ * The header's generate command, which opens the dialog and shows the job while one runs.
+ * @param {TourBundle} bundle
+ */
+function generateButtonHtml(bundle) {
+  if (!canGenerate(bundle)) {
+    return ''
+  }
+  const mode = tourGenerationMode(bundle)
+  return `<button class="cmd" type="button" id="${GENERATE_BUTTON_ID}" title="${esc(mode.title)}" aria-haspopup="dialog">${mode.label}</button>`
 }
 
 /**
@@ -572,7 +600,10 @@ export function staleBarHtml(bundle) {
     stale.relation === 'ancestor'
       ? `${plural(stale.commitsBehind ?? 0, 'commit')} behind`
       : 'on a commit the head does not contain'
-  return `<div class="tour-stale" role="status">This tour is of <span class="mono">${esc(stale.tourHeadSha.slice(0, 7))}</span>, ${esc(behind)} the head <span class="mono">${esc(stale.currentHeadSha.slice(0, 7))}</span>. Run <code>${esc(bundle.skillCommand)}</code> for a tour of the current commit; picks carry by decision key.</div>`
+  const action = canGenerate(bundle)
+    ? ` <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">tour the current head</button> or run <code>${esc(bundle.skillCommand)}</code>; picks carry by decision key.`
+    : ` Run <code>${esc(bundle.skillCommand)}</code> for a tour of the current commit; picks carry by decision key.`
+  return `<div class="tour-stale" role="status">This tour is of <span class="mono">${esc(stale.tourHeadSha.slice(0, 7))}</span>, ${esc(behind)} the head <span class="mono">${esc(stale.currentHeadSha.slice(0, 7))}</span>.${action}</div>`
 }
 
 export function helpHtml() {

@@ -25,6 +25,13 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
 - The generator works in review checkouts (`pr-review tour checkout <tourDir> head|base`) and
   removes the merge-base one when done (`base --remove`); `serve` also removes it once the pull
   request is merged or closed.
+- The project home has canvases and tours tabs (`?tab=tours`). The tours tab opens a tour by
+  number and lists the local tours and the recent pull requests with whether each has one.
+- The tour page generates the tour itself when an agent runs here, as the review page does the
+  canvas: from the empty page, the stale bar, the header, or the tours tab. The server prepares
+  and publishes; between those, the agent runs the pr-tour skill from the repository root with
+  every permission approved, since it writes scene files, previews them, and runs try-it recipes.
+  One generation of either kind runs at a time in a clone.
 
 ### Generating from the terminal
 

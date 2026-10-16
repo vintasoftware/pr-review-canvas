@@ -29,9 +29,14 @@ function fakeServer(bundle, opts = {}) {
     async (input, init) => {
       const url = String(input)
       const method = init?.method ?? 'GET'
-      calls.push(`${method} ${url}`)
       const json = (/** @type {unknown} */ body, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+      // With an agent on, the page asks once whether a tour generation runs; none does here. The
+      // generation's own calls are generate.test.js's to check, so they stay out of `calls`.
+      if (url.endsWith('/generate') && method === 'GET') {
+        return json({ job: null })
+      }
+      calls.push(`${method} ${url}`)
       if (opts.fail) {
         return json({ error: { code: 'PR_NOT_FOUND', message: 'no such pull request', hint: 'check' } }, 404)
       }
