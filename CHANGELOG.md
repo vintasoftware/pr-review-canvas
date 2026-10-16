@@ -32,7 +32,8 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   and publishes; between those, the agent runs the pr-tour skill from the repository root with
   every permission approved, since it writes scene files, previews them, and runs try-it recipes.
   One generation of either kind runs at a time in a clone. `pr-review tour generate` does the same
-  from a terminal, with `generate`'s flags.
+  from a terminal, with `generate`'s flags, and `pr-review tour open` opens a tour as `open` does
+  a review.
 - A tour of a later commit updates the earlier one, as an incremental canvas does: what the new
   commits left untouched carries, the rest is judged again, and the author's picks carry by decision
   key (`tour.incremental`, on by default; `--force` starts blank). An outdated tour says so, as an

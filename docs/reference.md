@@ -966,6 +966,7 @@ same targets `prepare` takes. [pr-tour-setup](../skills/pr-tour-setup/SKILL.md) 
 the tour is generated with.
 
 ```text
+pr-review tour open [<n>|branch|uncommitted] [--no-open] [--json]
 pr-review tour generate [<n>|branch|uncommitted] [--force] [--base <ref>] [--agent claude|codex] [--model <id>] [--out <file|dir>] [--open] [--json]
 pr-review tour prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
 pr-review tour validate <tour-model.json> --tour <dir> [--human]
@@ -978,6 +979,10 @@ pr-review tour checkout <tourDir> head|base [--remove]
 pr-review tour export (--pr <n> | --branch | --uncommitted | --head <sha> [--pr <n>]) [--out <file|dir>]
 pr-review tour import <zip> [--pr <n>] [--force]
 ```
+
+`tour open` is `open` for the tour: it adds the project to the running server and opens the
+tour page of the review it names; with none, the tour of the checked-out branch's open pull
+request, else the home page's tours tab.
 
 `tour generate` is `generate` for the tour: it runs the job in the running server, as the tour
 page's generate command does, and waits for it. `tour.generate` decides who may: `author`, the default, lets only

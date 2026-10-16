@@ -110,8 +110,9 @@ const COMMANDS: CommandHelp[] = [
   {
     name: 'tour <step>',
     summary:
-      'The tour, a guided pass over a change: the same steps as a canvas, apart from it. The steps: generate, prepare, validate, preview, publish, plan, gallery, hunk, checkout, export, import.',
+      'The tour, a guided pass over a change: the same steps as a canvas, apart from it. The steps: open, generate, prepare, validate, preview, publish, plan, gallery, hunk, checkout, export, import.',
     flags: [
+      { form: 'open [<n>|branch|uncommitted]', detail: 'the tour in the browser, as open does a review' },
       {
         form: 'generate [<n>|branch|uncommitted]',
         detail: 'in the running server, as generate does a canvas',
