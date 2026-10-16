@@ -773,7 +773,7 @@ export class PrTourElement extends HTMLElement {
     this.poll = setTimeout(async () => {
       this.poll = null
       try {
-        const next = await fetchTour(this.key, { preview: boot.preview })
+        const next = await fetchTour(this.key, { preview: boot.preview, poll: true })
         if (next.tour !== undefined) {
           this.render(next)
           return

@@ -1060,9 +1060,15 @@ such a zip, refusing one of another repository unless `--force` and one exported
 pull request than `--pr`, and keeps a stored tour of the same commit that is at least as new. The
 tour page has the same two: an export command in its header, and on a pull request with no tour, a
 drop zone (`GET /api/tours/<n>/export`, `POST /api/tours/<n>/import`). On a pull request with no
-tour, or an older one, **look for a shared tour** reads the pull request's comments afresh and
-imports the tour comment of the head, else the newest, passing over one whose zip names another
-pull request (`POST /api/tours/<n>/shared-tour/fetch`).
+tour of its head, opening the page looks through the comments for a tour someone shared, as the
+review page does for a canvas, and imports the tour comment of the head, else the newest, passing
+over one whose zip names another pull request; it looks again only when the comments or the head
+change. **Look for a shared tour** does the same on demand, reading the comments afresh
+(`POST /api/tours/<n>/shared-tour/fetch`).
+
+Opening the tour page resolves the head as the review page does: a pull request's asks the forge
+whether it moved, and local work is read again, so a tour of an earlier commit shows as outdated.
+The page's polls answer from the head last read (`GET /api/tours/<n>?poll=1`).
 
 The three later steps use the data directory that holds the tour dir, as `validate` and `publish`
 do for a canvas. `tour publish` answers `CANVAS_STALE` when the head moved and `CANVAS_ELSEWHERE`

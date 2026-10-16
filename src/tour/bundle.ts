@@ -10,7 +10,11 @@ import {
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { TourArtifact } from '../contract/tour.js'
 import { isAuthor } from '../review/self-review.js'
-import type { PrLoader } from '../server/bundle.js'
+import type { CommentsPayload } from '../contract/comments.js'
+import type { Pr } from '../contract/review-artifact.js'
+import { discoveryFingerprint } from '../host/attachments.js'
+import type { BundleOptions, PrLoader } from '../server/bundle.js'
+import { fetchSharedTour } from './import.js'
 import type { AppContext } from '../server/context.js'
 import { lookupTour } from './lookup.js'
 import { readReaderState } from './reader.js'
@@ -66,13 +70,60 @@ export async function tourChatStatus(ctx: AppContext): Promise<ChatStatus> {
   }
 }
 
+/**
+ * The head the page shows, resolved as the review page resolves it: a pull request's asks the forge
+ * whether it moved (on a poll, the one last read), and local work is read again, so a tour whose
+ * head moved since it was generated shows as outdated. A pull request's comments come with it.
+ */
+async function currentHead(
+  loader: PrLoader,
+  key: ReviewKey,
+  opts: BundleOptions
+): Promise<{ pr: Pr; comments: CommentsPayload | null; warnings: string[] }> {
+  if (isLocalKey(key)) return { pr: await loader.localHead(key, opts), comments: null, warnings: [] }
+  return loader.load(key, opts)
+}
+
+/**
+ * The comments each pull request's shared tours were last looked for in, by a fingerprint of them
+ * and the head, so the page looks again only when someone commented or pushed.
+ */
+const lookedAt = new Map<string, string>()
+
+/**
+ * Looks on the pull request for a tour someone shared, as the review page does for a canvas, when the
+ * page has no tour of the head: imports the best one and says whether it did.
+ */
+async function discoverSharedTour(
+  ctx: AppContext,
+  pr: Pr,
+  comments: CommentsPayload,
+  refresh: boolean
+): Promise<{ imported: boolean; warnings: string[] }> {
+  const memo = `${ctx.tours.root}#${String(pr.number)}`
+  const fingerprint = discoveryFingerprint('', comments, pr.headSha)
+  if (!refresh && lookedAt.get(memo) === fingerprint) return { imported: false, warnings: [] }
+  lookedAt.set(memo, fingerprint)
+  const { imported, warnings } = await fetchSharedTour(ctx, pr, comments)
+  return { imported, warnings }
+}
+
 export async function resolveTourBundle(
   ctx: AppContext,
   loader: PrLoader,
   key: ReviewKey,
-  opts: { preview?: boolean | undefined } = {}
+  opts: { preview?: boolean | undefined; refresh?: boolean | undefined; poll?: boolean | undefined } = {}
 ): Promise<TourBundle> {
-  const found = await lookupTour(ctx, loader, key, opts)
+  const load: BundleOptions = { refresh: opts.refresh === true, poll: opts.poll === true }
+  const head = await currentHead(loader, key, load)
+  const warnings = [...ctx.projectConfig.warnings, ...head.warnings]
+  const lookup = { preview: opts.preview, pr: head.pr }
+  let found = await lookupTour(ctx, loader, key, lookup)
+  if (head.comments !== null && !found.preview && found.status !== 'ready') {
+    const shared = await discoverSharedTour(ctx, head.pr, head.comments, load.refresh)
+    warnings.push(...shared.warnings)
+    if (shared.imported) found = await lookupTour(ctx, loader, key, lookup)
+  }
   const reviewer = await tourReviewer(ctx, key, found.pr)
   const config = ctx.projectConfig.config.tour
   const base: TourBundle = {
@@ -91,7 +142,7 @@ export async function resolveTourBundle(
     chat: await tourChatStatus(ctx),
     generate: tourGeneratePermission(ctx, reviewer),
     skillCommand: `/pr-tour ${keyToString(key)}`,
-    warnings: [...ctx.projectConfig.warnings],
+    warnings,
   }
   if (isLocalKey(key)) base.local = key
   if (found.status === 'missing') return base

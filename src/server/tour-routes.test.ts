@@ -22,6 +22,7 @@ import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
 import {
   ghHandler,
+  ghJson,
   ghPost,
   ghPostError,
   makeTestContext,
@@ -32,6 +33,7 @@ import {
 import {
   BASE_SHA,
   GH_ISSUE_COMMENTS,
+  GH_PULL,
   GH_REVIEW_COMMENTS,
   ghFor42,
   gitFor42,
@@ -212,7 +214,7 @@ describe('GET /api/tours/:n', () => {
 
   it('serves a local review with no login, as its own author, and never shares', async () => {
     t = await context({ git: gitForLocal({ snapshot: null, head: HEAD_SHA }) })
-    await t.ctx.prs.writePr('branch', { ...syntheticTour().pr, number: null })
+    await t.ctx.prs.writePr('branch', { ...syntheticTour().pr, number: null, baseRef: 'origin/main' })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour({ pr: { ...syntheticTour().pr, number: null } }))
     const bundle = await json<TourBundle>(await get('/api/tours/branch'))
     expect(bundle).toMatchObject({
@@ -924,5 +926,55 @@ describe('looking for a shared tour', () => {
     const body = await json<SharedTourFetchResponse>(await look())
     expect(body).toMatchObject({ found: true, imported: false })
     expect(body.warnings[0]).toMatch(/^pr-42-.+-tour\.zip: the zip is not a tour$/)
+  })
+})
+
+describe('the tour page keeps up with the pull request', () => {
+  it('shows a tour as outdated once the pull request moves, with no review page load in between', async () => {
+    const git = gitFor42()
+    t = await context({ git })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    // One app, as the server keeps one: its loader remembers the head it last read.
+    const app = createApp(t.ctx)
+    const open = async (query = '') =>
+      json<TourBundle>(await app.request(`/api/tours/42${query}`, { headers: LOCAL }))
+    expect((await open()).status).toBe('ready')
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: OTHER_SHA,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF,
+      ahead: { [HEAD_SHA]: 1 },
+    })
+    t.ctx.gh = ghFor42({
+      routes: {
+        'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, head: { ...GH_PULL.head, sha: OTHER_SHA } }),
+      },
+    })
+    // A poll answers from the head last read, so waiting costs no forge call.
+    expect((await open('?poll=1')).status).toBe('ready')
+    const opened = await open()
+    expect(opened.status).toBe('stale')
+    expect(opened.stale).toMatchObject({ tourHeadSha: HEAD_SHA, currentHeadSha: OTHER_SHA, commitsBehind: 1 })
+  })
+
+  it('loads a tour someone shared on the pull request when the page has none', async () => {
+    t = await context()
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const { zip } = await zipStoredTour(t.ctx, HEAD_SHA, 42)
+    const comment = {
+      ...GH_ISSUE_COMMENTS[0],
+      id: 7200,
+      body: buildTourComment(zip, syntheticTour(), 65_536),
+    }
+    await rm(t.ctx.tours.tourDir(HEAD_SHA), { recursive: true })
+    await rm(path.join(t.ctx.tours.root, 'index.json'), { force: true })
+    t.ctx.gh = ghFor42({
+      routes: { 'repos/acme/widgets/issues/42/comments': ghHandler(() => [...GH_ISSUE_COMMENTS, comment]) },
+    })
+    const bundle = await json<TourBundle>(await get('/api/tours/42'))
+    expect(bundle.status).toBe('ready')
+    expect(bundle.tour?.source).toBe('import')
   })
 })

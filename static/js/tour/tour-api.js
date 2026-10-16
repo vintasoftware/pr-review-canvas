@@ -6,12 +6,15 @@
 import { fetchJson, streamEvents } from '../api.js'
 
 /**
+ * The bundle. A poll asks the server to answer from the head it last read, as the review page's
+ * poll does, so waiting for a tour costs no forge call.
  * @param {string} key
- * @param {{ preview?: boolean, fetchImpl?: typeof fetch }} [opts]
+ * @param {{ preview?: boolean, poll?: boolean, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<TourBundle>}
  */
 export function fetchTour(key, opts = {}) {
-  const query = opts.preview === true ? '?preview=1' : ''
+  const params = [...(opts.preview === true ? ['preview=1'] : []), ...(opts.poll === true ? ['poll=1'] : [])]
+  const query = params.length === 0 ? '' : `?${params.join('&')}`
   return fetchJson(`/api/tours/${encodeURIComponent(key)}${query}`, { fetchImpl: opts.fetchImpl })
 }
 

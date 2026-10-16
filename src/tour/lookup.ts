@@ -56,9 +56,10 @@ export async function lookupTour(
   ctx: AppContext,
   loader: PrLoader,
   key: ReviewKey,
-  opts: { preview?: boolean | undefined } = {}
+  opts: { preview?: boolean | undefined; pr?: Pr | undefined } = {}
 ): Promise<TourLookupResult> {
-  const pr = await loader.currentTarget(key)
+  // The page resolves the head afresh and passes it; the other callers take the one on file.
+  const pr = opts.pr ?? (await loader.currentTarget(key))
   if (opts.preview === true) {
     const artifact = await previewArtifact(ctx, pr)
     if (artifact !== null) return { status: 'ready', pr, headSha: pr.headSha, artifact, preview: true }

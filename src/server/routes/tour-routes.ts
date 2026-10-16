@@ -55,6 +55,8 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
     const key = parseTargetKey(c.req.param('n'))
     const bundle = await resolveTourBundle(ctx, loader, key, {
       preview: c.req.query('preview') !== undefined,
+      refresh: c.req.query('refresh') === '1',
+      poll: c.req.query('poll') === '1',
     })
     return c.json(bundle)
   })
