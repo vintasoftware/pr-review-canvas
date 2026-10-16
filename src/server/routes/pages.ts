@@ -78,7 +78,9 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
 
   // Where `pr-review open` and `serve` point the browser. The lookup runs here rather than in the
   // command, so the browser opens at once and lands on the branch's open review when it is found.
-  app.get('/start', async c => c.redirect(await startPage(ctx, ctx.log), 302))
+  app.get('/start', async c =>
+    c.redirect(await startPage(ctx, ctx.log, c.req.query('page') === 'tour' ? 'tour' : 'review'), 302)
+  )
 
   // Where the home page's form lands. It is a plain GET form, so the page needs no script of its
   // own and the number arrives as a query parameter.

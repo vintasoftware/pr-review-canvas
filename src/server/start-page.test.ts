@@ -95,6 +95,21 @@ describe('startPage', () => {
     })
   })
 
+  it("opens the tour of the branch's PR for tour open, and the tours tab without one", async () => {
+    const pulls = ghHandler(params => (params['head'] === 'acme:feature' ? [{ number: 42 }] : []))
+    t = await makeTestContext({
+      gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+      git: createFakeGit({ branch: 'feature' }),
+    })
+    expect(await startPage(t.ctx, () => {}, 'tour')).toBe('/r/acme/widgets/tour/42')
+    await t.cleanup()
+    t = await makeTestContext({
+      gh: createFakeGh({ routes: { [PULLS]: pulls } }),
+      git: createFakeGit({ branch: 'main' }),
+    })
+    expect(await startPage(t.ctx, () => {}, 'tour')).toBe('/r/acme/widgets/?tab=tours')
+  })
+
   it('opens the home page when no open review has this branch as its head', async () => {
     t = await makeTestContext({
       host: GITHUB_HOST,

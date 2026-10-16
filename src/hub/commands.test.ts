@@ -105,6 +105,20 @@ describe('runOpen', () => {
     await expect(runOpen(fakeDeps(), ['42', 'branch'], fakeIo())).rejects.toThrow(/one review at most/)
   })
 
+  it("opens a review's tour, or the tour of the branch's open PR, for tour open", async () => {
+    const deps = fakeDeps()
+    const io = fakeIo()
+    await runOpen(deps, ['branch'], io, 'tour')
+    await runOpen(deps, [], io, 'tour')
+    expect(io.out).toEqual([
+      'http://localhost:3010/r/acme/widgets/tour/branch',
+      'http://localhost:3010/r/acme/widgets/start?page=tour',
+    ])
+    await expect(runOpen(fakeDeps(), ['1', '2'], fakeIo(), 'tour')).rejects.toThrow(
+      'tour open takes one review at most'
+    )
+  })
+
   it('rejects an unknown flag', async () => {
     await expect(runOpen(fakeDeps(), ['--port', '1'], fakeIo())).rejects.toThrow()
   })

@@ -289,10 +289,13 @@ export async function main(argv: string[]): Promise<number> {
       case 'upgrade':
         return await upgradeCommand(rest)
       default: {
-        // `tour generate` talks to the running server, as `generate` does; the other tour steps
-        // work on this checkout's files.
+        // `tour generate` and `tour open` talk to the running server, as `generate` and `open` do;
+        // the other tour steps work on this checkout's files.
         if (command === 'tour' && rest[0] === 'generate') {
           return await runGenerate(generateDeps(), rest.slice(1), io, 'tour')
+        }
+        if (command === 'tour' && rest[0] === 'open') {
+          return await runOpen(hubDeps(), rest.slice(1), io, 'tour')
         }
         const { repo, dataDir, rest: own } = splitCommonFlags(rest)
         const ctx = await buildContext(repo, dataDir, {
