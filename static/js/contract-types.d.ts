@@ -84,6 +84,7 @@ export type {
   TourFinished,
   TourFinishResponse,
   TourImportResult,
+  SharedTourFetchResponse,
   TourPageLandmark,
   TourPageTour,
   TourReaderState,

@@ -109,6 +109,15 @@ export interface TourImportResult {
   warnings: string[]
 }
 
+/** The answer of `POST /api/tours/:n/shared-tour/fetch`. */
+export interface SharedTourFetchResponse {
+  /** A tour comment was on the pull request. */
+  found: boolean
+  /** Its tour was stored; false when the stored one was as new, or no comment's zip would import. */
+  imported: boolean
+  warnings: string[]
+}
+
 export interface TourStaleInfo {
   tourHeadSha: string
   currentHeadSha: string

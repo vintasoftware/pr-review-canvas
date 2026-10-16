@@ -1047,7 +1047,10 @@ the head has none), or of the stored tour of `--head`, to `.pr-review/exports/` 
 such a zip, refusing one of another repository unless `--force` and one exported for another
 pull request than `--pr`, and keeps a stored tour of the same commit that is at least as new. The
 tour page has the same two: an export command in its header, and on a pull request with no tour, a
-drop zone (`GET /api/tours/<n>/export`, `POST /api/tours/<n>/import`).
+drop zone (`GET /api/tours/<n>/export`, `POST /api/tours/<n>/import`). On a pull request with no
+tour, or an older one, **look for a shared tour** reads the pull request's comments afresh and
+imports the tour comment of the head, else the newest, passing over one whose zip names another
+pull request (`POST /api/tours/<n>/shared-tour/fetch`).
 
 The three later steps use the data directory that holds the tour dir, as `validate` and `publish`
 do for a canvas. `tour publish` answers `CANVAS_STALE` when the head moved and `CANVAS_ELSEWHERE`

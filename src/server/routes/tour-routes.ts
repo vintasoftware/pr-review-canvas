@@ -2,12 +2,16 @@
 // and the zip a tour travels in.
 import { Hono } from 'hono'
 import { TourGrillSendSchema } from '../../contract/chat.js'
-import { TourFinishInputSchema, TourReaderInputSchema } from '../../contract/tour-api.js'
+import {
+  type SharedTourFetchResponse,
+  TourFinishInputSchema,
+  TourReaderInputSchema,
+} from '../../contract/tour-api.js'
 import { resolveTourBundle, tourReviewer } from '../../tour/bundle.js'
 import { finishTour } from '../../tour/finish.js'
 import { CANVAS_ZIP_MAX_BYTES } from '../../canvas/zip.js'
 import { isLocalKey } from '../../contract/review-key.js'
-import { importTour } from '../../tour/import.js'
+import { fetchSharedTour, importTour } from '../../tour/import.js'
 import { lookupTour } from '../../tour/lookup.js'
 import { zipStoredTour } from '../../tour/share.js'
 import { readReaderState, writeReaderState } from '../../tour/reader.js'
@@ -92,6 +96,14 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
       force: force === '1',
     })
     return c.json(result)
+  })
+
+  // Looks on the pull request, as it is now, for a tour someone shared, and imports the best one.
+  api.post('/tours/:n/shared-tour/fetch', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'looking for a shared tour')
+    const { pr, comments } = await loader.load(number, { refresh: true })
+    const body: SharedTourFetchResponse = await fetchSharedTour(ctx, pr, comments)
+    return c.json(body)
   })
 
   api.put('/tours/:n/reader', async c => {

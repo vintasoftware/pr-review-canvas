@@ -7,7 +7,7 @@
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 /** @typedef {import('../contract-types.js').Decision} Decision */
 /** @typedef {import('./steps.js').Step} Step */
-import { importTour, saveAppearance, setApiBase } from '../api.js'
+import { fetchSharedTour, importTour, saveAppearance, setApiBase } from '../api.js'
 import { runCommand, toast, wireCopyCommands } from '../commands.js'
 import { exportTourZip } from '../download.js'
 import { validateTourFilename } from '../empty-state.js'
@@ -183,6 +183,29 @@ export class PrTourElement extends HTMLElement {
         void runCommand(exportZip, () => exportTourZip(bundle.key, { headSha }), {
           pendingLabel: 'exporting…',
         })
+      })
+    }
+    const fetchShared = qs('#fetch-shared', this)
+    if (fetchShared instanceof HTMLElement) {
+      fetchShared.addEventListener('click', () => {
+        void runCommand(
+          fetchShared,
+          async () => {
+            const result = await fetchSharedTour(bundle.key)
+            for (const warning of result.warnings) toast(this, warning)
+            if (result.imported) {
+              await this.boot()
+            } else {
+              toast(
+                this,
+                result.found
+                  ? 'the tour shared on the pull request is no newer than this one'
+                  : 'no tour is shared on the pull request'
+              )
+            }
+          },
+          { pendingLabel: 'looking…' }
+        )
       })
     }
     if (typeof bundle.key === 'number') {

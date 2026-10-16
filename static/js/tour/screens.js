@@ -568,10 +568,16 @@ export function missingHtml(bundle) {
     : `<p>Run the tour skill in your agent, then this page draws it:</p>
     ${command}`
   // Only a pull request takes a shared tour: local work has none to be shared on.
-  const drop = bundle.local === undefined && !bundle.preview ? dropZoneHtml('tour') : ''
+  const drop =
+    bundle.local === undefined && !bundle.preview ? `${fetchSharedHtml()}${dropZoneHtml('tour')}` : ''
   return `<section class="panel tour-missing" aria-labelledby="missing-h"><div class="panel-h"><h2 id="missing-h">No tour yet for ${what}</h2></div>
     <div class="body">${body}${drop}
     <p class="muted">This page checks again every few seconds.</p></div></section>`
+}
+
+/** The command that looks on the pull request for a tour someone shared as a comment. */
+function fetchSharedHtml() {
+  return '<button class="cmd" type="button" id="fetch-shared" title="Look on the pull request for a tour someone shared, and load it">look for a shared tour</button>'
 }
 
 /**
@@ -606,10 +612,11 @@ export function staleBarHtml(bundle) {
     stale.relation === 'ancestor'
       ? `${plural(stale.commitsBehind ?? 0, 'commit')} behind`
       : 'on a commit the head does not contain'
+  const shared = bundle.local === undefined ? ` ${fetchSharedHtml()}` : ''
   const action = canGenerate(bundle)
     ? ` <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">tour the current head</button> or run <code>${esc(bundle.skillCommand)}</code>; picks carry by decision key.`
     : ` Run <code>${esc(bundle.skillCommand)}</code> for a tour of the current commit; picks carry by decision key.`
-  return `<div class="tour-stale" role="status">This tour is of <span class="mono">${esc(stale.tourHeadSha.slice(0, 7))}</span>, ${esc(behind)} the head <span class="mono">${esc(stale.currentHeadSha.slice(0, 7))}</span>.${action}</div>`
+  return `<div class="tour-stale" role="status">This tour is of <span class="mono">${esc(stale.tourHeadSha.slice(0, 7))}</span>, ${esc(behind)} the head <span class="mono">${esc(stale.currentHeadSha.slice(0, 7))}</span>.${action}${shared}</div>`
 }
 
 export function helpHtml() {

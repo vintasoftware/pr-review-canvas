@@ -7,10 +7,16 @@ import type { AddressInfo } from 'node:net'
 import { serve } from '@hono/node-server'
 import path from 'node:path'
 import type { ErrorEnvelope } from '../contract/api.js'
-import type { TourBundle, TourFinishResponse, TourReaderState } from '../contract/tour-api.js'
+import type {
+  SharedTourFetchResponse,
+  TourBundle,
+  TourFinishResponse,
+  TourReaderState,
+} from '../contract/tour-api.js'
 import { freshReaderState } from '../contract/tour-api.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
-import { readTourComment } from '../tour/comment.js'
+import { buildTourComment, readTourComment, TOUR_COMMENT_MARKER } from '../tour/comment.js'
+import { zipStoredTour } from '../tour/share.js'
 import { prepareTour } from '../tour/prepare.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
@@ -856,5 +862,67 @@ describe('the tour zip routes', () => {
     expect(local.status).toBe(400)
     const junk = await upload('/api/tours/42/import', { bytes: new Uint8Array([1, 2, 3]), name: 'x.zip' })
     expect((await json<ErrorEnvelope>(junk)).error.code).toBe('CANVAS_INVALID')
+  })
+})
+
+describe('looking for a shared tour', () => {
+  /** PR #42 whose comments hold the tour comments of these tours, newest last. */
+  async function sharing(...tours: Array<{ artifact: ReturnType<typeof syntheticTour>; prNumber: number }>) {
+    const bodies: string[] = []
+    t = await context()
+    for (const { artifact, prNumber } of tours) {
+      await t.ctx.tours.write(artifact.headSha, artifact)
+      const { zip } = await zipStoredTour(t.ctx, artifact.headSha, prNumber)
+      bodies.push(buildTourComment(zip, artifact, 65_536))
+      await rm(t.ctx.tours.tourDir(artifact.headSha), { recursive: true })
+    }
+    await rm(path.join(t.ctx.tours.root, 'index.json'), { force: true })
+    const comments = bodies.map((body, i) => ({
+      ...GH_ISSUE_COMMENTS[0],
+      id: 7000 + i,
+      body,
+      updated_at: `2026-09-1${i}T00:00:00Z`,
+    }))
+    t.ctx.gh = ghFor42({
+      routes: {
+        'repos/acme/widgets/issues/42/comments': ghHandler(() => [...GH_ISSUE_COMMENTS, ...comments]),
+      },
+    })
+  }
+
+  const look = () =>
+    createApp(t.ctx).request('/api/tours/42/shared-tour/fetch', { method: 'POST', headers: WRITE })
+
+  it('imports the tour shared for the head, and then finds it no newer', async () => {
+    await sharing(
+      { artifact: syntheticTour({ headSha: OTHER_SHA }), prNumber: 42 },
+      { artifact: syntheticTour(), prNumber: 42 }
+    )
+    expect(await json(await look())).toEqual({ found: true, imported: true, warnings: [] })
+    expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
+    expect(await t.ctx.tours.read(OTHER_SHA)).toBeNull()
+    expect(await json(await look())).toEqual({ found: true, imported: false, warnings: [] })
+  })
+
+  it("passes over another pull request's tour, finds none on a quiet one, and refuses local work", async () => {
+    await sharing({ artifact: syntheticTour(), prNumber: 7 })
+    expect(await json(await look())).toEqual({ found: false, imported: false, warnings: [] })
+    const local = await createApp(t.ctx).request('/api/tours/branch/shared-tour/fetch', {
+      method: 'POST',
+      headers: WRITE,
+    })
+    expect(local.status).toBe(400)
+  })
+
+  it('reports a shared zip that will not import, and imports none', async () => {
+    t = await context()
+    const name = 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip'
+    const broken = { ...GH_ISSUE_COMMENTS[0], id: 7100, body: `${TOUR_COMMENT_MARKER}${name}\nAAAA\n-->` }
+    t.ctx.gh = ghFor42({
+      routes: { 'repos/acme/widgets/issues/42/comments': ghHandler(() => [...GH_ISSUE_COMMENTS, broken]) },
+    })
+    const body = await json<SharedTourFetchResponse>(await look())
+    expect(body).toMatchObject({ found: true, imported: false })
+    expect(body.warnings[0]).toMatch(/^pr-42-.+-tour\.zip: the zip is not a tour$/)
   })
 })

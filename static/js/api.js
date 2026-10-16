@@ -465,6 +465,16 @@ export function fetchSharedCanvas(prNumber, opts = {}) {
 }
 
 /**
+ * Looks on the pull request for a tour someone shared, and imports the best one.
+ * @param {ReviewKey} prNumber
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('./contract-types.js').SharedTourFetchResponse>}
+ */
+export function fetchSharedTour(prNumber, opts = {}) {
+  return fetchJson(`/api/tours/${prNumber}/shared-tour/fetch`, { method: 'POST', fetchImpl: opts.fetchImpl })
+}
+
+/**
  * The zip as a blob plus the name the server chose, ready to hand to the browser.
  * @param {ReviewKey} prNumber
  * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]

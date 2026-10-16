@@ -34,7 +34,8 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   One generation of either kind runs at a time in a clone. `pr-review tour generate` does the same
   from a terminal, with `generate`'s flags.
 - Tours travel as zips like canvases: `pr-review tour export` and `tour import`, the tour page's
-  export command, and a drop zone on a pull request with no tour.
+  export command, and a drop zone on a pull request with no tour. The page can also look on the
+  pull request for a tour someone shared and load it.
 
 ### Generating from the terminal
 

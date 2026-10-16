@@ -592,6 +592,16 @@ describe('the other screens', () => {
     expect(document.querySelector('label.drop')?.textContent).toContain('Drop a tour zip here')
     document.body.innerHTML = missingHtml(missingTourBundle({ local: 'branch' }))
     expect(document.querySelector('label.drop')).toBeNull()
+    expect(document.querySelector('#fetch-shared')).toBeNull()
+    document.body.innerHTML = missingHtml(missingTourBundle())
+    expect(document.querySelector('#fetch-shared')?.textContent).toBe('look for a shared tour')
+    const stale = /** @type {const} */ ({
+      tourHeadSha: 'a'.repeat(40),
+      currentHeadSha: 'c'.repeat(40),
+      relation: 'unrelated',
+    })
+    expect(staleBarHtml({ ...bundleWith(), stale })).toContain('id="fetch-shared"')
+    expect(staleBarHtml({ ...bundleWith(), stale, local: 'branch' })).not.toContain('fetch-shared')
   })
 
   it('offers to generate the tour where an agent runs, and only the skill command where none does', () => {
