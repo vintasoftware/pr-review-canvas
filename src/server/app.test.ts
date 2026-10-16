@@ -181,6 +181,19 @@ describe('createApp', () => {
       expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42?generate=1')
     })
 
+    it('offers no tour generation on the tours tab when tour.generate is off', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const config = t.ctx.projectConfig.config
+      t.ctx.projectConfig = {
+        ...t.ctx.projectConfig,
+        config: { ...config, tour: { ...config.tour, generate: 'off' } },
+      }
+      const html = await (await createApp(t.ctx).request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).not.toContain('?generate=1')
+      expect(html).not.toContain('generate tour</button>')
+    })
+
     it('lists the local tours on the tours tab, with a link to their canvas', async () => {
       const app = createApp(t.ctx)
       await t.ctx.prs.writePr('branch', syntheticArtifact().pr)

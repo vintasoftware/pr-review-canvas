@@ -57,6 +57,7 @@ async function context(opts: { chat?: boolean; acpx?: string | null } = {}): Pro
   t = await makeTestContext({
     // A host CLI that is logged in, so a PR's canvas could be shared.
     gh: ghFor42(),
+    git: gitFor42(),
     runner: createFakeRunner({ acpxVersion: opts.acpx === undefined ? '0.19.4' : opts.acpx }),
     projectConfig: {
       config: { ...DEFAULT_PROJECT_CONFIG, chat: { enabled: opts.chat ?? true } },
@@ -482,6 +483,42 @@ describe('generate routes', () => {
       // The tour's own setting wins over the canvas's.
       await writeFile(t.ctx.settings.file, 'tourComment: false\n')
       expect((await start()).status).toBe(202)
+    })
+
+    it('starts a tour for its author by default, for every reader with on, and for nobody with off', async () => {
+      await context()
+      const start = (key: string | number = 42) =>
+        tourApp(fakeManager()).request(`/api/tours/${key}/generate`, {
+          method: 'POST',
+          headers: POST,
+          body: '{"force":false}',
+        })
+      const reader = (login: string) => {
+        t.ctx.capabilities = { get: async () => ({ canComment: true, tokenKind: 'classic', login }) }
+      }
+      reader('octocat')
+      expect((await start()).status).toBe(202)
+      reader('someone-else')
+      const refused = await start()
+      expect(refused.status).toBe(403)
+      expect(((await refused.json()) as ErrorEnvelope).error).toMatchObject({
+        code: 'NOT_AUTHOR',
+        hint: 'run /pr-tour 42 from Claude Code or Codex, or set tour.generate: on in pr-review.config.yml',
+      })
+      // Local work is the reader's own.
+      expect((await start('uncommitted')).status).toBe(202)
+      const tour = (generate: 'on' | 'off') => {
+        t.ctx.projectConfig = {
+          ...t.ctx.projectConfig,
+          config: { ...t.ctx.projectConfig.config, tour: { ...t.ctx.projectConfig.config.tour, generate } },
+        }
+      }
+      tour('on')
+      expect((await start()).status).toBe(202)
+      tour('off')
+      const off = await start('uncommitted')
+      expect(off.status).toBe(404)
+      expect(((await off.json()) as ErrorEnvelope).error.message).toContain('tour.generate: off')
     })
 
     it('does not exist when the project turns agents off', async () => {

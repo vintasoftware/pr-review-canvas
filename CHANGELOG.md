@@ -33,6 +33,9 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   every permission approved, since it writes scene files, previews them, and runs try-it recipes.
   One generation of either kind runs at a time in a clone. `pr-review tour generate` does the same
   from a terminal, with `generate`'s flags.
+- `tour.generate` (`author` by default, `on`, or `off`) decides who generates a tour from the review
+  app. Its agent runs with every permission while reading a diff that could steer it, so by
+  default only the pull request's author, or the owner of local work, may.
 - Tours travel as zips like canvases: `pr-review tour export` and `tour import`, the tour page's
   export command, and a drop zone on a pull request with no tour. The page can also look on the
   pull request for a tour someone shared and load it.

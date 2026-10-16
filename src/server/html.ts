@@ -160,7 +160,8 @@ function localGenerateHtml(
   page: 'review' | 'tour',
   have: readonly LocalKey[]
 ): Html | '' {
-  return data.canGenerate && have.length < LOCAL_KEYS.length
+  const can = page === 'tour' ? data.canGenerateTours : data.canGenerate
+  return can && have.length < LOCAL_KEYS.length
     ? html`<p class="tbtns">${LOCAL_KEYS.filter(key => !have.includes(key)).map(
         key => html`<a class="cmd" href="${data.base}${page}/${key}?generate=1">${LOCAL_GENERATE[key]}</a>`
       )}</p>`
@@ -191,6 +192,8 @@ type HomePageData = HomeData & {
   localTours: readonly LocalKey[]
   /** An agent can run here, so the page offers to generate a canvas or a tour as well as to open one. */
   canGenerate: boolean
+  /** `tour.generate` is not off, so the tours tab offers to generate too; the tour page checks the author. */
+  canGenerateTours: boolean
   tab: HomeTab
 }
 
@@ -242,7 +245,7 @@ function toursTabHtml(data: HomePageData): Html {
 <form class="body home-form" method="get" action="${data.base}tour">
 <label>${nounShort} number <input name="n" type="number" min="1" required inputmode="numeric"></label>
 <button class="cmd fill" type="submit">open</button>
-${data.canGenerate ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the tour page of the ${noun} and generate its tour with the chat agent">generate tour</button>` : ''}
+${data.canGenerateTours ? html`<button class="cmd" type="submit" name="generate" value="1" title="Open the tour page of the ${noun} and generate its tour with the chat agent">generate tour</button>` : ''}
 </form>
 <div class="body"><p class="muted">The recommended pass before a review: read the change as landmarks, keep or change its decisions, and take the quiz. Run <code>/pr-tour &lt;number&gt;</code> in your agent to generate one.</p></div></section>
 <section class="panel"><div class="panel-h"><h2>Before the ${noun}</h2></div>
@@ -260,7 +263,7 @@ ${
     ? html`<div class="body muted">No ${noun}s opened yet.</div>`
     : html`<ul class="plain body">${data.recentPrs.map(
         p =>
-          html`<li><a href="${data.base}tour/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasTour === true ? '' : html` <span class="muted">no tour yet</span>${data.canGenerate ? html` <a class="cmd" href="${data.base}tour/${String(p.number)}?generate=1">generate</a>` : ''}`}${p.hasCanvas === true ? html` · <a href="${data.base}review/${String(p.number)}">canvas</a>` : ''}</li>`
+          html`<li><a href="${data.base}tour/${String(p.number)}"><span class="mono num">#${String(p.number)}</span> ${p.title}</a>${p.hasTour === true ? '' : html` <span class="muted">no tour yet</span>${data.canGenerateTours ? html` <a class="cmd" href="${data.base}tour/${String(p.number)}?generate=1">generate</a>` : ''}`}${p.hasCanvas === true ? html` · <a href="${data.base}review/${String(p.number)}">canvas</a>` : ''}</li>`
       )}</ul>`
 }
 </section>`

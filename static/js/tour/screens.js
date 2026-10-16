@@ -566,7 +566,7 @@ export function missingHtml(bundle) {
     <p><button class="cmd fill" type="button" id="generate-start" aria-haspopup="dialog">generate tour</button></p>
     ${command}`
     : `<p>Run the tour skill in your agent, then this page draws it:</p>
-    ${command}`
+    ${command}${notAuthorHtml(bundle)}`
   // Only a pull request takes a shared tour: local work has none to be shared on.
   const drop =
     bundle.local === undefined && !bundle.preview ? `${fetchSharedHtml()}${dropZoneHtml('tour')}` : ''
@@ -581,11 +581,22 @@ function fetchSharedHtml() {
 }
 
 /**
- * Whether the page can generate the tour itself: an agent runs here, and this is no preview.
+ * Whether the page can generate the tour itself: an agent runs here, `tour.generate` lets this
+ * reader, and this is no preview.
  * @param {TourBundle} bundle
  */
 export function canGenerate(bundle) {
-  return bundle.chat.enabled && !bundle.preview
+  return bundle.chat.enabled && bundle.generate === 'allowed' && !bundle.preview
+}
+
+/**
+ * Why the page offers no generate command to a reader who could otherwise run one.
+ * @param {TourBundle} bundle
+ */
+function notAuthorHtml(bundle) {
+  return bundle.chat.enabled && bundle.generate === 'not-author' && !bundle.preview
+    ? '<p class="muted">Only the author generates the tour here (<code>tour.generate: author</code>): its agent runs with every permission, and a diff someone else wrote could steer it. Set <code>tour.generate: on</code> in <code>pr-review.config.yml</code> to allow every reader.</p>'
+    : ''
 }
 
 /**

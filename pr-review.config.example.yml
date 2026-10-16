@@ -117,3 +117,4 @@ tour:
   # models:            # the model each agent generates tours with; falls back to generation.models
   #   claude: opus
   guide: docs/pr-tour.md # the committed guide /pr-tour-setup writes
+  generate: author # who may generate from the review app: author, on (every reader), or off

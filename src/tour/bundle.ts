@@ -3,6 +3,7 @@ import type { ChatStatus } from '../contract/api.js'
 import {
   freshReaderState,
   type TourBundle,
+  type TourGeneratePermission,
   type TourPageLandmark,
   type TourPageTour,
 } from '../contract/tour-api.js'
@@ -36,6 +37,20 @@ export async function tourReviewer(
   if (isLocalKey(key)) return { login: null, author: true }
   const { login } = await ctx.capabilities.get()
   return { login, author: isAuthor(login, pr) }
+}
+
+/**
+ * Whether this reader may start a tour generation from the review app, by `tour.generate`. The
+ * agent runs with every permission while it reads the diff, so a diff someone else wrote could
+ * steer it: by default only the author, or the owner of local work, may.
+ */
+export function tourGeneratePermission(
+  ctx: AppContext,
+  reviewer: TourBundle['reviewer']
+): TourGeneratePermission {
+  const rule = ctx.projectConfig.config.tour.generate
+  if (rule === 'off') return 'off'
+  return rule === 'on' || reviewer.author ? 'allowed' : 'not-author'
 }
 
 /** Whether the grilling can run: chat is on for the project and acpx is on the PATH. */
@@ -74,6 +89,7 @@ export async function resolveTourBundle(
       audio: config.audio,
     },
     chat: await tourChatStatus(ctx),
+    generate: tourGeneratePermission(ctx, reviewer),
     skillCommand: `/pr-tour ${keyToString(key)}`,
     warnings: [...ctx.projectConfig.warnings],
   }

@@ -9,9 +9,11 @@ import {
   type GenerationSkillResponse,
   type GenerationTargetResponse,
 } from '../../contract/generation.js'
-import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
+import { isLocalKey, keyToString, type ReviewKey } from '../../contract/review-key.js'
 import { resolveSharing, resolveTourSharing } from '../../contract/settings.js'
 import { GenerationBusyError, type GenerationManager } from '../../generate/generation-manager.js'
+import { tourGeneratePermission, tourReviewer } from '../../tour/bundle.js'
+import { createPrLoader, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { branchPr } from '../start-page.js'
@@ -52,7 +54,35 @@ export async function requireSharingLogin(
   })
 }
 
+/**
+ * Refuses a tour generation `tour.generate` does not allow this reader, before any agent time: the
+ * tour's agent runs with every permission, so by default only the change's author starts one.
+ */
+async function requireTourGenerate(ctx: AppContext, loader: PrLoader, key: ReviewKey): Promise<void> {
+  const reviewer = isLocalKey(key)
+    ? await tourReviewer(ctx, key, { author: '' })
+    : await tourReviewer(ctx, key, await loader.currentTarget(key))
+  const permission = tourGeneratePermission(ctx, reviewer)
+  if (permission === 'off') {
+    throw new AppError(
+      'NOT_FOUND',
+      'generating a tour from the review app is off for this repository (tour.generate: off)',
+      404,
+      `run /pr-tour ${keyToString(key)} from Claude Code or Codex, or set tour.generate in pr-review.config.yml`
+    )
+  }
+  if (permission === 'not-author') {
+    throw new AppError(
+      'NOT_AUTHOR',
+      `only the author of #${keyToString(key)} generates its tour from the review app (tour.generate: author): the agent runs with every permission, and a diff someone else wrote could steer it`,
+      403,
+      `run /pr-tour ${keyToString(key)} from Claude Code or Codex, or set tour.generate: on in pr-review.config.yml`
+    )
+  }
+}
+
 export function generateRoutes(ctx: AppContext): Hono {
+  const loader = createPrLoader(ctx)
   const api = new Hono()
   const managers: Record<
     GenerationKind,
@@ -121,6 +151,9 @@ export function generateRoutes(ctx: AppContext): Hono {
           503,
           'install it with `npm install -g acpx@latest`, or run the skill from Claude Code or Codex'
         )
+      }
+      if (kind === 'tour') {
+        await requireTourGenerate(ctx, loader, key)
       }
       await requireSharingLogin(ctx, key, input.share !== false, kind)
       try {

@@ -132,6 +132,8 @@ export interface TourPageOptions {
   audio: 'on' | 'off'
 }
 
+export type TourGeneratePermission = 'allowed' | 'not-author' | 'off'
+
 export interface TourBundle {
   status: 'ready' | 'stale' | 'missing'
   key: ReviewKey
@@ -150,6 +152,11 @@ export interface TourBundle {
   options: TourPageOptions
   /** Whether the grilling can run through AI Chat, and with which agent. */
   chat: ChatStatus
+  /**
+   * Whether this reader may generate the tour from the page (`tour.generate`): `allowed`, or why
+   * not: `off` for everyone, `not-author` when only the change's author may.
+   */
+  generate: TourGeneratePermission
   skillCommand: string
   warnings: string[]
 }

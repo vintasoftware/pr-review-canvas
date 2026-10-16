@@ -980,7 +980,10 @@ pr-review tour import <zip> [--pr <n>] [--force]
 ```
 
 `tour generate` is `generate` for the tour: it runs the job in the running server, as the tour
-page's generate command does, and waits for it. The server runs prepare and publish; between them
+page's generate command does, and waits for it. `tour.generate` decides who may: `author`, the default, lets only
+the pull request's author (and anyone on their own local work) start one, because the agent runs
+with every permission while it reads a diff that could steer it; `on` lets every reader, and `off`
+nobody. A reader it leaves out still runs `/pr-tour` from their own agent. The server runs prepare and publish; between them
 the chat agent follows the pr-tour skill (the project's copy, else the shipped one) from the
 repository root, through acpx with every permission approved, because the skill writes scene files,
 runs `tour validate`, `preview`, and `checkout`, and runs try-it recipes. It calls this server's own
@@ -1117,21 +1120,22 @@ the zip is exported to `<dataDir>/exports/` for the author to attach by hand. Th
 
 Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-review.config.example.yml).
 
-| Key                            | Default           | Details                                                                                                      |
-| ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tour.budget.whyLandmarks`     | `4`               | Hard ceiling on why landmarks; the state landmark does not count                                             |
-| `tour.budget.decisions`        | `5`               | Ceiling on decisions                                                                                         |
-| `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                    |
-| `tour.budget.linesPerLandmark` | `400`             | About one why landmark per this many changed lines                                                           |
-| `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                      |
-| `tour.grill`                   | `change`          | `change` grills when the reader asks for something else, `always` on every pick, `off` never                 |
-| `tour.audio`                   | `on`              | Speech through the browser's Web Speech API, with a one-time notice on where the audio goes                  |
-| `tour.microWorld`              | `on`              | `off` refuses a micro-world                                                                                  |
-| `tour.tryIt`                   | `auto`            | `auto` is on when the guide has a run recipe; `on`; `off`                                                    |
-| `tour.categories`              | all six           | The decision categories the project keeps: `trade-off`, `architecture`, `product`, `pokayoke`, `nfr`, `spec` |
-| `tour.share`                   | `auto`            | `auto` follows `sharing.canvasComment`; `on`; `off`                                                          |
-| `tour.models`                  | `{}`              | Per agent id, over `generation.models`                                                                       |
-| `tour.guide`                   | `docs/pr-tour.md` | The committed guide, relative to the repository root                                                         |
+| Key                            | Default           | Details                                                                                                             |
+| ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `tour.budget.whyLandmarks`     | `4`               | Hard ceiling on why landmarks; the state landmark does not count                                                    |
+| `tour.budget.decisions`        | `5`               | Ceiling on decisions                                                                                                |
+| `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                           |
+| `tour.budget.linesPerLandmark` | `400`             | About one why landmark per this many changed lines                                                                  |
+| `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                             |
+| `tour.grill`                   | `change`          | `change` grills when the reader asks for something else, `always` on every pick, `off` never                        |
+| `tour.audio`                   | `on`              | Speech through the browser's Web Speech API, with a one-time notice on where the audio goes                         |
+| `tour.microWorld`              | `on`              | `off` refuses a micro-world                                                                                         |
+| `tour.tryIt`                   | `auto`            | `auto` is on when the guide has a run recipe; `on`; `off`                                                           |
+| `tour.categories`              | all six           | The decision categories the project keeps: `trade-off`, `architecture`, `product`, `pokayoke`, `nfr`, `spec`        |
+| `tour.share`                   | `auto`            | `auto` follows `sharing.canvasComment`; `on`; `off`                                                                 |
+| `tour.models`                  | `{}`              | Per agent id, over `generation.models`                                                                              |
+| `tour.guide`                   | `docs/pr-tour.md` | The committed guide, relative to the repository root                                                                |
+| `tour.generate`                | `author`          | Who generates a tour from the review app: `author` (the change's author, or local work), `on` (every reader), `off` |
 
 The prompt template is `prompts/tour.md`, and the grilling's seed is `prompts/tour-grill.md`; both
 are overridable as `prompts: { tour.md: <path>, tour-grill.md: <path> }` like the others. The scene guide the generator reads is `skills/pr-tour/scenes.md`.

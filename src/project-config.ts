@@ -91,6 +91,12 @@ export const TourConfigSchema = z.object({
   models: GenerationModelsSchema,
   /** The committed guide, relative to the repository root. */
   guide: z.string().min(1),
+  /**
+   * Who may generate a tour from the review app. Its agent runs with every permission, and the
+   * diff it reads can steer it, so by default only the change's author does (`author`); `on` is
+   * every reader, `off` nobody: the pr-tour skill still runs from a terminal.
+   */
+  generate: z.enum(['on', 'author', 'off']),
 })
 export type TourConfig = z.infer<typeof TourConfigSchema>
 
@@ -112,6 +118,7 @@ const PartialTourConfigSchema = z.object({
   share: z.enum(['on', 'off', 'auto']).optional(),
   models: GenerationModelsSchema.optional(),
   guide: z.string().min(1).optional(),
+  generate: z.enum(['on', 'author', 'off']).optional(),
 })
 
 export const DEFAULT_TOUR_CONFIG: TourConfig = {
@@ -125,6 +132,7 @@ export const DEFAULT_TOUR_CONFIG: TourConfig = {
   share: 'auto',
   models: {},
   guide: 'docs/pr-tour.md',
+  generate: 'author',
 }
 
 export const ProjectConfigSchema = z.object({
@@ -280,6 +288,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
       share: user.tour?.share ?? DEFAULT_TOUR_CONFIG.share,
       models: { ...user.tour?.models },
       guide: user.tour?.guide ?? DEFAULT_TOUR_CONFIG.guide,
+      generate: user.tour?.generate ?? DEFAULT_TOUR_CONFIG.generate,
     },
   }
   if (user.rulebook !== undefined) {

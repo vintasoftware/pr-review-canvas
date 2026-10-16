@@ -604,6 +604,18 @@ describe('the other screens', () => {
     expect(staleBarHtml({ ...bundleWith(), stale, local: 'branch' })).not.toContain('fetch-shared')
   })
 
+  it('offers no generate command to a reader tour.generate leaves out, and says why to a non-author', () => {
+    const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
+    document.body.innerHTML = missingHtml(missingTourBundle({ chat, generate: 'not-author' }))
+    expect(document.querySelector('#generate-start')).toBeNull()
+    expect(document.body.textContent).toContain('Only the author generates the tour here')
+    document.body.innerHTML = missingHtml(missingTourBundle({ chat, generate: 'off' }))
+    expect(document.querySelector('#generate-start')).toBeNull()
+    expect(document.body.textContent).not.toContain('Only the author')
+    document.body.innerHTML = tourHeaderHtml({ ...bundleWith(), chat, generate: 'not-author' }, LOOK)
+    expect(document.querySelector('#regenerate')).toBeNull()
+  })
+
   it('offers to generate the tour where an agent runs, and only the skill command where none does', () => {
     const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
     document.body.innerHTML = missingHtml(missingTourBundle({ chat }))

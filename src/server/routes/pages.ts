@@ -67,6 +67,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           base: ctx.config.basePath,
           host: ctx.config.host,
           canGenerate: acpx.installed,
+          canGenerateTours: acpx.installed && ctx.projectConfig.config.tour.generate !== 'off',
           tab: homeTab(c.req.query('tab')),
         },
         c.get('cspNonce'),
