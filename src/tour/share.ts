@@ -1,14 +1,12 @@
 // Sharing a stored tour on its pull request as the author's tour comment, and exporting it as a
 // zip when the comment does not fit or the post fails.
-import { mkdir, writeFile } from 'node:fs/promises'
-import path from 'node:path'
 import { resolveTourSharing } from '../contract/settings.js'
 import type { CanvasSharing } from '../contract/self-review.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { TourArtifact } from '../contract/tour.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { defaultExportDir } from '../canvas/export.js'
+import { defaultExportDir, writeCanvasZip } from '../canvas/export.js'
 import { buildTourComment, TOUR_COMMENT_MARKER, type TourZip } from './comment.js'
 import { buildTourZip, buildTourZipName, TOUR_TOOL_NAME } from './zip.js'
 
@@ -66,14 +64,13 @@ export interface TourExportResult {
   headSha: string
 }
 
+/** Writes the stored tour's zip where `out` says, as `export` does a canvas's; the exports folder by default. */
 export async function exportTour(
   ctx: AppContext,
-  opts: { headSha: string; prNumber?: number | undefined }
+  opts: { headSha: string; prNumber?: number | undefined; out?: string | undefined }
 ): Promise<TourExportResult> {
   const { zip } = await zipStoredTour(ctx, opts.headSha, opts.prNumber)
-  const file = path.join(defaultExportDir(ctx), zip.name)
-  await mkdir(path.dirname(file), { recursive: true })
-  await writeFile(file, zip.bytes)
+  const file = await writeCanvasZip(opts.out, defaultExportDir(ctx), zip)
   return { status: 'exported', path: file, name: zip.name, headSha: zip.headSha }
 }
 

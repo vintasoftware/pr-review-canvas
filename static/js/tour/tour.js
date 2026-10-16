@@ -7,8 +7,11 @@
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 /** @typedef {import('../contract-types.js').Decision} Decision */
 /** @typedef {import('./steps.js').Step} Step */
-import { saveAppearance, setApiBase } from '../api.js'
-import { toast, wireCopyCommands } from '../commands.js'
+import { importTour, saveAppearance, setApiBase } from '../api.js'
+import { runCommand, toast, wireCopyCommands } from '../commands.js'
+import { exportTourZip } from '../download.js'
+import { validateTourFilename } from '../empty-state.js'
+import { wireDropZone } from '../import-zone.js'
 import { copyToClipboard, esc, qs, scrollIntoViewSafe } from '../dom.js'
 import { bannerHtml, errorCardHtml, toEnvelopeError } from '../errors.js'
 import { wireEnvBadge } from '../header-bar.js'
@@ -164,6 +167,34 @@ export class PrTourElement extends HTMLElement {
     generation.attach(bundle)
     for (const id of ['#regenerate', '#generate-start', '#stale-generate']) {
       qs(id, this)?.addEventListener('click', () => generation.open(bundle))
+    }
+  }
+
+  /**
+   * The header's export command, which saves the tour on screen, and the empty screen's drop zone,
+   * which imports a tour a teammate shared and draws it.
+   * @param {TourBundle} bundle
+   */
+  wireZips(bundle) {
+    const exportZip = qs('#export-zip', this)
+    const headSha = bundle.tour?.headSha
+    if (exportZip instanceof HTMLElement && headSha !== undefined) {
+      exportZip.addEventListener('click', () => {
+        void runCommand(exportZip, () => exportTourZip(bundle.key, { headSha }), {
+          pendingLabel: 'exporting…',
+        })
+      })
+    }
+    if (typeof bundle.key === 'number') {
+      wireDropZone(this, {
+        prNumber: bundle.key,
+        importImpl: importTour,
+        validate: validateTourFilename,
+        onImported: result => {
+          for (const warning of result.warnings) toast(this, warning)
+          void this.boot()
+        },
+      })
     }
   }
 
@@ -688,6 +719,7 @@ export class PrTourElement extends HTMLElement {
   wireCommands() {
     if (this.bundle !== null) {
       this.wireGeneration(this.bundle)
+      this.wireZips(this.bundle)
     }
     const toggle = qs('#theme-toggle', this)
     toggle?.addEventListener('click', () => {

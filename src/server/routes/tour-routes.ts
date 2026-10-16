@@ -1,16 +1,21 @@
-// The tour's API: the bundle the page opens with, the reader's state between visits, and finishing.
+// The tour's API: the bundle the page opens with, the reader's state between visits, finishing,
+// and the zip a tour travels in.
 import { Hono } from 'hono'
 import { TourGrillSendSchema } from '../../contract/chat.js'
 import { TourFinishInputSchema, TourReaderInputSchema } from '../../contract/tour-api.js'
 import { resolveTourBundle, tourReviewer } from '../../tour/bundle.js'
 import { finishTour } from '../../tour/finish.js'
+import { CANVAS_ZIP_MAX_BYTES } from '../../canvas/zip.js'
+import { isLocalKey } from '../../contract/review-key.js'
+import { importTour } from '../../tour/import.js'
 import { lookupTour } from '../../tour/lookup.js'
+import { zipStoredTour } from '../../tour/share.js'
 import { readReaderState, writeReaderState } from '../../tour/reader.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { oneAtATime } from '../one-at-a-time.js'
-import { parseTargetKey } from './api.js'
+import { parseHeadShaQuery, parseTargetKey, readUpload, requirePrNumber } from './api.js'
 import { turnResponse } from './chat-routes.js'
 import { readBody } from './review-routes.js'
 
@@ -48,6 +53,45 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
       preview: c.req.query('preview') !== undefined,
     })
     return c.json(bundle)
+  })
+
+  // The tour on screen as a zip, or the one `headSha` names. A local tour is exported without a
+  // number, as a local canvas is.
+  api.get('/tours/:n/export', async c => {
+    const key = parseTargetKey(c.req.param('n'))
+    let headSha = parseHeadShaQuery(c.req.query('headSha'))
+    if (headSha === undefined) {
+      const found = await lookupTour(ctx, loader, key)
+      if (found.status === 'missing') {
+        throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)}`, 404, 'generate one with /pr-tour')
+      }
+      headSha = found.headSha
+    }
+    const { zip } = await zipStoredTour(ctx, headSha, isLocalKey(key) ? undefined : key)
+    // The name is built from the repo slug, the PR number, and the sha, so it holds no user text.
+    return new Response(new Blob([zip.bytes]), {
+      headers: {
+        'content-type': 'application/zip',
+        'content-disposition': `attachment; filename="${zip.name}"`,
+      },
+    })
+  })
+
+  api.post('/tours/:n/import', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'importing a shared tour')
+    const { file, force } = await readUpload(c.req.raw)
+    if (!(file instanceof File)) {
+      throw new AppError('BAD_REQUEST', 'send the zip as the multipart field `file`', 400)
+    }
+    if (file.size > CANVAS_ZIP_MAX_BYTES) {
+      throw new AppError('CANVAS_TOO_LARGE', `the tour zip is larger than ${CANVAS_ZIP_MAX_BYTES} bytes`, 413)
+    }
+    const result = await importTour(ctx, {
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      prNumber: number,
+      force: force === '1',
+    })
+    return c.json(result)
   })
 
   api.put('/tours/:n/reader', async c => {

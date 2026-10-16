@@ -974,6 +974,8 @@ pr-review tour plan (--pr <n> | --branch | --uncommitted)
 pr-review tour gallery [<slug>…] [--out <dir>]
 pr-review tour hunk <tourDir> <hunk id> [--from <line> --to <line>]
 pr-review tour checkout <tourDir> head|base [--remove]
+pr-review tour export (--pr <n> | --branch | --uncommitted | --head <sha> [--pr <n>]) [--out <file|dir>]
+pr-review tour import <zip> [--pr <n>] [--force]
 ```
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
@@ -1028,6 +1030,14 @@ soon as its pull request is merged or closed).
 `headSha`, `tourDir`, `promptPath`, the `prompt` itself, `finishedAt`, and how many `changes`
 and `kept` decisions it holds. `/pr-tour-apply <key>` reads it, makes the approved changes, runs
 the project checks, and offers a fresh tour.
+
+`tour export` writes the zip of the tour the page shows for that review (the newest older one when
+the head has none), or of the stored tour of `--head`, to `.pr-review/exports/` or `--out`, as
+`export` does a canvas; it is the zip the tour comment carries. `tour import` stores a tour from
+such a zip, refusing one of another repository unless `--force` and one exported for another
+pull request than `--pr`, and keeps a stored tour of the same commit that is at least as new. The
+tour page has the same two: an export command in its header, and on a pull request with no tour, a
+drop zone (`GET /api/tours/<n>/export`, `POST /api/tours/<n>/import`).
 
 The three later steps use the data directory that holds the tour dir, as `validate` and `publish`
 do for a canvas. `tour publish` answers `CANVAS_STALE` when the head moved and `CANVAS_ELSEWHERE`

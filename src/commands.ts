@@ -97,7 +97,7 @@ export function printErrorEnvelope(io: CliIo, code: ErrorCode, message: string, 
   printJson(io, { error })
 }
 
-function shortSha(sha: string): string {
+export function shortSha(sha: string): string {
   return sha.slice(0, 7)
 }
 
@@ -193,7 +193,7 @@ export function splitCommonFlags(argv: string[]): {
   }
 }
 
-function parsePrNumber(raw: string): number {
+export function parsePrNumber(raw: string): number {
   const n = Number(raw)
   if (!Number.isInteger(n) || n <= 0) {
     throw new UsageError(`--pr must be a positive integer, got "${raw}"`)
@@ -523,12 +523,12 @@ export async function runExport(ctx: AppContext, argv: string[], io: CliIo): Pro
  * grows between the check and the read, and a named pipe that reports no size at all, both stop
  * at the cap instead of filling memory.
  */
-async function readZipFile(zipPath: string, shown: string): Promise<Uint8Array> {
+export async function readZipFile(zipPath: string, shown: string): Promise<Uint8Array> {
   let handle: FileHandle
   try {
     handle = await open(zipPath, 'r')
   } catch {
-    throw new PublishError('NOT_FOUND', `${shown} does not exist`, 'pass the canvas zip to import')
+    throw new PublishError('NOT_FOUND', `${shown} does not exist`, 'pass the zip to import')
   }
   const tooLarge = new AppError(
     'CANVAS_TOO_LARGE',

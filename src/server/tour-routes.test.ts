@@ -799,3 +799,62 @@ describe('pr-review tour plan', () => {
     })
   })
 })
+
+describe('the tour zip routes', () => {
+  /** The stored tour of PR #42 as its zip, for the import to take back. */
+  async function exported(): Promise<{ bytes: Uint8Array<ArrayBuffer>; name: string }> {
+    const res = await get('/api/tours/42/export')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/zip')
+    const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? ''
+    return { bytes: new Uint8Array(await res.arrayBuffer()), name }
+  }
+
+  async function upload(
+    route: string,
+    file: { bytes: Uint8Array<ArrayBuffer>; name: string },
+    force = false
+  ) {
+    const form = new FormData()
+    form.append('file', new File([file.bytes], file.name))
+    if (force) form.append('force', '1')
+    return createApp(t.ctx).request(route, {
+      method: 'POST',
+      headers: { ...LOCAL, origin: 'http://127.0.0.1:3010' },
+      body: form,
+    })
+  }
+
+  it('exports the tour on screen, and answers 404 with none', async () => {
+    t = await context()
+    expect((await get('/api/tours/42/export')).status).toBe(404)
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const zip = await exported()
+    expect(zip.name).toMatch(/^pr-42-\d{8}T\d{6}Z-aaaaaaaa-acme-widgets-tour\.zip$/)
+    expect((await get(`/api/tours/42/export?headSha=${OTHER_SHA}`)).status).toBe(404)
+    expect((await get('/api/tours/42/export?headSha=nope')).status).toBe(400)
+  })
+
+  it('imports a shared tour, keeps a stored one at least as new, and refuses another PR', async () => {
+    t = await context()
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const zip = await exported()
+    const kept = await upload('/api/tours/42/import', zip)
+    expect(await json(kept)).toEqual({ status: 'exists', headSha: HEAD_SHA, warnings: [] })
+
+    await t.cleanup()
+    t = await context()
+    const imported = await upload('/api/tours/42/import', zip)
+    expect(await json(imported)).toEqual({ status: 'imported', headSha: HEAD_SHA, warnings: [] })
+    expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
+    expect((await t.ctx.tours.readIndex()).tours[HEAD_SHA]).toMatchObject({ prNumber: 42, source: 'import' })
+
+    const other = await upload('/api/tours/7/import', zip)
+    expect(other.status).toBe(400)
+    expect((await json<ErrorEnvelope>(other)).error.code).toBe('CANVAS_PR_MISMATCH')
+    const local = await upload('/api/tours/branch/import', zip)
+    expect(local.status).toBe(400)
+    const junk = await upload('/api/tours/42/import', { bytes: new Uint8Array([1, 2, 3]), name: 'x.zip' })
+    expect((await json<ErrorEnvelope>(junk)).error.code).toBe('CANVAS_INVALID')
+  })
+})

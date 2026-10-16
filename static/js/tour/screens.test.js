@@ -578,6 +578,22 @@ describe('the corners of the screens', () => {
 })
 
 describe('the other screens', () => {
+  it('offers the tour as a zip in the header, and a drop zone for a shared one on a PR with none', () => {
+    document.body.innerHTML = tourHeaderHtml(bundleWith(), LOOK)
+    expect(document.querySelector('#export-zip')?.getAttribute('title')).toBe(
+      'Download this tour as a zip to share on GitHub'
+    )
+    document.body.innerHTML = tourHeaderHtml({ ...bundleWith(), preview: true }, LOOK)
+    expect(document.querySelector('#export-zip')).toBeNull()
+    document.body.innerHTML = tourHeaderHtml(missingTourBundle(), LOOK)
+    expect(document.querySelector('#export-zip')).toBeNull()
+
+    document.body.innerHTML = missingHtml(missingTourBundle())
+    expect(document.querySelector('label.drop')?.textContent).toContain('Drop a tour zip here')
+    document.body.innerHTML = missingHtml(missingTourBundle({ local: 'branch' }))
+    expect(document.querySelector('label.drop')).toBeNull()
+  })
+
   it('offers to generate the tour where an agent runs, and only the skill command where none does', () => {
     const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
     document.body.innerHTML = missingHtml(missingTourBundle({ chat }))

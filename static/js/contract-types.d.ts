@@ -83,6 +83,7 @@ export type {
   TourBundle,
   TourFinished,
   TourFinishResponse,
+  TourImportResult,
   TourPageLandmark,
   TourPageTour,
   TourReaderState,

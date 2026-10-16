@@ -442,6 +442,21 @@ export function importCanvas(prNumber, file, opts = {}) {
 
 /**
  * @param {ReviewKey} prNumber
+ * @param {File} file
+ * @param {{ force?: boolean, onProgress?: (fraction: number) => void, xhrImpl?: () => XMLHttpRequest }} [opts]
+ * @returns {Promise<import('./contract-types.js').TourImportResult>}
+ */
+export function importTour(prNumber, file, opts = {}) {
+  const form = new FormData()
+  form.append('file', file)
+  if (opts.force) {
+    form.append('force', '1')
+  }
+  return uploadForm(`/api/tours/${prNumber}/import`, form, opts)
+}
+
+/**
+ * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<import('./contract-types.js').SharedCanvasFetchResponse>}
  */
@@ -455,10 +470,29 @@ export function fetchSharedCanvas(prNumber, opts = {}) {
  * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ blob: Blob, filename: string }>}
  */
-export async function fetchCanvasZip(prNumber, opts = {}) {
+export function fetchCanvasZip(prNumber, opts = {}) {
+  return fetchZip(`/api/prs/${prNumber}/export`, opts)
+}
+
+/**
+ * The tour's zip, as `fetchCanvasZip` fetches the canvas's.
+ * @param {ReviewKey} prNumber
+ * @param {{ headSha?: string, fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ blob: Blob, filename: string }>}
+ */
+export function fetchTourZip(prNumber, opts = {}) {
+  return fetchZip(`/api/tours/${prNumber}/export`, opts)
+}
+
+/**
+ * @param {string} route
+ * @param {{ headSha?: string, fetchImpl?: typeof fetch }} opts
+ * @returns {Promise<{ blob: Blob, filename: string }>}
+ */
+async function fetchZip(route, opts) {
   const doFetch = opts.fetchImpl ?? fetch
   const q = opts.headSha ? `?headSha=${encodeURIComponent(opts.headSha)}` : ''
-  const res = await doFetch(underBase(`/api/prs/${prNumber}/export${q}`), {
+  const res = await doFetch(underBase(`${route}${q}`), {
     headers: { accept: 'application/zip' },
   })
   if (!res.ok) {

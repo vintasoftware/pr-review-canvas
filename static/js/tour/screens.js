@@ -12,6 +12,7 @@
 /** @typedef {import('../contract-types.js').Restatement} Restatement */
 /** @typedef {import('./steps.js').Step} Step */
 import { esc, timeAgo } from '../dom.js'
+import { dropZoneHtml } from '../empty-state.js'
 import { GENERATE_BUTTON_ID, tourGenerationMode } from '../generate.js'
 import { authorProfileUrl, currentHost } from '../host.js'
 import { headerBarHtml } from '../header-bar.js'
@@ -105,6 +106,9 @@ export function tourHeaderHtml(bundle, opts) {
       { ...opts, skinTitle: 'Switch between GitHub and Olive styling' },
       `<a class="cmd" id="canvas-link" href="${esc(opts.project?.home ?? '/')}review/${esc(key)}" title="Open the review canvas of this change">canvas</a>` +
         generateButtonHtml(bundle) +
+        (tour === undefined || bundle.preview
+          ? ''
+          : `<button class="cmd" type="button" id="export-zip" title="Download this tour as a zip to share on ${esc(currentHost().label)}">export zip</button>`) +
         '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and how a tour works" aria-haspopup="dialog">help</button>'
     ) +
     '<div class="stripe" aria-hidden="true"></div>' +
@@ -563,8 +567,10 @@ export function missingHtml(bundle) {
     ${command}`
     : `<p>Run the tour skill in your agent, then this page draws it:</p>
     ${command}`
+  // Only a pull request takes a shared tour: local work has none to be shared on.
+  const drop = bundle.local === undefined && !bundle.preview ? dropZoneHtml('tour') : ''
   return `<section class="panel tour-missing" aria-labelledby="missing-h"><div class="panel-h"><h2 id="missing-h">No tour yet for ${what}</h2></div>
-    <div class="body">${body}
+    <div class="body">${body}${drop}
     <p class="muted">This page checks again every few seconds.</p></div></section>`
 }
 

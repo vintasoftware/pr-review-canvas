@@ -71,7 +71,7 @@ export const MAX_UPLOAD_BYTES = CANVAS_ZIP_MAX_BYTES + 64 * 1024
  * The multipart form of an upload, read under the cap first. Parsing is done on the bytes we
  * already hold, so a request that never declares its length cannot buffer without limit.
  */
-async function readUpload(request: Request): Promise<{ file: unknown; force: unknown }> {
+export async function readUpload(request: Request): Promise<{ file: unknown; force: unknown }> {
   let body: Uint8Array<ArrayBuffer>
   try {
     body = await readCappedBody(request, MAX_UPLOAD_BYTES)
@@ -89,7 +89,7 @@ async function readUpload(request: Request): Promise<{ file: unknown; force: unk
   return { file: form.get('file'), force: form.get('force') }
 }
 
-function parseHeadShaQuery(raw: string | undefined): string | undefined {
+export function parseHeadShaQuery(raw: string | undefined): string | undefined {
   if (raw !== undefined && !SHA_RE.test(raw)) {
     throw new AppError('BAD_REQUEST', 'headSha must be a 40-character lowercase hex sha', 400)
   }

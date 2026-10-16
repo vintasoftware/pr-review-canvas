@@ -108,8 +108,9 @@ const COMMANDS: CommandHelp[] = [
     ],
   },
   {
-    name: 'tour prepare|validate|preview|publish|plan',
-    summary: 'The tour, a guided pass over a change: the same steps as a canvas, apart from it.',
+    name: 'tour <step>',
+    summary:
+      'The tour, a guided pass over a change: the same steps as a canvas, apart from it. The steps: prepare, validate, preview, publish, plan, gallery, hunk, checkout, export, import.',
     flags: [
       { form: 'prepare --pr <n> [--force]', detail: 'or --branch, --uncommitted, --base <ref> --head <ref>' },
       { form: 'validate <model> --tour <dir>', detail: '[--human]' },
@@ -120,6 +121,8 @@ const COMMANDS: CommandHelp[] = [
       },
       { form: 'plan --pr <n>', detail: 'or --branch, --uncommitted: the confirmed plan' },
       { form: 'checkout <dir> head|base', detail: 'a worktree to run things in' },
+      { form: 'export --pr <n>', detail: 'or --branch, --uncommitted, --head <sha>; [--out <file|dir>]' },
+      { form: 'import <zip> [--pr <n>]', detail: '[--force]: store a tour someone exported' },
     ],
     notes: [
       'A tour is stored beside the canvases and shared as its own comment. The pr-tour skill runs these.',

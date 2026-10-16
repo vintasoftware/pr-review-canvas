@@ -102,6 +102,13 @@ export interface TourFinishResponse {
 export type TourPageLandmark = Omit<Landmark, 'scene' | 'micro'> & { scene: boolean; micro: boolean }
 export type TourPageTour = Omit<TourArtifact, 'landmarks'> & { landmarks: TourPageLandmark[] }
 
+/** What importing a tour zip did: stored it, or kept the stored one, which is at least as new. */
+export interface TourImportResult {
+  status: 'imported' | 'exists'
+  headSha: string
+  warnings: string[]
+}
+
 export interface TourStaleInfo {
   tourHeadSha: string
   currentHeadSha: string

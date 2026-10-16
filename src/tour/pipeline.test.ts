@@ -2,7 +2,7 @@
 // The tour's steps end to end over the synthetic pull request: prepare writes the prompt and the
 // context, validate reads the model and the scene files, publish stores and shares, preview
 // screenshots, and the CLI layer prints what the skill reads.
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type CliIo, reportFailure } from '../commands.js'
 import { TourContextSchema, TourArtifactSchema } from '../contract/tour.js'
@@ -16,7 +16,7 @@ import {
   gitForLocal,
   HEAD_SHA,
 } from '../testing/synthetic.js'
-import { syntheticTourModel, writeTourFiles } from '../testing/synthetic-tour.js'
+import { syntheticTour, syntheticTourModel, writeTourFiles } from '../testing/synthetic-tour.js'
 import { buildTourComment, readTourComment, tourCommentSummary } from './comment.js'
 import { namedTourDir, tourStepCreatesDataDir } from './named-dir.js'
 import { runTour } from './commands.js'
@@ -431,6 +431,37 @@ describe('the tour CLI', () => {
     await expect(runTour(t.ctx, ['hunk', result.tourDir, 'nope#1'], chunk.io)).rejects.toThrow(
       'no hunk nope#1 in this change'
     )
+  })
+
+  it('exports the tour a review shows and imports it back, as export and import do a canvas', async () => {
+    await prepared()
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const out = path.join(t.dataDir, 'shared')
+    await mkdir(out)
+    const exported = capture()
+    expect(await runTour(t.ctx, ['export', '--pr', '42', '--out', out], exported.io)).toBe(0)
+    const { path: zipPath, headSha } = JSON.parse(exported.out[0]!) as { path: string; headSha: string }
+    expect(headSha).toBe(HEAD_SHA)
+    expect(zipPath).toMatch(/shared\/pr-42-.+-tour\.zip$/)
+    const byHead = capture()
+    expect(await runTour(t.ctx, ['export', '--head', HEAD_SHA, '--pr', '42'], byHead.io)).toBe(0)
+    expect(JSON.parse(byHead.out[0]!).path).toMatch(/exports\/pr-42-.+-tour\.zip$/)
+    await expect(runTour(t.ctx, ['export', '--head', HEAD_SHA, '--branch'], byHead.io)).rejects.toThrow(
+      'tour export takes --head alone'
+    )
+    await expect(runTour(t.ctx, ['export', '--branch'], byHead.io)).rejects.toThrow(
+      'no branch review has been prepared'
+    )
+
+    const kept = capture()
+    expect(await runTour(t.ctx, ['import', zipPath], kept.io)).toBe(0)
+    expect(JSON.parse(kept.out[0]!)).toEqual({ status: 'exists', headSha: HEAD_SHA, warnings: [] })
+    const human = capture()
+    human.io.json = false
+    await rm(t.ctx.tours.tourDir(HEAD_SHA), { recursive: true })
+    expect(await runTour(t.ctx, ['import', zipPath, '--pr', '42'], human.io)).toBe(0)
+    expect(human.out).toEqual([`Imported the tour for ${HEAD_SHA.slice(0, 7)}.`])
+    await expect(runTour(t.ctx, ['import'], human.io)).rejects.toThrow('tour import takes one zip')
   })
 
   it('checks out the head and the merge base in worktrees of their own, listed and swept with the chat ones', async () => {

@@ -1,12 +1,22 @@
-// `pr-review tour <prepare|validate|preview|publish|plan|gallery|hunk|checkout>`: the tour's own steps, mirroring
-// the canvas commands. Everything is injected: the AppContext carries git, the host, and the stores.
+// `pr-review tour <prepare|validate|preview|publish|plan|gallery|hunk|checkout|export|import>`: the
+// tour's own steps, mirroring the canvas commands. Everything is injected: the AppContext carries git, the host, and the stores.
 import { mkdir, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { HARNESSES } from '../contract/review-artifact.js'
 import { budgetLimits, formatTourError } from '../contract/tour.js'
-import { type CliIo, EXIT, PREPARE_OPTIONS, parsePrepareTarget, printJson, UsageError } from '../commands.js'
+import {
+  type CliIo,
+  EXIT,
+  PREPARE_OPTIONS,
+  parsePrepareTarget,
+  parsePrNumber,
+  printJson,
+  readZipFile,
+  shortSha,
+  UsageError,
+} from '../commands.js'
 import { keyToString, type ReviewKey } from '../contract/review-key.js'
 import { PublishError } from '../review/publish.js'
 import { createPrLoader } from '../server/bundle.js'
@@ -25,9 +35,11 @@ import { renderGallery } from './gallery.js'
 import { HunkNotFound, tourChunk } from './hunk.js'
 import { CheckoutBusyError } from '../chat/checkouts.js'
 import { AppError } from '../server/errors.js'
+import { importTour } from './import.js'
 import { prepareTour } from './prepare.js'
 import { headlessScreenshot, previewTour } from './preview.js'
 import { publishTour, readTourContext, readTourModel, tourValidationInput } from './publish.js'
+import { exportTour } from './share.js'
 import { validateTourModel } from './validate.js'
 
 export const TOUR_STEPS = [
@@ -39,6 +51,8 @@ export const TOUR_STEPS = [
   'gallery',
   'hunk',
   'checkout',
+  'export',
+  'import',
 ] as const
 export type TourStep = (typeof TOUR_STEPS)[number]
 
@@ -75,9 +89,92 @@ export async function runTour(ctx: AppContext, argv: string[], io: CliIo): Promi
       return runTourHunk(rest, io)
     case 'checkout':
       return runTourCheckout(ctx, rest, io)
+    case 'export':
+      return runTourExport(ctx, rest, io)
+    case 'import':
+      return runTourImport(ctx, rest, io)
     default:
       return runTourPublish(ctx, rest, io)
   }
+}
+
+/** The review a `--pr`, `--branch`, or `--uncommitted` flag names. */
+function reviewKeyOf(values: { pr?: string; branch?: boolean; uncommitted?: boolean }): ReviewKey {
+  const target = parsePrepareTarget(values)
+  return target.kind === 'pr' ? target.number : target.kind === 'local' ? target.source : 'branch'
+}
+
+/**
+ * `tour export (--pr <n> | --branch | --uncommitted | --head <sha>) [--out <file|dir>]`: the zip of
+ * the tour the page shows for that review, or of the stored tour of a commit, as `export` writes a
+ * canvas's. `--pr` with `--head` stamps the number on the zip of that commit's tour.
+ */
+async function runTourExport(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      pr: { type: 'string' },
+      branch: { type: 'boolean' },
+      uncommitted: { type: 'boolean' },
+      head: { type: 'string' },
+      out: { type: 'string' },
+    },
+    strict: true,
+  })
+  let headSha: string
+  let prNumber: number | undefined
+  if (values.head !== undefined) {
+    if (values.branch === true || values.uncommitted === true) {
+      throw new UsageError('tour export takes --head alone, or with --pr to stamp the number')
+    }
+    headSha = await ctx.git.revParse(values.head)
+    prNumber = values.pr === undefined ? undefined : parsePrNumber(values.pr)
+  } else {
+    const key = reviewKeyOf(values)
+    const found = await lookupTour(ctx, createPrLoader(ctx), key)
+    if (found.status === 'missing') {
+      throw new PublishError('NOT_FOUND', `no tour of ${keyToString(key)}`, 'generate one with /pr-tour')
+    }
+    headSha = found.headSha
+    prNumber = typeof key === 'number' ? key : undefined
+  }
+  const result = await exportTour(ctx, { headSha, prNumber, out: values.out })
+  if (io.json) {
+    printJson(io, result)
+  } else {
+    io.stdout(`Exported the tour for ${shortSha(result.headSha)} to ${result.path}`)
+  }
+  return EXIT.ok
+}
+
+/** `tour import <zip> [--pr <n>] [--force]`: stores a tour someone exported, as `import` does a canvas. */
+async function runTourImport(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { pr: { type: 'string' }, force: { type: 'boolean' } },
+    allowPositionals: true,
+    strict: true,
+  })
+  const file = positionals[0]
+  if (file === undefined || positionals.length > 1) {
+    throw new UsageError('tour import takes one zip: pr-review tour import <zip> [--pr <n>] [--force]')
+  }
+  const result = await importTour(ctx, {
+    bytes: await readZipFile(path.resolve(file), file),
+    prNumber: values.pr === undefined ? undefined : parsePrNumber(values.pr),
+    force: values.force === true,
+  })
+  if (io.json) {
+    printJson(io, result)
+    return EXIT.ok
+  }
+  for (const warning of result.warnings) io.stderr(`warning: ${warning}`)
+  io.stdout(
+    result.status === 'exists'
+      ? `A tour for ${shortSha(result.headSha)} is already stored and is at least as new; kept it.`
+      : `Imported the tour for ${shortSha(result.headSha)}.`
+  )
+  return EXIT.ok
 }
 
 /**
@@ -90,9 +187,7 @@ async function runTourPlan(ctx: AppContext, argv: string[], io: CliIo): Promise<
     options: { pr: { type: 'string' }, branch: { type: 'boolean' }, uncommitted: { type: 'boolean' } },
     strict: true,
   })
-  const target = parsePrepareTarget(values)
-  const key: ReviewKey =
-    target.kind === 'pr' ? target.number : target.kind === 'local' ? target.source : 'branch'
+  const key = reviewKeyOf(values)
   const found = await lookupTour(ctx, createPrLoader(ctx), key)
   if (found.status === 'missing') {
     throw new PublishError('NOT_FOUND', `no tour of ${keyToString(key)}`, 'generate one with /pr-tour')

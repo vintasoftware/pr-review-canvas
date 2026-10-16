@@ -38,7 +38,7 @@ export function namedTourDir(argv: string[]): string | undefined {
   return undefined
 }
 
-/** The steps that work inside the data dir prepare made, so they create none. */
+/** The steps that may start a data dir: prepare, and import, which stores a tour; the rest work in one prepare made. */
 export function tourStepCreatesDataDir(argv: string[]): boolean {
-  return argv[0] === 'prepare'
+  return argv[0] === 'prepare' || argv[0] === 'import'
 }
