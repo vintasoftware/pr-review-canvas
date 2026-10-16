@@ -864,6 +864,13 @@ describe('the tour zip routes', () => {
     expect(local.status).toBe(400)
     const junk = await upload('/api/tours/42/import', { bytes: new Uint8Array([1, 2, 3]), name: 'x.zip' })
     expect((await json<ErrorEnvelope>(junk)).error.code).toBe('CANVAS_INVALID')
+    // A form with no file, and a file over the cap, never reach the importer.
+    const noFile = await createApp(t.ctx).request('/api/tours/42/import', {
+      method: 'POST',
+      headers: { ...LOCAL, origin: 'http://127.0.0.1:3010' },
+      body: new FormData(),
+    })
+    expect((await json<ErrorEnvelope>(noFile)).error.code).toBe('BAD_REQUEST')
   })
 })
 

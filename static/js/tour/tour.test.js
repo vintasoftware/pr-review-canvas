@@ -10,13 +10,30 @@ import { nextTourSkin, POLL_MS, PrTourElement } from './tour.js'
 
 const HEAD = 'a'.repeat(40)
 
+/** @type {import('../contract-types.js').GenerationJob} */
+const TOUR_JOB = {
+  kind: 'tour',
+  key: 42,
+  force: false,
+  agent: 'claude',
+  model: 'opus',
+  skill: { source: 'default', version: '0.0.0-test' },
+  phase: 'done',
+  round: 1,
+  maxRounds: 4,
+  startedAt: '2026-10-16T12:00:00.000Z',
+  activity: [],
+  headSha: HEAD,
+  sharing: { status: 'off' },
+}
+
 /** @typedef {import('../contract-types.js').TourBundle} TourBundle */
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 
 /**
  * A fake server: the bundle it answers with, the reader states it was sent, and the finishes.
  * @param {TourBundle | (() => TourBundle)} bundle
- * @param {{ finish?: () => Response, save?: () => Response, fail?: boolean }} [opts]
+ * @param {{ finish?: () => Response, save?: () => Response, fail?: boolean, shared?: () => unknown }} [opts]
  */
 function fakeServer(bundle, opts = {}) {
   /** @type {TourReaderState[]} */
@@ -39,6 +56,17 @@ function fakeServer(bundle, opts = {}) {
       calls.push(`${method} ${url}`)
       if (opts.fail) {
         return json({ error: { code: 'PR_NOT_FOUND', message: 'no such pull request', hint: 'check' } }, 404)
+      }
+      if (url.endsWith('/shared-tour/fetch') && method === 'POST') {
+        return json(opts.shared?.() ?? { found: false, imported: false, warnings: [] })
+      }
+      if (url.includes('/export')) {
+        return new Response(new Uint8Array([80, 75]), {
+          headers: { 'content-disposition': 'attachment; filename="pr-42-x-tour.zip"' },
+        })
+      }
+      if (url.endsWith('/generate') && method === 'POST') {
+        return json({ job: { ...TOUR_JOB, phase: 'preparing' } }, 202)
       }
       if (url.endsWith('/grill/history')) {
         return json({ name: 't0', turns: [] })
@@ -479,6 +507,56 @@ describe('the tour page', () => {
     await vi.waitFor(() => expect(document.querySelector('.tour-cover-actions')).not.toBeNull())
     el.remove()
     expect(el.poll).toBeNull()
+  })
+
+  it('generates from the missing screen, and loads the tour a finished job published', async () => {
+    const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
+    let published = false
+    const server = fakeServer(() => (published ? syntheticTourBundle({ chat }) : missingTourBundle({ chat })))
+    vi.stubGlobal('fetch', server.impl)
+    const el = mount()
+    await drawn('#generate-start')
+    click('#generate-start')
+    const dialog = /** @type {HTMLDialogElement} */ (await drawn('#generate-dialog'))
+    expect(dialog.querySelector('h2')?.textContent).toBe('Generate the tour')
+    click('#generate-dialog [data-gen="start"]')
+    await vi.waitFor(() => expect(server.calls).toContain('POST /r/acme/widgets/api/tours/42/generate'))
+    // A job that ended badly while the dialog was closed is a toast.
+    dialog.removeAttribute('open')
+    await el.generationEnded({
+      ...TOUR_JOB,
+      phase: 'failed',
+      error: { code: 'GENERATION_FAILED', message: 'no' },
+    })
+    expect(document.querySelector('.toast')?.textContent).toBe('tour generation failed: no')
+    await el.generationEnded({ ...TOUR_JOB, phase: 'cancelled' })
+    expect(text()).toContain('tour generation stopped')
+    published = true
+    await el.generationEnded(TOUR_JOB)
+    await drawn('.tour-cover-actions')
+    expect(text()).toContain('tour published')
+    el.remove()
+  })
+
+  it('looks for a shared tour on demand, and exports the tour on screen', async () => {
+    /** @type {unknown} */
+    let shared = { found: false, imported: false, warnings: ['pr-42-x-tour.zip: broken'] }
+    const server = fakeServer(missingTourBundle(), { shared: () => shared })
+    vi.stubGlobal('fetch', server.impl)
+    const el = mount()
+    click(`#${(await drawn('#fetch-shared')).id}`)
+    await vi.waitFor(() => expect(text()).toContain('no tour is shared on the pull request'))
+    shared = { found: true, imported: false, warnings: [] }
+    click('#fetch-shared')
+    await vi.waitFor(() => expect(text()).toContain('is no newer than this one'))
+    el.remove()
+
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    vi.stubGlobal('fetch', fakeServer(syntheticTourBundle()).impl)
+    mount()
+    click(`#${(await drawn('#export-zip')).id}`)
+    await vi.waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
   })
 
   it('shows the error card with a retry when the bundle cannot be read, and the stale bar', async () => {

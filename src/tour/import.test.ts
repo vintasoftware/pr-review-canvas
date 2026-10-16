@@ -37,6 +37,16 @@ describe('importTour', () => {
     expect((await t.ctx.tours.readIndex()).tours[HEAD_SHA]).toMatchObject({ prNumber: 42, source: 'import' })
   })
 
+  it('refuses to file a tour under another pull request than its zip names', async () => {
+    t = await makeTestContext()
+    await expect(importTour(t.ctx, { bytes: zipOf(syntheticTour()), prNumber: 7 })).rejects.toMatchObject({
+      code: 'CANVAS_PR_MISMATCH',
+    })
+    // A zip that names no pull request is filed under the one given.
+    const local = syntheticTour({ pr: { ...syntheticArtifact().pr, number: null } })
+    expect((await importTour(t.ctx, { bytes: zipOf(local), prNumber: 7 })).status).toBe('imported')
+  })
+
   it('refuses a zip whose manifest and tour name different commits', async () => {
     t = await makeTestContext()
     const bytes = zipOf(syntheticTour(), { headSha: 'c'.repeat(40) })
