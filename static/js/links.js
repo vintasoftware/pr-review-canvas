@@ -25,6 +25,16 @@ import { hunkForLine, hunkLineRanges } from './hunks.js'
 const LINE_RE = /^([^\n]+?):(\d+)(?:-(\d+))?(:old)?$/
 
 /**
+ * The `#line:` link to a range of lines, in the form `parseLink` reads back.
+ * @param {{ path: string, start: number, end: number, side: 'new' | 'old' }} range
+ * @returns {string}
+ */
+export function lineLink(range) {
+  const lines = range.end === range.start ? `${range.start}` : `${range.start}-${range.end}`
+  return `#line:${range.path}:${lines}${range.side === 'old' ? ':old' : ''}`
+}
+
+/**
  * Parses one link. Returns null for anything that is not one of the four forms.
  * @param {string} href
  * @returns {ParsedLink | null}

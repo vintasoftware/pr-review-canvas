@@ -249,6 +249,8 @@ export interface ChatStatus {
   acpx: boolean
   agent?: string
   model?: string | null
+  /** The reader's `chatThreadPerPlace`: an ask opens its place's thread, or goes to the open one. */
+  threadPerPlace?: boolean
 }
 
 export interface HomeData {

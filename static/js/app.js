@@ -370,7 +370,10 @@ export class PrAppElement extends HTMLElement {
         uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
         openSettings: el =>
           void openSettingsDialog(this, el, {
-            onSaved: data => this.layerView?.setView(data.settings.layerView),
+            onSaved: data => {
+              this.layerView?.setView(data.settings.layerView)
+              this.chat?.followSettings(data.settings)
+            },
           }),
       })
       this.interactions = interactions
@@ -379,6 +382,7 @@ export class PrAppElement extends HTMLElement {
           root: this,
           prNumber: boot.prNumber,
           session,
+          ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })

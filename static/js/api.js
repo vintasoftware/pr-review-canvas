@@ -517,6 +517,21 @@ export function fetchThreadHistory(prNumber, name, opts = {}) {
 }
 
 /**
+ * Makes a thread the one that opens next time.
+ * @param {ReviewKey} prNumber
+ * @param {string} name
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ activeThread: string }>}
+ */
+export function selectThread(prNumber, name, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/chat/threads/${encodeURIComponent(name)}/active`, {
+    method: 'PUT',
+    body: {},
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
  * @param {ReviewKey} prNumber
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ cancelled: boolean }>}

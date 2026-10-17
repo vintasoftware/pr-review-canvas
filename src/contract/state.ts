@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ChatContextSchema } from './chat.js'
 import { PendingCommentSchema } from './pending.js'
 
 export const ChatThreadSchema = z.object({
@@ -19,6 +20,11 @@ export const ChatThreadSchema = z.object({
    * before it have none and are seeded once more.
    */
   seededReaderResolves: z.boolean().optional(),
+  /**
+   * What the thread is about: an attention point, a range of lines, a file, or a layer. **ask** on
+   * that place continues this thread. A thread with none is about the whole pull request.
+   */
+  anchor: ChatContextSchema.optional(),
 })
 
 export type ChatThread = z.infer<typeof ChatThreadSchema>

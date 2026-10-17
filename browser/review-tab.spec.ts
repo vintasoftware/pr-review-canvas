@@ -46,8 +46,10 @@ test('lists the review being written in the side pane, edits a draft there, and 
   // Back on AI Chat, the half-written question is still there.
   await pane.getByRole('tab', { name: 'AI Chat' }).click()
   await expect(page.locator('#msg')).toHaveValue('half a question')
-  await reviewTab.press('ArrowLeft')
-  await pane.getByRole('tab', { name: 'AI Chat' }).press('ArrowRight')
+  // The arrows wrap: right from the last tab is the first, left from the first is the last.
+  await reviewTab.press('ArrowRight')
+  await expect(pane.getByRole('tab', { name: 'AI Chat' })).toHaveAttribute('aria-selected', 'true')
+  await pane.getByRole('tab', { name: 'AI Chat' }).press('ArrowLeft')
   await expect(reviewTab).toHaveAttribute('aria-selected', 'true')
 
   await panel.locator('[data-act="pending-delete"]').click()

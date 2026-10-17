@@ -50,6 +50,7 @@ describe('createSettingsStore', () => {
       chatModel: 'gpt-5.2',
       chatTimeoutSec: 900,
       maxTurns: 6,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,
@@ -76,12 +77,25 @@ describe('createSettingsStore', () => {
       chatModel: null,
       chatTimeoutSec: 120,
       maxTurns: null,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,
       canvasComment: null,
       mentionCanvas: null,
     })
+  })
+
+  it('saves whether an ask opens its place’s thread, and explains the key in a file that lacks it', async () => {
+    const store = createSettingsStore(dataDir)
+    // A file written before the key existed.
+    await writeFile(store.file, 'version: 1\nchatAgent: claude\n', 'utf8')
+    expect((await store.read()).chatThreadPerPlace).toBe(true)
+    expect((await store.write({ chatThreadPerPlace: false })).chatThreadPerPlace).toBe(false)
+    const text = await readFile(store.file, 'utf8')
+    expect(text).toContain('# Whether ask opens the thread of the place it was asked from')
+    expect(text).toContain('chatThreadPerPlace: false')
+    expect((await store.read()).chatThreadPerPlace).toBe(false)
   })
 
   it('saves the reading level a review opens at, next to its comment', async () => {
@@ -254,6 +268,7 @@ describe('two saves that arrive together', () => {
       chatModel: null,
       chatTimeoutSec: 900,
       maxTurns: null,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,

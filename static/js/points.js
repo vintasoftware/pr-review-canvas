@@ -6,6 +6,7 @@ import { askButtonHtml } from './ask.js'
 import { sendCommandsHtml, viewCommentHtml } from './comment-link.js'
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
+import { lineLink } from './links.js'
 import { pendingCommentHtml, pendingForPoint, pendingRange } from './pending.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { renderMarkdown } from './markdown.js'
@@ -105,8 +106,12 @@ export function openPoints(points, state) {
  * @param {Point} p
  */
 export function pointLink(p) {
-  const range = p.endLine !== undefined && p.endLine !== p.line ? `${p.line}-${p.endLine}` : `${p.line}`
-  return `#line:${p.path}:${range}${p.side === 'old' ? ':old' : ''}`
+  return lineLink({
+    path: p.path,
+    start: p.line,
+    end: p.endLine ?? p.line,
+    side: p.side === 'old' ? 'old' : 'new',
+  })
 }
 
 /** @param {Point} p */

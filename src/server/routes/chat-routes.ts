@@ -226,6 +226,16 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
     return c.json(body)
   })
 
+  api.put('/prs/:n/chat/threads/:name/active', async c => {
+    const key = parseTargetKey(c.req.param('n'))
+    const name = c.req.param('name')
+    const thread = isThreadNameFor(name, key) ? await ctx.chat.selectThread(key, name) : null
+    if (thread === null) {
+      throw new AppError('NOT_FOUND', `no chat thread named ${name} on this review`, 404)
+    }
+    return c.json({ activeThread: thread.name })
+  })
+
   api.post('/prs/:n/chat/cancel', async c => {
     const key = parseTargetKey(c.req.param('n'))
     return c.json({ cancelled: await ctx.chat.cancel(key) })

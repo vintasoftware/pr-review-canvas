@@ -213,6 +213,29 @@ describe('the chat thread routes', () => {
     expect(res.status).toBe(404)
   })
 
+  it('records the thread the reader opened, so a reload comes back to it', async () => {
+    const app = createApp(t.ctx)
+    await app.request('/api/prs/42/chat/threads', { method: 'POST', headers: POST })
+    await app.request('/api/prs/42/chat/threads', { method: 'POST', headers: POST })
+    const res = await app.request(`/api/prs/42/chat/threads/${T1}/active`, { method: 'PUT', headers: POST })
+    expect(await json<{ activeThread: string }>(res)).toEqual({ activeThread: T1 })
+    const list = await json<ChatThreadsResponse>(
+      await app.request('/api/prs/42/chat/threads', { headers: LOCAL })
+    )
+    expect(list.activeThread).toBe(T1)
+  })
+
+  it('refuses to open a thread this review does not have', async () => {
+    const app = createApp(t.ctx)
+    for (const name of ['pr-review-acme-widgets-42-claude-t9', 'pr-review-acme-widgets-43-claude-t1']) {
+      const res = await app.request(`/api/prs/42/chat/threads/${name}/active`, {
+        method: 'PUT',
+        headers: POST,
+      })
+      expect([name, res.status]).toEqual([name, 404])
+    }
+  })
+
   it('reports whether there was a turn to cancel', async () => {
     const res = await createApp(t.ctx).request('/api/prs/42/chat/cancel', { method: 'POST', headers: POST })
     expect(await json<{ cancelled: boolean }>(res)).toEqual({ cancelled: false })
@@ -255,6 +278,7 @@ describe('the settings routes', () => {
       chatModel: null,
       chatTimeoutSec: 600,
       maxTurns: null,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,
@@ -300,6 +324,7 @@ describe('the settings routes', () => {
       chatModel: 'gpt-5.2',
       chatTimeoutSec: 300,
       maxTurns: 4,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,
@@ -380,6 +405,7 @@ describe('with chat turned off in the project config', () => {
       ['/api/prs/42/chat/threads', { headers: LOCAL }],
       ['/api/prs/42/chat/threads', { method: 'POST', headers: POST }],
       [`/api/prs/42/chat/threads/${T1}/history`, { headers: LOCAL }],
+      [`/api/prs/42/chat/threads/${T1}/active`, { method: 'PUT', headers: POST }],
       ['/api/prs/42/chat/cancel', { method: 'POST', headers: POST }],
       ['/api/prs/42/chat', { method: 'POST', headers: POST, body: '{}' }],
     ]
@@ -439,7 +465,13 @@ describe('the health check', () => {
     const bundle = await json<{ chat: unknown; warnings: string[] }>(
       await createApp(t.ctx).request('/api/prs/42', { headers: LOCAL })
     )
-    expect(bundle.chat).toEqual({ enabled: false, acpx: false, agent: 'claude', model: null })
+    expect(bundle.chat).toEqual({
+      enabled: false,
+      acpx: false,
+      agent: 'claude',
+      model: null,
+      threadPerPlace: true,
+    })
     expect(bundle.warnings).toContain(
       'acpx is not on PATH, so the AI Chat pane is off; install acpx to turn it on'
     )

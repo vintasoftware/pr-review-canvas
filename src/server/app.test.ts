@@ -439,7 +439,13 @@ describe('createApp', () => {
       ])
       expect(bundle.state).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
       expect(bundle.capabilities).toEqual({ canComment: true, tokenKind: 'classic', login: 'octocat' })
-      expect(bundle.chat).toEqual({ enabled: true, acpx: true, agent: 'claude', model: null })
+      expect(bundle.chat).toEqual({
+        enabled: true,
+        acpx: true,
+        agent: 'claude',
+        model: null,
+        threadPerPlace: true,
+      })
       expect(bundle.warnings).toEqual([])
       // Second call: served from the cache once the head has not moved; one read of the pull, no
       // comments, no fetch. A poll does not even ask for the head.

@@ -25,6 +25,7 @@ const SETTINGS = {
     chatModel: null,
     chatTimeoutSec: 600,
     maxTurns: null,
+    chatThreadPerPlace: true,
     checkoutEnabled: true,
     checkoutIdleDays: 7,
     checkoutSweepMinutes: 60,
@@ -233,6 +234,7 @@ describe('readSettingsForm', () => {
       chatModel: null,
       chatTimeoutSec: 600,
       maxTurns: null,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,
@@ -258,6 +260,18 @@ describe('readSettingsForm', () => {
     )
     expect(holder.querySelector('#set-layer-view option[selected]')?.textContent).toBe('one at a time')
     expect(readSettingsForm(holder).layerView).toBe('one')
+  })
+
+  it('reads a thread per place the reader turned off', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(SETTINGS, AGENTS)
+    const box = holder.querySelector('#set-thread-per-place')
+    if (!(box instanceof HTMLInputElement)) {
+      throw new Error('no checkbox')
+    }
+    expect(box.checked).toBe(true)
+    box.checked = false
+    expect(readSettingsForm(holder).chatThreadPerPlace).toBe(false)
   })
 })
 
@@ -326,6 +340,7 @@ describe('openSettingsDialog', () => {
       chatModel: null,
       chatTimeoutSec: 600,
       maxTurns: null,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,
@@ -412,6 +427,7 @@ describe('the dialog with parts missing', () => {
       chatModel: 'gpt-5.2',
       chatTimeoutSec: 120,
       maxTurns: 6,
+      chatThreadPerPlace: true,
       checkoutEnabled: true,
       checkoutIdleDays: 7,
       checkoutSweepMinutes: 60,

@@ -6,6 +6,7 @@ import {
   chatContextFromElement,
   chatContextLabel,
   sameChatContext,
+  threadOfPlace,
   WHOLE_PR,
 } from './chat-context.js'
 
@@ -32,6 +33,29 @@ describe('sameChatContext', () => {
     expect(sameChatContext(base, { ...base, end: 3 })).toBe(false)
     expect(sameChatContext(base, { ...base, side: 'old' })).toBe(false)
     expect(sameChatContext(base, { ...base, path: 'b.ts' })).toBe(false)
+  })
+})
+
+describe('threadOfPlace', () => {
+  const point = /** @type {const} */ ({ kind: 'point', fingerprint: 'fp-1' })
+  const threads = [
+    { name: 'old', agent: 'claude' },
+    { name: 'point', agent: 'claude', anchor: point },
+    { name: 'codex point', agent: 'codex', anchor: point },
+    { name: 'newer', agent: 'claude' },
+    { name: 'codex overall', agent: 'codex' },
+  ]
+
+  it('finds the chat agent’s thread of a place, and none of another agent’s', () => {
+    expect(threadOfPlace(threads, 'claude', point)?.name).toBe('point')
+    expect(threadOfPlace(threads, 'codex', point)?.name).toBe('codex point')
+    expect(threadOfPlace(threads, 'claude', { kind: 'layer', layerId: 'run-path' })).toBeUndefined()
+  })
+
+  it('takes a thread with no place as one about the whole PR, and continues the latest', () => {
+    expect(threadOfPlace(threads, 'claude', WHOLE_PR)?.name).toBe('newer')
+    expect(threadOfPlace(threads, 'codex', WHOLE_PR)?.name).toBe('codex overall')
+    expect(threadOfPlace([], 'claude', WHOLE_PR)).toBeUndefined()
   })
 })
 

@@ -1,14 +1,27 @@
 // @ts-check
-// The pane on the right of the review: AI Chat and the review being written share it as two tabs.
-// With AI Chat off the pane holds the review alone, and stays minimized until the reader opens it.
+// The pane on the right of the review: AI Chat, its threads, and the review being written share it
+// as tabs. With AI Chat off the pane holds the review alone, and stays minimized until the reader
+// opens it.
 import { wireChatPanel } from './chat-panel.js'
 import { REVIEW_PANEL_ID } from './review-panel.js'
 
-/** @typedef {'chat' | 'review'} SideTab */
+/** @typedef {'chat' | 'threads' | 'review'} SideTab */
+
+/** The id of the threads tab's panel: the index of the review's chat threads. */
+export const THREADS_PANEL_ID = 'threads-panel'
+
+/**
+ * @param {string | null} name
+ * @returns {SideTab}
+ */
+function sideTabOf(name) {
+  return name === 'review' || name === 'threads' ? name : 'chat'
+}
 
 /**
  * The tab strip at the top of the pane, which also holds the command that minimizes it.
- * @param {{ chat: boolean }} opts `chat` adds the AI Chat tab; without it the review is alone
+ * @param {{ chat: boolean }} opts `chat` adds the AI Chat and Threads tabs; without it the review
+ *   is alone
  */
 export function sideTabsHtml(opts) {
   const tab =
@@ -21,7 +34,9 @@ export function sideTabsHtml(opts) {
       `<button class="side-tab" type="button" role="tab" id="side-tab-${name}" data-side-tab="${name}" aria-controls="${controls}" aria-selected="${selected}"${selected ? '' : ' tabindex="-1"'}>${label}</button>`
   return (
     '<div class="side-tabs" role="tablist" aria-label="Side pane">' +
-    (opts.chat ? tab('chat', 'AI Chat', 'chat-log', true) : '') +
+    (opts.chat
+      ? tab('chat', 'AI Chat', 'chat-log', true) + tab('threads', 'Threads', THREADS_PANEL_ID, false)
+      : '') +
     tab('review', 'Your review <span class="review-count" data-empty>0</span>', REVIEW_PANEL_ID, !opts.chat) +
     `<button class="cmd chat-minimize" type="button" id="chat-minimize" aria-label="Minimize ${opts.chat ? 'AI Chat' : 'your review'}">minimize</button>` +
     '</div>'
@@ -44,7 +59,7 @@ export function reviewPaneHtml() {
 }
 
 /**
- * Shows one tab of the pane and hides the other. The chat's parts stay mounted while the review
+ * Shows one tab of the pane and hides the others. The chat's parts stay mounted while another tab
  * is shown, so a draft message and the transcript's place survive the switch.
  * @param {HTMLElement} pane
  * @param {SideTab} tab
@@ -61,6 +76,7 @@ export function selectSideTab(pane, tab) {
     }
   }
   pane.querySelector(`#${REVIEW_PANEL_ID}`)?.toggleAttribute('hidden', tab !== 'review')
+  pane.querySelector(`#${THREADS_PANEL_ID}`)?.toggleAttribute('hidden', tab !== 'threads')
 }
 
 /**
@@ -78,7 +94,7 @@ export function wireSideTabs(pane) {
   const onClick = event => {
     const button = tabOf(event)
     if (button !== null) {
-      selectSideTab(pane, button.getAttribute('data-side-tab') === 'review' ? 'review' : 'chat')
+      selectSideTab(pane, sideTabOf(button.getAttribute('data-side-tab')))
     }
   }
   /** @param {KeyboardEvent} event */
@@ -92,7 +108,7 @@ export function wireSideTabs(pane) {
       tabs[(tabs.indexOf(button) + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]
     if (next instanceof HTMLElement) {
       event.preventDefault()
-      selectSideTab(pane, next.getAttribute('data-side-tab') === 'review' ? 'review' : 'chat')
+      selectSideTab(pane, sideTabOf(next.getAttribute('data-side-tab')))
       next.focus()
     }
   }

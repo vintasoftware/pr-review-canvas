@@ -7,9 +7,16 @@
 /** @typedef {import('./proposed-comment.js').ProposedComment} ProposedComment */
 /** @typedef {import('./proposed-comment.js').ProposedResolution} ProposedResolution */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
-import { cancelChat, createThread, fetchThreadHistory, fetchThreads, streamChat } from './api.js'
-import { chatContextAttrs, chatContextLabel, sameChatContext, WHOLE_PR } from './chat-context.js'
+import { cancelChat, fetchThreadHistory, fetchThreads, selectThread, streamChat } from './api.js'
+import {
+  chatContextAttrs,
+  chatContextLabel,
+  sameChatContext,
+  threadOfPlace,
+  WHOLE_PR,
+} from './chat-context.js'
 import { wireChatPanel } from './chat-panel.js'
+import { navigateLink } from './deep-link.js'
 import {
   canScrollBy,
   chatScrollReducer,
@@ -19,17 +26,19 @@ import {
   scrollBehavior,
   unseenLabel,
 } from './chat-scroll.js'
-import { runCommand, runControl, showCommandError } from './commands.js'
+import { runCommand, showCommandError } from './commands.js'
 import { isQueuedComment, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
-import { esc, qs } from './dom.js'
+import { esc, flash, qs, scrollIntoViewSafe } from './dom.js'
+import { cssEscape } from './anchors.js'
 import { getRenderContext } from './layers.js'
+import { lineLink } from './links.js'
 import { renderMarkdown } from './markdown.js'
 import { pendingComments } from './pending.js'
 import { pointStatus, resolvable } from './points.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
 import { REVIEW_PANEL_ID } from './review-panel.js'
 import { canSettle } from './self-review.js'
-import { openReviewTab, selectSideTab, sideTabsHtml, wireSideTabs } from './side-pane.js'
+import { THREADS_PANEL_ID, openReviewTab, selectSideTab, sideTabsHtml, wireSideTabs } from './side-pane.js'
 
 export const CHAT_WIDTH_KEY = 'pr-review.chat-width'
 export const CHAT_MINIMIZED_KEY = 'pr-review.chat-minimized'
@@ -53,9 +62,14 @@ export function renderChatShell(opts) {
     `<button class="handle" type="button" id="chat-handle" role="separator" aria-orientation="vertical" aria-label="Resize AI Chat" aria-valuenow="${width}" aria-valuemin="${CHAT_WIDTH_MIN}" aria-valuemax="${CHAT_WIDTH_MAX}"></button>` +
     sideTabsHtml({ chat: true }) +
     // The tab names the pane on screen; the heading stays for screen readers and the dialog's name.
-    '<div class="chat-h"><h2 class="sr" id="chat-h">AI Chat</h2><label class="sr" for="thread">Thread</label>' +
-    '<select id="thread"></select>' +
-    '<button class="cmd" type="button" id="new-thread">new thread</button></div>' +
+    // One thread at a time, under a head naming what it is about. The Threads tab lists them all,
+    // and is where a thread about the whole PR starts.
+    '<div class="chat-h"><h2 class="sr" id="chat-h">AI Chat</h2>' +
+    '<p class="thread-title" id="thread-title">New thread</p>' +
+    '<button class="cmd" type="button" id="thread-goto" hidden>go to code</button></div>' +
+    `<section class="threads-panel" id="${THREADS_PANEL_ID}" role="tabpanel" aria-labelledby="side-tab-threads" hidden>` +
+    '<div class="threads-h"><button class="cmd" type="button" id="new-thread">new thread</button></div>' +
+    '<nav class="thread-index" id="thread-index" aria-label="Threads"></nav></section>' +
     '<div class="transcript" id="chat-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0">' +
     '<p class="empty">Ask AI Chat about a layer, a file, or a selection. Answers come with a verdict first, then evidence.</p>' +
     '</div>' +
@@ -63,7 +77,7 @@ export function renderChatShell(opts) {
     // thread. The bubble sits on the composer too, so it clears it at any height.
     '<form class="chat-composer" id="chat-form">' +
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
-    '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
+    '<p class="ctx-line" id="chat-ctx-line" hidden>Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
     ' <button class="cmd" type="button" id="chat-clear" hidden>clear</button></p>' +
     '<label class="sr" for="msg">Message</label>' +
     '<textarea id="msg" rows="3" placeholder="Ask AI Chat about this PR…"></textarea>' +
@@ -155,6 +169,7 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
  *   storage?: Storage | null,
  *   api?: Partial<ChatApi>,
  *   reducedMotion?: boolean,
+ *   threadPerPlace?: boolean,
  *   onProposed?: (what: ProposedAct, comment: ProposedComment, el: HTMLElement) => void,
  *   onResolution?: (what: 'save' | 'edit', resolution: ProposedResolution, el: HTMLElement) => void,
  * }} ChatOptions
@@ -163,8 +178,8 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
 /**
  * @typedef {{
  *   fetchThreads: typeof fetchThreads,
- *   createThread: typeof createThread,
  *   fetchThreadHistory: typeof fetchThreadHistory,
+ *   selectThread: typeof selectThread,
  *   cancelChat: typeof cancelChat,
  *   streamChat: typeof streamChat,
  * }} ChatApi
@@ -172,7 +187,14 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
 
 /** @param {Partial<ChatApi> | undefined} overrides */
 function withDefaults(overrides) {
-  return { fetchThreads, createThread, fetchThreadHistory, cancelChat, streamChat, ...overrides }
+  return {
+    fetchThreads,
+    fetchThreadHistory,
+    selectThread,
+    cancelChat,
+    streamChat,
+    ...overrides,
+  }
 }
 
 /**
@@ -505,8 +527,11 @@ export function wireChat(options) {
   const log = mustFind(root, '#chat-log', HTMLElement)
   const box = mustFind(root, '#msg', HTMLTextAreaElement)
   const form = mustFind(root, '#chat-form', HTMLFormElement)
-  const select = mustFind(root, '#thread', HTMLSelectElement)
+  const threadTitleEl = mustFind(root, '#thread-title', HTMLElement)
+  const gotoButton = mustFind(root, '#thread-goto', HTMLElement)
+  const index = mustFind(root, '#thread-index', HTMLElement)
   const chip = mustFind(root, '#chat-ctx', HTMLElement)
+  const contextLine = mustFind(root, '#chat-ctx-line', HTMLElement)
   const clearButton = mustFind(root, '#chat-clear', HTMLElement)
   const bubble = mustFind(root, '#chat-unseen', HTMLElement)
   const sendButton = mustFind(root, '#chat-send', HTMLElement)
@@ -550,6 +575,31 @@ export function wireChat(options) {
   })
   /** @type {string | null} */
   let activeThread = null
+  /**
+   * The place the thread on the AI Chat tab is about: a saved thread's place, or the one a draft
+   * was opened for. Undefined for a thread about the whole PR.
+   * @type {ChatContext | undefined}
+   */
+  let openPlace
+  /** The reader's `chatThreadPerPlace`: an ask opens the thread of its place, or the open one. */
+  let threadPerPlace = options.threadPerPlace ?? true
+  // A thread of its own place is titled after it; the open thread takes questions about anything,
+  // so the line above the composer says what the next one is about.
+  contextLine.hidden = threadPerPlace
+  /** @type {import('./contract-types.js').ChatThreadsResponse['threads']} */
+  let threads = []
+  /** The agent a new thread would use: a thread of another agent is not continued. */
+  let agentName = ''
+  /** The thread whose answer is coming in, for the index to say so. */
+  /** @type {string | null} */
+  let answering = null
+  /**
+   * The badge on every ask command whose place has a thread, as CSS: cards drawn later, and the
+   * selection toolbar, pick it up without being visited.
+   */
+  const marks = document.createElement('style')
+  marks.id = 'chat-thread-marks'
+  root.append(marks)
   let streaming = false
   let stopActivity = () => {}
   /** The turn in flight, so taking the pane down stops its request too. */
@@ -583,15 +633,158 @@ export function wireChat(options) {
   const layerTitle = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)?.title
   const pointTitle = /** @param {string} fp */ fp =>
     session.artifact.points.find(p => p.fingerprint === fp)?.title
+  const currentThread = () => threads.find(t => t.name === activeThread)
+  /**
+   * Whether a place is on the canvas on screen. A thread outlives the canvas it was made on, and a
+   * question about a place the canvas no longer has is refused.
+   * @param {ChatContext} place
+   */
+  const onCanvas = place => {
+    switch (place.kind) {
+      case 'point':
+        return pointTitle(place.fingerprint) !== undefined
+      case 'layer':
+        return layerTitle(place.layerId) !== undefined
+      case 'file':
+      case 'lines':
+        return paths.has(place.path)
+      case 'pr':
+        return true
+    }
+  }
+  /**
+   * What a question asked in a thread about `place` is about: that place while the canvas has it,
+   * else the whole PR.
+   * @param {ChatContext | undefined} place
+   * @returns {ChatContext}
+   */
+  const askedIn = place => (place !== undefined && onCanvas(place) ? place : WHOLE_PR)
   /**
    * What a sent message names above its text, so a reader scrolling back sees what each question
-   * was about. A message about the whole PR, or one saved before turns kept a context, names none.
+   * was about. A message about the whole PR, about the thread's own place, or one saved before
+   * turns kept a context, names none.
    * @param {ChatContext | undefined} about
    */
   const turnContext = about =>
-    about === undefined || about.kind === 'pr'
+    about === undefined ||
+    about.kind === 'pr' ||
+    (openPlace !== undefined && sameChatContext(openPlace, about))
       ? {}
       : { context: chatContextLabel(about, layerTitle, pointTitle) }
+  /**
+   * A place as a thread's head names it: a point by its own title, since the head already says
+   * it is a thread about that point.
+   * @param {ChatContext} anchor
+   */
+  const placeName = anchor =>
+    (anchor.kind === 'point' ? pointTitle(anchor.fingerprint) : undefined) ??
+    chatContextLabel(anchor, layerTitle, pointTitle)
+  /**
+   * A thread as the head and the index name it: by its place while the canvas has it, by the title
+   * it was saved with otherwise.
+   * @param {(typeof threads)[number]} thread
+   */
+  const shownTitle = thread =>
+    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : thread.title
+
+  const drawHead = () => {
+    const thread = currentThread()
+    const title =
+      thread !== undefined
+        ? shownTitle(thread)
+        : openPlace !== undefined
+          ? placeName(openPlace)
+          : 'New thread'
+    const gone = openPlace !== undefined && !onCanvas(openPlace)
+    threadTitleEl.textContent = gone ? `${title} · not on this canvas` : title
+    threadTitleEl.title = threadTitleEl.textContent
+    gotoButton.hidden = askedIn(openPlace).kind === 'pr'
+    box.placeholder =
+      askedIn(openPlace).kind === 'pr' ? 'Ask AI Chat about this PR…' : 'Ask about this, in this thread…'
+  }
+
+  /** Shows the open thread, in the AI Chat tab. */
+  const showThread = () => {
+    selectSideTab(pane, 'chat')
+    drawHead()
+  }
+
+  const INDEX_GROUPS = /** @type {const} */ ([
+    ['point', 'Attention points'],
+    ['lines', 'Lines'],
+    ['file', 'Files'],
+    ['layer', 'Layers'],
+    ['pr', 'Whole PR'],
+  ])
+
+  const drawIndex = () => {
+    if (threads.length === 0) {
+      index.innerHTML =
+        '<p class="empty">No threads yet. Use ask on an attention point, a selection of lines, a file or a layer, or start a thread about the whole PR.</p>'
+      return
+    }
+    index.innerHTML = INDEX_GROUPS.map(([kind, label]) => {
+      const group = threads.filter(t => (t.anchor?.kind ?? 'pr') === kind)
+      if (group.length === 0) return ''
+      const items = group
+        .map(t => {
+          const status =
+            t.name === answering ? 'answering…' : t.turns === 1 ? '1 question' : `${t.turns} questions`
+          // While an answer comes in, it is drawn into its own thread, so no other one opens.
+          const waiting =
+            streaming && t.name !== activeThread
+              ? ' disabled title="An answer is still coming in. Open this thread once it ends."'
+              : ''
+          return (
+            `<li><button type="button" class="thread-item${t.name === activeThread ? ' current' : ''}" data-thread-open="${esc(t.name)}"${waiting}>` +
+            `<span class="thread-item-t">${esc(shownTitle(t))}</span>` +
+            `<span class="muted small">${esc(status)}</span></button></li>`
+          )
+        })
+        .join('')
+      return `<h3 class="thread-group">${esc(label)}</h3><ul class="thread-list">${items}</ul>`
+    }).join('')
+  }
+
+  /**
+   * @param {ChatContext} anchor
+   * @returns {string | null}
+   */
+  const askSelector = anchor => {
+    const ask = '[data-act="ask"]'
+    switch (anchor.kind) {
+      case 'point':
+        return `${ask}[data-ask-point="${cssEscape(anchor.fingerprint)}"]`
+      case 'layer':
+        return `${ask}[data-ask-layer="${cssEscape(anchor.layerId)}"]`
+      case 'file':
+        return `${ask}[data-ask-path="${cssEscape(anchor.path)}"]:not([data-ask-start])`
+      case 'lines':
+        return (
+          `${ask}[data-ask-path="${cssEscape(anchor.path)}"][data-ask-side="${anchor.side}"]` +
+          `[data-ask-start="${anchor.start}"][data-ask-end="${anchor.end}"]`
+        )
+      case 'pr':
+        return null
+    }
+  }
+  const drawMarks = () => {
+    // Off, an ask never opens the thread its badge would count.
+    if (!threadPerPlace) {
+      marks.textContent = ''
+      return
+    }
+    marks.textContent = threads
+      .flatMap(t => {
+        // Only the thread an ask would open counts: this agent's, as `threadOfPlace` picks it.
+        const selector =
+          t.anchor === undefined || t.turns === 0 || threadOfPlace(threads, agentName, t.anchor) !== t
+            ? null
+            : askSelector(t.anchor)
+        return selector === null ? [] : [`${selector}::after { content: "${t.turns}"; }`]
+      })
+      .join('\n')
+  }
 
   const drawContext = () => {
     chip.textContent = chatContextLabel(context, layerTitle, pointTitle)
@@ -699,17 +892,27 @@ export function wireChat(options) {
     clearTimeout(handle)
   }
 
-  const drawThreads = /** @param {import('./contract-types.js').ChatThreadsResponse} data */ data => {
-    activeThread = data.activeThread
-    select.innerHTML = data.threads
-      .map(
-        t =>
-          `<option value="${esc(t.name)}"${t.name === data.activeThread ? ' selected' : ''}>${esc(t.title)}</option>`
-      )
-      .join('')
-    if (data.threads.length === 0) {
-      select.innerHTML = '<option value="">Thread 1</option>'
+  /**
+   * Takes the review's thread list. The open thread stays the pane's own: a draft is in no list,
+   * and a turn names its thread before the list is fetched again. Once the list holds the open
+   * thread, its place is the one the server keeps: a draft's question can land in a thread with
+   * no place, after the setting changed or the place left the canvas.
+   * @param {import('./contract-types.js').ChatThreadsResponse} data
+   */
+  const drawThreads = data => {
+    threads = data.threads
+    agentName = data.agent
+    const open = currentThread()
+    if (open !== undefined) {
+      openPlace = open.anchor
+      if (threadPerPlace) {
+        context = askedIn(openPlace)
+        drawContext()
+      }
     }
+    drawIndex()
+    drawHead()
+    drawMarks()
   }
 
   /**
@@ -765,11 +968,11 @@ export function wireChat(options) {
     sendButton.hidden = on
     stopButton.hidden = !on
     box.disabled = on
-    select.disabled = on
     const newThread = qs('#new-thread', root)
     if (newThread instanceof HTMLButtonElement) {
       newThread.disabled = on
     }
+    drawIndex()
   }
 
   /**
@@ -833,6 +1036,7 @@ export function wireChat(options) {
             const thread = field('thread')
             if (event.event === 'turn' && typeof thread === 'string') {
               activeThread = thread
+              answering = thread
               void refreshThreads()
               // The checkout, if there was one, is done once the turn starts.
               phase = 'Preparing answer'
@@ -893,6 +1097,8 @@ export function wireChat(options) {
       )
     } finally {
       inFlight = null
+      answering = null
+      void refreshThreads().catch(() => undefined)
       stopActivity()
       toolDetails.open = false
       const toolSummary = toolDetails.querySelector('summary')
@@ -923,10 +1129,82 @@ export function wireChat(options) {
     if (seq !== logSeq) {
       return
     }
+    activeThread = data.activeThread
+    openPlace = data.threads.find(t => t.name === activeThread)?.anchor
+    context = askedIn(openPlace)
+    drawContext()
     drawThreads(data)
-    if (data.activeThread !== null) {
-      await loadHistory(data.activeThread)
+    if (activeThread !== null) {
+      await loadHistory(activeThread)
     }
+  }
+
+  /**
+   * Opens a saved thread, with its place as the context of what is asked in it.
+   * @param {string} name
+   */
+  const openThread = async name => {
+    activeThread = name
+    openPlace = currentThread()?.anchor
+    context = askedIn(openPlace)
+    drawContext()
+    showThread()
+    drawIndex()
+    void api.selectThread(prNumber, name).catch(() => undefined)
+    await loadHistory(name)
+  }
+
+  /**
+   * Opens a thread not made yet: a place's, or one about the whole PR. Nothing is saved until its
+   * first message, which the server files under that place.
+   * @param {ChatContext} anchor
+   */
+  const openDraft = anchor => {
+    claimLog()
+    activeThread = null
+    openPlace = anchor.kind === 'pr' ? undefined : anchor
+    context = anchor
+    drawContext()
+    proposed.clear()
+    log.innerHTML =
+      anchor.kind === 'pr'
+        ? '<p class="empty">A new thread about the whole PR.</p>'
+        : `<p class="empty">A new thread about ${esc(chatContextLabel(anchor, layerTitle, pointTitle))}. Asking about it again comes back here.</p>`
+    dispatch({ type: 'thread-switch', pinned: true })
+    showThread()
+    drawIndex()
+  }
+
+  /** While an answer comes in, its thread keeps the pane: the answer is drawn into this transcript. */
+  const refuseWhileAnswering = () => {
+    const thread = currentThread()
+    showCommandError(
+      stopButton,
+      `An answer is still coming in ${thread === undefined ? 'this thread' : `“${shownTitle(thread)}”`}. Ask again once it ends.`
+    )
+  }
+
+  /**
+   * Shows the thread of a place, the one it has or a new one, and says whether the pane is there.
+   * @param {ChatContext} next
+   * @returns {Promise<boolean>}
+   */
+  const goToThread = async next => {
+    if (sameChatContext(openPlace ?? WHOLE_PR, next)) {
+      showThread()
+      return true
+    }
+    if (streaming) {
+      refuseWhileAnswering()
+      return false
+    }
+    const placed = threadOfPlace(threads, agentName, next)
+    if (placed === undefined) {
+      openDraft(next)
+    } else {
+      await openThread(placed.name)
+    }
+    return true
   }
 
   /** @param {Event} event */
@@ -950,21 +1228,20 @@ export function wireChat(options) {
       return
     }
     if (el.id === 'new-thread') {
-      void runCommand(
-        el,
-        async () => {
-          const seq = claimLog()
-          const data = await api.createThread(prNumber)
-          if (seq !== logSeq) {
-            return
-          }
-          drawThreads(data)
-          proposed.clear()
-          log.innerHTML = '<p class="empty">New thread. Ask about a layer, a file, or a selection.</p>'
-          dispatch({ type: 'thread-switch', pinned: true })
-        },
-        { pendingLabel: 'starting…' }
-      )
+      openDraft(WHOLE_PR)
+      return
+    }
+    if (el.id === 'thread-goto') {
+      goToAnchor()
+      return
+    }
+    const picked = el.getAttribute('data-thread-open')
+    if (picked !== null) {
+      if (picked === activeThread) {
+        showThread()
+      } else {
+        void openThread(picked)
+      }
       return
     }
     if (el.id === 'chat-unseen') {
@@ -1021,8 +1298,10 @@ export function wireChat(options) {
    */
   const onPaneWheel = event => {
     const target = event.target instanceof Element ? event.target : null
-    // The tab on screen owns the wheel: the transcript, or the list of the review being written.
-    const scroller = (pane.getAttribute('data-tab') === 'review' ? reviewPanel : null) ?? log
+    // The tab on screen owns the wheel: the transcript, the list of threads, or the list of the
+    // review being written.
+    const tab = pane.getAttribute('data-tab')
+    const scroller = (tab === 'review' ? reviewPanel : tab === 'threads' ? index : null) ?? log
     const insideOwnScroller =
       target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
         ? canScrollBy(target, event.deltaY)
@@ -1040,16 +1319,6 @@ export function wireChat(options) {
     // Consumed whether or not the list can move, so the page stays put under the pointer.
     event.preventDefault()
     scroller.scrollTop += event.deltaY
-  }
-
-  /** @param {Event} event */
-  const onThreadChange = event => {
-    const name = event.target instanceof HTMLSelectElement ? event.target.value : ''
-    if (name === '' || name === activeThread) {
-      return
-    }
-    activeThread = name
-    void runControl(select, () => loadHistory(name))
   }
 
   /** @param {KeyboardEvent} event */
@@ -1076,6 +1345,32 @@ export function wireChat(options) {
     onMinimizedChange: minimized => writeChatMinimized(storage, minimized),
   })
   const stopTabs = wireSideTabs(pane)
+
+  /** Leads the canvas to the open thread's place, while the canvas has it. */
+  const goToAnchor = () => {
+    const anchor = askedIn(openPlace)
+    if (anchor.kind === 'pr') {
+      return
+    }
+    if (anchor.kind === 'point') {
+      const el = root.querySelector(`[data-point][data-fingerprint="${cssEscape(anchor.fingerprint)}"]`)
+      if (el instanceof HTMLElement) {
+        scrollIntoViewSafe(el)
+        flash(el)
+      }
+      return
+    }
+    if (anchor.kind === 'layer') {
+      const key = session.artifact.layers.find(l => l.id === anchor.layerId)?.key
+      if (key !== undefined) navigateLink(`#layer:${key}`, root)
+      return
+    }
+    if (anchor.kind === 'file') {
+      navigateLink(`#file:${anchor.path}`, root)
+      return
+    }
+    navigateLink(lineLink(anchor), root)
+  }
   // Whatever asks the chat for something shows its tab first.
   const openChat = () => {
     selectSideTab(pane, 'chat')
@@ -1086,7 +1381,6 @@ export function wireChat(options) {
   root.addEventListener('click', onClick)
   log.addEventListener('scroll', onScroll)
   pane.addEventListener('wheel', onPaneWheel, { passive: false })
-  select.addEventListener('change', onThreadChange)
   box.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
   drawContext()
   void restoreThread().catch(() => undefined)
@@ -1109,8 +1403,28 @@ export function wireChat(options) {
     },
     /** @param {ChatContext} next */
     ask(next) {
-      setContext(next)
       openChat()
+      // Off, an ask only says what the open thread's next question is about.
+      if (threadPerPlace) {
+        void goToThread(next)
+      } else {
+        setContext(next)
+      }
+    },
+    /**
+     * Follows the settings the reader saved, without a reload: whether an ask opens its place's
+     * thread, and the chat agent, whose threads are the ones an ask continues.
+     * @param {import('./contract-types.js').Settings} settings
+     */
+    followSettings(settings) {
+      threadPerPlace = settings.chatThreadPerPlace
+      contextLine.hidden = threadPerPlace
+      if (threadPerPlace) {
+        context = askedIn(openPlace)
+        drawContext()
+      }
+      drawMarks()
+      void refreshThreads().catch(() => undefined)
     },
     /**
      * Draws each card again where the state changed it: a comment just posted, joined the review,
@@ -1149,10 +1463,16 @@ export function wireChat(options) {
      * @param {string} question
      */
     askQuestion(next, question) {
-      setContext(next)
       openChat()
-      box.value = question
-      void runCommand(sendButton, send, { pendingLabel: 'sending…' })
+      void (async () => {
+        if (!threadPerPlace) {
+          setContext(next)
+        } else if (!(await goToThread(next))) {
+          return
+        }
+        box.value = question
+        await runCommand(sendButton, send, { pendingLabel: 'sending…' })
+      })()
     },
     stop() {
       stopActivity()
@@ -1165,7 +1485,7 @@ export function wireChat(options) {
       form.removeEventListener('submit', onSubmit)
       root.removeEventListener('click', onClick)
       log.removeEventListener('scroll', onScroll)
-      select.removeEventListener('change', onThreadChange)
+      marks.remove()
       box.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
       stopResize()
       panel.stop()
