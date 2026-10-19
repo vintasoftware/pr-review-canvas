@@ -343,8 +343,6 @@ pr-tour[data-at='plan'] {
   padding: 8px 20px 10px;
 }
 .tour-rail {
-  /* Room under the road for the bus at the current stop, whichever stop that is. */
-  padding-bottom: 32px;
   display: flex;
   gap: 26px;
   overflow-x: auto;
@@ -430,12 +428,12 @@ pr-tour[data-at='plan'] {
   background: var(--sun);
   color: var(--on-sun);
 }
-/* The bus, parked on the road under the stop the reader is at. */
+/* The bus, on the road at the foot of the stop the reader is at, in front of the pole. */
 .tour-rail-seg[data-state='current']::before {
   content: '';
   position: absolute;
   left: 50%;
-  top: calc(100% + 12px);
+  bottom: -7px;
   translate: -50% 0;
   z-index: 2;
   width: 34px;
