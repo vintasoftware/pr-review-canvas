@@ -381,8 +381,8 @@ export function landmarkHtml(bundle, steps, landmark) {
   const code =
     landmark.code.length === 0
       ? ''
-      : `<div class="tour-actions"><button class="cmd" type="button" data-act="code">${codeButtonHtml(codeOpen)}</button></div>
-         <div class="tour-code"${codeOpen ? '' : ' hidden'}>
+      : `<div class="tour-actions"><button class="cmd" type="button" data-act="code" aria-expanded="${codeOpen}" aria-controls="code-${esc(landmark.id)}">${codeButtonHtml(codeOpen)}</button></div>
+         <div class="tour-code" id="code-${esc(landmark.id)}" tabindex="-1" aria-label="Code behind this landmark"${codeOpen ? '' : ' hidden'}>
            ${
              hasLiterate
                ? `<div class="tour-code-tabs" role="tablist">
@@ -399,10 +399,10 @@ export function landmarkHtml(bundle, steps, landmark) {
     <h2 class="tour-title">${plain(landmark.title)}</h2>
     <p class="tour-lead">${inline(landmark.lead)}</p>
     ${figure}
+    ${code}
     <div class="tour-body">${landmark.body.map(p => `<p>${inline(p)}</p>`).join('')}</div>
     ${chips}
-    <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>
-    ${code}`
+    <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>`
 }
 
 /** @param {boolean} open */
@@ -483,7 +483,8 @@ export function chunkHtml(chunk, link = () => null) {
     url === null
       ? ''
       : `<a class="tour-file-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(name)}" aria-label="${esc(name)}">${EXTERNAL_ICON}</a>`
-  return `<div class="tour-code-file"><span>${esc(chunk.path)}</span>${open}</div><div class="tour-diff">${lines.join('')}</div>`
+  // A chunk holds its file's bar, so the bar stays in view while its diff scrolls past.
+  return `<div class="tour-chunk"><div class="tour-code-file"><span>${esc(chunk.path)}</span>${open}</div><div class="tour-diff">${lines.join('')}</div></div>`
 }
 
 /**

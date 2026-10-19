@@ -247,6 +247,9 @@ describe('landmarkHtml', () => {
     document.body.innerHTML = landmarkHtml(bundle, steps, sum)
     // The strip says which stop and stage this is; the screen does not say it again.
     expect(document.querySelector('.tour-eyebrow')).toBeNull()
+    // The code control sits under the pictures, before the prose.
+    const order = [...document.querySelectorAll('.tour-figure, [data-act="code"], .tour-body')]
+    expect(order.map(e => e.className)).toEqual(['tour-figure', 'cmd', 'tour-body'])
     expect(document.querySelector('.tour-frame-host')?.getAttribute('data-kind')).toBe('scene')
     expect(document.querySelector('.tour-frame-host[data-kind="micro"]')).toBeNull()
     expect(document.querySelector('.tour-chip')?.textContent).toBe('one decision waits here')

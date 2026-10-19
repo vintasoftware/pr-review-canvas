@@ -637,8 +637,12 @@ pr-tour[data-at='plan'] {
   margin-left: auto;
   margin-right: auto;
 }
-.tour-stage > :is(.tour-figure, .tour-code) {
+.tour-stage > .tour-figure {
   max-width: none;
+}
+/* Code reads best a little wider than prose, not across the whole ticket. */
+.tour-stage > .tour-code {
+  max-width: 920px;
 }
 .tour-stage code {
   padding: 0.05em 0.35em;
@@ -891,10 +895,17 @@ pr-tour[data-at='plan'] {
 
 /* Code behind a landmark: two views of the same chunks, a literate diff or the raw one. */
 .tour-code {
-  overflow: hidden;
+  /* clip, not hidden: a hidden overflow would hold the file bars from sticking to the page. */
+  overflow: clip;
   margin-top: 12px;
+  margin-bottom: 24px;
   border: 1px solid var(--tour-line-strong);
   border-radius: 12px;
+  scroll-margin-top: calc(var(--rail-h, 0px) + 12px);
+}
+.tour-code:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 .tour-code[hidden] {
   display: none;
@@ -934,12 +945,22 @@ pr-tour[data-at='plan'] {
 .tour-literate p:first-child {
   margin-top: 0;
 }
+.tour-chunk {
+  margin-top: 12px;
+}
+.tour-code-body > .tour-chunk:first-child,
+.tour-literate > .tour-chunk:first-child {
+  margin-top: 0;
+}
+/* The file's bar sticks under the rail while its diff scrolls past, so a long diff keeps its name. */
 .tour-code-file {
+  position: sticky;
+  top: var(--rail-h, 0);
+  z-index: 1;
   display: flex;
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 12px;
   padding: 6px 10px;
   border: 1px solid var(--tour-line-strong);
   border-bottom: 0;
@@ -961,9 +982,6 @@ pr-tour[data-at='plan'] {
 .tour-file-link:hover {
   background: var(--btn-bg-hover);
   color: var(--blue);
-}
-.tour-code-body > .tour-code-file:first-child {
-  margin-top: 0;
 }
 .tour-diff {
   overflow-x: auto;

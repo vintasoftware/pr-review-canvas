@@ -493,8 +493,11 @@ export class PrTourElement extends HTMLElement {
     code.hidden = !open
     const button = /** @type {HTMLElement} */ (qs('[data-act="code"]', this))
     button.innerHTML = codeButtonHtml(open)
+    button.setAttribute('aria-expanded', String(open))
     if (open) {
       scrollIntoViewSafe(code, 'start')
+      // The focus follows, so the next Tab is in the code, not back where the key was pressed.
+      code.focus({ preventScroll: true })
     }
   }
 
@@ -746,9 +749,11 @@ export class PrTourElement extends HTMLElement {
         this.go(i, { force: true, fromHistory: true })
       }
     }
-    // A resized window may make the rail scroll, or stop scrolling: its faded ends follow.
+    // The rail is sticky: what scrolls to the top of the page stops under it, not behind it. A
+    // resized window may make the rail scroll, or stop scrolling: its faded ends follow.
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))
     const onRailSize = () => {
+      this.style.setProperty('--rail-h', `${rail.offsetHeight}px`)
       const road = qs('.tour-rail', rail)
       if (road instanceof HTMLElement) {
         markRailEdges(road)
