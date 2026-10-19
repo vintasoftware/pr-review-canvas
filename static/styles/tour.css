@@ -1000,6 +1000,12 @@ pr-tour[data-at='plan'] {
   z-index: 5;
   padding: 0 20px 12px;
 }
+.tour-nav-why {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tour-ink-soft);
+  text-align: center;
+}
 .tour-nav-inner {
   display: flex;
   gap: 12px;
@@ -1051,13 +1057,29 @@ pr-tour[data-at='plan'] {
   display: grid;
   gap: 4px;
   padding: 16px 18px 16px 54px;
-  border: 1px solid var(--tour-line);
+  border: 1px solid var(--tour-line-strong);
   border-radius: 12px;
   background: var(--tour-card);
   color: var(--tour-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* Each card stands up like a button, so it reads as one to press. */
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--btn-edge) 60%, transparent),
+    0 4px 10px -6px rgb(31 36 48 / 25%);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+}
+.tour-option:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-option {
+    transition: none;
+  }
 }
 .tour-option::before {
   content: '';
@@ -1071,8 +1093,8 @@ pr-tour[data-at='plan'] {
   background: var(--tour-card);
 }
 .tour-option:hover {
-  border-color: var(--tour-line-strong);
-  background: color-mix(in srgb, var(--blue) 3%, var(--tour-card));
+  border-color: var(--lilac);
+  background: color-mix(in srgb, var(--lilac) 4%, var(--tour-card));
 }
 .tour-option[aria-checked='true'] {
   padding: 15px 17px 15px 53px;
@@ -1100,16 +1122,14 @@ pr-tour[data-at='plan'] {
 .tour-option-k > span:first-child::first-letter {
   text-transform: uppercase;
 }
-.tour-option-k :is(.now, .rec) {
+.tour-option-k .now {
+  font-weight: 400;
+}
+/* The tour's advice is the one badge on the cards; what the code does is said in plain text. */
+.tour-option-k .rec {
   padding: 1px 9px;
   border-radius: 999px;
   font-size: 13px;
-}
-.tour-option-k .now {
-  background: var(--tour-well);
-  color: var(--tour-ink);
-}
-.tour-option-k .rec {
   background: var(--p-mint);
   color: var(--green);
 }
@@ -1723,6 +1743,10 @@ pr-tour[data-at='cover'] .hdr-title .title {
   .tour-nav {
     padding: 0 10px 10px;
   }
+  .tour-nav-why {
+    font-size: 13px;
+    line-height: 1.3;
+  }
   /* The stops say what they are by their signs; a phone's height goes to the step. */
   .tour-rail-legend {
     display: none;
@@ -1751,6 +1775,14 @@ pr-tour[data-at='cover'] .hdr-title .title {
     font-size: 20px;
   }
   pr-tour:not([data-at='cover']) .hdr-title .meta {
+    display: none;
+  }
+}
+
+/* Key hints are for a keyboard: a touch screen has none to press, so it shows none. */
+@media (hover: none) {
+  .tour-keys,
+  .tour-page .cmd kbd {
     display: none;
   }
 }

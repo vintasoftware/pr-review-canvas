@@ -172,12 +172,23 @@ describe('railHtml and navHtml', () => {
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('start →')
     // The cover's own button is the primary one, not the nav's.
     expect(document.querySelector('[data-nav="next"]')?.classList.contains('fill')).toBe(false)
+    expect(document.querySelector('.tour-nav-why')?.textContent).toBe('')
     document.body.innerHTML = navHtml(stepsOf(bundle), 1, bundle.reader)
     expect(document.querySelector('[data-nav="next"]')?.classList.contains('fill')).toBe(true)
+    // A closed next says why, beside it.
     document.body.innerHTML = navHtml(stepsOf(bundle), 5, bundle.reader)
     expect(document.querySelector('[data-nav="next"]')?.hasAttribute('disabled')).toBe(true)
+    expect(document.querySelector('.tour-nav-why')?.textContent).toBe('pick one to continue')
+    expect(document.querySelector('[data-nav="next"]')?.getAttribute('aria-describedby')).toBe('nav-why')
+    document.body.innerHTML = navHtml(stepsOf(bundle), 6, bundle.reader)
+    expect(document.querySelector('.tour-nav-why')?.textContent).toBe('answer to continue')
     document.body.innerHTML = navHtml(stepsOf(bundle), 7, bundle.reader)
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('done →')
+    expect(document.querySelector('.tour-nav-why')?.textContent).toBe('confirm the plan to finish')
+    document.body.innerHTML = navHtml(stepsOf(bundle), 7, bundle.reader, { preview: true })
+    expect(document.querySelector('.tour-nav-why')?.textContent).toBe(
+      'a preview is not finished: publish the tour first'
+    )
   })
 })
 
@@ -363,7 +374,10 @@ describe('decisionHtml', () => {
       [...document.querySelectorAll('.tour-option-k > span:first-child')].map(s => s.textContent)
     ).toEqual(['keep', 'alternative', 'something else'])
     expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
-    expect(document.querySelector('.tour-option .now')?.textContent).toBe('what the code does')
+    expect(document.querySelector('.tour-option .now')?.textContent).toBe('· what the code does')
+    expect(document.querySelector('[data-pick="other"] .tour-option-l')?.textContent).toBe(
+      'Say what you want instead'
+    )
     expect(document.querySelector('.tour-landmark-note')?.textContent).toContain('my note')
     expect(document.querySelector('.tour-actions .tour-hint')?.textContent).toBe(
       'pick one: k keep · a alternative · c something else'
@@ -494,7 +508,7 @@ describe('planHtml', () => {
     expect(document.querySelector('.tour-hint')?.textContent).toBe('writes the prompt')
     document.body.innerHTML = planHtml({ ...bundle, preview: true })
     expect(document.querySelector('[data-act="confirm"]')).toBeNull()
-    expect(document.body.textContent).toContain('A preview is not finished')
+    expect(document.querySelector('.tour-actions')).toBeNull()
   })
 
   it('reports each way the record was shared once finished, with the prompt to copy', () => {

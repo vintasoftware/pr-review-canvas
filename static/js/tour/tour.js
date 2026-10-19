@@ -407,7 +407,7 @@ export class PrTourElement extends HTMLElement {
     rail.innerHTML = railHtml(this.steps, this.current, bundle.reader, bundle.tour, {
       preview: bundle.preview,
     })
-    nav.innerHTML = navHtml(this.steps, this.current, bundle.reader)
+    nav.innerHTML = navHtml(this.steps, this.current, bundle.reader, { preview: bundle.preview })
     const road = /** @type {HTMLElement} */ (qs('.tour-rail', rail))
     const here = qs('[aria-current="step"]', rail)
     if (here instanceof HTMLElement) {

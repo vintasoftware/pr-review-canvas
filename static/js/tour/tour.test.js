@@ -499,7 +499,7 @@ describe('the tour page', () => {
     // Every step is open in a preview.
     click('.tour-rail-seg[data-step="7"]')
     expect(location.hash).toBe('#plan')
-    expect(text()).toContain('A preview is not finished')
+    expect(text()).toContain('a preview is not finished')
     expect(server.calls).toEqual(['GET /r/acme/widgets/api/tours/42?preview=1'])
     // An unknown landmark falls back to the cover.
     document.body.innerHTML = ''

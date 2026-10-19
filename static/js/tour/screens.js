@@ -264,19 +264,34 @@ function stepDone(step, i, current, reader, tour) {
 }
 
 /**
- * The footer nav. The rail and the strip say where the reader is, so the nav does not.
+ * The footer nav. The rail and the strip say where the reader is, so the space between the buttons
+ * says why next is closed, when it is.
  * @param {Step[]} steps
  * @param {number} i
  * @param {TourReaderState} reader
+ * @param {{ preview?: boolean }} [opts]
  */
-export function navHtml(steps, i, reader) {
+export function navHtml(steps, i, reader, opts = {}) {
   const step = steps[i]
   const canNext = step !== undefined && i < steps.length - 1 && settled(step, reader)
+  const why =
+    step === undefined || canNext
+      ? ''
+      : step.kind === 'decision'
+        ? 'pick one to continue'
+        : step.kind === 'quiz'
+          ? 'answer to continue'
+          : step.kind === 'plan' && opts.preview === true
+            ? 'a preview is not finished: publish the tour first'
+            : step.kind === 'plan' && reader.finished === undefined
+              ? 'confirm the plan to finish'
+              : ''
   // The cover's own button is the one to press; the nav's does not compete with it.
   const fill = canNext && step.kind !== 'cover'
   return `<div class="tour-nav-inner">
     <button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>
-    <button class="cmd${fill ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ' disabled'}>${esc(nextLabel(steps, i))} →</button>
+    <span class="tour-nav-why" id="nav-why">${esc(why)}</span>
+    <button class="cmd${fill ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ` disabled${why === '' ? '' : ' aria-describedby="nav-why"'}`}>${esc(nextLabel(steps, i))} →</button>
   </div>`
 }
 
@@ -305,7 +320,7 @@ export function coverHtml(bundle) {
     ${bundle.reader.finished ? '<p class="tour-hint">You finished this tour. Read it again, or open the plan.</p>' : ''}
     <div class="tour-cover-actions">
       <button class="cmd fill big" type="button" data-nav="next">${bundle.reader.step > 0 ? 'continue the tour' : 'start the tour'}</button>
-      <span class="tour-hint"><kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>i</kbd> code · <kbd>?</kbd> help</span>
+      <span class="tour-hint tour-keys"><kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>i</kbd> code · <kbd>?</kbd> help</span>
     </div>`
 }
 
@@ -498,7 +513,7 @@ export function decisionHtml(bundle, steps, d) {
   const unsettle = '<button class="cmd" type="button" data-act="unsettle">undo</button>'
   const actions =
     chosen === null
-      ? '<span class="tour-hint">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</span>'
+      ? '<span class="tour-hint tour-keys">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</span>'
       : chosen === 'keep'
         ? `<span class="tour-state">✓ kept</span>${unsettle}`
         : chosen === 'change'
@@ -507,8 +522,8 @@ export function decisionHtml(bundle, steps, d) {
             ? `<span class="tour-state change">✓ change approved · in the plan</span><button class="cmd" type="button" data-act="grill">reopen</button>${unsettle}`
             : `<button class="cmd fill" type="button" data-act="grill">continue the conversation <kbd>c</kbd></button>${unsettle}`
   const other = {
-    label: 'Something else',
-    consequence: 'Neither side: say what you want instead, then approve it as restated.',
+    label: 'Say what you want instead',
+    consequence: 'Neither side: describe the change you want, then approve it as restated.',
   }
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
@@ -546,7 +561,7 @@ const OPTION_LABEL = { keep: 'keep', change: 'alternative', other: 'something el
  */
 function optionHtml(kind, side, checked, marks) {
   return `<button class="tour-option" type="button" role="radio" aria-checked="${checked}" data-act="pick" data-pick="${kind}"${marks.recommended ? ' data-recommended' : ''}>
-    <span class="tour-option-k"><span>${OPTION_LABEL[kind]}</span>${marks.isNow ? '<span class="now">what the code does</span>' : ''}${marks.recommended ? '<span class="rec">the tour recommends</span>' : ''}</span>
+    <span class="tour-option-k"><span>${OPTION_LABEL[kind]}</span>${marks.isNow ? '<span class="now">· what the code does</span>' : ''}${marks.recommended ? '<span class="rec">the tour recommends</span>' : ''}</span>
     <span class="tour-option-l">${plain(side.label)}</span>
     <span class="tour-option-c">${inline(side.consequence)}</span></button>`
 }
@@ -573,7 +588,7 @@ export function quizHtml(bundle, q) {
     ? a.right
       ? `<div class="tour-quiz-why right">${inline(q.why)}</div>`
       : `<div class="tour-quiz-why wrong">Not quite. ${inline(q.why)}<div class="tour-actions">${reopen}</div></div>`
-    : '<p class="tour-hint tour-quiz-hint">press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to answer · a wrong answer reopens the landmark it came from</p>'
+    : '<p class="tour-hint tour-quiz-hint"><span class="tour-keys">press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to answer · </span>a wrong answer reopens the landmark it came from</p>'
   return `
     <h2 class="tour-quiz-q">${inline(q.question)}</h2>
     <div class="tour-quiz-opts">${q.options
@@ -640,7 +655,7 @@ export function planHtml(bundle) {
        <h3 class="tour-section-h">Re-implementation prompt</h3>
        <div class="tour-prompt"><div class="tour-actions"><button class="cmd" type="button" data-act="copy">copy</button></div><pre id="prompt">${esc(finished.prompt)}</pre></div>`
     : bundle.preview
-      ? '<div class="tour-actions"><span class="tour-hint">A preview is not finished: publish the tour first.</span></div>'
+      ? ''
       : confirm
   return `
     <h2 class="tour-title">${esc(title)}</h2>
