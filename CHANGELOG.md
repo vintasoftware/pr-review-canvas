@@ -45,6 +45,10 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   export command, and a drop zone on a pull request with no tour. Opening the tour page of a pull
   request with no tour of its head loads one someone shared on it, as the review page does a
   canvas; a command looks again on demand.
+- The tour page has a look of its own, a hop-on hop-off sightseeing bus, apart from the canvas's
+  skins: each screen a ticket, the rail a road of bus stops, pastel colors in light and dark, and
+  fonts served by the app. It offers the theme command and no skin command. Scene frames and the
+  scene kit follow the same palette.
 
 ### Generating from the terminal
 
