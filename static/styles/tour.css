@@ -928,7 +928,7 @@ pr-tour[data-at='plan'] {
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: var(--tour-well);
-  font: 600 13px var(--mono);
+  font: 600 12px var(--mono);
 }
 .tour-code-body > .tour-code-file:first-child {
   margin-top: 0;
@@ -938,7 +938,11 @@ pr-tour[data-at='plan'] {
   border: 1px solid var(--tour-line-strong);
   border-radius: 0 0 6px 6px;
   background: var(--tour-card);
-  font: 14px / 1.65 var(--mono);
+  /* GitHub's diff size. One column as wide as the longest line, so every row's tint runs the full
+     width when the diff scrolls sideways. */
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
+  font: 12px / 20px var(--mono);
 }
 .tour-diff div {
   padding: 0 12px;
