@@ -139,8 +139,12 @@
   --del-w: light-dark(#ffc1c0, rgb(229 83 75 / 40%));
   --mv-bg: var(--p-lilac);
   --hunk-bg: light-dark(#ddf4ff, #1e2d44);
-  --btn-bg: light-dark(#f6f8fa, #263042);
-  --btn-bg-hover: light-dark(#eef1f4, #2f3a4f);
+  --btn-bg: light-dark(#fff, #2b3446);
+  --btn-bg-hover: light-dark(#f4f7fa, #343f53);
+  /* A button stands up from the page like a key: a light top edge and a darker bottom one. */
+  --btn-hi: light-dark(rgb(255 255 255 / 100%), rgb(255 255 255 / 8%));
+  --btn-edge: light-dark(#c3ccd9, #0d1219);
+  --btn-primary-edge: light-dark(#15692f, #0f4d22);
   --btn-primary: light-dark(#1f883d, #238636);
   --btn-primary-hover: light-dark(#1c8139, #2ea043);
   --btn-primary-fg: #fff;
@@ -214,6 +218,48 @@ pr-tour[data-at='plan'] {
   text-decoration: none;
 }
 
+/* ---- Buttons: GitHub's shape, standing up from the page ---- */
+:root[data-skin='tour']
+  .tour-page
+  :is(
+    .hdr-actions,
+    .tour-actions,
+    .tour-cover-actions,
+    .tour-nav,
+    .tour-return,
+    .tour-restate,
+    .tour-notice,
+    .tour-help,
+    .tour-missing
+  )
+  .cmd:not(:disabled) {
+  border-color: color-mix(in srgb, var(--btn-edge) 70%, var(--tour-line));
+  box-shadow:
+    inset 0 1px 0 var(--btn-hi),
+    0 2px 0 var(--btn-edge),
+    0 3px 6px -2px rgb(31 36 48 / 22%);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+
+  &.fill {
+    border-color: var(--btn-primary-edge);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 22%),
+      0 2px 0 var(--btn-primary-edge),
+      0 3px 6px -2px rgb(31 36 48 / 30%);
+  }
+  &:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 1px 2px rgb(31 36 48 / 18%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin='tour'] .tour-page .cmd {
+    transition: none;
+  }
+}
+
 /* ---- Header: a pastel sky over a skyline, and the bus ---- */
 .tour-page .hdr {
   position: relative;
@@ -233,6 +279,9 @@ pr-tour[data-at='plan'] {
 :root[data-skin='tour'] .tour-page .hdr-actions {
   --btn-h: 32px;
   --btn-pad: 12px;
+
+  /* When the bar wraps, the commands stay at the right, apart from the meta line below. */
+  margin-left: auto;
 }
 :root[data-skin='tour'] .tour-page .hdr-title {
   border-bottom: 0;
@@ -279,7 +328,6 @@ pr-tour[data-at='plan'] {
   padding: 8px 14px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--tour-card) 90%, transparent);
-  box-shadow: 0 1px 2px rgb(31 36 48 / 6%);
   color: var(--tour-ink);
   font-size: 15px;
 }
