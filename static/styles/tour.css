@@ -1368,7 +1368,7 @@ pr-tour[data-at='plan'] {
   font: 800 clamp(26px, 3.6vw, 32px) / 1.2 var(--tour-display);
   font-stretch: 95%;
 }
-.tour-missing .body {
+:root[data-skin='tour'] .tour-missing .body {
   padding: 0;
 }
 .tour-missing .body p {

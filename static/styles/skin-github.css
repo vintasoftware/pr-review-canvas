@@ -194,7 +194,7 @@
   :is(
     .hdr-actions .cmd,
     .codeblock > .cmd,
-    :is(.tour-actions, .tour-nav, .tour-return, .tour-restate, .tour-notice, .tour-help) .cmd,
+    :is(.tour-actions, .tour-nav, .tour-return, .tour-restate, .tour-notice, .tour-help, .tour-missing) .cmd,
     .signoff .cmd,
     :is(.findings, .ifind)
       .cmd:is(
@@ -251,7 +251,8 @@
      accessible name. */
     &.cmd:not(
         .signoff .cmd,
-        :is(.tour-actions, .tour-nav, .tour-return, .tour-restate, .tour-notice, .tour-help) .cmd
+        :is(.tour-actions, .tour-nav, .tour-return, .tour-restate, .tour-notice, .tour-help, .tour-missing)
+          .cmd
       )::before {
       content: '';
       flex: 0 0 var(--icon-size, 14px);
