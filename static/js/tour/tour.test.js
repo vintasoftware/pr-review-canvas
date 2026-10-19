@@ -193,7 +193,7 @@ describe('the tour page', () => {
     )
 
     click('[data-nav="next"]')
-    expect(document.querySelector('.tour-stage-tag')?.textContent).toBe('Before this change')
+    expect(document.querySelector('#strip')?.textContent).toBe('stop1of 4Before this change')
     expect(location.hash).toBe('#landmark-before')
     expect(document.querySelector('iframe.tour-frame')?.getAttribute('src')).toContain(
       `/tour-scene/42/before/scene?theme=auto&headSha=${HEAD}`
@@ -453,7 +453,7 @@ describe('the tour page', () => {
     const server = fakeServer(syntheticTourBundle({ preview: true, warnings: ['previewing'] }))
     vi.stubGlobal('fetch', server.impl)
     mount({ preview: true, landmark: 'respect' })
-    await drawn('.tour-stage-tag')
+    await drawn('.tour-title')
     expect(document.querySelector('.tour-title')?.textContent).toBe('Keep run() total')
     expect(document.querySelector('.banner')?.textContent).toBe('previewing')
     expect(document.querySelector('iframe.tour-frame')?.getAttribute('src')).toContain('&preview=1')

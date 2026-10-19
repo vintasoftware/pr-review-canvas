@@ -22,6 +22,7 @@ import {
   railHtml,
   returnBannerHtml,
   staleBarHtml,
+  stripHtml,
   tourHeaderHtml,
 } from './screens.js'
 import { buildSteps, planBasis } from './steps.js'
@@ -163,9 +164,12 @@ describe('railHtml and navHtml', () => {
     document.body.innerHTML = navHtml(stepsOf(bundle), 0, bundle.reader)
     expect(document.querySelector('[data-nav="prev"]')?.hasAttribute('disabled')).toBe(true)
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('start →')
+    // The cover's own button is the primary one, not the nav's.
+    expect(document.querySelector('[data-nav="next"]')?.classList.contains('fill')).toBe(false)
+    document.body.innerHTML = navHtml(stepsOf(bundle), 1, bundle.reader)
+    expect(document.querySelector('[data-nav="next"]')?.classList.contains('fill')).toBe(true)
     document.body.innerHTML = navHtml(stepsOf(bundle), 5, bundle.reader)
     expect(document.querySelector('[data-nav="next"]')?.hasAttribute('disabled')).toBe(true)
-    expect(document.querySelector('.tour-nav-pos')?.textContent).toBe('1 of 1 decision')
     document.body.innerHTML = navHtml(stepsOf(bundle), 7, bundle.reader)
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('done →')
   })
@@ -183,12 +187,8 @@ describe('coverHtml', () => {
       'WhySum, not product',
       'What to respectKeep run() total',
     ])
-    expect([...document.querySelectorAll('.tour-budget b')].map(b => b.textContent)).toEqual([
-      '4',
-      '1',
-      '1',
-      '~6',
-    ])
+    // The strip and the rail give the tour's size; the cover does not count it a third time.
+    expect(document.querySelector('.tour-budget')).toBeNull()
     expect(document.querySelector('.tour-cover-meta')?.textContent).toBe('touches: schema')
     // The header names the change, its author, and its branch; the cover does not again.
     expect(document.querySelector('.tour-eyebrow')).toBeNull()
@@ -198,12 +198,6 @@ describe('coverHtml', () => {
     document.body.innerHTML = coverHtml({ ...back, tour, options: { ...back.options, finalQuiz: 'off' } })
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('continue the tour')
     expect(document.querySelector('.tour-cover-meta')).toBeNull()
-    expect([...document.querySelectorAll('.tour-budget b')].map(b => b.textContent)).toEqual([
-      '4',
-      '1',
-      '0',
-      '~6',
-    ])
     const finished = bundleWith({
       finished: { at: 'x', promptPath: '/p', prompt: 'p', sharing: { status: 'off' } },
     })
@@ -234,8 +228,8 @@ describe('landmarkHtml', () => {
       throw new Error('no landmark')
     }
     document.body.innerHTML = landmarkHtml(bundle, steps, sum)
-    expect(document.querySelector('.tour-stage-tag')?.textContent).toBe('Why')
-    expect(document.querySelector('.tour-eyebrow')?.textContent).toContain('landmark 3 of 4')
+    // The strip says which stop and stage this is; the screen does not say it again.
+    expect(document.querySelector('.tour-eyebrow')).toBeNull()
     expect(document.querySelector('.tour-frame-host')?.getAttribute('data-kind')).toBe('scene')
     expect(document.querySelector('.tour-frame-host[data-kind="micro"]')).toBeNull()
     expect(document.querySelector('.tour-chip')?.textContent).toBe('one decision waits here')
@@ -352,7 +346,7 @@ describe('decisionHtml', () => {
       throw new Error('no decision')
     }
     document.body.innerHTML = decisionHtml(bundle, stepsOf(bundle), decision)
-    expect(document.querySelector('.tour-stage-tag')?.textContent).toBe('Trade-off')
+    expect(document.querySelector('.tour-stage-tag')).toBeNull()
     expect(document.querySelector('.tour-eyebrow a')?.textContent).toBe('from landmark 3: Sum, not product')
     expect([...document.querySelectorAll('.tour-option')].map(o => o.getAttribute('data-pick'))).toEqual([
       'keep',
@@ -589,8 +583,11 @@ describe('the corners of the screens', () => {
       /** @type {unknown} */ ('other')
     )
     const odd = { ...decision, category }
-    document.body.innerHTML = decisionHtml(bundle, stepsOf(bundle), odd)
-    expect(document.querySelector('.tour-stage-tag')?.textContent).toBe('other')
+    document.body.innerHTML = stripHtml(bundle, stepsOf(bundle), 5)
+    expect(document.querySelector('.tour-strip-what')?.textContent).toBe('Trade-off')
+    const oddBundle = { ...bundle, tour: { ...tour, decisions: [odd] } }
+    document.body.innerHTML = stripHtml(oddBundle, stepsOf(oddBundle), 5)
+    expect(document.querySelector('.tour-strip-what')?.textContent).toBe('other')
     const changed = bundleWith({
       picks: {
         'sum-over-product': {

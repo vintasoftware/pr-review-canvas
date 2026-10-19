@@ -9,7 +9,6 @@ import {
   nextLabel,
   pickSettled,
   plural,
-  positionLabel,
   reachable,
   settled,
   stepFromHash,
@@ -100,12 +99,6 @@ describe('reachability', () => {
 describe('labels', () => {
   it('says where the reader is and what comes next', () => {
     const steps = buildSteps(tour, ON)
-    expect(positionLabel(steps, 0)).toBe('')
-    expect(positionLabel(steps, 2)).toBe('2 of 4 landmarks')
-    expect(positionLabel(steps, 5)).toBe('1 of 1 decision')
-    expect(positionLabel(steps, 6)).toBe('1 of 1 question')
-    expect(positionLabel(steps, 7)).toBe('the plan')
-    expect(positionLabel(steps, 9)).toBe('')
     expect(nextLabel(steps, 0)).toBe('start')
     expect(nextLabel(steps, 1)).toBe('next')
     expect(nextLabel(steps, 4)).toBe('decide')

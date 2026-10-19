@@ -182,24 +182,6 @@ export function stepIndexOf(steps, kind, id) {
 }
 
 /**
- * `2 of 6 landmarks`, `the plan`, or nothing on the cover.
- * @param {Step[]} steps
- * @param {number} i
- */
-export function positionLabel(steps, i) {
-  const step = steps[i]
-  if (step === undefined || step.kind === 'cover') {
-    return ''
-  }
-  if (step.kind === 'plan') {
-    return 'the plan'
-  }
-  const same = steps.filter(s => s.kind === step.kind)
-  const noun = step.kind === 'quiz' ? 'question' : step.kind
-  return `${same.indexOf(step) + 1} of ${plural(same.length, noun)}`
-}
-
-/**
  * The word on the next button: what the step after this one is.
  * @param {Step[]} steps
  * @param {number} i

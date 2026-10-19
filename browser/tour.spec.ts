@@ -6,14 +6,16 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
 }) => {
   await page.goto(tourUrl)
   await expect(page).toHaveTitle(/^Tour · #42 /)
-  await expect(page.locator('.tour-budget b').first()).toHaveText('6')
+  await expect(page.locator('.tour-rail-group[data-kind="landmarks"] .tour-rail-label')).toHaveText(
+    '6 landmarks'
+  )
   for (const button of await page.locator('.hdr button').all()) {
     await expect(button).toHaveAttribute('title', /\S.+/)
   }
   await expect(page.locator('#canvas-link')).toHaveAttribute('href', '/r/acme/widgets/review/42')
   await page.locator('.tour-cover-actions [data-nav="next"]').click()
   await expect(page).toHaveURL(/#landmark-l0$/)
-  await expect(page.locator('.tour-stage-tag')).toHaveText('Before this change')
+  await expect(page.locator('.tour-strip-what')).toHaveText('Before this change')
 
   // The scene's runtime tells the page how tall it is, and the frame follows.
   const frame = page.locator('iframe.tour-frame[title="scene"]')

@@ -24,7 +24,6 @@ import {
   pickSettled,
   planChanged,
   plural,
-  positionLabel,
   reachable,
   settled,
   stepTitle,
@@ -194,8 +193,9 @@ export function railHtml(steps, current, reader, tour, opts = {}) {
 const STOP_SIGN = { cover: '▸', landmark: '', decision: 'D', quiz: '?', plan: '★' }
 
 /**
- * The ticket's strip over each screen: which stop this is on the route, what it is about, and a
- * barcode for decoration. The page tints the strip by the kind of step.
+ * The ticket's strip over each screen: which stop this is on the route, and its stage. The title is
+ * the screen's own heading, so the strip does not say it. The page tints the strip by the kind of
+ * step.
  * @param {TourBundle} bundle
  * @param {Step[]} steps
  * @param {number} i
@@ -215,14 +215,14 @@ export function stripHtml(bundle, steps, i) {
               'stop',
               String(tour.landmarks.indexOf(step.landmark) + 1),
               `of ${tour.landmarks.length}`,
-              `${STAGE_LABEL[step.landmark.stage]} · ${step.landmark.title}`,
+              STAGE_LABEL[step.landmark.stage],
             ]
           : step.kind === 'decision'
             ? [
                 'choice',
                 String(tour.decisions.indexOf(step.decision) + 1),
                 `of ${tour.decisions.length}`,
-                decisionWhere(tour, step.decision),
+                CATEGORY_LABEL[step.decision.category] ?? step.decision.category,
               ]
             : step.kind === 'quiz'
               ? [
@@ -231,29 +231,8 @@ export function stripHtml(bundle, steps, i) {
                   `of ${tour.quiz.length}`,
                   'Private · stays on this machine',
                 ]
-              : ['last stop', '★', '', `The plan · ${planCount(bundle)}`]
-  return `<span class="tour-strip-no"><small>${label}</small><b>${esc(number)}</b>${of === '' ? '' : `<small>${of}</small>`}</span><span class="tour-strip-what">${plain(what.replaceAll('`', ''))}</span><span class="tour-strip-code" aria-hidden="true"></span>`
-}
-
-/**
- * @param {TourPageTour} tour
- * @param {Decision} d
- */
-function decisionWhere(tour, d) {
-  const category = CATEGORY_LABEL[d.category] ?? d.category
-  const n = tour.landmarks.findIndex(l => l.id === d.landmark) + 1
-  return n === 0 ? category : `${category} · from landmark ${n}`
-}
-
-/**
- * How the plan stands, in a few words: the changes to make and the decisions kept.
- * @param {TourBundle} bundle
- */
-function planCount(bundle) {
-  const tour = /** @type {TourPageTour} */ (bundle.tour)
-  const picks = tour.decisions.map(d => bundle.reader.picks[d.key]).filter(p => pickSettled(p))
-  const kept = picks.filter(p => p?.pick === 'keep').length
-  return `${plural(picks.length - kept, 'change')}, ${kept} kept`
+              : ['last stop', '★', '', 'The plan']
+  return `<span class="tour-strip-no"><small>${label}</small><b>${esc(number)}</b>${of === '' ? '' : `<small>${of}</small>`}</span><span class="tour-strip-what">${plain(what.replaceAll('`', ''))}</span>`
 }
 
 /**
@@ -280,6 +259,7 @@ function stepDone(step, i, current, reader, tour) {
 }
 
 /**
+ * The footer nav. The rail and the strip say where the reader is, so the nav does not.
  * @param {Step[]} steps
  * @param {number} i
  * @param {TourReaderState} reader
@@ -287,10 +267,11 @@ function stepDone(step, i, current, reader, tour) {
 export function navHtml(steps, i, reader) {
   const step = steps[i]
   const canNext = step !== undefined && i < steps.length - 1 && settled(step, reader)
+  // The cover's own button is the one to press; the nav's does not compete with it.
+  const fill = canNext && step.kind !== 'cover'
   return `<div class="tour-nav-inner">
     <button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>
-    <span class="tour-nav-pos">${esc(positionLabel(steps, i))}</span>
-    <button class="cmd${canNext ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ' disabled'}>${esc(nextLabel(steps, i))} →</button>
+    <button class="cmd${fill ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ' disabled'}>${esc(nextLabel(steps, i))} →</button>
   </div>`
 }
 
@@ -299,6 +280,7 @@ export function coverHtml(bundle) {
   const { pr } = bundle
   const tour = /** @type {TourPageTour} */ (bundle.tour)
   // The route ahead, by landmark title: each landmark tells its own lead, so the cover tells none.
+  // The strip and the rail give the tour's size, so the cover does not count it again.
   const agenda = `<ol class="tour-agenda">${tour.landmarks
     .map(
       l =>
@@ -315,12 +297,6 @@ export function coverHtml(bundle) {
     <h1 class="tour-title">${esc(pr.title)}</h1>
     ${blast}
     ${agenda}
-    <div class="tour-budget">
-      <div><b>${tour.landmarks.length}</b><span>landmarks</span></div>
-      <div><b>${tour.decisions.length}</b><span>decisions</span></div>
-      <div><b>${bundle.options.finalQuiz === 'off' ? 0 : tour.quiz.length}</b><span>questions</span></div>
-      <div><b>~${minutesOf(tour)}</b><span>minutes</span></div>
-    </div>
     ${bundle.reader.finished ? '<p class="tour-hint">You finished this tour. Read it again, or open the plan.</p>' : ''}
     <div class="tour-cover-actions">
       <button class="cmd fill big" type="button" data-nav="next">${bundle.reader.step > 0 ? 'continue the tour' : 'start the tour'}</button>
@@ -359,7 +335,6 @@ export function returnBannerHtml(steps, tour, from) {
 export function landmarkHtml(bundle, steps, landmark) {
   const tour = /** @type {TourPageTour} */ (bundle.tour)
   const reader = bundle.reader
-  const n = tour.landmarks.indexOf(landmark) + 1
   const decisionsHere = tour.decisions.filter(d => d.landmark === landmark.id)
   const codeOpen = reader.codeOpen[landmark.id] === true
   const hasLiterate = landmark.literate.length > 0
@@ -400,7 +375,7 @@ export function landmarkHtml(bundle, steps, landmark) {
          </div>`
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
-    <p class="tour-eyebrow"><span class="tour-stage-tag">${esc(STAGE_LABEL[landmark.stage])}</span><span>landmark ${n} of ${tour.landmarks.length}</span>${landmark.state ? '<span class="tour-state-tag">state landmark</span>' : ''}</p>
+    ${landmark.state ? '<p class="tour-eyebrow"><span class="tour-state-tag">state landmark</span></p>' : ''}
     <h2 class="tour-title">${plain(landmark.title)}</h2>
     <p class="tour-lead">${inline(landmark.lead)}</p>
     ${figure}
@@ -499,7 +474,6 @@ export function chunkHtml(chunk, link = () => null) {
 export function decisionHtml(bundle, steps, d) {
   const tour = /** @type {TourPageTour} */ (bundle.tour)
   const reader = bundle.reader
-  const n = tour.decisions.indexOf(d) + 1
   const landmark = tour.landmarks.find(l => l.id === d.landmark)
   const landmarkIndex = landmark === undefined ? 0 : tour.landmarks.indexOf(landmark) + 1
   const p = reader.picks[d.key]
@@ -533,7 +507,7 @@ export function decisionHtml(bundle, steps, d) {
   }
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
-    <p class="tour-eyebrow"><span class="tour-stage-tag">${esc(CATEGORY_LABEL[d.category] ?? d.category)}</span><span>decision ${n} of ${tour.decisions.length}</span>${from}</p>
+    ${from === '' ? '' : `<p class="tour-eyebrow">${from}</p>`}
     <h2 class="tour-title">${plain(d.title)}</h2>
     <p class="tour-lead">${inline(d.context)}</p>
     <p class="tour-anchor"><span class="mono">${esc(d.anchor.path)}:${d.anchor.line}</span></p>
@@ -584,7 +558,6 @@ export function restatedHtml(r) {
 export function quizHtml(bundle, q) {
   const tour = /** @type {TourPageTour} */ (bundle.tour)
   const a = bundle.reader.quiz[q.id]
-  const n = tour.quiz.indexOf(q) + 1
   const landmark = tour.landmarks.find(l => l.id === q.landmark)
   const landmarkIndex = landmark === undefined ? 0 : tour.landmarks.indexOf(landmark) + 1
   const reopen =
@@ -597,7 +570,6 @@ export function quizHtml(bundle, q) {
       : `<div class="tour-quiz-why wrong">Not quite. ${inline(q.why)}<div class="tour-actions">${reopen}</div></div>`
     : '<p class="tour-hint tour-quiz-hint">press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to answer · a wrong answer reopens the landmark it came from</p>'
   return `
-    <p class="tour-eyebrow"><span class="tour-stage-tag">Quiz</span><span>question ${n} of ${tour.quiz.length}</span><span>private · stays on this machine</span></p>
     <h2 class="tour-quiz-q">${inline(q.question)}</h2>
     <div class="tour-quiz-opts">${q.options
       .map((o, i) => {
@@ -666,7 +638,6 @@ export function planHtml(bundle) {
       ? '<div class="tour-actions"><span class="tour-hint">A preview is not finished: publish the tour first.</span></div>'
       : confirm
   return `
-    <p class="tour-eyebrow"><span class="tour-stage-tag">The plan</span></p>
     <h2 class="tour-title">${esc(title)}</h2>
     <p class="tour-lead">${esc(lead)}</p>
     ${changes.length ? `<h3 class="tour-section-h">Changes</h3><ol class="tour-plan-list">${changes.map(({ d, r }) => `<li><b>${esc(d.title)}</b><br>${inline(r.what)} <span class="where">${r.where.map(esc).join(' · ')}</span>${r.unchanged === undefined ? '' : `<span class="stays">Stays the same: ${inline(r.unchanged)}</span>`}</li>`).join('')}</ol>` : ''}
