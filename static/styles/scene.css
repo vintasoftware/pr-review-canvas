@@ -7,31 +7,21 @@
 
 :root {
   color-scheme: light dark;
-  /* The tour's accent, as each skin paints it: the github skin's green, the olive skin's olive. */
-  --ink: light-dark(#1f883d, #57ab5a);
-  --fg: light-dark(#1f2328, #d1d7e0);
-  --muted: light-dark(#59636e, #9198a1);
-  --paper: light-dark(#fff, #212830);
-  --line: light-dark(#d1d9e0, #3d444d);
-  --good: light-dark(#1a7f37, #57ab5a);
-  --bad: light-dark(#d1242f, #e5534b);
-  --warn: light-dark(#9a6700, #c69026);
+  /* The tour's palette (tour.css). `ink` is the tour's purple, the color of what the reader picks:
+     apart from added green, so an accent never reads as "new". `paper` is the box the frame sits
+     in on the tour page. */
+  --ink: light-dark(#5638a8, #bcaaff);
+  --fg: light-dark(#1f2430, #e6eaf2);
+  --muted: light-dark(#4b5363, #a9b2c3);
+  --paper: light-dark(#f7fbff, #172030);
+  --line: light-dark(#c3ccd9, #4a5669);
+  --good: light-dark(#146b3c, #7fd8a6);
+  --bad: light-dark(#b3342b, #ff9e93);
+  --warn: light-dark(#6e5200, #f0cf72);
   /* Two more hues for drawing a real screen: a link, an open state, a merged state. */
-  --blue: light-dark(#0969da, #478be6);
-  --purple: light-dark(#8250df, #986ee2);
+  --blue: light-dark(#1b5aa6, #8fbaff);
+  --purple: light-dark(#8250df, #d2a8ff);
   font-size: clamp(12px, 2vw, 15px);
-}
-:root[data-skin='olive'] {
-  --ink: light-dark(#50643f, #b5cf8f);
-  --fg: light-dark(#252821, #e9eae1);
-  --muted: light-dark(#686c62, #a6aa9c);
-  --paper: light-dark(#fffefa, #252821);
-  --line: light-dark(#dcded3, #3a3e33);
-  --good: light-dark(#4a6a2e, #a8c97f);
-  --bad: light-dark(#a8432c, #e98a6f);
-  --warn: light-dark(#86681a, #d4b25a);
-  --blue: light-dark(#3d6a8a, #8fb4cf);
-  --purple: light-dark(#6e4f8a, #b69ad0);
 }
 :root[data-theme='light'] {
   color-scheme: light;

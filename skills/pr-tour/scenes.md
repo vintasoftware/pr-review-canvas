@@ -66,7 +66,7 @@ Every tour draws change the same way, so a reader learns it once:
 - **One hero**, at most two: the element the change is really about (the edge it adds, the state
   it removes, the line that moved) gets the emphasis, a thicker stroke, a glow, a gentle pulse.
   If everything is emphasized, nothing is. Emphasize with weight and light, never with `ink`: the
-  accent is green in the github skin, the same green as added, so an `ink` hero reads as "new".
+  accent is the tour's purple, the color of what the reader picks, so an `ink` hero reads as a choice.
 - **Before and after** are the same picture twice, with the same layout, actors, labels, and
   scale, so the eye goes straight to what differs. Side by side on a desktop; stacked on a phone.
 
@@ -352,8 +352,8 @@ Rules:
 
 - **Your own CSS** in a `<style>` inside the scene: grids, keyframes, transitions, clip paths.
   Scope your classes with a prefix of your own so they cannot clash with the kit, and take every
-  color from the kit's tokens (`var(--good)`, `var(--ink)`, …) so the scene fits both themes and
-  both skins. Scope element rules too: a rule on every `svg` or `path` also restyles the kit's
+  color from the kit's tokens (`var(--good)`, `var(--ink)`, …) so the scene fits both themes.
+  Scope element rules too: a rule on every `svg` or `path` also restyles the kit's
   icons, so give your own SVG a class and write the rules under it. Text below about 0.75 rem is
   under 9 px on a phone: size small labels in `em` of a readable base, or raise them under a
   `@media (max-width: 40rem)` rule.
@@ -400,7 +400,7 @@ Rules:
   One that should fill the frame, or a long line of code or output, takes
   `style="max-width: none"`; check it in the preview.
 - **What scripts get.** `window.scene` has `reducedMotion` and `color(name)` (a kit token resolved
-  for the current skin and theme, such as `scene.color('good')` → `rgb(26, 127, 55)`).
+  for the current theme, such as `scene.color('good')` → `rgb(20, 107, 60)`).
 - **What the frame lacks.** It has no origin, network, storage, eval, or workers; it loads nothing,
   so icons, styles, and scripts are all inline (images as SVG, canvas, or `data:`). A scene takes no
   input: the tour owns clicks, drags, and keys, so a scene is watched, never used. A micro-world
@@ -448,7 +448,7 @@ Rules:
   names the speaker.
 - **Coverage**: `checks`, a `<ul>` whose items are marked by tone: `good` ✓, `bad` ✕, `warn` !,
   none open.
-- **Tones**, on any element: `ink` (the tour's accent, as the skin paints it), `good`, `bad`,
+- **Tones**, on any element: `ink` (the tour's purple accent), `good`, `bad`,
   `warn`, `muted`, and `blue` and `purple` for a real screen that has them (a link, an open or a
   merged state). A tone sets `--c` on its element, and each thing uses it its own way: `chip`,
   `banner`, `box solid`, `btn solid`, `toast`, `msg me`, and a `bar`'s fill are filled with it, and

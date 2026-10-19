@@ -8,8 +8,8 @@
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   /**
-   * A kit color as the scene draws it now, such as `rgb(31, 136, 61)`: the tokens are CSS, and a
-   * canvas or a script needs the value the skin and the theme resolve them to.
+   * A kit color as the scene draws it now, such as `rgb(86, 56, 168)`: the tokens are CSS, and a
+   * canvas or a script needs the value the theme resolves them to.
    * @param {string} name `ink`, `good`, `bad`, `warn`, `blue`, `purple`, `muted`, `fg`, `paper`, `line`, or `tint`
    */
   function color(name) {
