@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { freshReaderState } from '../../../src/contract/tour-api.js'
 import { missingTourBundle, syntheticTourBundle } from '../../../src/testing/tour-page.js'
-import { nextTourSkin, POLL_MS, PrTourElement } from './tour.js'
+import { POLL_MS, PrTourElement } from './tour.js'
 
 const HEAD = 'a'.repeat(40)
 
@@ -196,7 +196,7 @@ describe('the tour page', () => {
     expect(document.querySelector('.tour-stage-tag')?.textContent).toBe('Before this change')
     expect(location.hash).toBe('#landmark-before')
     expect(document.querySelector('iframe.tour-frame')?.getAttribute('src')).toContain(
-      `/tour-scene/42/before/scene?skin=github&theme=auto&headSha=${HEAD}`
+      `/tour-scene/42/before/scene?theme=auto&headSha=${HEAD}`
     )
     expect(window.scrollTo).toHaveBeenCalled()
 
@@ -469,7 +469,7 @@ describe('the tour page', () => {
     await drawn('.tour-cover-actions')
   })
 
-  it('switches the theme and the skin, telling the frames and the settings file', async () => {
+  it('switches the theme, telling the frames and the settings file, and offers no skin', async () => {
     const server = fakeServer(syntheticTourBundle({ reader: { ...freshReaderState(), step: 1 } }))
     vi.stubGlobal('fetch', server.impl)
     mount()
@@ -479,17 +479,10 @@ describe('the tour page', () => {
     click('#theme-toggle')
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     expect(postMessage).toHaveBeenCalledWith({ scene: 'theme', theme: 'light' }, '*')
-    click('#skin-toggle')
-    expect(document.documentElement.getAttribute('data-skin')).toBe('olive')
-    expect(document.querySelector('#skin-toggle')?.textContent).toBe('skin: olive')
-    expect(document.querySelector('iframe.tour-frame')?.getAttribute('src')).toContain(
-      'skin=olive&theme=light'
-    )
+    expect(document.querySelector('#skin-toggle')).toBeNull()
     await vi.waitFor(() =>
-      expect(server.calls.filter(c => c === 'PUT /r/acme/widgets/api/appearance')).toHaveLength(2)
+      expect(server.calls.filter(c => c === 'PUT /r/acme/widgets/api/appearance')).toHaveLength(1)
     )
-    expect(nextTourSkin('olive')).toBe('github')
-    expect(nextTourSkin('terminal')).toBe('github')
   })
 
   it('shows the missing screen and polls until the tour is published', async () => {

@@ -17,7 +17,6 @@ import { bannerHtml, errorCardHtml, toEnvelopeError } from '../errors.js'
 import { wireEnvBadge } from '../header-bar.js'
 import { hostLabel, setHost } from '../host.js'
 import { isTypingTarget } from '../keyboard.js'
-import { applySkin, DEFAULT_SKIN, readSkin, skinLabel } from '../skin.js'
 import { applyTheme, nextTheme, readTheme, themeLabel } from '../theme.js'
 import { createGeneration, GENERATE_DIALOG_ID, tourGenerationStartHtml } from '../generate.js'
 import { listenToFrames, mountFrames, tellFramesTheme } from './frames.js'
@@ -42,12 +41,6 @@ import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf }
 import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
 
 export const POLL_MS = 5000
-
-/** The tour offers two looks; the base terminal look is not one of them. */
-/** @param {import('../skin.js').Skin} skin */
-export function nextTourSkin(skin) {
-  return skin === 'github' ? 'olive' : 'github'
-}
 
 /** @returns {TourBootstrap | null} */
 function readBootstrap() {
@@ -77,8 +70,6 @@ export class PrTourElement extends HTMLElement {
   current = 0
   /** @type {import('../theme.js').Theme} */
   theme = 'auto'
-  /** @type {import('../skin.js').Skin} */
-  skin = DEFAULT_SKIN
   /** @type {ReturnType<typeof createSaver> | null} */
   saver = null
   /** @type {{ stop: () => void } | null} */
@@ -127,7 +118,6 @@ export class PrTourElement extends HTMLElement {
     setApiBase(this.bootstrap.base)
     this.key = String(this.bootstrap.key)
     this.theme = readTheme(document.documentElement)
-    this.skin = readSkin(document.documentElement)
     /** @type {TourBundle} */
     let bundle
     try {
@@ -269,7 +259,6 @@ export class PrTourElement extends HTMLElement {
     const header = tourHeaderHtml(bundle, {
       host: location.host,
       theme: this.theme,
-      skin: this.skin,
       now,
       project,
     })
@@ -398,7 +387,6 @@ export class PrTourElement extends HTMLElement {
         key: this.key,
         headSha: bundle.tour.headSha,
         preview: bundle.preview,
-        skin: this.skin,
         theme: this.theme,
       })
     } else if (step.kind === 'decision') {
@@ -730,15 +718,6 @@ export class PrTourElement extends HTMLElement {
     }
   }
 
-  /**
-   * Writes the skin or the theme to `.pr-review/settings.yml`.
-   * @param {import('../contract-types.js').AppearanceInput} input
-   * @param {string} what the word the failure message names
-   */
-  saveLook(input, what) {
-    void saveAppearance(input).catch(() => toast(this, `could not save the ${what} to settings.yml`))
-  }
-
   wireCommands() {
     if (this.bundle !== null) {
       this.wireGeneration(this.bundle)
@@ -750,16 +729,10 @@ export class PrTourElement extends HTMLElement {
       applyTheme(this.theme, document.documentElement)
       toggle.textContent = themeLabel(this.theme)
       tellFramesTheme(this, this.theme)
-      this.saveLook({ theme: this.theme }, 'theme')
-    })
-    const skinToggle = qs('#skin-toggle', this)
-    skinToggle?.addEventListener('click', () => {
-      this.skin = nextTourSkin(this.skin)
-      applySkin(this.skin, document.documentElement)
-      skinToggle.textContent = skinLabel(this.skin)
-      this.saveLook({ skin: this.skin }, 'skin')
-      // The frames carry the skin in their URL, so the landmark is drawn again.
-      this.renderStep()
+      // Written to `.pr-review/settings.yml`; the tour has no skin of its own to save.
+      void saveAppearance({ theme: this.theme }).catch(() =>
+        toast(this, 'could not save the theme to settings.yml')
+      )
     })
   }
 

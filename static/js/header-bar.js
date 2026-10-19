@@ -2,7 +2,7 @@
 // The bar every page starts with: the wordmark, which leads to the list of every project the server
 // serves; next to it the project's name, which leads to its home page, or where the page is served
 // from on a page of the server's own; then the page's own commands, and the skin and theme commands
-// last. The server draws it on its pages and the review page draws it in the browser, from this
+// last. The tour page has a look of its own, so it offers the theme command alone. The server draws it on its pages and the review page draws it in the browser, from this
 // one module, so every page has the same header.
 import { esc } from './dom.js'
 import { skinLabel } from './skin.js'
@@ -19,9 +19,8 @@ import { themeLabel } from './theme.js'
  *   host?: string | undefined,
  *   project?: ProjectLink | undefined,
  *   theme: import('./theme.js').Theme,
- *   skin: import('./skin.js').Skin,
- *   skinTitle?: string | undefined,
- * }} BarOptions `skinTitle` names the skins the skin command cycles, when a page offers fewer
+ *   skin?: import('./skin.js').Skin | undefined,
+ * }} BarOptions A page without `skin` has a look of its own and offers no skin command
  */
 
 const BRAND_HTML =
@@ -121,7 +120,9 @@ export function headerBarHtml(opts, commands = '') {
     `<div class="hdr-bar"><div class="brand">${BRAND_HTML}${contextHtml(opts)}</div>` +
     '<div class="hdr-actions" role="group" aria-label="Page actions">' +
     commands +
-    `<button class="cmd" type="button" id="skin-toggle" title="${esc(opts.skinTitle ?? 'Switch between Terminal, GitHub, and Olive styling')}">${esc(skinLabel(opts.skin))}</button>` +
+    (opts.skin === undefined
+      ? ''
+      : `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>`) +
     `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
     '</div></div>' +
     envDialogHtml(opts)

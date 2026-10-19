@@ -9,7 +9,6 @@ const OPTS = {
   key: '42',
   headSha: 'a'.repeat(40),
   preview: false,
-  skin: 'github',
   theme: 'dark',
 }
 
@@ -40,10 +39,10 @@ afterEach(() => {
 describe('frameUrl', () => {
   it('names the tour by its commit, or the preview, with the look the page wears', () => {
     expect(frameUrl({ ...OPTS, landmark: 'world', kind: 'scene' })).toBe(
-      `/r/acme/widgets/tour-scene/42/world/scene?skin=github&theme=dark&headSha=${'a'.repeat(40)}`
+      `/r/acme/widgets/tour-scene/42/world/scene?theme=dark&headSha=${'a'.repeat(40)}`
     )
     expect(frameUrl({ ...OPTS, preview: true, key: 'branch', landmark: 'l 1', kind: 'micro' })).toBe(
-      '/r/acme/widgets/tour-scene/branch/l%201/micro?skin=github&theme=dark&preview=1'
+      '/r/acme/widgets/tour-scene/branch/l%201/micro?theme=dark&preview=1'
     )
   })
 })

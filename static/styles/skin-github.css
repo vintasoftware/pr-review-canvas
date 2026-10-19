@@ -95,8 +95,9 @@
 }
 
 /* The layout the GitHub-built skins share. Each skin sets its palette in its own `:root` block
-   (this file for github, skin-olive.css for olive); everything below reads only tokens. */
-:is([data-skin='github'], [data-skin='olive']) {
+   (this file for github, skin-olive.css for olive, tour.css for the tour page's own look, which no
+   skin command offers); everything below reads only tokens. */
+:is([data-skin='github'], [data-skin='olive'], [data-skin='tour']) {
   --r: 6px;
   --fs: 13px;
   --gap: 16px;

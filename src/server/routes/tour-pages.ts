@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Hono } from 'hono'
-import { type Appearance, appearanceForRequest } from '../../contract/settings.js'
+import { appearanceForRequest } from '../../contract/settings.js'
 import { parseReviewKey } from '../../contract/review-key.js'
 import { lookupTour, tourAt } from '../../tour/lookup.js'
 import { inlineIcons } from '../../tour/scene.js'
@@ -15,11 +15,6 @@ import { sceneFrame, tourPage } from '../html.js'
 import { appearanceQuery } from './pages.js'
 
 const SHA_RE = /^[0-9a-f]{40}$/
-
-/** The tour offers the github and olive skins; the base terminal look is drawn as github. */
-export function tourAppearance(appearance: Appearance): Appearance {
-  return appearance.skin === 'terminal' ? { ...appearance, skin: 'github' } : appearance
-}
 
 function parseTourKey(raw: string) {
   const key = parseReviewKey(raw)
@@ -57,7 +52,7 @@ export function tourPageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppE
           ...(landmark === undefined || landmark === '' ? {} : { landmark }),
         },
         c.get('cspNonce'),
-        tourAppearance(appearanceForRequest(settings, appearanceQuery(c)))
+        appearanceForRequest(settings, appearanceQuery(c))
       )
     )
   })
@@ -92,10 +87,8 @@ export function tourPageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppE
       readFile(path.join(ctx.staticDir, 'styles', 'scene.css'), 'utf8'),
       readFile(path.join(ctx.staticDir, 'js', 'scene-runtime.js'), 'utf8'),
     ])
-    const appearance = tourAppearance(appearanceForRequest(await ctx.settings.read(), appearanceQuery(c)))
-    const res = c.html(
-      sceneFrame({ scene: inlineIcons(scene), skin: appearance.skin, theme: appearance.theme, kit, runtime })
-    )
+    const { theme } = appearanceForRequest(await ctx.settings.read(), appearanceQuery(c))
+    const res = c.html(sceneFrame({ scene: inlineIcons(scene), theme, kit, runtime }))
     res.headers.set('cache-control', 'no-store')
     return res
   })

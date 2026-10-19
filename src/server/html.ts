@@ -50,6 +50,8 @@ export interface PageOptions {
   nonce: string
   /** How this page is painted, from the settings file or this request's `?skin` and `?theme`. */
   appearance: Appearance
+  /** The look of a page that has its own in place of the settings' skin: the tour's. */
+  look?: 'tour'
   /** Modules of its own, for a page that loads no app: the skin and theme commands, and more. */
   scripts?: readonly string[]
 }
@@ -69,7 +71,7 @@ export function pageShell(opts: PageOptions): Html {
           .map(([, href]) => href)
       : []
   return html`<!doctype html>
-<html lang="en" data-skin="${opts.appearance.skin}" data-theme="${opts.appearance.theme}">
+<html lang="en" data-skin="${opts.look ?? opts.appearance.skin}" data-theme="${opts.appearance.theme}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -97,12 +99,11 @@ ${(opts.scripts ?? []).map(src => html`<script type="module" src="${src}"></scri
  */
 export function sceneFrame(opts: {
   scene: string
-  skin: string
   theme: 'light' | 'dark' | 'auto'
   kit: string
   runtime: string
 }): string {
-  return `<!doctype html><html lang="en" data-skin="${opts.skin.replace(/[^\w-]/g, '')}" data-theme="${opts.theme}"><head><meta charset="utf-8"><title>scene</title>
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"><title>scene</title>
 <style>${opts.kit}</style><script>${opts.runtime}</script></head>
 <body><main class="scene-root"><div class="scene-fit">${opts.scene}</div></main></body></html>`
 }
@@ -127,7 +128,10 @@ export function reviewPage(
   })
 }
 
-/** The tour page: its module boots from the bootstrap and fetches the bundle. */
+/**
+ * The tour page: its module boots from the bootstrap and fetches the bundle. It wears the tour's own
+ * look whatever the skin, and takes only the theme from `appearance`.
+ */
 export function tourPage(
   page: Omit<TourBootstrap, 'host'> & { host: Host },
   nonce: string,
@@ -141,6 +145,7 @@ export function tourPage(
     bootstrap,
     nonce,
     appearance,
+    look: 'tour',
     app: true,
     entry: '/static/js/tour/tour.js',
     body: html`<a class="skip" href="#main">Skip to content</a>

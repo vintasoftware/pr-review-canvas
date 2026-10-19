@@ -26,7 +26,7 @@ import {
 import { buildSteps, planBasis } from './steps.js'
 
 const NOW = new Date('2026-09-10T13:00:00.000Z')
-const LOOK = /** @type {const} */ ({ host: 'localhost:3010', theme: 'auto', skin: 'github', now: NOW })
+const LOOK = /** @type {const} */ ({ host: 'localhost:3010', theme: 'auto', now: NOW })
 
 /** @param {Partial<import('../contract-types.js').TourReaderState>} [reader] */
 function bundleWith(reader = {}) {
@@ -73,7 +73,9 @@ describe('tourHeaderHtml', () => {
     expect(document.querySelector('.hdr-title h1')?.textContent).toBe('Tour #42feat: add b')
     expect(document.querySelector('.pill.agent')?.textContent).toBe('tour by claude · claude-code')
     expect(document.querySelector('.meta a')?.getAttribute('href')).toBe('https://github.com/octocat')
-    expect(document.querySelector('#skin-toggle')?.textContent).toBe('skin: github')
+    expect(document.querySelector('#skin-toggle')).toBeNull()
+    expect(document.querySelector('#theme-toggle')?.textContent).toBe('theme: auto')
+    expect(document.querySelector('.tour-skyline')?.getAttribute('aria-hidden')).toBe('true')
     for (const button of document.querySelectorAll('.hdr button')) {
       expect(button.getAttribute('title')).toMatch(/\S/)
     }

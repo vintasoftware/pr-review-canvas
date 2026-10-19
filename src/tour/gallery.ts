@@ -86,7 +86,7 @@ export async function renderGallery(
   for (const entry of wanted) {
     const scene = inlineIcons(await readFile(entry.file, 'utf8'))
     const frame = path.join(outDir, `${entry.slug}.frame.html`)
-    await writeFile(frame, sceneFrame({ scene, skin: 'github', theme: 'light', kit, runtime }), 'utf8')
+    await writeFile(frame, sceneFrame({ scene, theme: 'light', kit, runtime }), 'utf8')
     const png = path.join(outDir, `${entry.slug}.png`)
     await deps.screenshot(browser, pathToFileURL(frame).href, png, FIGURE_VIEWPORT)
     entries.push({ slug: entry.slug, kind: entry.kind, png })

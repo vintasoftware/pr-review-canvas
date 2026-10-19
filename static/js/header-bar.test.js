@@ -79,6 +79,11 @@ describe('headerBarHtml', () => {
     expect([...(group?.children ?? [])].map(el => el.textContent)).toEqual(['skin: github', 'theme: auto'])
   })
 
+  it('leaves out the skin command on a page with a look of its own', () => {
+    const group = bar(headerBarHtml({ theme: 'auto' })).querySelector('.hdr-actions')
+    expect([...(group?.children ?? [])].map(el => el.id)).toEqual(['theme-toggle'])
+  })
+
   it('escapes the project, its home, and the host', () => {
     const html = headerBarHtml({
       project: { slug: '<b>acme</b>', home: '/r/"x"/' },

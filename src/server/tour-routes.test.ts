@@ -457,12 +457,12 @@ describe('GET /tour-scene/:n/:landmark/:kind', () => {
   it('draws the scene in a sandboxed frame with the kit, the runtime, and its icons inlined', async () => {
     t = await context()
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
-    const res = await get(`/tour-scene/42/world/scene?headSha=${HEAD_SHA}&skin=olive&theme=dark`)
+    const res = await get(`/tour-scene/42/world/scene?headSha=${HEAD_SHA}&theme=dark`)
     expect(res.status).toBe(200)
     expect(res.headers.get('content-security-policy')).toBe(sceneFramePolicy())
     expect(res.headers.get('cache-control')).toBe('no-store')
     const html = await res.text()
-    expect(html).toContain('data-skin="olive" data-theme="dark"')
+    expect(html).toContain('<html lang="en" data-theme="dark">')
     expect(html).toContain('.scene-root')
     expect(html).toContain("postMessage({ scene: 'size', height }")
     expect(html).toContain('<svg')
@@ -470,12 +470,12 @@ describe('GET /tour-scene/:n/:landmark/:kind', () => {
     expect(html).toContain('run() = a() + b()')
   })
 
-  it('draws the terminal skin as github, and refuses what it cannot name', async () => {
+  it('takes the theme from the settings, and refuses what it cannot name', async () => {
     t = await context()
-    await t.ctx.settings.write({ skin: 'terminal' })
+    await t.ctx.settings.write({ skin: 'terminal', theme: 'light' })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     expect(await (await get(`/tour-scene/42/world/scene?headSha=${HEAD_SHA}`)).text()).toContain(
-      'data-skin="github"'
+      '<html lang="en" data-theme="light">'
     )
     expect((await get(`/tour-scene/42/world/movie?headSha=${HEAD_SHA}`)).status).toBe(400)
     expect((await get('/tour-scene/42/world/scene')).status).toBe(400)
@@ -511,11 +511,11 @@ describe('GET /tour/:n and the home page', () => {
     expect((await get('/tour/nope')).status).toBe(400)
   })
 
-  it('draws the terminal skin as github on the tour page alone', async () => {
+  it('wears the tour look whatever the skin, which the canvas keeps', async () => {
     t = await context()
-    await t.ctx.settings.write({ skin: 'terminal' })
-    expect(await (await get('/tour/42')).text()).toContain('data-skin="github"')
-    expect(await (await get('/tour/42?skin=olive')).text()).toContain('data-skin="olive"')
+    await t.ctx.settings.write({ skin: 'terminal', theme: 'dark' })
+    expect(await (await get('/tour/42')).text()).toContain('data-skin="tour" data-theme="dark"')
+    expect(await (await get('/tour/42?skin=olive')).text()).toContain('data-skin="tour"')
     expect(await (await get('/review/42')).text()).toContain('data-skin="terminal"')
   })
 

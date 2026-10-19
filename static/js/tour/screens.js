@@ -81,9 +81,23 @@ export function inline(text) {
 }
 
 /**
+ * The header's skyline: a row of buildings, the road, and the tour bus parked on it. Drawn with
+ * classes, so the tour's tokens paint it in both themes.
+ */
+const SKYLINE_HTML = `<svg class="tour-skyline" viewBox="0 0 1200 124" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+<g class="tour-sky-city"><path d="M0 124V74h40V54h30v20h20V34h12V14h4v20h12v40h30V59h50v65Z"/><path d="M260 124V64l40-30 40 30v60Z"/><path d="M360 124V44h20V24h10v20h20v80Z"/><path d="M440 124V79q40-50 80 0v45Z"/><path d="M560 124V54h60v70Z"/><path d="M585 54V26h10v28Z"/><path d="M660 124V69h30V39h20v30h40v55Z"/><path d="M800 124V84l30-50 30 50v40Z"/><path d="M900 124V49h50v75Z"/><path d="M960 124V74h70v50Z"/><path d="M1060 124V59h20V34l10-10 10 10v25h20v65Z"/><path d="M1140 124V79h60v45Z"/></g>
+<g class="tour-sky-cloud"><circle cx="150" cy="40" r="20"/><circle cx="1000" cy="30" r="14"/></g>
+<rect class="tour-sky-road" y="106" width="1200" height="18"/><rect class="tour-sky-lane" y="114" width="1200" height="2"/>
+<g transform="translate(860 52)"><rect class="tour-bus-body" width="134" height="56" rx="10"/><rect class="tour-bus-band" y="25" width="134" height="5"/>
+<g class="tour-bus-glass"><rect x="10" y="6" width="20" height="14" rx="3"/><rect x="36" y="6" width="20" height="14" rx="3"/><rect x="62" y="6" width="20" height="14" rx="3"/><rect x="88" y="6" width="20" height="14" rx="3"/><rect x="114" y="6" width="12" height="14" rx="3"/><rect x="10" y="34" width="20" height="12" rx="3"/><rect x="36" y="34" width="20" height="12" rx="3"/><rect x="62" y="34" width="20" height="12" rx="3"/><rect x="102" y="34" width="14" height="20" rx="3"/></g>
+<g class="tour-bus-wheel"><circle cx="30" cy="58" r="9"/><circle cx="104" cy="58" r="9"/></g><g class="tour-sky-road"><circle cx="30" cy="58" r="3.5"/><circle cx="104" cy="58" r="3.5"/></g></g>
+</svg>`
+
+/**
  * @param {TourBundle} bundle
- * @param {{ host: string, theme: import('../theme.js').Theme, skin: import('../skin.js').Skin, now: Date, project?: import('../header-bar.js').ProjectLink | undefined }} opts
+ * @param {{ host: string, theme: import('../theme.js').Theme, now: Date, project?: import('../header-bar.js').ProjectLink | undefined }} opts
  *   The wordmark links to the project list, the project to its home, and canvas to the review.
+ *   The tour has a look of its own, so the header offers the theme command and no skin.
  */
 export function tourHeaderHtml(bundle, opts) {
   const { pr, tour } = bundle
@@ -103,7 +117,7 @@ export function tourHeaderHtml(bundle, opts) {
   return (
     '<header class="hdr">' +
     headerBarHtml(
-      { ...opts, skinTitle: 'Switch between GitHub and Olive styling' },
+      opts,
       `<a class="cmd" id="canvas-link" href="${esc(opts.project?.home ?? '/')}review/${esc(key)}" title="Open the review canvas of this change">canvas</a>` +
         generateButtonHtml(bundle) +
         (tour === undefined || bundle.preview
@@ -111,12 +125,11 @@ export function tourHeaderHtml(bundle, opts) {
           : `<button class="cmd" type="button" id="export-zip" title="Download this tour as a zip to share on ${esc(currentHost().label)}">export zip</button>`) +
         '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and how a tour works" aria-haspopup="dialog">help</button>'
     ) +
-    '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +
     `<div class="title"><h1><span class="tour-word">Tour</span> ${number}${esc(pr.title)}</h1>${forgeLink}</div>` +
     `<p class="meta"><span>by ${author}</span><span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>` +
     `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
-    '</div></header>'
+    `</div>${SKYLINE_HTML}</header>`
   )
 }
 
