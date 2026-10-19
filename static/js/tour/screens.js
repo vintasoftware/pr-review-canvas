@@ -200,14 +200,9 @@ export function stripHtml(bundle, steps, i) {
   /** @type {[string, string, string, string]} label, number, of, what */
   const [label, number, of, what] =
     tour === undefined || step === undefined
-      ? ['route', route, '', 'No tour yet · the bus has not set out']
+      ? ['route', route, '', 'No tour yet']
       : step.kind === 'cover'
-        ? [
-            'route',
-            route,
-            '',
-            `All-day pass · ${plural(steps.length, 'stop')} · about ${minutesOf(tour)} minutes`,
-          ]
+        ? ['route', route, '', `${plural(steps.length, 'stop')} · about ${minutesOf(tour)} minutes`]
         : step.kind === 'landmark'
           ? [
               'stop',
