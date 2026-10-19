@@ -922,6 +922,10 @@ pr-tour[data-at='plan'] {
   margin-top: 0;
 }
 .tour-code-file {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
   margin-top: 12px;
   padding: 6px 10px;
   border: 1px solid var(--tour-line-strong);
@@ -929,6 +933,21 @@ pr-tour[data-at='plan'] {
   border-radius: 6px 6px 0 0;
   background: var(--tour-well);
   font: 600 12px var(--mono);
+}
+/* The file on the forge, at the commit the tour reads. */
+.tour-file-link {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px -4px -4px 0;
+  border-radius: 6px;
+  color: var(--tour-ink-soft);
+}
+.tour-file-link:hover {
+  background: var(--btn-bg-hover);
+  color: var(--blue);
 }
 .tour-code-body > .tour-code-file:first-child {
   margin-top: 0;

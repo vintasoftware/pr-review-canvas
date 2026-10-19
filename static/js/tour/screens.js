@@ -11,10 +11,11 @@
 /** @typedef {import('../contract-types.js').ReaderPick} ReaderPick */
 /** @typedef {import('../contract-types.js').Restatement} Restatement */
 /** @typedef {import('./steps.js').Step} Step */
+/** @typedef {(chunk: CodeChunk) => string | null} FileLink where a chunk's file opens on the forge */
 import { esc, timeAgo } from '../dom.js'
 import { dropZoneHtml } from '../empty-state.js'
 import { GENERATE_BUTTON_ID, tourGenerationMode } from '../generate.js'
-import { authorProfileUrl, currentHost } from '../host.js'
+import { authorProfileUrl, currentHost, fileUrl } from '../host.js'
 import { headerBarHtml } from '../header-bar.js'
 import {
   minutesOf,
@@ -395,7 +396,7 @@ export function landmarkHtml(bundle, steps, landmark) {
                   </div>`
                : ''
            }
-           <div class="tour-code-body">${codeViewHtml(landmark, codeView)}</div>
+           <div class="tour-code-body">${codeViewHtml(landmark, codeView, fileLinker(bundle))}</div>
          </div>`
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
@@ -417,29 +418,60 @@ export function codeButtonHtml(open) {
 /**
  * @param {TourPageLandmark} landmark
  * @param {'literate' | 'raw'} view
+ * @param {FileLink} [link]
  */
-export function codeViewHtml(landmark, view) {
-  return view === 'literate' ? literateHtml(landmark) : landmark.code.map(chunkHtml).join('')
+export function codeViewHtml(landmark, view, link = () => null) {
+  return view === 'literate'
+    ? literateHtml(landmark, link)
+    : landmark.code.map(chunk => chunkHtml(chunk, link)).join('')
+}
+
+/**
+ * Where each file of the tour opens on the forge: the file at the commit the tour reads, at the
+ * first line the chunk shows; a removed file at the merge base, where it last lived. Local work
+ * is on no forge, so its files open nowhere.
+ * @param {TourBundle} bundle
+ * @returns {FileLink}
+ */
+export function fileLinker(bundle) {
+  const { pr, tour } = bundle
+  if (pr.url === '' || tour === undefined) {
+    return () => null
+  }
+  return chunk => {
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,(\d+))? @@/m.exec(chunk.diff)
+    if (hunk === null) {
+      return fileUrl(tour.repo, tour.headSha, chunk.path)
+    }
+    const removed = hunk[2] === '0' && hunk[3] === '0'
+    return removed
+      ? fileUrl(tour.repo, pr.mergeBaseSha, chunk.path, Number(hunk[1]))
+      : fileUrl(tour.repo, tour.headSha, chunk.path, Number(hunk[2]))
+  }
 }
 
 /**
  * The literate diff: prose in reading order, with the chunks embedded where they belong.
  * @param {TourPageLandmark} landmark
+ * @param {FileLink} [link]
  */
-export function literateHtml(landmark) {
+export function literateHtml(landmark, link = () => null) {
   return `<div class="tour-literate">${landmark.literate
     .map(block => {
       if (typeof block === 'string') {
         return `<p>${inline(block)}</p>`
       }
       const chunk = 'chunk' in block ? landmark.code[block.chunk] : block
-      return chunk === undefined ? '' : chunkHtml(chunk)
+      return chunk === undefined ? '' : chunkHtml(chunk, link)
     })
     .join('')}</div>`
 }
 
-/** @param {CodeChunk} chunk */
-export function chunkHtml(chunk) {
+/**
+ * @param {CodeChunk} chunk
+ * @param {FileLink} [link]
+ */
+export function chunkHtml(chunk, link = () => null) {
   const lines = chunk.diff.split('\n').map(line => {
     const cls = line.startsWith('+')
       ? 'add'
@@ -450,7 +482,13 @@ export function chunkHtml(chunk) {
           : ''
     return `<div${cls === '' ? '' : ` class="${cls}"`}>${esc(line) || ' '}</div>`
   })
-  return `<div class="tour-code-file">${esc(chunk.path)}</div><div class="tour-diff">${lines.join('')}</div>`
+  const url = link(chunk)
+  const name = `Open ${chunk.path} on ${currentHost().label}`
+  const open =
+    url === null
+      ? ''
+      : `<a class="tour-file-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(name)}" aria-label="${esc(name)}">${EXTERNAL_ICON}</a>`
+  return `<div class="tour-code-file"><span>${esc(chunk.path)}</span>${open}</div><div class="tour-diff">${lines.join('')}</div>`
 }
 
 /**

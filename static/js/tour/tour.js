@@ -25,6 +25,7 @@ import {
   canGenerate,
   codeButtonHtml,
   codeViewHtml,
+  fileLinker,
   coverHtml,
   decisionHtml,
   helpHtml,
@@ -497,7 +498,7 @@ export class PrTourElement extends HTMLElement {
       tab.setAttribute('aria-selected', String(tab instanceof HTMLElement && tab.dataset['view'] === view))
     }
     const body = /** @type {HTMLElement} */ (qs('.tour-code-body', this))
-    body.innerHTML = codeViewHtml(landmark, view)
+    body.innerHTML = codeViewHtml(landmark, view, fileLinker(bundle))
   }
 
   openHelp() {

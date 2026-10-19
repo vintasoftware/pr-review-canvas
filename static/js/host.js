@@ -38,3 +38,16 @@ export function noPostingTitle() {
 export function authorProfileUrl(author) {
   return `${current.webBase}/${author}`
 }
+
+/**
+ * A file at a commit on the forge, scrolled to a line when one is given.
+ * @param {{ owner: string, name: string }} repo
+ * @param {string} sha
+ * @param {string} path
+ * @param {number} [line]
+ */
+export function fileUrl(repo, sha, path, line) {
+  const blob = current.kind === 'gitlab' ? '-/blob' : 'blob'
+  const file = path.split('/').map(encodeURIComponent).join('/')
+  return `${current.webBase}/${repo.owner}/${repo.name}/${blob}/${sha}/${file}${line === undefined ? '' : `#L${line}`}`
+}

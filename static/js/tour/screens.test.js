@@ -6,6 +6,7 @@ import { missingTourBundle, syntheticTourBundle } from '../../../src/testing/tou
 import { setHost } from '../host.js'
 import {
   chunkHtml,
+  fileLinker,
   coverHtml,
   decisionHtml,
   helpHtml,
@@ -297,6 +298,27 @@ describe('landmarkHtml', () => {
       '',
     ])
     expect(chunkHtml({ path: 'a', diff: '' })).toContain('<div> </div>')
+  })
+
+  it('links each file to the forge at the commit the tour reads, and local work to nothing', () => {
+    const bundle = bundleWith()
+    const { headSha, repo } = tourOf(bundle)
+    const link = fileLinker(bundle)
+    const at = `https://github.com/${repo.owner}/${repo.name}/blob`
+    expect(link({ path: 'src/b.ts', diff: '@@ -3,2 +5,4 @@ run\n+x' })).toBe(`${at}/${headSha}/src/b.ts#L5`)
+    // A removed file is gone at the head, so it opens where it last lived.
+    expect(link({ path: 'src/old.ts', diff: '@@ -1,3 +0,0 @@\n-a' })).toBe(
+      `${at}/${bundle.pr.mergeBaseSha}/src/old.ts#L1`
+    )
+    document.body.innerHTML = chunkHtml({ path: 'src/b.ts', diff: '@@ -1 +1 @@\n+x' }, link)
+    expect(document.querySelector('.tour-file-link')?.getAttribute('aria-label')).toBe(
+      'Open src/b.ts on GitHub'
+    )
+    expect(document.querySelector('.tour-file-link')?.getAttribute('target')).toBe('_blank')
+    const local = { ...bundle, pr: { ...bundle.pr, url: '' } }
+    expect(fileLinker(local)({ path: 'src/b.ts', diff: '' })).toBeNull()
+    document.body.innerHTML = chunkHtml({ path: 'src/b.ts', diff: '' })
+    expect(document.querySelector('.tour-file-link')).toBeNull()
   })
 })
 
