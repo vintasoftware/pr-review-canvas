@@ -878,6 +878,7 @@ describe('createApp', () => {
     it('has helpers for content types and safe resolution', async () => {
       expect(contentTypeFor('a.css')).toBe('text/css; charset=utf-8')
       expect(contentTypeFor('a.mjs')).toBe('text/javascript; charset=utf-8')
+      expect(contentTypeFor('a.woff2')).toBe('font/woff2')
       expect(contentTypeFor('a.bin')).toBe('application/octet-stream')
       const dir = await makeTempDir()
       expect(await resolveUnder(dir, '../x')).toBeNull()
