@@ -681,10 +681,15 @@ export class PrTourElement extends HTMLElement {
       if (this.querySelector('dialog[open]') !== null) {
         return
       }
+      const target = e.target instanceof Element ? e.target : null
+      // On a focused button or link, Enter and space press it, as they do anywhere.
+      if ((e.key === 'Enter' || e.key === ' ') && target?.closest('button, a[href]')) {
+        return
+      }
       const step = this.steps[this.current]
       const decision = this.decisionStep()?.decision ?? null
+      let handled = true
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault()
         this.go(this.current + 1)
       } else if (e.key === 'ArrowLeft') {
         this.go(this.current - 1)
@@ -700,6 +705,12 @@ export class PrTourElement extends HTMLElement {
         this.answer(Number(e.key) - 1)
       } else if (e.key === '?') {
         this.openHelp()
+      } else {
+        handled = false
+      }
+      // A key the tour used goes no further: `c` opens the drawer and must not type a "c" in it.
+      if (handled) {
+        e.preventDefault()
       }
     }
     /** @param {PopStateEvent} e */
