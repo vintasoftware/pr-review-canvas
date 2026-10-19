@@ -93,6 +93,10 @@ const SKYLINE_HTML = `<svg class="tour-skyline" viewBox="0 0 1200 124" preserveA
 <g class="tour-bus-wheel"><circle cx="30" cy="58" r="9"/><circle cx="104" cy="58" r="9"/></g><g class="tour-sky-road"><circle cx="30" cy="58" r="3.5"/><circle cx="104" cy="58" r="3.5"/></g></g>
 </svg>`
 
+/** GitHub's link-external octicon. */
+const EXTERNAL_ICON =
+  '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"/></svg>'
+
 /**
  * @param {TourBundle} bundle
  * @param {{ host: string, theme: import('../theme.js').Theme, now: Date, project?: import('../header-bar.js').ProjectLink | undefined }} opts
@@ -104,10 +108,12 @@ export function tourHeaderHtml(bundle, opts) {
   const local = bundle.local !== undefined
   const key = bundle.local ?? String(pr.number)
   const number = pr.number === null ? '' : `<span class="mono num">#${pr.number}</span>`
+  // The change on its forge, opened in a new tab: an icon that says "another site".
+  const forgeName = `Open ${pr.number === null ? 'it' : `#${pr.number}`} on ${currentHost().label}`
   const forgeLink =
     pr.url === ''
       ? ''
-      : `<a class="cmd" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(currentHost().kind)}</a>`
+      : `<a class="tour-forge" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" title="${esc(forgeName)}" aria-label="${esc(forgeName)}">${EXTERNAL_ICON}</a>`
   const author = local
     ? esc(pr.author)
     : `<a href="${esc(authorProfileUrl(pr.author))}" target="_blank" rel="noopener noreferrer">${esc(pr.author)}</a>`
@@ -126,7 +132,7 @@ export function tourHeaderHtml(bundle, opts) {
         '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and how a tour works" aria-haspopup="dialog">help</button>'
     ) +
     '<div class="hdr-title">' +
-    `<div class="title"><h1><span class="tour-word">Tour</span> ${number}${esc(pr.title)}</h1>${forgeLink}</div>` +
+    `<div class="title"><h1><span class="tour-word">Tour</span> ${esc(pr.title)}${number === '' ? '' : ` ${number}`}${forgeLink}</h1></div>` +
     `<p class="meta"><span>by ${author}</span><span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>` +
     `<span class="diffstat"><span class="ok">+${pr.additions}</span> <span class="bad">&minus;${pr.deletions}</span></span>${agent}</p>` +
     `</div>${SKYLINE_HTML}</header>`
@@ -298,20 +304,15 @@ export function coverHtml(bundle) {
         `<li><span class="tour-agenda-stage">${esc(STAGE_LABEL[l.stage])}</span><span class="tour-agenda-name">${esc(l.title)}</span></li>`
     )
     .join('')}</ol>`
-  const guide =
-    tour.guide === null
-      ? '<span>no guide on file</span>'
-      : `<span>guide: <span class="mono">${esc(tour.guide)}</span></span>`
+  // The header already names the change, its author, branch, and size; the cover adds what it
+  // touches, when the tour says.
   const blast =
-    tour.blastRadius.length === 0 ? '' : `<span>touches: ${tour.blastRadius.map(esc).join(', ')}</span>`
-  const link =
-    pr.url === ''
-      ? `${esc(pr.headRef)}`
-      : `<a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">#${pr.number}</a>`
+    tour.blastRadius.length === 0
+      ? ''
+      : `<p class="tour-cover-meta">touches: ${tour.blastRadius.map(esc).join(', ')}</p>`
   return `
-    <p class="tour-eyebrow"><span class="tour-stage-tag">Tour</span><span>${link} · ${esc(tour.repo.owner)}/${esc(tour.repo.name)}</span></p>
     <h1 class="tour-title">${esc(pr.title)}</h1>
-    <p class="tour-cover-meta"><span>by ${esc(pr.author)}</span><span class="mono">${esc(pr.headRef)} → ${esc(pr.baseRef)}</span><span><span class="ok">+${pr.additions}</span> <span class="bad">−${pr.deletions}</span> in ${plural(pr.changedFiles, 'file')}</span>${guide}${blast}</p>
+    ${blast}
     ${agenda}
     <div class="tour-budget">
       <div><b>${tour.landmarks.length}</b><span>landmarks</span></div>

@@ -241,12 +241,27 @@ pr-tour[data-at='plan'] {
 .tour-page .hdr-title h1 {
   margin: 0 0 14px;
   max-width: 820px;
-  font: 800 clamp(30px, 4.6vw, 44px) / 1.12 var(--tour-display);
+  font: 800 clamp(24px, 3vw, 32px) / 1.18 var(--tour-display);
   font-stretch: 95%;
+  text-wrap: balance;
 }
 .tour-page .hdr-title h1 .num {
-  font: 500 0.52em var(--mono);
-  vertical-align: 0.25em;
+  font: 500 0.6em var(--mono);
+  white-space: nowrap;
+}
+.tour-forge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 6px;
+  border-radius: 6px;
+  color: var(--tour-ink-soft);
+  vertical-align: 0.1em;
+}
+.tour-forge:hover {
+  background: color-mix(in srgb, var(--tour-card) 70%, transparent);
+  color: var(--blue);
 }
 .tour-word {
   display: inline-block;

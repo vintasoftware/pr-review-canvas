@@ -67,10 +67,11 @@ describe('tourHeaderHtml', () => {
   it('names the tour, links the canvas and the forge, and says who generated it', () => {
     document.body.innerHTML = tourHeaderHtml(bundleWith(), LOOK)
     expect(document.querySelector('#canvas-link')?.getAttribute('href')).toBe('/review/42')
-    expect(document.querySelector('.title a.cmd')?.getAttribute('href')).toBe(
+    expect(document.querySelector('.tour-forge')?.getAttribute('aria-label')).toBe('Open #42 on GitHub')
+    expect(document.querySelector('.tour-forge')?.getAttribute('href')).toBe(
       'https://github.com/acme/widgets/pull/42'
     )
-    expect(document.querySelector('.hdr-title h1')?.textContent).toBe('Tour #42feat: add b')
+    expect(document.querySelector('.hdr-title h1')?.textContent).toBe('Tour feat: add b #42')
     expect(document.querySelector('.pill.agent')?.textContent).toBe('tour by claude · claude-code')
     expect(document.querySelector('.meta a')?.getAttribute('href')).toBe('https://github.com/octocat')
     expect(document.querySelector('#skin-toggle')).toBeNull()
@@ -86,7 +87,7 @@ describe('tourHeaderHtml', () => {
     const pr = { ...bundle.pr, url: '', number: null }
     document.body.innerHTML = tourHeaderHtml({ ...bundle, pr }, LOOK)
     expect(document.querySelector('#canvas-link')?.getAttribute('href')).toBe('/review/branch')
-    expect(document.querySelector('.title a.cmd')).toBeNull()
+    expect(document.querySelector('.tour-forge')).toBeNull()
     expect(document.querySelector('.meta a')).toBeNull()
     expect(document.querySelector('.pill.agent')).toBeNull()
   })
@@ -187,15 +188,15 @@ describe('coverHtml', () => {
       '1',
       '~6',
     ])
-    expect(document.querySelector('.tour-cover-meta')?.textContent).toContain('no guide on file')
-    expect(document.querySelector('.tour-cover-meta')?.textContent).toContain('touches: schema')
+    expect(document.querySelector('.tour-cover-meta')?.textContent).toBe('touches: schema')
+    // The header names the change, its author, and its branch; the cover does not again.
+    expect(document.querySelector('.tour-eyebrow')).toBeNull()
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('start the tour')
     const back = bundleWith({ step: 3 })
     const tour = { ...tourOf(back), guide: 'docs/pr-tour.md', blastRadius: [] }
     document.body.innerHTML = coverHtml({ ...back, tour, options: { ...back.options, finalQuiz: 'off' } })
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('continue the tour')
-    expect(document.querySelector('.tour-cover-meta')?.textContent).toContain('guide: docs/pr-tour.md')
-    expect(document.querySelector('.tour-cover-meta')?.textContent).not.toContain('touches')
+    expect(document.querySelector('.tour-cover-meta')).toBeNull()
     expect([...document.querySelectorAll('.tour-budget b')].map(b => b.textContent)).toEqual([
       '4',
       '1',
@@ -207,7 +208,6 @@ describe('coverHtml', () => {
     })
     document.body.innerHTML = coverHtml({ ...finished, pr: { ...finished.pr, url: '' } })
     expect(document.body.textContent).toContain('You finished this tour')
-    expect(document.querySelector('.tour-eyebrow')?.textContent).toContain('feat/b')
   })
 })
 
