@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antique Atlas · Tour prototype 01</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f1e6cc;
+    --paper-deep: #e6d5ae;
+    --sheet: #fffaf0;
+    --ink: #33261a;
+    --ink-soft: #6a5642;
+    --rule: #cdb98f;
+    --oxblood: #8b2e1f;
+    --oxblood-dark: #6f2317;
+    --teal: #1d6a66;
+    --gold: #b07d1e;
+    --ok: #1d6b38;
+    --bad: #a3271b;
+    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --display: "Fraunces", Georgia, serif;
+    --prose: "Source Serif 4", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  h1, h2, .budget b, .opt-l, .agenda .name { font-variant-numeric: lining-nums; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 17px/1.62 var(--prose);
+    background-color: var(--paper);
+    background-image:
+      radial-gradient(ellipse at 15% 10%, rgba(255,255,255,.45), transparent 55%),
+      radial-gradient(ellipse at 85% 90%, rgba(139,46,31,.08), transparent 50%),
+      repeating-linear-gradient(0deg, transparent 0 119px, rgba(51,38,26,.05) 119px 120px),
+      repeating-linear-gradient(90deg, transparent 0 119px, rgba(51,38,26,.05) 119px 120px);
+  }
+  a { color: var(--teal); text-underline-offset: 2px; }
+  code, .mono { font-family: var(--mono); font-size: .84em; }
+  code { background: #f3e8cf; border: 1px solid #e3d2a9; border-radius: 4px; padding: 0 .3em; }
+
+  /* prototype label */
+  .proto { position: fixed; z-index: 50; right: 12px; bottom: 12px; font: 600 12px var(--ui); background: var(--ink); color: #fff7e6; padding: 6px 10px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .proto a { color: #f7d58a; margin-left: 6px; }
+
+  /* GitHub-like controls */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 32px; padding: 0 12px;
+    font: 500 14px/1 var(--ui); color: var(--ink);
+    background: var(--sheet);
+    border: 1px solid rgba(51,38,26,.28); border-radius: 6px;
+    box-shadow: 0 1px 0 rgba(51,38,26,.08), inset 0 1px 0 rgba(255,255,255,.6);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .btn:hover { background: #f6ecd6; border-color: rgba(51,38,26,.4); }
+  .btn:focus-visible, .seg:focus-visible, .opt:focus-visible, textarea:focus-visible, .chip:focus-visible, .tab:focus-visible, .qopt:focus-visible {
+    outline: 2px solid var(--teal); outline-offset: 2px;
+  }
+  .btn.fill { background: var(--oxblood); border-color: var(--oxblood-dark); color: #fff; box-shadow: 0 1px 0 rgba(51,38,26,.15), inset 0 1px 0 rgba(255,255,255,.15); }
+  .btn.fill:hover { background: var(--oxblood-dark); }
+  .btn.big { height: 40px; padding: 0 20px; font-size: 15px; }
+  .btn:disabled { color: #a59479; background: #f5ecd8; border-color: rgba(51,38,26,.15); box-shadow: none; cursor: not-allowed; }
+  .btn.icon { width: 32px; padding: 0; justify-content: center; }
+  kbd {
+    display: inline-block; min-width: 20px; padding: 2px 5px;
+    font: 600 11px/1.3 var(--mono); color: var(--ink); text-align: center;
+    background: #fbf5e8; border: 1px solid #cdb98f; border-bottom-width: 2px; border-radius: 5px;
+  }
+  .hint { font: 13px/1.5 var(--ui); color: var(--ink-soft); }
+
+  /* header */
+  .top { background: var(--ink); color: #f6ead0; }
+  .top-in { max-width: 860px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wordmark { display: flex; align-items: center; gap: 8px; font: 700 16px var(--display); color: #fff3d6; text-decoration: none; }
+  .wordmark svg { flex: none; }
+  .project { font: 14px var(--ui); color: #e9cf95; }
+  .top .spacer { flex: 1; }
+  .top .btn { background: #43331f; color: #fbeccb; border-color: #6b5435; box-shadow: none; }
+  .top .btn:hover { background: #523e26; }
+  .top .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .masthead { max-width: 860px; margin: 0 auto; padding: 28px 16px 12px; position: relative; }
+  .masthead h1 { font: 700 clamp(26px, 4.6vw, 36px)/1.15 var(--display); margin: 0 0 10px; letter-spacing: -.01em; padding-right: 96px; }
+  .tour-word { font-style: italic; color: var(--oxblood); font-weight: 800; }
+  .masthead .num { font: 600 .7em var(--mono); color: var(--ink-soft); }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0; font: 14px/1.5 var(--ui); color: var(--ink-soft); }
+  .meta .ok, .ok { color: var(--ok); font-weight: 600; }
+  .meta .bad, .bad { color: var(--bad); font-weight: 600; }
+  .pill { font: 500 12px var(--ui); padding: 2px 10px; border-radius: 999px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+  .compass { position: absolute; top: 18px; right: 16px; width: 84px; height: 84px; opacity: .9; }
+
+  /* rail: a dotted route between pins */
+  .rail-wrap { position: sticky; top: 0; z-index: 10; background: rgba(241,230,204,.94); backdrop-filter: blur(4px); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .rail { max-width: 860px; margin: 0 auto; padding: 10px 16px 8px; display: flex; gap: 18px; align-items: flex-end; overflow-x: auto; }
+  .grp { display: flex; flex-direction: column; gap: 4px; flex: none; }
+  .grp-label { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); min-height: 15px; }
+  .segs { display: flex; gap: 10px; position: relative; }
+  .segs::before { content: ""; position: absolute; left: 10px; right: 10px; top: 50%; border-top: 2px dotted var(--ink-soft); opacity: .5; }
+  .seg { position: relative; width: 26px; height: 26px; border-radius: 50%; padding: 0; cursor: pointer; display: grid; place-items: center; font: 700 11px var(--ui); border: 2px solid var(--ink); background: var(--sheet); color: var(--ink); }
+  .seg[data-state="done"] { background: var(--oxblood); border-color: var(--oxblood-dark); color: #fff; box-shadow: 0 0 0 3px rgba(139,46,31,.18); }
+  .seg[data-state="current"] { width: 32px; height: 32px; background: var(--gold); border-color: #7a560f; color: #fff; box-shadow: 0 0 0 4px rgba(176,125,30,.28); margin-top: -3px; }
+  .seg[data-state="ahead"] { border-style: dashed; border-color: #a99572; color: #a99572; background: transparent; cursor: not-allowed; }
+  .legend { max-width: 860px; margin: 0 auto; padding: 0 16px 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12px var(--ui); color: var(--ink-soft); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; border: 2px solid var(--ink); }
+  .legend .d { background: var(--oxblood); border-color: var(--oxblood-dark); }
+  .legend .c { background: var(--gold); border-color: #7a560f; }
+  .legend .a { border-style: dashed; border-color: #a99572; }
+
+  /* screens */
+  main { max-width: 860px; margin: 0 auto; padding: 8px 16px 80px; }
+  .cap { margin: 40px 0 10px; font: 600 12px var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--oxblood); display: flex; align-items: center; gap: 10px; }
+  .cap::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+  .sheet {
+    position: relative; background: var(--sheet);
+    border: 1px solid #d9c59a; border-radius: 4px;
+    box-shadow: 0 1px 0 #fff inset, 0 10px 26px -14px rgba(51,38,26,.45);
+    padding: 34px clamp(18px, 5vw, 52px) 30px;
+  }
+  .sheet::before { content: ""; position: absolute; inset: 7px; border: 1px solid #e3d2a9; border-radius: 2px; pointer-events: none; }
+  .sheet > * { position: relative; }
+
+  .eyebrow { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 12px; font: 13px var(--ui); color: var(--ink-soft); }
+  .tag { display: inline-flex; align-items: center; gap: 6px; font: 700 12px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: #fff; background: var(--teal); padding: 3px 10px 3px 8px; border-radius: 3px; }
+  .tag::before { content: ""; width: 7px; height: 7px; border: 2px solid currentColor; border-radius: 50%; }
+  .tag.ox { background: var(--oxblood); }
+  .tag.gold { background: #8a6112; }
+  .title { font: 700 clamp(26px, 4.4vw, 34px)/1.18 var(--display); margin: 0 0 12px; letter-spacing: -.01em; }
+  .lead { font-size: 19px; line-height: 1.55; color: #4a3a29; margin: 0 0 20px; max-width: 64ch; }
+  .body p { margin: 0 0 14px; max-width: 68ch; }
+
+  .return { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: -6px 0 20px; padding: 10px 12px 10px 14px; background: #eef6f4; border: 1px solid #a8cdc8; border-left: 4px solid var(--teal); border-radius: 6px; font: 14px var(--ui); color: #1b4744; }
+
+  /* cover */
+  .agenda { list-style: none; counter-reset: stop; margin: 22px 0; padding: 0 0 0 4px; position: relative; }
+  .agenda::before { content: ""; position: absolute; left: 17px; top: 18px; bottom: 18px; border-left: 2px dotted var(--ink-soft); opacity: .55; }
+  .agenda li { counter-increment: stop; position: relative; display: grid; grid-template-columns: 30px 1fr; gap: 0 14px; padding: 8px 0; }
+  .agenda li::before { content: counter(stop); grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 700 13px var(--ui); background: var(--sheet); border: 2px solid var(--oxblood); color: var(--oxblood); position: relative; }
+  .agenda .stage { font: 600 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
+  .agenda .name { font: 600 18px/1.35 var(--display); }
+  .budget { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 24px; }
+  .budget div { text-align: center; padding: 12px 6px; border: 1px solid #e3d2a9; border-radius: 6px; background: #fbf4e3; }
+  .budget b { display: block; font: 800 28px/1 var(--display); color: var(--oxblood); }
+  .budget span { font: 12px var(--ui); color: var(--ink-soft); }
+  .cover-actions { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+
+  /* figure */
+  .figure { margin: 0 0 22px; }
+  .frame { border: 1px solid #cdb98f; border-radius: 4px; padding: 6px; background: #f8efdb; box-shadow: 0 0 0 4px var(--sheet), 0 0 0 5px #d9c59a; }
+  .frame svg { display: block; width: 100%; height: auto; background: #fffdf7; border-radius: 2px; }
+  .micro { margin-top: 18px; border: 1px solid #a8cdc8; border-radius: 6px; overflow: hidden; background: #fff; }
+  .micro-h { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; padding: 7px 12px; font: 600 12px var(--ui); color: #fff; background: var(--teal); }
+  .micro-h span:last-child { font-weight: 400; opacity: .9; }
+  .micro-b { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 14px 12px; font: 13px var(--ui); }
+  .micro-b label { display: grid; gap: 4px; color: var(--ink-soft); }
+  .micro-b input { height: 32px; padding: 0 8px; font: 13px var(--mono); border: 1px solid #cdb98f; border-radius: 6px; background: #fffdf7; color: var(--ink); width: 180px; max-width: 100%; }
+  .micro-b output { padding: 6px 10px; border-radius: 6px; background: #e3f1ea; color: #14532d; font-weight: 600; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px 0; }
+  .chip { font: 500 13px var(--ui); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--rule); background: #fbf4e3; color: var(--ink-soft); }
+  .chip.link { background: #fff; border-color: var(--teal); color: var(--teal); cursor: pointer; }
+  .chip.link:hover { background: #eef6f4; }
+
+  .note { margin: 18px 0; display: grid; gap: 6px; }
+  .note label { font: 600 14px var(--ui); }
+  .note label .hint { font-weight: 400; margin-left: 6px; }
+  textarea { width: 100%; font: 15px/1.5 var(--prose); color: var(--ink); padding: 8px 10px; border: 1px solid #cdb98f; border-radius: 6px; background: #fffdf7; resize: vertical; box-shadow: inset 0 1px 0 rgba(51,38,26,.06); }
+  textarea::placeholder { color: #8f7c62; }
+
+  .code { margin-top: 12px; border: 1px solid #d9c59a; border-radius: 6px; background: #fff; overflow: hidden; }
+  .tabs { display: flex; gap: 4px; padding: 6px 6px 0; background: #f8efdb; border-bottom: 1px solid #d9c59a; }
+  .tab { font: 500 13px var(--ui); padding: 7px 12px; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--ink-soft); cursor: pointer; margin-bottom: -1px; }
+  .tab[aria-selected="true"] { background: #fff; border-color: #d9c59a; color: var(--ink); font-weight: 600; }
+  .code-body { padding: 14px; }
+  .code-body p { margin: 0 0 12px; font-size: 16px; }
+  .file { font: 600 12px var(--mono); padding: 6px 10px; background: #f6f1e4; border: 1px solid #e3d2a9; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--ink); }
+  .diff { font: 13px/1.6 var(--mono); border: 1px solid #e3d2a9; border-radius: 0 0 6px 6px; overflow-x: auto; }
+  .diff div { padding: 0 10px; white-space: pre; }
+  .diff .hunk { background: #eef4f8; color: #4d6070; }
+  .diff .add { background: #e6f6ea; color: #1a4d2a; }
+  .diff .del { background: #fbe9e6; color: #7d2116; }
+
+  .nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 26px; padding: 12px 14px; background: #fbf4e3; border: 1px solid #e3d2a9; border-radius: 8px; }
+  .nav .pos { font: 600 13px var(--ui); color: var(--ink-soft); }
+
+  /* decision */
+  .anchor { margin: -6px 0 18px; font-size: 14px; color: var(--ink-soft); }
+  .anchor span { padding: 2px 8px; background: #f6f1e4; border: 1px solid #e3d2a9; border-radius: 4px; }
+  .mynote { margin: 0 0 20px; padding: 10px 14px; background: #fdf6dc; border: 1px solid #e8d38f; border-radius: 6px; font-size: 15px; }
+  .mynote b { display: block; font: 600 12px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: #7a5a10; margin-bottom: 2px; }
+  .opts { display: grid; gap: 10px; margin-bottom: 20px; }
+  .opt { text-align: left; display: grid; gap: 4px; padding: 14px 16px 14px 48px; position: relative; border: 1px solid #d9c59a; border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; }
+  .opt::before { content: ""; position: absolute; left: 16px; top: 17px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #a99572; background: #fff; }
+  .opt:hover { border-color: #b8a273; background: #fffdf7; }
+  .opt[aria-checked="true"] { border: 2px solid var(--oxblood); padding: 13px 15px 13px 47px; background: #fdf5f1; }
+  .opt[aria-checked="true"]::before { border-color: var(--oxblood); background: radial-gradient(circle, var(--oxblood) 0 4px, #fff 5px); left: 15px; top: 16px; }
+  .opt-k { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+  .mark { font: 600 11px var(--ui); letter-spacing: .02em; text-transform: none; padding: 1px 8px; border-radius: 999px; }
+  .mark.now { background: #f0e6cf; color: var(--ink); }
+  .mark.rec { background: #dcefe9; color: #134a46; }
+  .opt-l { font: 600 18px/1.35 var(--display); }
+  .opt-c { font-size: 15px; color: #4a3a29; }
+
+  .card { border: 1px dashed #b8a273; border-radius: 8px; padding: 14px 16px; background: #fbf4e3; margin-bottom: 18px; font-size: 15px; }
+  .card-h { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--teal); margin-bottom: 8px; }
+  .card ol, .card ul { margin: 0 0 10px; padding-left: 22px; }
+  .card li { margin: 2px 0; }
+  .card label { font: 14px var(--ui); display: inline-flex; gap: 8px; align-items: center; }
+  .card input { accent-color: var(--oxblood); width: 16px; height: 16px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+  .state { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--ui); color: var(--ok); }
+  .seal { width: 26px; height: 26px; }
+  .hint-row { margin-top: 12px; }
+
+  /* quiz */
+  .q { font: 600 clamp(22px, 3.8vw, 28px)/1.3 var(--display); margin: 0 0 18px; }
+  .qopts { display: grid; gap: 10px; margin-bottom: 18px; }
+  .qopt { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center; text-align: left; padding: 12px 14px; border: 1px solid #d9c59a; border-radius: 8px; background: #fff; color: var(--ink); font: 16px/1.45 var(--prose); cursor: pointer; }
+  .qopt::before { content: attr(data-n); width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; font: 700 13px var(--ui); background: #f6f1e4; border: 1px solid #d9c59a; }
+  .qopt:hover { border-color: #b8a273; }
+  .qopt[data-result="wrong"] { border: 2px solid var(--bad); background: #fdf1ef; padding: 11px 13px; }
+  .qopt[data-result="wrong"]::before { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .qopt .res { font: 600 12px var(--ui); color: var(--bad); }
+  .why { padding: 14px 16px; border-radius: 8px; border: 1px solid #e7b4ac; background: #fdf1ef; font-size: 16px; }
+  .why .actions { margin-top: 10px; }
+  .why .btn { height: auto; min-height: 32px; padding: 6px 12px; white-space: normal; text-align: left; line-height: 1.35; }
+
+  /* plan */
+  .sec { font: 600 13px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--teal); margin: 22px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e3d2a9; }
+  .plan-list { margin: 0; padding-left: 22px; }
+  .plan-list li { margin-bottom: 8px; }
+  .where { display: inline-block; font: 12px var(--mono); color: var(--ink-soft); background: #f6f1e4; border-radius: 4px; padding: 1px 6px; }
+  .kept { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .kept li { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 16px; padding: 10px 12px; border: 1px solid #e3d2a9; border-radius: 6px; background: #fffdf7; font-size: 15px; }
+  .kept li span:first-child { font-weight: 600; }
+  .plan-actions { margin-top: 22px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    .masthead h1 { padding-right: 0; }
+    .compass { display: none; }
+    .budget { grid-template-columns: repeat(2, 1fr); }
+    .kept li { grid-template-columns: 1fr; }
+    .lead { font-size: 17px; }
+    .nav .pos { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="proto">Prototype 01 · Antique Atlas <a href="index.html">all designs</a></div>
+
+<header>
+  <div class="top">
+    <div class="top-in">
+      <a class="wordmark" href="#">
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#e9cf95" stroke-width="1.6"/><path d="M12 3 14 12 12 21 10 12Z" fill="#e9cf95"/><path d="M3 12 12 10 21 12 12 14Z" fill="#c45a3f"/></svg>
+        pr-review
+      </a>
+      <a class="project" href="#">vintasoftware/pr-review-canvas</a>
+      <span class="spacer"></span>
+      <div class="actions">
+        <a class="btn" href="#">canvas</a>
+        <button class="btn" type="button">regenerate tour</button>
+        <button class="btn" type="button">export zip</button>
+        <button class="btn" type="button">help</button>
+        <button class="btn icon" type="button" aria-label="Switch to dark theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M9.6 1.2a6.8 6.8 0 1 0 5.2 9.9A5.6 5.6 0 0 1 9.6 1.2Z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="masthead">
+    <svg class="compass" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#33261a" stroke-width="1"/>
+      <circle cx="50" cy="50" r="40" fill="none" stroke="#33261a" stroke-width=".6" stroke-dasharray="2 3"/>
+      <path d="M50 6 57 50 50 94 43 50Z" fill="#33261a"/>
+      <path d="M50 6 57 50 43 50Z" fill="#8b2e1f"/>
+      <path d="M6 50 50 43 94 50 50 57Z" fill="#b07d1e" opacity=".85"/>
+      <circle cx="50" cy="50" r="4" fill="#fffaf0" stroke="#33261a"/>
+      <text x="50" y="4" font-size="8" text-anchor="middle" font-family="Fraunces" fill="#33261a" dy="-1">N</text>
+    </svg>
+    <h1><span class="tour-word">Tour</span> <span class="num">#101</span> Carry reader picks across regenerated tours</h1>
+    <p class="meta">
+      <span>by <a href="#">fjsj</a></span>
+      <span class="mono">fjsj/carry-picks → main</span>
+      <span><span class="ok">+412</span> <span class="bad">−87</span></span>
+      <span class="pill">tour by claude · opus-5.5 · acpx</span>
+      <span>generated 3 minutes ago</span>
+    </p>
+  </div>
+</header>
+
+<div class="rail-wrap">
+  <nav class="rail" aria-label="Tour progress">
+    <div class="grp"><span class="grp-label">&nbsp;</span><div class="segs"><button class="seg" data-state="done" title="Cover" aria-label="Cover, done">✓</button></div></div>
+    <div class="grp"><span class="grp-label">5 landmarks</span><div class="segs">
+      <button class="seg" data-state="done" aria-label="Landmark 1, done">✓</button>
+      <button class="seg" data-state="done" aria-label="Landmark 2, done">✓</button>
+      <button class="seg" data-state="current" aria-current="step" aria-label="Landmark 3, current">3</button>
+      <button class="seg" data-state="open" aria-label="Landmark 4, open">4</button>
+      <button class="seg" data-state="open" aria-label="Landmark 5, open">5</button>
+    </div></div>
+    <div class="grp"><span class="grp-label">3 decisions</span><div class="segs">
+      <button class="seg" data-state="ahead" disabled aria-label="Decision 1, locked">◆</button>
+      <button class="seg" data-state="ahead" disabled aria-label="Decision 2, locked">◆</button>
+      <button class="seg" data-state="ahead" disabled aria-label="Decision 3, locked">◆</button>
+    </div></div>
+    <div class="grp"><span class="grp-label">2 questions</span><div class="segs">
+      <button class="seg" data-state="ahead" disabled aria-label="Question 1, locked">?</button>
+      <button class="seg" data-state="ahead" disabled aria-label="Question 2, locked">?</button>
+    </div></div>
+    <div class="grp"><span class="grp-label">&nbsp;</span><div class="segs"><button class="seg" data-state="ahead" disabled aria-label="Plan, locked">★</button></div></div>
+  </nav>
+  <div class="legend" aria-hidden="true"><span><i class="d"></i>sealed</span><span><i class="c"></i>you are here</span><span><i></i>open</span><span><i class="a"></i>ahead</span></div>
+</div>
+
+<main>
+  <!-- COVER -->
+  <p class="cap">Cover</p>
+  <section class="sheet">
+    <p class="eyebrow"><span class="tag ox">Tour</span><span><a href="#">#101</a> · vintasoftware/pr-review-canvas</span></p>
+    <h2 class="title">Carry reader picks across regenerated tours</h2>
+    <p class="meta"><span>by fjsj</span><span class="mono">fjsj/carry-picks → main</span><span><span class="ok">+412</span> <span class="bad">−87</span> in 14 files</span><span>guide: <code>docs/tour-guide.md</code></span><span>touches: tour store, tour page, chat</span></p>
+    <ol class="agenda">
+      <li><span class="stage">Before this change</span><span class="name">Picks lived and died with one tour</span></li>
+      <li><span class="stage">The world</span><span class="name">A decision key outlives its tour</span></li>
+      <li><span class="stage">Why</span><span class="name">Keys come from the anchor, not the title</span></li>
+      <li><span class="stage">Why</span><span class="name">Stale picks wait instead of vanishing</span></li>
+      <li><span class="stage">What to respect</span><span class="name">Never carry a pick across a changed anchor</span></li>
+    </ol>
+    <div class="budget">
+      <div><b>5</b><span>landmarks</span></div>
+      <div><b>3</b><span>decisions</span></div>
+      <div><b>2</b><span>questions</span></div>
+      <div><b>~12</b><span>minutes</span></div>
+    </div>
+    <div class="cover-actions">
+      <button class="btn fill big" type="button">start the tour</button>
+      <span class="hint"><kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>i</kbd> code · <kbd>?</kbd> help</span>
+    </div>
+  </section>
+
+  <!-- LANDMARK -->
+  <p class="cap">Landmark</p>
+  <section class="sheet">
+    <div class="return"><span>Jumped from landmark 2. Decide now, or go back and keep reading.</span><button class="btn" type="button">back to the landmark</button></div>
+    <p class="eyebrow"><span class="tag">Why</span><span>landmark 3 of 5</span></p>
+    <h2 class="title">Keys come from the anchor, not the title</h2>
+    <p class="lead">A decision's key is a hash of its file and the code around it, so renaming the decision keeps the reader's pick.</p>
+    <figure class="figure">
+      <div class="frame">
+        <svg viewBox="0 0 640 230" role="img" aria-label="Two tours, a1b2c3 and d4e5f6, each with a decision card; the same key carries the pick from one to the other">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#8b2e1f"/></marker></defs>
+          <g font-family="Source Serif 4, Georgia, serif" fill="#33261a">
+            <rect x="30" y="30" width="220" height="170" rx="6" fill="#fbf4e3" stroke="#33261a"/>
+            <text x="46" y="56" font-size="16" font-weight="600">tour @ a1b2c3</text>
+            <rect x="46" y="74" width="188" height="104" rx="5" fill="#fff" stroke="#b8a273"/>
+            <text x="60" y="98" font-size="13" fill="#6a5642">decision</text>
+            <text x="60" y="120" font-size="15" font-weight="600">Hash the anchor?</text>
+            <text x="60" y="146" font-size="12" font-family="JetBrains Mono, monospace" fill="#1d6a66">key 7f3e…c1</text>
+            <rect x="60" y="154" width="54" height="18" rx="9" fill="#8b2e1f"/><text x="87" y="167" font-size="11" fill="#fff" text-anchor="middle" font-family="system-ui">kept</text>
+
+            <rect x="390" y="30" width="220" height="170" rx="6" fill="#fbf4e3" stroke="#33261a"/>
+            <text x="406" y="56" font-size="16" font-weight="600">tour @ d4e5f6</text>
+            <rect x="406" y="74" width="188" height="104" rx="5" fill="#fff" stroke="#b8a273"/>
+            <text x="420" y="98" font-size="13" fill="#6a5642">decision</text>
+            <text x="420" y="120" font-size="15" font-weight="600">Anchor or title?</text>
+            <text x="420" y="146" font-size="12" font-family="JetBrains Mono, monospace" fill="#1d6a66">key 7f3e…c1</text>
+            <rect x="420" y="154" width="54" height="18" rx="9" fill="#8b2e1f"/><text x="447" y="167" font-size="11" fill="#fff" text-anchor="middle" font-family="system-ui">kept</text>
+
+            <path d="M256 118 C 300 80, 340 80, 384 118" fill="none" stroke="#8b2e1f" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <text x="320" y="74" font-size="13" text-anchor="middle" font-weight="600" fill="#8b2e1f">same key → pick carried</text>
+          </g>
+        </svg>
+      </div>
+      <div class="micro">
+        <div class="micro-h"><span>micro-world</span><span>try it: change the inputs</span></div>
+        <div class="micro-b">
+          <label>anchor path<input value="src/tour/keys.ts" aria-label="anchor path"></label>
+          <label>decision title<input value="Anchor or title?" aria-label="decision title"></label>
+          <output>key 7f3e…c1 · pick carried</output>
+        </div>
+      </div>
+    </figure>
+    <div class="body">
+      <p>When the tour is generated again, every decision gets a fresh title. If the key came from the title, a reworded decision would look new, and the reader's earlier keep or change would be lost. So <code>decisionKey()</code> hashes the anchor path and the three lines around it.</p>
+      <p>This means a decision moves with its code. Move the function to another file and the key changes on purpose: the reader should look again, because the code they judged is gone.</p>
+    </div>
+    <div class="chips"><span class="chip">one decision waits here</span><button class="chip link" type="button">Hash the anchor, or the title? →</button></div>
+    <div class="note">
+      <label for="note-3">Something I noticed <span class="hint">optional</span></label>
+      <textarea id="note-3" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions"></textarea>
+    </div>
+    <div class="actions"><button class="btn" type="button">hide code <kbd>i</kbd></button></div>
+    <div class="code">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" type="button">literate diff</button>
+        <button class="tab" role="tab" aria-selected="false" type="button">raw diff</button>
+      </div>
+      <div class="code-body">
+        <p>The title is gone from the key. What the reader judged was the code, so the key is the code: the anchor's path and the lines around it.</p>
+        <div class="file">src/tour/keys.ts</div>
+        <div class="diff"><div class="hunk">@@ -12,7 +12,11 @@ export function decisionKey(d: Decision): string {</div><div class="del">-  return slug(d.title)</div><div class="add">+  const around = linesAround(d.anchor, 3)</div><div class="add">+  return sha1(`${d.anchor.path}\n${around}`).slice(0, 12)</div><div> }</div></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn" type="button">← back</button>
+      <span class="pos">landmark 3 of 5</span>
+      <button class="btn fill" type="button">next: landmark 4 →</button>
+    </div>
+  </section>
+
+  <!-- DECISION -->
+  <p class="cap">Decision</p>
+  <section class="sheet">
+    <p class="eyebrow"><span class="tag gold">Architecture</span><span>decision 1 of 3</span><a href="#">from landmark 3: Keys come from the anchor, not the title</a></p>
+    <h2 class="title">Hash the anchor, or the title?</h2>
+    <p class="lead">The key decides which picks survive a regenerated tour. The anchor is stable while the code is; the title changes with every generation.</p>
+    <p class="anchor"><span class="mono">src/tour/keys.ts:14</span></p>
+    <div class="mynote"><b>Your note on landmark 3</b>What if two decisions share an anchor?</div>
+    <div class="opts" role="radiogroup" aria-label="Keep, the alternative, or something else">
+      <button class="opt" type="button" role="radio" aria-checked="true">
+        <span class="opt-k"><span>keep</span><span class="mark now">what the code does</span><span class="mark rec">★ the tour recommends</span></span>
+        <span class="opt-l">Hash the anchor path and nearby lines</span>
+        <span class="opt-c">Picks survive rewording. A moved function asks the reader again.</span>
+      </button>
+      <button class="opt" type="button" role="radio" aria-checked="false">
+        <span class="opt-k"><span>alternative</span></span>
+        <span class="opt-l">Hash the decision title</span>
+        <span class="opt-c">Simpler, but every regeneration that rewords a title drops the pick.</span>
+      </button>
+      <button class="opt" type="button" role="radio" aria-checked="false">
+        <span class="opt-k"><span>something else</span></span>
+        <span class="opt-l">Something else</span>
+        <span class="opt-c">Neither side: say what you want instead, then approve it as restated.</span>
+      </button>
+    </div>
+    <div class="card">
+      <div class="card-h">try it · verified when this tour was generated</div>
+      <ol><li><code>pnpm start --repo .</code></li><li>Regenerate the tour of #101 and open decision 1</li></ol>
+      <ul><li>The pick you made is still selected</li></ul>
+      <label><input type="checkbox"> I tried it</label>
+    </div>
+    <div class="actions">
+      <span class="state">
+        <svg class="seal" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1l3 3 4-1 1 4 4 1-1 4 3 3-3 3 1 4-4 1-1 4-4-1-3 3-3-3-4 1-1-4-4-1 1-4-3-3 3-3-1-4 4-1 1-4 4 1Z" fill="#8b2e1f"/><path d="M10 16.5l4 4 8-9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        kept
+      </span>
+      <button class="btn" type="button">undo</button>
+    </div>
+    <p class="hint hint-row">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</p>
+  </section>
+
+  <!-- QUIZ -->
+  <p class="cap">Quiz</p>
+  <section class="sheet">
+    <p class="eyebrow"><span class="tag ox">Quiz</span><span>question 1 of 2</span><span>private · stays on this machine</span></p>
+    <h2 class="q">You move <code>decisionKey()</code> into another file. What happens to the reader's picks?</h2>
+    <div class="qopts">
+      <button class="qopt" type="button" data-n="1"><span>They carry over: the key ignores the path.</span><span></span></button>
+      <button class="qopt" type="button" data-n="2" data-result="wrong"><span>They carry over, because the title did not change.</span><span class="res">✗ your answer</span></button>
+      <button class="qopt" type="button" data-n="3"><span>They wait as stale: the key changed with the path.</span><span></span></button>
+    </div>
+    <div class="why">
+      <b>Not quite.</b> The key hashes the anchor path, so a move changes it, and the pick waits as stale for the reader to look again.
+      <div class="actions"><button class="btn" type="button">reopen landmark 3: Keys come from the anchor, not the title</button><span class="hint">then answer again</span></div>
+    </div>
+  </section>
+
+  <!-- PLAN -->
+  <p class="cap">Plan</p>
+  <section class="sheet">
+    <p class="eyebrow"><span class="tag">The plan</span></p>
+    <h2 class="title">1 change to make, 2 kept</h2>
+    <p class="lead">Read it once. When you confirm, the prompt is written and the record is shared.</p>
+    <h3 class="sec">Changes</h3>
+    <ol class="plan-list"><li><b>Stale picks wait instead of vanishing</b><br>Show stale picks in a separate list on the plan. <span class="where">src/tour/plan.ts:40</span></li></ol>
+    <h3 class="sec">Kept</h3>
+    <ul class="kept">
+      <li><span>Hash the anchor path and nearby lines</span><span>Picks survive rewording. A moved function asks the reader again.</span></li>
+      <li><span>Carry picks by decision key</span><span>A regenerated tour keeps every pick whose key it still has.</span></li>
+    </ul>
+    <div class="actions plan-actions">
+      <button class="btn fill" type="button">confirm the plan</button>
+      <span class="hint">writes the prompt, shares the record</span>
+      <button class="btn" type="button">restate the plan with the agent</button>
+    </div>
+  </section>
+</main>
+</body>
+</html>

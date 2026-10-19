@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunny Postcard · Tour prototype 03</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Caveat:wght@600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sand: #fdf3e1;
+    --sand-deep: #f7e3bf;
+    --card: #fffdf8;
+    --ink: #22303c;
+    --ink-soft: #55636f;
+    --line: #ecdcbf;
+    --sun: #ffc93c;
+    --coral: #d6452b;
+    --coral-dark: #b5361f;
+    --coral-soft: #ffe2d9;
+    --sea: #0d7d86;
+    --sea-soft: #d8f2f1;
+    --sky: #1f6fb2;
+    --ok: #157a3a;
+    --bad: #c12f1d;
+    --ui: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --display: "Bricolage Grotesque", system-ui, sans-serif;
+    --hand: "Caveat", cursive;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font: 17px/1.62 var(--ui); background: var(--sand); }
+  a { color: var(--sky); text-underline-offset: 2px; }
+  code, .mono { font-family: var(--mono); font-size: .84em; }
+  code { background: #fff3d6; border: 1px solid #f3dca4; border-radius: 4px; padding: 0 .3em; }
+  h1, h2, h3 { font-variant-numeric: lining-nums; }
+
+  .proto { position: fixed; z-index: 50; right: 12px; bottom: 12px; font: 700 12px var(--ui); background: var(--ink); color: #fff; padding: 6px 10px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .proto a { color: var(--sun); margin-left: 6px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; font: 600 14px/1 var(--ui); color: var(--ink); background: #fff; border: 1px solid rgba(34,48,60,.2); border-radius: 6px; box-shadow: 0 1px 0 rgba(34,48,60,.06), inset 0 1px 0 rgba(255,255,255,.8); cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .btn:hover { background: #fff8ea; border-color: rgba(34,48,60,.3); }
+  .btn:focus-visible, .flag:focus-visible, .opt:focus-visible, textarea:focus-visible, .chip:focus-visible, .tab:focus-visible, .qopt:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+  .btn.fill { background: var(--coral); border-color: var(--coral-dark); color: #fff; box-shadow: 0 1px 0 rgba(34,48,60,.15), inset 0 1px 0 rgba(255,255,255,.18); }
+  .btn.fill:hover { background: var(--coral-dark); }
+  .btn.big { height: 40px; padding: 0 20px; font-size: 15px; }
+  .btn.icon { width: 32px; padding: 0; justify-content: center; }
+  .btn.wrap { height: auto; min-height: 32px; padding: 6px 12px; white-space: normal; text-align: left; line-height: 1.35; }
+  kbd { display: inline-block; min-width: 20px; padding: 2px 5px; font: 600 11px/1.3 var(--mono); color: var(--ink); text-align: center; background: #fff; border: 1px solid #e0cfae; border-bottom-width: 2px; border-radius: 5px; }
+  .hint { font: 13px/1.5 var(--ui); color: var(--ink-soft); }
+
+  /* header: sky, sun, and a wave */
+  header { background: linear-gradient(180deg, #7fd3e6 0%, #b9e8ef 70%, #d9f3ef 100%); position: relative; overflow: hidden; }
+  .sun { position: absolute; right: max(16px, calc(50% - 470px)); top: 46px; width: 150px; height: 150px; }
+  .top-in { position: relative; max-width: 860px; margin: 0 auto; padding: 10px 16px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wordmark { display: flex; align-items: center; gap: 8px; font: 800 18px var(--display); color: var(--ink); text-decoration: none; }
+  .project { font: 600 14px var(--ui); color: #134a6e; }
+  .spacer { flex: 1; }
+  .top-in .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .masthead { position: relative; max-width: 860px; margin: 0 auto; padding: 26px 16px 34px; }
+  .masthead h1 { font: 800 clamp(28px, 5vw, 42px)/1.08 var(--display); margin: 0 0 12px; letter-spacing: -.02em; max-width: 640px; color: #13314a; }
+  .tour-word { font: 600 1.15em/1 var(--hand); color: var(--coral); margin-right: 2px; }
+  .num { font: 600 .55em var(--mono); color: #2b5b7c; vertical-align: .25em; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0; font: 14px/1.5 var(--ui); color: var(--ink-soft); }
+  .masthead .meta { color: #24465f; }
+  .ok { color: var(--ok); font-weight: 700; }
+  .bad { color: var(--bad); font-weight: 700; }
+  .pill { font: 600 12px var(--ui); padding: 2px 10px; border-radius: 999px; background: rgba(255,255,255,.75); border: 1px solid rgba(19,49,74,.15); color: #13314a; }
+  .wave { display: block; width: 100%; height: 34px; }
+
+  /* rail: bunting */
+  .rail-wrap { position: sticky; top: 0; z-index: 10; background: rgba(253,243,225,.95); backdrop-filter: blur(4px); border-bottom: 1px solid var(--line); }
+  .rail { max-width: 860px; margin: 0 auto; padding: 8px 16px 6px; display: flex; gap: 18px; overflow-x: auto; }
+  .grp { flex: none; display: grid; gap: 2px; }
+  .grp-label { font: 700 12px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); min-height: 16px; }
+  .segs { display: flex; gap: 4px; position: relative; padding-top: 4px; }
+  .segs::before { content: ""; position: absolute; left: -6px; right: -6px; top: 4px; height: 8px; border-top: 2px solid #8a7351; border-radius: 0 0 50% 50%; }
+  .flag { width: 28px; height: 34px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
+  .flag svg { display: block; width: 28px; height: 34px; overflow: visible; }
+  .flag path { stroke-width: 2; stroke-linejoin: round; }
+  .flag text { font: 700 11px var(--ui); }
+  .flag[data-state="done"] path { fill: var(--c, var(--coral)); stroke: var(--c, var(--coral)); }
+  .flag[data-state="done"] text { fill: #fff; }
+  .flag[data-state="current"] { transform: scale(1.18); transform-origin: top center; z-index: 1; }
+  .flag[data-state="current"] path { fill: var(--sun); stroke: #8a5a00; }
+  .flag[data-state="current"] text { fill: #3a2800; }
+  .flag[data-state="open"] path { fill: #fff; stroke: #8a7351; }
+  .flag[data-state="open"] text { fill: var(--ink); }
+  .flag[data-state="ahead"] { cursor: not-allowed; }
+  .flag[data-state="ahead"] path { fill: transparent; stroke: #bba98a; stroke-dasharray: 3 3; }
+  .flag[data-state="ahead"] text { fill: #9d8b6c; }
+  .legend { max-width: 860px; margin: 0 auto; padding: 0 16px 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12px var(--ui); color: var(--ink-soft); }
+  .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -2px; clip-path: polygon(0 0, 100% 0, 50% 100%); background: #8a7351; }
+  .legend .d { background: var(--coral); } .legend .c { background: #d39b00; } .legend .a { background: #d8cbb2; }
+
+  main { max-width: 860px; margin: 0 auto; padding: 8px 16px 80px; }
+  .cap { margin: 44px 0 12px; font: 600 26px/1 var(--hand); color: var(--sea); display: flex; align-items: center; gap: 10px; }
+  .cap::after { content: ""; flex: 1; height: 10px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5q6-6 12 0t12 0' fill='none' stroke='%230d7d86' stroke-width='1.6' opacity='.5'/%3E%3C/svg%3E") repeat-x center; }
+
+  /* the postcard: airmail stripes around a clean card */
+  .card-wrap { position: relative; padding: 7px; border-radius: 12px; background: repeating-linear-gradient(135deg, #d6452b 0 14px, #fffdf8 14px 22px, #1f6fb2 22px 36px, #fffdf8 36px 44px); box-shadow: 0 16px 34px -20px rgba(34,48,60,.5); }
+  .sheet { position: relative; background: var(--card); border-radius: 7px; padding: 30px clamp(18px, 5vw, 48px) 28px; }
+  .stamp { position: absolute; top: 16px; right: 16px; width: 64px; height: 76px; padding: 6px; transform: rotate(4deg); filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.3)); }
+  .stamp::before { content: ""; position: absolute; inset: 0; background: #fff;
+    -webkit-mask: radial-gradient(circle 3px, transparent 96%, #000) -4px -4px / 8px 8px; mask: radial-gradient(circle 3px, transparent 96%, #000) -4px -4px / 8px 8px; }
+  .stamp div { position: relative; }
+  .stamp div { height: 100%; display: grid; place-items: center; align-content: center; gap: 0; border-radius: 2px; color: #fff; text-align: center; background: var(--st, var(--sea)); }
+  .stamp b { font: 800 26px/1 var(--display); }
+  .stamp span { font: 700 9px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
+  .postmark { position: absolute; top: 34px; right: 64px; width: 112px; height: 92px; opacity: .5; pointer-events: none; }
+  .sheet .eyebrow, .sheet .title, .sheet .q { padding-right: 84px; }
+
+  .eyebrow { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 12px; font: 14px var(--ui); color: var(--ink-soft); }
+  .tag { font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; color: #fff; background: var(--sea); }
+  .tag.coral { background: var(--coral); } .tag.sky { background: var(--sky); } .tag.yel { background: var(--sun); color: #3a2800; }
+  .title { font: 800 clamp(26px, 4.4vw, 34px)/1.15 var(--display); margin: 0 0 12px; letter-spacing: -.015em; color: #13314a; }
+  .lead { font-size: 19px; line-height: 1.55; color: #364553; margin: 0 0 20px; max-width: 64ch; }
+  .body p { margin: 0 0 14px; max-width: 68ch; }
+
+  .return { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 20px; padding: 10px 12px 10px 14px; background: var(--sea-soft); border: 1px solid #9fd8d4; border-radius: 10px; font: 14px var(--ui); color: #0b4f55; }
+
+  .agenda { list-style: none; counter-reset: s; margin: 22px 0; padding: 0; display: grid; gap: 8px; }
+  .agenda li { counter-increment: s; display: grid; grid-template-columns: 38px 1fr; gap: 0 14px; padding: 10px 14px 10px 10px; border-radius: 10px; background: #fff8ea; border: 1px solid var(--line); }
+  .agenda li::before { content: counter(s); grid-row: span 2; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 800 17px var(--display); color: #3a2800; background: var(--sun); }
+  .agenda li:nth-child(1)::before { background: #ffd977; } .agenda li:nth-child(2)::before { background: #9fe0dc; } .agenda li:nth-child(5)::before { background: #ffb8a6; }
+  .agenda .stage { font: 700 12px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--sea); }
+  .agenda .name { font: 700 18px/1.3 var(--display); }
+  .budget { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 24px; }
+  .budget div { text-align: center; padding: 12px 6px; border-radius: 12px; background: var(--sea-soft); }
+  .budget div:nth-child(2) { background: var(--coral-soft); } .budget div:nth-child(3) { background: #fff0c2; } .budget div:nth-child(4) { background: #dcebf8; }
+  .budget b { display: block; font: 800 28px/1.1 var(--display); color: #13314a; }
+  .budget span { font: 600 13px var(--ui); color: var(--ink-soft); }
+  .cover-actions { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+
+  .figure { margin: 0 0 22px; }
+  .frame { border-radius: 10px; overflow: hidden; background: #e9f7f6; border: 1px solid #bfe5e2; }
+  .frame svg { display: block; width: 100%; height: auto; }
+  .micro { margin-top: 16px; border-radius: 10px; overflow: hidden; border: 1px solid #f3c7b9; }
+  .micro-h { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; padding: 7px 12px; font: 700 13px var(--ui); color: #fff; background: var(--coral); }
+  .micro-h span:last-child { font-weight: 500; }
+  .micro-b { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 14px 12px; font: 13px var(--ui); background: #fff; }
+  .micro-b label { display: grid; gap: 4px; color: var(--ink-soft); font-weight: 600; }
+  .micro-b input { height: 32px; padding: 0 8px; font: 13px var(--mono); border: 1px solid #e0cfae; border-radius: 6px; width: 180px; max-width: 100%; color: var(--ink); }
+  .micro-b output { padding: 6px 10px; border-radius: 6px; background: #ddf5e5; color: #115c2c; font-weight: 700; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px 0; }
+  .chip { font: 600 13px var(--ui); padding: 4px 12px; border-radius: 999px; background: #fff0c2; color: #6b4b00; border: 0; }
+  .chip.link { background: #fff; border: 1px solid var(--coral); color: var(--coral-dark); cursor: pointer; }
+  .chip.link:hover { background: var(--coral-soft); }
+  .note { margin: 18px 0; display: grid; gap: 6px; }
+  .note label { font: 700 14px var(--ui); }
+  .note label .hint { font-weight: 400; margin-left: 6px; }
+  textarea { width: 100%; font: 15px/1.5 var(--ui); color: var(--ink); padding: 8px 10px; border: 1px solid #e0cfae; border-radius: 8px; background: #fff; resize: vertical; background-image: repeating-linear-gradient(transparent 0 23px, #f3e6cc 23px 24px); background-position: 0 8px; line-height: 24px; }
+  textarea::placeholder { color: #7d8a95; }
+
+  .code { margin-top: 12px; border: 1px solid #d0d7de; border-radius: 10px; overflow: hidden; }
+  .tabs { display: flex; gap: 4px; padding: 6px 6px 0; background: #f6f8fa; border-bottom: 1px solid #d0d7de; }
+  .tab { font: 600 13px var(--ui); padding: 7px 12px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--ink-soft); cursor: pointer; margin-bottom: -1px; }
+  .tab[aria-selected="true"] { background: #fff; border-color: #d0d7de; color: var(--ink); box-shadow: inset 0 3px 0 var(--sun); }
+  .code-body { padding: 14px; background: #fff; }
+  .code-body p { margin: 0 0 12px; font-size: 16px; }
+  .file { font: 600 12px var(--mono); padding: 6px 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-bottom: 0; border-radius: 6px 6px 0 0; }
+  .diff { font: 13px/1.6 var(--mono); border: 1px solid #d0d7de; border-radius: 0 0 6px 6px; overflow-x: auto; }
+  .diff div { padding: 0 10px; white-space: pre; }
+  .diff .hunk { background: #ddf4ff; color: #3b5068; }
+  .diff .add { background: #dafbe1; color: #11421f; }
+  .diff .del { background: #ffebe9; color: #7a1c12; }
+
+  .nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 26px; padding-top: 18px; border-top: 2px dashed var(--line); }
+  .nav .pos { font: 600 22px var(--hand); color: var(--sea); }
+
+  .anchor { margin: -6px 0 18px; font-size: 14px; }
+  .anchor span { padding: 2px 8px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; }
+  .mynote { margin: 0 0 20px; padding: 10px 14px; background: #fff7d6; border-radius: 4px; transform: rotate(-.6deg); box-shadow: 0 6px 12px -8px rgba(0,0,0,.35); font-size: 15px; border-left: 4px solid var(--sun); }
+  .mynote b { display: block; font: 600 20px/1.1 var(--hand); color: #8a5a00; }
+  .opts { display: grid; gap: 10px; margin-bottom: 20px; }
+  .opt { text-align: left; display: grid; gap: 4px; padding: 14px 16px 14px 50px; position: relative; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; }
+  .opt::before { content: ""; position: absolute; left: 16px; top: 17px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #b7a888; background: #fff; }
+  .opt:hover { border-color: #d9c39a; background: #fffcf4; }
+  .opt[aria-checked="true"] { border: 2px solid var(--sea); padding: 13px 15px 13px 49px; background: #f1fbfa; }
+  .opt[aria-checked="true"]::before { left: 15px; top: 16px; border-color: var(--sea); background: radial-gradient(circle, var(--sea) 0 5px, #fff 6px); }
+  .opt-k { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+  .mark { font: 700 12px var(--ui); letter-spacing: 0; text-transform: none; padding: 1px 8px; border-radius: 999px; }
+  .mark.now { background: #eef1f4; color: var(--ink); }
+  .mark.rec { background: var(--sun); color: #3a2800; }
+  .opt-l { font: 700 18px/1.3 var(--display); color: #13314a; }
+  .opt-c { font-size: 15px; color: #3d4b57; }
+
+  .card { border-radius: 12px; padding: 14px 16px; background: #f1fbfa; border: 1px dashed #7cc7c2; margin-bottom: 18px; font-size: 15px; }
+  .card-h { font: 700 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--sea); margin-bottom: 6px; }
+  .card ol, .card ul { margin: 0 0 10px; padding-left: 22px; }
+  .card label { font: 600 14px var(--ui); display: inline-flex; gap: 8px; align-items: center; }
+  .card input { accent-color: var(--sea); width: 16px; height: 16px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font: 700 15px var(--ui); color: var(--ok); }
+  .hint-row { margin-top: 12px; }
+
+  .q { font: 800 clamp(22px, 3.8vw, 28px)/1.25 var(--display); margin: 0 0 18px; color: #13314a; }
+  .qopts { display: grid; gap: 10px; margin-bottom: 18px; }
+  .qopt { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font: 16px/1.45 var(--ui); cursor: pointer; }
+  .qopt::before { content: attr(data-n); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 800 14px var(--display); background: #fff0c2; color: #6b4b00; }
+  .qopt[data-result="wrong"] { border: 2px solid var(--bad); background: #fff1ee; padding: 11px 13px; }
+  .qopt[data-result="wrong"]::before { background: var(--bad); color: #fff; }
+  .res { font: 700 13px var(--ui); color: var(--bad); }
+  .why { padding: 14px 16px; border-radius: 12px; border: 1px solid #f2b6a8; background: #fff1ee; }
+  .why .actions { margin-top: 10px; }
+
+  .sec { font: 600 24px/1 var(--hand); color: var(--coral-dark); margin: 24px 0 8px; }
+  .plan-list { margin: 0; padding-left: 22px; }
+  .where { display: inline-block; font: 12px var(--mono); background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 1px 6px; color: var(--ink-soft); }
+  .kept { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .kept li { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 16px; padding: 10px 12px; border-radius: 10px; background: #fff8ea; border: 1px solid var(--line); font-size: 15px; }
+  .kept li span:first-child { font-weight: 700; }
+  .plan-actions { margin-top: 22px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    .sun { width: 96px; height: 96px; top: 54px; right: 8px; opacity: .55; }
+    .budget { grid-template-columns: repeat(2, 1fr); }
+    .kept li { grid-template-columns: 1fr; }
+    .lead { font-size: 17px; }
+    .stamp { width: 52px; height: 62px; top: 12px; right: 12px; }
+    .stamp b { font-size: 20px; }
+    .postmark { display: none; }
+    .sheet .eyebrow, .sheet .title { padding-right: 60px; }
+    .nav .pos { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="proto">Prototype 03 · Sunny Postcard <a href="index.html">all designs</a></div>
+
+<header>
+  <svg class="sun" viewBox="0 0 150 150" aria-hidden="true">
+    <g stroke="#ffb703" stroke-width="6" stroke-linecap="round">
+      <path d="M75 6v18M75 126v18M6 75h18M126 75h18M26 26l13 13M111 111l13 13M26 124l13-13M111 39l13-13"/>
+    </g>
+    <circle cx="75" cy="75" r="40" fill="#ffc93c"/>
+    <circle cx="62" cy="70" r="4" fill="#5a3d00"/><circle cx="88" cy="70" r="4" fill="#5a3d00"/>
+    <path d="M60 86q15 12 30 0" fill="none" stroke="#5a3d00" stroke-width="4" stroke-linecap="round"/>
+  </svg>
+  <div class="top-in">
+    <a class="wordmark" href="#">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#d6452b"/><path d="M5 14q3.5-4 7 0t7 0" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="8" r="2.5" fill="#ffc93c"/></svg>
+      pr-review
+    </a>
+    <a class="project" href="#">vintasoftware/pr-review-canvas</a>
+    <span class="spacer"></span>
+    <div class="actions">
+      <a class="btn" href="#">canvas</a>
+      <button class="btn" type="button">regenerate tour</button>
+      <button class="btn" type="button">export zip</button>
+      <button class="btn" type="button">help</button>
+      <button class="btn icon" type="button" aria-label="Switch to dark theme"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M9.6 1.2a6.8 6.8 0 1 0 5.2 9.9A5.6 5.6 0 0 1 9.6 1.2Z"/></svg></button>
+    </div>
+  </div>
+  <div class="masthead">
+    <h1><span class="tour-word">Tour</span> <span class="num">#101</span> Carry reader picks across regenerated tours</h1>
+    <p class="meta">
+      <span>by <a href="#">fjsj</a></span>
+      <span class="mono">fjsj/carry-picks → main</span>
+      <span><span class="ok">+412</span> <span class="bad">−87</span></span>
+      <span class="pill">tour by claude · opus-5.5 · acpx</span>
+      <span>generated 3 minutes ago</span>
+    </p>
+  </div>
+  <svg class="wave" viewBox="0 0 1200 34" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 14q50-14 100 0t100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0V34H0Z" fill="#46b7c4"/>
+    <path d="M0 22q50-12 100 0t100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0V34H0Z" fill="#f7e3bf"/>
+    <path d="M0 28q50-8 100 0t100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0 100 0V34H0Z" fill="#fdf3e1"/>
+  </svg>
+</header>
+
+<div class="rail-wrap">
+  <nav class="rail" aria-label="Tour progress">
+    <div class="grp"><span class="grp-label">&nbsp;</span><div class="segs">
+      <button class="flag" data-state="done" aria-label="Cover, done" style="--c:#0d7d86"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">✓</text></svg></button>
+    </div></div>
+    <div class="grp"><span class="grp-label">5 landmarks</span><div class="segs">
+      <button class="flag" data-state="done" aria-label="Landmark 1, done"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">✓</text></svg></button>
+      <button class="flag" data-state="done" aria-label="Landmark 2, done" style="--c:#1f6fb2"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">✓</text></svg></button>
+      <button class="flag" data-state="current" aria-current="step" aria-label="Landmark 3, you are here"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">3</text></svg></button>
+      <button class="flag" data-state="open" aria-label="Landmark 4, open"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">4</text></svg></button>
+      <button class="flag" data-state="open" aria-label="Landmark 5, open"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">5</text></svg></button>
+    </div></div>
+    <div class="grp"><span class="grp-label">3 decisions</span><div class="segs">
+      <button class="flag" data-state="ahead" disabled aria-label="Decision 1, ahead"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/></svg></button>
+      <button class="flag" data-state="ahead" disabled aria-label="Decision 2, ahead"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/></svg></button>
+      <button class="flag" data-state="ahead" disabled aria-label="Decision 3, ahead"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/></svg></button>
+    </div></div>
+    <div class="grp"><span class="grp-label">2 questions</span><div class="segs">
+      <button class="flag" data-state="ahead" disabled aria-label="Question 1, ahead"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/></svg></button>
+      <button class="flag" data-state="ahead" disabled aria-label="Question 2, ahead"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/></svg></button>
+    </div></div>
+    <div class="grp"><span class="grp-label">plan</span><div class="segs">
+      <button class="flag" data-state="ahead" disabled aria-label="Plan, ahead"><svg viewBox="0 0 28 34"><path d="M2 2h24L14 32Z"/><text x="14" y="15" text-anchor="middle">★</text></svg></button>
+    </div></div>
+  </nav>
+  <div class="legend" aria-hidden="true"><span><i class="d"></i>visited</span><span><i class="c"></i>you are here</span><span><i></i>open</span><span><i class="a"></i>ahead</span></div>
+</div>
+
+<main>
+  <p class="cap">Cover</p>
+  <div class="card-wrap"><section class="sheet">
+    <div class="stamp" style="--st:#d6452b"><div><b>#101</b><span>tour</span></div></div>
+    <p class="eyebrow"><span class="tag coral">Tour</span><span><a href="#">#101</a> · vintasoftware/pr-review-canvas</span></p>
+    <h2 class="title">Carry reader picks across regenerated tours</h2>
+    <p class="meta"><span>by fjsj</span><span class="mono">fjsj/carry-picks → main</span><span><span class="ok">+412</span> <span class="bad">−87</span> in 14 files</span><span>guide: <code>docs/tour-guide.md</code></span><span>touches: tour store, tour page, chat</span></p>
+    <ol class="agenda">
+      <li><span class="stage">Before this change</span><span class="name">Picks lived and died with one tour</span></li>
+      <li><span class="stage">The world</span><span class="name">A decision key outlives its tour</span></li>
+      <li><span class="stage">Why</span><span class="name">Keys come from the anchor, not the title</span></li>
+      <li><span class="stage">Why</span><span class="name">Stale picks wait instead of vanishing</span></li>
+      <li><span class="stage">What to respect</span><span class="name">Never carry a pick across a changed anchor</span></li>
+    </ol>
+    <div class="budget">
+      <div><b>5</b><span>landmarks</span></div>
+      <div><b>3</b><span>decisions</span></div>
+      <div><b>2</b><span>questions</span></div>
+      <div><b>~12</b><span>minutes</span></div>
+    </div>
+    <div class="cover-actions">
+      <button class="btn fill big" type="button">start the tour</button>
+      <span class="hint"><kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>i</kbd> code · <kbd>?</kbd> help</span>
+    </div>
+  </section></div>
+
+  <p class="cap">Landmark</p>
+  <div class="card-wrap"><section class="sheet">
+    <div class="stamp" style="--st:#0d7d86"><div><b>3</b><span>of 5</span></div></div>
+    <div class="return"><span>Jumped from landmark 2. Decide now, or go back and keep reading.</span><button class="btn" type="button">back to the landmark</button></div>
+    <p class="eyebrow"><span class="tag">Why</span><span>landmark 3 of 5</span></p>
+    <h2 class="title">Keys come from the anchor, not the title</h2>
+    <p class="lead">A decision's key is a hash of its file and the code around it, so renaming the decision keeps the reader's pick.</p>
+    <figure class="figure">
+      <div class="frame">
+        <svg viewBox="0 0 640 240" role="img" aria-label="Two tours, a1b2c3 and d4e5f6, each with a decision card; the same key carries the pick">
+          <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#d6452b"/></marker></defs>
+          <path d="M0 200q40-10 80 0t80 0 80 0 80 0 80 0 80 0 80 0 80 0V240H0Z" fill="#9fdcdc"/>
+          <path d="M0 214q40-8 80 0t80 0 80 0 80 0 80 0 80 0 80 0 80 0V240H0Z" fill="#f7e3bf"/>
+          <g font-family="Figtree, system-ui" fill="#22303c">
+            <g transform="rotate(-2 140 110)">
+              <rect x="30" y="28" width="220" height="160" rx="6" fill="#fff" stroke="#e0cfae"/>
+              <text x="48" y="56" font-size="17" font-weight="800" font-family="Bricolage Grotesque" fill="#13314a">tour @ a1b2c3</text>
+              <line x1="48" y1="68" x2="232" y2="68" stroke="#ecdcbf"/>
+              <text x="48" y="92" font-size="13" fill="#55636f">decision</text>
+              <text x="48" y="116" font-size="16" font-weight="700">Hash the anchor?</text>
+              <text x="48" y="142" font-size="12" font-family="JetBrains Mono, monospace" fill="#0d7d86">key 7f3e…c1</text>
+              <rect x="48" y="152" width="56" height="20" rx="10" fill="#0d7d86"/><text x="76" y="166" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">kept</text>
+            </g>
+            <g transform="rotate(2 500 110)">
+              <rect x="390" y="28" width="220" height="160" rx="6" fill="#fff" stroke="#e0cfae"/>
+              <text x="408" y="56" font-size="17" font-weight="800" font-family="Bricolage Grotesque" fill="#13314a">tour @ d4e5f6</text>
+              <line x1="408" y1="68" x2="592" y2="68" stroke="#ecdcbf"/>
+              <text x="408" y="92" font-size="13" fill="#55636f">decision</text>
+              <text x="408" y="116" font-size="16" font-weight="700">Anchor or title?</text>
+              <text x="408" y="142" font-size="12" font-family="JetBrains Mono, monospace" fill="#0d7d86">key 7f3e…c1</text>
+              <rect x="408" y="152" width="56" height="20" rx="10" fill="#0d7d86"/><text x="436" y="166" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">kept</text>
+            </g>
+            <path d="M262 120 C 300 80, 342 80, 380 120" fill="none" stroke="#d6452b" stroke-width="3" stroke-dasharray="7 6" stroke-linecap="round" marker-end="url(#ah3)"/>
+            <text x="321" y="64" font-size="26" text-anchor="middle" font-family="Caveat, cursive" font-weight="600" fill="#b5361f">same key</text>
+            <text x="321" y="150" font-size="22" text-anchor="middle" font-family="Caveat, cursive" font-weight="600" fill="#b5361f">pick carried!</text>
+          </g>
+        </svg>
+      </div>
+      <div class="micro">
+        <div class="micro-h"><span>micro-world</span><span>try it: change the inputs</span></div>
+        <div class="micro-b">
+          <label>anchor path<input value="src/tour/keys.ts" aria-label="anchor path"></label>
+          <label>decision title<input value="Anchor or title?" aria-label="decision title"></label>
+          <output>key 7f3e…c1 · pick carried</output>
+        </div>
+      </div>
+    </figure>
+    <div class="body">
+      <p>When the tour is generated again, every decision gets a fresh title. If the key came from the title, a reworded decision would look new, and the reader's earlier keep or change would be lost. So <code>decisionKey()</code> hashes the anchor path and the three lines around it.</p>
+      <p>This means a decision moves with its code. Move the function to another file and the key changes on purpose: the reader should look again, because the code they judged is gone.</p>
+    </div>
+    <div class="chips"><span class="chip">one decision waits here</span><button class="chip link" type="button">Hash the anchor, or the title? →</button></div>
+    <div class="note">
+      <label for="note-3">Something I noticed <span class="hint">optional</span></label>
+      <textarea id="note-3" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions"></textarea>
+    </div>
+    <div class="actions"><button class="btn" type="button">hide code <kbd>i</kbd></button></div>
+    <div class="code">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" type="button">literate diff</button>
+        <button class="tab" role="tab" aria-selected="false" type="button">raw diff</button>
+      </div>
+      <div class="code-body">
+        <p>The title is gone from the key. What the reader judged was the code, so the key is the code: the anchor's path and the lines around it.</p>
+        <div class="file">src/tour/keys.ts</div>
+        <div class="diff"><div class="hunk">@@ -12,7 +12,11 @@ export function decisionKey(d: Decision): string {</div><div class="del">-  return slug(d.title)</div><div class="add">+  const around = linesAround(d.anchor, 3)</div><div class="add">+  return sha1(`${d.anchor.path}\n${around}`).slice(0, 12)</div><div> }</div></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn" type="button">← back</button>
+      <span class="pos">landmark 3 of 5</span>
+      <button class="btn fill" type="button">next: landmark 4 →</button>
+    </div>
+  </section></div>
+
+  <p class="cap">Decision</p>
+  <div class="card-wrap"><section class="sheet">
+    <div class="stamp" style="--st:#1f6fb2"><div><b>1</b><span>of 3</span></div></div>
+    <svg class="postmark" viewBox="0 0 112 92" aria-hidden="true"><circle cx="46" cy="46" r="40" fill="none" stroke="#157a3a" stroke-width="3"/><circle cx="46" cy="46" r="31" fill="none" stroke="#157a3a" stroke-width="1.5"/><text x="46" y="44" text-anchor="middle" font-family="Figtree" font-size="12" font-weight="800" fill="#157a3a">KEPT</text><text x="46" y="58" text-anchor="middle" font-family="Figtree" font-size="9" fill="#157a3a">OCT 16</text><path d="M86 30q10 4 20 0M86 46q10 4 20 0M86 62q10 4 20 0" stroke="#157a3a" stroke-width="2" fill="none"/></svg>
+    <p class="eyebrow"><span class="tag sky">Architecture</span><span>decision 1 of 3</span><a href="#">from landmark 3: Keys come from the anchor, not the title</a></p>
+    <h2 class="title">Hash the anchor, or the title?</h2>
+    <p class="lead">The key decides which picks survive a regenerated tour. The anchor is stable while the code is; the title changes with every generation.</p>
+    <p class="anchor"><span class="mono">src/tour/keys.ts:14</span></p>
+    <div class="mynote"><b>Your note on landmark 3</b>What if two decisions share an anchor?</div>
+    <div class="opts" role="radiogroup" aria-label="Keep, the alternative, or something else">
+      <button class="opt" type="button" role="radio" aria-checked="true">
+        <span class="opt-k"><span>keep</span><span class="mark now">what the code does</span><span class="mark rec">☀ the tour recommends</span></span>
+        <span class="opt-l">Hash the anchor path and nearby lines</span>
+        <span class="opt-c">Picks survive rewording. A moved function asks the reader again.</span>
+      </button>
+      <button class="opt" type="button" role="radio" aria-checked="false">
+        <span class="opt-k"><span>alternative</span></span>
+        <span class="opt-l">Hash the decision title</span>
+        <span class="opt-c">Simpler, but every regeneration that rewords a title drops the pick.</span>
+      </button>
+      <button class="opt" type="button" role="radio" aria-checked="false">
+        <span class="opt-k"><span>something else</span></span>
+        <span class="opt-l">Something else</span>
+        <span class="opt-c">Neither side: say what you want instead, then approve it as restated.</span>
+      </button>
+    </div>
+    <div class="card">
+      <div class="card-h">try it · verified when this tour was generated</div>
+      <ol><li><code>pnpm start --repo .</code></li><li>Regenerate the tour of #101 and open decision 1</li></ol>
+      <ul><li>The pick you made is still selected</li></ul>
+      <label><input type="checkbox"> I tried it</label>
+    </div>
+    <div class="actions"><span class="state">✓ kept</span><button class="btn" type="button">undo</button></div>
+    <p class="hint hint-row">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</p>
+  </section></div>
+
+  <p class="cap">Quiz</p>
+  <div class="card-wrap"><section class="sheet">
+    <div class="stamp" style="--st:#946a00"><div><b>?</b><span>1 of 2</span></div></div>
+    <p class="eyebrow"><span class="tag yel">Quiz</span><span>question 1 of 2</span><span>private · stays on this machine</span></p>
+    <h2 class="q">You move <code>decisionKey()</code> into another file. What happens to the reader's picks?</h2>
+    <div class="qopts">
+      <button class="qopt" type="button" data-n="1"><span>They carry over: the key ignores the path.</span><span></span></button>
+      <button class="qopt" type="button" data-n="2" data-result="wrong"><span>They carry over, because the title did not change.</span><span class="res">✗ your answer</span></button>
+      <button class="qopt" type="button" data-n="3"><span>They wait as stale: the key changed with the path.</span><span></span></button>
+    </div>
+    <div class="why">
+      <b>Not quite.</b> The key hashes the anchor path, so a move changes it, and the pick waits as stale for the reader to look again.
+      <div class="actions"><button class="btn wrap" type="button">reopen landmark 3: Keys come from the anchor, not the title</button><span class="hint">then answer again</span></div>
+    </div>
+  </section></div>
+
+  <p class="cap">Plan</p>
+  <div class="card-wrap"><section class="sheet">
+    <div class="stamp" style="--st:#13314a"><div><b>★</b><span>plan</span></div></div>
+    <p class="eyebrow"><span class="tag coral">The plan</span></p>
+    <h2 class="title">1 change to make, 2 kept</h2>
+    <p class="lead">Read it once. When you confirm, the prompt is written and the record is shared.</p>
+    <h3 class="sec">Changes</h3>
+    <ol class="plan-list"><li><b>Stale picks wait instead of vanishing</b><br>Show stale picks in a separate list on the plan. <span class="where">src/tour/plan.ts:40</span></li></ol>
+    <h3 class="sec">Kept</h3>
+    <ul class="kept">
+      <li><span>Hash the anchor path and nearby lines</span><span>Picks survive rewording. A moved function asks the reader again.</span></li>
+      <li><span>Carry picks by decision key</span><span>A regenerated tour keeps every pick whose key it still has.</span></li>
+    </ul>
+    <div class="actions plan-actions">
+      <button class="btn fill" type="button">confirm the plan</button>
+      <span class="hint">writes the prompt, shares the record</span>
+      <button class="btn" type="button">restate the plan with the agent</button>
+    </div>
+  </section></div>
+</main>
+</body>
+</html>

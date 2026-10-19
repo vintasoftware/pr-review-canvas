@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour page prototypes</title>
+<style>
+  :root { --ink: #1f2328; --muted: #59636e; --line: #d1d9e0; --bg: #f6f8fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  main { max-width: 1040px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 28px; }
+  ol { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  a.card { display: block; height: 100%; padding: 16px 18px 18px; background: #fff; border: 1px solid var(--line); border-radius: 10px; color: inherit; text-decoration: none; border-top: 6px solid var(--c); }
+  a.card:hover { box-shadow: 0 6px 18px rgba(31,35,40,.12); }
+  a.card:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
+  .n { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  .t { display: block; font-size: 18px; font-weight: 650; margin: 2px 0 6px; }
+  .d { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tour page prototypes</h1>
+  <p class="lead">Ten designs of the same tour page, one theme each. Same content in every file; see BRIEF.md.</p>
+  <ol>
+    <li><a class="card" style="--c:#8b2e1f" href="01-antique-atlas.html"><span class="n">01</span><span class="t">Antique Atlas</span><span class="d">Old landmarks: parchment, compass rose, wax-seal stamps, dotted route.</span></a></li>
+    <li><a class="card" style="--c:#2f6b3a" href="02-trail-blazes.html"><span class="n">02</span><span class="t">Trail Blazes</span><span class="d">Hiking: topo lines, painted trail blazes, wooden signposts, summit flag.</span></a></li>
+    <li><a class="card" style="--c:#ff7a59" href="03-sunny-postcard.html"><span class="n">03</span><span class="t">Sunny Postcard</span><span class="d">Seaside holiday: postcards, stamps, postmarks, beach bunting.</span></a></li>
+    <li><a class="card" style="--c:#0072ce" href="04-metro-lines.html"><span class="n">04</span><span class="t">Metro Lines</span><span class="d">City: a transit map with colored lines and stations.</span></a></li>
+    <li><a class="card" style="--c:#d7261e" href="05-hop-on-bus.html"><span class="n">05</span><span class="t">Hop-on Hop-off</span><span class="d">Sightseeing bus: route stops, tickets, a bus at the current stop.</span></a></li>
+    <li><a class="card" style="--c:#c75b2a" href="06-travel-poster.html"><span class="n">06</span><span class="t">Retro Travel Poster</span><span class="d">National-park posters: flat landscapes, screen-print palette, badges.</span></a></li>
+    <li><a class="card" style="--c:#1d2a5a" href="07-passport.html"><span class="n">07</span><span class="t">Passport</span><span class="d">Travel documents: visa stamps as progress, forms for decisions.</span></a></li>
+    <li><a class="card" style="--c:#6b2d8f" href="08-museum-guide.html"><span class="n">08</span><span class="t">Museum Audio Guide</span><span class="d">Gallery walls in bold colors, wall labels, numbered stops.</span></a></li>
+    <li><a class="card" style="--c:#f5c400" href="09-departures.html"><span class="n">09</span><span class="t">Departures</span><span class="d">Airport: split-flap board, boarding passes, wayfinding signs.</span></a></li>
+    <li><a class="card" style="--c:#ff5fa2" href="10-theme-park.html"><span class="n">10</span><span class="t">Theme Park Map</span><span class="d">The most playful: candy lands, ride tickets, "you are here" pin.</span></a></li>
+  </ol>
+</main>
+</body>
+</html>

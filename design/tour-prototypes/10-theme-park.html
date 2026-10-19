@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theme Park Map · Tour prototype 10</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #fff6ea;
+    --card: #ffffff;
+    --ink: #2b2140;
+    --ink-soft: #5b5170;
+    --line: #eadfce;
+    --pink: #ff4f9a;
+    --pink-dark: #c81f68;
+    --mint: #2ec4a0;
+    --mint-dark: #0c7d62;
+    --grape: #7b4ddb;
+    --grape-dark: #5a2fb8;
+    --tangerine: #ff8a2b;
+    --tangerine-dark: #b85607;
+    --lemon: #ffd93b;
+    --sky: #bfe8ff;
+    --ok: #13803f;
+    --bad: #d0261c;
+    --ui: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --display: "Baloo 2", "Nunito", system-ui, sans-serif;
+    --mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font: 17px/1.62 var(--ui); background: var(--cream); background-image: radial-gradient(circle at 10px 10px, #f3e3cb 2px, transparent 2.5px); background-size: 28px 28px; }
+  a { color: var(--grape-dark); text-underline-offset: 2px; }
+  code, .mono { font-family: var(--mono); font-size: .84em; }
+  code { background: #f6eefc; border: 1px solid #e3d6f5; border-radius: 5px; padding: 0 .3em; }
+
+  .proto { position: fixed; z-index: 50; right: 12px; bottom: 12px; font: 700 12px var(--ui); background: var(--ink); color: #fff; padding: 6px 10px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .proto a { color: var(--lemon); margin-left: 6px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; font: 700 14px/1 var(--ui); color: var(--ink); background: #fff; border: 1px solid rgba(43,33,64,.22); border-radius: 8px; box-shadow: 0 1px 0 rgba(43,33,64,.08), inset 0 1px 0 rgba(255,255,255,.8); cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .btn:hover { background: #fbf6ff; border-color: rgba(43,33,64,.35); }
+  .btn:focus-visible, .ride:focus-visible, .opt:focus-visible, textarea:focus-visible, .chip:focus-visible, .tab:focus-visible, .qopt:focus-visible { outline: 3px solid var(--grape); outline-offset: 2px; }
+  .btn.fill { background: var(--grape); border-color: var(--grape-dark); color: #fff; box-shadow: 0 2px 0 var(--grape-dark), inset 0 1px 0 rgba(255,255,255,.2); }
+  .btn.fill:hover { background: var(--grape-dark); }
+  .btn.big { height: 40px; padding: 0 20px; font-size: 15px; }
+  .btn.icon { width: 32px; padding: 0; justify-content: center; }
+  .btn.wrap { height: auto; min-height: 32px; padding: 6px 12px; white-space: normal; text-align: left; line-height: 1.35; }
+  kbd { display: inline-block; min-width: 20px; padding: 2px 5px; font: 500 11px/1.3 var(--mono); color: var(--ink); text-align: center; background: #fff; border: 1px solid #d8cbe6; border-bottom-width: 2px; border-radius: 5px; }
+  .hint { font: 14px/1.5 var(--ui); color: var(--ink-soft); }
+
+  /* header: the park gate over an illustrated map */
+  header { position: relative; overflow: hidden; background: var(--sky); }
+  .map { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .top-in { position: relative; max-width: 880px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wordmark { display: flex; align-items: center; gap: 8px; font: 800 20px/1 var(--display); color: var(--ink); text-decoration: none; }
+  .project { font: 700 14px var(--ui); color: var(--ink); background: rgba(255,255,255,.7); padding: 2px 8px; border-radius: 6px; }
+  .spacer { flex: 1; }
+  .top-in .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .gate { position: relative; max-width: 880px; margin: 0 auto; padding: 18px 16px 34px; }
+  .gate-card { background: #fff; border: 3px solid var(--ink); border-radius: 24px; padding: 20px clamp(16px, 4vw, 30px) 18px; box-shadow: 6px 6px 0 var(--ink); max-width: 720px; }
+  .gate-card h1 { font: 800 clamp(28px, 5vw, 42px)/1.08 var(--display); margin: 0 0 10px; }
+  .tour-word { display: inline-block; background: var(--pink); color: #fff; padding: 0 14px; border-radius: 999px; transform: rotate(-4deg); margin-right: 4px; box-shadow: 2px 2px 0 var(--ink); }
+  .num { color: var(--grape-dark); }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0; font: 14px/1.5 var(--ui); color: var(--ink-soft); }
+  .ok { color: var(--ok); font-weight: 700; }
+  .bad { color: var(--bad); font-weight: 700; }
+  .pill { font: 700 12px var(--ui); padding: 2px 10px; border-radius: 999px; background: var(--lemon); color: var(--ink); }
+
+  /* rail: a winding path of ride bubbles */
+  .rail-wrap { position: sticky; top: 0; z-index: 10; background: rgba(255,246,234,.96); backdrop-filter: blur(4px); border-bottom: 3px solid var(--ink); }
+  .rail { max-width: 880px; margin: 0 auto; padding: 10px 16px 10px; display: flex; gap: 14px; overflow-x: auto; align-items: flex-end; }
+  .grp { flex: none; display: grid; gap: 6px; }
+  .grp-label { display: inline-flex; align-items: center; gap: 4px; justify-self: start; font: 800 13px var(--display); color: #fff; background: var(--c); padding: 0 10px; border-radius: 999px; white-space: nowrap; }
+  .grp-label.dark { color: var(--ink); }
+  .segs { display: flex; gap: 6px; align-items: center; height: 46px; position: relative; padding: 0 4px; }
+  .segs::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 10px; margin-top: -5px; border-radius: 6px; background: repeating-linear-gradient(90deg, #f2d9b5 0 8px, #ead0a8 8px 16px); }
+  .ride { position: relative; width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 3px solid var(--c); background: #fff; cursor: pointer; display: grid; place-items: center; font: 800 14px/1 var(--display); color: var(--ink); }
+  .ride:nth-child(even) { transform: translateY(-7px); }
+  .ride:nth-child(odd) { transform: translateY(5px); }
+  .ride[data-state="done"] { background: var(--c); color: #fff; border-color: var(--ink); }
+  .ride[data-state="current"] { width: 38px; height: 38px; background: var(--lemon); border: 3px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+  .ride[data-state="current"]::before { content: "you are here"; position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); white-space: nowrap; font: 800 10px/1 var(--display); background: var(--ink); color: #fff; padding: 3px 6px; border-radius: 999px; }
+  .ride[data-state="ahead"] { border: 3px dashed #c8b9a2; background: #fffaf2; color: #9a8b74; cursor: not-allowed; }
+  .legend { max-width: 880px; margin: 0 auto; padding: 0 16px 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 13px var(--ui); color: var(--ink-soft); }
+  .legend i { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--tangerine); margin-right: 5px; vertical-align: -2px; background: #fff; }
+  .legend .d { background: var(--tangerine); border-color: var(--ink); } .legend .c { background: var(--lemon); border-color: var(--ink); } .legend .a { border: 2px dashed #c8b9a2; }
+
+  main { max-width: 880px; margin: 0 auto; padding: 8px 16px 80px; }
+  .cap { margin: 44px 0 12px; display: flex; align-items: center; gap: 10px; font: 800 22px/1 var(--display); color: var(--ink); }
+  .cap .land { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--c); border: 3px solid var(--ink); }
+  .cap .land svg { width: 24px; height: 24px; }
+  .cap small { font: 700 14px var(--ui); color: var(--ink-soft); }
+
+  .sheet { position: relative; background: var(--card); border: 3px solid var(--ink); border-radius: 26px; padding: 30px clamp(18px, 5vw, 46px) 28px; box-shadow: 8px 8px 0 var(--c, var(--grape)); }
+
+  .eyebrow { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 12px; font: 15px var(--ui); color: var(--ink-soft); }
+  .tag { position: relative; font: 800 15px/1 var(--display); padding: 7px 18px 5px; color: #fff; background: var(--c, var(--grape)); border-radius: 4px;
+    -webkit-mask: radial-gradient(circle 6px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 6px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+    mask: radial-gradient(circle 6px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 6px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat; }
+  .tag.dark { color: var(--ink); }
+  .title { font: 800 clamp(28px, 4.6vw, 38px)/1.12 var(--display); margin: 0 0 10px; }
+  .lead { font-size: 19px; line-height: 1.55; color: #3c3352; margin: 0 0 20px; max-width: 64ch; }
+  .body p { margin: 0 0 14px; max-width: 68ch; }
+
+  .return { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 20px; padding: 10px 12px 10px 14px; background: #f3edff; border: 2px solid var(--grape); border-radius: 14px; font: 700 15px var(--ui); }
+
+  .agenda { list-style: none; margin: 22px 0; padding: 0; display: grid; gap: 10px; }
+  .agenda li { display: grid; grid-template-columns: 48px 1fr; gap: 0 14px; align-items: center; padding: 10px 14px 10px 10px; border-radius: 18px; background: var(--bg); border: 2px solid var(--c); }
+  .agenda .icon { grid-row: span 2; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--c); border: 3px solid var(--ink); }
+  .agenda .icon svg { width: 28px; height: 28px; }
+  .agenda .stage { font: 800 13px var(--display); color: var(--cd); }
+  .agenda .name { font: 700 18px/1.3 var(--ui); }
+  .budget { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 24px; }
+  .budget div { text-align: center; padding: 10px 6px; border-radius: 18px; border: 3px solid var(--ink); background: var(--c); }
+  .budget b { display: block; font: 800 32px/1 var(--display); }
+  .budget span { font: 700 14px var(--ui); }
+  .cover-actions { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+
+  .figure { margin: 0 0 22px; }
+  .frame { border-radius: 20px; overflow: hidden; border: 3px solid var(--ink); background: #e9f8ff; }
+  .frame svg { display: block; width: 100%; height: auto; }
+  .micro { margin-top: 16px; border: 3px solid var(--ink); border-radius: 20px; overflow: hidden; }
+  .micro-h { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; padding: 6px 14px; font: 800 15px var(--display); color: #fff; background: var(--mint-dark); }
+  .micro-h span:last-child { font: 700 14px var(--ui); }
+  .micro-b { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 14px; font: 14px var(--ui); background: #fff; }
+  .micro-b label { display: grid; gap: 4px; color: var(--ink-soft); font-weight: 700; }
+  .micro-b input { height: 32px; padding: 0 8px; font: 13px var(--mono); border: 2px solid #d8cbe6; border-radius: 8px; width: 180px; max-width: 100%; color: var(--ink); }
+  .micro-b output { padding: 6px 12px; border-radius: 999px; background: #d8f6ec; color: #0b5c47; font-weight: 700; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px 0; }
+  .chip { font: 700 14px var(--ui); padding: 3px 12px; border-radius: 999px; background: #fff3c4; color: #6b5300; border: 0; }
+  .chip.link { background: #fff; color: var(--pink-dark); border: 2px solid var(--pink); cursor: pointer; padding: 1px 11px; }
+  .chip.link:hover { background: #fff0f6; }
+  .note { margin: 18px 0; display: grid; gap: 6px; }
+  .note label { font: 700 15px var(--ui); }
+  .note label .hint { font-weight: 400; margin-left: 6px; }
+  textarea { width: 100%; font: 16px/1.5 var(--ui); color: var(--ink); padding: 8px 12px; border: 2px solid #d8cbe6; border-radius: 12px; resize: vertical; }
+  textarea::placeholder { color: #75698a; }
+
+  .code { margin-top: 12px; border: 2px solid #d0d7de; border-radius: 14px; overflow: hidden; }
+  .tabs { display: flex; gap: 4px; padding: 6px 6px 0; background: #f6f8fa; border-bottom: 1px solid #d0d7de; }
+  .tab { font: 700 14px var(--ui); padding: 6px 12px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--ink-soft); cursor: pointer; margin-bottom: -1px; }
+  .tab[aria-selected="true"] { background: #fff; border-color: #d0d7de; color: var(--ink); box-shadow: inset 0 3px 0 var(--pink); }
+  .code-body { padding: 14px; }
+  .code-body p { margin: 0 0 12px; font-size: 16px; }
+  .file { font: 500 12px var(--mono); padding: 6px 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-bottom: 0; border-radius: 6px 6px 0 0; }
+  .diff { font: 13px/1.6 var(--mono); border: 1px solid #d0d7de; border-radius: 0 0 6px 6px; overflow-x: auto; }
+  .diff div { padding: 0 10px; white-space: pre; }
+  .diff .hunk { background: #ddf4ff; color: #3b5068; }
+  .diff .add { background: #dafbe1; color: #11421f; }
+  .diff .del { background: #ffebe9; color: #7a1c12; }
+
+  .nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 26px; padding: 10px 12px; background: #fff3c4; border: 2px solid var(--ink); border-radius: 16px; }
+  .nav .pos { font: 800 16px var(--display); }
+
+  .anchor { margin: -6px 0 18px; font-size: 14px; }
+  .anchor span { padding: 2px 8px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; }
+  .mynote { margin: 0 0 20px; padding: 10px 14px; background: #fff3c4; border-radius: 14px; font-size: 16px; transform: rotate(-.5deg); border: 2px dashed #e0b800; }
+  .mynote b { display: block; font: 800 15px var(--display); color: #6b5300; }
+  .opts { display: grid; gap: 10px; margin-bottom: 20px; }
+  .opt { text-align: left; display: grid; gap: 4px; padding: 14px 16px 14px 56px; position: relative; border: 2px solid var(--line); border-radius: 18px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; }
+  .opt::before { content: ""; position: absolute; left: 16px; top: 16px; width: 24px; height: 24px; border-radius: 50%; border: 3px solid #b9aac9; background: #fff; }
+  .opt:hover { border-color: #cdbde0; }
+  .opt[aria-checked="true"] { border: 3px solid var(--ink); padding: 13px 15px 13px 55px; background: #f2fcf8; box-shadow: 4px 4px 0 var(--mint); }
+  .opt[aria-checked="true"]::before { left: 15px; top: 15px; border-color: var(--ink); background: var(--mint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%232b2140' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat; }
+  .opt-k { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font: 800 14px var(--display); color: var(--ink-soft); }
+  .mark { font: 700 12px var(--ui); padding: 1px 8px; border-radius: 999px; }
+  .mark.now { background: #f0eaf7; color: var(--ink); }
+  .mark.rec { background: var(--pink-dark); color: #fff; }
+  .opt-l { font: 800 19px/1.25 var(--display); }
+  .opt-c { font-size: 16px; color: #463d5c; }
+
+  .card { border-radius: 18px; padding: 14px 16px; background: #eefbf6; border: 2px solid var(--mint); margin-bottom: 18px; font-size: 16px; }
+  .card-h { font: 800 15px var(--display); color: var(--mint-dark); margin-bottom: 4px; }
+  .card ol, .card ul { margin: 0 0 10px; padding-left: 22px; }
+  .card label { font: 700 15px var(--ui); display: inline-flex; gap: 8px; align-items: center; }
+  .card input { accent-color: var(--grape); width: 18px; height: 18px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font: 800 18px var(--display); color: var(--ok); }
+  .hint-row { margin-top: 12px; }
+
+  .q { font: 800 clamp(24px, 4vw, 30px)/1.22 var(--display); margin: 0 0 18px; }
+  .qopts { display: grid; gap: 10px; margin-bottom: 18px; }
+  .qopt { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; text-align: left; padding: 12px 14px; border: 2px solid var(--line); border-radius: 18px; background: #fff; color: var(--ink); font: 17px/1.45 var(--ui); cursor: pointer; }
+  .qopt::before { content: attr(data-n); width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font: 800 18px var(--display); background: var(--lemon); border: 2px solid var(--ink); }
+  .qopt[data-result="wrong"] { border: 3px solid var(--bad); background: #fff1f0; padding: 11px 13px; }
+  .qopt[data-result="wrong"]::before { background: var(--bad); color: #fff; }
+  .res { font: 800 15px var(--display); color: var(--bad); }
+  .why { padding: 14px 16px; border-radius: 18px; border: 2px solid #f3a9a3; background: #fff1f0; }
+  .why .actions { margin-top: 10px; }
+
+  .sec { font: 800 20px var(--display); color: var(--pink-dark); margin: 24px 0 6px; }
+  .plan-list { margin: 0; padding-left: 22px; }
+  .where { display: inline-block; font: 12px var(--mono); background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 1px 6px; color: var(--ink-soft); }
+  .kept { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .kept li { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 16px; padding: 10px 14px; border-radius: 14px; background: #f2fcf8; border: 2px solid #bfeedd; font-size: 16px; }
+  .kept li span:first-child { font-weight: 700; }
+  .plan-actions { margin-top: 22px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    .budget { grid-template-columns: repeat(2, 1fr); }
+    .kept li { grid-template-columns: 1fr; }
+    .lead { font-size: 17px; }
+    .nav .pos { display: none; }
+    .sheet { box-shadow: 5px 5px 0 var(--c, var(--grape)); }
+  }
+</style>
+</head>
+<body>
+<div class="proto">Prototype 10 · Theme Park Map <a href="index.html">all designs</a></div>
+
+<!-- land icons, reused below -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="castle" viewBox="0 0 24 24"><path d="M3 21V9h2V6h2v3h2V6h2v3h2V6h2v3h2V6h2v3h2v12h-7v-5a2 2 0 0 0-4 0v5Z" fill="#fff" stroke="#2b2140" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 2v4" stroke="#2b2140" stroke-width="1.4"/><path d="M12 2h4l-1 1 1 1h-4" fill="#ffd93b" stroke="#2b2140" stroke-width="1"/></symbol>
+  <symbol id="wheel" viewBox="0 0 24 24"><circle cx="12" cy="10" r="7.5" fill="#fff" stroke="#2b2140" stroke-width="1.4"/><path d="M12 2.5v15M4.5 10h15M6.7 4.7l10.6 10.6M17.3 4.7 6.7 15.3" stroke="#2b2140" stroke-width="1"/><circle cx="12" cy="10" r="1.6" fill="#2b2140"/><path d="M8 22l4-12 4 12" fill="none" stroke="#2b2140" stroke-width="1.4"/></symbol>
+  <symbol id="coaster" viewBox="0 0 24 24"><path d="M2 18c3-12 6-12 8-4s4 6 6-2 4-6 6-2" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><path d="M2 18c3-12 6-12 8-4s4 6 6-2 4-6 6-2" fill="none" stroke="#2b2140" stroke-width="1.4" stroke-linecap="round"/><path d="M5 21v-6M10 21v-6M15 21v-8M20 21v-8" stroke="#2b2140" stroke-width="1.2"/></symbol>
+  <symbol id="flag" viewBox="0 0 24 24"><path d="M3 22V9h18v13" fill="#fff" stroke="#2b2140" stroke-width="1.4"/><path d="M3 9l9-6 9 6" fill="none" stroke="#2b2140" stroke-width="1.4"/><path d="M12 3v-1M12 2h5l-1.2 1.2L17 4.4h-5" fill="#ffd93b" stroke="#2b2140" stroke-width="1"/><path d="M9 22v-7h6v7" fill="#ffd93b" stroke="#2b2140" stroke-width="1.4"/></symbol>
+  <symbol id="ticket" viewBox="0 0 24 24"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4Z" fill="#fff" stroke="#2b2140" stroke-width="1.4" stroke-linejoin="round"/><path d="M14 7v10" stroke="#2b2140" stroke-width="1.2" stroke-dasharray="1.5 1.5"/></symbol>
+  <symbol id="balloon" viewBox="0 0 24 24"><ellipse cx="12" cy="9" rx="6" ry="7" fill="#fff" stroke="#2b2140" stroke-width="1.4"/><path d="M12 16l-1 2h2Zm0 2c0 2-2 2-1 4" fill="none" stroke="#2b2140" stroke-width="1.2"/><path d="M9 6a3 3 0 0 1 3-2" stroke="#2b2140" stroke-width="1" fill="none"/></symbol>
+</svg>
+
+<header>
+  <svg class="map" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <rect width="1200" height="300" fill="#bfe8ff"/>
+    <path d="M0 300V180q120-50 260-10t280-20 300 10 360-30v170Z" fill="#a6e3b8"/>
+    <path d="M0 300V230q200-40 400 0t400-10 400 10v70Z" fill="#7fd29c"/>
+    <path d="M-20 270q180-60 340-20t320-40 300 30 300-40" fill="none" stroke="#f2d9b5" stroke-width="22" stroke-linecap="round"/>
+    <path d="M-20 270q180-60 340-20t320-40 300 30 300-40" fill="none" stroke="#ead0a8" stroke-width="22" stroke-dasharray="10 12"/>
+    <g opacity=".95">
+      <circle cx="1020" cy="120" r="56" fill="none" stroke="#7b4ddb" stroke-width="6"/><path d="M1020 64v112M964 120h112M980 80l80 80M1060 80l-80 80" stroke="#7b4ddb" stroke-width="3"/><path d="M990 240l30-120 30 120" fill="none" stroke="#2b2140" stroke-width="5"/>
+      <g fill="#ff4f9a"><circle cx="1020" cy="64" r="9"/><circle cx="1076" cy="120" r="9"/><circle cx="1020" cy="176" r="9"/><circle cx="964" cy="120" r="9"/></g>
+      <path d="M860 230c20-80 40-80 55-30s30 40 45-10" fill="none" stroke="#ff8a2b" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="140" cy="60" r="22" fill="#ffd93b"/>
+      <ellipse cx="300" cy="70" rx="44" ry="16" fill="#fff"/><ellipse cx="330" cy="60" rx="30" ry="16" fill="#fff"/>
+      <ellipse cx="760" cy="50" rx="38" ry="13" fill="#fff"/>
+      <g transform="translate(1130 40)"><ellipse cx="0" cy="0" rx="16" ry="19" fill="#2ec4a0" stroke="#2b2140" stroke-width="2"/><path d="M0 19c0 12-4 14 0 24" stroke="#2b2140" stroke-width="1.5" fill="none"/></g>
+    </g>
+  </svg>
+  <div class="top-in">
+    <a class="wordmark" href="#">
+      <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#ff4f9a" stroke="#2b2140" stroke-width="1.6"/><use href="#balloon" x="4" y="3.5" width="16" height="16"/></svg>
+      pr-review
+    </a>
+    <a class="project" href="#">vintasoftware/pr-review-canvas</a>
+    <span class="spacer"></span>
+    <div class="actions">
+      <a class="btn" href="#">canvas</a>
+      <button class="btn" type="button">regenerate tour</button>
+      <button class="btn" type="button">export zip</button>
+      <button class="btn" type="button">help</button>
+      <button class="btn icon" type="button" aria-label="Switch to dark theme"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M9.6 1.2a6.8 6.8 0 1 0 5.2 9.9A5.6 5.6 0 0 1 9.6 1.2Z"/></svg></button>
+    </div>
+  </div>
+  <div class="gate"><div class="gate-card">
+    <h1><span class="tour-word">Tour</span> <span class="num">#101</span> Carry reader picks across regenerated tours</h1>
+    <p class="meta">
+      <span>by <a href="#">fjsj</a></span>
+      <span class="mono">fjsj/carry-picks → main</span>
+      <span><span class="ok">+412</span> <span class="bad">−87</span></span>
+      <span class="pill">tour by claude · opus-5.5 · acpx</span>
+      <span>generated 3 minutes ago</span>
+    </p>
+  </div></div>
+</header>
+
+<div class="rail-wrap">
+  <nav class="rail" aria-label="Tour progress">
+    <div class="grp" style="--c: var(--pink-dark)"><span class="grp-label">gate</span><div class="segs"><button class="ride" data-state="done" aria-label="Cover, done">✓</button></div></div>
+    <div class="grp" style="--c: var(--tangerine-dark)"><span class="grp-label">5 landmarks</span><div class="segs">
+      <button class="ride" data-state="done" aria-label="Landmark 1, done">✓</button>
+      <button class="ride" data-state="done" aria-label="Landmark 2, done">✓</button>
+      <button class="ride" data-state="current" aria-current="step" aria-label="Landmark 3, you are here">3</button>
+      <button class="ride" data-state="open" aria-label="Landmark 4, open">4</button>
+      <button class="ride" data-state="open" aria-label="Landmark 5, open">5</button>
+    </div></div>
+    <div class="grp" style="--c: var(--mint-dark)"><span class="grp-label">3 decisions</span><div class="segs">
+      <button class="ride" data-state="ahead" disabled aria-label="Decision 1, ahead">1</button>
+      <button class="ride" data-state="ahead" disabled aria-label="Decision 2, ahead">2</button>
+      <button class="ride" data-state="ahead" disabled aria-label="Decision 3, ahead">3</button>
+    </div></div>
+    <div class="grp" style="--c: var(--lemon)"><span class="grp-label dark">2 questions</span><div class="segs">
+      <button class="ride" data-state="ahead" disabled aria-label="Question 1, ahead">?</button>
+      <button class="ride" data-state="ahead" disabled aria-label="Question 2, ahead">?</button>
+    </div></div>
+    <div class="grp" style="--c: var(--grape)"><span class="grp-label">plan</span><div class="segs"><button class="ride" data-state="ahead" disabled aria-label="Plan, ahead">★</button></div></div>
+  </nav>
+  <div class="legend" aria-hidden="true"><span><i class="d"></i>ridden</span><span><i class="c"></i>you are here</span><span><i></i>open</span><span><i class="a"></i>opens later</span></div>
+</div>
+
+<main>
+  <p class="cap" style="--c: var(--pink)"><span class="land"><svg><use href="#ticket"/></svg></span>Cover <small>· the front gate</small></p>
+  <section class="sheet" style="--c: var(--pink)">
+    <p class="eyebrow"><span class="tag" style="--c: var(--pink-dark)">Tour</span><span><a href="#">#101</a> · vintasoftware/pr-review-canvas</span></p>
+    <h2 class="title">Carry reader picks across regenerated tours</h2>
+    <p class="meta"><span>by fjsj</span><span class="mono">fjsj/carry-picks → main</span><span><span class="ok">+412</span> <span class="bad">−87</span> in 14 files</span><span>guide: <code>docs/tour-guide.md</code></span><span>touches: tour store, tour page, chat</span></p>
+    <ol class="agenda">
+      <li style="--c: var(--grape); --bg: #f5f0ff; --cd: var(--grape-dark)"><span class="icon"><svg><use href="#castle"/></svg></span><span class="stage">Before this change · Castle Land</span><span class="name">Picks lived and died with one tour</span></li>
+      <li style="--c: var(--mint); --bg: #ecfbf6; --cd: var(--mint-dark)"><span class="icon"><svg><use href="#wheel"/></svg></span><span class="stage">The world · Wheel Plaza</span><span class="name">A decision key outlives its tour</span></li>
+      <li style="--c: var(--tangerine); --bg: #fff3e8; --cd: var(--tangerine-dark)"><span class="icon"><svg><use href="#coaster"/></svg></span><span class="stage">Why · Coaster Hill</span><span class="name">Keys come from the anchor, not the title</span></li>
+      <li style="--c: var(--tangerine); --bg: #fff3e8; --cd: var(--tangerine-dark)"><span class="icon"><svg><use href="#coaster"/></svg></span><span class="stage">Why · Coaster Hill</span><span class="name">Stale picks wait instead of vanishing</span></li>
+      <li style="--c: var(--pink); --bg: #fff0f6; --cd: var(--pink-dark)"><span class="icon"><svg><use href="#flag"/></svg></span><span class="stage">What to respect · The Gatehouse</span><span class="name">Never carry a pick across a changed anchor</span></li>
+    </ol>
+    <div class="budget">
+      <div style="--c: #ffd6a8"><b>5</b><span>landmarks</span></div>
+      <div style="--c: #bff0e0"><b>3</b><span>decisions</span></div>
+      <div style="--c: #fff0a6"><b>2</b><span>questions</span></div>
+      <div style="--c: #e2d6ff"><b>~12</b><span>minutes</span></div>
+    </div>
+    <div class="cover-actions">
+      <button class="btn fill big" type="button">start the tour</button>
+      <span class="hint"><kbd>→</kbd> next · <kbd>←</kbd> back · <kbd>i</kbd> code · <kbd>?</kbd> help</span>
+    </div>
+  </section>
+
+  <p class="cap" style="--c: var(--tangerine)"><span class="land"><svg><use href="#coaster"/></svg></span>Landmark <small>· Coaster Hill</small></p>
+  <section class="sheet" style="--c: var(--tangerine)">
+    <div class="return"><span>Jumped from landmark 2. Decide now, or go back and keep reading.</span><button class="btn" type="button">back to the landmark</button></div>
+    <p class="eyebrow"><span class="tag" style="--c: var(--tangerine-dark)">Why</span><span>landmark 3 of 5</span></p>
+    <h2 class="title">Keys come from the anchor, not the title</h2>
+    <p class="lead">A decision's key is a hash of its file and the code around it, so renaming the decision keeps the reader's pick.</p>
+    <figure class="figure">
+      <div class="frame">
+        <svg viewBox="0 0 640 230" role="img" aria-label="Two tours, a1b2c3 and d4e5f6, each with a decision card; the same key carries the pick">
+          <path d="M0 230v-40q160-30 320 0t320 0v40Z" fill="#a6e3b8"/>
+          <g font-family="Atkinson Hyperlegible, system-ui" fill="#2b2140">
+            <rect x="30" y="26" width="220" height="160" rx="22" fill="#fff" stroke="#2b2140" stroke-width="3"/>
+            <rect x="30" y="26" width="220" height="36" rx="18" fill="#7b4ddb" stroke="#2b2140" stroke-width="3"/>
+            <text x="140" y="50" font-size="17" font-family="Baloo 2" font-weight="800" fill="#fff" text-anchor="middle">tour @ a1b2c3</text>
+            <text x="48" y="88" font-size="13" fill="#5b5170">decision</text>
+            <text x="48" y="112" font-size="17" font-weight="700">Hash the anchor?</text>
+            <text x="48" y="138" font-size="12" font-family="Fira Code, monospace" fill="#5a2fb8">key 7f3e…c1</text>
+            <rect x="48" y="150" width="64" height="24" rx="12" fill="#2ec4a0" stroke="#2b2140" stroke-width="2"/><text x="80" y="167" font-size="13" font-weight="700" text-anchor="middle">kept ✓</text>
+            <rect x="390" y="26" width="220" height="160" rx="22" fill="#fff" stroke="#2b2140" stroke-width="3"/>
+            <rect x="390" y="26" width="220" height="36" rx="18" fill="#ff4f9a" stroke="#2b2140" stroke-width="3"/>
+            <text x="500" y="50" font-size="17" font-family="Baloo 2" font-weight="800" fill="#fff" text-anchor="middle">tour @ d4e5f6</text>
+            <text x="408" y="88" font-size="13" fill="#5b5170">decision</text>
+            <text x="408" y="112" font-size="17" font-weight="700">Anchor or title?</text>
+            <text x="408" y="138" font-size="12" font-family="Fira Code, monospace" fill="#5a2fb8">key 7f3e…c1</text>
+            <rect x="408" y="150" width="64" height="24" rx="12" fill="#2ec4a0" stroke="#2b2140" stroke-width="2"/><text x="440" y="167" font-size="13" font-weight="700" text-anchor="middle">kept ✓</text>
+            <path d="M256 150 C 280 40, 300 40, 312 110 S 350 170, 384 90" fill="none" stroke="#ff8a2b" stroke-width="6" stroke-linecap="round"/>
+            <g transform="translate(372 96) rotate(-50)"><rect x="-12" y="-8" width="24" height="16" rx="5" fill="#ffd93b" stroke="#2b2140" stroke-width="2"/></g>
+            <rect x="216" y="194" width="208" height="28" rx="14" fill="#2b2140"/>
+            <text x="320" y="213" font-size="14" text-anchor="middle" font-weight="700" fill="#fff">same key → pick carried</text>
+          </g>
+        </svg>
+      </div>
+      <div class="micro">
+        <div class="micro-h"><span>micro-world</span><span>try it: change the inputs</span></div>
+        <div class="micro-b">
+          <label>anchor path<input value="src/tour/keys.ts" aria-label="anchor path"></label>
+          <label>decision title<input value="Anchor or title?" aria-label="decision title"></label>
+          <output>key 7f3e…c1 · pick carried</output>
+        </div>
+      </div>
+    </figure>
+    <div class="body">
+      <p>When the tour is generated again, every decision gets a fresh title. If the key came from the title, a reworded decision would look new, and the reader's earlier keep or change would be lost. So <code>decisionKey()</code> hashes the anchor path and the three lines around it.</p>
+      <p>This means a decision moves with its code. Move the function to another file and the key changes on purpose: the reader should look again, because the code they judged is gone.</p>
+    </div>
+    <div class="chips"><span class="chip">one decision waits here</span><button class="chip link" type="button">Hash the anchor, or the title? →</button></div>
+    <div class="note">
+      <label for="note-3">Something I noticed <span class="hint">optional</span></label>
+      <textarea id="note-3" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions"></textarea>
+    </div>
+    <div class="actions"><button class="btn" type="button">hide code <kbd>i</kbd></button></div>
+    <div class="code">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" type="button">literate diff</button>
+        <button class="tab" role="tab" aria-selected="false" type="button">raw diff</button>
+      </div>
+      <div class="code-body">
+        <p>The title is gone from the key. What the reader judged was the code, so the key is the code: the anchor's path and the lines around it.</p>
+        <div class="file">src/tour/keys.ts</div>
+        <div class="diff"><div class="hunk">@@ -12,7 +12,11 @@ export function decisionKey(d: Decision): string {</div><div class="del">-  return slug(d.title)</div><div class="add">+  const around = linesAround(d.anchor, 3)</div><div class="add">+  return sha1(`${d.anchor.path}\n${around}`).slice(0, 12)</div><div> }</div></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn" type="button">← back</button>
+      <span class="pos">ride 3 of 5</span>
+      <button class="btn fill" type="button">next: landmark 4 →</button>
+    </div>
+  </section>
+
+  <p class="cap" style="--c: var(--mint)"><span class="land"><svg><use href="#wheel"/></svg></span>Decision <small>· pick your ride</small></p>
+  <section class="sheet" style="--c: var(--mint)">
+    <p class="eyebrow"><span class="tag" style="--c: var(--mint-dark)">Architecture</span><span>decision 1 of 3</span><a href="#">from landmark 3: Keys come from the anchor, not the title</a></p>
+    <h2 class="title">Hash the anchor, or the title?</h2>
+    <p class="lead">The key decides which picks survive a regenerated tour. The anchor is stable while the code is; the title changes with every generation.</p>
+    <p class="anchor"><span class="mono">src/tour/keys.ts:14</span></p>
+    <div class="mynote"><b>Your note on landmark 3</b>What if two decisions share an anchor?</div>
+    <div class="opts" role="radiogroup" aria-label="Keep, the alternative, or something else">
+      <button class="opt" type="button" role="radio" aria-checked="true">
+        <span class="opt-k"><span>keep</span><span class="mark now">what the code does</span><span class="mark rec">♥ the tour recommends</span></span>
+        <span class="opt-l">Hash the anchor path and nearby lines</span>
+        <span class="opt-c">Picks survive rewording. A moved function asks the reader again.</span>
+      </button>
+      <button class="opt" type="button" role="radio" aria-checked="false">
+        <span class="opt-k"><span>alternative</span></span>
+        <span class="opt-l">Hash the decision title</span>
+        <span class="opt-c">Simpler, but every regeneration that rewords a title drops the pick.</span>
+      </button>
+      <button class="opt" type="button" role="radio" aria-checked="false">
+        <span class="opt-k"><span>something else</span></span>
+        <span class="opt-l">Something else</span>
+        <span class="opt-c">Neither side: say what you want instead, then approve it as restated.</span>
+      </button>
+    </div>
+    <div class="card">
+      <div class="card-h">try it · verified when this tour was generated</div>
+      <ol><li><code>pnpm start --repo .</code></li><li>Regenerate the tour of #101 and open decision 1</li></ol>
+      <ul><li>The pick you made is still selected</li></ul>
+      <label><input type="checkbox"> I tried it</label>
+    </div>
+    <div class="actions"><span class="state">✓ kept</span><button class="btn" type="button">undo</button></div>
+    <p class="hint hint-row">pick one: <kbd>k</kbd> keep · <kbd>a</kbd> alternative · <kbd>c</kbd> something else</p>
+  </section>
+
+  <p class="cap" style="--c: var(--lemon)"><span class="land"><svg><use href="#balloon"/></svg></span>Quiz <small>· the games booth</small></p>
+  <section class="sheet" style="--c: var(--lemon)">
+    <p class="eyebrow"><span class="tag dark" style="--c: var(--lemon)">Quiz</span><span>question 1 of 2</span><span>private · stays on this machine</span></p>
+    <h2 class="q">You move <code>decisionKey()</code> into another file. What happens to the reader's picks?</h2>
+    <div class="qopts">
+      <button class="qopt" type="button" data-n="1"><span>They carry over: the key ignores the path.</span><span></span></button>
+      <button class="qopt" type="button" data-n="2" data-result="wrong"><span>They carry over, because the title did not change.</span><span class="res">✗ your answer</span></button>
+      <button class="qopt" type="button" data-n="3"><span>They wait as stale: the key changed with the path.</span><span></span></button>
+    </div>
+    <div class="why">
+      <b>Not quite.</b> The key hashes the anchor path, so a move changes it, and the pick waits as stale for the reader to look again.
+      <div class="actions"><button class="btn wrap" type="button">reopen landmark 3: Keys come from the anchor, not the title</button><span class="hint">then answer again</span></div>
+    </div>
+  </section>
+
+  <p class="cap" style="--c: var(--grape)"><span class="land"><svg><use href="#flag"/></svg></span>Plan <small>· the exit</small></p>
+  <section class="sheet" style="--c: var(--grape)">
+    <p class="eyebrow"><span class="tag">The plan</span></p>
+    <h2 class="title">1 change to make, 2 kept</h2>
+    <p class="lead">Read it once. When you confirm, the prompt is written and the record is shared.</p>
+    <h3 class="sec">Changes</h3>
+    <ol class="plan-list"><li><b>Stale picks wait instead of vanishing</b><br>Show stale picks in a separate list on the plan. <span class="where">src/tour/plan.ts:40</span></li></ol>
+    <h3 class="sec">Kept</h3>
+    <ul class="kept">
+      <li><span>Hash the anchor path and nearby lines</span><span>Picks survive rewording. A moved function asks the reader again.</span></li>
+      <li><span>Carry picks by decision key</span><span>A regenerated tour keeps every pick whose key it still has.</span></li>
+    </ul>
+    <div class="actions plan-actions">
+      <button class="btn fill" type="button">confirm the plan</button>
+      <span class="hint">writes the prompt, shares the record</span>
+      <button class="btn" type="button">restate the plan with the agent</button>
+    </div>
+  </section>
+</main>
+</body>
+</html>
