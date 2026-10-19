@@ -129,12 +129,25 @@ describe('railHtml and navHtml', () => {
     document.body.innerHTML = railHtml(stepsOf(bundle), 0, changed, tourOf(bundle))
     expect(states()[7]).not.toBe('done')
     expect([...document.querySelectorAll('.tour-rail-label')].map(l => l.textContent)).toEqual([
-      '',
+      'start',
       '4 landmarks',
       '1 decision',
       '1 question',
-      '',
+      'plan',
     ])
+    // Each stop wears its sign: a check once visited, a landmark's number, D, ?, and the plan's star.
+    expect([...document.querySelectorAll('.tour-rail-seg > span')].map(s => s.textContent)).toEqual([
+      '▸',
+      '✓',
+      '2',
+      '3',
+      '4',
+      'D',
+      '?',
+      '★',
+    ])
+    expect(document.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('0')
+    expect(document.querySelector('.tour-rail-legend')?.getAttribute('aria-hidden')).toBe('true')
     expect(document.querySelector('.tour-rail-seg[data-state="ahead"]')?.hasAttribute('disabled')).toBe(true)
     document.body.innerHTML = railHtml(stepsOf(bundle), 2, bundle.reader, tourOf(bundle), { preview: true })
     expect(document.querySelector('.tour-rail-seg[data-state="ahead"]')).toBeNull()

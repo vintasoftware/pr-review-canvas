@@ -84,7 +84,7 @@ export function inline(text) {
  * The header's skyline: a row of buildings, the road, and the tour bus parked on it. Drawn with
  * classes, so the tour's tokens paint it in both themes.
  */
-const SKYLINE_HTML = `<svg class="tour-skyline" viewBox="0 0 1200 124" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+const SKYLINE_HTML = `<svg class="tour-skyline" viewBox="0 0 1200 124" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false">
 <g class="tour-sky-city"><path d="M0 124V74h40V54h30v20h20V34h12V14h4v20h12v40h30V59h50v65Z"/><path d="M260 124V64l40-30 40 30v60Z"/><path d="M360 124V44h20V24h10v20h20v80Z"/><path d="M440 124V79q40-50 80 0v45Z"/><path d="M560 124V54h60v70Z"/><path d="M585 54V26h10v28Z"/><path d="M660 124V69h30V39h20v30h40v55Z"/><path d="M800 124V84l30-50 30 50v40Z"/><path d="M900 124V49h50v75Z"/><path d="M960 124V74h70v50Z"/><path d="M1060 124V59h20V34l10-10 10 10v25h20v65Z"/><path d="M1140 124V79h60v45Z"/></g>
 <g class="tour-sky-cloud"><circle cx="150" cy="40" r="20"/><circle cx="1000" cy="30" r="14"/></g>
 <rect class="tour-sky-road" y="106" width="1200" height="18"/><rect class="tour-sky-lane" y="114" width="1200" height="2"/>
@@ -144,19 +144,21 @@ export function railHtml(steps, current, reader, tour, opts = {}) {
   const q = steps.filter(s => s.kind === 'quiz').length
   /** @type {Array<{ kind: Step['kind'], label: string }>} */
   const groups = [
-    { kind: 'cover', label: '' },
+    { kind: 'cover', label: 'start' },
     { kind: 'landmark', label: plural(tour.landmarks.length, 'landmark') },
     { kind: 'decision', label: plural(tour.decisions.length, 'decision') },
     ...(q === 0 ? [] : [{ kind: /** @type {const} */ ('quiz'), label: plural(q, 'question') }]),
-    { kind: 'plan', label: '' },
+    { kind: 'plan', label: 'plan' },
   ]
-  return `<nav class="tour-rail" aria-label="Tour progress">${groups
+  const nav = `<nav class="tour-rail" aria-label="Tour progress">${groups
     .map(g => {
       let segs = ''
+      let n = 0
       for (const [i, step] of steps.entries()) {
         if (step.kind !== g.kind) {
           continue
         }
+        n += 1
         const state =
           i === current
             ? 'current'
@@ -167,12 +169,89 @@ export function railHtml(steps, current, reader, tour, opts = {}) {
                 : 'ahead'
         // A tooltip shows text as it is, so the backticks that mark code in prose go.
         const title = esc(stepTitle(step).replaceAll('`', ''))
-        segs += `<button class="tour-rail-seg" type="button" data-step="${i}" data-state="${state}" title="${title}" aria-label="${title}"${state === 'ahead' ? ' disabled' : ''}></button>`
+        // The sign on the stop: a check once visited, else what kind of stop it is.
+        const sign = state === 'done' ? '✓' : STOP_SIGN[step.kind] || String(n)
+        segs += `<button class="tour-rail-seg" type="button" data-step="${i}" data-state="${state}" title="${title}" aria-label="${title}"${state === 'current' ? ' aria-current="step"' : ''}${state === 'ahead' ? ' disabled' : ''}><span aria-hidden="true">${sign}</span></button>`
       }
       const kind = g.kind === 'landmark' ? 'landmarks' : g.kind === 'decision' ? 'decisions' : g.kind
       return `<div class="tour-rail-group" data-kind="${kind}"><span class="tour-rail-label">${esc(g.label)}</span><div class="tour-rail-segs">${segs}</div></div>`
     })
     .join('')}</nav>`
+  // The legend repeats what each stop's label says, so screen readers skip it.
+  const legend =
+    '<div class="tour-rail-legend" aria-hidden="true"><span><i data-state="done"></i>visited</span><span><i data-state="current"></i>the bus is here</span><span><i data-state="open"></i>hop on any time</span><span><i data-state="ahead"></i>later on the route</span></div>'
+  return nav + legend
+}
+
+/** The sign on a stop that is not visited yet; a landmark's is its number. */
+const STOP_SIGN = { cover: '▸', landmark: '', decision: 'D', quiz: '?', plan: '★' }
+
+/**
+ * The ticket's strip over each screen: which stop this is on the route, what it is about, and a
+ * barcode for decoration. The page tints the strip by the kind of step.
+ * @param {TourBundle} bundle
+ * @param {Step[]} steps
+ * @param {number} i
+ */
+export function stripHtml(bundle, steps, i) {
+  const tour = bundle.tour
+  const step = steps[i]
+  const route = bundle.pr.number === null ? 'local' : String(bundle.pr.number)
+  /** @type {[string, string, string, string]} label, number, of, what */
+  const [label, number, of, what] =
+    tour === undefined || step === undefined
+      ? ['route', route, '', 'No tour yet · the bus has not set out']
+      : step.kind === 'cover'
+        ? [
+            'route',
+            route,
+            '',
+            `All-day pass · ${plural(steps.length, 'stop')} · about ${minutesOf(tour)} minutes`,
+          ]
+        : step.kind === 'landmark'
+          ? [
+              'stop',
+              String(tour.landmarks.indexOf(step.landmark) + 1),
+              `of ${tour.landmarks.length}`,
+              `${STAGE_LABEL[step.landmark.stage]} · ${step.landmark.title}`,
+            ]
+          : step.kind === 'decision'
+            ? [
+                'choice',
+                String(tour.decisions.indexOf(step.decision) + 1),
+                `of ${tour.decisions.length}`,
+                decisionWhere(tour, step.decision),
+              ]
+            : step.kind === 'quiz'
+              ? [
+                  'quiz',
+                  String(tour.quiz.indexOf(step.q) + 1),
+                  `of ${tour.quiz.length}`,
+                  'Private · stays on this machine',
+                ]
+              : ['last stop', '★', '', `The plan · ${planCount(bundle)}`]
+  return `<span class="tour-strip-no"><small>${label}</small><b>${esc(number)}</b>${of === '' ? '' : `<small>${of}</small>`}</span><span class="tour-strip-what">${plain(what.replaceAll('`', ''))}</span><span class="tour-strip-code" aria-hidden="true"></span>`
+}
+
+/**
+ * @param {TourPageTour} tour
+ * @param {Decision} d
+ */
+function decisionWhere(tour, d) {
+  const category = CATEGORY_LABEL[d.category] ?? d.category
+  const n = tour.landmarks.findIndex(l => l.id === d.landmark) + 1
+  return n === 0 ? category : `${category} · from landmark ${n}`
+}
+
+/**
+ * How the plan stands, in a few words: the changes to make and the decisions kept.
+ * @param {TourBundle} bundle
+ */
+function planCount(bundle) {
+  const tour = /** @type {TourPageTour} */ (bundle.tour)
+  const picks = tour.decisions.map(d => bundle.reader.picks[d.key]).filter(p => pickSettled(p))
+  const kept = picks.filter(p => p?.pick === 'keep').length
+  return `${plural(picks.length - kept, 'change')}, ${kept} kept`
 }
 
 /**
@@ -219,7 +298,10 @@ export function coverHtml(bundle) {
   const tour = /** @type {TourPageTour} */ (bundle.tour)
   // The route ahead, by landmark title: each landmark tells its own lead, so the cover tells none.
   const agenda = `<ol class="tour-agenda">${tour.landmarks
-    .map(l => `<li><span class="tour-agenda-stage">${esc(STAGE_LABEL[l.stage])}</span>${esc(l.title)}</li>`)
+    .map(
+      l =>
+        `<li><span class="tour-agenda-stage">${esc(STAGE_LABEL[l.stage])}</span><span class="tour-agenda-name">${esc(l.title)}</span></li>`
+    )
     .join('')}</ol>`
   const guide =
     tour.guide === null
@@ -486,7 +568,12 @@ export function quizHtml(bundle, q) {
     <div class="tour-quiz-opts">${q.options
       .map((o, i) => {
         const result = a && a.answered === i ? (a.right ? 'right' : 'wrong') : ''
-        return `<button class="tour-quiz-opt" type="button" data-act="answer" data-i="${i}" data-n="${i + 1}"${result === '' ? '' : ` data-result="${result}"`}${a?.right ? ' disabled' : ''}>${inline(o)}</button>`
+        // The answer says how it went in words too, so a wrong one is not told by red alone.
+        const mark =
+          result === ''
+            ? ''
+            : `<span class="tour-quiz-res">${result === 'right' ? '✓ right' : '✗ your answer'}</span>`
+        return `<button class="tour-quiz-opt" type="button" data-act="answer" data-i="${i}" data-n="${i + 1}"${result === '' ? '' : ` data-result="${result}"`}${a?.right ? ' disabled' : ''}><span>${inline(o)}</span>${mark}</button>`
       })
       .join('')}</div>
     ${after}`

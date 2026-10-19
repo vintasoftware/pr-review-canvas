@@ -35,6 +35,7 @@ import {
   quizHtml,
   railHtml,
   staleBarHtml,
+  stripHtml,
   tourHeaderHtml,
 } from './screens.js'
 import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf } from './steps.js'
@@ -268,7 +269,7 @@ export class PrTourElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<main id="main" class="home">${missingHtml(bundle)}</main>` +
+        `<main id="main" class="tour-main"><div class="tour-ticket"><div class="tour-strip">${stripHtml(bundle, [], 0)}</div><div class="tour-stage">${missingHtml(bundle)}</div></div></main>` +
         footerHtml(boot.version)
       this.wireCommands()
       this.startPolling()
@@ -285,8 +286,10 @@ export class PrTourElement extends HTMLElement {
       header +
       bannerHtml(bundle.warnings) +
       staleBarHtml(bundle) +
-      '<div id="rail"></div>' +
-      '<main id="main" class="tour-main"><div class="tour-stage" id="stage"></div></main>' +
+      '<div class="tour-rail-wrap" id="rail"></div>' +
+      // Each screen is a ticket: a strip that says which stop it is, then the stop itself.
+      '<main id="main" class="tour-main"><div class="tour-ticket"><div class="tour-strip" id="strip"></div>' +
+      '<section class="tour-stage" id="stage"></section></div></main>' +
       '<nav class="tour-nav" id="nav" aria-label="Tour navigation"></nav>' +
       `<dialog class="tour-chat" id="${GRILL_DIALOG_ID}" aria-label="Something else"></dialog>` +
       '<dialog class="tour-help" id="help-dialog" aria-label="Tour help"></dialog>' +
@@ -370,6 +373,7 @@ export class PrTourElement extends HTMLElement {
     )
     const stage = /** @type {HTMLElement} */ (qs('#stage', this))
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))
+    const strip = /** @type {HTMLElement} */ (qs('#strip', this))
     const nav = /** @type {HTMLElement} */ (qs('#nav', this))
     const step = /** @type {Step} */ (this.steps[this.current])
     // The kind of step on screen, for the layout: the cover drops the header's title.
@@ -396,6 +400,7 @@ export class PrTourElement extends HTMLElement {
     } else {
       stage.innerHTML = planHtml(bundle)
     }
+    strip.innerHTML = stripHtml(bundle, this.steps, this.current)
     rail.innerHTML = railHtml(this.steps, this.current, bundle.reader, bundle.tour, {
       preview: bundle.preview,
     })
