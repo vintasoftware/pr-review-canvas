@@ -87,7 +87,7 @@
   /* The ring around the current stop: dark on the light rail, light on the dark one. */
   --sun-ring: light-dark(#1f2430, #fff6d6);
   --bus: light-dark(#ef8a82, #e0766d);
-  --frame-bg: light-dark(#f7fbff, #172030);
+  --frame-bg: light-dark(#f7fbff, #222b3b);
   --sky-1: light-dark(#cfe6ff, #1d2c44);
   --sky-2: light-dark(#e3f0ff, #17202f);
   --sky-3: light-dark(#eef6ff, #141b26);
@@ -373,14 +373,25 @@ pr-tour[data-at='plan'] {
   fill: #1f2430;
 }
 
-/* ---- Stale bar ---- */
+/* ---- Warnings: the preview banner and the stale bar ---- */
+/* The dark yellow pastel reads as olive, not a warning: in the dark a warning is a card with a sun
+   stripe at its edge. */
+:root[data-skin='tour'] .tour-page .banner {
+  border-bottom: 1px solid var(--tour-line);
+  border-left: 5px solid var(--sun);
+  background: light-dark(var(--p-yellow), var(--tour-card));
+  color: light-dark(var(--tour-ink), var(--yellow-ink));
+  font-size: 14px;
+  font-weight: 600;
+}
 .tour-stale {
   width: calc(100% - 40px);
   max-width: var(--page-w);
   margin: 14px auto 0;
   padding: 10px 16px;
+  border-left: 5px solid var(--sun);
   border-radius: 10px;
-  background: var(--p-yellow);
+  background: light-dark(var(--p-yellow), var(--tour-card));
   color: var(--tour-ink);
   font-size: 15px;
   line-height: 1.5;
@@ -806,18 +817,21 @@ pr-tour[data-at='plan'] {
 .tour-scene,
 .tour-micro {
   overflow: hidden;
-  border: 1px solid var(--tour-line);
+  /* In the dark a scene's own dark terminal meets the page: a lighter hairline sets it apart. */
+  border: 1px solid light-dark(var(--tour-line), #56647b);
   border-radius: 14px;
   background: var(--frame-bg);
 }
+/* Neutral, not green: green on this page means the primary button, not "try this". */
 .tour-micro-h {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   justify-content: space-between;
   padding: 8px 14px;
-  background: var(--p-mint);
-  color: var(--green);
+  border-bottom: 1px solid var(--tour-line);
+  background: var(--tour-well);
+  color: var(--tour-ink-2);
   font-size: 14px;
   font-weight: 700;
 }
