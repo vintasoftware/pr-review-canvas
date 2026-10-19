@@ -70,7 +70,12 @@ function readBootstrap() {
  * @returns {import('./header-bar.js').ProjectLink}
  */
 function projectLinkOf(bootstrap) {
-  return { slug: bootstrap.project, home: bootstrap.base, reopenIn: bootstrap.reopenIn }
+  return {
+    slug: bootstrap.project,
+    name: bootstrap.projectName,
+    home: bootstrap.base,
+    reopenIn: bootstrap.reopenIn,
+  }
 }
 
 /**

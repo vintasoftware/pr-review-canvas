@@ -256,7 +256,7 @@ export class PrTourElement extends HTMLElement {
     this.unwire?.()
     this.bundle = bundle
     const now = new Date()
-    const project = { slug: boot.project, home: boot.base, reopenIn: boot.reopenIn }
+    const project = { slug: boot.project, name: boot.projectName, home: boot.base, reopenIn: boot.reopenIn }
     const header = tourHeaderHtml(bundle, {
       host: location.host,
       theme: this.theme,

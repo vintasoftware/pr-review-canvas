@@ -152,7 +152,7 @@ describe('header', () => {
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
-      project: { slug: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
+      project: { slug: 'acme/widgets~fix', name: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
     })
     const wordmark = document.querySelector('a.brand-wordmark')
     expect(wordmark?.getAttribute('href')).toBe('/')
@@ -183,7 +183,7 @@ describe('header', () => {
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
-      project: { slug: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
+      project: { slug: 'acme/<b>"x', name: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
     })
     const project = document.querySelector('.brand a.mono.muted')
     expect(project?.textContent).toBe('acme/<b>"x')
@@ -194,7 +194,7 @@ describe('header', () => {
   it('keeps the wordmark and the project link on a page whose review did not load', () => {
     document.body.innerHTML = bareHeaderHtml({
       host: 'localhost:3010',
-      project: { slug: 'acme/widgets', home: '/r/acme/widgets/' },
+      project: { slug: 'acme/widgets', name: 'acme/widgets', home: '/r/acme/widgets/' },
       theme: 'dark',
       skin: 'olive',
     })

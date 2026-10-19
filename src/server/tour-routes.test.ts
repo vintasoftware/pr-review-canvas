@@ -501,7 +501,7 @@ describe('GET /tour/:n and the home page', () => {
     expect(html).toContain('<script type="module" src="/static/js/tour/tour.js"></script>')
     expect(html).not.toContain('<link rel="modulepreload" href="/vendor/')
     expect(html).toContain(
-      '{"key":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"preview":true,"landmark":"world"}</script>'
+      '{"key":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","projectName":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"preview":true,"landmark":"world"}</script>'
     )
     expect(html).toContain('<title>Tour · PR #42 · acme/widgets</title>')
     const local = await (await get('/tour/branch')).text()

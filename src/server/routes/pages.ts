@@ -8,6 +8,7 @@ import { tourBelongsTo } from '../../store/tour-store.js'
 import { homePage, homeTab, reviewPage } from '../html.js'
 import { startPage } from '../start-page.js'
 import type { ProjectLink } from '../../../static/js/header-bar.js'
+import { projectName } from '../../hub/slug.js'
 
 /** How the page is painted, rendered onto the tag so nothing flashes before the app module runs. */
 export async function appearanceFor(ctx: AppContext, query: AppearanceQuery): Promise<Appearance> {
@@ -34,6 +35,7 @@ export interface Served {
 export function projectLink(ctx: AppContext, served: Served): ProjectLink {
   return {
     slug: ctx.config.slug,
+    name: projectName(ctx.config.repo, ctx.config.worktree, ctx.config.repoRoot),
     home: ctx.config.basePath,
     reopenIn: served.shellEnv ? undefined : ctx.config.repoRoot,
   }
@@ -120,6 +122,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           repo: ctx.config.repo.name,
           base: ctx.config.basePath,
           project: ctx.config.slug,
+          projectName: project.name,
           reopenIn: project.reopenIn,
           version: ctx.version,
           host: ctx.config.host,

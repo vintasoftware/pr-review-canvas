@@ -254,7 +254,7 @@ describe('createApp', () => {
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
       expect(html).toContain(
-        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all"}</script>'
+        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","projectName":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all"}</script>'
       )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
@@ -318,7 +318,7 @@ describe('createApp', () => {
 
     it('draws the same header bar the review page draws in the browser', async () => {
       const app = createApp(t.ctx)
-      const project = { slug: 'acme/widgets', home: '/r/acme/widgets/' }
+      const project = { slug: 'acme/widgets', name: 'acme/widgets', home: '/r/acme/widgets/' }
       const look = { theme: 'auto', skin: 'github' } as const
       const home = await (await app.request('/', { headers: LOCAL })).text()
       expect(home).toContain(
@@ -363,7 +363,7 @@ describe('createApp', () => {
       const errorHtml = await error.text()
       // The project's name, as on every page of it, leads back to its home page.
       expect(errorHtml).toContain(
-        '<a class="mono muted" href="/r/acme/widgets/" title="This project\'s home page">acme/widgets</a>'
+        '<a class="mono muted" href="/r/acme/widgets/" title="This project&#39;s home page">acme/widgets</a>'
       )
       expect(errorHtml).toContain('"base":"/r/acme/widgets/"')
       expect(errorHtml).toContain('<script type="module" src="/static/js/page-appearance.js"></script>')
@@ -380,13 +380,17 @@ describe('createApp', () => {
       const app = createApp(t.ctx)
       const home = await (await app.request('/', { headers: LOCAL })).text()
       expect(home).toContain(
-        '<a class="mono muted" href="/r/acme/widgets~fix-login/" title="This project\'s home page">acme/widgets~fix-login</a>'
+        '<a class="mono muted" href="/r/acme/widgets~fix-login/" title="This project&#39;s home page (acme/widgets~fix-login)">acme/widgets · fix-login</a>'
       )
       expect(home).toContain('action="/r/acme/widgets~fix-login/review"')
       const review = await (await app.request('/review/42', { headers: LOCAL })).text()
-      expect(review).toContain('"base":"/r/acme/widgets~fix-login/","project":"acme/widgets~fix-login"')
+      expect(review).toContain(
+        '"base":"/r/acme/widgets~fix-login/","project":"acme/widgets~fix-login","projectName":"acme/widgets · fix-login"'
+      )
       const error = await (await app.request('/review/abc', { headers: LOCAL })).text()
-      expect(error).toContain('href="/r/acme/widgets~fix-login/" title="This project\'s home page"')
+      expect(error).toContain(
+        'href="/r/acme/widgets~fix-login/" title="This project&#39;s home page (acme/widgets~fix-login)"'
+      )
     })
 
     it('answers 400 for a non-numeric PR', async () => {

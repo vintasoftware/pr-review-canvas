@@ -45,6 +45,7 @@ export function tourPageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppE
           repo: ctx.config.repo.name,
           base: ctx.config.basePath,
           project: ctx.config.slug,
+          projectName: project.name,
           ...(project.reopenIn === undefined ? {} : { reopenIn: project.reopenIn }),
           version: ctx.version,
           host: ctx.config.host,

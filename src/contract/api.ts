@@ -269,6 +269,8 @@ export interface ReviewBootstrap {
   repo: string
   /** The project's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
   project: string
+  /** The project as the header shows it: a linked worktree by its folder. */
+  projectName: string
   /** The checkout's folder when the project runs under the server's environment, not the shell's. */
   reopenIn?: string | undefined
   /** Where the project's pages and API live on the server, with a trailing slash. */

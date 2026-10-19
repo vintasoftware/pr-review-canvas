@@ -9,9 +9,10 @@ import { skinLabel } from './skin.js'
 import { themeLabel } from './theme.js'
 
 /**
- * @typedef {{ slug: string, home: string, reopenIn?: string | undefined }} ProjectLink The project's
- *   name and home page; `reopenIn` is its folder when it runs under the server's environment
- *   rather than the shell's that opened it.
+ * @typedef {{ slug: string, name: string, home: string, reopenIn?: string | undefined }} ProjectLink
+ *   The project's slug, the name the header shows for it (a linked worktree by its folder), and its
+ *   home page; `reopenIn` is its folder when it runs under the server's environment rather than the
+ *   shell's that opened it.
  */
 
 /**
@@ -82,7 +83,9 @@ function envDialogHtml(opts) {
  */
 function contextHtml(opts) {
   if (opts.project !== undefined) {
-    return `<a class="mono muted" href="${esc(opts.project.home)}" title="This project's home page">${esc(opts.project.slug)}</a>${envBadgeHtml(opts.project)}`
+    const { slug, name } = opts.project
+    const title = name === slug ? "This project's home page" : `This project's home page (${slug})`
+    return `<a class="mono muted" href="${esc(opts.project.home)}" title="${esc(title)}">${esc(name)}</a>${envBadgeHtml(opts.project)}`
   }
   return opts.host === undefined ? '' : `<span class="mono muted">${esc(opts.host)}</span>`
 }

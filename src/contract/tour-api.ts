@@ -170,6 +170,8 @@ export interface TourBootstrap {
   base: string
   /** The project's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
   project: string
+  /** The project as the header shows it: a linked worktree by its folder. */
+  projectName: string
   /** The checkout's folder when the project runs under the server's environment, not the shell's. */
   reopenIn?: string
   version: string
