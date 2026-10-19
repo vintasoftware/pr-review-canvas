@@ -236,7 +236,7 @@ pr-tour[data-at='plan'] {
 }
 :root[data-skin='tour'] .tour-page .hdr-title {
   border-bottom: 0;
-  padding: 18px 20px 112px;
+  padding: 18px 20px 28px;
 }
 .tour-page .hdr-title h1 {
   margin: 0 0 14px;
@@ -274,11 +274,13 @@ pr-tour[data-at='plan'] {
   border: 0;
   font-weight: 700;
 }
+/* The skyline is the header's backdrop: it adds no height, and the bus parks behind the meta line
+   at the right. A short header draws it smaller; a phone has no room for it. */
 .tour-skyline {
   position: absolute;
   inset: auto 0 0;
   width: 100%;
-  height: 124px;
+  height: min(124px, 100%);
 }
 .tour-sky-city {
   fill: var(--city);
@@ -341,6 +343,8 @@ pr-tour[data-at='plan'] {
   padding: 8px 20px 10px;
 }
 .tour-rail {
+  /* Room under the road for the bus at the current stop, whichever stop that is. */
+  padding-bottom: 32px;
   display: flex;
   gap: 26px;
   overflow-x: auto;
@@ -418,7 +422,6 @@ pr-tour[data-at='plan'] {
 .tour-rail-seg[data-state='current'] {
   width: 34px;
   height: 48px;
-  margin-right: 36px;
 }
 .tour-rail-seg[data-state='current'] span {
   width: 32px;
@@ -427,12 +430,13 @@ pr-tour[data-at='plan'] {
   background: var(--sun);
   color: var(--on-sun);
 }
-/* The bus, parked beside the stop the reader is at. */
+/* The bus, parked on the road under the stop the reader is at. */
 .tour-rail-seg[data-state='current']::before {
   content: '';
   position: absolute;
-  left: calc(100% + 2px);
-  bottom: 10px;
+  left: 50%;
+  top: calc(100% + 12px);
+  translate: -50% 0;
   z-index: 2;
   width: 34px;
   height: 20px;
@@ -1698,21 +1702,18 @@ pr-tour[data-at='cover'] .hdr-title .title {
     padding-right: 14px;
   }
   :root[data-skin='tour'] .tour-page .hdr-title {
-    padding: 12px 14px 92px;
+    padding: 12px 14px 18px;
+  }
+  .tour-skyline {
+    display: none;
   }
   /* A phone's height goes to the step: past the cover, the header keeps only a short title. */
-  :root[data-skin='tour'] pr-tour:not([data-at='cover']) .hdr-title {
-    padding-bottom: 64px;
-  }
   pr-tour:not([data-at='cover']) .hdr-title h1 {
     margin: 0;
     font-size: 20px;
   }
   pr-tour:not([data-at='cover']) .hdr-title .meta {
     display: none;
-  }
-  pr-tour:not([data-at='cover']) .tour-skyline {
-    height: 80px;
   }
 }
 
