@@ -409,6 +409,17 @@ pr-tour[data-at='plan'] {
   display: flex;
   gap: 26px;
   overflow-x: auto;
+  scrollbar-width: thin;
+}
+/* More stops past the window's edge: that end fades out, so the rail reads as one that scrolls. */
+.tour-rail[data-more='right'] {
+  mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent);
+}
+.tour-rail[data-more='left'] {
+  mask-image: linear-gradient(90deg, transparent, #000 48px);
+}
+.tour-rail[data-more='left right'] {
+  mask-image: linear-gradient(90deg, transparent, #000 48px, #000 calc(100% - 48px), transparent);
 }
 .tour-rail-group {
   flex: none;
@@ -506,6 +517,14 @@ pr-tour[data-at='plan'] {
 }
 .tour-rail-seg[data-state='ahead'] {
   cursor: not-allowed;
+}
+/* The ring goes round the stop's sign, not the whole pole. */
+.tour-page .tour-rail-seg:focus-visible {
+  outline: 0;
+}
+.tour-rail-seg:focus-visible span {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 .tour-rail-seg[data-state='ahead'] span {
   border: 2px dashed var(--stop-locked);
@@ -1703,6 +1722,10 @@ pr-tour[data-at='cover'] .hdr-title .title {
   }
   .tour-nav {
     padding: 0 10px 10px;
+  }
+  /* The stops say what they are by their signs; a phone's height goes to the step. */
+  .tour-rail-legend {
+    display: none;
   }
   .tour-strip-no b {
     font-size: 26px;

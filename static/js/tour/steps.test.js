@@ -9,11 +9,13 @@ import {
   nextLabel,
   pickSettled,
   plural,
+  blockedBy,
   reachable,
   settled,
   stepFromHash,
   stepHash,
   stepIndexOf,
+  stepName,
   stepTitle,
 } from './steps.js'
 
@@ -75,6 +77,8 @@ describe('reachability', () => {
     const reader = freshReaderState()
     expect(reachable(steps, 5, reader)).toBe(true)
     expect(reachable(steps, 6, reader)).toBe(false)
+    expect(blockedBy(steps, 7, reader)).toBe(5)
+    expect(blockedBy(steps, 5, reader)).toBe(-1)
     expect(settled(steps[5] ?? { kind: 'cover' }, reader)).toBe(false)
     reader.picks['sum-over-product'] = { pick: 'other', approved: true }
     expect(reachable(steps, 6, reader)).toBe(false)
@@ -99,6 +103,12 @@ describe('reachability', () => {
 describe('labels', () => {
   it('says where the reader is and what comes next', () => {
     const steps = buildSteps(tour, ON)
+    expect(stepName(steps, 0)).toBe('the cover')
+    expect(stepName(steps, 2)).toBe('landmark 2')
+    expect(stepName(steps, 5)).toBe('decision 1')
+    expect(stepName(steps, 6)).toBe('question 1')
+    expect(stepName(steps, 7)).toBe('the plan')
+    expect(stepName(steps, 9)).toBe('')
     expect(nextLabel(steps, 0)).toBe('start')
     expect(nextLabel(steps, 1)).toBe('next')
     expect(nextLabel(steps, 4)).toBe('decide')

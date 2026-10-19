@@ -151,7 +151,13 @@ describe('railHtml and navHtml', () => {
     ])
     expect(document.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('0')
     expect(document.querySelector('.tour-rail-legend')?.getAttribute('aria-hidden')).toBe('true')
-    expect(document.querySelector('.tour-rail-seg[data-state="ahead"]')?.hasAttribute('disabled')).toBe(true)
+    // A closed stop stays focusable and says what opens it; the rail is one tab stop.
+    const ahead = document.querySelector('.tour-rail-seg[data-state="ahead"]')
+    expect(ahead?.hasAttribute('disabled')).toBe(false)
+    expect(ahead?.getAttribute('aria-disabled')).toBe('true')
+    expect(ahead?.getAttribute('aria-label')).toBe('What does run() return now? · opens after decision 1')
+    const tabStops = [...document.querySelectorAll('.tour-rail-seg[tabindex="0"]')]
+    expect(tabStops.map(s => s.getAttribute('data-step'))).toEqual(['0'])
     document.body.innerHTML = railHtml(stepsOf(bundle), 2, bundle.reader, tourOf(bundle), { preview: true })
     expect(document.querySelector('.tour-rail-seg[data-state="ahead"]')).toBeNull()
     const off = { ...bundle, options: { ...bundle.options, finalQuiz: /** @type {const} */ ('off') } }

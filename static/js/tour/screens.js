@@ -18,14 +18,15 @@ import { GENERATE_BUTTON_ID, tourGenerationMode } from '../generate.js'
 import { authorProfileUrl, currentHost, fileUrl } from '../host.js'
 import { headerBarHtml } from '../header-bar.js'
 import {
+  blockedBy,
   minutesOf,
   nextLabel,
   chosenPick,
   pickSettled,
   planChanged,
   plural,
-  reachable,
   settled,
+  stepName,
   stepTitle,
 } from './steps.js'
 
@@ -165,19 +166,23 @@ export function railHtml(steps, current, reader, tour, opts = {}) {
           continue
         }
         n += 1
+        const blocker = opts.preview === true ? -1 : blockedBy(steps, i, reader)
         const state =
           i === current
             ? 'current'
             : stepDone(step, i, current, reader, tour)
               ? 'done'
-              : opts.preview === true || reachable(steps, i, reader)
+              : blocker === -1
                 ? 'open'
                 : 'ahead'
-        // A tooltip shows text as it is, so the backticks that mark code in prose go.
-        const title = esc(stepTitle(step).replaceAll('`', ''))
+        // A tooltip shows text as it is, so the backticks that mark code in prose go. A closed stop
+        // says what opens it, and stays in the tab order so keyboards and screen readers hear why.
+        const locked = state === 'ahead' ? `opens after ${stepName(steps, blocker)}` : ''
+        const title = esc(stepTitle(step).replaceAll('`', '') + (locked === '' ? '' : ` · ${locked}`))
         // The sign on the stop: a check once visited, else what kind of stop it is.
         const sign = state === 'done' ? '✓' : STOP_SIGN[step.kind] || String(n)
-        segs += `<button class="tour-rail-seg" type="button" data-step="${i}" data-state="${state}" title="${title}" aria-label="${title}"${state === 'current' ? ' aria-current="step"' : ''}${state === 'ahead' ? ' disabled' : ''}><span aria-hidden="true">${sign}</span></button>`
+        // One tab stop for the whole rail, on the current stop; the arrows move between stops.
+        segs += `<button class="tour-rail-seg" type="button" data-step="${i}" data-state="${state}" title="${title}" aria-label="${title}" tabindex="${state === 'current' ? 0 : -1}"${state === 'current' ? ' aria-current="step"' : ''}${locked === '' ? '' : ` aria-disabled="true" data-locked="${esc(locked)}"`}><span aria-hidden="true">${sign}</span></button>`
       }
       const kind = g.kind === 'landmark' ? 'landmarks' : g.kind === 'decision' ? 'decisions' : g.kind
       return `<div class="tour-rail-group" data-kind="${kind}"><span class="tour-rail-label">${esc(g.label)}</span><div class="tour-rail-segs">${segs}</div></div>`

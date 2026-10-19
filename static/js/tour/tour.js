@@ -39,7 +39,7 @@ import {
   stripHtml,
   tourHeaderHtml,
 } from './screens.js'
-import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf } from './steps.js'
+import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf, stepTitle } from './steps.js'
 import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
 
 export const POLL_MS = 5000
@@ -402,10 +402,24 @@ export class PrTourElement extends HTMLElement {
       stage.innerHTML = planHtml(bundle)
     }
     strip.innerHTML = stripHtml(bundle, this.steps, this.current)
+    // A stop chosen from the keyboard keeps the focus on the rail once the rail is drawn again.
+    const railFocused = rail.contains(document.activeElement)
     rail.innerHTML = railHtml(this.steps, this.current, bundle.reader, bundle.tour, {
       preview: bundle.preview,
     })
     nav.innerHTML = navHtml(this.steps, this.current, bundle.reader)
+    const road = /** @type {HTMLElement} */ (qs('.tour-rail', rail))
+    const here = qs('[aria-current="step"]', rail)
+    if (here instanceof HTMLElement) {
+      // On a narrow window the rail scrolls: it centres the stop the reader is at.
+      const gap = here.getBoundingClientRect().left - road.getBoundingClientRect().left
+      road.scrollLeft += gap - (road.clientWidth - here.offsetWidth) / 2
+      if (railFocused) {
+        here.focus()
+      }
+    }
+    road.addEventListener('scroll', () => markRailEdges(road), { passive: true })
+    markRailEdges(road)
   }
 
   /** Queues the reader's state for the server. A preview saves nothing. */
@@ -602,7 +616,13 @@ export class PrTourElement extends HTMLElement {
         return
       }
       if (target.classList.contains('tour-rail-seg')) {
-        this.go(Number(target.dataset['step']))
+        const locked = target.dataset['locked']
+        if (locked === undefined) {
+          this.go(Number(target.dataset['step']))
+        } else {
+          const title = stepTitle(/** @type {Step} */ (this.steps[Number(target.dataset['step'])]))
+          toast(this, `${title.replaceAll('`', '')} ${locked}`)
+        }
         return
       }
       const step = this.steps[this.current]
@@ -686,6 +706,11 @@ export class PrTourElement extends HTMLElement {
       if ((e.key === 'Enter' || e.key === ' ') && target?.closest('button, a[href]')) {
         return
       }
+      const seg = target?.closest('.tour-rail-seg')
+      if (seg instanceof HTMLElement && moveRailFocus(seg, e.key)) {
+        e.preventDefault()
+        return
+      }
       const step = this.steps[this.current]
       const decision = this.decisionStep()?.decision ?? null
       let handled = true
@@ -721,12 +746,23 @@ export class PrTourElement extends HTMLElement {
         this.go(i, { force: true, fromHistory: true })
       }
     }
+    // A resized window may make the rail scroll, or stop scrolling: its faded ends follow.
+    const rail = /** @type {HTMLElement} */ (qs('#rail', this))
+    const onRailSize = () => {
+      const road = qs('.tour-rail', rail)
+      if (road instanceof HTMLElement) {
+        markRailEdges(road)
+      }
+    }
+    const railSize = typeof ResizeObserver === 'function' ? new ResizeObserver(onRailSize) : null
+    railSize?.observe(rail)
     this.addEventListener('click', onClick)
     this.addEventListener('input', onInput)
     this.addEventListener('change', onChange)
     document.addEventListener('keydown', onKeydown)
     window.addEventListener('popstate', onPopstate)
     this.unwire = () => {
+      railSize?.disconnect()
       this.removeEventListener('click', onClick)
       this.removeEventListener('input', onInput)
       this.removeEventListener('change', onChange)
@@ -781,6 +817,52 @@ export class PrTourElement extends HTMLElement {
       this.poll = null
     }
   }
+}
+
+/**
+ * Marks which ends of the rail have more stops past the window's edge, so the page fades them.
+ * @param {HTMLElement} road
+ */
+function markRailEdges(road) {
+  const more = []
+  if (road.scrollLeft > 1) {
+    more.push('left')
+  }
+  if (road.scrollLeft + road.clientWidth < road.scrollWidth - 1) {
+    more.push('right')
+  }
+  road.dataset['more'] = more.join(' ')
+}
+
+/**
+ * The rail is one tab stop: the arrows, Home, and End move the focus between its stops.
+ * @param {HTMLElement} seg the focused stop
+ * @param {string} key
+ * @returns {boolean} whether the key moved the focus
+ */
+function moveRailFocus(seg, key) {
+  const segs = [...(seg.closest('.tour-rail')?.querySelectorAll('.tour-rail-seg') ?? [])]
+  const at = segs.indexOf(seg)
+  const to =
+    key === 'ArrowRight'
+      ? at + 1
+      : key === 'ArrowLeft'
+        ? at - 1
+        : key === 'Home'
+          ? 0
+          : key === 'End'
+            ? segs.length - 1
+            : null
+  if (to === null) {
+    return false
+  }
+  const next = segs[Math.max(0, Math.min(segs.length - 1, to))]
+  if (next instanceof HTMLElement) {
+    seg.tabIndex = -1
+    next.tabIndex = 0
+    next.focus()
+  }
+  return true
 }
 
 if (!customElements.get('pr-tour')) {

@@ -420,7 +420,7 @@ describe('the tour page', () => {
   it('lands on the step in the URL, follows the browser history, and ignores a step it cannot reach', async () => {
     vi.stubGlobal('fetch', fakeServer(syntheticTourBundle()).impl)
     history.replaceState(null, '', '/tour/42#landmark-sum')
-    mount()
+    const el = mount()
     await drawn('.tour-chips')
     expect(document.querySelector('.tour-title')?.textContent).toBe('Sum, not product')
     press('ArrowRight')
@@ -431,6 +431,8 @@ describe('the tour page', () => {
     )
     window.dispatchEvent(new PopStateEvent('popstate', { state: null }))
     expect(document.querySelector('.tour-title')?.textContent).toBe('Sum, not product')
+    // The moves saved above go out before the page goes, not through a later test's server.
+    await el.saver?.settle()
     document.body.innerHTML = ''
     // A step past an open decision falls back to where the reader may be.
     history.replaceState(null, '', '/tour/42#plan')
@@ -447,6 +449,43 @@ describe('the tour page', () => {
     mount()
     await drawn('.tour-options')
     expect(location.hash).toBe('#decision-sum-over-product')
+  })
+
+  it('keeps the rail one tab stop, says why a stop is closed, and swallows the keys it uses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fakeServer(syntheticTourBundle({ reader: { ...freshReaderState(), step: 5 } })).impl
+    )
+    mount()
+    await drawn('.tour-options')
+    // A closed stop says what opens it.
+    click('.tour-rail-seg[data-step="7"]')
+    expect(location.hash).toBe('#decision-sum-over-product')
+    expect(document.querySelector('.toast')?.textContent).toBe('The plan opens after decision 1')
+    // The arrows move the focus along the rail and leave the step where it is.
+    const here = /** @type {HTMLElement} */ (document.querySelector('.tour-rail-seg[aria-current="step"]'))
+    here.focus()
+    here.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }))
+    const stop = /** @type {HTMLElement} */ (document.activeElement)
+    expect(stop.getAttribute('data-step')).toBe('4')
+    expect(stop.tabIndex).toBe(0)
+    expect(location.hash).toBe('#decision-sum-over-product')
+    // Enter on a focused button presses it; it does not move to the next step.
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    stop.dispatchEvent(enter)
+    expect(enter.defaultPrevented).toBe(false)
+    stop.click()
+    expect(location.hash).toBe('#landmark-respect')
+    expect(document.activeElement?.getAttribute('aria-current')).toBe('step')
+    // A key the tour uses goes no further, so `c` types nothing into the drawer it opens.
+    press('ArrowRight')
+    const keep = new KeyboardEvent('keydown', { key: 'k', bubbles: true, cancelable: true })
+    document.body.dispatchEvent(keep)
+    expect(keep.defaultPrevented).toBe(true)
+    expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
+    const other = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true })
+    document.body.dispatchEvent(other)
+    expect(other.defaultPrevented).toBe(false)
   })
 
   it('opens on the landmark the preview names, saves nothing, and cannot finish', async () => {

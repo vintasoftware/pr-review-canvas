@@ -108,13 +108,7 @@ export function settled(step, reader) {
  * @param {TourReaderState} reader
  */
 export function reachable(steps, i, reader) {
-  for (let k = 0; k < i; k++) {
-    const step = steps[k]
-    if (step !== undefined && !settled(step, reader)) {
-      return false
-    }
-  }
-  return true
+  return blockedBy(steps, i, reader) === -1
 }
 
 /** @param {Step} step */
@@ -205,6 +199,39 @@ export function nextLabel(steps, i) {
     return 'plan'
   }
   return 'next'
+}
+
+/**
+ * A step by kind and number: `landmark 2`, `decision 1`, `question 3`, `the plan`, `the cover`.
+ * @param {Step[]} steps
+ * @param {number} i
+ */
+export function stepName(steps, i) {
+  const step = steps[i]
+  if (step === undefined) {
+    return ''
+  }
+  if (step.kind === 'cover' || step.kind === 'plan') {
+    return `the ${step.kind}`
+  }
+  const noun = step.kind === 'quiz' ? 'question' : step.kind
+  return `${noun} ${steps.filter(s => s.kind === step.kind).indexOf(step) + 1}`
+}
+
+/**
+ * The first step before `i` the reader has not settled, which keeps `i` closed; -1 when it is open.
+ * @param {Step[]} steps
+ * @param {number} i
+ * @param {TourReaderState} reader
+ */
+export function blockedBy(steps, i, reader) {
+  for (let k = 0; k < i; k++) {
+    const step = steps[k]
+    if (step !== undefined && !settled(step, reader)) {
+      return k
+    }
+  }
+  return -1
 }
 
 /**
