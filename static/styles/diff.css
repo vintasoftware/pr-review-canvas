@@ -109,13 +109,13 @@ tr.annot .x {
 }
 tr.ifind .x {
   background: var(--panel);
-  box-shadow: inset 4px 0 0 var(--sev-major);
+  box-shadow: inset 4px 0 0 var(--level-check);
 }
 tr.ifind.decide .x {
-  box-shadow: inset 4px 0 0 var(--sev-blocker);
+  box-shadow: inset 4px 0 0 var(--level-decide);
 }
 tr.ifind.fyi .x {
-  box-shadow: inset 4px 0 0 var(--sev-minor);
+  box-shadow: inset 4px 0 0 var(--level-fyi);
 }
 tr.ifind.is-handled:not([data-expanded]) .x {
   padding: 6px 14px;
@@ -141,8 +141,9 @@ tr.is-approx .x::before {
   margin: 0 0 6px;
   max-width: 100ch;
 }
-.x .sq {
+.x .lv {
   margin-right: 8px;
+  align-self: center;
 }
 .x .f-title {
   font-size: 14px;

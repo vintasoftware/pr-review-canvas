@@ -196,6 +196,75 @@ export function putSettled(prNumber, fingerprint, input, opts = {}) {
 }
 
 /**
+ * The settled points of the canvas on screen, after the server read the canvas comment again.
+ * @param {number} prNumber
+ * @param {string} headSha the canvas on screen
+ * @param {{ fetchImpl?: typeof fetch | undefined }} [opts]
+ * @returns {Promise<import('./contract-types.js').SettledResponse>}
+ */
+export function getSettled(prNumber, headSha, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/settled?headSha=${encodeURIComponent(headSha)}`, {
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/** How often a reviewer's page reads the author's resolutions back. Each read asks the forge. */
+export const SETTLED_POLL_MS = 2 * 60 * 1000
+
+/**
+ * Reads the settled points of the canvas on screen at once, then every `SETTLED_POLL_MS` while the
+ * tab is in view, and hands over each answer. A tab out of view asks once it comes back, if a read
+ * came due meanwhile. A failed read is skipped; the next one may work.
+ * @param {number} prNumber
+ * @param {string} headSha the canvas on screen
+ * @param {(answer: import('./contract-types.js').SettledResponse) => void} onSettled
+ * @param {{ intervalMs?: number, doc?: Document, fetchImpl?: typeof fetch | undefined }} [opts]
+ * @returns {{ stop: () => void }}
+ */
+export function pollSettled(prNumber, headSha, onSettled, opts = {}) {
+  const interval = opts.intervalMs ?? SETTLED_POLL_MS
+  const doc = opts.doc ?? document
+  let stopped = false
+  let due = false
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let timer = null
+  const tick = async () => {
+    timer = null
+    if (doc.visibilityState === 'hidden') {
+      due = true
+      return
+    }
+    try {
+      const answer = await getSettled(prNumber, headSha, { fetchImpl: opts.fetchImpl })
+      if (!stopped) onSettled(answer)
+    } catch {
+      // The next read tries again.
+    }
+    if (!stopped) timer = setTimeout(tick, interval)
+  }
+  const onVisible = () => {
+    if (due && doc.visibilityState !== 'hidden') {
+      due = false
+      void tick()
+    }
+  }
+  doc.addEventListener('visibilitychange', onVisible)
+  // A canvas imported earlier is not discovered again on load, so the first read is what brings it
+  // the resolutions made since.
+  timer = setTimeout(tick, 0)
+  return {
+    stop: () => {
+      stopped = true
+      doc.removeEventListener('visibilitychange', onVisible)
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+    },
+  }
+}
+
+/**
  * @param {ReviewKey} prNumber
  * @param {number} rootCommentId
  * @param {boolean} hidden

@@ -246,7 +246,8 @@ export function judgmentHtml(layer, paths) {
 }
 
 /**
- * The attention point cards of one layer, in artifact order.
+ * The attention point cards of one layer, in artifact order, under their heading. The two go off the
+ * page together when every point of the layer is resolved and hidden.
  * @param {Layer} layer
  * @param {ReadonlyArray<Point>} points
  * @param {ReadonlySet<string>} paths
@@ -262,7 +263,7 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
   const cards = own.map(p =>
     pointCardHtml(p, posted === undefined ? { paths, state } : { paths, state, posted })
   )
-  return `<h3 class="lbl sub">Attention points · <span class="point-count">${active}</span></h3><ol class="findings">${cards.join('')}</ol>`
+  return `<div class="layer-points"><h3 class="lbl sub">Attention points · <span class="point-count">${active}</span></h3><ol class="findings">${cards.join('')}</ol></div>`
 }
 
 /**
@@ -394,6 +395,11 @@ export function wireCardReveal(root) {
   /** @param {Event} event */
   const reveal = event => {
     const target = event.target
+    // A resolved point is off the page until the reader shows the resolved ones; a link to it, or
+    // into it, shows that one point.
+    if (target instanceof Element) {
+      target.closest('[data-point].is-resolved')?.setAttribute('data-revealed', '')
+    }
     for (
       let node = target instanceof Element ? target.parentElement : null;
       node !== null;

@@ -320,6 +320,9 @@ predates it is behind in the same way. Refresh copies with
 `pr-review upgrade` or `pr-review install-skill` (repeat any custom directory flags used during
 installation). Automatic discovery checks the two default directories.
 
+`doctor`'s `prompts` check fails when one of the project's own prompt templates lacks a token any
+release up to the running one added to the bundled template, and its hint says where to add it.
+
 `serve` runs this skill check automatically and prints failures with a repair hint to stderr.
 Warnings do not prevent the server from starting. Use `doctor --all-checks` for full diagnostics.
 The `.gitignore` update always applies to the selected repository root, even with custom skill
@@ -340,9 +343,16 @@ pr-review upgrade [--yes] [--only package,acpx,skill] [--repo <dir>]
 | The project skills | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one, or a bundled skill is missing beside the canvas skill | The same copies `install-skill` makes                      |
 
 When pr-review itself upgrades, the skill step covers every copy, since the new version may ship
-a new skill, or a new one beside it. After installing, it runs the new version as `pr-review upgrade --yes --only <kinds>`
-with the confirmed steps, so the new version copies its own skill and takes only the steps the plan
-showed. If the install fails, the current version runs the remaining steps itself.
+a new skill, or a new one beside it. After installing, it runs the new version as
+`pr-review upgrade --yes --from <old version> --only <kinds>` with the confirmed steps, none when
+none are left, so the new version copies its own skill and takes only the steps the plan showed.
+If the install fails, the current version runs the remaining steps itself.
+
+Last, `upgrade` checks the project's own [prompt templates](#prompt-templates). For each token a
+release after the old version added to a bundled template, a custom copy that lacks it is named
+with the token and the heading the bundled template has it under, for you to add. Run at the
+latest version with nothing to upgrade, it names the tokens that version added. It never edits a
+template.
 
 - `--only` limits the run to the named kinds. Skipped kinds are listed in `notes`.
 - `upgrade` does not install a missing acpx or add a missing skill copy. It prints the command
@@ -354,7 +364,8 @@ showed. If the install fails, the current version runs the remaining steps itsel
 Without a terminal, `upgrade` prints the plan and changes nothing. `--yes` applies it without
 asking. The plan and each step's outcome go to stderr. With `--json`, or when stdout is a pipe,
 stdout is one JSON line with `applied` and, after applying, `ok` and each step's `status` (`done`
-or `failed`, with a `detail`). The exit code is `1` when a step fails. When a skill copy changes,
+or `failed`, with a `detail`), and `prompts`, the tokens the project's templates lack. The exit
+code is `1` when a step fails; a missing token does not change it. When a skill copy changes,
 stderr says to commit and push it.
 
 ### Output and exit codes
@@ -485,8 +496,9 @@ validation rules enforced by the tool.
 
 Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
 Restart the server after changing the config; chat template edits apply to new threads.
-Custom templates persist across tool upgrades. Compare them with the new bundled templates
-when upgrading.
+Custom templates persist across tool upgrades. When a release adds a token to a bundled template,
+`pr-review upgrade` and `pr-review doctor` name each custom copy that lacks it and where it goes.
+Compare the rest of your templates with the new bundled ones when upgrading.
 
 ### Text limits
 
@@ -540,23 +552,24 @@ placed in Other while its source is in a regular layer.
 
 The data directory's `settings.yml` accepts these keys and values:
 
-| Key                    | Default  | Accepted values                                                                  |
-| ---------------------- | -------- | -------------------------------------------------------------------------------- |
-| `version`              | `1`      | `1`                                                                              |
-| `skin`                 | `github` | `terminal`, `github`, `olive`                                                    |
-| `theme`                | `auto`   | `auto`, `light`, `dark`                                                          |
-| `foldLevel`            | `light`  | `light`, `moderate`, `aggressive`                                                |
-| `layerView`            | `all`    | `all`, `one`                                                                     |
-| `chatAgent`            | `claude` | `claude`, `codex` (2)                                                            |
-| `chatModel`            | `null`   | A model ID, or `null` for the agent's default (1) (2)                            |
-| `chatTimeoutSec`       | `600`    | Integer seconds, 30–3600                                                         |
-| `maxTurns`             | `null`   | Integer 1–100, or `null` for the agent's default                                 |
-| `checkoutEnabled`      | `true`   | `true` reads a [review checkout](#review-checkouts); `false` reads your checkout |
-| `checkoutIdleDays`     | `7`      | Integer 1–365, or `-1` to never remove an idle checkout                          |
-| `checkoutSweepMinutes` | `60`     | Integer minutes, 5–1440, between `serve`'s idle sweeps                           |
-| `canvasComment`        | `null`   | `true`, `false`, or `null` to follow the project (3)                             |
-| `mentionCanvas`        | `null`   | `true`, `false`, or `null` to follow the project (3)                             |
-| `tourComment`          | `null`   | `true`, `false`, or `null` to follow the project's `tour.share` (3)              |
+| Key                    | Default   | Accepted values                                                                  |
+| ---------------------- | --------- | -------------------------------------------------------------------------------- |
+| `version`              | `1`       | `1`                                                                              |
+| `skin`                 | `github`  | `terminal`, `github`, `olive`                                                    |
+| `theme`                | `auto`    | `auto`, `light`, `dark`                                                          |
+| `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
+| `layerView`            | `all`     | `all`, `one`                                                                     |
+| `pointColors`          | `classic` | `classic`, `action`                                                              |
+| `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
+| `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
+| `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |
+| `maxTurns`             | `null`    | Integer 1–100, or `null` for the agent's default                                 |
+| `checkoutEnabled`      | `true`    | `true` reads a [review checkout](#review-checkouts); `false` reads your checkout |
+| `checkoutIdleDays`     | `7`       | Integer 1–365, or `-1` to never remove an idle checkout                          |
+| `checkoutSweepMinutes` | `60`      | Integer minutes, 5–1440, between `serve`'s idle sweeps                           |
+| `canvasComment`        | `null`    | `true`, `false`, or `null` to follow the project (3)                             |
+| `mentionCanvas`        | `null`    | `true`, `false`, or `null` to follow the project (3)                             |
+| `tourComment`          | `null`    | `true`, `false`, or `null` to follow the project's `tour.share` (3)              |
 
 (1) A model ID names a family; see [Model families](#model-families).
 (2) `chatAgent` also picks the agent that [generates canvases from the review
@@ -713,6 +726,29 @@ refused.
 When automatic download fails, download the archive in GitHub or GitLab and use the page's drop
 zone or `pr-review import <zip> --pr <n>`.
 
+### Attention point levels and impact
+
+Each attention point has a level, which says what it asks of you rather than how bad it is. Its
+icon shows the level by shape:
+
+- **decide** (a diamond): a choice only a person can make, or a structural problem that holds the
+  merge until the author justifies it.
+- **check** (a checked box): a real problem that does not hold the merge, or something to verify
+  by hand.
+- **fyi** (an info circle): context worth knowing.
+
+A `decide` point also has an impact: what shipping the wrong call would do to users, their data, or
+callers, whatever it takes to change the code back. **critical** cannot be taken back once it
+ships, such as data lost or exposed, content shared that was not meant to be, an outage, or a break
+for callers. **high** shows users or callers wrong behavior until a fix ships. **low** goes
+unnoticed outside the code: the cost is rework or readability.
+Its card shows the impact next to the title, and `decide` points list the worst impact first. A
+canvas generated before impact existed shows its `decide` points without one.
+
+The icons are red, amber, and gray by default. Set **Point colors** in the settings dialog to
+**action** for purple, blue, and gray instead, so no level reads as a warning. The choice is saved
+as `pointColors` in `settings.yml`.
+
 ### Attention point status
 
 Each attention point shows where it stands for you. A point you have not acted on is **open**.
@@ -722,7 +758,8 @@ Acting on it changes its status:
   out when you submit. A point can hold more than one draft; the card lists them all.
 - **posted**: you posted it (or a comment AI Chat tied to it), or it went out with a submitted
   review. Drafts for it that still wait show on its card too.
-- **resolved**: the author answered it with a reason. Every reader sees this status.
+- **resolved**: the author answered it with a reason. Every reader sees this status, and the point
+  starts hidden for every reader (see below).
 - **dismissed**: you took it off your own list. Other readers still see it open.
 
 When more than one applies, the point shows the first one in this order: resolved, posted, in your
@@ -736,10 +773,14 @@ under the point), and the commands that undo it: **reopen**, **restore**, or
 deleting the draft. The point collapses again when its status changes. A reload also collapses it.
 
 The counts in the rail, the layer headings, and the overview squares include only open points. The
-overview line **Attention points: 2 open · 1 in your review · …** counts each status. Its
-**hide the N acted on** command removes the collapsed points from the page until you click it
-again; **edit** on an AI Chat proposed resolution brings its point back while the reason box is
-open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
+overview line **Attention points: 2 open · 1 in your review · 1 resolved by the author · …** counts
+each status. Resolved points start off the page for every reader, the author too: **show the N
+resolved** brings them back, collapsed in place, until you click it again. A layer whose points are
+all resolved drops its **Attention points** heading while they are hidden. A link to a resolved
+point shows that one point, and a point you just resolved stays shown until the next load. The
+line's **hide the N acted on** command removes your other collapsed points from the page until you
+click it again; **edit** on an AI Chat proposed resolution brings its point back while the reason
+box is open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
 it again.
 
 ### Self-review
@@ -764,18 +805,28 @@ it. To resolve a point you dismissed, **restore** it first.
 
 A resolution is written into the canvas itself:
 
-- The point leaves every reader's open list and collapses where it is, with the author's reason
-  and, when posted, a link to the comment. A reason posted as a comment does not mark the point
-  posted, so a reopened point is open again.
-- The canvas comment is shared again at once, with the new counts. Reviewers click **refresh** to
-  load it. The author's Conversation card updates immediately and stays current after reload.
+- The point leaves every reader's open list and starts hidden. **show the N resolved** shows it
+  collapsed where it is, with the author's reason and, when posted, a link to the comment. A
+  reason posted as a comment does not mark the point posted, so a reopened point is open again.
+- The canvas comment is shared again at once, with the new counts. A reviewer's page reads it back
+  when it opens and every two minutes after while its tab is in view, hides the newly resolved
+  points, updates the Conversation card, and says so. Each read fetches the pull request's comments,
+  and downloads the canvas only when they changed. When the author shared a newer canvas for the
+  same commit, the page says to **refresh** and stops reading. The author's Conversation card updates
+  immediately and stays current after reload.
   When sharing fails, the resolution stays in your local canvas and the message says why.
   With [`canvasComment` off](#turning-sharing-off), nothing is shared and reviewers do not see it.
 - **reopen** on the expanded point takes a resolution back and shares the canvas again. A posted comment
   stays on the forge.
-- Regenerating the canvas for the same commit keeps each resolution whose point comes back with the
-  same kind, path, and title. An [incremental canvas](#incremental-canvases) keeps the
-  resolutions of the points it carries.
+- A resolution follows the pull request to every later canvas, `--force` and canvases after a
+  rebase included. Each new canvas starts from the resolutions of the pull request's newest canvas,
+  a canvas generated for the pull request winning over a branch review of the same work:
+  the generator is told each resolved point and its reason, and writes a concern that still applies
+  under the same kind, path, and title, which keeps it resolved wherever its lines moved. It reopens
+  a point only when it reads the new code and the reason no longer holds: the point comes back open
+  under a new title, with what changed in its body. A point whose code is gone is left out. A
+  resolution the author takes back with **reopen** stays taken back, because only the newest canvas
+  counts.
 - When you tell AI Chat how you decided a point, it can propose a resolution instead of a comment:
   a **proposed resolution** card names the point and the reason. **resolve** saves that reason as
   it stands and does not post it as a comment; **edit** opens the point's own reason box with it,
@@ -1425,4 +1476,5 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                                                                                                        |
 | `FOLD_MISSING`                                                  | Using diff rows in chunks: a file over 20 unannotated rows hides something; an open file over 60 folds half; a layer over 100 hides more at aggressive |
 | `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                                                                |
+| `POINT_IMPACT`                                                  | Every `decide` point has an impact, and no other point has one                                                                                         |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                                                     |

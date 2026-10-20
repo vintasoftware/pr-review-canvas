@@ -14,6 +14,23 @@ export function esc(value) {
     .replace(/'/g, '&#39;')
 }
 
+/**
+ * A select's options, with `selected` marked. `labels` names each value; without it, a value is its
+ * own label.
+ * @template {string} T
+ * @param {readonly T[]} values
+ * @param {T} selected
+ * @param {Readonly<Record<T, string>>} [labels]
+ * @returns {string}
+ */
+export function optionsHtml(values, selected, labels) {
+  return values
+    .map(
+      v => `<option value="${esc(v)}"${v === selected ? ' selected' : ''}>${esc(labels?.[v] ?? v)}</option>`
+    )
+    .join('')
+}
+
 /** The chevron every collapse toggle draws. It points right; CSS turns it down while open. */
 export const CHEVRON_ICON =
   '<svg class="chev-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +

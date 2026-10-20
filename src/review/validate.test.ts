@@ -615,6 +615,33 @@ describe('validateModelOutput', () => {
     ])
   })
 
+  it('POINT_IMPACT: a decide point without one, and a check or fyi point with one', () => {
+    const output = clean()
+    const point = {
+      kind: 'decision' as const,
+      audience: 'reviewer' as const,
+      path: 'src/app.ts',
+      line: 4,
+      body: 'b',
+    }
+    output.points = [
+      { ...point, level: 'decide', title: 'Bare' },
+      { ...point, level: 'decide', impact: 'critical', title: 'Weighed' },
+      { ...point, level: 'check', impact: 'low', title: 'Checked' },
+      { ...point, level: 'fyi', impact: 'high', title: 'Noted' },
+    ]
+    expect(errorsOf(output).map(formatValidationError)).toEqual([
+      'POINT_IMPACT point 1 "Bare": a decide point needs an impact',
+      'POINT_IMPACT point 3 "Checked": only a decide point has an impact',
+      'POINT_IMPACT point 4 "Noted": only a decide point has an impact',
+    ])
+    // A stored canvas may predate impact; an impact on the wrong level is still refused.
+    expect(errorsOf(output, { storedArtifact: true }).map(formatValidationError)).toEqual([
+      'POINT_IMPACT point 3 "Checked": only a decide point has an impact',
+      'POINT_IMPACT point 4 "Noted": only a decide point has an impact',
+    ])
+  })
+
   it('TOO_MANY_POINTS: counts the written points plus the missing test entries', () => {
     const output = clean()
     const p = output.points[0]
@@ -805,6 +832,9 @@ describe('validateModelOutput', () => {
       highRisk: config.highRisk,
     })
     expect(fresh.ok).toBe(false)
-    expect(new Set(fresh.errors.map(error => error.code))).toEqual(new Set(['FOLD_MISSING', 'FOLD_INVALID']))
+    // It also predates impact, which a fresh generation must give each decide point.
+    expect(new Set(fresh.errors.map(error => error.code))).toEqual(
+      new Set(['FOLD_MISSING', 'FOLD_INVALID', 'POINT_IMPACT'])
+    )
   })
 })

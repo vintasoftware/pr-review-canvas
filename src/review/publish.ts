@@ -14,7 +14,7 @@ import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { standsForHead } from './carry-over.js'
 import { normalize } from './normalize.js'
-import { carriedSettlements } from './self-review.js'
+import { keptSettlements } from './self-review.js'
 import { coveredTestPaths, type ValidationInput, validateModelOutput } from './validate.js'
 
 export interface PublishOptions {
@@ -200,22 +200,18 @@ export function buildManifest(
 }
 
 /**
- * The author's settlements that still answer this canvas: those of the canvas this run replaces for
- * the same commit, and those of the basis canvas whose points it carried.
+ * The author's settlements that still answer this canvas: those of the canvas `prepare` took the
+ * resolutions from, read again now, under the points this canvas still has. A context written before
+ * that canvas was recorded reads the basis canvas, or the one this run replaces.
  */
 async function settlementsToKeep(
   ctx: AppContext,
   context: GenerationContext,
   artifact: ReviewArtifact
 ): Promise<Record<string, Settlement>> {
+  const sha = context.resolutions?.canvasSha ?? context.basis?.canvasSha ?? context.headSha
   // A canvas in a format this version no longer reads has no settlement it could keep.
-  const read = (sha: string) => ctx.canvases.readArtifact(sha).catch(() => null)
-  const split = context.basis
-  const basisArtifact = split === undefined ? null : await read(split.canvasSha)
-  return carriedSettlements(artifact, {
-    sameCommit: await read(context.headSha),
-    basis: split === undefined || basisArtifact === null ? null : { artifact: basisArtifact, split },
-  })
+  return keptSettlements(artifact, await ctx.canvases.readArtifact(sha).catch(() => null))
 }
 
 export async function publish(

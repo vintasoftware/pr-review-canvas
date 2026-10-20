@@ -370,7 +370,7 @@ describe('renderPrompt', () => {
     )
     basis.points = []
     expect(renderPrompt(context({ basis }), PATCHES, sources)).toContain(
-      'current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level and body still hold unless a changed chunk contradicts them:\n\n_none_'
+      'current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level, impact, and body still hold unless a changed chunk contradicts them. A carried `decide` point without an impact gets one:\n\n_none_'
     )
     expect(() =>
       renderPrompt(context({ basis }), PATCHES, {
@@ -379,6 +379,56 @@ describe('renderPrompt', () => {
       })
     ).toThrow('generation-strict-incremental.md uses an unknown token {{NOPE}}')
   })
+
+  it.each(['strict', 'surfacing'] as const)(
+    'lists the points the author resolved for the %s generator, fresh or incremental, and marks a re-judged one',
+    mode => {
+      const generation = { mode, maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 }
+      const resolutions: NonNullable<GenerationContext['resolutions']> = {
+        canvasSha: 'e'.repeat(40),
+        points: [
+          {
+            kind: 'risk',
+            path: 'src/app.ts',
+            title: 'Edited under it',
+            origin: 'model',
+            reason: 'Nothing\ncalls it yet.',
+          },
+          {
+            kind: 'tests',
+            path: 'src/app.ts',
+            title: 'other() has no test',
+            origin: 'tests',
+            reason: 'Covered by e2e.',
+          },
+        ],
+      }
+      const fresh = renderPrompt(context({ resolutions, generation }), PATCHES, sources)
+      expect(fresh).toContain('### Points the author already resolved')
+      expect(fresh).toContain(
+        '- risk on `src/app.ts` — "Edited under it"\n  Author\'s reason: Nothing calls it yet.'
+      )
+      expect(fresh).toContain(
+        '"other() has no test" (from a `tests: missing` entry: keep the entry\'s `title`)'
+      )
+      expect(fresh).toContain(
+        "Reopen one only when you read the current code and the author's reason no longer holds"
+      )
+      const basis: NonNullable<GenerationContext['basis']> = {
+        canvasSha: 'e'.repeat(40),
+        reviewJsonPath: '/data/canvases/e/review.json',
+        files: { unchanged: [], changed: ['src/app.ts'], added: [], removed: [] },
+        layers: [],
+        points: [{ kind: 'risk', path: 'src/app.ts', title: 'Edited under it', status: 're-judged' }],
+      }
+      const incremental = renderPrompt(context({ basis, resolutions, generation }), PATCHES, sources)
+      expect(incremental).toContain(
+        '- risk on `src/app.ts` — "Edited under it" (resolved by the author; see below)'
+      )
+      expect(incremental).toContain('### Points the author already resolved')
+      expect(renderPrompt(context({ generation }), PATCHES, sources)).not.toContain('already resolved')
+    }
+  )
 
   it('throws on a template token it does not know', () => {
     const generation = { ...sources.generation, strict: 'hi {{NOPE}}' }

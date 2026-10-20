@@ -33,10 +33,11 @@
   --warn-bg: light-dark(#f6f0d9, rgb(212 178 90 / 15%));
   --progress: light-dark(#50643f, #a8c97f);
 
-  --sev-blocker: light-dark(#a8432c, #e98a6f);
-  --sev-major: light-dark(#b58a1f, #d4b25a);
-  --sev-minor: light-dark(#9a9e90, #6f7466);
-  --sq-mark: light-dark(#fffefa, #252821);
+  --point-red: light-dark(#a8432c, #e98a6f);
+  --point-amber: light-dark(#b58a1f, #d4b25a);
+  --point-gray: light-dark(#9a9e90, #6f7466);
+  /* The accent is green here, which reads as done, so the blue is its own. */
+  --point-blue: light-dark(#3f6a8a, #8fb3cf);
 
   --add-bg: light-dark(#edf4e7, rgb(168 201 127 / 12%));
   --add-w: light-dark(#d0e2b8, rgb(168 201 127 / 30%));

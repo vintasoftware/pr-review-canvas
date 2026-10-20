@@ -100,7 +100,48 @@ describe('runDoctorChecks', () => {
         ghAuth: { ok: true, detail: 'Logged in to github.com' },
         dataDir: { ok: true, detail: dataDir },
         skill: { ok: true, detail: path.join(CLAUDE_SKILLS_DIR, SKILL_NAME) },
+        prompts: { ok: true, detail: 'bundled templates' },
       },
+    })
+  })
+
+  it('names the tokens the project’s own templates lack, from every release up to this one', async () => {
+    const repo = await makeTempDir()
+    await writeFile(path.join(repo, 'format.md'), '## Attention points\n')
+    await writeFile(path.join(repo, 'pr-review.config.yml'), 'prompts:\n  generation-format.md: format.md\n')
+    const addedTokens = [
+      { since: '0.5.0', template: 'generation-format.md', token: 'MAX_POINTS' },
+      { since: '0.6.0', template: 'generation-format.md', token: 'RESOLVED' },
+      // A release after this one: its template is not the one installed here.
+      { since: '0.7.0', template: 'generation-format.md', token: 'LATER' },
+    ] as const
+    const report = await runDoctorChecks(
+      deps({
+        git: createFakeGit({ topLevel: repo, commonDir: path.join(repo, '.git'), remotes: {} }),
+        dataDirOverride: await makeTempDir(),
+        version: '0.6.0',
+        addedTokens,
+      })
+    )
+    expect(report.checks.prompts).toEqual({
+      ok: false,
+      detail: 'own templates lack tokens: {{MAX_POINTS}} in format.md, {{RESOLVED}} in format.md',
+      hint:
+        'add {{MAX_POINTS}} to format.md under "## Attention points", where pr-review 0.5.0\'s generation-format.md has it; ' +
+        'add {{RESOLVED}} to format.md under "## Attention points", where pr-review 0.6.0\'s generation-format.md has it',
+    })
+    await writeFile(path.join(repo, 'format.md'), '{{MAX_POINTS}} {{RESOLVED}}\n')
+    const fixed = await runDoctorChecks(
+      deps({
+        git: createFakeGit({ topLevel: repo, commonDir: path.join(repo, '.git'), remotes: {} }),
+        dataDirOverride: await makeTempDir(),
+        version: '0.6.0',
+        addedTokens,
+      })
+    )
+    expect(fixed.checks.prompts).toEqual({
+      ok: true,
+      detail: 'own templates have every token a release added: generation-format.md',
     })
   })
 

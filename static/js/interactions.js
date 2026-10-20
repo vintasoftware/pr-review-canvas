@@ -58,6 +58,7 @@ import {
   applyPointStates,
   openPoints,
   pointStatusesHtml,
+  pointSwitches,
   pointToMarkdown,
   postedUrls,
   setPointExpanded,
@@ -940,6 +941,23 @@ export function wireReview(root, session, opts = {}) {
     )
   }
 
+  /**
+   * Flips one of the overview's switches; see `.is-handled` and `.is-resolved` in CSS.
+   * @param {HTMLElement} el the switch
+   * @param {'hiding' | 'showingResolved'} which
+   */
+  const flipSwitch = (el, which) => {
+    const line = el.closest('.point-statuses')
+    if (line === null) return
+    const switches = { ...pointSwitches(line), [which]: el.getAttribute('aria-pressed') !== 'true' }
+    const next = nodeFrom(doc, pointStatusesHtml(session.artifact.points, session.state, switches))
+    if (next !== null) {
+      line.replaceWith(next)
+      const toggle = next.querySelector(`[data-act="${el.getAttribute('data-act')}"]`)
+      if (toggle instanceof HTMLElement) toggle.focus()
+    }
+  }
+
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
     'toggle-card': (el, event) => {
@@ -973,17 +991,8 @@ export function wireReview(root, session, opts = {}) {
         setPointExpanded(point)
       }
     },
-    'toggle-handled': el => {
-      // The page hides the points acted on while this switch is pressed; see `.is-handled` in CSS.
-      const line = el.closest('.point-statuses')
-      const hiding = el.getAttribute('aria-pressed') !== 'true'
-      const next = nodeFrom(doc, pointStatusesHtml(session.artifact.points, session.state, hiding))
-      if (line !== null && next !== null) {
-        line.replaceWith(next)
-        const toggle = next.querySelector('[data-act="toggle-handled"]')
-        if (toggle instanceof HTMLElement) toggle.focus()
-      }
-    },
+    'toggle-handled': el => flipSwitch(el, 'hiding'),
+    'toggle-resolved': el => flipSwitch(el, 'showingResolved'),
     ...selfReviewActions(session, message => toast(root, message)),
     'point-post': el => {
       const point = pointById(el.getAttribute('data-point') ?? '')

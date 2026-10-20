@@ -76,6 +76,11 @@ export const FILE_STATUSES = ['added', 'modified', 'deleted', 'renamed', 'binary
 export const POINT_KINDS = ['decision', 'risk', 'drift', 'tests', 'debt', 'question'] as const
 export const POINT_LEVELS = ['decide', 'check', 'fyi'] as const
 /**
+ * What a wrong call on a `decide` point would cost, worst first. Only `decide` points carry one; a
+ * canvas written before impact existed has `decide` points without it.
+ */
+export const POINT_IMPACTS = ['critical', 'high', 'low'] as const
+/**
  * Who a point is for. The author can settle an `author` point before asking for review, because it
  * asks about intent the author already knows. A `reviewer` point needs a second pair of eyes.
  */
@@ -303,6 +308,7 @@ function pointBase(caps: Caps) {
   return {
     kind: z.enum(POINT_KINDS),
     level: z.enum(POINT_LEVELS),
+    impact: z.enum(POINT_IMPACTS).optional(),
     title: text(caps, 'pointTitle'),
     path: z.string().min(1),
     line: z.number().int().positive(),

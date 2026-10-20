@@ -1,17 +1,18 @@
-// The author's side of self-review: settling an attention point with a reason, or reopening it. The
-// answer is written into the canvas itself and shared again, so it reaches every reviewer.
+// Self-review on the server: the author settles an attention point with a reason, or reopens it.
+// The answer is written into the canvas itself and shared again, and every reviewer's page reads it
+// back from the canvas comment while it stays open.
 import { Hono } from 'hono'
-import { SettleInputSchema, type SettleResponse } from '../../contract/self-review.js'
+import { SettleInputSchema, type SettledResponse, type SettleResponse } from '../../contract/self-review.js'
 import type { Pr, Settlement } from '../../contract/review-artifact.js'
 import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
 import { shareCanvasOnPr } from '../../canvas/share.js'
 import { lookupCanvas } from '../../review/carry-over.js'
 import { isAuthor, settlementCommentBody, withSettlement } from '../../review/self-review.js'
-import type { PrLoader } from '../bundle.js'
+import { type PrLoader, runDiscovery } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { oneAtATime } from '../one-at-a-time.js'
-import { parseTargetKey, requirePrNumber } from './api.js'
+import { parseHeadShaQuery, parseTargetKey, requirePrNumber } from './api.js'
 import { mentionsCanvas, postOnPr, readBody, requireSameDiff } from './review-routes.js'
 
 /** Settling changes what every reviewer reads, so only the pull request's author may do it. */
@@ -108,6 +109,31 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       }
     })
     return c.json(answer)
+  })
+
+  // A reviewer's page asks when it opens and every few minutes after. The comments are read again,
+  // and the canvas comment imported again only when the pull request's text changed, which a
+  // settlement does by updating it.
+  api.get('/prs/:n/settled', async c => {
+    const number = requirePrNumber(parseTargetKey(c.req.param('n')), 'reading resolutions')
+    const canvasSha = parseHeadShaQuery(c.req.query('headSha'))
+    if (canvasSha === undefined) {
+      throw new AppError('BAD_REQUEST', 'name the canvas on screen with ?headSha=<sha>', 400)
+    }
+    const { comments } = await loader.refreshComments(number)
+    if (ctx.fixtureArtifact === null) {
+      await runDiscovery(ctx, await loader.currentPr(number), comments, { refresh: false })
+    }
+    const artifact = ctx.fixtureArtifact ?? (await ctx.canvases.readArtifact(canvasSha))
+    if (artifact === null) {
+      throw new AppError('NOT_FOUND', `no canvas for ${canvasSha.slice(0, 7)}`, 404, 'reload the page')
+    }
+    const body: SettledResponse = {
+      generatedAt: artifact.generatedAt,
+      settled: artifact.settled ?? {},
+      issueComments: comments.issueComments,
+    }
+    return c.json(body)
   })
 
   return api

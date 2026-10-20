@@ -1,11 +1,9 @@
 // Self-review: the author settles attention points before asking for review, and the canvas carries
 // each answer to every reviewer. Any point can be settled, a reviewer point too when it does not
 // apply. A settled point leaves the reviewer's list; its reason stays.
-import type { GenerationContext } from '../contract/generation-context.js'
 import type { Point, Pr, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
 import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
-import { fingerprint } from './normalize.js'
 
 type Level = (typeof POINT_LEVELS)[number]
 
@@ -110,34 +108,15 @@ export function readerResolves(
 }
 
 /**
- * The settlements a newly generated canvas keeps. A settlement answers the code under its point, so
- * it survives only where that code survives: in a regeneration of the same commit, under a point
- * with the same fingerprint; in an incremental run, under one the basis split carried.
+ * The settlements a newly generated canvas keeps: those of the canvas it took its resolutions from
+ * (see `findResolutionSource`), under a point with the same fingerprint. The generator is told which
+ * points the author resolved, and writes a concern that still applies under its old kind, path, and
+ * title, wherever its lines moved; one it reopens comes back under a new title, and so open.
  */
-export function carriedSettlements(
+export function keptSettlements(
   artifact: Pick<ReviewArtifact, 'points'>,
-  sources: {
-    sameCommit: Pick<ReviewArtifact, 'settled'> | null
-    basis: {
-      artifact: Pick<ReviewArtifact, 'settled'>
-      split: NonNullable<GenerationContext['basis']>
-    } | null
-  }
+  source: Pick<ReviewArtifact, 'settled'> | null
 ): Record<string, Settlement> {
   const present = new Set(artifact.points.map(p => p.fingerprint))
-  const carriedByBasis = new Set(
-    (sources.basis?.split.points ?? []).filter(p => p.status === 'carried').map(p => fingerprint(p))
-  )
-  const out: Record<string, Settlement> = {}
-  for (const [fp, settlement] of Object.entries(sources.basis?.artifact.settled ?? {})) {
-    if (present.has(fp) && carriedByBasis.has(fp)) {
-      out[fp] = settlement
-    }
-  }
-  for (const [fp, settlement] of Object.entries(sources.sameCommit?.settled ?? {})) {
-    if (present.has(fp)) {
-      out[fp] = settlement
-    }
-  }
-  return out
+  return Object.fromEntries(Object.entries(source?.settled ?? {}).filter(([fp]) => present.has(fp)))
 }

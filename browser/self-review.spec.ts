@@ -19,8 +19,9 @@ test('the author settles a reviewer point with a reason, reads it after a reload
   await expect(box.locator('textarea')).toBeFocused()
   await box.locator('textarea').fill('The spec says sum; see the linked issue.')
   await box.locator('[data-act="settle-save"]').click()
-  // The point stays in place, collapsed to its title and the author's reason.
+  // The point the author just resolved stays in place, collapsed to its title and the reason.
   await expect(card).toHaveAttribute('data-status', 'resolved')
+  await expect(card).toBeVisible()
   await expect(card.locator('.p-summary')).toHaveText(
     'Resolved by the author: The spec says sum; see the linked issue.'
   )
@@ -31,8 +32,14 @@ test('the author settles a reviewer point with a reason, reads it after a reload
   await page.reload()
   await expect(page.locator('.conversation')).toContainText('For the reviewer: no open attention points')
   await expect(page.locator('.conversation')).toContainText('Resolved by the author: 1')
-  await expect(page.locator('.point-statuses')).toContainText('1 resolved')
+  await expect(page.locator('.point-statuses')).toContainText('1 resolved by the author')
   await expect(card).toHaveAttribute('data-status', 'resolved')
+  // Every reader loads a resolved point off the page, until they show the resolved ones.
+  await expect(card).toBeHidden()
+  const showResolved = page.locator('[data-act="toggle-resolved"]')
+  await expect(showResolved).toHaveText('show the 1 resolved')
+  await showResolved.click()
+  await expect(card).toBeVisible()
   await card.locator('[data-act="point-expand"]').click()
   await expect(card.locator('.settled-reason')).toContainText('The spec says sum')
   await expect(card.locator('a[href$="#discussion_r5001"]')).toHaveCount(1)
@@ -102,4 +109,33 @@ test('generated missing-test points use reviewer routing, changed code, and a wo
   expect(point).toMatchObject({ path: 'src/app.ts', line: 2, side: 'new' })
   await page.reload()
   await expect(card.locator('.pill.audience')).toHaveText('reviewer')
+})
+
+test('a reviewer loads the author’s resolved points off the page, and the layer they emptied without its heading', async ({
+  page,
+  chatServer,
+}) => {
+  const artifact = {
+    ...syntheticArtifact(),
+    settled: { 'fp-1': { reason: 'The spec says sum.', at: '2026-09-10T12:00:00.000Z' } },
+  }
+  const server = await chatServer({
+    setup: async t => {
+      t.ctx.fixtureArtifact = artifact
+    },
+  })
+  await page.goto(server.url)
+  const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  const heading = page
+    .locator('section.layer')
+    .filter({ has: page.locator('li.finding[data-fingerprint="fp-1"]') })
+    .locator('.lbl.sub', { hasText: 'Attention points' })
+  await expect(page.locator('.point-statuses')).toContainText('2 open · 1 resolved by the author')
+  await expect(card).toBeHidden()
+  await expect(heading).toBeHidden()
+  await page.locator('[data-act="toggle-resolved"]').click()
+  await expect(card).toBeVisible()
+  await expect(heading).toBeVisible()
+  await expect(card.locator('.p-summary')).toHaveText('Resolved by the author: The spec says sum.')
+  await expect(card.locator('[data-act="point-unsettle"]')).toHaveCount(0)
 })

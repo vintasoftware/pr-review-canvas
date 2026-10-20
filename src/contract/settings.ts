@@ -3,6 +3,7 @@ import type { GenerationModels, Sharing } from '../project-config.js'
 import type { ReviewKey } from './review-key.js'
 import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
+import { DEFAULT_POINT_COLORS, POINT_COLORS } from '../../static/js/point-colors.js'
 import { DEFAULT_SKIN, isSkin, SKINS, type Skin } from '../../static/js/skin.js'
 import { DEFAULT_THEME, isTheme, THEMES, type Theme } from '../../static/js/theme.js'
 
@@ -14,6 +15,8 @@ export type { Theme } from '../../static/js/theme.js'
 export { DEFAULT_THEME, THEMES } from '../../static/js/theme.js'
 export type { LayerView } from '../../static/js/layer-views.js'
 export { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
+export type { PointColors } from '../../static/js/point-colors.js'
+export { DEFAULT_POINT_COLORS, POINT_COLORS } from '../../static/js/point-colors.js'
 
 /** The agents the chat knows how to reach through acpx. */
 export const CHAT_AGENTS = ['claude', 'codex'] as const
@@ -52,6 +55,8 @@ export const SettingsSchema = z.object({
   foldLevel: z.enum(FOLD_LEVELS),
   /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
   layerView: z.enum(LAYER_VIEWS),
+  /** The palette of the attention point level icons; their shapes are the same in each. */
+  pointColors: z.enum(POINT_COLORS),
   /** The agent that answers in AI Chat. Canvas generation does not read it. */
   chatAgent: z.enum(CHAT_AGENTS),
   /** The model AI Chat runs, or null for the agent's default. Canvas generation does not read it. */
@@ -79,6 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   foldLevel: DEFAULT_FOLD_LEVEL,
   layerView: DEFAULT_LAYER_VIEW,
+  pointColors: DEFAULT_POINT_COLORS,
   chatAgent: 'claude',
   chatModel: null,
   chatTimeoutSec: 600,
@@ -121,6 +127,7 @@ export const SettingsInputSchema = z.strictObject({
   theme: z.enum(THEMES).optional(),
   foldLevel: z.enum(FOLD_LEVELS).optional(),
   layerView: z.enum(LAYER_VIEWS).optional(),
+  pointColors: z.enum(POINT_COLORS).optional(),
   chatAgent: z.enum(CHAT_AGENTS).optional(),
   chatModel: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),

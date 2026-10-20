@@ -139,6 +139,20 @@ table.keys td:first-child {
 .pill.audience {
   font-weight: 500;
 }
+/* Critical is the high red, filled, so the two read apart. */
+.pill.impact.critical {
+  color: var(--bg);
+  background: var(--point-red);
+  border-color: var(--point-red);
+}
+.pill.impact.high {
+  color: var(--point-red);
+  border-color: currentcolor;
+}
+.pill.impact.low {
+  color: var(--fg-muted);
+  border-color: currentcolor;
+}
 .pill.audience.author {
   color: var(--accent);
   border-color: currentcolor;

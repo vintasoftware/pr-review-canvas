@@ -23,6 +23,14 @@ _Avoid_: Excluded code, deleted context
 A concern anchored to changed code that asks the reviewer to decide, check, or take note.
 _Avoid_: Proven bug, automatic finding
 
+**Level**:
+What an attention point asks of the reader: decide, check, or take note (fyi). It says what to do, not how bad something is.
+_Avoid_: Severity, priority
+
+**Impact**:
+What a wrong call on a decide point would cost: critical, high, or low. Only decide points have one.
+_Avoid_: Severity
+
 **Missing-test point**:
 An attention point generated from a behavior with no test. It belongs to the reviewer unless the
 writer assigns it to the author, and counts alongside explicitly written attention points.
@@ -37,7 +45,7 @@ The author's pass over their own canvas before asking for review, resolving the 
 _Avoid_: Self-approval, pre-review
 
 **Resolved point**:
-An attention point the author answered with a reason saved in the canvas. The author may resolve any point, a reviewer point too when it does not apply. It leaves the open-point list and stays in place, collapsed with its reason, for anyone loading that canvas.
+An attention point the author answered with a reason saved in the canvas. The author may resolve any point, a reviewer point too when it does not apply. It leaves the open-point list and starts hidden for every reader, who can show it in place, collapsed with its reason. The resolution follows the pull request to every later canvas while the point comes back with the same kind, path, and title; the generator reopens it under a new title only when the reason no longer holds.
 _Avoid_: Dismissed, approved, closed
 
 **Dismissal**:

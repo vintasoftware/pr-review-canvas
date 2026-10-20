@@ -318,6 +318,23 @@ export function createReviewSession(options) {
       })
     },
     /**
+     * Takes the settled points the author wrote since the page was drawn, read back from the shared
+     * canvas, with the comments whose canvas comment counts them, and redraws what they change. The
+     * same set again changes nothing.
+     * @param {import('./contract-types.js').SettledResponse} answer
+     * @returns {string[]} the fingerprints resolved since the last set
+     */
+    takeSettled(answer) {
+      if (JSON.stringify(answer.settled) === JSON.stringify(settled)) {
+        return []
+      }
+      const added = Object.keys(answer.settled).filter(fp => settled[fp] === undefined)
+      settled = answer.settled
+      issueComments = answer.issueComments
+      publish(state)
+      return added
+    },
+    /**
      * @param {number} rootCommentId
      * @param {boolean} hidden
      */

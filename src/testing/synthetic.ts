@@ -297,6 +297,7 @@ export function syntheticArtifact(): ReviewArtifact {
         fingerprint: 'fp-1',
         kind: 'decision',
         level: 'decide',
+        impact: 'high',
         title: 'Sum instead of product',
         path: 'src/app.ts',
         line: 4,

@@ -11,7 +11,8 @@ import {
   listBundledSkills,
 } from './review/install-skill.js'
 import { makeTempDir } from './testing/fakes.js'
-import { type CommandResult, isNewer, planUpgrade, runUpgrade, type UpgradeDeps } from './upgrade.js'
+import { type CommandResult, planUpgrade, runUpgrade, type UpgradeDeps } from './upgrade.js'
+import { isNewer } from './version.js'
 
 const NAME = '@vintasoftware/pr-review-canvas'
 const BUNDLED = await listBundledSkills()
@@ -66,6 +67,8 @@ function fake(opts: {
   repoRoot?: string | null
   /** `npm root -g` fails. */
   noGlobalRoot?: boolean
+  /** The tokens every pr-review version on this machine says releases added. */
+  addedTokens?: UpgradeDeps['addedTokens']
 }): Fake {
   const calls: string[] = []
   const installed: Record<string, string | null> = {
@@ -110,6 +113,7 @@ function fake(opts: {
       return { ok: code === 0, stdout: child.out.join('\n'), stderr: child.err.join('\n') }
     },
     confirm: async () => (opts.confirm === undefined ? true : opts.confirm),
+    ...(opts.addedTokens === undefined ? {} : { addedTokens: opts.addedTokens }),
   })
   return { deps: depsFor(installed[NAME] ?? ''), calls }
 }
@@ -246,7 +250,9 @@ describe('runUpgrade', () => {
     const { io, out, err } = capture()
 
     expect(await runUpgrade(deps, [], io)).toBe(0)
-    expect(calls).toContain(`pr-review 0.6.0 upgrade --yes --json --only acpx,skill --repo ${repo}`)
+    expect(calls).toContain(
+      `pr-review 0.6.0 upgrade --yes --json --from 0.5.0 --only acpx,skill --repo ${repo}`
+    )
     expect((await findSkillCopies(repo)).every(copy => copy.state === 'current')).toBe(true)
     expect(JSON.parse(out[0] ?? '').steps).toEqual([
       { kind: 'package', name: NAME, from: '0.5.0', to: '0.6.0', status: 'done' },
@@ -327,14 +333,51 @@ describe('runUpgrade', () => {
   it('hands off without --repo outside a repository', async () => {
     const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.19.1' }, repoRoot: null })
     expect(await runUpgrade(deps, ['--yes'], capture().io)).toBe(0)
-    expect(calls).toContain('pr-review 0.6.0 upgrade --yes --json --only acpx')
+    expect(calls).toContain('pr-review 0.6.0 upgrade --yes --json --from 0.5.0 --only acpx')
     expect(calls).toContain('install -g acpx@0.19.1')
   })
 
-  it('does not start the new pr-review when no step follows its upgrade', async () => {
+  it('hands off with no step left, so the new pr-review checks without planning again', async () => {
     const { deps, calls } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, repoRoot: null })
     expect(await runUpgrade(deps, ['--yes'], capture().io)).toBe(0)
-    expect(calls.some(call => call.startsWith('pr-review '))).toBe(false)
+    expect(calls.filter(call => call.startsWith('pr-review '))).toEqual([
+      'pr-review 0.6.0 upgrade --yes --json --from 0.5.0 --only ',
+    ])
+    // The new pr-review takes no step, so it asks npm nothing.
+    expect(calls.filter(call => call === 'root -g')).toHaveLength(1)
+  })
+
+  it('names the tokens the new pr-review added that the project’s own templates lack', async () => {
+    await mkdir(path.join(repo, 'review-prompts'), { recursive: true })
+    await writeFile(path.join(repo, 'review-prompts', 'format.md'), '## Attention points\n\nno token here\n')
+    await writeFile(
+      path.join(repo, 'pr-review.config.yml'),
+      'prompts:\n  generation-format.md: review-prompts/format.md\n'
+    )
+    const addedTokens = [
+      { since: '0.5.0', template: 'generation-format.md', token: 'MAX_POINTS' },
+      { since: '0.6.0', template: 'generation-format.md', token: 'RESOLVED' },
+    ] as const
+    const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, addedTokens })
+    const { io, out, err } = capture()
+    expect(await runUpgrade(deps, ['--yes'], io)).toBe(0)
+    // Only the token added after 0.5.0: the copy was made from 0.5.0 or later, or dropped it on purpose.
+    const gap = {
+      since: '0.6.0',
+      template: 'generation-format.md',
+      token: 'RESOLVED',
+      file: 'review-prompts/format.md',
+      heading: '## Attention points',
+    }
+    expect(JSON.parse(out[0] ?? '').prompts).toEqual([gap])
+    expect(err).toContain(
+      '  - add {{RESOLVED}} to review-prompts/format.md under "## Attention points", where pr-review 0.6.0\'s generation-format.md has it'
+    )
+    // Run at the new version with nothing to do, it names the tokens that version added.
+    const current = fake({ version: '0.6.0', latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, addedTokens })
+    const again = capture()
+    expect(await runUpgrade(current.deps, [], again.io)).toBe(0)
+    expect(JSON.parse(again.out[0] ?? '').prompts).toEqual([gap])
   })
 
   it('takes only the kinds of step --only names, and says what it left out', async () => {
@@ -415,6 +458,11 @@ describe('runUpgrade', () => {
     const { io, out, err } = capture()
     expect(await runUpgrade(deps, [], io)).toBe(0)
     expect(err.at(-1)).toBe('Everything is up to date.')
-    expect(JSON.parse(out[0] ?? '')).toEqual({ applied: false, steps: [], notes: expect.any(Array) })
+    expect(JSON.parse(out[0] ?? '')).toEqual({
+      applied: false,
+      steps: [],
+      notes: expect.any(Array),
+      prompts: [],
+    })
   })
 })

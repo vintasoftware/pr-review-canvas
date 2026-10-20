@@ -73,6 +73,7 @@ describe('normalize', () => {
         id: 'p-1',
         kind: 'decision',
         level: 'decide',
+        impact: 'high',
         title: 'Sum instead of product',
         path: 'src/app.ts',
         line: 4,
@@ -203,6 +204,31 @@ describe('normalize', () => {
       { label: 'rename', source: 'config' },
       { label: 'core', source: 'config' },
     ])
+  })
+
+  it('lists decide points worst impact first, with one that has no impact after them', () => {
+    const output = artifactToModelOutput(syntheticArtifact())
+    const decide = (title: string, line: number, impact?: 'critical' | 'high' | 'low') => ({
+      kind: 'decision' as const,
+      level: 'decide' as const,
+      ...(impact === undefined ? {} : { impact }),
+      audience: 'reviewer' as const,
+      title,
+      path: 'src/new.ts',
+      line,
+      body: 'x',
+    })
+    output.points = [
+      decide('none', 1),
+      decide('low', 2, 'low'),
+      decide('critical', 3, 'critical'),
+      decide('high', 4, 'high'),
+    ]
+    output.layers.forEach(l => {
+      l.tests = []
+    })
+    const artifact = normalize(output, input())
+    expect(artifact.points.map(p => p.title)).toEqual(['critical', 'high', 'low', 'none'])
   })
 
   it('anchors a tests point on the old side when the first hunk is a pure deletion, and skips a layer with no hunk', () => {

@@ -8,8 +8,9 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { fileDelta, findBasis, splitBasis } from './incremental.js'
+import { fileDelta, findBasis, findResolutionSource, splitBasis } from './incremental.js'
 import { pointLinesInHead, type SideText, stableLines } from './point-carry.js'
+import { canvasBelongsTo, type CanvasStore } from '../store/canvas-store.js'
 import type { CanvasEntry, CanvasIndex } from '../contract/canvas-manifest.js'
 
 const OLD = 'e'.repeat(40)
@@ -343,5 +344,53 @@ describe('findBasis', () => {
 
   it('has no basis when the store is empty', async () => {
     expect(await findBasisCanvas(index({}), git, 42, HEAD_SHA)).toBeNull()
+  })
+})
+
+describe('findResolutionSource', () => {
+  /** The store of linked worktree `a`, which owns canvases the way the page does. */
+  const store = (canvases: CanvasIndex['canvases']): CanvasStore =>
+    ({
+      readIndex: async () => ({ canvases }),
+      belongsTo: (entry, key) => canvasBelongsTo(entry, key, 'a'),
+    }) as Pick<CanvasStore, 'readIndex' | 'belongsTo'> as unknown as CanvasStore
+  const git = createFakeGit({ ancestors: { [`${OLD}..${HEAD_SHA}`]: true } })
+  const at = (generatedAt: string) => ({ generatedAt, source: 'local' as const })
+
+  it('takes the pull request’s newest numbered canvas on any commit, else a number-less one on its line', async () => {
+    const pr = store({
+      [OLD]: { ...at('2026-09-09T00:00:00Z'), prNumber: 42 },
+      [FORCE_PUSHED]: { ...at('2026-09-17T00:00:00Z'), prNumber: 42 },
+    })
+    expect(await findResolutionSource(pr, git, 42, HEAD_SHA)).toBe(FORCE_PUSHED)
+    // A later branch review of the same work carries no number and none of the PR's resolutions.
+    const branchReview = store({
+      [FORCE_PUSHED]: { ...at('2026-09-09T00:00:00Z'), prNumber: 42 },
+      [OLD]: at('2026-09-17T00:00:00Z'),
+    })
+    expect(await findResolutionSource(branchReview, git, 42, HEAD_SHA)).toBe(FORCE_PUSHED)
+    const beforeThePr = store({
+      [FORCE_PUSHED]: at('2026-09-01T00:00:00Z'),
+      [OLD]: at('2026-09-09T00:00:00Z'),
+    })
+    expect(await findResolutionSource(beforeThePr, git, 42, HEAD_SHA)).toBe(OLD)
+  })
+
+  it('takes a local review’s canvases from its own checkout only', async () => {
+    const canvases = store({
+      [OLDER]: { ...at('2026-09-01T00:00:00Z'), checkout: 'a' },
+      [OLD]: { ...at('2026-09-09T00:00:00Z'), checkout: 'b' },
+    })
+    const lineage = createFakeGit({
+      ancestors: { [`${OLD}..${HEAD_SHA}`]: true, [`${OLDER}..${HEAD_SHA}`]: true },
+    })
+    expect(await findResolutionSource(canvases, lineage, 'branch', HEAD_SHA)).toBe(OLDER)
+  })
+
+  it('takes the head’s own canvas whoever owned it, since the run replaces it', async () => {
+    const canvases = store({ [HEAD_SHA]: { ...at('2026-09-09T00:00:00Z'), prNumber: 42 } })
+    expect(await findResolutionSource(canvases, git, 'branch', HEAD_SHA)).toBe(HEAD_SHA)
+    expect(await findResolutionSource(canvases, git, undefined, HEAD_SHA)).toBe(HEAD_SHA)
+    expect(await findResolutionSource(store({}), git, 42, HEAD_SHA)).toBeNull()
   })
 })

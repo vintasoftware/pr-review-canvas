@@ -270,12 +270,12 @@
   gap: 4px 12px;
   padding: 10px 12px;
 }
-/* A point to check: an amber square with a dot, as in the app. */
+/* A point to check: an amber checked box, as in the app's classic colors. */
 .app-level {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   margin-top: 4px;
-  background: radial-gradient(circle, #fffefa 0 2px, #b58a1f 2.5px);
+  fill: #b58a1f;
 }
 .attention h4 {
   font-size: 14px;

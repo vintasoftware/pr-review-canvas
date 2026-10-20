@@ -1,5 +1,5 @@
 import { syntheticArtifact } from '../testing/synthetic.js'
-import { carriedSettlements, isAuthor, tallyCanvas, tallyMarkdown, withSettlement } from './self-review.js'
+import { isAuthor, keptSettlements, tallyCanvas, tallyMarkdown, withSettlement } from './self-review.js'
 
 const settlement = { reason: 'Known.', at: '2026-09-10T12:00:00.000Z' }
 
@@ -43,8 +43,16 @@ describe('isAuthor', () => {
   })
 })
 
-describe('carriedSettlements', () => {
+describe('keptSettlements', () => {
   it('keeps nothing without a source', () => {
-    expect(carriedSettlements(syntheticArtifact(), { sameCommit: null, basis: null })).toEqual({})
+    expect(keptSettlements(syntheticArtifact(), null)).toEqual({})
+  })
+
+  it('keeps the settlement of every point the new canvas still has, and drops the rest', () => {
+    const artifact = syntheticArtifact()
+    const kept = artifact.points[0]!.fingerprint
+    expect(keptSettlements(artifact, { settled: { [kept]: settlement, gone: settlement } })).toEqual({
+      [kept]: settlement,
+    })
   })
 })

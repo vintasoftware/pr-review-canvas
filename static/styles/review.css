@@ -270,26 +270,23 @@
 .sevsum > a:hover {
   text-decoration: underline;
 }
-.sq {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  box-sizing: border-box;
-  border: 1px solid var(--ink);
-  background: var(--sc);
-  vertical-align: -1px;
+.lv {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: var(--level-fyi);
+  vertical-align: -2px;
 }
-.sq.decide {
-  --sc: var(--sev-blocker);
+.lv svg {
+  width: 100%;
+  height: 100%;
 }
-.sq.check {
-  --sc: var(--sev-major);
-  background: radial-gradient(circle, var(--sq-mark) 0 2px, var(--sc) 2.5px);
+.lv.decide {
+  fill: var(--level-decide);
 }
-.sq.fyi {
-  --sc: var(--sev-minor);
-  background: transparent;
+.lv.check {
+  fill: var(--level-check);
 }
 .sevsum > .legend {
   position: absolute;
@@ -332,7 +329,7 @@
 .findings li:first-child {
   border-top: 0;
 }
-.findings > li > .sq {
+.findings > li > .lv {
   margin-top: 5px;
 }
 .findings p {
@@ -402,9 +399,23 @@
 .pill.status.dismissed {
   color: var(--fg-muted);
 }
-/* The overview's switch takes every point acted on off the page, wherever it is drawn, except one
-   whose reason box is open. */
-body:has(.point-statuses [aria-pressed='true']) .is-handled:not(:has(.settle-box)) {
+/* The overview's switch takes every point the reader acted on off the page, wherever it is drawn,
+   except one whose reason box is open. */
+body:has(.point-statuses [data-act='toggle-handled'][aria-pressed='true'])
+  .is-handled:not(.is-resolved, :has(.settle-box)) {
+  display: none;
+}
+/* A layer's points heading and list lay out as the layer's own children. */
+.layer-points {
+  display: contents;
+}
+/* A point the author resolved is off the page until the reader shows the resolved ones, or follows
+   a link to that point. A layer left with no point on the page drops its points heading too. */
+body:not(:has(.point-statuses [data-act='toggle-resolved'][aria-pressed='true']))
+  :is(
+    .is-resolved:not([data-revealed]),
+    .layer-points:not(:has(> .findings > li:not(.is-resolved:not([data-revealed]))))
+  ) {
   display: none;
 }
 .point-statuses {

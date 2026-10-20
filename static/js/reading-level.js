@@ -3,7 +3,7 @@
 // takes off the screen, the control under the header, and the labels that say how much of the
 // diff that is. The level itself, and the counts, belong to layers.js, which owns the file cards
 // and the rule for what a card keeps open.
-import { esc } from './dom.js'
+import { esc, optionsHtml } from './dom.js'
 import { FOLD_LEVELS } from './fold-levels.js'
 
 /** @typedef {import('./contract-types.js').FoldLevel} FoldLevel */
@@ -50,18 +50,6 @@ export function foldLevelHint(level, counts) {
 }
 
 /**
- * The levels as options, with one selected. The control on the page and the default field of the
- * settings dialog are the same list.
- * @param {FoldLevel} level
- * @returns {string}
- */
-export function foldLevelOptionsHtml(level) {
-  return FOLD_LEVELS.map(
-    l => `<option value="${esc(l)}"${l === level ? ' selected' : ''}>${esc(l)}</option>`
-  ).join('')
-}
-
-/**
  * How much of the diff the page hides. One control for the whole canvas, next to the review
  * progress rather than among the commands, because it changes what the reader sees and does not
  * act on the pull request. The page opens at the level saved in the settings dialog; a change
@@ -71,7 +59,7 @@ export function foldLevelOptionsHtml(level) {
  * @returns {string}
  */
 export function foldLevelControlHtml(level, counts) {
-  const options = foldLevelOptionsHtml(level)
+  const options = optionsHtml(FOLD_LEVELS, level)
   return (
     `<div class="reading"><label for="${FOLD_LEVEL_SELECT_ID}">Hide code</label>` +
     `<select id="${FOLD_LEVEL_SELECT_ID}" title="How much of the diff this page hides. Press f to step through the levels; the settings dialog sets the default.">${options}</select>` +

@@ -109,6 +109,28 @@ export const BasisSplitSchema = z.object({
 })
 export type BasisSplit = z.infer<typeof BasisSplitSchema>
 
+/** A point the author resolved on an earlier canvas, with the reason every reviewer read. */
+export const ResolvedPointSchema = z.object({
+  kind: z.enum(POINT_KINDS),
+  path: z.string().min(1),
+  title: z.string(),
+  /** `tests` when a missing-test entry generated the point, so its entry's title is the one to keep. */
+  origin: z.enum(['model', 'tests']),
+  reason: z.string(),
+})
+export type ResolvedPoint = z.infer<typeof ResolvedPointSchema>
+
+/**
+ * The canvas this run takes the author's resolutions from (see `findResolutionSource`), with the
+ * points resolved on it when `prepare` ran. `publish` reads that canvas again, so a point resolved
+ * while the generator worked is kept too.
+ */
+export const ResolutionsSchema = z.object({
+  canvasSha: z.string().regex(/^[0-9a-f]{40}$/),
+  points: z.array(ResolvedPointSchema),
+})
+export type Resolutions = z.infer<typeof ResolutionsSchema>
+
 /**
  * `context.json`: everything the agent and `publish` need about one prepared canvas. Written by
  * `prepare` next to `prompt.md`; `publish` validates `model.json` against the hunk index and the
@@ -152,6 +174,9 @@ export const GenerationContextSchema = z.object({
   largePr: z.boolean(),
   /** Absent when this canvas is generated from a blank page: no basis, `--force`, or turned off. */
   basis: BasisSplitSchema.optional(),
+  /** Absent when no earlier canvas of this review exists. `--force` keeps it: a resolution is not
+   * the basis's wording, it is the author's answer. */
+  resolutions: ResolutionsSchema.optional(),
   preparedAt: z.string(),
 })
 export type GenerationContext = z.infer<typeof GenerationContextSchema>

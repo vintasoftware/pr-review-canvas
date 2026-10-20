@@ -37,7 +37,12 @@ export type {
   GenerationSkillResponse,
 } from '../../src/contract/generation.js'
 export type { ReviewKey } from '../../src/contract/review-key.js'
-export type { CanvasSharing, SettleInput, SettleResponse } from '../../src/contract/self-review.js'
+export type {
+  CanvasSharing,
+  SettledResponse,
+  SettleInput,
+  SettleResponse,
+} from '../../src/contract/self-review.js'
 export type {
   CommentsPayload,
   IssueComment,

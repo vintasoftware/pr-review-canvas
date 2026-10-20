@@ -31,7 +31,7 @@ pr-review doctor --all-checks
 ```
 
 `doctor --all-checks` checks your repository, host CLI login, local storage, the project's
-skills, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
+skills and own prompt templates, and `acpx` for AI Chat. Follow any hints it prints to fix failed checks.
 If only `acpx` is missing, you can still review canvases; install it below to enable chat.
 If only the skill is missing, you can still generate from the review app or with
 `pr-review generate`, which use the skill pr-review ships.

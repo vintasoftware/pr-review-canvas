@@ -22,6 +22,7 @@ function report(over: Partial<DoctorReport['checks']> = {}): DoctorReport {
       ghAuth: { ok: true, detail: 'github.com' },
       dataDir: { ok: true, detail: '/repo/.pr-review' },
       skill: { ok: true, detail: '.claude/skills/pr-review-canvas, .agents/skills/pr-review-canvas' },
+      prompts: { ok: true, detail: 'bundled templates' },
       ...over,
     },
   }

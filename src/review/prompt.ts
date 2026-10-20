@@ -6,11 +6,13 @@ import {
   type BasisSplitPoint,
   type GenerationContext,
   LARGE_PR,
+  type Resolutions,
 } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema, type Pr } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
+import { fingerprint } from './normalize.js'
 import type { GenerationMode } from '../project-config.js'
 
 export { PROMPTS_DIR }
@@ -286,7 +288,7 @@ function carriedMarkdown(basis: BasisSplit | undefined): string {
   return [
     `**Whole layers** — copy the layer with its title, rationale, decisions, checkByHand, tests, files, notes, folds, and annotations:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
     `**Single files of a re-judged layer** — the file is untouched, so its note, folds, and annotations still fit wherever you put the file:\n\n${files.length === 0 ? '_none_' : files.join('\n')}`,
-    `**Attention points** — repeat the kind, path, title, and audience exactly, so the point keeps its identity, any dismissal the reviewer made, and any resolution the author made. Use each point's printed current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level and body still hold unless a changed chunk contradicts them:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
+    `**Attention points** — repeat the kind, path, title, and audience exactly, so the point keeps its identity, any dismissal the reviewer made, and any resolution the author made. Use each point's printed current anchor; its code is unchanged, and so is every file linked from the body of a point you wrote, so the level, impact, and body still hold unless a changed chunk contradicts them. A carried \`decide\` point without an impact gets one:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
   ].join('\n\n')
 }
 
@@ -300,10 +302,11 @@ function carriedPointLine(point: BasisSplitPoint): string {
   return `${line}; current anchor: ${at.side}-side ${lines}`
 }
 
-function reJudgedMarkdown(basis: BasisSplit | undefined): string {
+function reJudgedMarkdown(basis: BasisSplit | undefined, resolutions: Resolutions | undefined): string {
   if (basis === undefined) {
     return ''
   }
+  const resolved = new Set((resolutions?.points ?? []).map(p => fingerprint(p)))
   const layers = basis.layers
     .filter(l => l.status === 're-judged')
     .map(
@@ -312,11 +315,41 @@ function reJudgedMarkdown(basis: BasisSplit | undefined): string {
     )
   const points = basis.points
     .filter(p => p.status === 're-judged')
-    .map(p => `- ${p.kind} on \`${p.path}\` — "${p.title}"`)
+    .map(
+      p =>
+        `- ${p.kind} on \`${p.path}\` — "${p.title}"${resolved.has(fingerprint(p)) ? ' (resolved by the author; see below)' : ''}`
+    )
   return [
     `**Layers** — the head touched at least one of their files, so decide the grouping, the prose, and the anchors again:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
     `**Attention points** — the code under them or a file they link to changed, or could not be compared; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
     '**The summary and the pull-request-wide risk** are always written again: they describe the whole change set, which the new commits changed.',
+  ].join('\n\n')
+}
+
+/**
+ * The points the author resolved on an earlier canvas, with their reasons, and how to keep them. A
+ * resolution follows the point's kind, path, and title, so the generator decides whether each one
+ * still stands by the title it writes.
+ */
+function resolvedMarkdown(resolutions: Resolutions | undefined): string {
+  const points = resolutions?.points ?? []
+  if (points.length === 0) {
+    return ''
+  }
+  const lines = points.map(p => {
+    const entry = p.origin === 'tests' ? " (from a `tests: missing` entry: keep the entry's `title`)" : ''
+    const reason = p.reason.trim().replace(/\s*\n\s*/g, ' ')
+    return `- ${p.kind} on \`${p.path}\` — "${p.title}"${entry}\n  Author's reason: ${reason}`
+  })
+  return [
+    '### Points the author already resolved',
+    "The author answered these points on an earlier canvas of this change, and every reviewer reads the reason. A point you write with the same `kind`, `path`, and `title` stays resolved and stays off the reviewer's list.",
+    [
+      '- A concern that still applies keeps its kind, path, and title exactly, wherever its lines are now, and its audience. Never raise it again under other words.',
+      "- Reopen one only when you read the current code and the author's reason no longer holds: write it under a new title and say in the body what changed since the author answered.",
+      '- Leave out one whose code is gone.',
+    ].join('\n'),
+    lines.join('\n'),
   ].join('\n\n')
 }
 
@@ -353,7 +386,8 @@ export function renderPrompt(
     BASIS: basisMarkdown(ctx.basis),
     FILE_DELTA: fileDeltaMarkdown(ctx.basis),
     CARRIED: carriedMarkdown(ctx.basis),
-    RE_JUDGED: reJudgedMarkdown(ctx.basis),
+    RE_JUDGED: reJudgedMarkdown(ctx.basis, ctx.resolutions),
+    RESOLVED: resolvedMarkdown(ctx.resolutions),
   }
   // A prepared basis picks the incremental wording: one prompt states one job, with no conditions.
   // Both wordings end with the mode's judging rules, which are assembled first so the tokens inside

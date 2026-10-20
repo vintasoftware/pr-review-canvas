@@ -16,7 +16,7 @@ import type {
   Side,
   TextCaps,
 } from '../contract/review-artifact.js'
-import { POINT_LEVELS } from '../contract/review-artifact.js'
+import { POINT_IMPACTS, POINT_LEVELS } from '../contract/review-artifact.js'
 import { hunkForLine } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { matchesGlob } from './glob.js'
@@ -167,12 +167,20 @@ function testPoints(
 }
 
 const LEVEL_ORDER = new Map(POINT_LEVELS.map((l, i) => [l, i]))
+/** Worst impact first; a point without one sorts after every point with one. */
+function impactRank(p: Unassigned): number {
+  return p.impact === undefined ? POINT_IMPACTS.length : POINT_IMPACTS.indexOf(p.impact)
+}
 
 function sortPoints(points: Unassigned[]): Point[] {
   const sorted = [...points].sort((a, b) => {
     const level = (LEVEL_ORDER.get(a.level) ?? 0) - (LEVEL_ORDER.get(b.level) ?? 0)
     if (level !== 0) {
       return level
+    }
+    const impact = impactRank(a) - impactRank(b)
+    if (impact !== 0) {
+      return impact
     }
     return a.path.localeCompare(b.path) || a.line - b.line
   })

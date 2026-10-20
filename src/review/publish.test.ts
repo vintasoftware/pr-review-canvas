@@ -440,23 +440,28 @@ describe('publish', () => {
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toBeUndefined()
   })
 
-  it('carries the basis canvas’s settlements only for the points the basis split carried', async () => {
+  it('keeps the resolution source’s settlements for every point that came back, re-judged ones too', async () => {
     const canvasDir = await prepared()
-    const basisSha = 'e'.repeat(40)
+    // Not the basis: a canvas of the pull request on a commit a rebase left behind.
+    const sourceSha = 'e'.repeat(40)
     const carried = { kind: 'debt', path: 'src/gone.ts', title: 'Deleted file had no owner' } as const
     const reJudged = { kind: 'tests', path: 'src/app.ts', title: 'other() returns x' } as const
     const settlement = { reason: 'Agreed with the team.', at: '2026-09-09T12:00:00.000Z' }
     await t.ctx.canvases.write(
-      basisSha,
+      sourceSha,
       {
         ...syntheticArtifact(),
-        settled: { [fingerprint(carried)]: settlement, [fingerprint(reJudged)]: settlement },
+        settled: {
+          [fingerprint(carried)]: settlement,
+          [fingerprint(reJudged)]: settlement,
+          gone: settlement,
+        },
       },
       {
         formatVersion: 1,
         tool: { name: 'pr-review', version: '0' },
         repo: { owner: 'acme', name: 'widgets' },
-        headSha: basisSha,
+        headSha: sourceSha,
         mergeBaseSha: BASE_SHA,
         baseRef: 'main',
         headRef: 'feat/b',
@@ -467,21 +472,14 @@ describe('publish', () => {
     )
     const contextPath = path.join(canvasDir, 'context.json')
     const context = JSON.parse(await readFile(contextPath, 'utf8')) as Record<string, unknown>
-    context['basis'] = {
-      canvasSha: basisSha,
-      reviewJsonPath: path.join(canvasDir, 'review.json'),
-      files: { unchanged: ['src/gone.ts'], changed: ['src/app.ts'], added: [], removed: [] },
-      layers: [],
-      points: [
-        { ...carried, status: 'carried' },
-        { ...reJudged, status: 're-judged' },
-      ],
-    }
+    // prepare recorded the resolutions it saw; the ones written since are read at publish.
+    context['resolutions'] = { canvasSha: sourceSha, points: [] }
     await writeFile(contextPath, JSON.stringify(context))
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
     await publish(t.ctx, canvasDir, OPTS)
     expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.settled).toEqual({
       [fingerprint(carried)]: settlement,
+      [fingerprint(reJudged)]: settlement,
     })
   })
 

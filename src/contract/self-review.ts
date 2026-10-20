@@ -34,3 +34,15 @@ export interface SettleResponse {
   /** `local` for a review with no pull request, where there is nothing to share. */
   sharing: CanvasSharing | { status: 'local' }
 }
+
+/**
+ * The answer of `GET /prs/:n/settled`: the settled points of one stored canvas, after the pull
+ * request's comments were read again, with those comments, whose canvas comment counts the points
+ * left. `generatedAt` tells the page whether the stored canvas is still the one on screen, or a
+ * newer generation for the same commit was imported in its place.
+ */
+export interface SettledResponse {
+  generatedAt: string
+  settled: Record<string, Settlement>
+  issueComments: IssueComment[]
+}

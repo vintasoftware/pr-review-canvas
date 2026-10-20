@@ -99,6 +99,34 @@ describe('createReviewSession', () => {
     expect(off.reviewed).toEqual({})
   })
 
+  it('takes the settled points read back from the shared canvas, with its comments, once per change', () => {
+    let draws = 0
+    const s = session({}, () => {
+      draws += 1
+    })
+    const settlement = { reason: 'Known.', at: '2026-09-10T12:00:00.000Z' }
+    const comment = {
+      id: 6001,
+      author: 'octocat',
+      body: 'canvas',
+      createdAt: '2026-09-10T12:00:00Z',
+      updatedAt: '2026-09-10T12:00:00Z',
+      url: 'u',
+    }
+    /** @param {Record<string, typeof settlement>} settled */
+    const read = settled => ({ generatedAt: artifact.generatedAt, settled, issueComments: [comment] })
+    expect(s.takeSettled(read({ 'fp-1': settlement }))).toEqual(['fp-1'])
+    expect(s.settled).toEqual({ 'fp-1': settlement })
+    // The canvas comment that counts the points left comes with them, for the Conversation card.
+    expect(s.issueComments).toEqual([comment])
+    expect(draws).toBe(1)
+    expect(s.takeSettled(read({ 'fp-1': settlement }))).toEqual([])
+    expect(draws).toBe(1)
+    // A point the author reopened is open again; nothing new was resolved.
+    expect(s.takeSettled(read({}))).toEqual([])
+    expect(draws).toBe(2)
+  })
+
   it('dismisses and restores a point', async () => {
     /** @type {Array<boolean>} */
     const asked = []

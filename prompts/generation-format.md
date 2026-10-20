@@ -257,6 +257,15 @@ An `fyi` point can simply explain useful context. Anchor each on `path` and `lin
 hunk of the diff, on the head side unless you set `side: "old"`; any line inside the hunk works,
 changed or not. Do not nitpick.
 
+A `decide` point also has an `impact`: what shipping the wrong call would do. Judge its effect on
+users, their data, and callers, not how sure you are that something is wrong, and not how easy the
+code is to change back; almost any code is easy to change back. `critical` when the effect cannot
+be taken back once it ships: data lost, corrupted, or exposed, content posted or shared that the
+user did not mean to share, an outage, or a break for callers or stored data. `high` when users or
+callers see wrong or surprising behavior until a fix ships. `low` when nothing outside the code
+notices: the cost is rework, readability, or a convention. Leave `impact` out of `check` and `fyi`
+points.
+
 Each point also names its `audience`, the person who can close it. The author reads the canvas
 first, in a self-review before asking for review, and resolves each point they can answer with a
 reason every reviewer then reads. Sort the points so the reviewer's list holds only what needs a
@@ -272,6 +281,8 @@ second pair of eyes:
   a security or data-handling concern, and a manual check whose result someone else should see.
 
 When in doubt, choose `reviewer`: a point the author resolves leaves every reviewer's list.
+
+{{RESOLVED}}
 
 - Every decision or trade-off you surface gets a `kind: "decision"` point. Use `level: "fyi"`
   to explain a chosen approach, its benefit and cost; use `level: "decide"` when human agreement

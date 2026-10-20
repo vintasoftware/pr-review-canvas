@@ -15,6 +15,7 @@ import {
   fetchThreadHistory,
   fetchThreads,
   pollBundle,
+  pollSettled,
   postComment,
   postReview,
   probeAgent,
@@ -88,6 +89,59 @@ describe('fetchJson', () => {
       '/api/prs/42/patches',
       '/api/prs/42/patches?headSha=abc',
     ])
+  })
+})
+
+describe('pollSettled', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  /** @param {() => string} visibility */
+  const fakeDocument = visibility =>
+    /** @type {Document} */ (
+      /** @type {unknown} */ (
+        Object.defineProperty(new EventTarget(), 'visibilityState', { get: visibility })
+      )
+    )
+
+  it('reads the canvas on screen back at once, then every two minutes while the tab is in view', async () => {
+    const answer = { generatedAt: 'g', settled: {}, issueComments: [] }
+    const f = fakeFetch(200, answer)
+    let visibility = 'visible'
+    const doc = fakeDocument(() => visibility)
+    const seen = /** @type {unknown[]} */ ([])
+    const poller = pollSettled(42, 'a'.repeat(40), a => seen.push(a), { fetchImpl: f.impl, doc })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.calls.map(c => c.url)).toEqual([`/api/prs/42/settled?headSha=${'a'.repeat(40)}`])
+    expect(seen).toEqual([answer])
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000 - 1)
+    expect(f.calls.length).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(f.calls.length).toBe(2)
+    // Out of view, the read that comes due waits for the tab to come back.
+    visibility = 'hidden'
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+    expect(f.calls.length).toBe(2)
+    visibility = 'visible'
+    doc.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.calls.length).toBe(3)
+    poller.stop()
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+    expect(f.calls.length).toBe(3)
+  })
+
+  it('skips a failed read and keeps reading', async () => {
+    const f = fakeFetch(500, { error: { code: 'INTERNAL', message: 'boom' } })
+    const seen = /** @type {unknown[]} */ ([])
+    pollSettled(42, 'a'.repeat(40), a => seen.push(a), {
+      fetchImpl: f.impl,
+      intervalMs: 100,
+      doc: fakeDocument(() => 'visible'),
+    })
+    await vi.advanceTimersByTimeAsync(250)
+    expect(f.calls.length).toBe(3)
+    expect(seen).toEqual([])
   })
 })
 

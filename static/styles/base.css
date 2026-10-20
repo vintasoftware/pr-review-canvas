@@ -61,10 +61,17 @@
   --bad: light-dark(#c40400, #ff657a);
   --warn: light-dark(#caa512, #ffd76d);
   --warn-bg: var(--annot-bg);
-  --sev-blocker: light-dark(#db0400, #ff657a);
-  --sev-major: var(--warn);
-  --sev-minor: light-dark(#808080, #696d77);
-  --sq-mark: light-dark(#3a3739, #1e1f2b);
+  /* The colors attention points draw from: the level icons through --level-*, which the
+     pointColors setting picks, and the impact pills. A skin sets its red, amber, and gray; purple
+     and blue follow its own --purple and --accent unless it sets them. */
+  --point-red: light-dark(#db0400, #ff657a);
+  --point-amber: var(--warn);
+  --point-gray: light-dark(#808080, #696d77);
+  --point-purple: var(--purple);
+  --point-blue: var(--accent);
+  --level-decide: var(--point-red);
+  --level-check: var(--point-amber);
+  --level-fyi: var(--point-gray);
   /* Added and deleted lines carry GitHub's light tints in both skins, so a diff reads the same
      here as it does on the pull request. */
   --add-bg: light-dark(#e6ffec, rgb(186 215 97 / 14%));
@@ -86,6 +93,12 @@
   --syn-attr: light-dark(#0b6a2f, #ffd76d);
   --syn-tag: light-dark(#c40400, #ff657a);
   --syn-meta: light-dark(#3b5bdb, #91a7ff);
+}
+
+/* The action palette: purple to decide and blue to check, so no level reads as a warning. */
+:root[data-point-colors='action'] {
+  --level-decide: var(--point-purple);
+  --level-check: var(--point-blue);
 }
 
 /* The server writes `data-theme` for every load. `auto` matches neither rule, which leaves the

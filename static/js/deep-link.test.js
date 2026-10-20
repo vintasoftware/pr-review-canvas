@@ -76,6 +76,15 @@ describe('followLink', () => {
     expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
   })
 
+  it('shows a resolved point that something scrolls to, and only that one', () => {
+    document.body.innerHTML =
+      '<ol class="findings"><li class="finding is-handled is-resolved" data-point="p-1"><span class="p-title">A</span></li>' +
+      '<li class="finding is-handled is-resolved" data-point="p-2"></li></ol>'
+    document.querySelector('.p-title')?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    expect(document.querySelector('[data-point="p-1"]')?.hasAttribute('data-revealed')).toBe(true)
+    expect(document.querySelector('[data-point="p-2"]')?.hasAttribute('data-revealed')).toBe(false)
+  })
+
   it('marks the rail item of a layer link', () => {
     expect(followLink('#layer:auth')).toBe(true)
     expect(document.querySelector('.rail a[aria-current]')?.getAttribute('href')).toBe('#layer-auth')

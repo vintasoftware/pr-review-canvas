@@ -2,10 +2,10 @@
 name: thermo-nuclear-review-loop
 description: Iteratively review and fix a commit, branch, ref, range, current change set, or historical feature until an independent reviewer explicitly approves it under a strict code-quality standard. Use for a thermo-nuclear review loop, strict review/fix cycles, or when a change must survive an adversarial reviewer without growing defensive code.
 metadata:
-  version: "4"
+  version: "5"
 ---
 
-# Thermo-Nuclear Review Loop v4
+# Thermo-Nuclear Review Loop v5
 
 You are the **fixer**: the agent running this skill in the host session (Claude Code or Codex). You spawn one **reviewer**, independently verify its findings, fix the justified ones, and repeat until it explicitly approves. There is no separate fixer agent.
 
@@ -27,7 +27,12 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 
 **Reasoning effort**: a Claude reviewer runs at its highest effort. A Codex reviewer runs at `high` or lower throughout the loop; configure that explicitly when spawning a subagent or starting a cross-host session, including when the host uses a higher effort setting.
 
-**Host**: when the reviewer runs on the same agent as the host, spawn a subagent with a stable name (`tnr-reviewer`) and keep it for the whole loop so later passes reuse its context. When the reviewer runs on a different agent, use `acpx` with a named persistent session (see Host notes). The user chooses; default to the same host.
+**Host**: the user chooses whether the reviewer runs on the same agent as the host or on a different one; default to the same host. The two kinds start differently:
+
+- **Same-host reviewer**: a subagent with a stable name (`tnr-reviewer`), kept for the whole loop so later passes reuse its context.
+- **Cross-host reviewer**: an `acpx` command that you run yourself from your own shell tool. The named acpx session keeps the reviewer alive across passes: create it once with `sessions ensure --name tnr-reviewer`, then send every pass to it with `-s tnr-reviewer --ttl 0`. The full commands, and how each host waits for the verdict, are in Host notes.
+
+A helper agent between you and acpx costs a model and a context window and puts the model choice in its hands; if you start one anyway, give it the cheapest tier (Claude: Haiku or Sonnet), never the Opus-like tier.
 
 **Brief**: before spawning, check for a project-root `REVIEW.md`. If it exists, the reviewer reads only that file as its standard. Otherwise the reviewer reads the Review Standard section of this skill: point at this file's path, or paste the section when the reviewer is a different agent that cannot see this skill.
 
@@ -167,11 +172,12 @@ Approve when the scope has: no verified correctness or security defect, no rule 
 
 - **Claude Code host, same-host reviewer**: `Agent` tool with `model` set to the Opus-like tier, `name: tnr-reviewer`, `run_in_background: false`; continue it with `SendMessage` on later passes. Ask gate questions with `AskUserQuestion`.
 - **Codex host, same-host reviewer**: Codex has built-in subagents; spawn one, keep its handle, and message it on later passes. Its structured question tool works only in Plan mode, so ask gate questions by ending the turn in plain text. Under the default workspace-write sandbox a commit may trigger an approval prompt because `.git` can be protected; accept it, the commit is part of the loop.
-- **Cross-host reviewer via acpx**: create one named session and reuse it every pass so context persists; deny ACP writes while keeping reads and terminal:
+- **Cross-host reviewer via acpx**: run these yourself from your shell tool. Create one named session and send every pass to it so context persists; deny ACP writes while keeping reads and terminal:
 
     ```bash
-    acpx --approve-reads --non-interactive-permissions deny <agent> sessions ensure --name tnr-reviewer
-    acpx --approve-reads --non-interactive-permissions deny <agent> -s tnr-reviewer -f review-prompt.md
+    acpx --approve-reads --non-interactive-permissions deny --model <id> <agent> sessions ensure --name tnr-reviewer
+    acpx codex set reasoning_effort high -s tnr-reviewer   # Codex reviewer only
+    acpx --approve-reads --non-interactive-permissions deny --ttl 0 --format quiet <agent> -s tnr-reviewer -f <scratch>/review-prompt.md
     ```
 
-    `<agent>` is `claude` or `codex`. Use `--model` to request the Opus-like tier when the adapter advertises models (Codex also takes `--config-option reasoning_effort=high`). From a Codex host, acpx needs network, which the default sandbox blocks: expect one approval prompt. Paste the Review Standard (or `REVIEW.md`) into the prompt file when the reviewer agent cannot read this skill. The tree-integrity check in Spawn the reviewer is the real guard; the flags reduce the chance of needing it.
+    `<agent>` is `claude` or `codex`; `--model` requests the Opus-like tier when the adapter advertises models. Keep the prompt file outside the tree, so the integrity check sees only the reviewer's changes. On Claude Code, run the pass with `run_in_background: true`, wait for the completion notification, and read the verdict from the task output it names. On Codex, run the pass in the foreground; the tool result is the verdict. `--ttl 0` keeps the session's process up between passes; close it with `acpx <agent> sessions close tnr-reviewer` when the loop ends. From a Codex host, acpx needs network, which the default sandbox blocks: expect one approval prompt. Paste the Review Standard (or `REVIEW.md`) into the prompt file when the reviewer agent cannot read this skill. The tree-integrity check in Spawn the reviewer is the real guard; the flags reduce the chance of needing it.

@@ -5,7 +5,8 @@ changes within the PR's scope. Do not repeat automated lint findings or turn sty
 into merge requirements.
 
 Use `decide` for a choice requiring agreement or a substantiated structural concern that needs
-resolution, `check` for a concrete verification, and `fyi` for useful context. Read relevant test
+resolution, `check` for a concrete verification, and `fyi` for useful context. Give each `decide`
+point the `impact` of a wrong call. Read relevant test
 assertions before classifying behavior as covered or missing. The canvas itself runs no tests and
 provides no approval on the reviewer's behalf.
 

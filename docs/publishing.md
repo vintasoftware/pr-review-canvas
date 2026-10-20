@@ -7,7 +7,8 @@ OIDC trusted publishing, as in `vintasoftware/fhirpath-ts`. No npm token secret 
 ## Release a version
 
 Open a PR with the version change in `package.json` and release notes and upgrade
-instructions in `CHANGELOG.md`. Use `npm version minor --no-git-tag-version`
+instructions in `CHANGELOG.md`. Stamp each `ADDED_TOKENS` entry in `src/prompt-tokens.ts` this
+release adds with its version; CI fails a release whose version is older than an entry's. Use `npm version minor --no-git-tag-version`
 (or `patch` / `major`) and `corepack pnpm install --lockfile-only`.
 
 Merge the PR after CI passes. From a clean checkout, pull `main` and push the tag:

@@ -22,6 +22,7 @@ function labelFor(name: CheckName, cli: HostCli): string {
     case 'git':
     case 'origin':
     case 'skill':
+    case 'prompts':
     case 'acpx':
       return name
     case 'dataDir':

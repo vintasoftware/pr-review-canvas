@@ -149,6 +149,11 @@ export function sharingNote(sharing, done) {
  * @returns {Promise<true | undefined>} true once the point is resolved
  */
 export function resolvePoint(session, el, fingerprint, input, notify) {
+  // Resolved points are off the page, but the one the reader just resolved stays until the next
+  // load, so it does not vanish under the command and take the focus with it.
+  for (const point of Array.from(el.ownerDocument.querySelectorAll('[data-point][data-fingerprint]'))) {
+    if (point.getAttribute('data-fingerprint') === fingerprint) point.setAttribute('data-revealed', '')
+  }
   return runCommand(
     el,
     async () => {

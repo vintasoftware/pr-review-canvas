@@ -32,7 +32,8 @@ Give particular weight to these, because a walkthrough reads past them easily:
 - **Structure.** Consequential drift, debt, and complexity the change adds rather than deletes.
 
 Use `decide` for a choice requiring agreement or a substantiated problem that needs resolution,
-`check` for a concrete verification, and `fyi` for useful context. Use layer rationales and file
+`check` for a concrete verification, and `fyi` for useful context. Give each `decide` point the
+`impact` of a wrong call. Use layer rationales and file
 notes to explain the reading path and code flow. Put every decision, trade-off, and specific human
 verification in an attention point, including sound choices the reviewer should understand.
 A trade-off is not automatically a defect. Do not repeat automated lint

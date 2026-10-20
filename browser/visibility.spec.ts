@@ -120,7 +120,7 @@ test('hidden takes priority over component display rules', async ({ page, review
     host.innerHTML = `
       <div class="layout" hidden>grid</div>
       <div class="layer-ctl" hidden>flex</div>
-      <span class="sq" hidden>inline block</span>
+      <span class="lv" hidden>inline flex</span>
       <ol class="findings"><li hidden>finding</li></ol>
       <table><tbody><tr class="noise shown" hidden><td>row</td></tr></tbody></table>`
     document.body.appendChild(host)
@@ -135,6 +135,6 @@ test('hidden takes priority over component display rules', async ({ page, review
   })
   expect(displays).toEqual({
     hidden: ['none', 'none', 'none', 'none', 'none'],
-    shown: ['grid', 'flex', 'inline-block', 'grid', 'table-row'],
+    shown: ['grid', 'flex', 'inline-flex', 'grid', 'table-row'],
   })
 })

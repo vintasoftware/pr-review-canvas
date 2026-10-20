@@ -4,7 +4,6 @@ import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
   applyPointStates,
-  hidingHandled,
   openPoints,
   pointCardHtml,
   pointLink,
@@ -12,6 +11,8 @@ import {
   pointRowHtml,
   pointStatus,
   pointStatusesHtml,
+  pointSwitches,
+  impactPillHtml,
   pointsByLevel,
   pointToMarkdown,
   setMentionCanvas,
@@ -20,6 +21,7 @@ import {
   refreshPoint,
   sevsumHtml,
 } from './points.js'
+import { setSettled } from './self-review.js'
 
 const points = syntheticArtifact().points
 const ctx = { paths: new Set(['src/app.ts']) }
@@ -45,7 +47,7 @@ describe('points', () => {
     expect(pointLocation({ ...p, endLine: 6 })).toBe('src/app.ts:4-6')
   })
 
-  it('renders a card with square, kind tag, location link, body, and its four commands', () => {
+  it('renders a card with level icon, impact, kind tag, location link, body, and its four commands', () => {
     const p = points[0]
     if (!p) {
       throw new Error('no point')
@@ -53,7 +55,8 @@ describe('points', () => {
     document.body.innerHTML = `<ol>${pointCardHtml(p, ctx)}</ol>`
     const li = document.querySelector('li.finding')
     expect(li?.id).toBe('point-p-1')
-    expect(li?.querySelector('.sq.decide')?.getAttribute('aria-label')).toBe('decide')
+    expect(li?.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('decide')
+    expect(li?.querySelector('.pill.impact.high')?.textContent).toBe('high')
     expect(li?.querySelector('.pill.kind')?.textContent).toBe('decision')
     expect(li?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
     expect(li?.querySelector('.prose p')?.textContent).toContain('Look at the operator')
@@ -69,6 +72,16 @@ describe('points', () => {
     expect(li?.getAttribute('data-fingerprint')).toBe('fp-1')
   })
 
+  it('shows the impact of a point that has one', () => {
+    const p = points[0]
+    if (!p) {
+      throw new Error('no point')
+    }
+    expect(impactPillHtml({ ...p, impact: 'critical' })).toContain('class="pill impact critical"')
+    const { impact: _, ...older } = p
+    expect(impactPillHtml(older)).toBe('')
+  })
+
   it('renders the inline row and the level summary', () => {
     const p = points[1]
     if (!p) {
@@ -78,7 +91,7 @@ describe('points', () => {
     const tr = document.querySelector('tr.ifind')
     expect(tr?.classList.contains('check')).toBe(true)
     expect(tr?.getAttribute('data-point')).toBe('p-2')
-    expect(tr?.querySelector('.f-title span:not(.sq):not(.pill)')?.textContent).toBe(p.title)
+    expect(tr?.querySelector('.f-title span:not(.lv):not(.pill)')?.textContent).toBe(p.title)
     document.body.innerHTML = sevsumHtml(points)
     expect(document.querySelector('.sevsum')?.textContent).toBe('111decidecheckfyi')
     expect(document.querySelector('.sevsum a')).toBeNull()
@@ -88,7 +101,8 @@ describe('points', () => {
       '#layer-other',
       '#layer-other',
     ])
-    expect(document.querySelector('.sq.decide')?.getAttribute('aria-label')).toBe('1 decide')
+    expect(document.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('1 decide')
+    expect(document.querySelectorAll('.legend .lv[aria-hidden="true"]')).toHaveLength(3)
     document.body.innerHTML = sevsumHtml([], syntheticArtifact().layers)
     expect(document.querySelector('.sevsum a')).toBeNull()
     expect(document.querySelector('.sevsum')?.textContent).toBe('000decidecheckfyi')
@@ -108,14 +122,14 @@ describe('where a point stands', () => {
     expect(pointToMarkdown(first)).toBe(
       '**Sum instead of product**\n\n' +
         'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.\n\n' +
-        '_src/app.ts:4 · decision · decide · from the pr-review canvas_'
+        '_src/app.ts:4 · decision · decide (high impact) · from the pr-review canvas_'
     )
   })
 
   it('leaves the canvas out of the comment when mentionCanvas is off', () => {
     setMentionCanvas(false)
     try {
-      expect(pointToMarkdown(first)).toMatch(/_src\/app\.ts:4 · decision · decide_$/)
+      expect(pointToMarkdown(first)).toMatch(/_src\/app\.ts:4 · decision · decide \(high impact\)_$/)
       expect(pointToMarkdown(first).toLowerCase()).not.toContain('canvas')
     } finally {
       setMentionCanvas(true)
@@ -151,10 +165,30 @@ describe('where a point stands', () => {
     expect(document.querySelector('.point-statuses')?.textContent).toBe(
       'Attention points: 1 open · 1 in your review · 1 dismissed hide the 2 acted on'
     )
-    expect(hidingHandled(document)).toBe(false)
-    document.body.innerHTML = pointStatusesHtml(points, state, true)
+    expect(pointSwitches(document).hiding).toBe(false)
+    document.body.innerHTML = pointStatusesHtml(points, state, { hiding: true })
     expect(document.querySelector('[data-act="toggle-handled"]')?.textContent).toBe('show the 2 acted on')
-    expect(hidingHandled(document)).toBe(true)
+    expect(pointSwitches(document).hiding).toBe(true)
+  })
+
+  it('counts the resolved points apart, behind a switch that starts with them hidden', () => {
+    setSettled({ [first.fingerprint]: { reason: 'Known.', at: '2026-09-10T12:00:00.000Z' } })
+    // A resolution wins over the reader's own dismissal of the same point.
+    const state = { ...dismissed, dismissed: { ...dismissed.dismissed, 'fp-3': { at: BASE.updatedAt } } }
+    try {
+      document.body.innerHTML = pointStatusesHtml(points, state)
+      expect(document.querySelector('.point-statuses')?.textContent).toBe(
+        'Attention points: 1 open · 1 resolved by the author · 1 dismissed hide the 1 acted on show the 1 resolved'
+      )
+      expect(pointSwitches(document)).toEqual({ hiding: false, showingResolved: false })
+      document.body.innerHTML = pointStatusesHtml(points, state, { showingResolved: true })
+      expect(document.querySelector('[data-act="toggle-resolved"]')?.textContent).toBe('hide the 1 resolved')
+      expect(pointSwitches(document).showingResolved).toBe(true)
+      document.body.innerHTML = `<ol>${pointCardHtml(first, ctx)}</ol>`
+      expect(document.querySelector('li.finding')?.className).toBe('finding is-handled is-resolved')
+    } finally {
+      setSettled({})
+    }
   })
 
   it('links a posted point to its comment, and says it was sent when the comment is unknown', () => {
@@ -233,9 +267,9 @@ describe('where a point stands', () => {
   it.each([true, false])(
     'keeps the switch that hides the points acted on (%s) when state updates',
     hiding => {
-      document.body.innerHTML = pointStatusesHtml(artifact.points, dismissed, hiding)
+      document.body.innerHTML = pointStatusesHtml(artifact.points, dismissed, { hiding })
       applyPointStates(document, artifact.points, dismissed, ctx)
-      expect(hidingHandled(document)).toBe(hiding)
+      expect(pointSwitches(document).hiding).toBe(hiding)
       expect(document.querySelector('.point-statuses')?.textContent).toContain('1 dismissed')
     }
   )

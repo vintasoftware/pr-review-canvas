@@ -9,7 +9,10 @@ import type { Git } from '../git/git.js'
 import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
+import { loadProjectConfig } from '../project-config.js'
+import { ADDED_TOKENS, type AddedToken, describeGap, promptGaps } from '../prompt-tokens.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
+import { isNewer } from '../version.js'
 import {
   CLAUDE_SKILLS_DIR,
   CODEX_SKILLS_DIR,
@@ -19,7 +22,7 @@ import {
   type SkillCopy,
 } from './install-skill.js'
 
-export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill'] as const
+export const DOCTOR_CHECKS = ['git', 'origin', 'gh', 'ghAuth', 'dataDir', 'skill', 'prompts'] as const
 export type DoctorCheckName = (typeof DOCTOR_CHECKS)[number]
 
 export interface DoctorCheck {
@@ -47,6 +50,8 @@ export interface DoctorDeps {
   /** `--data-dir` or `PR_REVIEW_DATA_DIR`; without it the dir sits next to the git common dir. */
   dataDirOverride?: string | undefined
   readSkill?: ReadSkill
+  /** The tokens releases added to the bundled templates; `ADDED_TOKENS` unless a test says. */
+  addedTokens?: readonly AddedToken[]
 }
 
 function message(err: unknown): string {
@@ -104,6 +109,38 @@ export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill)
       .filter(copy => copy.skill === SKILL_NAME)
       .map(copy => copy.path)
       .join(', '),
+  }
+}
+
+/**
+ * The project's own prompt templates, against every token a release up to this one added. Unlike
+ * `upgrade`, which names only what its release added, it cannot tell which release a copy came from.
+ */
+export async function checkPrompts(
+  repoRoot: string | null,
+  version: string,
+  added: readonly AddedToken[] = ADDED_TOKENS
+): Promise<DoctorCheck> {
+  if (repoRoot === null) {
+    return { ok: true, detail: 'no repository, so no project templates' }
+  }
+  const { config } = await loadProjectConfig(repoRoot)
+  const own = Object.keys(config.prompts ?? {})
+  if (own.length === 0) {
+    return { ok: true, detail: 'bundled templates' }
+  }
+  const gaps = await promptGaps(
+    repoRoot,
+    config.prompts,
+    added.filter(t => !isNewer(t.since, version))
+  )
+  if (gaps.length === 0) {
+    return { ok: true, detail: `own templates have every token a release added: ${own.join(', ')}` }
+  }
+  return {
+    ok: false,
+    detail: `own templates lack tokens: ${gaps.map(g => `{{${g.token}}} in ${g.file}`).join(', ')}`,
+    hint: gaps.map(describeGap).join('; '),
   }
 }
 
@@ -167,7 +204,8 @@ export async function runDoctorChecks(
   }
 
   const skill = await checkSkill(repoRoot, deps.readSkill)
-  const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill }
+  const prompts = await checkPrompts(repoRoot, deps.version, deps.addedTokens)
+  const checks: DoctorReport['checks'] = { git, origin, gh, ghAuth, dataDir, skill, prompts }
   if (options.allChecks) {
     checks.acpx = await checkAcpx(deps)
   }

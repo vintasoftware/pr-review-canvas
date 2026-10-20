@@ -10,6 +10,7 @@ import {
   isLargePr,
   type PrepareTarget,
   type PrepareTargetInput,
+  type Resolutions,
 } from '../contract/generation-context.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
 import type { LocalKey } from '../contract/review-key.js'
@@ -26,7 +27,7 @@ import type { GenerationModels } from '../project-config.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import type { Derived } from '../store/derived-store.js'
-import { fileDelta, findBasis, splitBasis } from './incremental.js'
+import { fileDelta, findBasis, findResolutionSource, splitBasis } from './incremental.js'
 import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
 
@@ -200,6 +201,31 @@ async function resolveBasis(
   }
 }
 
+/**
+ * The author's resolutions this run starts from, or null when this review has no earlier canvas, or
+ * its newest canvas is one this machine can no longer read.
+ */
+async function resolveResolutions(
+  ctx: AppContext,
+  target: PrepareTarget,
+  headSha: string
+): Promise<Resolutions | null> {
+  const key = target.kind === 'pr' ? target.number : target.kind === 'local' ? target.source : undefined
+  const sha = await findResolutionSource(ctx.canvases, ctx.git, key, headSha)
+  const artifact = sha === null ? null : await ctx.canvases.readArtifact(sha).catch(() => null)
+  if (sha === null || artifact === null) {
+    return null
+  }
+  const settled = artifact.settled ?? {}
+  const points = artifact.points.flatMap(p => {
+    const settlement = settled[p.fingerprint]
+    return settlement === undefined
+      ? []
+      : [{ kind: p.kind, path: p.path, title: p.title, origin: p.origin, reason: settlement.reason }]
+  })
+  return { canvasSha: sha, points }
+}
+
 /** The target with its base resolved, which is the form `context.json` records. */
 async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promise<PrepareTarget> {
   if (input.kind !== 'local') {
@@ -331,6 +357,10 @@ export async function prepare(
   const basis = opts.force || !config.canvas.incremental ? null : await resolveBasis(ctx, target, pr, derived)
   if (basis !== null) {
     context.basis = basis
+  }
+  const resolutions = await resolveResolutions(ctx, target, pr.headSha)
+  if (resolutions !== null) {
+    context.resolutions = resolutions
   }
   const sources =
     opts.promptSources ??

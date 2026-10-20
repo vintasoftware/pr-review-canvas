@@ -1,11 +1,22 @@
 // `pr-review upgrade`: brings pr-review, acpx, and the project's copy of the skill up to date. It
 // says what it will change and asks first. Once pr-review itself moves, the new version checks the
-// skill, so the skill it ships is stamped by the code that ships it.
+// skill, so the skill it ships is stamped by the code that ships it, and the project's own prompt
+// templates, so it names the tokens its release added that they lack.
 import { realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { z } from 'zod'
 import { type CliIo, EXIT, printJson, UsageError } from './commands.js'
+import { loadProjectConfig } from './project-config.js'
+import {
+  ADDED_TOKENS,
+  type AddedToken,
+  describeGap,
+  promptGaps,
+  type TokenGap,
+  TokenGapSchema,
+} from './prompt-tokens.js'
+import { isNewer } from './version.js'
 import {
   findSkillCopies,
   installSkill,
@@ -41,6 +52,8 @@ export interface UpgradeDeps {
   readSkill?: ReadSkill
   /** Where the bundled skills are read from; the package's own unless a test says otherwise. */
   skillsRoot?: string
+  /** The tokens releases added to the bundled templates; `ADDED_TOKENS` unless a test says. */
+  addedTokens?: readonly AddedToken[]
 }
 
 /** What one step upgrades, in the order a plan runs them. */
@@ -63,7 +76,12 @@ const StepOutcomeSchema = z.discriminatedUnion('kind', [
   SkillStepSchema.extend(OutcomeFields),
 ])
 /** What an applied upgrade prints, and so what the parent reads back from the new version. */
-const AppliedReportSchema = z.object({ steps: z.array(StepOutcomeSchema) })
+const AppliedReportSchema = z.object({
+  steps: z.array(StepOutcomeSchema),
+  /** Absent from a version before prompt checks. */
+  prompts: z.array(TokenGapSchema).default([]),
+})
+type AppliedReport = z.infer<typeof AppliedReportSchema>
 
 export type UpgradeStep = z.infer<typeof NpmStepSchema> | z.infer<typeof SkillStepSchema>
 export type StepOutcome = z.infer<typeof StepOutcomeSchema>
@@ -72,19 +90,6 @@ export interface UpgradePlan {
   steps: UpgradeStep[]
   /** What was looked at and left alone, and why. */
   notes: string[]
-}
-
-/** `1.2.10` against `1.2.9`, numerically. A prerelease tag is ignored. */
-export function isNewer(candidate: string, current: string): boolean {
-  const parts = (v: string): number[] => v.trim().replace(/^v/, '').split(/[-+]/)[0]!.split('.').map(Number)
-  const a = parts(candidate)
-  const b = parts(current)
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const diff = (a[i] ?? 0) - (b[i] ?? 0)
-    if (Number.isNaN(diff)) return false
-    if (diff !== 0) return diff > 0
-  }
-  return false
 }
 
 async function latestVersion(deps: UpgradeDeps, name: string): Promise<string | null> {
@@ -213,15 +218,18 @@ async function applySkillStep(
 }
 
 /**
- * The new pr-review's own `upgrade --yes --json --only <kinds>`: it plans again with its own code, and runs
- * only the kinds of step the user confirmed. Its report's steps join this one's, so this process
- * stays the one that prints them.
+ * The new pr-review's own `upgrade --yes --json --from <this version> --only <kinds>`: it plans again
+ * with its own code, runs only the kinds of step the user confirmed, none when nothing is left, and
+ * checks the project's prompt templates for the tokens added since this version. Its report joins
+ * this one's, so this process stays the one that prints it.
  */
-async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<StepOutcome[]> {
+async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<AppliedReport> {
   const result = await deps.runInstalled([
     'upgrade',
     '--yes',
     '--json',
+    '--from',
+    deps.version,
     '--only',
     kinds.join(','),
     ...(deps.repoRoot === null ? [] : ['--repo', deps.repoRoot]),
@@ -234,25 +242,32 @@ async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<StepOutcom
     report = null
   }
   const parsed = AppliedReportSchema.safeParse(report)
-  if (parsed.success) return parsed.data.steps
-  return [
-    {
-      kind: 'skill',
-      paths: [],
-      status: 'failed',
-      detail:
-        `the new pr-review did not report a result; run \`pr-review upgrade\` again\n` +
-        result.stderr.trim().split('\n').slice(-3).join('\n'),
-    },
-  ]
+  if (parsed.success) return parsed.data
+  return {
+    steps: [
+      {
+        kind: 'skill',
+        paths: [],
+        status: 'failed',
+        detail:
+          `the new pr-review did not report a result; run \`pr-review upgrade\` again\n` +
+          result.stderr.trim().split('\n').slice(-3).join('\n'),
+      },
+    ],
+    prompts: [],
+  }
 }
 
 /**
  * Runs every step in order. A failed npm install does not stop the rest. Once pr-review itself is
  * upgraded, the new version plans and runs whatever is left, so the skill it ships is checked and
- * copied by its own code.
+ * copied by its own code, and checks the prompt templates against its own tokens. `prompts` is null
+ * when no new version reported, and this one's own check stands.
  */
-export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promise<StepOutcome[]> {
+export async function applyUpgrade(
+  plan: UpgradePlan,
+  deps: UpgradeDeps
+): Promise<{ steps: StepOutcome[]; prompts: TokenGap[] | null }> {
   const outcomes: StepOutcome[] = []
   for (const [index, step] of plan.steps.entries()) {
     if (step.kind === 'skill') {
@@ -266,24 +281,46 @@ export async function applyUpgrade(plan: UpgradePlan, deps: UpgradeDeps): Promis
       continue
     }
     outcomes.push({ ...step, status: 'done' })
-    const rest = plan.steps.slice(index + 1)
-    if (step.kind === 'package' && rest.length > 0) {
-      return [
-        ...outcomes,
-        ...(await handOff(
-          deps,
-          rest.map(later => later.kind)
-        )),
-      ]
+    if (step.kind === 'package') {
+      const report = await handOff(
+        deps,
+        plan.steps.slice(index + 1).map(later => later.kind)
+      )
+      return { steps: [...outcomes, ...report.steps], prompts: report.prompts }
     }
   }
-  return outcomes
+  return { steps: outcomes, prompts: null }
+}
+
+/**
+ * The tokens the project's own templates lack: those added after `from` up to this version, or
+ * without `from`, the ones this version added.
+ */
+async function ownPromptGaps(deps: UpgradeDeps, from: string | undefined): Promise<TokenGap[]> {
+  if (deps.repoRoot === null) return []
+  const added = (deps.addedTokens ?? ADDED_TOKENS).filter(
+    t =>
+      !isNewer(t.since, deps.version) &&
+      (from === undefined ? !isNewer(deps.version, t.since) : isNewer(t.since, from))
+  )
+  if (added.length === 0) return []
+  const { config } = await loadProjectConfig(deps.repoRoot)
+  return promptGaps(deps.repoRoot, config.prompts, added)
+}
+
+function printPromptGaps(io: CliIo, gaps: readonly TokenGap[]): void {
+  if (gaps.length === 0) return
+  io.stderr(
+    'Your own prompt templates lack tokens this pr-review added, so generation leaves out what they fill in. Add each one:'
+  )
+  for (const gap of gaps) io.stderr(`  - ${describeGap(gap)}`)
 }
 
 /** `--only package,acpx,skill`: the kinds of step this run may take. */
 function parseOnly(raw: string | undefined): ReadonlySet<StepKind> | null {
   if (raw === undefined) return null
-  const kinds = z.array(StepKindSchema).safeParse(raw.split(','))
+  // An empty list takes no step: the run only checks, as a hand-off with nothing left asks.
+  const kinds = z.array(StepKindSchema).safeParse(raw.split(',').filter(kind => kind !== ''))
   if (!kinds.success) {
     throw new UsageError(`--only takes a comma list of ${StepKindSchema.options.join(', ')}; got "${raw}"`)
   }
@@ -291,17 +328,19 @@ function parseOnly(raw: string | undefined): ReadonlySet<StepKind> | null {
 }
 
 /**
- * `upgrade [--yes] [--only <kinds>] [--json]`: the plan and each step's outcome on stderr, with a
- * confirmation in between. With `io.json`, stdout then gets one JSON line with what happened.
+ * `upgrade [--yes] [--only <kinds>] [--from <version>] [--json]`: the plan and each step's outcome on
+ * stderr, with a confirmation in between, then the tokens the project's own prompt templates lack.
+ * `--from` is the version a hand-off upgraded from. With `io.json`, stdout then gets one JSON line
+ * with what happened.
  */
 export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): Promise<number> {
   const { values } = parseArgs({
     args: argv,
-    options: { yes: { type: 'boolean', short: 'y' }, only: { type: 'string' } },
+    options: { yes: { type: 'boolean', short: 'y' }, only: { type: 'string' }, from: { type: 'string' } },
     strict: true,
   })
   const only = parseOnly(values.only)
-  const full = await planUpgrade(deps)
+  const full: UpgradePlan = only?.size === 0 ? { steps: [], notes: [] } : await planUpgrade(deps)
   const plan: UpgradePlan =
     only === null
       ? full
@@ -316,8 +355,10 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
         }
   for (const note of plan.notes) io.stderr(`  ${note}`)
   if (plan.steps.length === 0) {
+    const prompts = await ownPromptGaps(deps, values.from)
     io.stderr('Everything is up to date.')
-    if (io.json) printJson(io, { applied: false, steps: [], notes: plan.notes })
+    printPromptGaps(io, prompts)
+    if (io.json) printJson(io, { applied: false, steps: [], notes: plan.notes, prompts })
     return EXIT.ok
   }
   io.stderr('pr-review upgrade will:')
@@ -333,7 +374,9 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
     return EXIT.ok
   }
 
-  const outcomes = await applyUpgrade(plan, deps)
+  const applied = await applyUpgrade(plan, deps)
+  const outcomes = applied.steps
+  const prompts = applied.prompts ?? (await ownPromptGaps(deps, values.from))
   for (const outcome of outcomes) {
     io.stderr(
       `  ${outcome.status}: ${describeStep(outcome)}${outcome.detail ? `\n    ${outcome.detail}` : ''}`
@@ -344,9 +387,10 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
   if (refreshed.length > 0) {
     io.stderr(`The project skill changed. Commit and push ${refreshed.join(' and ')} so your team gets it.`)
   }
+  printPromptGaps(io, prompts)
   const ok = outcomes.every(o => o.status !== 'failed')
   if (io.json) {
-    printJson(io, { applied: true, ok, steps: outcomes, notes: plan.notes })
+    printJson(io, { applied: true, ok, steps: outcomes, notes: plan.notes, prompts })
   } else {
     io.stderr(ok ? 'Upgrade complete.' : 'Upgrade finished with failed steps; see above.')
   }

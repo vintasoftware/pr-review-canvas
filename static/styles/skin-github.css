@@ -46,10 +46,9 @@
   --warn-bg: light-dark(#fff8c5, rgb(174 124 20 / 15%));
   --progress: light-dark(#1f883d, #57ab5a);
 
-  --sev-blocker: light-dark(#cf222e, #e5534b);
-  --sev-major: light-dark(#bf8700, #c69026);
-  --sev-minor: light-dark(#818b98, #636e7b);
-  --sq-mark: light-dark(#fff, #212830);
+  --point-red: light-dark(#cf222e, #e5534b);
+  --point-amber: light-dark(#bf8700, #c69026);
+  --point-gray: light-dark(#818b98, #636e7b);
 
   --add-bg: light-dark(#e6ffec, #263834);
   --add-w: light-dark(#abf2bc, rgb(87 171 90 / 40%));
@@ -456,9 +455,6 @@
   }
   .prose ul {
     list-style: disc;
-  }
-  .sq {
-    border-radius: 2px;
   }
   .sevsum > .legend {
     border-radius: var(--r);

@@ -36,8 +36,9 @@ export interface ValidationInput {
   testPatterns?: readonly string[] | undefined
   /**
    * The output was read back from a stored `review.json`, whose generator may predate the rules
-   * about what a canvas must hide. Only the correctness rules apply then: coordinates, and the
-   * ranges no fold may cover. A fresh `model.json` is held to the full shape.
+   * about what a canvas must hide and about impact. Only the correctness rules apply then:
+   * coordinates, the ranges no fold may cover, and no impact on a point other than `decide`; a
+   * `decide` point may lack one. A fresh `model.json` is held to the full shape.
    */
   storedArtifact?: boolean | undefined
 }
@@ -426,7 +427,14 @@ function checkAnnotations(output: ModelOutput, index: Index, report: Report): vo
   }
 }
 
-function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: Report): void {
+/** `storedArtifact`: a stored canvas may predate impact, so only a fresh generation must give one. */
+function checkPoints(
+  output: ModelOutput,
+  index: Index,
+  limits: Limits,
+  report: Report,
+  storedArtifact: boolean
+): void {
   const missingTests = output.layers.reduce(
     (n, l) => n + l.tests.filter(t => t.status === 'missing').length,
     0
@@ -441,6 +449,12 @@ function checkPoints(output: ModelOutput, index: Index, limits: Limits, report: 
   }
   output.points.forEach((p, i) => {
     const where = `point:${i + 1}`
+    if (p.level === 'decide' && p.impact === undefined && !storedArtifact) {
+      report.add('POINT_IMPACT', where, `point ${i + 1} "${p.title}": a decide point needs an impact`)
+    }
+    if (p.level !== 'decide' && p.impact !== undefined) {
+      report.add('POINT_IMPACT', where, `point ${i + 1} "${p.title}": only a decide point has an impact`)
+    }
     const side = p.side ?? 'new'
     const entry = index.byPath.get(p.path)
     const start = hunkAt(entry, side, p.line)
@@ -589,7 +603,7 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
   })) {
     report.add(error.code, error.where ?? 'folds', error.message)
   }
-  checkPoints(output, index, input.limits, report)
+  checkPoints(output, index, input.limits, report, input.storedArtifact === true)
   checkLinks(output, input.files, report)
   checkDiagramLinks(output, input.files, input.limits, report)
   return report.errors.length === 0

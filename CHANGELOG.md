@@ -50,6 +50,58 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
   fonts served by the app. It offers the theme command and no skin command. Scene frames and the
   scene kit follow the same palette.
 
+### Self-review
+
+- A resolution now lasts. Every later canvas of the pull request starts from the resolutions of its
+  newest canvas, after a push that changes the code under a point, a rebase, or `--force` too. The
+  generator keeps a resolved concern under its title, so it stays resolved, and reopens it under a
+  new title only when the author's reason no longer holds. Before, a push that touched a resolved
+  point's lines, or any `--force`, brought the point back open.
+- Resolved points start hidden for every reader. The overview line counts them as **resolved by the
+  author** and its **show the N resolved** command brings them back, collapsed in place. A layer
+  whose points are all resolved drops its points heading while they are hidden.
+- A reviewer's page reads the author's resolutions back from the canvas comment when it opens and
+  every two minutes after while its tab is in view, hides the newly resolved points, and says so.
+  Before, a reviewer who had already loaded the canvas saw them only after **refresh**.
+
+### Prompt templates
+
+- `pr-review upgrade` checks the project's own prompt templates once pr-review moves: each token
+  the new release added to a bundled template that a custom copy lacks is named, with the heading
+  to add it under. `pr-review doctor` has the same check as its `prompts` line, for any release up
+  to the running one.
+
+### Attention points
+
+- Each level has its own shape: a diamond for **decide**, a checked box for **check**, and an info
+  circle for **fyi**. The shapes replace the colored squares on cards, diff rows, the overview
+  counts, and the legend, so the level reads without color.
+- **Point colors** in the settings dialog picks the palette: **classic** (red, amber, gray, the
+  default) or **action** (purple, blue, gray), for readers who took the red and amber for a
+  severity scale. It is saved as `pointColors` in `settings.yml`.
+- A **decide** point has an impact: **critical**, **high**, or **low**, for what a wrong call would
+  cost. Its card shows it next to the title, and decide points list the worst impact first. A
+  canvas generated before this version shows its decide points without one; generate again to get
+  them.
+- A generation that leaves a decide point without an impact, or gives one to another point, is
+  sent back to the agent to fix (`POINT_IMPACT`).
+
+### Upgrade
+
+- A project with its own `generation-format.md` adds the `{{RESOLVED}}` token, where the bundled
+  template has it under **Attention points**; `pr-review upgrade` and `doctor` say so. Without it
+  the generator is not told which points the author resolved: a point that comes back with the same
+  title stays resolved unchecked, and one reworded comes back open.
+- A project with its own `generation-format.md`, `quality-standards.md`, `judging-strict.md`, or
+  `judging-surfacing.md` merges in the bundled copies' definitions of impact. `pr-review upgrade`
+  and `doctor` do not name this one, since it adds no token. Without them, every generated decide
+  point comes back with `POINT_IMPACT`, and the agent picks an impact without the definitions.
+- Teammates on 0.9.0 can still open new canvases; they do not see the impact.
+
+## 0.9.0
+
+Changes since 0.8.0.
+
 ### Generating from the terminal
 
 - `pr-review generate [<n>|branch|uncommitted]` generates a canvas from a terminal, with no skill
@@ -124,6 +176,17 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
   written on it are listed as written on an earlier diff and are refused on submit unless the diff
   is unchanged, and a page drawn before the move cannot post or mark until it is reloaded.
   `pr-review import` and a generation that finished after the move say so too.
+- The generation dialog says when the agent is correcting the issues validation found, so they no
+  longer read as errors to act on, and hides them once the canvas is published. They stay shown
+  when the generation fails or is stopped.
+
+### Upgrade from 0.8.0
+
+1. Run `pr-review upgrade` in a project. The skill did not change, so it only installs the new
+   version, and each project's skill copy stays as it is.
+2. Restart the running `pr-review serve`. `pr-review generate` needs the new server, and the
+   server moves each earlier diff into its merge base's folder the first time it is read.
+3. The canvas format did not change, so teammates on 0.8.0 can still open the canvases.
 
 ## 0.8.0
 

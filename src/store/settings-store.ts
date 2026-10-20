@@ -25,6 +25,10 @@ foldLevel: light
 # them.
 layerView: all
 
+# The colors of the attention point level icons: classic (red, amber, gray) or action (purple,
+# blue, gray). The shapes say the level either way.
+pointColors: ${DEFAULT_SETTINGS.pointColors}
+
 # Which agent answers in the AI Chat pane: claude or codex. Canvas generation does not read
 # this; generation.models in pr-review.config.yml sets the canvas generation models.
 chatAgent: claude
@@ -235,6 +239,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.layerView !== undefined) {
     out.layerView = input.layerView
+  }
+  if (input.pointColors !== undefined) {
+    out.pointColors = input.pointColors
   }
   if (input.chatAgent !== undefined) {
     out.chatAgent = input.chatAgent
