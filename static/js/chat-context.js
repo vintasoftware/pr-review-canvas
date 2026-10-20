@@ -8,10 +8,11 @@
  *   | { kind: 'layer', layerId: string }
  *   | { kind: 'file', path: string }
  *   | { kind: 'lines', path: string, side: 'new' | 'old', start: number, end: number }
- *   | { kind: 'point', fingerprint: string }
- *   | { kind: 'tour-decision', key: string }
- *   | { kind: 'tour-plan' }} ChatContext
+ *   | { kind: 'point', fingerprint: string }} ChatContext
  */
+
+/** What a saved turn pointed at: a canvas's context, or the tour's in the tour's own thread. */
+/** @typedef {ChatContext | import('./contract-types.js').TourGrillContext} ChatTurnContext */
 
 /** @type {ChatContext} */
 export const WHOLE_PR = { kind: 'pr' }
@@ -40,16 +41,13 @@ export function sameChatContext(a, b) {
   if (a.kind === 'point' && b.kind === 'point') {
     return a.fingerprint === b.fingerprint
   }
-  if (a.kind === 'tour-decision' && b.kind === 'tour-decision') {
-    return a.key === b.key
-  }
-  return a.kind === 'tour-plan'
+  return false
 }
 
 /**
- * What the chip says. The label names the target exactly, so a reader always knows what the next
- * message is about.
- * @param {ChatContext} context
+ * What the chip says, and what a saved turn is labelled with. The label names the target exactly,
+ * so a reader always knows what the next message is about.
+ * @param {ChatTurnContext} context
  * @param {(layerId: string) => string | undefined} [layerTitle]
  * @param {(fingerprint: string) => string | undefined} [pointTitle]
  * @returns {string}
@@ -128,10 +126,6 @@ export function chatContextAttrs(context) {
       )
     case 'point':
       return ` data-ask-point="${escapeAttr(context.fingerprint)}"`
-    case 'tour-decision':
-    case 'tour-plan':
-      // The tour's contexts come from the tour page, never from an `[ ask ]` element.
-      return ''
   }
 }
 

@@ -244,16 +244,21 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
       {
         key,
         headSha: diff.headSha,
-        artifact,
+        subject: {
+          kind: 'canvas',
+          artifact,
+          // The same reader the page offers resolve to: an outdated canvas is read with its own
+          // commit, so its points are not resolved here. The probe answers from its cache.
+          readerResolves: readerResolves(key, (await ctx.capabilities.get()).login, pr, current),
+          context: input.context,
+          thread: input.thread,
+        },
         files,
         patches,
         derivedDir: ctx.derived.derivedDir(diff),
         readLines: (side, filePath, from, to) => ctx.derived.readLines(diff, side, filePath, from, to),
-        // The same reader the page offers resolve to: an outdated canvas is read with its own
-        // commit, so its points are not resolved here. The probe answers from its cache.
-        readerResolves: readerResolves(key, (await ctx.capabilities.get()).login, pr, current),
       },
-      { message: input.message, context: input.context, thread: input.thread }
+      input.message
     )
     return turnResponse(ctx, c.req, key, events)
   })

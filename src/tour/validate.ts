@@ -129,12 +129,6 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     plain(`${where}.title`, l.title)
     tooLong(`${where}.lead`, l.lead, caps.lead)
     l.body.forEach((p, j) => tooLong(`${where}.body.${j}`, p, caps.paragraph))
-    if (l.body.length > TOUR_LIMITS.bodyParagraphsWritten)
-      errors.push({
-        code: 'TEXT_TOO_LONG',
-        where: `${where}.body`,
-        message: `${where}.body: ${l.body.length} paragraphs; a landmark's body has at most ${TOUR_LIMITS.bodyParagraphsWritten}, and its picture carries the rest`,
-      })
     l.code.forEach((c, j) => {
       if (!byPath.has(c.path))
         errors.push({

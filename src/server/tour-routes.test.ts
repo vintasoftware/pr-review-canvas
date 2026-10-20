@@ -15,7 +15,8 @@ import type {
 } from '../contract/tour-api.js'
 import { freshReaderState } from '../contract/tour-api.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
-import { buildTourComment, readTourComment, TOUR_COMMENT_MARKER } from '../tour/comment.js'
+import { buildTourComment, TOUR_COMMENT_MARKER } from '../tour/comment.js'
+import { readZipEnvelope } from '../canvas/comment.js'
 import { zipStoredTour } from '../tour/share.js'
 import { prepareTour } from '../tour/prepare.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
@@ -235,7 +236,7 @@ describe('GET /api/tours/:n', () => {
     const res = await get('/api/tours/42')
     expect(res.status).toBe(500)
     expect((await json<ErrorEnvelope>(res)).error.code).toBe('CANVAS_INVALID')
-    expect((await get(`/tour-scene/42/world/scene?headSha=${HEAD_SHA}`)).status).toBe(404)
+    expect((await get(`/tour-scene/42/world/scene?headSha=${HEAD_SHA}`)).status).toBe(500)
   })
 })
 
@@ -322,9 +323,10 @@ describe('PUT /api/tours/:n/reader', () => {
     t = await context()
     expect((await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: {} })).status).toBe(404)
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
-    const stale = await send('/api/tours/42/reader', 'PUT', { headSha: OTHER_SHA, reader: {} })
-    expect(stale.status).toBe(409)
-    expect((await json<ErrorEnvelope>(stale)).error.code).toBe('CANVAS_STALE')
+    // A commit the index does not file as this review's tour: the index alone answers, no git.
+    const other = await send('/api/tours/42/reader', 'PUT', { headSha: OTHER_SHA, reader: {} })
+    expect(other.status).toBe(404)
+    expect((await json<ErrorEnvelope>(other)).error.code).toBe('CANVAS_NOT_FOUND')
     const bad = await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: { step: -1 } })
     expect(bad.status).toBe(400)
   })
@@ -374,7 +376,7 @@ describe('POST /api/tours/:n/finish', () => {
     expect(stored?.revisedAt).toBe('2026-09-10T12:00:00.000Z')
     expect(sharing.posted()).toHaveLength(1)
     const posted = String(sharing.posted()[0]?.['body'])
-    expect(readTourComment(posted)?.name).toMatch(/-tour\.zip$/)
+    expect(readZipEnvelope(TOUR_COMMENT_MARKER, posted)?.name).toMatch(/-tour\.zip$/)
     expect(posted).toContain('octocat')
     // Finishing again lists the reader once and updates the same comment.
     await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
@@ -923,6 +925,24 @@ describe('looking for a shared tour', () => {
     expect(local.status).toBe(400)
   })
 
+  it('finds a tour zip attached to the pull request when the comment did not fit, as the canvas is found', async () => {
+    t = await context()
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const { zip } = await zipStoredTour(t.ctx, HEAD_SHA, 42)
+    await rm(t.ctx.tours.tourDir(HEAD_SHA), { recursive: true })
+    await rm(path.join(t.ctx.tours.root, 'index.json'), { force: true })
+    const url = `https://github.com/user-attachments/files/12345/${zip.name}`
+    await t.cleanup()
+    t = await context({
+      gh: ghFor42({
+        routes: { 'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, body: `the tour: ${url}` }) },
+      }),
+      fetch: async () => new Response(zip.bytes.slice().buffer as ArrayBuffer, { status: 200 }),
+    })
+    expect(await json(await look())).toEqual({ found: true, imported: true, warnings: [] })
+    expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
+  })
+
   it('reports a shared zip that will not import, and imports none', async () => {
     t = await context()
     const name = 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip'
@@ -932,7 +952,7 @@ describe('looking for a shared tour', () => {
     })
     const body = await json<SharedTourFetchResponse>(await look())
     expect(body).toMatchObject({ found: true, imported: false })
-    expect(body.warnings[0]).toMatch(/^pr-42-.+-tour\.zip: the zip is not a tour$/)
+    expect(body.warnings[0]).toMatch(/^pr-42-.+-tour\.zip: this file is not a zip$/)
   })
 })
 

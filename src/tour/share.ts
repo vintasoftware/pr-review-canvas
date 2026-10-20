@@ -6,9 +6,10 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { TourArtifact } from '../contract/tour.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { defaultExportDir, writeCanvasZip } from '../canvas/export.js'
-import { buildTourComment, TOUR_COMMENT_MARKER, type TourZip } from './comment.js'
-import { buildTourZip, buildTourZipName, TOUR_TOOL_NAME } from './zip.js'
+import { type CanvasZip, defaultExportDir, writeCanvasZip } from '../canvas/export.js'
+import { buildZipName } from '../canvas/name.js'
+import { buildZip } from '../canvas/zip.js'
+import { buildTourComment, TOUR_COMMENT_MARKER, TOUR_TOOL_NAME, TOUR_ZIP } from './comment.js'
 
 export function tourManifest(artifact: TourArtifact, version: string): CanvasManifest {
   const manifest: CanvasManifest = {
@@ -30,7 +31,7 @@ export async function zipStoredTour(
   ctx: AppContext,
   headSha: string,
   prNumber?: number | undefined
-): Promise<{ zip: TourZip; artifact: TourArtifact }> {
+): Promise<{ zip: CanvasZip; artifact: TourArtifact }> {
   const artifact = await ctx.tours.read(headSha)
   if (artifact === null) {
     throw new AppError(
@@ -43,14 +44,14 @@ export async function zipStoredTour(
   const number = prNumber ?? (artifact.pr.number === null ? undefined : artifact.pr.number)
   const manifest = tourManifest(artifact, ctx.version)
   if (number !== undefined) manifest.prNumber = number
-  const zip: TourZip = {
-    name: buildTourZipName({
+  const zip: CanvasZip = {
+    name: buildZipName('tour', {
       repo: artifact.repo,
       headSha,
       prNumber: number,
       generatedAt: artifact.generatedAt,
     }),
-    bytes: buildTourZip(manifest, artifact),
+    bytes: buildZip(TOUR_ZIP, manifest, artifact),
     headSha,
   }
   if (number !== undefined) zip.prNumber = number

@@ -97,12 +97,15 @@ export interface AppContext {
   runner: AgentRunner
   transcripts: TranscriptStore
   /**
-   * The review checkouts, one per review at its head: AI Chat reads code from them, and a tour
-   * runs its try-it recipes in them. Listing and sweeping also cover `baseCheckouts`.
+   * The review checkouts, one per review at its head, which AI Chat reads code from. Listing and
+   * sweeping also cover `tourCheckouts`.
    */
   checkouts: ReviewCheckouts
-  /** One checkout per review at its merge base, where a tour runs a script as it was before the change. */
-  baseCheckouts: ReviewCheckouts
+  /**
+   * The tour generator's own checkouts, one per review at its head and one at its merge base,
+   * where it installs, runs, and writes; AI Chat's stays read-only and is never moved under a run.
+   */
+  tourCheckouts: TourCheckouts
   now: () => Date
   version: string
   staticDir: string
@@ -151,7 +154,7 @@ export function createStores(dataDir: string, config: RuntimeConfig, git: Git, n
     derived: createDerivedStore(canvases, git, now),
     prs,
     state: createStateStore(prs, now),
-    tours: createTourStore(root, git),
+    tours: createTourStore(root, git, config.worktree),
   }
 }
 
@@ -184,8 +187,8 @@ export interface CreateAppContextOptions {
 export interface CloneShared {
   /** Run from the clone's common git dir, so no one worktree's folder has to stay. */
   checkouts: CheckoutStore
-  /** The checkouts at a review's merge base, which only a tour's generator takes; apart from the rest. */
-  baseCheckouts: CheckoutStore
+  /** The tour generator's own, at a review's head and at its merge base; apart from the rest. */
+  tourCheckouts: Record<TourCheckoutSide, CheckoutStore>
   /**
    * The chat turns running, by review folder: a pull request is one review for every worktree, a
    * local review is its own checkout's.
@@ -208,7 +211,10 @@ export function createCloneShared(
   const root = checkoutsRoot(config.dataDir, config)
   return {
     checkouts: createReviewCheckouts({ root, git: checkoutGit, now }),
-    baseCheckouts: createReviewCheckouts({ root: path.join(root, 'base'), git: checkoutGit, now }),
+    tourCheckouts: {
+      head: createReviewCheckouts({ root: path.join(root, 'tour', 'head'), git: checkoutGit, now }),
+      base: createReviewCheckouts({ root: path.join(root, 'tour', 'base'), git: checkoutGit, now }),
+    },
     chatTurns: new Map(),
     generationLane: createGenerationLane(),
   }
@@ -223,8 +229,12 @@ export interface ChatSet {
   chat: ChatManager
   transcripts: TranscriptStore
   checkouts: ReviewCheckouts
-  baseCheckouts: ReviewCheckouts
+  tourCheckouts: TourCheckouts
 }
+
+/** The two sides a tour's generator runs things in. */
+export type TourCheckoutSide = 'head' | 'base'
+export type TourCheckouts = Record<TourCheckoutSide, ReviewCheckouts>
 
 /** Where the review checkouts of one repository live, next to its canvases. */
 export function checkoutsRoot(dataDir: string, config: Pick<RuntimeConfig, 'repo'>): string {
@@ -242,8 +252,15 @@ export function createChatSet(
   prompts?: PromptOverrides
 ): ChatSet {
   const settings = createSettingsStore(config.dataDir)
-  const baseCheckouts = checkoutsFor(clone.baseCheckouts, config.worktree)
-  const checkouts = combineCheckouts(checkoutsFor(clone.checkouts, config.worktree), baseCheckouts)
+  const tourCheckouts: TourCheckouts = {
+    head: checkoutsFor(clone.tourCheckouts.head, config.worktree),
+    base: checkoutsFor(clone.tourCheckouts.base, config.worktree),
+  }
+  const checkouts = combineCheckouts(
+    checkoutsFor(clone.checkouts, config.worktree),
+    tourCheckouts.head,
+    tourCheckouts.base
+  )
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
@@ -252,7 +269,7 @@ export function createChatSet(
     preflight,
     transcripts,
     checkouts,
-    baseCheckouts,
+    tourCheckouts,
     agents: createAgentDirectory({ runner, preflight, cwd: config.repoRoot, now }),
     chat: createChatManager({
       runner,

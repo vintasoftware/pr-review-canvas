@@ -13,8 +13,15 @@ import { splitFences } from '../fences.js'
  *   | { type: 'invalid', text: string, reason: string }} GrillSegment
  */
 
-/** A restatement's fields are short; longer is a paste, not a restatement. */
+/**
+ * The caps on a restatement, as the agent's card, the reader's form, and the server's schema all
+ * hold it: a field is short (longer is a paste), a place is one line, and there are a few places.
+ */
 export const RESTATEMENT_FIELD_MAX = 2000
+export const RESTATEMENT_PLACES_MAX = 20
+export const RESTATEMENT_PLACE_MAX = 300
+/** A reader's note on one landmark. */
+export const NOTE_MAX = 4000
 
 /**
  * @param {unknown} raw
@@ -35,13 +42,15 @@ export function readRestatementBlock(raw) {
     return { reason: 'the block has no "unchanged"' }
   }
   const places = Array.isArray(where) ? where.filter(w => typeof w === 'string' && w.trim() !== '') : []
-  if (places.length === 0 || places.length > 20) {
+  if (places.length === 0) {
     return { reason: 'the block has no "where"' }
   }
   return {
     restatement: {
       what: what.trim(),
-      where: places.map(w => String(w).trim().slice(0, 300)),
+      where: places
+        .slice(0, RESTATEMENT_PLACES_MAX)
+        .map(w => String(w).trim().slice(0, RESTATEMENT_PLACE_MAX)),
       unchanged: unchanged.trim(),
     },
   }

@@ -172,8 +172,8 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
         checkouts: shared.checkouts,
         readSettings: () => settings.read(),
         log: line => opts.log(`[${name}] ${line}`),
-        base: {
-          checkouts: shared.baseCheckouts,
+        tour: {
+          checkouts: [shared.tourCheckouts.head, shared.tourCheckouts.base],
           prState: async number =>
             (await config.host.fetchPrMeta(createHostClient(config.host.cli), config.repo, number)).state,
         },

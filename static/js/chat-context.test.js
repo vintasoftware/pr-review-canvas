@@ -130,18 +130,8 @@ describe('attention-point context', () => {
 })
 
 describe("the tour's contexts", () => {
-  it('compare by decision key, label themselves, and carry no ask attributes', () => {
-    expect(sameChatContext({ kind: 'tour-decision', key: 'a' }, { kind: 'tour-decision', key: 'a' })).toBe(
-      true
-    )
-    expect(sameChatContext({ kind: 'tour-decision', key: 'a' }, { kind: 'tour-decision', key: 'b' })).toBe(
-      false
-    )
-    expect(sameChatContext({ kind: 'tour-plan' }, { kind: 'tour-plan' })).toBe(true)
-    expect(sameChatContext({ kind: 'tour-plan' }, { kind: 'tour-decision', key: 'a' })).toBe(false)
+  it('label a saved turn by its decision or as the plan', () => {
     expect(chatContextLabel({ kind: 'tour-decision', key: 'a' })).toBe('decision · a')
     expect(chatContextLabel({ kind: 'tour-plan' })).toBe('the plan')
-    expect(chatContextAttrs({ kind: 'tour-decision', key: 'a' })).toBe('')
-    expect(chatContextAttrs({ kind: 'tour-plan' })).toBe('')
   })
 })

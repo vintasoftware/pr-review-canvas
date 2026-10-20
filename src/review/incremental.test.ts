@@ -8,10 +8,9 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { fileDelta, findBasisCanvas, splitBasis } from './incremental.js'
+import { fileDelta, findBasis, splitBasis } from './incremental.js'
 import { pointLinesInHead, type SideText, stableLines } from './point-carry.js'
-import type { CanvasStore } from '../store/canvas-store.js'
-import type { CanvasIndex } from '../contract/canvas-manifest.js'
+import type { CanvasEntry, CanvasIndex } from '../contract/canvas-manifest.js'
 
 const OLD = 'e'.repeat(40)
 const OLDER = 'd'.repeat(40)
@@ -286,9 +285,16 @@ describe('pointLinesInHead', () => {
   })
 })
 
-describe('findBasisCanvas', () => {
-  const index = (canvases: CanvasIndex['canvases']): CanvasStore =>
-    ({ readIndex: async () => ({ canvases }) }) as unknown as CanvasStore
+describe('findBasis', () => {
+  const index = (canvases: CanvasIndex['canvases']) => canvases
+  const ofPr = (prNumber: number | undefined) => (entry: CanvasEntry) =>
+    entry.prNumber === undefined || entry.prNumber === prNumber
+  const findBasisCanvas = (
+    canvases: CanvasIndex['canvases'],
+    gitArg: ReturnType<typeof createFakeGit>,
+    prNumber: number | undefined,
+    headSha: string
+  ) => findBasis(gitArg, headSha, canvases, ofPr(prNumber))
 
   const git = createFakeGit({
     ancestors: { [`${OLD}..${HEAD_SHA}`]: true, [`${OLDER}..${HEAD_SHA}`]: true },

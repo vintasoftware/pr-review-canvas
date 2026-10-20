@@ -9,7 +9,6 @@ import type { PrLoader } from '../server/bundle.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { readText } from '../store/atomic-json.js'
-import { tourBelongsTo } from '../store/tour-store.js'
 import { readTourContext, readTourModel, tourArtifactOf, tourValidationInput } from './publish.js'
 import { validateTourModel } from './validate.js'
 
@@ -82,16 +81,32 @@ export async function lookupTour(
     currentHeadSha: pr.headSha,
     relation: found.relation,
   }
-  if (found.commitsBehind !== undefined) stale.commitsBehind = found.commitsBehind
+  if (found.relation === 'ancestor') stale.commitsBehind = found.commitsBehind
   return { status: 'stale', pr, headSha: found.headSha, artifact, stale, preview: false }
+}
+
+/**
+ * Refuses a commit the index does not file as a tour of this key. The page sends back the commit
+ * its bundle named, so a save or a frame costs no forge or git work: the index alone answers.
+ */
+export async function requireTourOf(ctx: AppContext, key: ReviewKey, headSha: string): Promise<void> {
+  const entry = (await ctx.tours.readIndex()).tours[headSha]
+  if (entry === undefined || !ctx.tours.belongsTo(entry, key)) {
+    throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)} at ${headSha.slice(0, 7)}`, 404)
+  }
 }
 
 /** The tour at a given commit, when the index files it under this key; for the scene frames. */
 export async function tourAt(ctx: AppContext, key: ReviewKey, headSha: string): Promise<TourArtifact> {
-  const entry = (await ctx.tours.readIndex()).tours[headSha]
-  const artifact = entry !== undefined && tourBelongsTo(entry, key) ? await ctx.tours.read(headSha) : null
+  await requireTourOf(ctx, key, headSha)
+  const artifact = await ctx.tours.read(headSha)
   if (artifact === null) {
-    throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)} at ${headSha.slice(0, 7)}`, 404)
+    throw new AppError(
+      'CANVAS_INVALID',
+      `the tour of ${headSha.slice(0, 7)} cannot be read`,
+      500,
+      'generate it again'
+    )
   }
   return artifact
 }

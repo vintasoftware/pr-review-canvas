@@ -3,6 +3,7 @@ import { mkdir, realpath } from 'node:fs/promises'
 import { lock } from 'proper-lockfile'
 import type { CarriedOverInfo, StaleRelation } from '../contract/api.js'
 import {
+  type CanvasEntry,
   type CanvasIndex,
   CanvasIndexSchema,
   type CanvasManifest,
@@ -34,11 +35,10 @@ export async function relateToHead(
     : { relation: 'unrelated' }
 }
 
-/** One canvas as `index.json` lists it. */
-export type CanvasEntry = CanvasIndex['canvases'][string]
+export type { CanvasEntry }
 
 /**
- * Whether a canvas is one of this target's. A canvas belongs to a pull request when it was
+ * Whether a canvas, or a tour, is one of this target's. It belongs to a pull request when it was
  * generated for it or before it existed; to a local review when it belongs to no pull request and
  * was made in the same checkout (`worktree` is the linked worktree's label, null for the main
  * checkout). A snapshot of uncommitted work sits on no branch, so only the `uncommitted` review
@@ -57,6 +57,40 @@ export function canvasBelongsTo(entry: CanvasEntry, key: ReviewKey, worktree: st
     )
   }
   return entry.worktree !== true && (entry.prNumber === undefined || entry.prNumber === key)
+}
+
+/**
+ * The entry for this head, which belongs to its commit whoever made it, or else the closest one
+ * `accept` allows among a store's index entries. Commits the head was built on come first, newest
+ * wins inside a relation, and an entry off a discarded branch is the last resort. The canvas
+ * store and the tour store answer with this.
+ */
+export async function findForHead(
+  git: Git,
+  currentHeadSha: string,
+  entries: Record<string, CanvasEntry>,
+  accept: (entry: CanvasEntry) => boolean
+): Promise<CanvasLookup> {
+  if (entries[currentHeadSha] !== undefined) {
+    return { status: 'ready', headSha: currentHeadSha }
+  }
+  const candidates = Object.entries(entries).filter(([sha, entry]) => sha !== currentHeadSha && accept(entry))
+  const ranked: Array<{ generatedAt: string; found: StaleCanvas }> = []
+  for (const [sha, entry] of candidates) {
+    const found: StaleCanvas = {
+      status: 'stale',
+      headSha: sha,
+      ...(await relateToHead(git, sha, currentHeadSha)),
+    }
+    ranked.push({ generatedAt: entry.generatedAt, found })
+  }
+  ranked.sort((a, b) => {
+    if (a.found.relation !== b.found.relation) {
+      return a.found.relation === 'ancestor' ? -1 : 1
+    }
+    return a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0
+  })
+  return ranked[0]?.found ?? { status: 'missing' }
 }
 
 export interface CanvasStore {
@@ -128,39 +162,10 @@ export function createCanvasStore(repoRoot: string, git: Git, worktree: string |
     }
   }
 
-  /**
-   * The canvas for this head, or the closest one `accept` allows. Commits the head was built on
-   * come first, newest wins inside a relation, and a canvas off a discarded branch is the last
-   * resort.
-   */
   const rank = async (
     currentHeadSha: string,
     accept: (entry: CanvasEntry) => boolean
-  ): Promise<CanvasLookup> => {
-    const index = await readIndex()
-    if (index.canvases[currentHeadSha] !== undefined) {
-      return { status: 'ready', headSha: currentHeadSha }
-    }
-    const candidates = Object.entries(index.canvases).filter(
-      ([sha, entry]) => sha !== currentHeadSha && accept(entry)
-    )
-    const ranked: Array<{ generatedAt: string; found: StaleCanvas }> = []
-    for (const [sha, entry] of candidates) {
-      const found: StaleCanvas = {
-        status: 'stale',
-        headSha: sha,
-        ...(await relateToHead(git, sha, currentHeadSha)),
-      }
-      ranked.push({ generatedAt: entry.generatedAt, found })
-    }
-    ranked.sort((a, b) => {
-      if (a.found.relation !== b.found.relation) {
-        return a.found.relation === 'ancestor' ? -1 : 1
-      }
-      return a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0
-    })
-    return ranked[0]?.found ?? { status: 'missing' }
-  }
+  ): Promise<CanvasLookup> => findForHead(git, currentHeadSha, (await readIndex()).canvases, accept)
 
   return {
     root: repoRoot,

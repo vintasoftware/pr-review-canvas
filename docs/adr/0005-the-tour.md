@@ -187,15 +187,15 @@ project can turn the quiz off or require it before the prompt is written.
 
 ## Look
 
-The tour has one look: Space Grotesk for display text, and an accent that follows the skin, so
-the tour's accent button is that skin's own primary. In the github skin the accent is GitHub's
-green, as Approve is, and blue stays a link; in the olive skin it is the site's olive, lime in
-the dark. Each pair goes through light-dark(), so the light and dark themes both work. The page
-offers the github and olive skins and the light and dark themes; the base terminal look is not
-offered. A per-tour mood catalog was tried in the prototype and dropped on 2026-09-29: four
-accents and display fonts added choice without adding meaning, and a fixed blue read as a link
-in the github skin. Scenes and micro-worlds run in the sandboxed frame from PR 44 (no origin,
-inline code only, no network). No badges, streaks, or scores.
+The tour has one look of its own, settled on 2026-10-19, and offers no skin command: the server
+renders the tour page in its own skin whatever the settings say, with Archivo for display text,
+Source Sans 3 for prose, and IBM Plex Mono for code, served from `static/fonts`, and one palette
+whose colours go through light-dark(), so the page offers the light and dark themes and nothing
+else. The header keeps the theme command alone; the canvas keeps its three skins. Before that the
+tour's accent followed the skin. A per-tour mood catalog was tried in the prototype and dropped on
+2026-09-29: four accents and display fonts added choice without adding meaning, and a fixed blue
+read as a link in the github skin. Scenes and micro-worlds run in the sandboxed frame from PR 44
+(no origin, inline code only, no network). No badges, streaks, or scores.
 
 ## The guide
 
@@ -238,7 +238,7 @@ Under `tour:` in `pr-review.config.yml`:
 | `budget`      | ceilings for landmarks, decisions, quiz questions, and changed lines per landmark | about one landmark per 150 changed lines; ceilings 8 / 5 / 5 |
 | `finalQuiz`   | `on`, `off`, `required`                                                           | `on`                                                         |
 | `reverseQuiz` | `on`, `off`                                                                       | `on`                                                         |
-| `grill`       | `change`, `always`, `off`                                                         | `change`                                                     |
+| `grill`       | `change`, `off`                                                                   | `change`                                                     |
 | `audio`       | `on`, `off`                                                                       | `on`, with the notice                                        |
 | `microWorld`  | `on`, `off`                                                                       | `on`                                                         |
 | `tryIt`       | `on`, `off`                                                                       | `on` when the guide has a run recipe                         |

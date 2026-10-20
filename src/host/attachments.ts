@@ -1,9 +1,10 @@
-// Finding the canvas zip a human attached to the review and downloading it with the host CLI's
-// token. The token is read per request, sent to the forge alone, and never logged or stored.
-import { readCanvasComment } from '../canvas/comment.js'
+// Finding the canvas or tour zip a human attached to the review, or a comment carries, and
+// downloading it with the host CLI's token. The token is read per request, sent to the forge
+// alone, and never logged or stored.
+import { readZipEnvelope, ZIP_COMMENT_MARKERS } from '../canvas/comment.js'
 import { createHash } from 'node:crypto'
 import { importCanvas } from '../canvas/import.js'
-import { type ParsedCanvasName, parseCanvasZipName } from '../canvas/name.js'
+import { type ParsedCanvasName, parseZipName, type ZipKind } from '../canvas/name.js'
 import { CANVAS_ZIP_MAX_BYTES, hasZipMagic } from '../canvas/zip.js'
 import type { ImportResult, SharedCanvasInfo } from '../contract/api.js'
 import type { CommentsPayload } from '../contract/comments.js'
@@ -42,11 +43,15 @@ export interface DiscoverySources {
   comments: CommentsPayload
 }
 
-/** Every link in the PR body and its comments whose name is a canvas zip of this repository. */
+/**
+ * Every link in the PR body and its comments whose name is a zip of `kind` for this repository,
+ * and every comment carrying one in its hidden block.
+ */
 export function collectCandidates(
   sources: DiscoverySources,
   repo: Repo,
-  attachments: HostAttachments
+  attachments: HostAttachments,
+  kind: ZipKind = 'canvas'
 ): AttachmentCandidate[] {
   const texts: Array<{ text: string; postedAt: string }> = [
     { text: sources.body, postedAt: sources.bodyUpdatedAt },
@@ -57,16 +62,16 @@ export function collectCandidates(
   let order = 0
   for (const { text, postedAt } of texts) {
     for (const link of attachments.findLinks(text, repo)) {
-      const parsed = parseCanvasZipName(link.name, repo)
+      const parsed = parseZipName(kind, link.name, repo)
       if (parsed !== null) {
         candidates.push({ ...link, parsed, postedAt, order: order++ })
       }
     }
   }
   for (const comment of sources.comments.issueComments) {
-    const embedded = readCanvasComment(comment.body)
+    const embedded = readZipEnvelope(ZIP_COMMENT_MARKERS[kind], comment.body)
     if (embedded === null) continue
-    const parsed = parseCanvasZipName(embedded.name, repo)
+    const parsed = parseZipName(kind, embedded.name, repo)
     if (parsed !== null) {
       candidates.push({ ...embedded, url: comment.url, parsed, postedAt: comment.updatedAt, order: order++ })
     }
@@ -75,7 +80,7 @@ export function collectCandidates(
 }
 
 /** True when the name names a pull request, and it is not the one being looked at. */
-function namesAnotherPr(c: AttachmentCandidate, prNumber: number): boolean {
+export function namesAnotherPr(c: AttachmentCandidate, prNumber: number): boolean {
   return c.parsed.prNumber !== undefined && c.parsed.prNumber !== prNumber
 }
 

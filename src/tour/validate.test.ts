@@ -135,7 +135,7 @@ describe('validateTourModel', () => {
     expect(codes({ ...model, decisions: [decision] })).toEqual(['MARKUP_IN_PLAIN_TEXT'])
     // A body has at most two paragraphs: the picture carries the rest.
     const three = validateTourModel(withLandmark(model, 2, { body: ['one', 'two', 'three'] }), input()).errors
-    expect(three.map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'landmarks.2.body']])
+    expect(three.map(e => [e.code, e.where])).toEqual([['SCHEMA', 'landmarks.2.body']])
   })
 
   it('checks every reference into the diff: code paths, chunks, anchors, landmarks', () => {

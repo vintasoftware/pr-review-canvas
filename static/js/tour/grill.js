@@ -15,7 +15,7 @@ import { liveAnswer } from '../chat-answer.js'
 import { esc, qs } from '../dom.js'
 import { openFence } from '../fences.js'
 import { renderMarkdown } from '../markdown.js'
-import { splitGrillAnswer } from './grill-cards.js'
+import { readRestatementBlock, RESTATEMENT_FIELD_MAX, splitGrillAnswer } from './grill-cards.js'
 import { inline, plain } from './screens.js'
 import { cancelGrill, fetchGrillHistory, streamGrill } from './tour-api.js'
 
@@ -100,9 +100,9 @@ export function restatementFormHtml(d, draft, opts = { cancel: 'close-grill' }) 
   const r = draft ?? { what: '', where: [`${d.anchor.path}:${d.anchor.line}`], unchanged: '' }
   return `<form class="tour-restate" data-act="restate">
         <h4>What you want instead</h4>
-        <label><b>What changes</b><textarea name="what" required maxlength="2000">${esc(r.what)}</textarea></label>
-        <label><b>Where</b> <span class="tour-hint">paths or places, one per line</span><textarea name="where" required maxlength="2000">${esc(r.where.join('\n'))}</textarea></label>
-        <label><b>Stays the same</b><textarea name="unchanged" required maxlength="2000" placeholder="What this change must not touch">${esc(r.unchanged)}</textarea></label>
+        <label><b>What changes</b><textarea name="what" required maxlength="${RESTATEMENT_FIELD_MAX}">${esc(r.what)}</textarea></label>
+        <label><b>Where</b> <span class="tour-hint">paths or places, one per line</span><textarea name="where" required maxlength="${RESTATEMENT_FIELD_MAX}">${esc(r.where.join('\n'))}</textarea></label>
+        <label><b>Stays the same</b><textarea name="unchanged" required maxlength="${RESTATEMENT_FIELD_MAX}" placeholder="What this change must not touch">${esc(r.unchanged)}</textarea></label>
         <div class="tour-actions"><button class="cmd fill" type="submit">approve · into the plan</button><button class="cmd" type="button" data-act="${esc(opts.cancel)}">cancel</button></div>
       </form>`
 }
@@ -125,23 +125,19 @@ export function formGrillHtml(d, draft) {
 }
 
 /**
- * The restatement the form holds, or null while a field is empty. A place is one line, so a place
- * that names something with a comma in it stays one place.
+ * The restatement the form holds, read as the agent's card is, or null while a field is empty. A
+ * place is one line, so a place that names something with a comma in it stays one place.
  * @param {HTMLFormElement} form
  * @returns {Restatement | null}
  */
 export function readRestatement(form) {
   const data = new FormData(form)
-  const what = String(data.get('what') ?? '').trim()
-  const unchanged = String(data.get('unchanged') ?? '').trim()
-  const where = String(data.get('where') ?? '')
-    .split('\n')
-    .map(s => s.trim())
-    .filter(s => s !== '')
-  if (what === '' || unchanged === '' || where.length === 0) {
-    return null
-  }
-  return { what, where, unchanged }
+  const read = readRestatementBlock({
+    what: data.get('what'),
+    unchanged: data.get('unchanged'),
+    where: String(data.get('where') ?? '').split('\n'),
+  })
+  return 'restatement' in read ? read.restatement : null
 }
 
 /**

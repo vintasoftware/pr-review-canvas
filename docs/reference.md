@@ -315,7 +315,8 @@ covers the body after the closing frontmatter delimiter, with CRLF normalized to
 compares the recorded hash and actual body against the skill bundled with the running CLI, and the
 files a skill ships beside its `SKILL.md` against the bundled ones. Any outdated or modified copy
 in `.claude/skills` or `.agents/skills` fails the skill check, even if the other copy is current;
-so does a bundled skill missing from a directory that has the canvas skill. Refresh copies with
+so does a bundled skill missing from a directory that has the canvas skill, since an install that
+predates it is behind in the same way. Refresh copies with
 `pr-review upgrade` or `pr-review install-skill` (repeat any custom directory flags used during
 installation). Automatic discovery checks the two default directories.
 
@@ -1039,18 +1040,18 @@ their paths.
 patches: the whole hunk, or with `--from` and `--to` the lines of that new-side range and the
 deletions among them, under an `@@` header that counts them.
 
-`tour checkout` gives the generator a place to run things: a [review checkout](#review-checkouts)
-at the tour's head, the same one AI Chat reads, or one at its merge base, kept apart under
-`checkouts/base/<key>`. It prints `{ "side", "dir", "sha", "port", "scratch" }`: a port nothing
-listens on, and an empty folder in the tour directory, emptied on each call, for the run's state.
-Try-it recipes run in the head checkout on that port with their state in that folder, and a script
-the change touches runs in either checkout, so nothing runs in your own checkout or writes your
-review state. A
-ref comparison has no review, so it has no checkout; while a chat turn holds the head checkout,
-the command answers `CHECKOUT_BUSY`. `base --remove` takes the base checkout away once the
-generator is done, and prints `{ "side": "base", "removed" }`; the head stays, for AI Chat, until
-the idle sweep removes it (`checkoutIdleDays`, which covers both, and removes a base checkout as
-soon as its pull request is merged or closed).
+`tour checkout` gives the generator a place to run things: a git worktree of its own at the
+tour's head, or one at its merge base, under `checkouts/tour/head/<key>` and
+`checkouts/tour/base/<key>`, apart from the [review checkout](#review-checkouts) AI Chat reads,
+which a run never writes into or moves. It prints `{ "side", "dir", "sha", "port", "scratch" }`: a
+port nothing listens on, and an empty folder in the tour directory, emptied on each call, for the
+run's state. Try-it recipes run in the head checkout on that port with their state in that folder,
+and a script the change touches runs in either checkout, so nothing runs in your own checkout or
+writes your review state. A ref comparison has no review, so it has no checkout; while another
+tour generation holds the checkout, the command answers `CHECKOUT_BUSY`. `--remove` takes the
+side's checkout away once the generator is done, and prints `{ "side", "removed" }`; what is left
+goes with the idle sweep (`checkoutIdleDays`, which covers them all), and as soon as the pull
+request is merged or closed.
 
 `tour plan` prints the plan a finished tour settled on, for the
 [pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),
@@ -1133,8 +1134,11 @@ A tour is shared as its own hidden comment, marked `pr-review-tour:v1`, holding 
 base64, with a visible line on its shape and who has toured it. `tour.share` decides: `auto`
 follows `sharing.canvasComment`, `on` and `off` decide apart from it, and the personal
 `tourComment` wins over all. When the comment does not fit the host's limit or the post fails,
-the zip is exported to `<dataDir>/exports/` for the author to attach by hand. The zip is named
-`pr-<n>-<time>-<sha8>-<repo>-tour.zip` and holds `manifest.json` and `tour.json`.
+the zip is exported to `<dataDir>/exports/` for the author to attach by hand; the tour page finds
+the attachment as the review page finds a canvas's, by its name. The zip is named
+`pr-<n>-<time>-<sha8>-<repo>-tour.zip` and holds `manifest.json` and `tour.json`. A copy of a
+tour already stored brings its record along: who finished it on another machine, and the
+author's picks when they finished later there.
 
 ### Tour config
 
@@ -1147,7 +1151,7 @@ Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-r
 | `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                           |
 | `tour.budget.linesPerLandmark` | `400`             | About one why landmark per this many changed lines                                                                  |
 | `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                             |
-| `tour.grill`                   | `change`          | `change` grills when the reader asks for something else, `always` on every pick, `off` never                        |
+| `tour.grill`                   | `change`          | `change` grills when the reader asks for something else, `off` never                                                |
 | `tour.audio`                   | `on`              | Speech through the browser's Web Speech API, with a one-time notice on where the audio goes                         |
 | `tour.microWorld`              | `on`              | `off` refuses a micro-world                                                                                         |
 | `tour.tryIt`                   | `auto`            | `auto` is on when the guide has a run recipe; `on`; `off`                                                           |
@@ -1391,7 +1395,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                                                               |
 | `CHAT_BUSY`                             | Wait for the running reply, or press **stop** on the page that asked; when a canvas generation, another worktree of the clone, or another `pr-review serve` holds the review, ask again once it is done |
-| `CHECKOUT_BUSY`                         | A chat answer or a canvas generation holds the review checkout `tour checkout` needs; run it again once it is done                                                                                      |
+| `CHECKOUT_BUSY`                         | Another tour generation holds the checkout `tour checkout` needs; run it again once it is done                                                                                                          |
 | `GENERATION_BUSY`                       | One generation runs at a time; open the running one from its review page to follow or stop it, then start again                                                                                         |
 | `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                                                                    |
 | `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                                                                    |

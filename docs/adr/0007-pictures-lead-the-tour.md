@@ -64,7 +64,8 @@ Fable model that decided and GPT-6-Astra as a second opinion, blind to which ver
   stated without the branch that breaks it, a keep-reason that argues for the change, a picture
   that loses its wires on a phone. More prompt text did not remove them; a check that reads the
   tour is the next thing to try.
-- A tour written before the change still loads: the stored schema keeps three body paragraphs and
-  scenes without a technique; only new tours are held to the new rules.
+- Every tour is held to the new rules, stored ones too: the tour shipped with no tours in the
+  wild, so on 2026-10-19 the stored schema stopped keeping three body paragraphs and the shapes of
+  earlier drafts, and the fixture tour of PR 67 was brought to the current shape.
 - The gallery has to stay licensed permissively and valid against the frame; a test checks that
   every entry passes the frame's rules and names its technique.

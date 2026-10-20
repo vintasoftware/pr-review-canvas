@@ -24,9 +24,6 @@ export const ChatContextSchema = z.discriminatedUnion('kind', [
     end: z.number().int().positive(),
   }),
   z.object({ kind: z.literal('point'), fingerprint: z.string().min(1).max(200) }),
-  // The tour's grilling: one decision the reader wants changed, or the plan as a whole.
-  z.object({ kind: z.literal('tour-decision'), key: z.string().min(1).max(40) }),
-  z.object({ kind: z.literal('tour-plan') }),
 ])
 
 /** A message longer than this is a paste, not a question. */
@@ -40,7 +37,7 @@ export const ChatSendSchema = z.object({
 })
 export type ChatSendInput = z.infer<typeof ChatSendSchema>
 
-/** The contexts a grilling turn may name; the canvas's kinds have no tour to point at. */
+/** The contexts a grilling turn may name: one decision the reader wants changed, or the plan as a whole. */
 export const TourGrillContextSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('tour-decision'), key: z.string().min(1).max(40) }),
   z.object({ kind: z.literal('tour-plan') }),
@@ -60,7 +57,8 @@ export const ChatTurnSchema = z.object({
   role: z.enum(['user', 'assistant']),
   text: z.string(),
   at: z.string(),
-  context: ChatContextSchema.optional(),
+  /** What the turn pointed at: the canvas's contexts in a canvas thread, the tour's in the tour's. */
+  context: z.union([ChatContextSchema, TourGrillContextSchema]).optional(),
   /** Why the turn ended, on an assistant turn that did not finish. */
   incomplete: z.string().optional(),
   /**

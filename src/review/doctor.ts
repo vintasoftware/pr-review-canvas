@@ -87,7 +87,7 @@ export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill)
   if (stale.length > 0) {
     return {
       ok: false,
-      detail: `outdated or modified skill: ${stale.join(', ')}`,
+      detail: `outdated, modified, or missing skill: ${stale.join(', ')}`,
       hint: 'run `pr-review upgrade` or `pr-review install-skill`',
     }
   }

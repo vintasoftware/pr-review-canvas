@@ -34,6 +34,11 @@ export function mountFrames(root, opts) {
     frame.className = 'tour-frame'
     frame.setAttribute('sandbox', 'allow-scripts')
     frame.setAttribute('title', kind === 'micro' ? 'micro-world' : 'scene')
+    // A scene is watched, never used: inert, it takes no click or focus, so the tour's keys keep
+    // working; a micro-world takes the reader's input through its own controls.
+    if (kind === 'scene') {
+      frame.setAttribute('inert', '')
+    }
     frame.setAttribute('loading', 'eager')
     frame.src = frameUrl({ ...opts, landmark, kind })
     host.append(frame)

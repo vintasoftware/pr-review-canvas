@@ -109,9 +109,17 @@ describe('createSaver', () => {
     saver.push(freshReaderState())
     await vi.advanceTimersByTimeAsync(250)
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'offline' }))
+    // Settling sends the failed state once more and says so when it fails again, so finishing
+    // does not go ahead on a state the server lacks; once it lands, settling is quiet.
+    await expect(saver.settle()).rejects.toThrow('offline')
+    expect(save).toHaveBeenCalledTimes(2)
     fail = false
+    await expect(saver.settle()).resolves.toBeUndefined()
+    expect(save).toHaveBeenCalledTimes(3)
     saver.push(freshReaderState())
     await vi.advanceTimersByTimeAsync(250)
-    expect(save).toHaveBeenCalledTimes(2)
+    expect(save).toHaveBeenCalledTimes(4)
+    await expect(saver.settle()).resolves.toBeUndefined()
+    expect(save).toHaveBeenCalledTimes(4)
   })
 })

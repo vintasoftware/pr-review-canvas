@@ -11,8 +11,8 @@ import type {
 } from '../contract/generation-context.js'
 import { extractLinks, parseLink } from '../contract/links.js'
 import type { Point, ReviewArtifact } from '../contract/review-artifact.js'
+import type { CanvasEntry } from '../contract/canvas-manifest.js'
 import type { Git } from '../git/git.js'
-import type { CanvasStore } from '../store/canvas-store.js'
 import type { Derived } from '../store/derived-store.js'
 
 /**
@@ -110,21 +110,18 @@ export function splitBasis(
 }
 
 /**
- * The canvas an incremental run builds on: the newest one generated for a commit this head was
- * built on. A canvas of a line of work the head no longer contains describes code that was
- * abandoned, so it is never a basis, however recent it is.
+ * The canvas, or the tour, an incremental run builds on: the newest entry `accept` allows that was
+ * generated for a commit this head was built on. One of a line of work the head no longer contains
+ * describes code that was abandoned, so it is never a basis, however recent it is.
  */
-export async function findBasisCanvas(
-  canvases: CanvasStore,
+export async function findBasis(
   git: Git,
-  prNumber: number | undefined,
-  headSha: string
+  headSha: string,
+  entries: Record<string, CanvasEntry>,
+  accept: (entry: CanvasEntry) => boolean
 ): Promise<string | null> {
-  const index = await canvases.readIndex()
-  const candidates = Object.entries(index.canvases)
-    .filter(
-      ([sha, entry]) => sha !== headSha && (entry.prNumber === undefined || entry.prNumber === prNumber)
-    )
+  const candidates = Object.entries(entries)
+    .filter(([sha, entry]) => sha !== headSha && accept(entry))
     .sort(([, a], [, b]) => (a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0))
   for (const [sha] of candidates) {
     if (await git.isAncestor(sha, headSha)) {

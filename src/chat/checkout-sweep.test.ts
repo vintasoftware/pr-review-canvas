@@ -45,7 +45,7 @@ afterEach(() => {
 })
 
 describe('startCheckoutSweep', () => {
-  it('removes the base checkouts of merged and closed pull requests, and keeps the rest', async () => {
+  it('removes the tour checkouts of merged and closed pull requests, and keeps the rest', async () => {
     const info = (key: number | 'branch', locked = false) => ({
       key,
       worktree: null,
@@ -75,8 +75,8 @@ describe('startCheckoutSweep', () => {
       checkouts: fakeCheckouts(),
       readSettings: async () => settings,
       log: l => lines.push(l),
-      base: {
-        checkouts: base,
+      tour: {
+        checkouts: [base],
         prState: async n => {
           asked.push(n)
           if (n === 3 && asked.filter(a => a === 3).length > 1) {
@@ -90,22 +90,22 @@ describe('startCheckoutSweep', () => {
     // A branch review has no pull request, and a checkout in use is not asked about.
     expect(asked).toEqual([1, 2, 3, 4])
     expect(removed).toEqual(['1', '2'])
-    expect(lines).toContain('removed the base checkout of #1: the pull request is merged')
-    expect(lines).toContain('removed the base checkout of #2: the pull request is closed')
+    expect(lines).toContain('removed the tour checkout of #1: the pull request is merged')
+    expect(lines).toContain('removed the tour checkout of #2: the pull request is closed')
     // A state it cannot read leaves the checkout, and says why.
     const result = await sweeper.runOnce()
     expect(result?.skipped.map(c => c.key)).toEqual([4])
-    expect(lines).toContain('could not read the state of #3, so its base checkout stays: offline')
+    expect(lines).toContain('could not read the state of #3, so its tour checkout stays: offline')
     sweeper.stop()
   })
 
-  it('leaves base checkouts alone when cleanup is off', async () => {
+  it('leaves tour checkouts alone when cleanup is off', async () => {
     const prState = vi.fn(async () => 'merged')
     const sweeper = startCheckoutSweep({
       checkouts: fakeCheckouts(),
       readSettings: async () => ({ ...DEFAULT_SETTINGS, checkoutIdleDays: CHECKOUT_IDLE_NEVER }),
       log: () => {},
-      base: { checkouts: fakeCheckouts(), prState },
+      tour: { checkouts: [fakeCheckouts()], prState },
     })
     await vi.advanceTimersByTimeAsync(0)
     expect(prState).not.toHaveBeenCalled()

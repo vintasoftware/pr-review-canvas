@@ -61,8 +61,14 @@ export function createSaver(save, opts = {}) {
   let pending = null
   let inFlight = false
   let timer = /** @type {ReturnType<typeof setTimeout> | null} */ (null)
-  /** @type {Array<() => void>} */
+  /** @type {Array<{ resolve: () => void, reject: (err: unknown) => void }>} */
   let idle = []
+  /** Why the last save failed, so a caller settling on it hears, or null once one landed. */
+  /** @type {unknown} */
+  let failed = null
+  /** The state that failed to land, sent once more when the next settle asks. */
+  /** @type {TourReaderState | null} */
+  let unsaved = null
 
   async function flush() {
     timer = null
@@ -74,7 +80,11 @@ export function createSaver(save, opts = {}) {
     inFlight = true
     try {
       await save(state)
+      failed = null
+      unsaved = null
     } catch (err) {
+      failed = err
+      unsaved = state
       opts.onError?.(err)
     } finally {
       inFlight = false
@@ -82,8 +92,12 @@ export function createSaver(save, opts = {}) {
     if (pending !== null) {
       void flush()
     } else {
-      for (const resolve of idle) {
-        resolve()
+      for (const waiter of idle) {
+        if (failed === null) {
+          waiter.resolve()
+        } else {
+          waiter.reject(failed)
+        }
       }
       idle = []
     }
@@ -97,18 +111,25 @@ export function createSaver(save, opts = {}) {
         timer = later(() => void flush(), delay)
       }
     },
-    /** Resolves once nothing is pending or in flight; sends what is pending now. */
+    /**
+     * Sends what is pending now, or once more what failed to land, and resolves once it has.
+     * Rejects when that save fails, so what follows (finishing, which reads the saved state) does
+     * not go ahead on a state the server never took.
+     */
     settle() {
+      if (pending === null && !inFlight && unsaved !== null) {
+        pending = unsaved
+      }
       if (timer === null && !inFlight && pending === null) {
         return Promise.resolve()
       }
       return /** @type {Promise<void>} */ (
-        new Promise(resolve => {
-          idle.push(() => resolve(undefined))
+        new Promise((resolve, reject) => {
+          idle.push({ resolve: () => resolve(undefined), reject })
           if (timer !== null) {
             clearTimeout(timer)
-            void flush()
           }
+          void flush()
         })
       )
     },

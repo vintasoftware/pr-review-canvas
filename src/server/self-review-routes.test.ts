@@ -13,7 +13,7 @@ import * as lockfile from 'proper-lockfile'
 import path from 'node:path'
 import type { SettleResponse } from '../contract/self-review.js'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
-import { readCanvasComment } from '../canvas/comment.js'
+import { CANVAS_COMMENT_MARKER, readZipEnvelope } from '../canvas/comment.js'
 import { readCanvasZip } from '../canvas/zip.js'
 import { HostCliError } from '../host/client.js'
 import { artifactToModelOutput } from '../review/normalize.js'
@@ -122,7 +122,7 @@ async function answer(res: Response): Promise<SettleResponse> {
 function sharedComment(forge: FakeGh): { text: string; settled: unknown } {
   const posts = forge.calls.filter(c => c.kind === 'post' && c.path.startsWith('repos/acme/widgets/issues/'))
   const text = (posts.at(-1)?.body as { body: string } | undefined)?.body ?? ''
-  const zip = readCanvasComment(text)
+  const zip = readZipEnvelope(CANVAS_COMMENT_MARKER, text)
   return { text, settled: zip === null ? null : readCanvasZip(zip.bytes).artifact.settled }
 }
 

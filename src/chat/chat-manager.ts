@@ -9,15 +9,18 @@ import type {
   ChatHistoryResponse,
   ChatThreadsResponse,
   ChatTurn,
+  TourGrillContext,
 } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
+import type { TourReaderState } from '../contract/tour-api.js'
+import type { TourArtifact } from '../contract/tour.js'
 import type { Settings, SettingsOverrides } from '../contract/settings.js'
 import { parseReviewFolder, type ReviewKey, reviewFolder } from '../contract/review-key.js'
 import type { ChatThread } from '../contract/state.js'
 import type { SettingsStore } from '../store/settings-store.js'
 import type { StateStore } from '../store/state-store.js'
 import { type CheckoutLease, readCodeAt, type ReviewCheckouts } from './checkouts.js'
-import { type ContextSources, renderChatContext, type TourSources } from './context.js'
+import { renderChatContext, renderTourContext } from './context.js'
 import { type CodeSource, renderSeed, type SeedPaths } from './seed.js'
 import { renderTourSeed } from './tour-seed.js'
 import {
@@ -71,27 +74,32 @@ export interface ChatManagerDeps {
 /** The turns running over one data dir, by review folder (`reviewFolder`). */
 export type RunningTurns = Map<string, RunningTurn>
 
+/**
+ * What a turn is about and what it points at: the canvas, with one of its contexts and the thread
+ * to answer in, or the tour, with a decision or the plan, in the tour's own thread.
+ */
+export type ChatSubject =
+  | {
+      kind: 'canvas'
+      artifact: ReviewArtifact
+      /** Whether the reader may resolve the points of this canvas, so the agent may propose it. */
+      readerResolves: boolean
+      context: ChatContext
+      /** The thread to answer in; the active one when absent. */
+      thread?: string | undefined
+    }
+  | { kind: 'tour'; artifact: TourArtifact; reader: TourReaderState; context: TourGrillContext }
+
 /** Everything about the review target one turn needs, resolved by the route. */
 export interface ChatTarget {
   key: ReviewKey
   headSha: string
-  /** The canvas the chat talks about; absent for a tour's grilling. */
-  artifact?: ReviewArtifact | undefined
-  /** The tour the grilling talks about: it runs in the tour's own thread with the tour's seed. */
-  tour?: TourSources | undefined
+  subject: ChatSubject
   files: FileEntry[]
   patches: Record<string, string>
   /** `<canvas>/derived`, which holds head/, base/ and patches/. */
   derivedDir: string
-  readLines: ContextSources['readLines']
-  /** Whether the reader may resolve the points of this canvas, so the agent may propose it. */
-  readerResolves: boolean
-}
-
-export interface ChatSendInput {
-  message: string
-  context: ChatContext
-  thread?: string | undefined
+  readLines: (side: 'head' | 'base', path: string, from: number, to: number) => Promise<string[] | null>
 }
 
 export interface ChatManager {
@@ -99,7 +107,7 @@ export interface ChatManager {
   threads(key: ReviewKey): Promise<ChatThreadsResponse>
   createThread(key: ReviewKey): Promise<ChatThread>
   selectThread(key: ReviewKey, name: string): Promise<ChatThread | null>
-  send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent>
+  send(target: ChatTarget, message: string): AsyncIterable<ChatEvent>
   /** The transcript of the tour's thread, empty before the first grilling. */
   tourHistory(key: ReviewKey): Promise<ChatHistoryResponse>
   /** True when a turn was running and has been asked to stop. */
@@ -286,7 +294,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     }))
   }
 
-  async function* send(target: ChatTarget, input: ChatSendInput): AsyncIterable<ChatEvent> {
+  async function* send(target: ChatTarget, message: string): AsyncIterable<ChatEvent> {
     const folder = folderOf(target.key)
     const held = turns.get(folder)
     if (held !== undefined) {
@@ -309,7 +317,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     const slot: RunningTurn = { run: null, stopped: false, lease: null, ended }
     turns.set(folder, slot)
     try {
-      yield* runTurn(target, input, slot)
+      yield* runTurn(target, message, slot)
     } finally {
       // The lock goes first, so a slot that looks free always has a free checkout behind it.
       await slot.lease?.release().catch(() => undefined)
@@ -348,24 +356,25 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     }
   }
 
-  async function* runTurn(
-    target: ChatTarget,
-    input: ChatSendInput,
-    slot: RunningTurn
-  ): AsyncIterable<ChatEvent> {
+  async function* runTurn(target: ChatTarget, message: string, slot: RunningTurn): AsyncIterable<ChatEvent> {
     const settings = await effectiveSettings()
+    const { subject } = target
     const thread =
-      target.tour === undefined
-        ? await resolveThread(target.key, settings.chatAgent, input.thread)
+      subject.kind === 'canvas'
+        ? await resolveThread(target.key, settings.chatAgent, subject.thread)
         : await tourThread(target.key, settings.chatAgent)
     const at = deps.now().toISOString()
-    const contextBlock = await renderChatContext(input.context, {
-      artifact: target.artifact,
-      tour: target.tour,
-      files: target.files,
-      patches: target.patches,
-      readLines: target.readLines,
-    })
+    const contextBlock =
+      subject.kind === 'canvas'
+        ? await renderChatContext(subject.context, {
+            artifact: subject.artifact,
+            files: target.files,
+            patches: target.patches,
+            readLines: target.readLines,
+          })
+        : renderTourContext(subject.context, subject)
+    // The seed says whether the reader may resolve points; a tour's reader restates instead.
+    const readerResolves = subject.kind === 'canvas' && subject.readerResolves
     const code = yield* prepareCode(target, settings, slot)
     const { cwd } = code
     // Saved on the answer, so the warning is still there when the thread is opened again.
@@ -376,9 +385,9 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     const seeded =
       !sameSession ||
       thread.seededHeadSha !== target.headSha ||
-      thread.seededReaderResolves !== target.readerResolves
+      thread.seededReaderResolves !== readerResolves
     const seed = seeded ? `${await renderSubjectSeed(deps, target, code)}\n\n` : ''
-    const prompt = `${seed}${contextBlock}\n\n## Question\n\n${input.message}\n`
+    const prompt = `${seed}${contextBlock}\n\n## Question\n\n${message}\n`
 
     if (!sameSession) {
       await deps.runner.ensureSession({
@@ -390,9 +399,9 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     }
     await deps.transcripts.append(target.key, thread.name, {
       role: 'user',
-      text: input.message,
+      text: message,
       at,
-      context: input.context,
+      context: subject.context,
     })
 
     const model = await modelForTurn(deps.runner, settings, thread.name, cwd)
@@ -403,11 +412,11 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       await saveTurn(
         target.key,
         thread,
-        input.message,
+        message,
         { role: 'assistant', text: '', at: deps.now().toISOString(), incomplete: 'cancelled', ...fallback },
         target.headSha,
         cwd,
-        target.readerResolves,
+        readerResolves,
         // The seed never went anywhere, so the thread stays where it was.
         false
       )
@@ -500,7 +509,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       await saveTurn(
         target.key,
         thread,
-        input.message,
+        message,
         {
           role: 'assistant',
           text: answer,
@@ -510,7 +519,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         },
         target.headSha,
         cwd,
-        target.readerResolves,
+        readerResolves,
         // An error before the agent said anything means the turn never reached it.
         answer !== '' || incomplete === undefined || incomplete === 'cancelled'
       )
@@ -585,15 +594,12 @@ async function renderSubjectSeed(
   code: CodeSource
 ): Promise<string> {
   const paths = seedPaths(deps, target, code)
-  if (target.tour !== undefined) {
-    return renderTourSeed(await deps.loadTourSeedTemplate(), target.tour.artifact, paths)
-  }
-  if (target.artifact === undefined) {
-    throw new Error('a chat turn needs a canvas or a tour')
-  }
-  return renderSeed(await deps.loadSeedTemplate(), target.artifact, paths, {
-    readerResolves: target.readerResolves,
-  })
+  const { subject } = target
+  return subject.kind === 'tour'
+    ? renderTourSeed(await deps.loadTourSeedTemplate(), subject.artifact, paths)
+    : renderSeed(await deps.loadSeedTemplate(), subject.artifact, paths, {
+        readerResolves: subject.readerResolves,
+      })
 }
 
 function seedPaths(deps: ChatManagerDeps, target: ChatTarget, code: CodeSource): SeedPaths {

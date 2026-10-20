@@ -1,6 +1,6 @@
 // The block that goes above the reader's message: what they pointed at, in the agent's terms.
 // Every value is checked against the canvas first, so a made-up path never reaches a file read.
-import type { ChatContext } from '../contract/chat.js'
+import type { ChatContext, TourGrillContext } from '../contract/chat.js'
 import { chatContextLabel } from '../contract/chat.js'
 import { pointRef } from '../../static/js/proposed-comment.js'
 import type { FileEntry, Hunk, Layer, ReviewArtifact } from '../contract/review-artifact.js'
@@ -27,28 +27,11 @@ export interface TourSources {
 }
 
 export interface ContextSources {
-  /** The canvas, for the canvas's contexts; a grilling turn has none. */
-  artifact?: ReviewArtifact | undefined
-  /** The tour, for the tour's contexts; the canvas's chat has none. */
-  tour?: TourSources | undefined
+  artifact: ReviewArtifact
   files: readonly FileEntry[]
   patches: Record<string, string>
   /** Lines of a materialized file, or null when this head has none. */
   readLines: (side: 'head' | 'base', path: string, from: number, to: number) => Promise<string[] | null>
-}
-
-function canvasOf(sources: ContextSources): ReviewArtifact {
-  if (sources.artifact === undefined) {
-    throw new ChatContextError('this chat has no canvas to point at')
-  }
-  return sources.artifact
-}
-
-function tourOf(sources: ContextSources): TourSources {
-  if (sources.tour === undefined) {
-    throw new ChatContextError('this chat has no tour to point at')
-  }
-  return sources.tour
 }
 
 function layerById(artifact: ReviewArtifact, id: string): Layer {
@@ -96,14 +79,14 @@ function patchOf(sources: ContextSources, entry: FileEntry): string | null {
 export async function renderChatContext(context: ChatContext, sources: ContextSources): Promise<string> {
   const label = chatContextLabel(
     context,
-    id => sources.artifact?.layers.find(l => l.id === id)?.title,
-    fp => sources.artifact?.points.find(p => p.fingerprint === fp)?.title
+    id => sources.artifact.layers.find(l => l.id === id)?.title,
+    fp => sources.artifact.points.find(p => p.fingerprint === fp)?.title
   )
   switch (context.kind) {
     case 'pr':
       return '## Context: the whole pull request\n\nThe reader is asking about the pull request as a whole.'
     case 'layer': {
-      const layer = layerById(canvasOf(sources), context.layerId)
+      const layer = layerById(sources.artifact, context.layerId)
       const files = layer.files.map(f => `- \`${f.path}\` (${f.hunks.join(', ')})`).join('\n')
       return [`## Context: ${label}`, '', layer.rationale, '', files === '' ? '_no files_' : files].join('\n')
     }
@@ -126,11 +109,12 @@ export async function renderChatContext(context: ChatContext, sources: ContextSo
       return renderLines(context, sources, label)
     case 'point':
       return renderPoint(context, sources)
-    case 'tour-decision':
-      return renderTourDecision(context.key, tourOf(sources))
-    case 'tour-plan':
-      return renderTourPlan(tourOf(sources))
   }
+}
+
+/** The grilling's context block: the decision the reader wants changed, or the plan as it stands. */
+export function renderTourContext(context: TourGrillContext, tour: TourSources): string {
+  return context.kind === 'tour-decision' ? renderTourDecision(context.key, tour) : renderTourPlan(tour)
 }
 
 /** A decision the reader wants changed: both sides, the tour's reason, and where the reader stands. */
@@ -200,7 +184,7 @@ async function renderPoint(
   context: Extract<ChatContext, { kind: 'point' }>,
   sources: ContextSources
 ): Promise<string> {
-  const point = canvasOf(sources).points.find(p => p.fingerprint === context.fingerprint)
+  const point = sources.artifact.points.find(p => p.fingerprint === context.fingerprint)
   if (point === undefined) {
     throw new ChatContextError('this canvas has no such attention point')
   }

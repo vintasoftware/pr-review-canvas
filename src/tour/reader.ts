@@ -15,6 +15,11 @@ export function readerFile(ctx: AppContext, headSha: string): string {
   return path.join(ctx.tours.tourDir(headSha), 'reader.json')
 }
 
+/** The state as saved, or null before the first save. */
+export function savedReaderState(ctx: AppContext, headSha: string): Promise<TourReaderState | null> {
+  return readJson(readerFile(ctx, headSha), TourReaderStateSchema)
+}
+
 /**
  * The state as saved, else a fresh one. A fresh state for the author starts from the picks the
  * record carried over from the tour of an earlier commit, by decision key, so a regenerated tour
@@ -26,7 +31,7 @@ export async function readReaderState(
   artifact: TourArtifact,
   author: boolean
 ): Promise<TourReaderState> {
-  const saved = await readJson(readerFile(ctx, headSha), TourReaderStateSchema)
+  const saved = await savedReaderState(ctx, headSha)
   if (saved !== null) return saved
   const state = freshReaderState()
   const carried = author ? artifact.record.author?.picks : undefined

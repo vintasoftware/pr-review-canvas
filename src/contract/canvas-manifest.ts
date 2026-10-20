@@ -15,31 +15,30 @@ export const CanvasManifestSchema = z.object({
 })
 export type CanvasManifest = z.infer<typeof CanvasManifestSchema>
 
-export const CanvasIndexSchema = z.object({
-  canvases: z.record(
-    z.string(),
-    z.object({
-      prNumber: z.number().int().positive().optional(),
-      generatedAt: z.string(),
-      /** The artifact's `revisedAt`: an import compares it, so the index answers without the file. */
-      revisedAt: z.string().optional(),
-      source: z.enum(['local', 'import']),
-      importedAt: z.string().optional(),
-      /**
-       * The canvas this one was generated from. Kept here as well as on the artifact so the line
-       * of descent can be walked from the index alone, without opening every canvas on the way.
-       */
-      basisCanvasSha: z.string().optional(),
-      /** A snapshot of uncommitted work: it sits on no branch, so no pull request can claim it. */
-      worktree: z.boolean().optional(),
-      /**
-       * The linked worktree whose local review the canvas was made for. Absent for the main
-       * checkout's local reviews, and for a pull request's canvas, which every worktree shares.
-       */
-      checkout: z.string().optional(),
-    })
-  ),
+/** One canvas, or one tour, as its store's `index.json` lists it. */
+export const CanvasEntrySchema = z.object({
+  prNumber: z.number().int().positive().optional(),
+  generatedAt: z.string(),
+  /** The artifact's `revisedAt`: an import compares it, so the index answers without the file. */
+  revisedAt: z.string().optional(),
+  source: z.enum(['local', 'import']),
+  importedAt: z.string().optional(),
+  /**
+   * The canvas this one was generated from. Kept here as well as on the artifact so the line
+   * of descent can be walked from the index alone, without opening every canvas on the way.
+   */
+  basisCanvasSha: z.string().optional(),
+  /** A snapshot of uncommitted work: it sits on no branch, so no pull request can claim it. */
+  worktree: z.boolean().optional(),
+  /**
+   * The linked worktree whose local review the canvas was made for. Absent for the main
+   * checkout's local reviews, and for a pull request's canvas, which every worktree shares.
+   */
+  checkout: z.string().optional(),
 })
+export type CanvasEntry = z.infer<typeof CanvasEntrySchema>
+
+export const CanvasIndexSchema = z.object({ canvases: z.record(z.string(), CanvasEntrySchema) })
 export type CanvasIndex = z.infer<typeof CanvasIndexSchema>
 
 /** How new a copy of a commit's canvas is: the author's last revision, or its generation. */

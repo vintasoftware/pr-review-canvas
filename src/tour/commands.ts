@@ -323,14 +323,13 @@ async function runTourGallery(ctx: AppContext, argv: string[], io: CliIo): Promi
 }
 
 /**
- * `tour checkout <tourDir> <head|base> [--remove]`: a git worktree at the tour's head or merge base,
- * where the generator runs a try-it recipe or a script the change touches, never in the reader's
- * checkout. The head is the review's own checkout, the one AI Chat reads; the base has one of its
- * own. A ref comparison has no review, so it has no checkout. Prints `{ side, dir, sha, port,
- * scratch }`: a port nothing listens on, and an empty folder in the tour dir for the run's state, so
- * a server started there touches neither the reader's ports nor their data dir, which every
- * worktree of the clone shares. `base --remove` takes the base checkout away once the generator is
- * done with it; the head stays, for AI Chat.
+ * `tour checkout <tourDir> <head|base> [--remove]`: a git worktree of the generator's own at the
+ * tour's head or merge base, where it runs a try-it recipe or a script the change touches, never in
+ * the reader's checkout and never in the one AI Chat reads. A ref comparison has no review, so it
+ * has no checkout. Prints `{ side, dir, sha, port, scratch }`: a port nothing listens on, and an
+ * empty folder in the tour dir for the run's state, so a server started there touches neither the
+ * reader's ports nor their data dir, which every worktree of the clone shares. `--remove` takes
+ * the side's checkout away once the generator is done with it.
  */
 async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Promise<number> {
   const { values, positionals } = parseArgs({
@@ -345,11 +344,6 @@ async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Prom
       'tour checkout takes a tour directory and a side: pr-review tour checkout <tourDir> <head|base> [--remove]'
     )
   }
-  if (values.remove === true && side === 'head') {
-    throw new UsageError(
-      'the head checkout stays: AI Chat reads it, and the idle sweep removes it once unused; remove the base only'
-    )
-  }
   const context = await readTourContext(path.resolve(tourDir))
   const target = context.target
   if (target.kind === 'refs') {
@@ -358,22 +352,24 @@ async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Prom
     )
   }
   const key = target.kind === 'pr' ? target.number : target.source
+  const checkouts = ctx.tourCheckouts[side]
   const busy = (err: unknown): unknown =>
     err instanceof CheckoutBusyError
       ? new AppError('CHECKOUT_BUSY', err.message, 409, 'wait for what holds it to finish, then run it again')
       : err
+  const scratch = path.join(context.tourDir, 'scratch', side)
   if (values.remove === true) {
-    const removed = await ctx.baseCheckouts.remove(key).catch((err: unknown) => {
+    const removed = await checkouts.remove(key).catch((err: unknown) => {
       throw busy(err)
     })
-    await rm(path.join(context.tourDir, 'scratch', 'base'), { recursive: true, force: true })
+    await rm(scratch, { recursive: true, force: true })
     printJson(io, { side, removed })
     return EXIT.ok
   }
   const sha = side === 'head' ? context.headSha : context.mergeBaseSha
   let lease
   try {
-    lease = await (side === 'head' ? ctx.checkouts : ctx.baseCheckouts).lease(key, 'tour')
+    lease = await checkouts.lease(key, 'tour')
   } catch (err) {
     throw busy(err)
   }
@@ -382,7 +378,6 @@ async function runTourCheckout(ctx: AppContext, argv: string[], io: CliIo): Prom
   } finally {
     await lease.release()
   }
-  const scratch = path.join(context.tourDir, 'scratch', side)
   await rm(scratch, { recursive: true, force: true })
   await mkdir(scratch, { recursive: true })
   printJson(io, { side, dir: lease.dir, sha, port: await freePort(), scratch })

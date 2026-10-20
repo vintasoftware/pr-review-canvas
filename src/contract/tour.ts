@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import { GeneratorSchema, PrSchema, RepoSchema, FileEntrySchema, type FileEntry } from './review-artifact.js'
 import { FileDeltaSchema, PrepareTargetSchema } from './generation-context.js'
-import { HighRiskRuleSchema } from '../project-config.js'
+import { HighRiskRuleSchema, TOUR_CATEGORIES } from '../project-config.js'
 
 /**
  * A landmark's place in the tour: the background, then what the change means to the world, why
@@ -13,16 +13,8 @@ import { HighRiskRuleSchema } from '../project-config.js'
 export const TOUR_STAGES = ['background', 'world', 'why', 'respect'] as const
 export type TourStage = (typeof TOUR_STAGES)[number]
 
-/** The six decision categories of the design. A project may turn some off (`tour.categories`). */
-export const DECISION_CATEGORIES = [
-  'trade-off',
-  'architecture',
-  'product',
-  'pokayoke',
-  'nfr',
-  'spec',
-] as const
-export type DecisionCategory = (typeof DECISION_CATEGORIES)[number]
+/** The six decision categories of the design (`TOUR_CATEGORIES`); a project may turn some off. */
+export type DecisionCategory = (typeof TOUR_CATEGORIES)[number]
 
 /** The two sides a decision offers: what the code does, and the tour's alternative. */
 export const PICKS = ['keep', 'change'] as const
@@ -58,10 +50,8 @@ export const TOUR_LIMITS = {
   codePerLandmark: 3,
   /** Paragraphs and embedded chunks of a literate diff: up to three chunks, a few snippets, and the prose between them. */
   literateBlocks: 12,
-  /** Paragraphs a stored landmark may hold; tours written before the two-paragraph rule had three. */
-  bodyParagraphs: 3,
-  /** Paragraphs a new landmark's body may have: the picture carries the rest. */
-  bodyParagraphsWritten: 2,
+  /** Paragraphs a landmark's body may have: the picture carries the rest. */
+  bodyParagraphs: 2,
   quizOptions: 3,
   tryItSteps: 8,
   tryItLook: 6,
@@ -85,20 +75,13 @@ export type TourLimits = { -readonly [K in keyof typeof TOUR_LIMITS]: number }
  * project's `tour.budget`, and records it in the context, so the validator holds the generator to
  * the same numbers the prompt stated.
  */
-const TourBudgetShape = z.object({
+export const TourBudgetSchema = z.object({
   why: z.number().int().positive(),
   whyMax: z.number().int().positive(),
   decisions: z.number().int().nonnegative(),
   quiz: z.number().int().nonnegative(),
 })
-/** Tours prepared before the why budget recorded ceilings on all landmarks; three of them were fixed. */
-export const TourBudgetSchema = z.preprocess(v => {
-  if (v === null || typeof v !== 'object' || !('landmarks' in v) || 'why' in v) return v
-  const { landmarks, ...rest } = v as { landmarks: number }
-  const why = Math.max(1, landmarks - TOUR_LIMITS.minLandmarks)
-  return { ...rest, why, whyMax: why }
-}, TourBudgetShape)
-export type TourBudget = z.infer<typeof TourBudgetShape>
+export type TourBudget = z.infer<typeof TourBudgetSchema>
 
 /** The decisions and quiz questions a tour may have, given the landmarks it has, state aside. */
 export function budgetLimits(
@@ -209,7 +192,7 @@ export function decisionSchema(caps: TourCaps) {
   return z.object({
     /** A stable slug: picks carry across regenerations by it. */
     key: slug(),
-    category: z.enum(DECISION_CATEGORIES),
+    category: z.enum(TOUR_CATEGORIES),
     /** The why (or respect) landmark the decision is anchored on. */
     landmark: slug(),
     title: text(caps, 'decisionTitle'),
@@ -246,15 +229,6 @@ export function notTouredSchema(caps: TourCaps) {
     paths: z.array(z.string().min(1)).min(1).max(TOUR_LIMITS.notTouredPaths),
   })
 }
-
-/** A stored entry: tours written before entries grouped files name one `path`. */
-const storedNotTouredSchema = z.preprocess(
-  v =>
-    v !== null && typeof v === 'object' && 'path' in v && !('paths' in v)
-      ? { title: (v as { title?: unknown }).title, paths: [(v as { path: unknown }).path] }
-      : v,
-  notTouredSchema(TOUR_ARTIFACT_HARD_CAPS)
-)
 
 /** What the generator writes to `tour-model.json`. The validator checks the rest. */
 export function tourModelSchema(visibleCaps: TourCaps) {
@@ -321,11 +295,10 @@ export const TourArtifactSchema = z.object({
   landmarks: z.array(landmarkSchema(TOUR_ARTIFACT_HARD_CAPS)),
   decisions: z.array(decisionSchema(TOUR_ARTIFACT_HARD_CAPS)),
   quiz: z.array(quizQuestionSchema(TOUR_ARTIFACT_HARD_CAPS)),
-  notToured: z.array(storedNotTouredSchema),
+  notToured: z.array(notTouredSchema(TOUR_ARTIFACT_HARD_CAPS)),
   generatedAt: z.string(),
   generator: GeneratorSchema,
   source: z.enum(['local', 'import']),
-  importedAt: z.string().optional(),
   record: TourRecordSchema,
   /** When the record last changed after generation. */
   revisedAt: z.string().optional(),
@@ -376,7 +349,7 @@ export const TourContextSchema = z.object({
     >
   ),
   /** The decision categories this project keeps. */
-  categories: z.array(z.enum(DECISION_CATEGORIES)),
+  categories: z.array(z.enum(TOUR_CATEGORIES)),
   tests: z.object({ patterns: z.array(z.string().min(1)) }),
   /** The committed guide, when the project has one. */
   guide: z.object({ path: z.string().nullable(), text: z.string().nullable() }),

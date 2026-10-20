@@ -19,8 +19,7 @@ import {
   type TourModel,
 } from '../contract/tour.js'
 import type { Derived } from '../store/derived-store.js'
-import { fileDelta } from '../review/incremental.js'
-import { tourBelongsTo } from '../store/tour-store.js'
+import { fileDelta, findBasis } from '../review/incremental.js'
 import { UNCOMMITTED_STATE } from '../git/local-target.js'
 import { loadPromptFile } from '../prompt-files.js'
 import { PACKAGE_ROOT } from '../paths.js'
@@ -106,28 +105,24 @@ async function resolveTourBasis(
 ): Promise<TourBasis | null> {
   const owner = ownerOf(target)
   if (owner === null) return null
-  const index = await ctx.tours.readIndex()
-  const candidates = Object.entries(index.tours)
-    .filter(([sha, entry]) => sha !== pr.headSha && tourBelongsTo(entry, owner))
-    .sort(([, a], [, b]) => (a.generatedAt < b.generatedAt ? 1 : a.generatedAt > b.generatedAt ? -1 : 0))
-  for (const [sha] of candidates) {
-    if (!(await ctx.git.isAncestor(sha, pr.headSha))) continue
-    const artifact = await ctx.tours.read(sha)
-    if (artifact === null) return null
-    const basis = await ctx.derived.readOrBuild({ headSha: sha, mergeBaseSha: artifact.mergeBaseSha })
-    if (basis === null) return null
-    const dir = path.join(tourDir, 'basis')
-    const scenesDir = path.join(dir, 'scenes')
-    await mkdir(scenesDir, { recursive: true })
-    const modelPath = path.join(dir, 'tour-model.json')
-    await writeJsonAtomic(modelPath, tourModelOf(artifact))
-    for (const l of artifact.landmarks) {
-      if (l.scene !== undefined) await writeFile(path.join(scenesDir, `${l.id}.scene.html`), l.scene)
-      if (l.micro !== undefined) await writeFile(path.join(scenesDir, `${l.id}.micro.html`), l.micro)
-    }
-    return { tourSha: sha, modelPath, scenesDir, files: fileDelta(basis, head) }
+  const sha = await findBasis(ctx.git, pr.headSha, (await ctx.tours.readIndex()).tours, entry =>
+    ctx.tours.belongsTo(entry, owner)
+  )
+  if (sha === null) return null
+  const artifact = await ctx.tours.read(sha)
+  if (artifact === null) return null
+  const basis = await ctx.derived.readOrBuild({ headSha: sha, mergeBaseSha: artifact.mergeBaseSha })
+  if (basis === null) return null
+  const dir = path.join(tourDir, 'basis')
+  const scenesDir = path.join(dir, 'scenes')
+  await mkdir(scenesDir, { recursive: true })
+  const modelPath = path.join(dir, 'tour-model.json')
+  await writeJsonAtomic(modelPath, tourModelOf(artifact))
+  for (const l of artifact.landmarks) {
+    if (l.scene !== undefined) await writeFile(path.join(scenesDir, `${l.id}.scene.html`), l.scene)
+    if (l.micro !== undefined) await writeFile(path.join(scenesDir, `${l.id}.micro.html`), l.micro)
   }
-  return null
+  return { tourSha: sha, modelPath, scenesDir, files: fileDelta(basis, head) }
 }
 
 /** A guide has a run recipe when it says how to run the app under a heading that names it. */

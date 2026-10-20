@@ -26,7 +26,7 @@ import type { GenerationModels } from '../project-config.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import type { Derived } from '../store/derived-store.js'
-import { fileDelta, findBasisCanvas, splitBasis } from './incremental.js'
+import { fileDelta, findBasis, splitBasis } from './incremental.js'
 import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
 
@@ -161,7 +161,12 @@ async function resolveBasis(
   head: Derived
 ): Promise<BasisSplit | null> {
   const prNumber = target.kind === 'pr' ? target.number : undefined
-  const sha = await findBasisCanvas(ctx.canvases, ctx.git, prNumber, pr.headSha)
+  const sha = await findBasis(
+    ctx.git,
+    pr.headSha,
+    (await ctx.canvases.readIndex()).canvases,
+    entry => entry.prNumber === undefined || entry.prNumber === prNumber
+  )
   if (sha === null) {
     return null
   }

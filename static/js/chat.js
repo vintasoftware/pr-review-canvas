@@ -562,7 +562,7 @@ export function wireChat(options) {
   /**
    * What a sent message names above its text, so a reader scrolling back sees what each question
    * was about. A message about the whole PR, or one saved before turns kept a context, names none.
-   * @param {ChatContext | undefined} about
+   * @param {import('./chat-context.js').ChatTurnContext | undefined} about
    */
   const turnContext = about =>
     about === undefined || about.kind === 'pr'

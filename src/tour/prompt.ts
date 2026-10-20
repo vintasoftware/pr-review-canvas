@@ -2,7 +2,7 @@
 // the prose; this module fills the `{{TOKENS}}` with data so a wording change never touches code.
 import { z } from 'zod'
 import type { TourContext } from '../contract/tour.js'
-import { DECISION_CATEGORIES, TOUR_LIMITS, tourModelSchema } from '../contract/tour.js'
+import { type DecisionCategory, TOUR_LIMITS, tourModelSchema } from '../contract/tour.js'
 import { labelPatch } from '../git/patch-lines.js'
 import {
   bodyMarkdown,
@@ -14,7 +14,7 @@ import {
 
 const INLINE_DIFF_MAX_LINES = 1500
 
-const CATEGORY_TEXT: Record<(typeof DECISION_CATEGORIES)[number], string> = {
+const CATEGORY_TEXT: Record<DecisionCategory, string> = {
   'trade-off':
     'Trade-offs: rare cases, compatibility, generality, failure policy, performance against plainness, reversibility, and accepting a test gap.',
   architecture:
@@ -63,7 +63,7 @@ function budgetMarkdown(ctx: TourContext): string {
 function capsMarkdown(ctx: TourContext): string {
   const c = ctx.caps
   return [
-    `- landmark title: ${c.landmarkTitle}; lead: ${c.lead}; each body paragraph and literate paragraph: ${c.paragraph}; a body: ${TOUR_LIMITS.bodyParagraphsWritten} paragraphs`,
+    `- landmark title: ${c.landmarkTitle}; lead: ${c.lead}; each body paragraph and literate paragraph: ${c.paragraph}; a body: ${TOUR_LIMITS.bodyParagraphs} paragraphs`,
     `- decision title: ${c.decisionTitle}; context: ${c.context}; each side's label: ${c.sideLabel}; consequence: ${c.consequence}`,
     `- quiz question: ${c.question}; option: ${c.option}; why: ${c.why}`,
     `- try-it step or look line: ${c.tryItLine}; not-toured title: ${c.notToured}`,

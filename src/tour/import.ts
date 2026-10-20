@@ -2,14 +2,22 @@
 // for a shared tour, and `pr-review tour import`. Everything is checked here, so no caller can skip
 // a step. The tour page decides afresh whether a stored tour is current or stale, so an import only
 // stores it.
+import { readZipOrThrow, sameRepo } from '../canvas/import.js'
 import type { CommentsPayload } from '../contract/comments.js'
 import type { Pr } from '../contract/review-artifact.js'
 import type { TourImportResult } from '../contract/tour-api.js'
-import type { TourArtifact } from '../contract/tour.js'
+import type { TourArtifact, TouredBy, TourRecord } from '../contract/tour.js'
+import {
+  collectCandidates,
+  type DiscoverySources,
+  downloadAttachment,
+  MAX_CANDIDATES_TRIED,
+  namesAnotherPr,
+  rankCandidates,
+} from '../host/attachments.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { readTourComment } from './comment.js'
-import { parseTourZipName, readTourZip } from './zip.js'
+import { TOUR_ZIP } from './comment.js'
 
 export interface TourImportOptions {
   bytes: Uint8Array
@@ -19,21 +27,47 @@ export interface TourImportOptions {
   force?: boolean | undefined
 }
 
-function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
-  return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
-}
-
 /** When a tour last changed: its author revises it by finishing, which keeps its generation time. */
 function revision(tour: Pick<TourArtifact, 'generatedAt' | 'revisedAt'>): string {
   return tour.revisedAt ?? tour.generatedAt
 }
 
 /**
- * Validates the zip and stores the tour under its head sha. A tour already on disk is kept unless
- * the incoming one was generated or revised later.
+ * Two copies' records of one tour as one: everyone who finished either copy, each by their latest
+ * finish, and the author's picks from the copy the author finished last. Every reader who finishes
+ * posts a copy of their own, so the record is whole only once the copies are read together.
+ */
+export function mergedRecord(
+  stored: TourRecord,
+  incoming: TourRecord
+): { record: TourRecord; changed: boolean } {
+  const byLogin = new Map<string, TouredBy>(stored.touredBy.map(t => [t.login, t]))
+  let changed = false
+  for (const t of incoming.touredBy) {
+    const seen = byLogin.get(t.login)
+    if (seen === undefined || seen.at < t.at) {
+      byLogin.set(t.login, t)
+      changed = true
+    }
+  }
+  const record: TourRecord = { touredBy: [...byLogin.values()].sort((a, b) => a.at.localeCompare(b.at)) }
+  const author =
+    incoming.author !== undefined &&
+    (stored.author === undefined || stored.author.finishedAt < incoming.author.finishedAt)
+      ? incoming.author
+      : stored.author
+  if (author !== undefined) record.author = author
+  if (author !== stored.author) changed = true
+  return { record, changed }
+}
+
+/**
+ * Validates the zip and stores the tour under its head sha. A tour already on disk keeps its
+ * content unless the incoming one was generated or revised later, and takes the incoming record's
+ * finishes either way, so no copy loses a reader's sign-off or the author's picks.
  */
 export async function importTour(ctx: AppContext, opts: TourImportOptions): Promise<TourImportResult> {
-  const { manifest, artifact } = readTourZip(opts.bytes)
+  const { manifest, artifact, prNumber: named } = readZipOrThrow(opts.bytes, TOUR_ZIP)
   const warnings: string[] = []
   if (!sameRepo(manifest.repo, ctx.config.repo)) {
     const from = `${manifest.repo.owner}/${manifest.repo.name}`
@@ -49,7 +83,6 @@ export async function importTour(ctx: AppContext, opts: TourImportOptions): Prom
   }
   // As for the canvas, the one check --force cannot lift: the tour may only be filed under the
   // pull request its zip names.
-  const named = manifest.prNumber ?? artifact.pr.number ?? undefined
   if (opts.prNumber !== undefined && named !== undefined && named !== opts.prNumber) {
     throw new AppError(
       'CANVAS_PR_MISMATCH',
@@ -59,33 +92,27 @@ export async function importTour(ctx: AppContext, opts: TourImportOptions): Prom
     )
   }
   const headSha = manifest.headSha
-  if (artifact.headSha !== headSha) {
-    throw new AppError(
-      'CANVAS_INVALID',
-      `the zip's manifest names ${headSha.slice(0, 7)} and its tour ${artifact.headSha.slice(0, 7)}`,
-      400
-    )
-  }
   const stored = await ctx.tours.read(headSha)
-  if (stored !== null && revision(stored) >= revision(artifact)) {
-    return { status: 'exists', headSha, warnings }
-  }
   const number = opts.prNumber ?? artifact.pr.number
-  await ctx.tours.write(headSha, {
-    ...artifact,
-    pr: { ...artifact.pr, number },
-    source: 'import',
-  })
+  if (stored === null) {
+    await ctx.tours.write(headSha, { ...artifact, pr: { ...artifact.pr, number }, source: 'import' })
+    return { status: 'imported', headSha, warnings }
+  }
+  const { record, changed } = mergedRecord(stored.record, artifact.record)
+  if (revision(stored) < revision(artifact)) {
+    await ctx.tours.write(headSha, { ...artifact, pr: { ...artifact.pr, number }, source: 'import', record })
+    return { status: 'imported', headSha, warnings }
+  }
+  if (!changed) return { status: 'exists', headSha, warnings }
+  await ctx.tours.revise(headSha, { ...stored, record, revisedAt: ctx.now().toISOString() })
   return { status: 'imported', headSha, warnings }
 }
 
-/** How many shared tours a fetch tries before it gives up: a broken one must not hide a good one. */
-const MAX_SHARED_TRIED = 3
-
 /**
- * Looks through the pull request's comments for tour comments (`readTourComment`) and imports the
- * best one: of the head first, then the newest. A comment whose zip names another pull request is
- * passed over. Answers whether one was found, and whether an import stored it.
+ * Looks on the pull request for a tour someone shared, in a comment's hidden block or attached as
+ * a zip the comment did not fit, and imports the best one: of the head first, then this pull
+ * request's, then the newest, as the canvas's discovery ranks them. Answers whether one was found,
+ * and whether an import stored anything.
  */
 export async function fetchSharedTour(
   ctx: AppContext,
@@ -94,27 +121,32 @@ export async function fetchSharedTour(
 ): Promise<{ found: boolean; imported: boolean; warnings: string[] }> {
   const number = pr.number
   if (number === null) return { found: false, imported: false, warnings: [] }
-  const candidates = comments.issueComments
-    .flatMap(comment => {
-      const zip = readTourComment(comment.body)
-      const named = zip === null ? null : parseTourZipName(zip.name, ctx.config.repo)
-      if (zip === null || named === null) return []
-      if (named.prNumber !== undefined && named.prNumber !== number) return []
-      return [{ zip, ofHead: named.shaPrefix === pr.headSha.slice(0, 8), at: comment.updatedAt }]
-    })
-    .sort((a, b) => (a.ofHead !== b.ofHead ? (a.ofHead ? -1 : 1) : a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+  const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
+  const ranked = rankCandidates(
+    collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour'),
+    { headSha: pr.headSha, prNumber: number }
+  ).filter(c => !namesAnotherPr(c, number))
   const warnings: string[] = []
-  for (const candidate of candidates.slice(0, MAX_SHARED_TRIED)) {
+  // A broken attachment must not hide a good one behind it, so the next ones are tried too.
+  for (const candidate of ranked.slice(0, MAX_CANDIDATES_TRIED)) {
+    const download =
+      candidate.bytes === undefined
+        ? await downloadAttachment(ctx, candidate.url)
+        : { ok: true as const, bytes: candidate.bytes }
+    if (!download.ok) {
+      warnings.push(`${candidate.name}: ${download.reason}`)
+      continue
+    }
     try {
-      const result = await importTour(ctx, { bytes: candidate.zip.bytes, prNumber: number })
+      const result = await importTour(ctx, { bytes: download.bytes, prNumber: number })
       return {
         found: true,
         imported: result.status === 'imported',
         warnings: [...warnings, ...result.warnings],
       }
     } catch (err) {
-      warnings.push(`${candidate.zip.name}: ${err instanceof Error ? err.message : String(err)}`)
+      warnings.push(`${candidate.name}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
-  return { found: candidates.length > 0, imported: false, warnings }
+  return { found: ranked.length > 0, imported: false, warnings }
 }

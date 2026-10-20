@@ -85,8 +85,8 @@ async function currentHead(
 }
 
 /**
- * The comments each pull request's shared tours were last looked for in, by a fingerprint of them
- * and the head, so the page looks again only when someone commented or pushed.
+ * The body and comments each pull request's shared tours were last looked for in, by a fingerprint
+ * of them and the head, so the page looks again only when someone wrote, attached, or pushed.
  */
 const lookedAt = new Map<string, string>()
 
@@ -101,7 +101,7 @@ async function discoverSharedTour(
   refresh: boolean
 ): Promise<{ imported: boolean; warnings: string[] }> {
   const memo = `${ctx.tours.root}#${String(pr.number)}`
-  const fingerprint = discoveryFingerprint('', comments, pr.headSha)
+  const fingerprint = discoveryFingerprint(pr.body, comments, pr.headSha)
   if (!refresh && lookedAt.get(memo) === fingerprint) return { imported: false, warnings: [] }
   lookedAt.set(memo, fingerprint)
   const { imported, warnings } = await fetchSharedTour(ctx, pr, comments)

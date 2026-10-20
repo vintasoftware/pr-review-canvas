@@ -4,7 +4,7 @@
 // The tour page end to end in happy-dom, against a fake server: the walk through the steps, the
 // picks, the quiz, the plan, the history, and the looks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { freshReaderState } from '../../../src/contract/tour-api.js'
+import { freshReaderState, TourReaderInputSchema } from '../../../src/contract/tour-api.js'
 import { missingTourBundle, syntheticTourBundle } from '../../../src/testing/tour-page.js'
 import { POLL_MS, PrTourElement } from './tour.js'
 
@@ -33,7 +33,8 @@ const TOUR_JOB = {
 /**
  * A fake server: the bundle it answers with, the reader states it was sent, and the finishes.
  * @param {TourBundle | (() => TourBundle)} bundle
- * @param {{ finish?: () => Response, save?: () => Response, fail?: boolean, shared?: () => unknown }} [opts]
+ * @param {{ finish?: () => Response, save?: () => Response | undefined, fail?: boolean, shared?: () => unknown }} [opts]
+ *   a `save` that answers undefined lets the fake accept the state as usual
  */
 function fakeServer(bundle, opts = {}) {
   /** @type {TourReaderState[]} */
@@ -75,7 +76,8 @@ function fakeServer(bundle, opts = {}) {
         return json(typeof bundle === 'function' ? bundle() : bundle)
       }
       if (url.endsWith('/reader') && method === 'PUT') {
-        const body = JSON.parse(String(init?.body))
+        // Parsed as the server parses it, so a state the page builds that the server would refuse fails here.
+        const body = TourReaderInputSchema.parse(JSON.parse(String(init?.body)))
         saved.push(body.reader)
         return opts.save?.() ?? json(body.reader)
       }
@@ -752,8 +754,15 @@ describe('the tour page', () => {
       throw new Error('no decision')
     }
     decision.tryIt = { steps: ['pnpm start'], look: ['the sum'], verified: true }
+    let saveFails = true
     const server = fakeServer(bundle, {
-      save: () => new Response('nope', { status: 500 }),
+      save: () =>
+        saveFails
+          ? new Response(JSON.stringify({ error: { code: 'BAD_REQUEST', message: 'nope' } }), {
+              status: 400,
+              headers: { 'content-type': 'application/json' },
+            })
+          : undefined,
       finish: () =>
         new Response(
           JSON.stringify({ error: { code: 'SIGNOFF_INCOMPLETE', message: 'open', hint: 'settle' } }),
@@ -778,8 +787,16 @@ describe('the tour page', () => {
     click('[data-nav="next"]')
     press('2')
     click('[data-nav="next"]')
+    // Confirming sends the unsaved state once more; while the server refuses it, nothing is finished.
+    const finishCalls = () => server.calls.filter(url => url.endsWith('/finish')).length
+    click('[data-act="confirm"]')
+    await vi.waitFor(() => expect(document.querySelector('.toast')?.textContent).toBe('nope'))
+    expect(finishCalls()).toBe(0)
+    expect(document.querySelector('[data-act="confirm"]')?.hasAttribute('disabled')).toBe(false)
+    saveFails = false
     click('[data-act="confirm"]')
     await vi.waitFor(() => expect(document.querySelector('.toast')?.textContent).toBe('open · settle'))
+    expect(finishCalls()).toBe(1)
     expect(document.querySelector('[data-act="confirm"]')?.hasAttribute('disabled')).toBe(false)
   })
 })

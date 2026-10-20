@@ -12,9 +12,9 @@ import { finishTour } from '../../tour/finish.js'
 import { CANVAS_ZIP_MAX_BYTES } from '../../canvas/zip.js'
 import { isLocalKey } from '../../contract/review-key.js'
 import { fetchSharedTour, importTour } from '../../tour/import.js'
-import { lookupTour } from '../../tour/lookup.js'
+import { lookupTour, requireTourOf } from '../../tour/lookup.js'
 import { zipStoredTour } from '../../tour/share.js'
-import { readReaderState, writeReaderState } from '../../tour/reader.js'
+import { readReaderState, savedReaderState, writeReaderState } from '../../tour/reader.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
@@ -61,8 +61,8 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
     return c.json(bundle)
   })
 
-  // The tour on screen as a zip, or the one `headSha` names. A local tour is exported without a
-  // number, as a local canvas is.
+  // The tour on screen as a zip, or the one `headSha` names, when it is a tour of this review. A
+  // local tour is exported without a number, as a local canvas is.
   api.get('/tours/:n/export', async c => {
     const key = parseTargetKey(c.req.param('n'))
     let headSha = parseHeadShaQuery(c.req.query('headSha'))
@@ -72,6 +72,8 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
         throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)}`, 404, 'generate one with /pr-tour')
       }
       headSha = found.headSha
+    } else {
+      await requireTourOf(ctx, key, headSha)
     }
     const { zip } = await zipStoredTour(ctx, headSha, isLocalKey(key) ? undefined : key)
     // The name is built from the repo slug, the PR number, and the sha, so it holds no user text.
@@ -108,15 +110,15 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
     return c.json(body)
   })
 
+  // Saved on every step, pick, and keystroke, so it asks the index alone which tour the page is on.
   api.put('/tours/:n/reader', async c => {
     const key = parseTargetKey(c.req.param('n'))
     const input = await readBody(c.req.raw, TourReaderInputSchema, '{ "headSha": "…", "reader": { … } }')
-    const found = await tourOnScreen(ctx, loader, key, input.headSha)
+    await requireTourOf(ctx, key, input.headSha)
     // What was already finished stays finished: the page never unfinishes a tour by saving.
-    const previous = await readReaderState(ctx, found.headSha, found.artifact, false)
-    const reader =
-      previous.finished === undefined ? input.reader : { ...input.reader, finished: previous.finished }
-    await writeReaderState(ctx, found.headSha, reader)
+    const finished = (await savedReaderState(ctx, input.headSha))?.finished
+    const reader = finished === undefined ? input.reader : { ...input.reader, finished }
+    await writeReaderState(ctx, input.headSha, reader)
     return c.json(reader)
   })
 
@@ -182,15 +184,13 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
       {
         key,
         headSha: found.headSha,
-        tour: { artifact: found.artifact, reader },
+        subject: { kind: 'tour', artifact: found.artifact, reader, context: input.context },
         files: derived.files,
         patches: derived.patches,
         derivedDir: ctx.derived.derivedDir(diff),
         readLines: (side, filePath, from, to) => ctx.derived.readLines(diff, side, filePath, from, to),
-        // A tour asks the reader to restate, never to resolve a canvas's points.
-        readerResolves: false,
       },
-      { message: input.message, context: input.context }
+      input.message
     )
     return turnResponse(ctx, c.req, key, events)
   })

@@ -79,7 +79,7 @@ export const TourConfigSchema = z.object({
     linesPerLandmark: z.number().int().positive(),
   }),
   finalQuiz: z.enum(['on', 'off', 'required']),
-  grill: z.enum(['change', 'always', 'off']),
+  grill: z.enum(['change', 'off']),
   audio: OnOff,
   microWorld: OnOff,
   /** `auto`: on when the guide has a run recipe. */
@@ -112,7 +112,7 @@ const PartialTourConfigSchema = z.object({
     })
     .optional(),
   finalQuiz: z.enum(['on', 'off', 'required']).optional(),
-  grill: z.enum(['change', 'always', 'off']).optional(),
+  grill: z.enum(['change', 'off']).optional(),
   audio: OnOff.optional(),
   microWorld: OnOff.optional(),
   tryIt: z.enum(['on', 'off', 'auto']).optional(),

@@ -2,7 +2,7 @@
 import { DEFAULT_SETTINGS, resolveTourSharing } from './settings.js'
 import { DEFAULT_PROJECT_CONFIG, mergeProjectConfig } from '../project-config.js'
 import { matchesGlob } from '../review/glob.js'
-import { syntheticTour, syntheticTourModel } from '../testing/synthetic-tour.js'
+import { syntheticTourModel } from '../testing/synthetic-tour.js'
 import {
   blastRadiusOf,
   budgetLimits,
@@ -12,7 +12,6 @@ import {
   stateRequiredFor,
   TOUR_CAPS,
   TourArtifactSchema,
-  TourBudgetSchema,
   TourModelSchema,
 } from './tour.js'
 
@@ -26,15 +25,6 @@ describe('the tour budget', () => {
     expect(computeBudget(1000, [], ceilings)).toEqual(budget(3))
     expect(computeBudget(300, ['auth'], ceilings)).toEqual(budget(2))
     expect(computeBudget(5000, ['auth', 'schema'], ceilings)).toEqual(budget(4))
-  })
-
-  it('reads a budget recorded before why landmarks were budgeted apart', () => {
-    expect(TourBudgetSchema.parse({ landmarks: 6, decisions: 5, quiz: 5 })).toEqual({
-      why: 3,
-      whyMax: 3,
-      decisions: 5,
-      quiz: 5,
-    })
   })
 
   it('limits decisions to one more than the why landmarks, and questions to one fewer than all', () => {
@@ -69,21 +59,6 @@ describe('the tour budget', () => {
 })
 
 describe('the tour schemas', () => {
-  it('read a stored tour written before not-toured groups and before guards were dropped', () => {
-    const stored = syntheticTour()
-    const old = {
-      ...stored,
-      landmarks: stored.landmarks.map(l => ({
-        ...l,
-        guards: [{ testPath: 'src/app.test.ts', behavior: 'x' }],
-      })),
-      notToured: [{ title: 'The renamed file', path: 'src/new-name.ts' }],
-    }
-    const parsed = TourArtifactSchema.parse(old)
-    expect(parsed.notToured).toEqual([{ title: 'The renamed file', paths: ['src/new-name.ts'] }])
-    expect(parsed.landmarks[0]).not.toHaveProperty('guards')
-  })
-
   it('group not-toured files under one reason, one to twenty paths', () => {
     const entry = (paths: string[]) =>
       TourModelSchema.safeParse({ ...syntheticTourModel(), notToured: [{ title: 'Notation only', paths }] })

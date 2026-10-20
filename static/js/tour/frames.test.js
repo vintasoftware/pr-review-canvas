@@ -58,7 +58,10 @@ describe('mountFrames', () => {
     expect(frames).toHaveLength(2)
     expect(frames[0]?.getAttribute('sandbox')).toBe('allow-scripts')
     expect(frames[0]?.getAttribute('title')).toBe('scene')
+    // A scene is watched, so it takes no click or focus and the tour's keys keep working.
+    expect(frames[0]?.hasAttribute('inert')).toBe(true)
     expect(frames[1]?.getAttribute('title')).toBe('micro-world')
+    expect(frames[1]?.hasAttribute('inert')).toBe(false)
     expect(frames[1]?.getAttribute('src')).toContain('/tour-scene/42/world/micro?')
     document.body.innerHTML = '<div class="tour-frame-host"></div>'
     mountFrames(document.body, OPTS)

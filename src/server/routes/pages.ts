@@ -4,7 +4,6 @@ import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
 import { AppError } from '../errors.js'
 import { LOCAL_KEYS, parseReviewKey } from '../../contract/review-key.js'
-import { tourBelongsTo } from '../../store/tour-store.js'
 import { homePage, homeTab, reviewPage } from '../html.js'
 import { startPage } from '../start-page.js'
 import type { ProjectLink } from '../../../static/js/header-bar.js'
@@ -58,10 +57,10 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           recentPrs: recentPrs.map(p => ({
             ...p,
             hasCanvas: canvases.some(canvas => canvas.prNumber === p.number),
-            hasTour: tours.some(tour => tourBelongsTo(tour, p.number)),
+            hasTour: tours.some(tour => ctx.tours.belongsTo(tour, p.number)),
           })),
           localReviews: LOCAL_KEYS.filter((_, i) => localPrs[i] !== null && localPrs[i] !== undefined),
-          localTours: LOCAL_KEYS.filter(key => tours.some(tour => tourBelongsTo(tour, key))),
+          localTours: LOCAL_KEYS.filter(key => tours.some(tour => ctx.tours.belongsTo(tour, key))),
           owner: ctx.config.repo.owner,
           repo: ctx.config.repo.name,
           version: ctx.version,

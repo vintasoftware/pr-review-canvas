@@ -108,7 +108,7 @@ tour:
     quiz: 5
     linesPerLandmark: 400 # about one why landmark per this many changed lines
   finalQuiz: on # on, off, or required before the prompt is written
-  grill: change # grill when the reader asks for something else; always; or off
+  grill: change # grill when the reader asks for something else, or off
   audio: on # speech through the browser's Web Speech API, with a one-time notice
   microWorld: on
   tryIt: auto # on when the guide has a run recipe

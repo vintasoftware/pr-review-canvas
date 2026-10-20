@@ -143,8 +143,8 @@ what reads badly: text that collides, a scene that says nothing at rest, a pictu
 read, a picture that is the same as the last. `--landmark <id>` retakes one landmark. Without a
 browser it prints a `previewUrl` to open in a browser tool instead. Then publish: it reads the
 model and the scene files again, so what you fixed after the preview is what gets published.
-If you took a base checkout, remove it first (`pr-review tour checkout <tourDir> base --remove`);
-leave the head checkout, which AI Chat reads. On failure the
+Remove the checkouts you took first (`pr-review tour checkout <tourDir> head --remove`, and the
+same for `base`). On failure the
 command prints one line per problem, then an error line, and exits 5; fix the named problems and
 publish again, giving up after the prompt's `maxRepairRounds`.
 

@@ -1,16 +1,25 @@
 // The tour page's side of the contract: the bundle it opens with, the reader's own state as the
 // server keeps it between visits, and what finishing answers with.
 import { z } from 'zod'
+import {
+  NOTE_MAX,
+  RESTATEMENT_FIELD_MAX,
+  RESTATEMENT_PLACE_MAX,
+  RESTATEMENT_PLACES_MAX,
+} from '../../static/js/tour/grill-cards.js'
 import type { Pr } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
 import type { CanvasRelation, ChatStatus, PublicHost } from './api.js'
 import { type Landmark, READER_PICKS, type TourArtifact, type TourRecord } from './tour.js'
 
-/** The reader's approved restatement of a change, what changes, where, and what stays the same. */
+/**
+ * The reader's approved restatement of a change, what changes, where, and what stays the same,
+ * under the caps the page's card and form apply, so no state the page builds is refused here.
+ */
 export const RestatementSchema = z.object({
-  what: z.string().min(1).max(2000),
-  where: z.array(z.string().min(1).max(300)).max(20),
-  unchanged: z.string().min(1).max(2000),
+  what: z.string().min(1).max(RESTATEMENT_FIELD_MAX),
+  where: z.array(z.string().min(1).max(RESTATEMENT_PLACE_MAX)).max(RESTATEMENT_PLACES_MAX),
+  unchanged: z.string().min(1).max(RESTATEMENT_FIELD_MAX),
 })
 export type Restatement = z.infer<typeof RestatementSchema>
 
@@ -60,7 +69,7 @@ export const TourReaderStateSchema = z.object({
     .record(z.string(), z.object({ answered: z.number().int().nonnegative(), right: z.boolean() }))
     .default({}),
   /** A thought per landmark, written while reading, carried into the plan and the prompt. */
-  notes: z.record(z.string(), z.string().max(4000)).default({}),
+  notes: z.record(z.string(), z.string().max(NOTE_MAX)).default({}),
   /** The landmarks the reader has had on screen, so the rail marks only those as read. */
   seen: z.record(z.string(), z.boolean()).default({}),
   codeOpen: z.record(z.string(), z.boolean()).default({}),
@@ -128,7 +137,7 @@ export interface TourStaleInfo {
 /** The tour's own options, as the page needs them; the rest belongs to the generator. */
 export interface TourPageOptions {
   finalQuiz: 'on' | 'off' | 'required'
-  grill: 'change' | 'always' | 'off'
+  grill: 'change' | 'off'
   audio: 'on' | 'off'
 }
 

@@ -11,6 +11,7 @@ import {
   enclosingHunk,
   INLINE_PATCH_MAX_LINES,
   renderChatContext,
+  renderTourContext,
 } from './context.js'
 
 const artifact = syntheticArtifact()
@@ -162,14 +163,14 @@ describe('enclosingHunk', () => {
   })
 })
 
-describe('renderChatContext for a tour', () => {
+describe('renderTourContext', () => {
   const tour = syntheticTour()
 
   it('gives a decision both sides, the recommendation, and where the reader stands', async () => {
     const reader = freshReaderState()
-    const fresh = await renderChatContext(
+    const fresh = renderTourContext(
       { kind: 'tour-decision', key: 'sum-over-product' },
-      sources({ artifact: undefined, tour: { artifact: tour, reader } })
+      { artifact: tour, reader }
     )
     expect(fresh).toContain('## Context: decision `sum-over-product` — Sum over product?')
     expect(fresh).toContain('trade-off · from the landmark "Sum, not product" · `src/app.ts:4`')
@@ -178,32 +179,23 @@ describe('renderChatContext for a tour', () => {
     expect(fresh).toContain('The reader has not answered yet.')
     reader.notes['sum'] = 'hm'
     reader.picks['sum-over-product'] = { pick: 'keep', approved: false }
-    const keeping = await renderChatContext(
+    const keeping = renderTourContext(
       { kind: 'tour-decision', key: 'sum-over-product' },
-      sources({ tour: { artifact: tour, reader } })
+      { artifact: tour, reader }
     )
     expect(keeping).toContain('The reader keeps it so far.')
     expect(keeping).toContain("The reader's note on that landmark: hm")
     reader.picks['sum-over-product'] = { pick: 'keep', approved: true }
     expect(
-      await renderChatContext(
-        { kind: 'tour-decision', key: 'sum-over-product' },
-        sources({ tour: { artifact: tour, reader } })
-      )
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
     ).toContain('The reader keeps it.')
     reader.picks['sum-over-product'] = { pick: 'other', approved: false }
     expect(
-      await renderChatContext(
-        { kind: 'tour-decision', key: 'sum-over-product' },
-        sources({ tour: { artifact: tour, reader } })
-      )
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
     ).toContain('wants something else and has not said what yet')
     reader.picks['sum-over-product'] = { pick: 'change', approved: true }
     expect(
-      await renderChatContext(
-        { kind: 'tour-decision', key: 'sum-over-product' },
-        sources({ tour: { artifact: tour, reader } })
-      )
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
     ).toContain("The reader picks the tour's alternative.")
     reader.picks['sum-over-product'] = {
       pick: 'other',
@@ -211,17 +203,14 @@ describe('renderChatContext for a tour', () => {
       restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
     }
     expect(
-      await renderChatContext(
-        { kind: 'tour-decision', key: 'sum-over-product' },
-        sources({ tour: { artifact: tour, reader } })
-      )
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
     ).toContain('the restatement so far: Multiply. (where: src/app.ts; unchanged: Callers.)')
     const [decision] = tour.decisions
     if (decision === undefined) throw new Error('synthetic tour')
     expect(
-      await renderChatContext(
+      renderTourContext(
         { kind: 'tour-decision', key: 'sum-over-product' },
-        sources({ tour: { artifact: { ...tour, decisions: [{ ...decision, landmark: 'nope' }] }, reader } })
+        { artifact: { ...tour, decisions: [{ ...decision, landmark: 'nope' }] }, reader }
       )
     ).not.toContain('from the landmark')
   })
@@ -240,10 +229,7 @@ describe('renderChatContext for a tour', () => {
       approved: true,
       restatement: { what: 'w', where: ['x'], unchanged: 'u' },
     }
-    const block = await renderChatContext(
-      { kind: 'tour-plan' },
-      sources({ tour: { artifact: three, reader } })
-    )
+    const block = renderTourContext({ kind: 'tour-plan' }, { artifact: three, reader })
     expect(block).toBe(
       [
         '## Context: the plan',
@@ -259,28 +245,16 @@ describe('renderChatContext for a tour', () => {
       ].join('\n')
     )
     expect(
-      await renderChatContext(
-        { kind: 'tour-plan' },
-        sources({ tour: { artifact: tour, reader: freshReaderState() } })
-      )
+      renderTourContext({ kind: 'tour-plan' }, { artifact: tour, reader: freshReaderState() })
     ).toContain('Kept:\n_none_')
   })
 
-  it('refuses a tour context without a tour, a canvas context without a canvas, and an unknown decision', async () => {
-    await expect(renderChatContext({ kind: 'tour-plan' }, sources())).rejects.toThrow(
-      'this chat has no tour to point at'
-    )
-    await expect(
-      renderChatContext({ kind: 'layer', layerId: 'run-path' }, sources({ artifact: undefined }))
-    ).rejects.toThrow('this chat has no canvas to point at')
-    await expect(
-      renderChatContext({ kind: 'point', fingerprint: 'fp-1' }, sources({ artifact: undefined }))
-    ).rejects.toThrow('this chat has no canvas to point at')
-    await expect(
-      renderChatContext(
+  it('refuses an unknown decision', () => {
+    expect(() =>
+      renderTourContext(
         { kind: 'tour-decision', key: 'nope' },
-        sources({ tour: { artifact: tour, reader: freshReaderState() } })
+        { artifact: tour, reader: freshReaderState() }
       )
-    ).rejects.toThrow('this tour has no decision nope')
+    ).toThrow('this tour has no decision nope')
   })
 })

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { createFakeGit, makeTempDir } from '../testing/fakes.js'
 import { HEAD_SHA } from '../testing/synthetic.js'
 import { syntheticTour } from '../testing/synthetic-tour.js'
-import { createTourStore, tourBelongsTo } from './tour-store.js'
+import { createTourStore } from './tour-store.js'
 
 const OTHER_SHA = 'c'.repeat(40)
 
@@ -16,7 +16,7 @@ afterEach(() => rm(dir, { recursive: true, force: true }))
 
 describe('createTourStore', () => {
   it('writes tour.json under tours/<sha>, indexes it, and reads it back', async () => {
-    const store = createTourStore(dir, createFakeGit())
+    const store = createTourStore(dir, createFakeGit(), null)
     const tour = syntheticTour()
     expect(await store.exists(HEAD_SHA)).toBe(false)
     await store.write(HEAD_SHA, tour)
@@ -31,7 +31,7 @@ describe('createTourStore', () => {
   })
 
   it('revises the record and notes the time; refuses to revise what it never wrote', async () => {
-    const store = createTourStore(dir, createFakeGit())
+    const store = createTourStore(dir, createFakeGit(), null)
     await store.write(HEAD_SHA, syntheticTour())
     const revised = {
       ...syntheticTour({ record: { touredBy: [{ login: 'octocat', at: '2026-09-11T00:00:00.000Z' }] } }),
@@ -48,7 +48,7 @@ describe('createTourStore', () => {
       ancestors: { [`${HEAD_SHA}..${OTHER_SHA}`]: true },
       counts: { [`${HEAD_SHA}..${OTHER_SHA}`]: 2 },
     })
-    const store = createTourStore(dir, git)
+    const store = createTourStore(dir, git, null)
     expect(await store.findFor(42, HEAD_SHA)).toEqual({ status: 'missing' })
     await store.write(HEAD_SHA, syntheticTour())
     expect(await store.findFor(42, HEAD_SHA)).toEqual({ status: 'ready', headSha: HEAD_SHA })
@@ -63,18 +63,23 @@ describe('createTourStore', () => {
       headSha: HEAD_SHA,
       relation: 'unrelated',
     })
-    // Another pull request's tour is not this one's.
-    expect(await store.findFor(7, HEAD_SHA)).toEqual({ status: 'missing' })
+    // The head's own tour belongs to its commit, as a canvas does; an older one is this review's only.
+    expect(await store.findFor(7, HEAD_SHA)).toEqual({ status: 'ready', headSha: HEAD_SHA })
+    expect(await store.findFor(7, OTHER_SHA)).toEqual({ status: 'missing' })
   })
 
-  it('claims a tour by pull request, by local review, and never a snapshot for a branch', () => {
-    const entry = { generatedAt: '', source: 'local' as const }
-    expect(tourBelongsTo({ ...entry, prNumber: 42 }, 42)).toBe(true)
-    expect(tourBelongsTo({ ...entry, prNumber: 42 }, 7)).toBe(false)
-    expect(tourBelongsTo(entry, 42)).toBe(true)
-    expect(tourBelongsTo(entry, 'branch')).toBe(true)
-    expect(tourBelongsTo({ ...entry, worktree: true }, 'branch')).toBe(false)
-    expect(tourBelongsTo({ ...entry, worktree: true }, 'uncommitted')).toBe(true)
-    expect(tourBelongsTo({ ...entry, worktree: true }, 42)).toBe(false)
+  it('keeps a local tour to the checkout that made it, as the canvas store does', async () => {
+    const local = syntheticTour({ pr: { ...syntheticTour().pr, number: null } })
+    const main = createTourStore(dir, createFakeGit(), null)
+    const linked = createTourStore(dir, createFakeGit(), 'feat')
+    await linked.write(HEAD_SHA, local)
+    expect((await linked.readIndex()).tours[HEAD_SHA]).toMatchObject({ checkout: 'feat' })
+    expect(await linked.findFor('branch', OTHER_SHA)).toMatchObject({ status: 'stale', headSha: HEAD_SHA })
+    expect(await main.findFor('branch', OTHER_SHA)).toEqual({ status: 'missing' })
+    // A pull request's tour is every worktree's, and the head's own tour belongs to its commit.
+    await linked.write(OTHER_SHA, syntheticTour({ headSha: OTHER_SHA }))
+    expect((await linked.readIndex()).tours[OTHER_SHA]).not.toHaveProperty('checkout')
+    expect(await main.findFor(42, OTHER_SHA)).toEqual({ status: 'ready', headSha: OTHER_SHA })
+    expect(await main.findFor('branch', HEAD_SHA)).toEqual({ status: 'ready', headSha: HEAD_SHA })
   })
 })

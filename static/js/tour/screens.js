@@ -14,6 +14,7 @@
 /** @typedef {(chunk: CodeChunk) => string | null} FileLink where a chunk's file opens on the forge */
 import { esc, timeAgo } from '../dom.js'
 import { dropZoneHtml } from '../empty-state.js'
+import { NOTE_MAX } from './grill-cards.js'
 import { GENERATE_BUTTON_ID, tourGenerationMode } from '../generate.js'
 import { authorProfileUrl, currentHost, fileUrl } from '../host.js'
 import { headerBarHtml } from '../header-bar.js'
@@ -402,7 +403,7 @@ export function landmarkHtml(bundle, steps, landmark) {
     ${code}
     <div class="tour-body">${landmark.body.map(p => `<p>${inline(p)}</p>`).join('')}</div>
     ${chips}
-    <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>`
+    <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" maxlength="${NOTE_MAX}" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>`
 }
 
 /** @param {boolean} open */
@@ -423,8 +424,9 @@ export function codeViewHtml(landmark, view, link = () => null) {
 
 /**
  * Where each file of the tour opens on the forge: the file at the commit the tour reads, at the
- * first line the chunk shows; a removed file at the merge base, where it last lived. Local work
- * is on no forge, so its files open nowhere.
+ * first line the chunk shows; a removed file at the tour's own merge base, where it last lived,
+ * which an outdated tour's pull request may have left behind. Local work is on no forge, so its
+ * files open nowhere.
  * @param {TourBundle} bundle
  * @returns {FileLink}
  */
@@ -440,7 +442,7 @@ export function fileLinker(bundle) {
     }
     const removed = hunk[2] === '0' && hunk[3] === '0'
     return removed
-      ? fileUrl(tour.repo, pr.mergeBaseSha, chunk.path, Number(hunk[1]))
+      ? fileUrl(tour.repo, tour.mergeBaseSha, chunk.path, Number(hunk[1]))
       : fileUrl(tour.repo, tour.headSha, chunk.path, Number(hunk[2]))
   }
 }

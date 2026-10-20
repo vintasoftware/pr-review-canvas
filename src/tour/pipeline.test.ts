@@ -18,7 +18,8 @@ import {
   SYNTHETIC_DIFF,
 } from '../testing/synthetic.js'
 import { syntheticTour, syntheticTourModel, writeTourFiles } from '../testing/synthetic-tour.js'
-import { buildTourComment, readTourComment, tourCommentSummary } from './comment.js'
+import { buildTourComment, TOUR_COMMENT_MARKER, TOUR_ZIP, tourCommentSummary } from './comment.js'
+import { readZipEnvelope } from '../canvas/comment.js'
 import { namedTourDir, tourStepCreatesDataDir } from './named-dir.js'
 import { runTour } from './commands.js'
 import { guideHasRunRecipe, prepareTour } from './prepare.js'
@@ -26,7 +27,8 @@ import { previewTour } from './preview.js'
 import { renderTourPrompt } from './prompt.js'
 import { carriedRecord, publishTour, TourInvalidError } from './publish.js'
 import { exportTour, zipStoredTour } from './share.js'
-import { buildTourZipName, parseTourZipName, readTourZip } from './zip.js'
+import { buildZipName, parseZipName } from '../canvas/name.js'
+import { readZip } from '../canvas/zip.js'
 
 let t: TestContext
 afterEach(() => t?.cleanup())
@@ -162,16 +164,16 @@ describe('tour publish', () => {
     const body = (shared as { body: string }).body
     expect(body).toContain('PR Review Tour for commit')
     expect(body).toContain('**Tour:** 4 landmarks, 1 decisions, 1 quiz questions.')
-    const embedded = readTourComment(body)
+    const embedded = readZipEnvelope(TOUR_COMMENT_MARKER, body)
     expect(embedded?.name).toBe(
-      buildTourZipName({
+      buildZipName('tour', {
         repo: stored.repo,
         headSha: HEAD_SHA,
         prNumber: 42,
         generatedAt: stored.generatedAt,
       })
     )
-    const zip = readTourZip(embedded!.bytes)
+    const zip = readZip(embedded!.bytes, TOUR_ZIP)
     expect(zip.artifact).toEqual(stored)
     expect(zip.manifest.tool.name).toBe('pr-review-tour')
     expect(zip.manifest.prNumber).toBe(42)
@@ -211,9 +213,9 @@ describe('tour publish', () => {
     expect(published.sharing.status).toBe('failed')
     if (published.sharing.status === 'failed') {
       expect(published.sharing.zipPath).toMatch(/-tour\.zip$/)
-      expect(readTourZip(new Uint8Array(await readFile(published.sharing.zipPath))).artifact.headSha).toBe(
-        HEAD_SHA
-      )
+      expect(
+        readZip(new Uint8Array(await readFile(published.sharing.zipPath)), TOUR_ZIP).artifact.headSha
+      ).toBe(HEAD_SHA)
     }
   })
 
@@ -251,22 +253,22 @@ describe('tour publish', () => {
 describe('tour zip and comment', () => {
   it('names and parses a tour zip, and refuses what is not one', () => {
     const repo = { owner: 'acme', name: 'widgets' }
-    const name = buildTourZipName({
+    const name = buildZipName('tour', {
       repo,
       headSha: HEAD_SHA,
       generatedAt: '2026-09-10T11:00:00Z',
       prNumber: 42,
     })
     expect(name).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip')
-    expect(parseTourZipName(name, repo)).toEqual({ prNumber: 42, shaPrefix: 'aaaaaaaa' })
-    expect(parseTourZipName('ref-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip', repo)).toEqual({
+    expect(parseZipName('tour', name, repo)).toEqual({ prNumber: 42, shaPrefix: 'aaaaaaaa' })
+    expect(parseZipName('tour', 'ref-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip', repo)).toEqual({
       shaPrefix: 'aaaaaaaa',
     })
-    expect(parseTourZipName('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', repo)).toBeNull()
-    expect(parseTourZipName('x-acme-widgets-tour.zip', repo)).toBeNull()
-    expect(() => readTourZip(new Uint8Array([1, 2, 3]))).toThrow('not a tour')
-    expect(() => readTourZip(new Uint8Array(21 * 1024 * 1024))).toThrow('larger')
-    expect(readTourComment('no marker here')).toBeNull()
+    expect(parseZipName('tour', 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip', repo)).toBeNull()
+    expect(parseZipName('tour', 'x-acme-widgets-tour.zip', repo)).toBeNull()
+    expect(() => readZip(new Uint8Array([1, 2, 3]), TOUR_ZIP)).toThrow('not a zip')
+    expect(() => readZip(new Uint8Array(21 * 1024 * 1024), TOUR_ZIP)).toThrow('larger')
+    expect(readZipEnvelope(TOUR_COMMENT_MARKER, 'no marker here')).toBeNull()
   })
 
   it('exports a stored tour and summarises who toured it', async () => {
@@ -465,7 +467,7 @@ describe('the tour CLI', () => {
     await expect(runTour(t.ctx, ['import'], human.io)).rejects.toThrow('tour import takes one zip')
   })
 
-  it('checks out the head and the merge base in worktrees of their own, listed and swept with the chat ones', async () => {
+  it('checks out the head and the merge base in worktrees of its own, apart from AI Chat, listed and swept with it', async () => {
     const result = await prepared()
     const head = capture()
     expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head'], head.io)).toBe(0)
@@ -476,7 +478,11 @@ describe('the tour CLI', () => {
       port: number
       scratch: string
     }
-    expect(headOut).toMatchObject({ side: 'head', dir: path.join(t.ctx.checkouts.root, '42'), sha: HEAD_SHA })
+    expect(headOut).toMatchObject({
+      side: 'head',
+      dir: path.join(t.ctx.checkouts.root, 'tour', 'head', '42'),
+      sha: HEAD_SHA,
+    })
     // A free port and an empty folder in the tour dir, so a server started there keeps off the reader's.
     expect(headOut.port).toBeGreaterThan(0)
     expect(headOut.scratch).toBe(path.join(result.tourDir, 'scratch', 'head'))
@@ -490,27 +496,32 @@ describe('the tour CLI', () => {
     const baseOut = JSON.parse(base.out[0]!) as { side: string; dir: string; sha: string }
     expect(baseOut).toMatchObject({
       side: 'base',
-      dir: path.join(t.ctx.checkouts.root, 'base', '42'),
+      dir: path.join(t.ctx.checkouts.root, 'tour', 'base', '42'),
       sha: BASE_SHA,
     })
     expect((await t.ctx.checkouts.list()).map(c => c.dir).sort()).toEqual([headOut.dir, baseOut.dir].sort())
-    // Done with it, the generator takes the base away; the head stays, for AI Chat.
+    // AI Chat's checkout is another: a chat answer neither waits for the generator nor moves under it.
+    const lease = await t.ctx.checkouts.lease(42, 'chat')
+    expect(lease.dir).toBe(path.join(t.ctx.checkouts.root, '42'))
+    expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head'], capture().io)).toBe(0)
+    await lease.release()
+    // Another tour generation holding a side is waited for rather than moved under.
+    const held = await t.ctx.tourCheckouts.base.lease(42, 'tour')
+    await expect(runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)).rejects.toThrow(
+      'a tour generation is using the review checkout of 42'
+    )
+    await held.release()
+    // Done with them, the generator takes both away; the scratch folder goes with each.
     const removed = capture()
     expect(await runTour(t.ctx, ['checkout', result.tourDir, 'base', '--remove'], removed.io)).toBe(0)
     expect(JSON.parse(removed.out[0]!)).toEqual({ side: 'base', removed: true })
     expect((await t.ctx.checkouts.list()).map(c => c.dir)).toEqual([headOut.dir])
-    await expect(
-      runTour(t.ctx, ['checkout', result.tourDir, 'head', '--remove'], removed.io)
-    ).rejects.toThrow('the head checkout stays')
+    expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head', '--remove'], capture().io)).toBe(0)
+    expect(await t.ctx.checkouts.list()).toEqual([])
+    await expect(readdir(headOut.scratch)).rejects.toThrow()
     await runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)
     const swept = await t.ctx.checkouts.sweep({ all: true })
-    expect(swept.removed).toHaveLength(2)
-    // The chat holds the head checkout: the tour waits rather than move it under the answer.
-    const lease = await t.ctx.checkouts.lease(42, 'chat')
-    await expect(runTour(t.ctx, ['checkout', result.tourDir, 'head'], head.io)).rejects.toThrow(
-      'a chat answer is using the review checkout of 42'
-    )
-    await lease.release()
+    expect(swept.removed).toHaveLength(1)
     await expect(runTour(t.ctx, ['checkout', result.tourDir, 'side'], head.io)).rejects.toThrow(
       'takes a tour directory and a side'
     )
