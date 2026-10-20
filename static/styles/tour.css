@@ -177,8 +177,8 @@
   --backdrop: rgb(18 24 33 / 55%);
 }
 
-/* Each kind of step tints its ticket and its tag: the cover blue, a landmark red, a decision mint,
-   a question yellow, the plan lilac. */
+/* Each kind of step tints its ticket and its tag: the cover blue, a landmark and the plan lilac, a
+   decision mint, a question yellow. */
 pr-tour {
   --tour-tint: var(--p-blue);
   --tour-tink: var(--blue);
@@ -190,8 +190,8 @@ pr-tour {
   -webkit-font-smoothing: antialiased;
 }
 pr-tour[data-at='landmark'] {
-  --tour-tint: var(--p-red);
-  --tour-tink: var(--red);
+  --tour-tint: var(--p-lilac);
+  --tour-tink: var(--lilac);
 }
 pr-tour[data-at='decision'] {
   --tour-tint: var(--p-mint);
@@ -761,10 +761,10 @@ pr-tour[data-at='plan'] {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 2px solid var(--red);
+  border: 2px solid var(--lilac);
   border-radius: 50%;
-  background: var(--p-red);
-  color: var(--red);
+  background: var(--p-lilac);
+  color: var(--lilac);
   font: 800 16px var(--tour-display);
 }
 .tour-agenda-stage {
@@ -1728,10 +1728,11 @@ pr-tour[data-at='plan'] {
 .tour-ask-threads[hidden] {
   display: none;
 }
+/* The pane is not a ticket: it keeps the tour's lilac whatever the step. */
 .tour-ask .chat-h {
   flex-wrap: nowrap;
   align-items: center;
-  background: var(--tour-tint);
+  background: var(--p-lilac);
 }
 .tour-ask .chat-h h2 {
   flex: 1 1 auto;
@@ -1747,7 +1748,8 @@ pr-tour[data-at='plan'] {
   gap: 4px;
 }
 .tour-ask-tabs [aria-selected='true'] {
-  background: var(--p-lilac);
+  background: var(--tour-card);
+  color: var(--lilac);
 }
 .tour-ask-head {
   display: flex;
