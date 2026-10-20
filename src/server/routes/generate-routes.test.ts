@@ -28,6 +28,7 @@ import {
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../../testing/synthetic.js'
 import { createApp } from '../app.js'
 import { AppError, toAppError } from '../errors.js'
+import { createPrLoader } from '../bundle.js'
 import { generateRoutes } from './generate-routes.js'
 
 const LOCAL = { host: '127.0.0.1:3010' }
@@ -90,7 +91,7 @@ function appWith(manager: ReturnType<typeof fakeManager>): Hono {
     return c.json(mapped.toEnvelope(), mapped.status)
   })
   t.ctx.generation = manager
-  app.route('/api', generateRoutes(t.ctx))
+  app.route('/api', generateRoutes(t.ctx, createPrLoader(t.ctx)))
   return app
 }
 

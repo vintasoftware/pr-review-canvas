@@ -3,6 +3,7 @@ import type { AppContext } from './context.js'
 import type { AppEnv } from './env.js'
 import { AppError, logRequestError, toAppError } from './errors.js'
 import { errorPage } from './html.js'
+import { createPrLoader } from './bundle.js'
 import { apiRoutes } from './routes/api.js'
 import { appearanceFor, appearanceQuery, pageRoutes, projectLink, type Served } from './routes/pages.js'
 import { staticRoutes } from './routes/static.js'
@@ -61,10 +62,13 @@ export function createApp(ctx: AppContext, served: Served = { shellEnv: true }):
     errorResponse(c, new AppError('NOT_FOUND', `no route for ${c.req.method} ${c.req.path}`, 404))
   )
 
-  app.route('/api', apiRoutes(ctx))
+  // One loader per app: the head a page's bundle last read is the one its frames and saves are
+  // checked against, so a route of its own never keeps an older head than the page shows.
+  const loader = createPrLoader(ctx)
+  app.route('/api', apiRoutes(ctx, loader))
   app.route('/', staticRoutes(ctx))
   app.route('/', pageRoutes(ctx, project))
-  app.route('/', tourPageRoutes(ctx, project))
+  app.route('/', tourPageRoutes(ctx, project, loader))
 
   return app
 }

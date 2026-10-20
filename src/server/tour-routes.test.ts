@@ -1004,6 +1004,40 @@ describe('the tour page keeps up with the pull request', () => {
     expect(opened.stale).toMatchObject({ tourHeadSha: HEAD_SHA, currentHeadSha: OTHER_SHA, commitsBehind: 1 })
   })
 
+  it("draws the new head's pictures after a commit on local work, on the one app the server keeps", async () => {
+    const git = gitForLocal({ snapshot: null, head: HEAD_SHA })
+    t = await context({ git })
+    await t.ctx.prs.writePr('branch', { ...syntheticTour().pr, number: null, baseRef: 'origin/main' })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const app = createApp(t.ctx)
+    const open = async () => json<TourBundle>(await app.request('/api/tours/branch', { headers: LOCAL }))
+    const frame = (sha: string) =>
+      app.request(`/tour-scene/branch/world/scene?headSha=${sha}`, { headers: LOCAL })
+    expect((await open()).tour?.headSha).toBe(HEAD_SHA)
+    expect((await frame(HEAD_SHA)).status).toBe(200)
+    // The author commits, and the pull request's tour is generated again for the new head.
+    moveFakeHead(git, {
+      headRef: 'HEAD',
+      baseRef: 'origin/main',
+      headSha: OTHER_SHA,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF,
+      ahead: { [HEAD_SHA]: 1 },
+    })
+    await t.ctx.tours.write(OTHER_SHA, syntheticTour({ headSha: OTHER_SHA }))
+    const reloaded = await open()
+    expect(reloaded.status).toBe('ready')
+    expect(reloaded.tour?.headSha).toBe(OTHER_SHA)
+    const saved = await app.request('/api/tours/branch/reader', {
+      method: 'PUT',
+      headers: WRITE,
+      body: JSON.stringify({ headSha: OTHER_SHA, reader: settledReader() }),
+    })
+    expect(saved.status).toBe(200)
+    // The frame reads the head the bundle just resolved, not one a loader of its own read before.
+    expect((await frame(OTHER_SHA)).status).toBe(200)
+  })
+
   it('loads a tour someone shared on the pull request when the page has none', async () => {
     t = await context()
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())

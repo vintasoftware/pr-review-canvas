@@ -6,7 +6,7 @@ import { appearanceForRequest } from '../../contract/settings.js'
 import { parseReviewKey } from '../../contract/review-key.js'
 import { lookupTour, tourAt } from '../../tour/lookup.js'
 import { inlineIcons } from '../../tour/scene.js'
-import { createPrLoader } from '../bundle.js'
+import type { PrLoader } from '../bundle.js'
 import type { ProjectLink } from '../../../static/js/header-bar.js'
 import type { AppContext } from '../context.js'
 import type { AppEnv } from '../env.js'
@@ -29,9 +29,8 @@ function parseTourKey(raw: string) {
   return key
 }
 
-export function tourPageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> {
+export function tourPageRoutes(ctx: AppContext, project: ProjectLink, loader: PrLoader): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
-  const loader = createPrLoader(ctx)
 
   app.get('/tour/:n', async c => {
     const key = parseTourKey(c.req.param('n'))

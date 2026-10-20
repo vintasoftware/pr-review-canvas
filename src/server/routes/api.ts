@@ -13,7 +13,7 @@ import { isLocalKey, parseReviewKey, type ReviewKey } from '../../contract/revie
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { publicHost } from '../../host/host.js'
 import { lookupCanvas } from '../../review/carry-over.js'
-import { createPrLoader, resolveBundle, resolveLocalBundle, runDiscovery } from '../bundle.js'
+import { type PrLoader, resolveBundle, resolveLocalBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
@@ -97,11 +97,7 @@ export function parseHeadShaQuery(raw: string | undefined): string | undefined {
 }
 
 /** The canvas the page is showing: the one for the head, else the stale one it fell back to. */
-async function currentCanvasSha(
-  ctx: AppContext,
-  loader: ReturnType<typeof createPrLoader>,
-  key: ReviewKey
-): Promise<string> {
+async function currentCanvasSha(ctx: AppContext, loader: PrLoader, key: ReviewKey): Promise<string> {
   const pr = await loader.currentTarget(key)
   const found = isLocalKey(key)
     ? await ctx.canvases.findForLocal(key, pr.headSha)
@@ -112,12 +108,11 @@ async function currentCanvasSha(
   return found.headSha
 }
 
-export function apiRoutes(ctx: AppContext): Hono {
+export function apiRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
-  const loader = createPrLoader(ctx)
   api.route('/', reviewRoutes(ctx, loader))
   api.route('/', chatRoutes(ctx, loader))
-  api.route('/', generateRoutes(ctx))
+  api.route('/', generateRoutes(ctx, loader))
   api.route('/', selfReviewRoutes(ctx, loader))
   api.route('/', tourRoutes(ctx, loader))
 

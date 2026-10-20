@@ -13,7 +13,7 @@ import { isLocalKey, keyToString, type ReviewKey } from '../../contract/review-k
 import { resolveSharing, resolveTourSharing } from '../../contract/settings.js'
 import { GenerationBusyError, type GenerationManager } from '../../generate/generation-manager.js'
 import { tourGeneratePermission, tourReviewer } from '../../tour/bundle.js'
-import { createPrLoader, type PrLoader } from '../bundle.js'
+import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { branchPr } from '../start-page.js'
@@ -81,8 +81,7 @@ async function requireTourGenerate(ctx: AppContext, loader: PrLoader, key: Revie
   }
 }
 
-export function generateRoutes(ctx: AppContext): Hono {
-  const loader = createPrLoader(ctx)
+export function generateRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
   const managers: Record<
     GenerationKind,
