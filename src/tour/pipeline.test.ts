@@ -505,7 +505,7 @@ describe('the tour CLI', () => {
     expect(lease.dir).toBe(path.join(t.ctx.checkouts.root, '42'))
     expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head'], capture().io)).toBe(0)
     await lease.release()
-    // Another tour generation holding a side is waited for rather than moved under.
+    // The lock is held while a side is moved: a move under way is refused rather than moved under.
     const held = await t.ctx.tourCheckouts.base.lease(42, 'tour')
     await expect(runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)).rejects.toThrow(
       'a tour generation is using the review checkout of 42'

@@ -227,6 +227,24 @@ describe('GET /api/tours/:n', () => {
     })
   })
 
+  it("shows, saves, and draws a pull request's tour from the local review at the same commit", async () => {
+    // The author on their branch at the pull request's head: the tour belongs to the commit, so
+    // /tour/branch shows it, and what the page then sends back for it is accepted.
+    t = await context({ git: gitForLocal({ snapshot: null, head: HEAD_SHA }) })
+    await t.ctx.prs.writePr('branch', { ...syntheticTour().pr, number: null, baseRef: 'origin/main' })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const bundle = await json<TourBundle>(await get('/api/tours/branch'))
+    expect(bundle).toMatchObject({ status: 'ready', local: 'branch' })
+    expect(bundle.tour?.headSha).toBe(HEAD_SHA)
+    const saved = await send('/api/tours/branch/reader', 'PUT', {
+      headSha: HEAD_SHA,
+      reader: settledReader(),
+    })
+    expect(saved.status).toBe(200)
+    expect((await get(`/tour-scene/branch/world/scene?headSha=${HEAD_SHA}`)).status).toBe(200)
+    expect((await get(`/api/tours/branch/export?headSha=${HEAD_SHA}`)).status).toBe(200)
+  })
+
   it('refuses a key that is not a review target, and says when a filed tour cannot be read', async () => {
     t = await context()
     expect((await get('/api/tours/nope')).status).toBe(400)

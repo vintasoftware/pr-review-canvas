@@ -1047,8 +1047,9 @@ which a run never writes into or moves. It prints `{ "side", "dir", "sha", "port
 port nothing listens on, and an empty folder in the tour directory, emptied on each call, for the
 run's state. Try-it recipes run in the head checkout on that port with their state in that folder,
 and a script the change touches runs in either checkout, so nothing runs in your own checkout or
-writes your review state. A ref comparison has no review, so it has no checkout; while another
-tour generation holds the checkout, the command answers `CHECKOUT_BUSY`. `--remove` takes the
+writes your review state. A ref comparison has no review, so it has no checkout. The checkout is
+locked only while the command moves it, so `CHECKOUT_BUSY` means another `tour checkout` of the
+same review is moving it at that moment; run it again. `--remove` takes the
 side's checkout away once the generator is done, and prints `{ "side", "removed" }`; what is left
 goes with the idle sweep (`checkoutIdleDays`, which covers them all), and as soon as the pull
 request is merged or closed.
@@ -1395,7 +1396,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                                                               |
 | `CHAT_BUSY`                             | Wait for the running reply, or press **stop** on the page that asked; when a canvas generation, another worktree of the clone, or another `pr-review serve` holds the review, ask again once it is done |
-| `CHECKOUT_BUSY`                         | Another tour generation holds the checkout `tour checkout` needs; run it again once it is done                                                                                                          |
+| `CHECKOUT_BUSY`                         | Another `tour checkout` of the same review is moving the checkout at this moment; run it again                                                                                                          |
 | `GENERATION_BUSY`                       | One generation runs at a time; open the running one from its review page to follow or stop it, then start again                                                                                         |
 | `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                                                                    |
 | `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                                                                    |

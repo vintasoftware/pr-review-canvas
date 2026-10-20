@@ -77,7 +77,7 @@ export function tourPageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppE
       if (headSha === undefined || !SHA_RE.test(headSha)) {
         throw new AppError('BAD_REQUEST', 'headSha must name the tour on the page', 400)
       }
-      artifact = await tourAt(ctx, key, headSha)
+      artifact = await tourAt(ctx, loader, key, headSha)
     }
     const landmark = artifact.landmarks.find(l => l.id === id)
     const scene = landmark?.[kind]

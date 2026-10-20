@@ -4,7 +4,7 @@ import path from 'node:path'
 import type { TourStaleInfo } from '../contract/tour-api.js'
 import { formatTourError, type TourArtifact } from '../contract/tour.js'
 import type { Pr } from '../contract/review-artifact.js'
-import type { ReviewKey } from '../contract/review-key.js'
+import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
 import type { PrLoader } from '../server/bundle.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
@@ -85,20 +85,41 @@ export async function lookupTour(
   return { status: 'stale', pr, headSha: found.headSha, artifact, stale, preview: false }
 }
 
-/**
- * Refuses a commit the index does not file as a tour of this key. The page sends back the commit
- * its bundle named, so a save or a frame costs no forge or git work: the index alone answers.
- */
-export async function requireTourOf(ctx: AppContext, key: ReviewKey, headSha: string): Promise<void> {
-  const entry = (await ctx.tours.readIndex()).tours[headSha]
-  if (entry === undefined || !ctx.tours.belongsTo(entry, key)) {
-    throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)} at ${headSha.slice(0, 7)}`, 404)
-  }
+/** The head the page's bundle resolved for `key`: a pull request's on file, local work's as last read. */
+function headOnScreen(loader: PrLoader, key: ReviewKey): Promise<Pr> {
+  return isLocalKey(key) ? loader.localHead(key, { refresh: false, poll: true }) : loader.currentTarget(key)
 }
 
-/** The tour at a given commit, when the index files it under this key; for the scene frames. */
-export async function tourAt(ctx: AppContext, key: ReviewKey, headSha: string): Promise<TourArtifact> {
-  await requireTourOf(ctx, key, headSha)
+/**
+ * Refuses a commit that is not a tour this key shows: one the index files under the key, or the
+ * key's own head, whose tour belongs to its commit whoever filed it, as `findFor` says. The page
+ * sends back the commit its bundle named, so a save or a frame costs the index and the head on
+ * file, no forge or git work.
+ */
+export async function requireTourOf(
+  ctx: AppContext,
+  loader: PrLoader,
+  key: ReviewKey,
+  headSha: string
+): Promise<void> {
+  const entry = (await ctx.tours.readIndex()).tours[headSha]
+  if (
+    entry !== undefined &&
+    (ctx.tours.belongsTo(entry, key) || headSha === (await headOnScreen(loader, key)).headSha)
+  ) {
+    return
+  }
+  throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)} at ${headSha.slice(0, 7)}`, 404)
+}
+
+/** The tour at a given commit, when this key shows it; for the scene frames. */
+export async function tourAt(
+  ctx: AppContext,
+  loader: PrLoader,
+  key: ReviewKey,
+  headSha: string
+): Promise<TourArtifact> {
+  await requireTourOf(ctx, loader, key, headSha)
   const artifact = await ctx.tours.read(headSha)
   if (artifact === null) {
     throw new AppError(

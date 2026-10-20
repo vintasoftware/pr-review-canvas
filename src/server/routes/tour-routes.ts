@@ -73,7 +73,7 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
       }
       headSha = found.headSha
     } else {
-      await requireTourOf(ctx, key, headSha)
+      await requireTourOf(ctx, loader, key, headSha)
     }
     const { zip } = await zipStoredTour(ctx, headSha, isLocalKey(key) ? undefined : key)
     // The name is built from the repo slug, the PR number, and the sha, so it holds no user text.
@@ -114,7 +114,7 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
   api.put('/tours/:n/reader', async c => {
     const key = parseTargetKey(c.req.param('n'))
     const input = await readBody(c.req.raw, TourReaderInputSchema, '{ "headSha": "…", "reader": { … } }')
-    await requireTourOf(ctx, key, input.headSha)
+    await requireTourOf(ctx, loader, key, input.headSha)
     // What was already finished stays finished: the page never unfinishes a tour by saving.
     const finished = (await savedReaderState(ctx, input.headSha))?.finished
     const reader = finished === undefined ? input.reader : { ...input.reader, finished }
