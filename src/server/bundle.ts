@@ -388,7 +388,13 @@ async function bundleBase(
     chat: {
       enabled: chatEnabled && acpx.installed,
       acpx: acpx.installed,
-      ...(settings === null ? {} : { agent: settings.chatAgent, model: settings.chatModel }),
+      ...(settings === null
+        ? {}
+        : {
+            agent: settings.chatAgent,
+            model: settings.chatModel,
+            threadPerPlace: settings.chatThreadPerPlace,
+          }),
     },
     largePr: largePrOf(input.diff.files),
     mentionCanvas: sharing.mentionCanvas,

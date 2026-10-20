@@ -86,6 +86,28 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
 - A generation that leaves a decide point without an impact, or gives one to another point, is
   sent back to the agent to fix (`POINT_IMPACT`).
 
+### AI Chat threads
+
+- **Ask** opens the thread of the place it was asked from: an attention point, a selection of lines,
+  a file, or a layer. The first ask about a place starts a thread titled after it, and asking about
+  the place again comes back to that thread. Each thread is its own agent session, so a
+  conversation about one point no longer mixes with another's.
+- The chat pane shows one thread at a time, with its place on top and **go to code** to lead back
+  to it. The new **Threads** tab lists them by kind of place, with the questions in each, and
+  **new thread** starts one about the whole PR; an ask about the whole PR comes back to the latest
+  of those. It replaces the thread list in the pane's head.
+- The ask command of a place with a thread carries a dot. The dot fills, and the **Threads** tab
+  shows one too, when an answer arrived there while the reader was not reading it: in another
+  thread, with the pane minimized, or on another tab. The **AI Chat** tab and its launcher count
+  those answers, up to 9.
+- While an answer comes in, ask, the Threads tab and **new thread** still open any thread, and the
+  answer keeps arriving in its own. A question asked elsewhere meanwhile is sent once it ends.
+- The open thread comes back when the page is reloaded.
+- `chatThreadPerPlace: false` in `settings.yml`, or **A thread per place** cleared in the settings
+  dialog, sends every ask to the open thread as before.
+- Threads saved by earlier versions still appear in the Threads tab, under whole PR, since they have
+  no place.
+
 ### Upgrade
 
 - A project with its own `generation-format.md` adds the `{{RESOLVED}}` token, where the bundled

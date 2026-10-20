@@ -564,6 +564,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
 | `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |
 | `maxTurns`             | `null`    | Integer 1–100, or `null` for the agent's default                                 |
+| `chatThreadPerPlace`   | `true`    | `true` opens the thread of the place asked about; `false` uses the open one      |
 | `checkoutEnabled`      | `true`    | `true` reads a [review checkout](#review-checkouts); `false` reads your checkout |
 | `checkoutIdleDays`     | `7`       | Integer 1–365, or `-1` to never remove an idle checkout                          |
 | `checkoutSweepMinutes` | `60`      | Integer minutes, 5–1440, between `serve`'s idle sweeps                           |
@@ -1241,15 +1242,42 @@ and keeps earlier threads. `--chat-agent` and `--chat-model` override saved pref
 that server run. Canvas generation models are configured separately in
 [`generation.models`](#project-config).
 
-**Ask** on a layer, file, attention point, or line selection chooses the context for your message.
-Choosing another target replaces it; **clear** returns to the whole PR. The `a` key asks about
-the focused target, and `/` focuses the message box.
+**Ask** on a layer, file, attention point, or line selection opens the thread of that place. The
+first ask about a place starts one, titled after it; a later ask about the same place comes back to
+it, history and all. A thread is made by its first question, so an ask you do not follow up leaves
+nothing behind. Lines match on their exact range: a different selection starts another thread. Each
+thread is a session of its own with the agent. The canvas goes with a thread's first question, and
+again when the PR's head, the folder the agent reads, or your right to resolve points changes. A
+place's thread belongs to the chat agent it was made with: after you switch agents, an ask about the
+place starts a new thread. The ask command of a place with a thread carries a dot, which fills with
+the accent when an answer arrived there while you were not reading it: you were reading another
+thread, the pane was minimized, or it showed another tab. The **Threads** tab carries the same dot,
+and the **AI Chat** tab and its launcher count those answers, up to 9, until you see each thread.
+**go to code** at the top of a thread leads back to its place. The `a` key asks about the focused target, and `/` focuses the message box.
+
+The **Threads** tab lists the review's threads by kind of place (attention points, lines, files,
+layers, whole PR) with the number of questions in each; pick one to open it in **AI Chat**. **new
+thread** starts one about the whole PR, and an ask about the whole PR comes back to the latest of
+those. Threads saved before threads had a place still appear in the Threads tab, under whole PR.
+When the canvas is generated again without a thread's place, the thread's head says the place is no
+longer on this canvas, and its questions are about the whole PR.
+
+To send every ask to the open thread instead, clear **A thread per place** under **AI Chat** in
+**settings**, or set `chatThreadPerPlace: false` in [`settings.yml`](#local-settings-and-storage).
+An ask then only chooses the context of your next message, which the line above the message box
+names; choosing another target replaces it, and **clear** returns to the whole PR.
 
 Chat can propose an inline comment. A valid proposal appears with controls to post, edit,
 or copy it. A proposal outside the current diff remains text with an explanation.
 
-Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. A timeout or
-incomplete answer can be retried; increase `chatTimeoutSec` if replies need more time.
+Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. While an answer is
+coming in, ask, the Threads tab and **new thread** still open any thread, and the answer keeps
+arriving in its own. A question asked in another thread meanwhile waits, marked as waiting, and is
+sent once the answer ends; one question waits at a time. If the server cannot take it then, a
+message says so wherever you are, and its thread shows the question with the reason; for a question
+asked from **new thread**, the next new thread does. Updating the review while a question waits asks
+first, as it does for unsent text. A timeout or incomplete answer can be retried; increase
+`chatTimeoutSec` if replies need more time.
 
 ### Review checkouts
 

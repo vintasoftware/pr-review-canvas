@@ -33,5 +33,5 @@ export function askButtonHtml(context, opts = {}) {
   }
   const label = opts.label ?? 'ask'
   const title = opts.title === undefined ? '' : ` title="${esc(opts.title)}"`
-  return `<button class="cmd" type="button" data-act="ask" data-ask${chatContextAttrs(context)}${title}>${esc(label)}</button>`
+  return `<button class="cmd" type="button" data-act="ask" data-ask${chatContextAttrs(context)}${title}><span class="ask-label">${esc(label)}</span></button>`
 }

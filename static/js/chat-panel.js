@@ -9,7 +9,8 @@ import { clickedCanvasLink } from './deep-link.js'
  *
  * @param {HTMLElement} root
  * @param {HTMLElement} pane
- * @param {{ minimized?: boolean, onMinimizedChange?: (minimized: boolean) => void }} [opts]
+ * @param {{ minimized?: boolean, onMinimizedChange?: (minimized: boolean) => void, onShownChange?: (shown: boolean) => void }} [opts]
+ *   `onShownChange` runs after every redraw, with whether the pane is on screen
  */
 export function wireChatPanel(root, pane, opts = {}) {
   const dialog = /** @type {HTMLDialogElement} */ (root.querySelector('#chat-dialog'))
@@ -40,6 +41,7 @@ export function wireChatPanel(root, pane, opts = {}) {
     layout?.classList.toggle('no-chat', !narrow.matches && !docked)
     launcher.setAttribute('aria-expanded', String(shown()))
     launcher.hidden = shown()
+    opts.onShownChange?.(shown())
   }
 
   function open() {

@@ -43,6 +43,10 @@ chatTimeoutSec: 600
 # Cap on agent turns per message, or null for the agent's own default.
 maxTurns: null
 
+# Whether ask opens the thread of the place it was asked from (an attention point, lines, a file,
+# a layer), starting one the first time. false sends every ask to the open thread.
+chatThreadPerPlace: true
+
 # Whether AI Chat reads a review checkout: a copy of the repository at the reviewed commit, kept
 # apart from your own checkout. false reads your checkout instead, whatever branch it is on.
 checkoutEnabled: true
@@ -254,6 +258,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.maxTurns !== undefined) {
     out.maxTurns = input.maxTurns
+  }
+  if (input.chatThreadPerPlace !== undefined) {
+    out.chatThreadPerPlace = input.chatThreadPerPlace
   }
   if (input.checkoutEnabled !== undefined) {
     out.checkoutEnabled = input.checkoutEnabled

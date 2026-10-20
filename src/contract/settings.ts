@@ -63,6 +63,11 @@ export const SettingsSchema = z.object({
   chatModel: z.string().min(1).nullable(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC),
   maxTurns: z.number().int().positive().max(100).nullable(),
+  /**
+   * Whether an ask opens the thread of the place it was asked from, starting one the first time,
+   * or goes to the open thread.
+   */
+  chatThreadPerPlace: z.boolean(),
   /** Whether AI Chat reads a review checkout at the reviewed commit, or the reader's own checkout. */
   checkoutEnabled: z.boolean(),
   /** Days without a chat turn before a review checkout is removed; -1 never removes one for that. */
@@ -89,6 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chatModel: null,
   chatTimeoutSec: 600,
   maxTurns: null,
+  chatThreadPerPlace: true,
   checkoutEnabled: true,
   checkoutIdleDays: 7,
   checkoutSweepMinutes: 60,
@@ -132,6 +138,7 @@ export const SettingsInputSchema = z.strictObject({
   chatModel: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),
   maxTurns: z.number().int().positive().max(100).nullable().optional(),
+  chatThreadPerPlace: z.boolean().optional(),
   checkoutEnabled: z.boolean().optional(),
   checkoutIdleDays: CheckoutIdleDaysSchema.optional(),
   checkoutSweepMinutes: CheckoutSweepMinutesSchema.optional(),

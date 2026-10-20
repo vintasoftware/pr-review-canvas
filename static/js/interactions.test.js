@@ -2222,7 +2222,6 @@ describe('the AI Chat commands', () => {
       reducedMotion: true,
       api: {
         fetchThreads: async () => ({ threads: [], activeThread: null, agent: 'claude' }),
-        createThread: async () => ({ threads: [], activeThread: null, agent: 'claude' }),
         fetchThreadHistory: async () => ({ name: 't', turns: [] }),
         cancelChat: async () => ({ cancelled: true }),
         streamChat: async (_pr, _input, opts) => {

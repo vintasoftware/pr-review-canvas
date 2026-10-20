@@ -52,12 +52,120 @@
 .chat-h h2 {
   margin-right: auto;
 }
-.chat-h select {
-  padding: 3px 6px;
-  font-size: 13px;
-  flex: 1 1 120px;
+/* The AI Chat tab shows one thread at a time; the Threads tab lists them all. */
+.chat[data-tab='threads'] > :is(.chat-h, .transcript, .chat-composer) {
+  display: none;
+}
+.threads-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.threads-panel[hidden] {
+  display: none;
+}
+.threads-h {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--panel-2);
+}
+.thread-title {
+  flex: 1 1 0;
   min-width: 0;
-  width: 0;
+  margin: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* No `overscroll-behavior: contain`, as on the review list: a short list would swallow the wheel. */
+.thread-index {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 14px 14px;
+}
+.thread-index .empty {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.thread-group {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+.thread-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.thread-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.thread-item:hover,
+.thread-item:focus-visible {
+  background: var(--panel-2);
+}
+.thread-item.current {
+  border-color: var(--accent);
+}
+.thread-item-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An ask command whose place has a thread carries a dot after its label, which chat.js turns on;
+   the dot takes the accent while an answer the reader has not seen waits there. It hangs off the
+   label, since a skin may draw the command's brackets or icon in the command's own
+   pseudo-elements: within brackets it reads `[ ask ● ]`. Like the icons, it is an SVG mask on a
+   fixed box, so neither the font nor a scaled screen changes its size or roundness. */
+.ask-label::after {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  background: var(--fg-dim);
+  mask: var(--i-dot) center / contain no-repeat;
+  vertical-align: middle;
+}
+/* The Threads tab and an index entry say where an answer arrived that the reader has not seen. */
+.threads-new,
+.thread-new::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.threads-new[hidden] {
+  display: none;
+}
+.thread-new {
+  color: var(--accent);
+  font-weight: 600;
+}
+.thread-new::before {
+  content: '';
+  margin-right: 5px;
+  vertical-align: middle;
 }
 select,
 input,
@@ -147,21 +255,27 @@ textarea {
 }
 
 /* ---- The side pane's tabs: AI Chat and the review being written ---- */
+/* At the default width the three tabs and minimize fit while the review holds fewer than ten
+   comments. A narrower pane, or a longer count, scrolls the tabs sideways under minimize instead
+   of breaking a label over two lines. */
 .side-tabs {
   display: flex;
   flex-shrink: 0;
   align-items: stretch;
-  padding: 0 14px 0 4px;
+  padding: 0 8px 0 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
   border-bottom: 1px solid var(--ink);
   background: var(--panel-2);
 }
 .side-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 10px 8px;
+  gap: 4px;
+  padding: 10px 6px 8px;
   border: 0;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
   background: none;
   color: var(--fg-muted);
   font: inherit;
@@ -176,8 +290,13 @@ textarea {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
+/* Minimize stays in reach while the tabs scroll under it. */
 .side-tabs .chat-minimize {
+  position: sticky;
+  right: 0;
   align-self: center;
+  padding-left: 6px;
+  background: var(--panel-2);
 }
 .review-count {
   min-width: 18px;
@@ -192,6 +311,20 @@ textarea {
 .review-count[data-empty] {
   background: var(--line);
   color: var(--fg-muted);
+}
+/* How many answers the reader has not seen, on the AI Chat tab and its launcher. */
+.chat-new {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.chat-new[hidden] {
+  display: none;
 }
 /* The review tab hides the chat's parts without unmounting them, so a draft message survives. */
 .chat[data-tab='review'] > :is(.chat-h, .transcript, .chat-composer) {

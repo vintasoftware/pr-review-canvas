@@ -337,6 +337,16 @@
   .cmd[data-act='ask'] {
     --icon: var(--i-robot);
   }
+  /* An icon alone has no label for the thread dot to follow, so the dot sits in its corner. */
+  .file-h .cmd[data-act='ask'] {
+    position: relative;
+  }
+  .file-h .cmd[data-act='ask'] .ask-label::after {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    margin: 0;
+  }
   :is(.layer-end .cmd, [data-act='point-settle'], [data-act='settle-save']) {
     --icon: var(--i-check);
   }

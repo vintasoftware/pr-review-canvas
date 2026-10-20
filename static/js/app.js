@@ -267,9 +267,11 @@ export class PrAppElement extends HTMLElement {
       : {}
     // Check after the requests finish, before tearing down the current screen: the reader may
     // have kept typing while the refresh was loading.
-    const hasUnfinishedText = [
-      ...this.querySelectorAll('.composer-box textarea, #msg, #signoff-dialog[open] textarea'),
-    ].some(el => el instanceof HTMLTextAreaElement && el.value !== el.defaultValue)
+    const hasUnfinishedText =
+      this.chat?.holdsUnsent() === true ||
+      [...this.querySelectorAll('.composer-box textarea, #msg, #signoff-dialog[open] textarea')].some(
+        el => el instanceof HTMLTextAreaElement && el.value !== el.defaultValue
+      )
     if (hasUnfinishedText && !window.confirm('Discard unfinished text and update the review?')) {
       return
     }
@@ -368,6 +370,7 @@ export class PrAppElement extends HTMLElement {
           void openSettingsDialog(this, el, {
             onSaved: data => {
               this.layerView?.setView(data.settings.layerView)
+              this.chat?.followSettings(data.settings)
               applyPointColors(data.settings.pointColors, document.documentElement)
             },
           }),
@@ -378,6 +381,7 @@ export class PrAppElement extends HTMLElement {
           root: this,
           prNumber: boot.prNumber,
           session,
+          ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })

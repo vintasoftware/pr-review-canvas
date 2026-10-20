@@ -60,6 +60,9 @@ function chatFieldsHtml(settings, agents) {
     `<input id="set-timeout" type="number" min="30" max="3600" value="${esc(settings.chatTimeoutSec)}"></div>` +
     '<div class="field"><label for="set-turns">Max turns</label>' +
     `<input id="set-turns" type="number" min="1" max="100" value="${esc(settings.maxTurns ?? '')}" placeholder="the agent's default"></div>` +
+    '<div class="field field-check"><label for="set-thread-per-place">A thread per place</label>' +
+    `<input id="set-thread-per-place" type="checkbox"${settings.chatThreadPerPlace ? ' checked' : ''}></div>` +
+    '<p class="muted small">Ask opens the thread of the attention point, lines, file or layer it was asked from, and starts one the first time. Off, every ask goes to the open thread.</p>' +
     '<p class="muted small">Changing the chat agent starts a new chat thread; the old ones stay in the list.</p>' +
     '<button class="cmd" type="button" data-act="settings-probe">test agent</button>'
   )
@@ -309,6 +312,7 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const model = qs(`#${CHAT_MODEL_ID}`, dialog)
   const timeout = qs('#set-timeout', dialog)
   const turns = qs('#set-turns', dialog)
+  const threadPerPlace = qs('#set-thread-per-place', dialog)
   const checkoutEnabled = qs('#set-checkout-enabled', dialog)
   const checkoutIdle = qs('#set-checkout-idle', dialog)
   const checkoutSweep = qs('#set-checkout-sweep', dialog)
@@ -334,6 +338,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   }
   if (turns instanceof HTMLInputElement) {
     input.maxTurns = turns.value.trim() === '' ? null : Number(turns.value)
+  }
+  if (threadPerPlace instanceof HTMLInputElement) {
+    input.chatThreadPerPlace = threadPerPlace.checked
   }
   if (checkoutEnabled instanceof HTMLInputElement) {
     input.checkoutEnabled = checkoutEnabled.checked
