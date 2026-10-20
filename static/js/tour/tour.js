@@ -749,11 +749,9 @@ export class PrTourElement extends HTMLElement {
         this.go(i, { force: true, fromHistory: true })
       }
     }
-    // The rail is sticky: what scrolls to the top of the page stops under it, not behind it. A
-    // resized window may make the rail scroll, or stop scrolling: its faded ends follow.
+    // A resized window may make the rail scroll, or stop scrolling: its faded ends follow.
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))
     const onRailSize = () => {
-      this.style.setProperty('--rail-h', `${rail.offsetHeight}px`)
       const road = qs('.tour-rail', rail)
       if (road instanceof HTMLElement) {
         markRailEdges(road)

@@ -402,11 +402,7 @@ pr-tour[data-at='plan'] {
 
 /* ---- Rail: a road with bus stops ---- */
 .tour-rail-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: color-mix(in srgb, var(--tour-card) 96%, transparent);
-  backdrop-filter: blur(6px);
+  background: var(--tour-card);
   border-bottom: 1px solid var(--tour-line);
   box-shadow: 0 6px 16px -12px rgb(31 36 48 / 35%);
 }
@@ -915,7 +911,7 @@ pr-tour[data-at='plan'] {
   margin-bottom: 24px;
   border: 1px solid var(--tour-line-strong);
   border-radius: 12px;
-  scroll-margin-top: calc(var(--rail-h, 0px) + 12px);
+  scroll-margin-top: 12px;
 }
 .tour-code:focus-visible {
   outline: 2px solid var(--blue);
@@ -966,10 +962,10 @@ pr-tour[data-at='plan'] {
 .tour-literate > .tour-chunk:first-child {
   margin-top: 0;
 }
-/* The file's bar sticks under the rail while its diff scrolls past, so a long diff keeps its name. */
+/* The file's bar sticks to the top while its diff scrolls past, so a long diff keeps its name. */
 .tour-code-file {
   position: sticky;
-  top: var(--rail-h, 0);
+  top: 0;
   z-index: 1;
   display: flex;
   gap: 8px;
