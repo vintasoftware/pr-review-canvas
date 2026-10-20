@@ -98,6 +98,11 @@
   --stop-pole: light-dark(#c3ccd9, #4a5669);
   --stop-locked: light-dark(#a9b2c0, #6b7587);
   --stop-locked-bg: light-dark(#f7f9fb, #1f2734);
+  /* AI Chat's glyphs that the skin's Octicons lack, from Lucide (ISC), drawn as masks like them. */
+  --i-ask-thread: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+  --i-ask-threads: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13'/%3E%3C/svg%3E");
+  --i-ask-goto: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 4v7a4 4 0 0 1-4 4H4'/%3E%3Cpath d='m9 10-5 5 5 5'/%3E%3C/svg%3E");
+  --i-ask-stop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3C/svg%3E");
   --stop-locked-fg: light-dark(#5e6676, #a3acbd);
 
   --tour-display: archivo, 'Source Sans 3', system-ui, sans-serif;
@@ -1728,35 +1733,160 @@ pr-tour[data-at='plan'] {
 .tour-ask-threads[hidden] {
   display: none;
 }
-/* The pane is not a ticket: it keeps the tour's lilac whatever the step. */
+/* The pane is not a ticket: it keeps the tour's lilac whatever the step. Its head is one row that
+   never wraps: the title gives way first, then the tabs keep their icons and lose their words. */
 .tour-ask .chat-h {
   flex-wrap: nowrap;
+  gap: 10px;
   align-items: center;
+  min-height: 52px;
+  padding: 8px 10px 8px 16px;
   background: var(--p-lilac);
 }
 .tour-ask .chat-h h2 {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--tour-display);
-  font-weight: 800;
+  overflow: hidden;
+  font: 800 17px var(--tour-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tour-ask .ctx-line {
-  padding: 6px 14px 0;
+/* The pane's commands are buttons with a glyph each, which the skin's button list leaves to it. */
+.tour-ask .cmd {
+  --btn-h: 30px;
+
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: var(--btn-h);
+  padding: 0 10px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 8px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  font: 600 13px / 1 var(--sans);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+/* Under the skin's root, since the skin blanks every command's ::before after this file. */
+:root[data-skin='tour'] .tour-ask .cmd::before {
+  content: '';
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  background: currentcolor;
+  mask: var(--icon) center / contain no-repeat;
+}
+.tour-ask .cmd:hover:not(:disabled) {
+  background: var(--tour-well);
+}
+.tour-ask .cmd.fill:not(:disabled) {
+  border-color: transparent;
+  background: var(--btn-primary);
+  color: var(--btn-primary-fg);
+}
+.tour-ask .cmd.fill:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+.tour-ask .cmd:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .tour-ask-tabs {
   display: flex;
-  gap: 4px;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--lilac) 12%, transparent);
+}
+.tour-ask-tabs .cmd {
+  position: relative;
+  border-color: transparent;
+  background: transparent;
+  color: var(--tour-ink-soft);
+}
+.tour-ask-tabs .cmd:hover:not([aria-selected='true']) {
+  background: color-mix(in srgb, var(--lilac) 10%, transparent);
+  color: var(--tour-ink);
 }
 .tour-ask-tabs [aria-selected='true'] {
+  border-color: var(--tour-line);
   background: var(--tour-card);
   color: var(--lilac);
 }
+/* Threads' dot for an answer not seen sits on the tab's corner, not in its words. */
+.tour-ask-tabs .threads-new {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+.tour-ask [data-view='thread'] {
+  --icon: var(--i-ask-thread);
+}
+.tour-ask [data-view='threads'] {
+  --icon: var(--i-ask-threads);
+}
+.tour-ask [data-act='ask-close'] {
+  --icon: var(--i-x);
+
+  flex: 0 0 auto;
+  justify-content: center;
+  width: var(--btn-h);
+  padding: 0;
+  gap: 0;
+  font-size: 0;
+}
+.tour-ask [data-act='ask-goto'] {
+  --icon: var(--i-ask-goto);
+
+  flex: 0 0 auto;
+}
+.tour-ask [data-act='ask-new'] {
+  --icon: var(--i-plus);
+}
+.tour-ask [data-act='ask-send'] {
+  --icon: var(--i-send);
+}
+.tour-ask [data-act='ask-stop'] {
+  --icon: var(--i-ask-stop);
+}
+.tour-ask .ctx-line {
+  padding: 8px 16px 0;
+}
 .tour-ask-head {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  padding: 8px 14px;
+  min-width: 0;
+  padding: 4px 16px 10px;
   border-bottom: 1px solid var(--tour-line);
+}
+.tour-ask-head .thread-title {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 15px;
+}
+/* Nothing inside widens the pane: a long title or a wide answer gives way within it. */
+.tour-ask .tour-chat-box {
+  min-width: 0;
+}
+.tour-ask .transcript {
+  padding: 14px 16px;
+}
+.tour-ask .chat-composer {
+  padding: 10px 16px 14px;
+}
+/* A narrow pane keeps the tabs' icons and drops their words. */
+@media (width <= 420px) {
+  .tour-ask-tabs .cmd {
+    width: var(--btn-h);
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    justify-content: center;
+  }
 }
 .tour-ask-threads {
   display: flex;

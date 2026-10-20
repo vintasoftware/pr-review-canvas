@@ -625,10 +625,10 @@ function shellHtml(bundle) {
   return `<div class="tour-chat-box">
     <div class="chat-h"><h2 id="tour-ask-h">AI Chat</h2>
       <div class="tour-ask-tabs" role="tablist" aria-label="AI Chat">
-        <button class="cmd" type="button" role="tab" data-view="thread" aria-selected="true">thread</button>
-        <button class="cmd" type="button" role="tab" data-view="threads" aria-selected="false">threads<span class="threads-new" hidden></span></button>
+        <button class="cmd" type="button" role="tab" data-view="thread" aria-selected="true" title="The thread of this stop">thread</button>
+        <button class="cmd" type="button" role="tab" data-view="threads" aria-selected="false" title="Every thread of this tour">threads<span class="threads-new" hidden></span></button>
       </div>
-      <button class="cmd" type="button" data-act="ask-close">close</button></div>
+      <button class="cmd" type="button" data-act="ask-close" title="Close AI Chat (esc)">close</button></div>
     <p class="ctx-line">${esc(agent)}${model} · read-only · a thread per stop</p>
     <div class="tour-ask-head"><p class="thread-title" id="tour-ask-title"></p><button class="cmd" type="button" data-act="ask-goto" hidden>go to stop</button></div>
     <div class="transcript" id="tour-ask-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0"></div>
