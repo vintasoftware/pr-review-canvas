@@ -26,7 +26,9 @@ export type {
   ChatHistoryResponse,
   ChatThreadsResponse,
   ChatTurn,
+  TourChatThreadsResponse,
   TourGrillContext,
+  TourPlace,
 } from '../../src/contract/chat.js'
 export type {
   AgentPulse,

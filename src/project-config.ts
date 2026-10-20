@@ -61,6 +61,7 @@ export const PromptOverridesSchema = z
     'chat-seed.md': z.string().min(1).optional(),
     'tour.md': z.string().min(1).optional(),
     'tour-grill.md': z.string().min(1).optional(),
+    'tour-chat.md': z.string().min(1).optional(),
   })
   .strict()
 export type PromptOverrides = z.infer<typeof PromptOverridesSchema>

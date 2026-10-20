@@ -740,6 +740,8 @@ describe('the other screens', () => {
     ).toContain('your work has moved on to')
     document.body.innerHTML = helpHtml()
     expect(document.querySelectorAll('dt')).toHaveLength(6)
+    document.body.innerHTML = helpHtml({ chat: true })
+    expect(document.querySelectorAll('dt')).toHaveLength(7)
     expect(document.querySelector('[data-act="close-help"]')).not.toBeNull()
   })
 })

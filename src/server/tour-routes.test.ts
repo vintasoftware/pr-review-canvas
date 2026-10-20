@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net'
 import { serve } from '@hono/node-server'
 import path from 'node:path'
 import type { ErrorEnvelope } from '../contract/api.js'
+import type { TourChatThreadsResponse } from '../contract/chat.js'
 import type {
   SharedTourFetchResponse,
   TourBundle,
@@ -695,6 +696,86 @@ describe('the grilling routes', () => {
     expect(await json<{ name: string; turns: unknown[] }>(await get('/api/tours/42/grill/history'))).toEqual({
       name: 'pr-review-acme-widgets-42-claude-t0',
       turns: [],
+    })
+  })
+})
+
+describe('the tour chat routes', () => {
+  const CHAT_ON = {
+    config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: true } },
+    warnings: [],
+    source: null,
+  }
+  const T1 = 'pr-review-acme-widgets-42-claude-t1'
+
+  async function ask(body: unknown): Promise<Response> {
+    return createApp(t.ctx).request('/api/tours/42/chat', {
+      method: 'POST',
+      headers: { ...WRITE, accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('answers in the thread of the place asked about, with the tour chat seed, and lists it', async () => {
+    const runner = createFakeRunner({
+      script: [
+        { type: 'chunk', text: 'It sums.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    })
+    t = await context({ projectConfig: CHAT_ON, runner })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    const res = await ask({ message: 'Why a sum?', context: { kind: 'tour-landmark', id: 'sum' } })
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    expect(body).toContain(`"thread":"${T1}"`)
+    expect(body).toContain('It sums.')
+    const prompt = runner.runs[0]?.prompt ?? ''
+    expect(prompt).toContain('# Answering the reader of a tour')
+    expect(prompt).toContain('## Context: landmark "Sum, not product"')
+    await (
+      await ask({ message: 'And the test?', context: { kind: 'tour-landmark', id: 'sum' }, thread: T1 })
+    ).text()
+    expect(runner.runs.map(run => run.session)).toEqual([T1, T1])
+    const threads = await json<TourChatThreadsResponse>(await get('/api/tours/42/chat/threads'))
+    expect(threads.threads.map(thread => [thread.name, thread.title, thread.turns])).toEqual([
+      [T1, 'landmark · Sum, not product', 2],
+    ])
+    const history = await json<{ turns: Array<{ role: string }> }>(
+      await get(`/api/tours/42/chat/threads/${T1}/history`)
+    )
+    expect(history.turns.map(turn => turn.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(await json<{ cancelled: boolean }>(await send('/api/tours/42/chat/cancel', 'POST', {}))).toEqual({
+      cancelled: false,
+    })
+  })
+
+  it('refuses without chat, without a tour, a canvas context, a place the tour lacks, and another review’s thread', async () => {
+    t = await context({
+      projectConfig: {
+        config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
+        warnings: [],
+        source: null,
+      },
+    })
+    expect((await ask({ message: 'x', context: { kind: 'tour' } })).status).toBe(404)
+    expect((await get('/api/tours/42/chat/threads')).status).toBe(404)
+    expect((await get(`/api/tours/42/chat/threads/${T1}/history`)).status).toBe(404)
+    expect((await send('/api/tours/42/chat/cancel', 'POST', {})).status).toBe(404)
+    await t.cleanup()
+    t = await context({ projectConfig: CHAT_ON })
+    const missing = await ask({ message: 'x', context: { kind: 'tour' } })
+    expect((await json<ErrorEnvelope>(missing)).error.code).toBe('CANVAS_NOT_FOUND')
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    expect((await ask({ message: 'x', context: { kind: 'pr' } })).status).toBe(400)
+    const unknown = await ask({ message: 'x', context: { kind: 'tour-question', id: 'nope' } })
+    expect((await json<ErrorEnvelope>(unknown)).error.message).toBe('this tour has no question nope')
+    expect((await get('/api/tours/42/chat/threads/pr-review-acme-widgets-7-claude-t1/history')).status).toBe(
+      404
+    )
+    expect(await json<TourChatThreadsResponse>(await get('/api/tours/42/chat/threads'))).toEqual({
+      threads: [],
+      agent: 'claude',
     })
   })
 })

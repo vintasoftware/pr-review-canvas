@@ -40,6 +40,7 @@ import {
   tourHeaderHtml,
 } from './screens.js'
 import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf, stepTitle } from './steps.js'
+import { createTourChat, placeOfStep, TOUR_CHAT_ID, tourChats } from './tour-chat.js'
 import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
 
 export const POLL_MS = 5000
@@ -80,6 +81,8 @@ export class PrTourElement extends HTMLElement {
   poll = null
   /** @type {ReturnType<typeof createGrill> | null} */
   grill = null
+  /** @type {ReturnType<typeof createTourChat> | null} */
+  chat = null
   /** @type {(() => void) | null} */
   unwire = null
   /**
@@ -100,6 +103,8 @@ export class PrTourElement extends HTMLElement {
     this.generation = null
     this.grill?.stop()
     this.grill = null
+    this.chat?.stop()
+    this.chat = null
     this.frames?.stop()
     this.frames = null
     this.unwire?.()
@@ -254,6 +259,8 @@ export class PrTourElement extends HTMLElement {
     this.frames?.stop()
     this.grill?.stop()
     this.grill = null
+    this.chat?.stop()
+    this.chat = null
     this.unwire?.()
     this.bundle = bundle
     const now = new Date()
@@ -293,6 +300,9 @@ export class PrTourElement extends HTMLElement {
       '<section class="tour-stage" id="stage"></section></div></main>' +
       '<nav class="tour-nav" id="nav" aria-label="Tour navigation"></nav>' +
       `<dialog class="tour-chat" id="${GRILL_DIALOG_ID}" aria-label="Something else"></dialog>` +
+      (tourChats(bundle)
+        ? `<aside class="tour-ask" id="${TOUR_CHAT_ID}" aria-labelledby="tour-ask-h" hidden></aside>`
+        : '') +
       '<dialog class="tour-help" id="help-dialog" aria-label="Tour help"></dialog>' +
       footerHtml(boot.version)
     this.frames = listenToFrames(this, { preview: bundle.preview })
@@ -310,6 +320,25 @@ export class PrTourElement extends HTMLElement {
       },
       onReader: () => this.save(),
     })
+    const pane = qs(`#${TOUR_CHAT_ID}`, this)
+    this.chat =
+      pane instanceof HTMLElement
+        ? createTourChat({
+            pane,
+            key: this.key,
+            bundle: /** @type {TourBundle & { tour: import('../contract-types.js').TourPageTour }} */ (
+              bundle
+            ),
+            steps: this.steps,
+            reachable: i => reachable(this.steps, i, bundle.reader),
+            onGoto: i => this.go(i),
+            onChange: () => {
+              // A wide window makes room for the open pane beside the tour.
+              this.toggleAttribute('data-asking', this.chat?.isOpen() === true)
+              this.drawNav()
+            },
+          })
+        : null
     this.wireCommands()
     this.wireEvents()
     const first = this.firstStep(boot)
@@ -375,7 +404,6 @@ export class PrTourElement extends HTMLElement {
     const stage = /** @type {HTMLElement} */ (qs('#stage', this))
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))
     const strip = /** @type {HTMLElement} */ (qs('#strip', this))
-    const nav = /** @type {HTMLElement} */ (qs('#nav', this))
     const step = /** @type {Step} */ (this.steps[this.current])
     // The kind of step on screen, for the layout: the cover drops the header's title.
     this.dataset['at'] = step.kind
@@ -407,7 +435,8 @@ export class PrTourElement extends HTMLElement {
     rail.innerHTML = railHtml(this.steps, this.current, bundle.reader, bundle.tour, {
       preview: bundle.preview,
     })
-    nav.innerHTML = navHtml(this.steps, this.current, bundle.reader, { preview: bundle.preview })
+    this.chat?.follow(placeOfStep(step))
+    this.drawNav()
     const road = /** @type {HTMLElement} */ (qs('.tour-rail', rail))
     const here = qs('[aria-current="step"]', rail)
     if (here instanceof HTMLElement) {
@@ -420,6 +449,18 @@ export class PrTourElement extends HTMLElement {
     }
     road.addEventListener('scroll', () => markRailEdges(road), { passive: true })
     markRailEdges(road)
+  }
+
+  /** Draws the nav, with the ask command when the tour has AI Chat. */
+  drawNav() {
+    const bundle = /** @type {TourBundle} */ (this.bundle)
+    const nav = qs('#nav', this)
+    if (nav instanceof HTMLElement) {
+      nav.innerHTML = navHtml(this.steps, this.current, bundle.reader, {
+        preview: bundle.preview,
+        ...(this.chat === null ? {} : { ask: this.chat.marks() }),
+      })
+    }
   }
 
   /** Queues the reader's state for the server. A preview saves nothing. */
@@ -520,7 +561,7 @@ export class PrTourElement extends HTMLElement {
 
   openHelp() {
     const dialog = /** @type {HTMLDialogElement} */ (qs('#help-dialog', this))
-    dialog.innerHTML = helpHtml()
+    dialog.innerHTML = helpHtml({ chat: this.chat !== null })
     dialog.showModal()
   }
 
@@ -667,6 +708,8 @@ export class PrTourElement extends HTMLElement {
         this.answer(Number(target.dataset['i']))
       } else if (act === 'confirm') {
         void this.confirm(target)
+      } else if (act === 'ask') {
+        this.chat?.toggle()
       } else if (act === 'copy') {
         void this.copyPrompt(target, /** @type {HTMLElement} */ (qs('#prompt', this)).textContent ?? '')
       }
@@ -731,6 +774,8 @@ export class PrTourElement extends HTMLElement {
         this.openGrill(decision)
       } else if (/^[1-9]$/.test(e.key) && step?.kind === 'quiz') {
         this.answer(Number(e.key) - 1)
+      } else if (e.key === '/' && this.chat !== null) {
+        this.chat.focus()
       } else if (e.key === '?') {
         this.openHelp()
       } else {

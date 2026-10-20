@@ -16,7 +16,7 @@ import {
 } from '../chat/checkouts.js'
 import type { PromptOverrides } from '../project-config.js'
 import { loadSeedTemplate } from '../chat/seed.js'
-import { loadTourSeedTemplate } from '../chat/tour-seed.js'
+import { loadTourChatSeedTemplate, loadTourSeedTemplate } from '../chat/tour-seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
@@ -282,6 +282,8 @@ export function createChatSet(
       loadSeedTemplate: () => loadSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
       loadTourSeedTemplate: () =>
         loadTourSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
+      loadTourChatSeedTemplate: () =>
+        loadTourChatSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,

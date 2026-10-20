@@ -1,7 +1,15 @@
 // The tour's API: the bundle the page opens with, the reader's state between visits, finishing,
-// and the zip a tour travels in.
+// the zip a tour travels in, and the agent: the grilling and the tour's AI Chat.
 import { Hono } from 'hono'
-import { TourGrillSendSchema } from '../../contract/chat.js'
+import { isThreadNameFor } from '../../chat/threads.js'
+import {
+  type ChatHistoryResponse,
+  TourChatSendSchema,
+  type TourGrillContext,
+  TourGrillSendSchema,
+  type TourPlace,
+} from '../../contract/chat.js'
+import type { ReviewKey } from '../../contract/review-key.js'
 import {
   type SharedTourFetchResponse,
   TourFinishInputSchema,
@@ -155,21 +163,21 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
   }
 
-  api.post('/tours/:n/grill', async c => {
-    requireChat()
-    const key = parseTargetKey(c.req.param('n'))
-    const input = await readBody(
-      c.req.raw,
-      TourGrillSendSchema,
-      '{ "message": "…", "context": { "kind": "tour-decision", "key": "…" } }'
-    )
+  /**
+   * A turn about the tour of `key`, read against the diff of the tour's own commit, so a stale tour
+   * is talked about on the code it describes.
+   */
+  const tourTurn = async (
+    key: ReviewKey,
+    message: string,
+    about: { grill: TourGrillContext } | { chat: TourPlace; thread?: string | undefined }
+  ) => {
     const found = await lookupTour(ctx, loader, key)
     if (found.status === 'missing') {
       throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)}`, 404, 'generate one with /pr-tour')
     }
     const reviewer = await tourReviewer(ctx, key, found.pr)
     const reader = await readReaderState(ctx, found.headSha, found.artifact, reviewer.author)
-    // The diff of the tour's own commit, so a stale tour is grilled on the code it describes.
     const diff = { headSha: found.headSha, mergeBaseSha: found.artifact.mergeBaseSha }
     const derived = await ctx.derived.readOrBuild(diff)
     if (derived === null) {
@@ -180,19 +188,33 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
         'fetch the head and reload'
       )
     }
-    const events = ctx.chat.send(
+    const tour = { artifact: found.artifact, reader }
+    return ctx.chat.send(
       {
         key,
         headSha: found.headSha,
-        subject: { kind: 'tour', artifact: found.artifact, reader, context: input.context },
+        subject:
+          'grill' in about
+            ? { kind: 'tour', ...tour, context: about.grill }
+            : { kind: 'tour-chat', ...tour, context: about.chat, thread: about.thread },
         files: derived.files,
         patches: derived.patches,
         derivedDir: ctx.derived.derivedDir(diff),
         readLines: (side, filePath, from, to) => ctx.derived.readLines(diff, side, filePath, from, to),
       },
-      input.message
+      message
     )
-    return turnResponse(ctx, c.req, key, events)
+  }
+
+  api.post('/tours/:n/grill', async c => {
+    requireChat()
+    const key = parseTargetKey(c.req.param('n'))
+    const input = await readBody(
+      c.req.raw,
+      TourGrillSendSchema,
+      '{ "message": "…", "context": { "kind": "tour-decision", "key": "…" } }'
+    )
+    return turnResponse(ctx, c.req, key, await tourTurn(key, input.message, { grill: input.context }))
   })
 
   api.get('/tours/:n/grill/history', async c => {
@@ -201,6 +223,44 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
   })
 
   api.post('/tours/:n/grill/cancel', async c => {
+    requireChat()
+    return c.json({ cancelled: await ctx.chat.cancel(parseTargetKey(c.req.param('n'))) })
+  })
+
+  // The tour's AI Chat: a thread per place of the tour, apart from the grilling's and the canvas's.
+  api.post('/tours/:n/chat', async c => {
+    requireChat()
+    const key = parseTargetKey(c.req.param('n'))
+    const input = await readBody(
+      c.req.raw,
+      TourChatSendSchema,
+      '{ "message": "…", "context": { "kind": "tour-landmark", "id": "…" } }'
+    )
+    return turnResponse(
+      ctx,
+      c.req,
+      key,
+      await tourTurn(key, input.message, { chat: input.context, thread: input.thread })
+    )
+  })
+
+  api.get('/tours/:n/chat/threads', async c => {
+    requireChat()
+    return c.json(await ctx.chat.tourThreads(parseTargetKey(c.req.param('n'))))
+  })
+
+  api.get('/tours/:n/chat/threads/:name/history', async c => {
+    requireChat()
+    const key = parseTargetKey(c.req.param('n'))
+    const name = c.req.param('name')
+    if (!isThreadNameFor(name, key)) {
+      throw new AppError('NOT_FOUND', `no chat thread named ${name} on this review`, 404)
+    }
+    const body: ChatHistoryResponse = { name, turns: await ctx.transcripts.read(key, name) }
+    return c.json(body)
+  })
+
+  api.post('/tours/:n/chat/cancel', async c => {
     requireChat()
     return c.json({ cancelled: await ctx.chat.cancel(parseTargetKey(c.req.param('n'))) })
   })

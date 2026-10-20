@@ -266,11 +266,12 @@ function stepDone(step, i, current, reader, tour) {
 
 /**
  * The footer nav. The rail and the strip say where the reader is, so the space between the buttons
- * says why next is closed, when it is.
+ * says why next is closed, when it is. With AI Chat, ask opens it beside the tour, dotted when this
+ * stop has a thread, and counts the answers the reader has not seen.
  * @param {Step[]} steps
  * @param {number} i
  * @param {TourReaderState} reader
- * @param {{ preview?: boolean }} [opts]
+ * @param {{ preview?: boolean, ask?: { open: boolean, thread: boolean, unseen: number } }} [opts]
  */
 export function navHtml(steps, i, reader, opts = {}) {
   const step = steps[i]
@@ -289,8 +290,23 @@ export function navHtml(steps, i, reader, opts = {}) {
               : ''
   // The cover's own button is the one to press; the nav's does not compete with it.
   const fill = canNext && step.kind !== 'cover'
+  const { ask } = opts
+  const counted =
+    ask === undefined || ask.unseen === 0
+      ? ''
+      : ask.unseen === 1
+        ? '1 new answer'
+        : `${ask.unseen} new answers`
+  const askHtml =
+    ask === undefined
+      ? ''
+      : `<button class="cmd tour-ask-cmd" type="button" data-act="ask" aria-controls="tour-ask" aria-expanded="${ask.open}"${ask.thread ? ' data-thread' : ''}>ask AI Chat${
+          counted === ''
+            ? ''
+            : `<span class="tour-ask-new" aria-label="${counted}" title="${counted}">${Math.min(ask.unseen, 9)}</span>`
+        }</button>`
   return `<div class="tour-nav-inner">
-    <button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>
+    <span class="tour-nav-side"><button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>${askHtml}</span>
     <span class="tour-nav-why" id="nav-why">${esc(why)}</span>
     <button class="cmd${fill ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ` disabled${why === '' ? '' : ' aria-describedby="nav-why"'}`}>${esc(nextLabel(steps, i))} →</button>
   </div>`
@@ -763,13 +779,15 @@ export function staleBarHtml(bundle) {
   return `<div class="tour-stale" role="status"><strong>Tour is outdated.</strong> You are reading an older commit. ${summary}${action}${shared}</div>`
 }
 
-export function helpHtml() {
+/** @param {{ chat?: boolean }} [opts] whether the tour has AI Chat, which `/` opens */
+export function helpHtml(opts = {}) {
   return `<h3>Keys</h3><dl>
     <dt><kbd>→</kbd> <kbd>space</kbd></dt><dd>next</dd>
     <dt><kbd>←</kbd></dt><dd>back</dd>
     <dt><kbd>i</kbd></dt><dd>show the code behind a landmark</dd>
     <dt><kbd>k</kbd> <kbd>a</kbd> <kbd>c</kbd></dt><dd>keep, take the alternative, or ask for something else</dd>
     <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>answer a question</dd>
+    ${opts.chat === true ? '<dt><kbd>/</kbd></dt><dd>ask AI Chat about this stop</dd>' : ''}
     <dt><kbd>esc</kbd></dt><dd>close this, or the drawer</dd>
   </dl>
   <p>A tour has landmarks that explain the change, decisions you keep or change, and a quiz. The browser's back and forward buttons move through it, and a reload lands where you were.</p>

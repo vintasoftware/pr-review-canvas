@@ -1,6 +1,6 @@
-// Renders the seed that opens a tour's grilling thread: who the agent is, what the tour says the
+// Renders the seed that opens a thread of the tour page: who the agent is, what the tour says the
 // change is, the decisions, and where the code sits on disk. The prose lives in
-// prompts/tour-grill.md.
+// prompts/tour-grill.md for the grilling, and prompts/tour-chat.md for the tour's AI Chat.
 import type { TourArtifact } from '../contract/tour.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
@@ -8,6 +8,10 @@ import { codeLocationMarkdown, prMetaMarkdown, type SeedPaths } from './seed.js'
 
 export async function loadTourSeedTemplate(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<string> {
   return loadPromptFile('tour-grill.md', dir, project)
+}
+
+export async function loadTourChatSeedTemplate(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<string> {
+  return loadPromptFile('tour-chat.md', dir, project)
 }
 
 /** The landmarks as the tour tells them: the stage, the title, and the lead. */

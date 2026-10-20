@@ -18,6 +18,12 @@ prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; sc
   edit, or reject, and speech input with a one-time notice.
 - A reviewer's approved changes go into their pending review as comments on the decisions'
   lines.
+- With AI Chat on, the tour page has AI Chat on every step: **ask AI Chat** in the nav, or `/`,
+  opens a pane beside the tour with a thread per place (the whole tour, each landmark, decision,
+  and quiz question, and the plan), as the canvas keeps a thread per place. The pane follows the
+  reader from step to step, **threads** lists them, and an answer that ends while the reader is
+  on another stop is counted until they open its thread. A quiz question's answer stays out of the
+  agent's context until the reader has it right. The seed is the new `prompts/tour-chat.md`.
 - Config: `tour:` in `pr-review.config.yml` (budget, quiz, grilling, audio, micro-world, try-it,
   categories, sharing, models, guide); `tourComment` in `.pr-review/settings.yml`; prompt
   templates `tour.md` and `tour-grill.md`.

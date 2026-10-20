@@ -1714,6 +1714,107 @@ pr-tour[data-at='plan'] {
   }
 }
 
+/* ---- AI Chat: a pane beside the tour, on every stop, with a thread per stop ---- */
+.tour-ask {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  display: flex;
+  width: min(420px, 100vw);
+  font-size: 15px;
+}
+.tour-ask[hidden],
+.tour-ask-head[hidden],
+.tour-ask-threads[hidden] {
+  display: none;
+}
+.tour-ask .chat-h {
+  flex-wrap: nowrap;
+  align-items: center;
+  background: var(--tour-tint);
+}
+.tour-ask .chat-h h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--tour-display);
+  font-weight: 800;
+}
+.tour-ask .ctx-line {
+  padding: 6px 14px 0;
+}
+.tour-ask-tabs {
+  display: flex;
+  gap: 4px;
+}
+.tour-ask-tabs [aria-selected='true'] {
+  background: var(--p-lilac);
+}
+.tour-ask-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--tour-line);
+}
+.tour-ask-threads {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.tour-ask .threads-h {
+  border-bottom-color: var(--tour-line);
+  background: var(--tour-card);
+}
+.tour-ask .thread-item {
+  border-color: var(--tour-line-strong);
+  background: var(--tour-card);
+  color: var(--tour-ink);
+}
+.tour-ask .thread-item.current {
+  border-color: var(--lilac);
+}
+/* A wide window keeps the whole tour in view beside the open pane; a narrower one keeps the nav
+   beside it, so the reader can move on with the pane open. A phone's pane is a sheet over both. */
+@media (width >= 1100px) {
+  pr-tour[data-asking] {
+    padding-right: 420px;
+  }
+}
+@media (720px < width < 1100px) {
+  pr-tour[data-asking] .tour-nav {
+    padding-right: 432px;
+  }
+}
+.tour-nav-side {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* Ask carries a dot when this stop has a thread, and counts the answers not seen yet. */
+.tour-ask-cmd[data-thread]::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--tour-ink-soft);
+  vertical-align: middle;
+}
+.tour-ask-new {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--sun);
+  color: var(--on-sun);
+  font: 800 11px var(--tour-display);
+}
+
 /* The cover is the title page: the header does not say the title above it again. */
 pr-tour[data-at='cover'] .hdr-title .title {
   display: none;
@@ -1730,7 +1831,8 @@ pr-tour[data-at='cover'] .hdr-title .title {
   .tour-strip {
     padding: 12px 18px 14px;
   }
-  .tour-chat[open] {
+  .tour-chat[open],
+  .tour-ask {
     inset: auto 0 0;
     width: 100vw;
     height: min(85vh, 640px);
@@ -1740,7 +1842,8 @@ pr-tour[data-at='cover'] .hdr-title .title {
     border-left: 0;
   }
   /* The drawer's height goes to the conversation: its fixed parts shrink. */
-  .tour-chat .ctx-line {
+  .tour-chat .ctx-line,
+  .tour-ask .ctx-line {
     display: none;
   }
   .tour-chat .chat-h h2 {

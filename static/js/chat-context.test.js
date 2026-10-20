@@ -7,6 +7,7 @@ import {
   chatContextLabel,
   sameChatContext,
   threadOfPlace,
+  tourPlaceLabel,
   WHOLE_PR,
 } from './chat-context.js'
 
@@ -33,6 +34,54 @@ describe('sameChatContext', () => {
     expect(sameChatContext(base, { ...base, end: 3 })).toBe(false)
     expect(sameChatContext(base, { ...base, side: 'old' })).toBe(false)
     expect(sameChatContext(base, { ...base, path: 'b.ts' })).toBe(false)
+  })
+})
+
+describe('the places of a tour', () => {
+  const tour = {
+    landmarks: [{ id: 'l1', title: 'Sum, not product' }],
+    decisions: [{ key: 'd1', title: 'Sum over product?' }],
+    quiz: [{ id: 'q1', question: 'What does run() return?' }],
+  }
+
+  it('are the same place when they name the same step', () => {
+    expect(sameChatContext({ kind: 'tour' }, { kind: 'tour' })).toBe(true)
+    expect(sameChatContext({ kind: 'tour-plan' }, { kind: 'tour-plan' })).toBe(true)
+    expect(sameChatContext({ kind: 'tour-landmark', id: 'l1' }, { kind: 'tour-landmark', id: 'l1' })).toBe(
+      true
+    )
+    expect(sameChatContext({ kind: 'tour-landmark', id: 'l1' }, { kind: 'tour-question', id: 'l1' })).toBe(
+      false
+    )
+    expect(sameChatContext({ kind: 'tour-question', id: 'q1' }, { kind: 'tour-question', id: 'q2' })).toBe(
+      false
+    )
+    expect(sameChatContext({ kind: 'tour-decision', key: 'd1' }, { kind: 'tour-decision', key: 'd1' })).toBe(
+      true
+    )
+    expect(sameChatContext({ kind: 'tour-decision', key: 'd1' }, { kind: 'tour-decision', key: 'd2' })).toBe(
+      false
+    )
+  })
+
+  it('are named by their titles while the tour has them', () => {
+    expect(tourPlaceLabel({ kind: 'tour' }, tour)).toBe('the whole tour')
+    expect(tourPlaceLabel({ kind: 'tour-plan' }, tour)).toBe('the plan')
+    expect(tourPlaceLabel({ kind: 'tour-landmark', id: 'l1' }, tour)).toBe('landmark · Sum, not product')
+    expect(tourPlaceLabel({ kind: 'tour-decision', key: 'd1' }, tour)).toBe('decision · Sum over product?')
+    expect(tourPlaceLabel({ kind: 'tour-question', id: 'q1' }, tour)).toBe(
+      'question · What does run() return?'
+    )
+    const gone = { landmarks: [], decisions: [], quiz: [] }
+    expect(tourPlaceLabel({ kind: 'tour-landmark', id: 'l1' }, gone)).toBe('landmark l1')
+    expect(tourPlaceLabel({ kind: 'tour-decision', key: 'd1' }, gone)).toBe('decision · d1')
+    expect(tourPlaceLabel({ kind: 'tour-question', id: 'q1' }, gone)).toBe('question q1')
+  })
+
+  it('label a saved turn by kind', () => {
+    expect(chatContextLabel({ kind: 'tour' })).toBe('the whole tour')
+    expect(chatContextLabel({ kind: 'tour-landmark', id: 'l1' })).toBe('landmark l1')
+    expect(chatContextLabel({ kind: 'tour-question', id: 'q1' })).toBe('question q1')
   })
 })
 

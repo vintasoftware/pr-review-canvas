@@ -1141,7 +1141,7 @@ the decisions, the quiz, and the plan; every step is a browser history entry, so
 forward buttons move through the tour, a reload lands on the step the reader was on, and a step's
 URL (`#landmark-<id>`, `#decision-<key>`, `#quiz-<id>`, `#plan`) can be shared. The keys: `→`,
 `space`, and `Enter` for next, `←` for back, `i` for the code behind a landmark, `k`, `a`, and `c`
-to keep, take the alternative, or ask for something else, `1` to `3` to answer, `?` for help. A landmark's scene and
+to keep, take the alternative, or ask for something else, `1` to `3` to answer, `/` to ask AI Chat, `?` for help. A landmark's scene and
 micro-world are drawn in sandboxed frames from `/tour-scene/<key>/<landmark>/scene|micro`.
 
 Where the reader is and what they answered is saved to `tours/<headSha>/reader.json` as they go
@@ -1172,6 +1172,22 @@ changes go into their pending review as comments on their decisions' lines, once
 with their verdict. The quiz result stays on the machine. With `?preview`, the
 page draws `tour-model.json` as the generator has written it and saves nothing; `?landmark=<id>`
 opens on that landmark, which is how `tour preview` takes its screenshots.
+
+With AI Chat on, **ask AI Chat** in the nav (or `/`) opens a pane beside the tour on every step.
+Each place of the tour has its own thread: the cover's is about the whole tour, and each
+landmark, decision, quiz question, and the plan has one. The first question about a place
+starts its thread, titled after it, and the next one continues it. The open pane follows the
+reader from step to step, and the ask command has a dot when the step on screen has a thread.
+**threads** lists them by kind; **new thread** there starts another thread about the whole tour,
+and **go to stop** brings a thread's step back. An answer keeps coming in while the reader reads
+another stop; it is counted on the ask command until its thread is opened. One answer runs at a
+time per pull request, the grilling's and the canvas's included. On a wide window the tour moves
+over to make room, and the pane stays open across a reload. A quiz question's context leaves out
+its answer until the reader has it right. The threads are kept with the pull request's chat
+threads, apart from the grilling's, and the canvas's pane never lists them; each is its own
+read-only agent session, seeded from `prompts/tour-chat.md` (`POST /api/tours/<n>/chat`,
+`GET /api/tours/<n>/chat/threads`, a thread's history at
+`GET /api/tours/<n>/chat/threads/<name>/history`).
 
 ### The guide
 
@@ -1215,8 +1231,9 @@ Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-r
 | `tour.generate`                | `author`          | Who generates a tour from the review app: `author` (the change's author, or local work), `on` (every reader), `off` |
 | `tour.incremental`             | `true`            | A later commit's tour updates the newest tour of an ancestor; `false` starts every tour blank                       |
 
-The prompt template is `prompts/tour.md`, and the grilling's seed is `prompts/tour-grill.md`; both
-are overridable as `prompts: { tour.md: <path>, tour-grill.md: <path> }` like the others. The scene guide the generator reads is `skills/pr-tour/scenes.md`.
+The prompt template is `prompts/tour.md`, the grilling's seed is `prompts/tour-grill.md`, and the
+tour's AI Chat's seed is `prompts/tour-chat.md`; each is overridable as
+`prompts: { tour.md: <path>, tour-grill.md: <path>, tour-chat.md: <path> }` like the others. The scene guide the generator reads is `skills/pr-tour/scenes.md`.
 
 ## AI Chat
 

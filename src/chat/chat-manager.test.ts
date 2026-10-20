@@ -5,7 +5,7 @@ import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
-import type { ChatContext, ChatEvent, TourGrillContext } from '../contract/chat.js'
+import type { ChatContext, ChatEvent, TourGrillContext, TourPlace } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { createPrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
@@ -84,6 +84,7 @@ function build(
     overrides: opts.overrides ?? {},
     loadSeedTemplate: async () => 'SEED for {{PR_META}}\n{{READER}}',
     loadTourSeedTemplate: async () => 'TOUR SEED for {{PR_META}}\n{{DECISIONS}}',
+    loadTourChatSeedTemplate: async () => 'TOUR CHAT SEED for {{PR_META}}',
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -953,6 +954,7 @@ describe('the review checkout a turn reads', () => {
       overrides: {},
       loadSeedTemplate: async () => '{{CODE_LOCATION}}',
       loadTourSeedTemplate: async () => '{{CODE_LOCATION}}',
+      loadTourChatSeedTemplate: async () => '{{CODE_LOCATION}}',
       checkouts,
       currentBranch: async () => 'main',
       now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -1086,5 +1088,91 @@ describe("createChatManager() and the tour's grilling", () => {
     // A canvas question naming the tour thread goes to a thread of its own instead.
     await collect(manager.send(target({ kind: 'pr' }, T0), 'x'))
     expect(runner.runs[2]?.session).toBe(T2)
+  })
+})
+
+describe('createChatManager() and the tour’s AI Chat', () => {
+  const T0 = 'pr-review-acme-widgets-42-claude-t0'
+  const LANDMARK: TourPlace = { kind: 'tour-landmark', id: 'sum' }
+  const QUESTION: TourPlace = { kind: 'tour-question', id: 'q-run' }
+
+  function chatTarget(context: TourPlace, thread?: string): ChatTarget {
+    return {
+      ...target(),
+      subject: { kind: 'tour-chat', artifact: syntheticTour(), reader: freshReaderState(), context, thread },
+    }
+  }
+
+  async function askTour(context: TourPlace, message = 'why?', thread?: string): Promise<void> {
+    await collect(manager.send(chatTarget(context, thread), message))
+  }
+
+  it('opens a thread per place of the tour, titled after it, with the tour chat seed', async () => {
+    await askTour(LANDMARK, 'where is this?')
+    await askTour(QUESTION, 'a hint?')
+    await askTour(LANDMARK, 'and the test?')
+    const { threads, agent } = await manager.tourThreads(42)
+    expect(agent).toBe('claude')
+    expect(threads.map(t => [t.name, t.title, t.place, t.turns])).toEqual([
+      [T1, 'landmark · Sum, not product', LANDMARK, 2],
+      [T2, 'question · What does run() return now?', QUESTION, 1],
+    ])
+    expect(runner.runs.map(run => [run.session, run.prompt.startsWith('TOUR CHAT SEED')])).toEqual([
+      [T1, true],
+      [T2, true],
+      [T1, false],
+    ])
+    expect(runner.runs[0]?.prompt).toContain('## Context: landmark "Sum, not product"')
+    // The canvas's pane lists none of them, and none is the open thread a reload brings back.
+    expect(await manager.threads(42)).toMatchObject({ threads: [], activeThread: null })
+  })
+
+  it('starts a thread about the whole tour for a question that names none, and continues a named one', async () => {
+    await askTour({ kind: 'tour' }, 'first')
+    await askTour({ kind: 'tour' }, 'second')
+    await askTour({ kind: 'tour' }, 'third', T1)
+    const { threads } = await manager.tourThreads(42)
+    expect(threads.map(t => [t.name, t.title, t.turns])).toEqual([
+      [T1, 'the whole tour', 2],
+      [T2, 'the whole tour', 1],
+    ])
+  })
+
+  it('keeps to this agent’s threads, and to the tour’s: a canvas thread named is not continued', async () => {
+    await askTour(LANDMARK)
+    const canvas = await manager.createThread(42)
+    await askTour(LANDMARK, 'here?', canvas.name)
+    await settings.write({ chatAgent: 'codex' })
+    await askTour(LANDMARK, 'and now?', T1)
+    const { threads } = await manager.tourThreads(42)
+    expect(threads.map(t => [t.agent, t.turns])).toEqual([
+      ['claude', 2],
+      ['codex', 1],
+    ])
+  })
+
+  it('stays apart from the grilling’s thread, which it never lists', async () => {
+    await collect(
+      manager.send(
+        {
+          ...target(),
+          subject: {
+            kind: 'tour',
+            artifact: syntheticTour(),
+            reader: freshReaderState(),
+            context: { kind: 'tour-plan' },
+          },
+        },
+        'the plan?'
+      )
+    )
+    await askTour({ kind: 'tour-plan' }, 'what is open?')
+    expect(runner.runs.map(run => run.session)).toEqual([T0, T1])
+    expect((await manager.tourThreads(42)).threads.map(t => t.name)).toEqual([T1])
+  })
+
+  it('makes no thread for a place the tour does not have', async () => {
+    await expect(askTour({ kind: 'tour-landmark', id: 'gone' })).rejects.toThrow('no landmark gone')
+    expect((await manager.tourThreads(42)).threads).toEqual([])
   })
 })

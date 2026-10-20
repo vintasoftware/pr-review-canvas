@@ -5,6 +5,7 @@ import {
   decisionsMarkdown,
   guideMarkdown,
   landmarksMarkdown,
+  loadTourChatSeedTemplate,
   loadTourSeedTemplate,
   renderTourSeed,
 } from './tour-seed.js'
@@ -31,6 +32,16 @@ describe('renderTourSeed', () => {
     expect(seed).toContain('```restatement')
     expect(seed).toContain('```plan')
     expect(seed).toContain('/checkouts/42')
+  })
+
+  it('fills the tour chat’s template too, which asks for no card', async () => {
+    const seed = renderTourSeed(await loadTourChatSeedTemplate(), syntheticTour(), PATHS)
+    expect(seed).not.toContain('{{')
+    expect(seed).toContain('# Answering the reader of a tour')
+    expect(seed).toContain('#42 **feat: add b** by octocat')
+    expect(seed).toContain('- `sum-over-product` · trade-off · **Sum over product?** (`src/app.ts:4`)')
+    expect(seed).toContain('/checkouts/42')
+    expect(seed).not.toContain('```restatement')
   })
 
   it('names the guide and the state landmark, and says when there are no decisions', () => {

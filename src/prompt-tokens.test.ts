@@ -79,6 +79,7 @@ const AT_0_9_0: Record<keyof PromptOverrides, readonly string[]> = {
     'TRY_IT',
   ],
   'tour-grill.md': ['CODE_LOCATION', 'DECISIONS', 'GUIDE', 'LANDMARKS', 'PR_META'],
+  'tour-chat.md': ['CODE_LOCATION', 'DECISIONS', 'GUIDE', 'LANDMARKS', 'PR_META'],
 }
 
 const templates = Object.keys(AT_0_9_0) as Array<keyof PromptOverrides>

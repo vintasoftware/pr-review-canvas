@@ -10,8 +10,12 @@ import {
   type ChatThreadsResponse,
   type ChatTurn,
   chatContextLabel,
+  sameChatContext,
   threadOfPlace,
+  type TourChatThreadsResponse,
   type TourGrillContext,
+  type TourPlace,
+  tourPlaceLabel,
 } from '../contract/chat.js'
 import type { FileEntry, Repo, ReviewArtifact } from '../contract/review-artifact.js'
 import type { TourReaderState } from '../contract/tour-api.js'
@@ -58,6 +62,8 @@ export interface ChatManagerDeps {
   loadSeedTemplate: () => Promise<string>
   /** The seed of a tour's grilling thread. */
   loadTourSeedTemplate: () => Promise<string>
+  /** The seed of a thread of the tour's AI Chat. */
+  loadTourChatSeedTemplate: () => Promise<string>
   checkouts: ReviewCheckouts
   /** The branch the reader's checkout is on, for the warning when a turn falls back to it. */
   currentBranch: () => Promise<string | null>
@@ -78,7 +84,8 @@ export type RunningTurns = Map<string, RunningTurn>
 
 /**
  * What a turn is about and what it points at: the canvas, with one of its contexts and the thread
- * to answer in, or the tour, with a decision or the plan, in the tour's own thread.
+ * to answer in; the tour's grilling, with a decision or the plan, in the tour's own thread; or the
+ * tour's AI Chat, with a place of the tour and the thread to answer in.
  */
 export type ChatSubject =
   | {
@@ -91,6 +98,14 @@ export type ChatSubject =
       thread?: string | undefined
     }
   | { kind: 'tour'; artifact: TourArtifact; reader: TourReaderState; context: TourGrillContext }
+  | {
+      kind: 'tour-chat'
+      artifact: TourArtifact
+      reader: TourReaderState
+      context: TourPlace
+      /** The tour thread to answer in; the place's thread when absent. */
+      thread?: string | undefined
+    }
 
 /** Everything about the review target one turn needs, resolved by the route. */
 export interface ChatTarget {
@@ -112,6 +127,8 @@ export interface ChatManager {
   send(target: ChatTarget, message: string): AsyncIterable<ChatEvent>
   /** The transcript of the tour's thread, empty before the first grilling. */
   tourHistory(key: ReviewKey): Promise<ChatHistoryResponse>
+  /** The threads of the tour's AI Chat, each about a place of the tour. */
+  tourThreads(key: ReviewKey): Promise<TourChatThreadsResponse>
   /** True when a turn was running and has been asked to stop. */
   cancel(key: ReviewKey): Promise<boolean>
   /**
@@ -173,14 +190,19 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   /**
    * Makes a thread. `opens` makes it the thread the pane opens next: new thread is the reader
    * opening one. A question's thread is not, since the reader may be reading another thread by the
-   * time it is made; the pane records the thread it shows.
+   * time it is made; the pane records the thread it shows. A thread of the tour's AI Chat has a
+   * place of the tour instead of an anchor, and the canvas's pane never lists it.
    */
   const newThread = async (
     key: ReviewKey,
     agent: string,
-    made: { opens: boolean; anchored?: { anchor: ChatContext; title: string } }
+    made: {
+      opens: boolean
+      anchored?: { anchor: ChatContext; title: string }
+      toured?: { place: TourPlace; title: string }
+    }
   ): Promise<ChatThread> => {
-    const { anchored } = made
+    const { anchored, toured } = made
     const at = deps.now().toISOString()
     let created: ChatThread | null = null
     await deps.state.update(key, state => {
@@ -188,10 +210,11 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
         name: threadName(deps.repo, key, agent, nextThreadIndex(state.chat.threads)),
         agent,
         rev: 0,
-        title: anchored?.title ?? NEW_THREAD_TITLE,
+        title: anchored?.title ?? toured?.title ?? NEW_THREAD_TITLE,
         createdAt: at,
         seededHeadSha: '',
         ...(anchored === undefined ? {} : { anchor: anchored.anchor }),
+        ...(toured === undefined ? {} : { tour: true, place: toured.place }),
       }
       created = thread
       return {
@@ -280,6 +303,35 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 
   /**
+   * The tour chat thread a question goes to: the one it names, while it is this agent's thread of
+   * the tour's AI Chat; else this agent's thread of the place; else a new thread titled after the
+   * place. A question about the whole tour that names no thread comes from new thread, so it starts
+   * one, as a question about the whole PR does on the canvas.
+   */
+  const resolveTourThread = async (
+    key: ReviewKey,
+    agent: string,
+    wanted: string | undefined,
+    place: TourPlace,
+    artifact: TourArtifact
+  ): Promise<ChatThread> => {
+    const state = await deps.state.read(key)
+    const ofTour = state.chat.threads.filter(t => t.place !== undefined && t.agent === agent)
+    const thread =
+      ofTour.find(t => t.name === wanted) ??
+      (place.kind === 'tour'
+        ? undefined
+        : ofTour.findLast(t => t.place !== undefined && sameChatContext(t.place, place)))
+    return (
+      thread ??
+      newThread(key, agent, {
+        opens: false,
+        toured: { place, title: threadTitle(tourPlaceLabel(place, artifact)) },
+      })
+    )
+  }
+
+  /**
    * Writes the answer down. A turn the agent never took leaves the thread as it was, so the next
    * try creates the session again and sends the seed again.
    */
@@ -309,9 +361,12 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
                 seededHeadSha,
                 seededCwd,
                 seededReaderResolves,
-                // The first turn of a general thread gives it its title; an anchored one is named
-                // after its place.
-                title: t.rev === 0 && t.anchor === undefined ? threadTitle(userText) : t.title,
+                // The first turn of a general thread gives it its title; an anchored one, or a
+                // tour place's, is named after its place.
+                title:
+                  t.rev === 0 && t.anchor === undefined && t.place === undefined
+                    ? threadTitle(userText)
+                    : t.title,
               }
             : t
         ),
@@ -418,7 +473,15 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
     const thread =
       subject.kind === 'canvas'
         ? await resolveThread(target.key, settings, subject.thread, subject.context, subject.artifact)
-        : await tourThread(target.key, settings.chatAgent)
+        : subject.kind === 'tour-chat'
+          ? await resolveTourThread(
+              target.key,
+              settings.chatAgent,
+              subject.thread,
+              subject.context,
+              subject.artifact
+            )
+          : await tourThread(target.key, settings.chatAgent)
     // Saved on the answer, so the warning is still there when the thread is opened again.
     const fallback: Pick<ChatTurn, 'fallback'> =
       code.kind === 'fallback' ? { fallback: { message: code.message, branch: code.branch } } : {}
@@ -607,6 +670,26 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
       return thread
     },
     send,
+    async tourThreads(key) {
+      const [state, settings] = await Promise.all([deps.state.read(key), effectiveSettings()])
+      return {
+        threads: state.chat.threads.flatMap(t =>
+          t.place === undefined
+            ? []
+            : [
+                {
+                  name: t.name,
+                  agent: t.agent,
+                  title: t.title,
+                  createdAt: t.createdAt,
+                  turns: t.rev,
+                  place: t.place,
+                },
+              ]
+        ),
+        agent: settings.chatAgent,
+      }
+    },
     async tourHistory(key) {
       const settings = await effectiveSettings()
       const name = threadName(deps.repo, key, settings.chatAgent, 0)
@@ -631,7 +714,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
   }
 }
 
-/** The seed of the subject: the tour's for a grilling, the canvas's for the chat. */
+/** The seed of the subject: the grilling's or the tour chat's on the tour page, the canvas's for its chat. */
 async function renderSubjectSeed(
   deps: ChatManagerDeps,
   target: ChatTarget,
@@ -639,11 +722,14 @@ async function renderSubjectSeed(
 ): Promise<string> {
   const paths = seedPaths(deps, target, code)
   const { subject } = target
-  return subject.kind === 'tour'
-    ? renderTourSeed(await deps.loadTourSeedTemplate(), subject.artifact, paths)
-    : renderSeed(await deps.loadSeedTemplate(), subject.artifact, paths, {
-        readerResolves: subject.readerResolves,
-      })
+  if (subject.kind !== 'canvas') {
+    const template =
+      subject.kind === 'tour' ? await deps.loadTourSeedTemplate() : await deps.loadTourChatSeedTemplate()
+    return renderTourSeed(template, subject.artifact, paths)
+  }
+  return renderSeed(await deps.loadSeedTemplate(), subject.artifact, paths, {
+    readerResolves: subject.readerResolves,
+  })
 }
 
 function seedPaths(deps: ChatManagerDeps, target: ChatTarget, code: CodeSource): SeedPaths {

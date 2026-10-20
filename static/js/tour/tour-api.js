@@ -1,5 +1,5 @@
 // @ts-check
-// The tour's requests: the bundle, the reader's state, finishing, and the grilling.
+// The tour's requests: the bundle, the reader's state, finishing, the grilling, and AI Chat.
 /** @typedef {import('../contract-types.js').TourBundle} TourBundle */
 /** @typedef {import('../contract-types.js').TourReaderState} TourReaderState */
 /** @typedef {import('../contract-types.js').TourFinishResponse} TourFinishResponse */
@@ -168,4 +168,50 @@ export function cancelGrill(key, opts = {}) {
  */
 export function streamGrill(key, input, opts) {
   return streamEvents(`/api/tours/${encodeURIComponent(key)}/grill`, input, opts)
+}
+
+/**
+ * @param {string} key
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('../contract-types.js').TourChatThreadsResponse>}
+ */
+export function fetchTourThreads(key, opts = {}) {
+  return fetchJson(`/api/tours/${encodeURIComponent(key)}/chat/threads`, { fetchImpl: opts.fetchImpl })
+}
+
+/**
+ * @param {string} key
+ * @param {string} name
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<import('../contract-types.js').ChatHistoryResponse>}
+ */
+export function fetchTourThreadHistory(key, name, opts = {}) {
+  return fetchJson(`/api/tours/${encodeURIComponent(key)}/chat/threads/${encodeURIComponent(name)}/history`, {
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
+ * @param {string} key
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ cancelled: boolean }>}
+ */
+export function cancelTourChat(key, opts = {}) {
+  return fetchJson(`/api/tours/${encodeURIComponent(key)}/chat/cancel`, {
+    method: 'POST',
+    body: {},
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
+ * Sends one question to the tour's AI Chat and calls `onEvent` for every frame until the turn
+ * ends. Rejects with an ApiError when the server refuses the question.
+ * @param {string} key
+ * @param {{ message: string, context: import('../contract-types.js').TourPlace, thread?: string }} input
+ * @param {{ onEvent: (event: { event: string, data: unknown }) => void, signal?: AbortSignal, fetchImpl?: typeof fetch }} opts
+ * @returns {Promise<void>}
+ */
+export function streamTourChat(key, input, opts) {
+  return streamEvents(`/api/tours/${encodeURIComponent(key)}/chat`, input, opts)
 }

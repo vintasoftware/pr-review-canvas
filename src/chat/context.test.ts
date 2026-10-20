@@ -249,12 +249,72 @@ describe('renderTourContext', () => {
     ).toContain('Kept:\n_none_')
   })
 
-  it('refuses an unknown decision', () => {
-    expect(() =>
+  it('refuses an unknown decision, landmark, or question', () => {
+    const at = { artifact: tour, reader: freshReaderState() }
+    expect(() => renderTourContext({ kind: 'tour-decision', key: 'nope' }, at)).toThrow(
+      'this tour has no decision nope'
+    )
+    expect(() => renderTourContext({ kind: 'tour-landmark', id: 'nope' }, at)).toThrow(
+      'this tour has no landmark nope'
+    )
+    expect(() => renderTourContext({ kind: 'tour-question', id: 'nope' }, at)).toThrow(
+      'this tour has no question nope'
+    )
+  })
+
+  it('says so plainly when the reader asks about the whole tour', () => {
+    expect(renderTourContext({ kind: 'tour' }, { artifact: tour, reader: freshReaderState() })).toBe(
+      '## Context: the whole tour\n\nThe reader asks about the tour as a whole, or the change it explains.'
+    )
+  })
+
+  it('gives a landmark its story, the files of its code, and the reader’s note', () => {
+    const reader = freshReaderState()
+    const world = renderTourContext({ kind: 'tour-landmark', id: 'world' }, { artifact: tour, reader })
+    expect(world).toBe(
+      [
+        '## Context: landmark "run() now adds b()"',
+        '',
+        'world · A caller of run() gets a() plus b(); the test expects 3.',
+        '',
+        'The sum replaces the single value, and `other()` gains `y`.',
+        '',
+        'Its code: `src/app.ts`',
+      ].join('\n')
+    )
+    reader.notes['before'] = ' why a()? '
+    const [first] = tour.landmarks
+    if (first === undefined) throw new Error('synthetic tour')
+    const state = renderTourContext(
+      { kind: 'tour-landmark', id: 'before' },
+      { artifact: { ...tour, landmarks: [{ ...first, state: true }] }, reader }
+    )
+    expect(state).toContain('background, the state landmark · ')
+    expect(state).toContain("Its code: none quoted.\n\nThe reader's note on it: why a()?")
+  })
+
+  it('keeps a quiz answer from the agent until the reader has it right', () => {
+    const reader = freshReaderState()
+    const at = () => renderTourContext({ kind: 'tour-question', id: 'q-run' }, { artifact: tour, reader })
+    const fresh = at()
+    expect(fresh).toContain('## Context: quiz question — What does run() return now?')
+    expect(fresh).toContain('From the landmark ')
+    expect(fresh).toContain('1. ')
+    expect(fresh).toContain('The reader has not answered yet.')
+    expect(fresh).toContain('Do not say which option is right')
+    reader.quiz['q-run'] = { answered: 0, right: false }
+    expect(at()).toContain('The reader answered 1, which is wrong.')
+    expect(at()).toContain('Do not say which option is right')
+    reader.quiz['q-run'] = { answered: 1, right: true }
+    expect(at()).toContain('The reader answered right. Why: ')
+    expect(at()).not.toContain('Do not say')
+    const [question] = tour.quiz
+    if (question === undefined) throw new Error('synthetic tour')
+    expect(
       renderTourContext(
-        { kind: 'tour-decision', key: 'nope' },
-        { artifact: tour, reader: freshReaderState() }
+        { kind: 'tour-question', id: 'q-run' },
+        { artifact: { ...tour, quiz: [{ ...question, landmark: 'nope' }] }, reader }
       )
-    ).toThrow('this tour has no decision nope')
+    ).not.toContain('From the landmark')
   })
 })

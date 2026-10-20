@@ -54,6 +54,10 @@ function fakeServer(bundle, opts = {}) {
       if (url.endsWith('/generate') && method === 'GET') {
         return json({ job: null })
       }
+      // With chat on, the tour's AI Chat reads its threads once; there are none here.
+      if (url.endsWith('/chat/threads') && method === 'GET') {
+        return json({ threads: [], agent: 'claude' })
+      }
       calls.push(`${method} ${url}`)
       if (opts.fail) {
         return json({ error: { code: 'PR_NOT_FOUND', message: 'no such pull request', hint: 'check' } }, 404)
@@ -724,6 +728,39 @@ describe('the tour page', () => {
     expect(server.calls).toContain('POST /r/acme/widgets/api/tours/42/grill')
     click('[data-act="close-grill"]')
     expect(dialog.open).toBe(false)
+  })
+
+  it('opens AI Chat beside the tour from the nav or with /, on the thread of the stop on screen', async () => {
+    const bundle = syntheticTourBundle({ chat: { enabled: true, acpx: true, agent: 'claude', model: null } })
+    vi.stubGlobal('fetch', fakeServer(bundle).impl)
+    const page = mount()
+    await drawn('[data-act="ask"]')
+    const pane = /** @type {HTMLElement} */ (document.querySelector('#tour-ask'))
+    expect(pane.hidden).toBe(true)
+    click('[data-act="ask"]')
+    expect(pane.hidden).toBe(false)
+    expect(page.hasAttribute('data-asking')).toBe(true)
+    expect(document.querySelector('[data-act="ask"]')?.getAttribute('aria-expanded')).toBe('true')
+    expect(pane.querySelector('#tour-ask-title')?.textContent).toBe('the whole tour')
+    // The pane follows the reader to the next stop.
+    click('[data-nav="next"]')
+    expect(pane.querySelector('#tour-ask-title')?.textContent).toBe('landmark · run() returned a() alone')
+    click('[data-act="ask"]')
+    expect(pane.hidden).toBe(true)
+    expect(page.hasAttribute('data-asking')).toBe(false)
+    press('/')
+    expect(pane.hidden).toBe(false)
+    expect(document.activeElement).toBe(pane.querySelector('#tour-ask-box'))
+  })
+
+  it('has no AI Chat with chat off', async () => {
+    vi.stubGlobal('fetch', fakeServer(syntheticTourBundle()).impl)
+    mount()
+    await drawn('[data-nav="next"]')
+    expect(document.querySelector('[data-act="ask"]')).toBeNull()
+    expect(document.querySelector('#tour-ask')).toBeNull()
+    press('/')
+    expect(document.querySelector('#tour-ask')).toBeNull()
   })
 
   it('shows a network failure and an error without a hint', async () => {
