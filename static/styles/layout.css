@@ -27,6 +27,33 @@
 .grp-lbl {
   padding: 14px 14px 6px;
 }
+/* The switch between the one-point view and the layers, at the head of the rail's group: two
+   labels, the one shown underlined. */
+.rail-view {
+  display: flex;
+  gap: 14px;
+  padding: 14px 14px 6px;
+}
+.rail-view button {
+  padding: 0 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rail-view button[aria-pressed='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--fg);
+  cursor: default;
+}
+.rail-view button[aria-pressed='false']:hover {
+  color: var(--fg);
+}
 .tree a {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
@@ -93,6 +120,37 @@
 }
 .tree .layers a {
   padding-left: 24px;
+}
+/* The one-point view's points, under the layer each belongs to, with their level's icon. */
+.tree .rail-points li:not(.pt-layer) a {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'd t';
+  padding-left: 40px;
+  font-size: 12.5px;
+}
+.tree .rail-points .lv {
+  grid-area: d;
+  margin-top: 2px;
+}
+.tree .rail-points .is-handled a {
+  color: var(--fg-muted);
+}
+.tree .rail-points .is-handled .lv {
+  opacity: 0.5;
+}
+.tree .rail-points li:not(.pt-layer) .t {
+  font-weight: 400;
+}
+.tree .pt-layer {
+  margin-top: 6px;
+}
+.tree .pt-layer .t {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.tree .pt-layer > .t {
+  display: block;
+  padding: 6px 14px 2px 24px;
 }
 .tree .other a {
   color: var(--fg-muted);

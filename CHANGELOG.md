@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### One point at a time
+
+- **Show layers: one point at a time** in **settings** reads a canvas by its attention points. Each
+  layer opens with its description and tests, then shows its points one at a time from the most
+  severe, each with only the chunk of code that holds it; the rest of the diff follows by layer. The
+  rail lists the points under their layers. A stop takes the place of the one before under a page
+  that stays at the top.
+- A switch at the head of the rail moves between **Attention points** and **Layers**, keeping your
+  place, and the rail lists what the view shows. **Layers** goes back to the layer view read last.
+
 ### Self-review
 
 - A resolution now lasts. Every later canvas of the pull request starts from the resolutions of its

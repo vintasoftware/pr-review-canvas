@@ -91,7 +91,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, setLayerView?: (view: string) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -298,6 +298,7 @@ function setup(opts = {}) {
     ...(opts.fetchReviewBody ? { fetchReviewBody: opts.fetchReviewBody } : {}),
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
+    ...(opts.setLayerView ? { setLayerView: opts.setLayerView } : {}),
     ...(opts.uncover ? { uncover: opts.uncover } : {}),
   })
   wirings.push(wiring)
@@ -2202,6 +2203,20 @@ describe('the AI Chat commands', () => {
     }
     settings.click()
     expect(opened).toEqual(['settings'])
+  })
+
+  it('the rail’s switch asks the page for the other view, and does nothing on the one shown', () => {
+    /** @type {string[]} */
+    const asked = []
+    const { root } = setup({ setLayerView: view => asked.push(view) })
+    const option = (/** @type {string} */ view) => {
+      const button = root.querySelector(`.rail-view [data-view="${view}"]`)
+      if (!(button instanceof HTMLElement)) throw new Error(`no ${view} option`)
+      return button
+    }
+    option('layers').click()
+    option('points').click()
+    expect(asked).toEqual(['points'])
   })
 
   /**

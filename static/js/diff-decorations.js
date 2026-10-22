@@ -63,7 +63,7 @@ export function insertPointRow(card, key, p, ctx) {
   if (near === null) {
     return false
   }
-  const row = firstRow(pointRowHtml(p, ctx))
+  const row = firstRow(pointRowHtml(p, { ...ctx, inStop: card.closest('.point-step') !== null }))
   row.setAttribute(DECORATION, 'point')
   if (near.approx) {
     row.classList.add('is-approx')

@@ -242,6 +242,7 @@ export function padUnderStickyBar(doc, bar) {
  *   chat?: () => ChatHandle | null,
  *   quickQuestions?: () => { openFor: (el: HTMLElement) => void } | null,
  *   openSettings?: (el: HTMLElement) => void,
+ *   setLayerView?: (view: string) => void,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -1192,6 +1193,11 @@ export function wireReview(root, session, opts = {}) {
     },
     settings: el => {
       opts.openSettings?.(el)
+    },
+    'layer-view': el => {
+      if (el.getAttribute('aria-pressed') !== 'true') {
+        opts.setLayerView?.(el.getAttribute('data-view') ?? '')
+      }
     },
     help: () => {
       openHelpDialog(root)

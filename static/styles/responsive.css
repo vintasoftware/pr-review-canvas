@@ -27,8 +27,12 @@
     padding: 0 8px;
   }
   .tree .grp,
-  .tree .layers {
+  .tree .layers,
+  .tree .rail-points {
     display: contents;
+  }
+  .tree .pt-layer {
+    display: none;
   }
   .tree li {
     flex: 0 0 auto;

@@ -216,7 +216,11 @@ export function postedUrls(state, comments) {
   return out
 }
 
-/** @typedef {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string>, now?: Date }} PointContext */
+/**
+ * `inStop`: the point's row is in a stop of the one-point view, where the card above shows it
+ * whole, so the row collapses to its title line while it is open too.
+ * @typedef {{ paths: ReadonlySet<string>, state?: PrState, posted?: ReadonlyMap<string, string>, now?: Date, inStop?: boolean }} PointContext
+ */
 
 /**
  * Where one of a point's drafts came from: a comment AI Chat proposed about it, the point's own
@@ -363,7 +367,7 @@ function pointPartsHtml(p, ctx, opts) {
   const parts =
     status === 'open' ? { pill: '', summary: '', outcome: '' } : statusPartsHtml(p, status, ctx, opts)
   const toggle =
-    status === 'open'
+    status === 'open' && (opts.card || ctx.inStop !== true)
       ? ''
       : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
   const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
@@ -382,14 +386,16 @@ function pointPartsHtml(p, ctx, opts) {
 }
 
 /**
- * One attention point card, shown in the layer that owns the point.
+ * One attention point card, shown in the layer that owns the point. `id` names a card shown
+ * somewhere else too, such as the one-point view, so the layer's keeps the point's anchor.
  * @param {Point} p
  * @param {PointContext} ctx
+ * @param {{ id?: string }} [opts]
  */
-export function pointCardHtml(p, ctx) {
+export function pointCardHtml(p, ctx, opts = {}) {
   const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: true })
   return (
-    `<li class="finding${handled}" id="${esc(pointAnchorId(p.id))}" ${attrs}>${levelIconHtml(p.level)}<div>` +
+    `<li class="finding${handled}" id="${esc(opts.id ?? pointAnchorId(p.id))}" ${attrs}>${levelIconHtml(p.level)}<div>` +
     `<div class="f-title">${title}</div>${rest}</div></li>`
   )
 }
@@ -521,7 +527,9 @@ export function refreshPoint(el, p, ctx) {
   }
   const row = el.tagName === 'TR'
   const template = document.createElement('template')
-  template.innerHTML = row ? `<table><tbody>${pointRowHtml(p, ctx)}</tbody></table>` : pointCardHtml(p, ctx)
+  template.innerHTML = row
+    ? `<table><tbody>${pointRowHtml(p, { ...ctx, inStop: el.closest('.point-step') !== null })}</tbody></table>`
+    : pointCardHtml(p, ctx)
   const next = row ? template.content.querySelector('tr') : template.content.firstElementChild
   if (next === null) {
     return false
@@ -543,12 +551,22 @@ export function refreshPoint(el, p, ctx) {
 }
 
 /**
- * Shows or hides the rest of a point that was acted on. An open point is always shown whole.
+ * Whether a point is drawn as its title line until the reader opens it: a point acted on, or a
+ * point's line in a stop of the one-point view, whose card above shows it whole. Any other open
+ * point is always whole.
+ * @param {Element} el the card or row that carries `data-point`
+ */
+export function pointCollapses(el) {
+  return el.classList.contains('is-handled') || el.matches('.point-step tr[data-point]')
+}
+
+/**
+ * Shows or hides the rest of a point that `pointCollapses` draws as its title line.
  * @param {Element} el the card or row that carries `data-point`
  * @param {boolean} [expanded] omitted flips it
  */
 export function setPointExpanded(el, expanded = !el.hasAttribute('data-expanded')) {
-  const on = expanded && el.classList.contains('is-handled')
+  const on = expanded && pointCollapses(el)
   el.toggleAttribute('data-expanded', on)
   const toggle = el.querySelector('[data-act="point-expand"]')
   if (toggle !== null) {

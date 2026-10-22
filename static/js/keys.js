@@ -107,3 +107,19 @@ export function pointAnchorId(pointId) {
 export function reviewedId(layerKey, path) {
   return path === undefined ? `layer:${layerKey}` : `layer:${layerKey}/file:${sanitizeKey(path)}`
 }
+
+/**
+ * The id of an attention point's stop in the one-point view.
+ * @param {string} pointId
+ */
+export function stepAnchorId(pointId) {
+  return `step-${pointId}`
+}
+
+/**
+ * The id of a layer's opening stop in the one-point view, before the layer's points.
+ * @param {string} layerKey
+ */
+export function layerStepAnchorId(layerKey) {
+  return `step-layer-${layerKey}`
+}

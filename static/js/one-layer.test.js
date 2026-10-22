@@ -60,13 +60,14 @@ const click = el => el?.dispatchEvent(new MouseEvent('click', { bubbles: true, c
 const reveal = el => el?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
 
 describe('the layer views', () => {
-  it('names two views, all by default, each with a label', () => {
-    expect(LAYER_VIEWS).toEqual(['all', 'one'])
+  it('names three views, all by default, each with a label', () => {
+    expect(LAYER_VIEWS).toEqual(['all', 'one', 'points'])
     expect(DEFAULT_LAYER_VIEW).toBe('all')
     expect(isLayerView('one')).toBe(true)
+    expect(isLayerView('points')).toBe(true)
     expect(isLayerView('some')).toBe(false)
     expect(isLayerView(1)).toBe(false)
-    expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one'])
+    expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one', 'points'])
   })
 })
 
@@ -221,5 +222,86 @@ describe('initOneLayer', () => {
     oneLayer = initOneLayer(root, { view: 'one' })
     oneLayer.redraw()
     expect(pageSections(root)).toEqual([])
+  })
+})
+
+describe('the one-point view', () => {
+  const STOPS = `
+    <div class="point-steps" id="point-steps">
+      <section class="point-step" id="step-p-1"><li class="finding" id="step-p-1-card"></li><nav class="step-nav"><a href="#step-p-2">next point</a></nav></section>
+      <section class="point-step" id="step-p-2"><nav class="step-nav"><a href="#layer-auth">the rest of the diff</a></nav></section>
+    </div>`
+
+  beforeEach(() => {
+    section('overview').insertAdjacentHTML('afterend', STOPS)
+  })
+
+  it('opens on the first point alone', () => {
+    oneLayer = initOneLayer(root, { view: 'points' })
+    expect(shownIds()).toEqual(['step-p-1'])
+  })
+
+  it('opens on the point the URL names', () => {
+    window.location.hash = '#step-p-2'
+    oneLayer = initOneLayer(root, { view: 'points' })
+    expect(shownIds()).toEqual(['step-p-2'])
+  })
+
+  it('moves from point to point and on to the layers with the stops’ links', () => {
+    oneLayer = initOneLayer(root, { view: 'points' })
+    click(root.querySelector('#step-p-1 .step-nav a'))
+    expect(shownIds()).toEqual(['step-p-2'])
+    click(root.querySelector('#step-p-2 .step-nav a'))
+    expect(shownIds()).toEqual(['layer-auth'])
+  })
+
+  it('still shows a layer that holds whatever is scrolled to, and the overview', () => {
+    oneLayer = initOneLayer(root, { view: 'points' })
+    reveal(root.querySelector('#src_auth_ts-new-4'))
+    expect(shownIds()).toEqual(['layer-auth'])
+    reveal(section('overview'))
+    expect(shownIds()).toEqual(['overview'])
+  })
+
+  it('swaps a section in under a page that stays at the top, and records it in the URL', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    oneLayer = initOneLayer(root, { view: 'points' })
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+    root.querySelector('#step-p-1 .step-nav a')?.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(shownIds()).toEqual(['step-p-2'])
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
+    expect(window.location.hash).toBe('#step-p-2')
+    // Back and forward land in place too.
+    window.location.hash = '#step-p-1'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(shownIds()).toEqual(['step-p-1'])
+    expect(scrollTo).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the one-layer view and the all view to the browser’s own scroll', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    oneLayer = initOneLayer(root, { view: 'one' })
+    const inOne = new MouseEvent('click', { bubbles: true, cancelable: true })
+    root.querySelector('nav.rail a[href="#layer-storage"]')?.dispatchEvent(inOne)
+    expect(inOne.defaultPrevented).toBe(false)
+    expect(shownIds()).toEqual(['layer-storage'])
+    oneLayer.setView('all')
+    const inAll = new MouseEvent('click', { bubbles: true, cancelable: true })
+    root.querySelector('nav.rail a[href="#layer-auth"]')?.dispatchEvent(inAll)
+    expect(inAll.defaultPrevented).toBe(false)
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('starts where the URL says, or at its first stop, when switched to from another view', () => {
+    oneLayer = initOneLayer(root, { view: 'all' })
+    root.querySelector('nav.rail a[href="#layer-auth"]')?.setAttribute('aria-current', 'location')
+    window.location.hash = '#step-p-2'
+    oneLayer.setView('points')
+    expect(shownIds()).toEqual(['step-p-2'])
+    oneLayer.setView('all')
+    window.location.hash = ''
+    oneLayer.setView('points')
+    expect(shownIds()).toEqual(['step-p-1'])
   })
 })

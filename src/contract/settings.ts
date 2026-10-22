@@ -53,7 +53,10 @@ export const SettingsSchema = z.object({
   theme: z.enum(THEMES),
   /** The reading level every review opens at; the control on the page changes it for one page. */
   foldLevel: z.enum(FOLD_LEVELS),
-  /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
+  /**
+   * Whether a review shows every layer on one page, the overview or one layer at a time, or one
+   * attention point at a time.
+   */
   layerView: z.enum(LAYER_VIEWS),
   /** The palette of the attention point level icons; their shapes are the same in each. */
   pointColors: z.enum(POINT_COLORS),

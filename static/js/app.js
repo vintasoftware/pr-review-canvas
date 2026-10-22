@@ -11,6 +11,7 @@ import {
   importCanvas,
   pollBundle,
   pollSettled,
+  saveSettings,
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
@@ -48,6 +49,7 @@ import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createGeneration } from './generate.js'
+import { overviewWayOnHtml, renderPointSteps, viewSwitchTarget } from './point-view.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
@@ -150,12 +152,29 @@ export class PrAppElement extends HTMLElement {
   /** @type {{ stop: () => void } | null} */
   scrollSpy = null
   /**
-   * Whether the canvas shows every layer or one at a time. Made once per boot, from the setting
-   * the page came with, and kept across renders: it redraws with each one, and a save in the
-   * settings dialog changes its view without a reload.
+   * Whether the canvas shows every layer, one at a time, or one attention point at a time. Made
+   * once per boot, from the setting the page came with, and kept across renders: it redraws with
+   * each one, and a save in the settings dialog changes its view without a reload.
    * @type {ReturnType<typeof initOneLayer> | null}
    */
   layerView = null
+  /**
+   * The bundle on screen, which a move into or out of the one-point view draws again.
+   * @type {PrBundle | null}
+   */
+  shown = null
+  /**
+   * The view the page is drawn for. Only the one-point view draws a stop per attention point, so
+   * moving into it or out of it draws the page again.
+   * @type {import('./layer-views.js').LayerView}
+   */
+  view = 'all'
+  /**
+   * The layer view the rail's switch goes back to from the one-point view: the last of all at once
+   * and one at a time the reader read in.
+   * @type {'all' | 'one'}
+   */
+  layersView = 'all'
   /** @type {{ stop: () => void } | null} */
   interactions = null
   /** @type {ReturnType<typeof wireChat>} */
@@ -222,6 +241,10 @@ export class PrAppElement extends HTMLElement {
     setFoldLevel(this, this.bootstrap.foldLevel)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
     this.layerView?.stop()
+    this.view = this.bootstrap.layerView
+    if (this.view !== 'points') {
+      this.layersView = this.view
+    }
     this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
@@ -265,6 +288,7 @@ export class PrAppElement extends HTMLElement {
     if (!boot) {
       return
     }
+    this.shown = bundle
     this.stopPolling()
     this.settledPoller?.stop()
     this.settledPoller = null
@@ -348,7 +372,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { points: this.view === 'points' })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now, ...(this.view === 'points' ? { wayOn: overviewWayOnHtml(artifact) } : {}) })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}${this.view === 'points' ? renderPointSteps(artifact, files, bundle.state, bundle.comments.reviewComments) : ''}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
         footerHtml(boot.version, bundle)
       // A bar the reader dismissed goes before the review wiring measures the outdated bar.
       wireBarDismissal(this, storage)
@@ -383,13 +407,8 @@ export class PrAppElement extends HTMLElement {
         openReview: () => (this.chat ?? this.reviewPane)?.openReview(),
         uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
         openSettings: el =>
-          void openSettingsDialog(this, el, {
-            onSaved: data => {
-              this.layerView?.setView(data.settings.layerView)
-              this.chat?.followSettings(data.settings)
-              applyPointColors(data.settings.pointColors, document.documentElement)
-            },
-          }),
+          void openSettingsDialog(this, el, { onSaved: data => void this.settingsSaved(data) }),
+        setLayerView: view => void this.switchLayerView(view),
       })
       this.interactions = interactions
       if (chatEnabled) {
@@ -453,8 +472,8 @@ export class PrAppElement extends HTMLElement {
     }
     // Mermaid is fetched only when this screen holds a diagram, and again on a theme flip.
     this.diagrams = initDiagrams(this)
-    // One layer at a time hides the rest before the URL is followed, so a link into a layer lands
-    // on a layer that is showing.
+    // One layer or one point at a time hides the rest before the URL is followed, so a link into a
+    // layer lands on a layer that is showing.
     this.layerView?.redraw()
     // The cards are in the page now, so a link in the URL has something to land on.
     this.deepLinks = initDeepLinks(this)
@@ -478,7 +497,10 @@ export class PrAppElement extends HTMLElement {
     // have no such handler, so the command is wired here for every screen.
     const settings = qs('#settings', this)
     if (settings instanceof HTMLElement && this.interactions === null) {
-      settings.addEventListener('click', () => void openSettingsDialog(this, settings))
+      settings.addEventListener(
+        'click',
+        () => void openSettingsDialog(this, settings, { onSaved: data => void this.settingsSaved(data) })
+      )
     }
     this.wireAppearance()
     const boot = this.bootstrap
@@ -550,6 +572,58 @@ export class PrAppElement extends HTMLElement {
         onImported: () => void this.reload(),
       })
     }
+  }
+
+  /**
+   * The rail's switch between the one-point view and the layers, which come back in the layer view
+   * the reader read them in last: saved as the settings dialog saves it, then applied.
+   * @param {string} choice `points` or `layers`
+   */
+  async switchLayerView(choice) {
+    if (choice !== 'points' && choice !== 'layers') {
+      return
+    }
+    const view = choice === 'points' ? 'points' : this.layersView
+    try {
+      const data = await saveSettings({ layerView: view })
+      // The other view opens where the reader was, as far as it has that place.
+      const artifact = this.shown?.artifact
+      if (artifact !== undefined) {
+        const target = viewSwitchTarget(artifact, view, window.location.hash)
+        const url = `${window.location.pathname}${window.location.search}${target}`
+        window.history.replaceState(null, '', url)
+      }
+      await this.settingsSaved(data)
+      // A view of one section at a time shows it under a page at its top, as a move between stops
+      // does; all the layers at once open on the layer that was read.
+      const target = view === 'all' ? document.getElementById(window.location.hash.slice(1)) : null
+      if (target === null) {
+        window.scrollTo({ top: 0 })
+      } else {
+        target.scrollIntoView({ block: 'start' })
+      }
+    } catch (err) {
+      toast(this, `could not switch the view: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  /**
+   * The settings the dialog saved, applied to the open page without a reload.
+   * @param {import('./contract-types.js').SettingsResponse} data
+   */
+  async settingsSaved(data) {
+    const next = data.settings.layerView
+    const redraw = (this.view === 'points') !== (next === 'points')
+    this.view = next
+    if (next !== 'points') {
+      this.layersView = next
+    }
+    if (redraw && this.shown) {
+      await this.render(this.shown)
+    }
+    this.layerView?.setView(next)
+    this.chat?.followSettings(data.settings)
+    applyPointColors(data.settings.pointColors, document.documentElement)
   }
 
   /**

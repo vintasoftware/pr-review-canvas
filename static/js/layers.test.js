@@ -153,6 +153,70 @@ describe('rail', () => {
     )
     setRenderContext(null)
   })
+
+  it('lists the points under their layers in the one-point view, and dims one acted on', () => {
+    document.body.innerHTML = renderRail(artifact, state, { points: true })
+    const group = () =>
+      [...document.querySelectorAll('.rail-points li')].map(li =>
+        li.classList.contains('pt-layer')
+          ? `[${li.querySelector('.t')?.textContent}]`
+          : li.querySelector('a')?.getAttribute('href')
+      )
+    expect(group()).toEqual(['[Run path]', '#step-p-1', '[Other changes]', '#step-p-2', '#step-p-3'])
+    expect(document.querySelector('a[href="#step-p-1"] .lv.decide')).not.toBeNull()
+    // A layer's heading leads to the layer's opening stop.
+    expect(document.querySelector('.rail-points .pt-layer a')?.getAttribute('href')).toBe(
+      '#step-layer-run-path'
+    )
+    const dismissed = { ...state, dismissed: { 'fp-2': { at: 'x' } } }
+    expect(refreshRail(document, artifact, dismissed)).toBe(true)
+    expect(group()).toEqual(['[Run path]', '#step-p-1', '[Other changes]', '#step-p-2', '#step-p-3'])
+    expect(
+      document.querySelector('a[href="#step-p-2"]')?.parentElement?.classList.contains('is-handled')
+    ).toBe(true)
+    expect(
+      document.querySelector('a[href="#step-p-1"]')?.parentElement?.classList.contains('is-handled')
+    ).toBe(false)
+  })
+
+  it('has no points group in the other views', () => {
+    document.body.innerHTML = renderRail(artifact, state)
+    expect(document.querySelector('.rail-points')).toBeNull()
+    expect(refreshRail(document, artifact, state)).toBe(true)
+    expect(document.querySelector('.rail-points')).toBeNull()
+  })
+
+  it('shows the points or the layers, under a switch between the two that presses the one shown', () => {
+    const pressed = () =>
+      [...document.querySelectorAll('.rail-view button')].map(button => [
+        button.textContent,
+        button.getAttribute('data-view'),
+        button.getAttribute('aria-pressed'),
+      ])
+    document.body.innerHTML = renderRail(artifact, state, { points: true })
+    expect(pressed()).toEqual([
+      ['Attention points', 'points', 'true'],
+      ['Layers', 'layers', 'false'],
+    ])
+    expect(document.querySelector('.layers')).toBeNull()
+    expect(document.querySelector('li.other')).toBeNull()
+    document.body.innerHTML = renderRail(artifact, state)
+    expect(pressed()).toEqual([
+      ['Attention points', 'points', 'false'],
+      ['Layers', 'layers', 'true'],
+    ])
+    expect(document.querySelector('.layers')).not.toBeNull()
+  })
+
+  it('names the layers with no switch, and in either view, for a canvas without points', () => {
+    const pointless = { ...artifact, points: [] }
+    for (const opts of [{}, { points: true }]) {
+      document.body.innerHTML = renderRail(pointless, state, opts)
+      expect(document.querySelector('.rail-view')).toBeNull()
+      expect(document.querySelector('.grp-lbl')?.textContent).toBe('Layers')
+      expect(document.querySelector('.layers')).not.toBeNull()
+    }
+  })
 })
 
 describe('layer sections', () => {
@@ -510,6 +574,19 @@ describe('hydration', () => {
     expect(hydrateFileCard(card, ctx())).toEqual({ rendered: true, deferred: false, placed: 1, missed: 0 })
     expect(card.querySelector('table.diff')?.id).toBe('hunk-src_app_ts-2')
     expect(card.querySelector('tr.ifind')?.getAttribute('data-point')).toBe('p-2')
+  })
+
+  it('puts only the point a card names on its lines, when it names one', () => {
+    const card = document.querySelector('article.file#file-src_app_ts')
+    if (!(card instanceof HTMLElement)) {
+      throw new Error('no card')
+    }
+    card.setAttribute('data-only-point', 'fp-other')
+    hydrateFileCard(card, ctx())
+    expect(card.querySelector('tr.ifind')).toBeNull()
+    card.setAttribute('data-only-point', 'fp-1')
+    hydrateFileCard(card, ctx())
+    expect([...card.querySelectorAll('tr.ifind')].map(row => row.getAttribute('data-point'))).toEqual(['p-1'])
   })
 
   it('places an old-side point on a deleted line', () => {

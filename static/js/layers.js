@@ -21,11 +21,20 @@ import { diffstatHtml, layerChanges } from './diffstat.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
-import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
+import {
+  fileAnchorId,
+  layerAnchorId,
+  layerStepAnchorId,
+  reviewedId,
+  sanitizeKey,
+  stepAnchorId,
+} from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
-import { openPoints, pointCardHtml, postedUrls } from './points.js'
+import { levelIconHtml } from './point-level.js'
+import { pointSteps } from './point-steps.js'
+import { openPoints, pointCardHtml, pointStatus, postedUrls } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
 import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
@@ -123,10 +132,57 @@ export function dotColor(index) {
 }
 
 /**
- * With a render context, each layer shows the lines it adds and removes.
+ * A layer's heading over its points in the rail's points group: its title, leading to the layer's
+ * opening stop, with its description and tests.
+ * @param {Layer | null} layer
+ */
+function railPointsLayerHtml(layer) {
+  if (layer === null) {
+    return '<li class="pt-layer"><span class="t">No layer</span></li>'
+  }
+  return `<li class="pt-layer"><a href="#${esc(layerStepAnchorId(layer.key))}"><span class="t">${esc(layer.title)}</span></a></li>`
+}
+
+/**
+ * The switch at the head of the rail, for a canvas with points: the one-point view's attention
+ * points, or the layers, in the layer view the reader read them in last. The one shown is pressed.
+ * @param {boolean} points
+ */
+function railViewSwitchHtml(points) {
+  const option = (/** @type {string} */ view, /** @type {string} */ label, /** @type {boolean} */ on) =>
+    `<button type="button" data-act="layer-view" data-view="${view}" aria-pressed="${on}">${label}</button>`
+  return `<div class="rail-view" role="group" aria-label="Read by">${option('points', 'Attention points', points)}${option('layers', 'Layers', !points)}</div>`
+}
+
+/**
+ * The rail's group of attention points in the one-point view: every point in the view's order,
+ * under the layer each belongs to. It is drawn from the state, so a point acted on dims at once.
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
+ * @param {(id: string) => string} current
+ */
+function railPointsHtml(artifact, state, current) {
+  const steps = pointSteps(artifact, artifact.points)
+  let shownLayer = /** @type {string | null | undefined} */ (undefined)
+  const items = steps
+    .map(({ point, layer }) => {
+      const heading = (layer?.id ?? null) === shownLayer ? '' : railPointsLayerHtml(layer)
+      shownLayer = layer?.id ?? null
+      const id = stepAnchorId(point.id)
+      const handled = pointStatus(point, state) === 'open' ? '' : ' class="is-handled"'
+      return `${heading}<li${handled}><a href="#${esc(id)}"${current(id)}>${levelIconHtml(point.level, null)}<span class="t">${esc(point.title)}</span></a></li>`
+    })
+    .join('')
+  return `<li class="grp">${railViewSwitchHtml(true)}<ul class="rail-points">${items}</ul></li>`
+}
+
+/**
+ * With a render context, each layer shows the lines it adds and removes. `points` draws, in place
+ * of the layers, the attention points the one-point view walks. A canvas with points heads the
+ * rail's group with the switch between the two.
+ * @param {ReviewArtifact} artifact
+ * @param {PrState} state
+ * @param {{ activeId?: string, points?: boolean }} [opts]
  * @returns {string}
  */
 export function railInnerHtml(artifact, state, opts = {}) {
@@ -158,21 +214,23 @@ export function railInnerHtml(artifact, state, opts = {}) {
   const otherItem = other
     ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
     : ''
-  return (
-    '<ul class="tree">' +
-    `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} attention ${points === 1 ? 'point' : 'points'}</span></a></li>` +
-    `<li class="grp"><span class="lbl grp-lbl">Layers</span><ul class="layers">${items}</ul></li>${otherItem}</ul>`
-  )
+  const overview = `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} attention ${points === 1 ? 'point' : 'points'}</span></a></li>`
+  const hasPoints = artifact.points.length > 0
+  if (opts.points === true && hasPoints) {
+    return `<ul class="tree">${overview}${railPointsHtml(artifact, state, current)}</ul>`
+  }
+  const heading = hasPoints ? railViewSwitchHtml(false) : '<span class="lbl grp-lbl">Layers</span>'
+  return `<ul class="tree">${overview}<li class="grp">${heading}<ul class="layers">${items}</ul></li>${otherItem}</ul>`
 }
 
 /**
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
+ * @param {{ activeId?: string, points?: boolean }} [opts]
  * @returns {string}
  */
 export function renderRail(artifact, state, opts = {}) {
-  return `<nav class="rail" aria-label="Review layers">${railInnerHtml(artifact, state, opts)}</nav>`
+  return `<nav class="rail" aria-label="Review layers"${opts.points === true ? ' data-points' : ''}>${railInnerHtml(artifact, state, opts)}</nav>`
 }
 
 /**
@@ -187,7 +245,10 @@ export function refreshRail(root, artifact, state) {
     return false
   }
   const active = rail.querySelector('a[aria-current]')?.getAttribute('href')?.slice(1)
-  rail.innerHTML = railInnerHtml(artifact, state, active === undefined ? {} : { activeId: active })
+  rail.innerHTML = railInnerHtml(artifact, state, {
+    ...(active === undefined ? {} : { activeId: active }),
+    points: rail.hasAttribute('data-points'),
+  })
   return true
 }
 
@@ -417,20 +478,27 @@ export function wireCardReveal(root) {
 }
 
 /**
+ * `id` names a card drawn outside its layer, such as in the one-point view, which leaves the file's
+ * anchors to the layers; `open` draws its body at once rather than under its title; `onlyPoint`
+ * puts that one attention point on the card's lines, and no other.
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
  * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, keepOpen?: boolean }} ctx
+ * @param {{ id?: string, open?: boolean, onlyPoint?: string }} [opts]
  * @returns {string}
  */
-export function renderFileCard(lf, entry, layer, ctx) {
+export function renderFileCard(lf, entry, layer, ctx, opts = {}) {
   const key = entry?.key ?? sanitizeKey(lf.path)
   const cardReviewedId = reviewedId(layer.key, lf.path)
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
-  const collapsed = cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
-  const isFirst = !ctx.firstCardFor.has(key)
-  ctx.firstCardFor.add(key)
-  const id = isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`
+  const collapsed =
+    opts.open !== true && (cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true))
+  const isFirst = opts.id === undefined && !ctx.firstCardFor.has(key)
+  if (opts.id === undefined) {
+    ctx.firstCardFor.add(key)
+  }
+  const id = opts.id ?? (isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`)
   const pills = entry
     ? `<span class="pill add">+${entry.additions}</span><span class="pill del">&minus;${entry.deletions}</span>`
     : ''
@@ -446,7 +514,7 @@ export function renderFileCard(lf, entry, layer, ctx) {
     : ''
   const elsewhere = elsewhereHtml(lf, entry, layer, ctx.hunkIndex)
   return (
-    `<pr-file><article class="file${lf.isTest ? ' test' : ''}${cardReviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-key="${esc(key)}" data-path="${esc(lf.path)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
+    `<pr-file><article class="file${lf.isTest ? ' test' : ''}${cardReviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-key="${esc(key)}" data-path="${esc(lf.path)}" data-layer="${esc(layer.id)}"${opts.onlyPoint === undefined ? '' : ` data-only-point="${esc(opts.onlyPoint)}"`} aria-labelledby="${esc(id)}-h">` +
     `<div class="file-h">${chevronHtml('Collapse file', !collapsed, { act: 'toggle-card' })}<h3 id="${esc(id)}-h" class="path" data-act="toggle-card">${path}${testTag}</h3>${status}${pills}` +
     `<label class="chk"><input type="checkbox" data-reviewed-id="${esc(cardReviewedId)}"${cardReviewed ? ' checked' : ''}> reviewed</label>` +
     `<span class="tbtns">${askButtonHtml({ kind: 'file', path: lf.path }, { title: 'Ask AI Chat about this file' })}</span></div>` +
@@ -660,10 +728,14 @@ function layerFileOf(ctx, layerId, path) {
  * @param {{ key: string, layerId: string, entry: FileEntry, hunkIds: ReadonlySet<string> }} at
  */
 function decorateCard(card, ctx, at) {
+  const only = card.getAttribute('data-only-point')
   return applyDecorations(card, at.key, {
     annotations: layerFileOf(ctx, at.layerId, at.entry.path)?.annotations ?? [],
     points: ctx.artifact.points.filter(
-      p => p.path === at.entry.path && at.hunkIds.has(hunkIdForPoint(p, at.entry))
+      p =>
+        (only === null || p.fingerprint === only) &&
+        p.path === at.entry.path &&
+        at.hunkIds.has(hunkIdForPoint(p, at.entry))
     ),
     threads: threadsForHunks(ctx.comments, at.entry, at.hunkIds),
     pending: draftsForCard(ctx, at.entry, at.hunkIds),

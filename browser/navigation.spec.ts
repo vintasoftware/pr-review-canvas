@@ -6,7 +6,7 @@ import { expect, test } from './fixtures.js'
 const summary =
   '[File start](#file:src/app.ts) · [Later line](#line:src/app.ts:13) · [Later hunk](#hunk:src/app.ts#2)'
 
-for (const layerView of ['all', 'one'] as const) {
+for (const layerView of ['all', 'one', 'points'] as const) {
   for (const target of ['line', 'hunk'] as const) {
     test(`${target} links reveal the later part of a file with ${layerView} layers`, async ({
       page,
@@ -18,26 +18,31 @@ for (const layerView of ['all', 'one'] as const) {
         },
       })
       await page.goto(server.url)
-      if (layerView === 'one') {
+      if (layerView !== 'all') {
         await page.locator('#settings').click()
-        await page.locator('#set-layer-view').selectOption('one')
+        await page.locator('#set-layer-view').selectOption(layerView)
         await page.locator('[data-act="settings-save"]').click()
         await expect(page.locator('#settings-dialog')).toBeHidden()
       }
+      // The one-point view opens on its first stop; the links are in the overview.
+      if (layerView === 'points') await page.goto(`${server.url}#overview`)
       // Other starts collapsed, with its diff undrawn.
       await expect(page.locator('#L-src_app_ts-new-13')).toHaveCount(0)
       await page
         .locator('#overview')
         .getByRole('link', { name: target === 'line' ? 'Later line' : 'Later hunk', exact: true })
         .click()
-      const destination = page.locator(target === 'line' ? '#L-src_app_ts-new-13' : '#hunk-src_app_ts-2')
+      // A point's stop in the one-point view draws its chunk again; the link lands in the layer.
+      const destination = page.locator(
+        `pr-layer ${target === 'line' ? '#L-src_app_ts-new-13' : '#hunk-src_app_ts-2'}`
+      )
       await expect(destination).toHaveClass(/is-target/)
       await expect(destination).not.toHaveClass(/is-approx/)
       await expect(destination).toBeInViewport()
       await expect(page.locator('#layer-other')).toBeVisible()
-      if (layerView === 'one') await expect(page.locator('#layer-run-path')).toBeHidden()
+      if (layerView !== 'all') await expect(page.locator('#layer-run-path')).toBeHidden()
       await page.goBack()
-      await expect(page).toHaveURL(server.url)
+      await expect(page).toHaveURL(layerView === 'points' ? `${server.url}#overview` : server.url)
       await expect(page.locator('#overview')).toBeVisible()
       await page.goForward()
       await expect(destination).toBeInViewport()

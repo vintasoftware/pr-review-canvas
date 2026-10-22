@@ -1,6 +1,7 @@
 /* ---- Panels, layers, cards ---- */
 .panel,
-.layer {
+.layer,
+.point-step {
   border: 1px solid var(--ink);
   background: var(--panel);
   box-shadow: 2px 2px 0 var(--shadow);
@@ -596,4 +597,51 @@ pr-file + pr-file > .file {
 img.av {
   object-fit: cover;
   border-radius: 50%;
+}
+
+/* ---- The one-point view: a stop per attention point (point-view.js) ---- */
+.step-h {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--panel-2);
+  font-size: 13px;
+}
+.step-n {
+  font-weight: 600;
+}
+.point-step > .findings {
+  margin: 0;
+  padding: 4px 16px 12px;
+}
+.point-step > .files {
+  padding: 0 16px 12px;
+}
+/* A way on alone, as the overview's, sits on the right, where the stops have theirs. */
+.step-nav > :only-child {
+  margin-left: auto;
+}
+.step-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+/* The card above shows the point whole, whatever the list density. Its line in the diff carries
+   the point's title, and opens to the whole point and its commands for a reader who scrolled
+   down to it. */
+.point-step tr.ifind:not([data-expanded]) :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
+  display: none;
+}
+.point-step tr.ifind:not([data-expanded]) .x {
+  padding: 4px 14px;
+}
+.point-step tr.ifind:not([data-expanded]) .f-title {
+  margin: 0;
+  font-size: 13px;
 }

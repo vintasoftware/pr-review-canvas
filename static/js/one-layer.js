@@ -4,7 +4,9 @@
 // scrolls through one layer only. Whatever brings something on screen (a rail link, the j/k and
 // n/p keys, a canvas link) shows the section that holds it first, so nothing the reader is sent
 // to stays hidden. A review mark is the exception: it moves on to the next card only inside the
-// layer on screen. With `all` this module does nothing.
+// layer on screen. With `points` it shows one stop of the one-point view at a time the same way
+// (`point-view.js`), and a link to a whole section swaps it in under a page that stays at the top.
+// With `all` this module does nothing.
 import { cssEscape } from './anchors.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
@@ -12,8 +14,8 @@ import { setCardCollapsed } from './layers.js'
 
 /** @typedef {import('./layer-views.js').LayerView} LayerView */
 
-/** The overview and every layer section: the parts of the page the rail links to. */
-const SECTION_SELECTOR = '#overview, pr-layer > section'
+/** The overview, every stop of the one-point view, and every layer section: the parts of the page the rail links to. */
+const SECTION_SELECTOR = '#overview, section.point-step, pr-layer > section'
 
 /**
  * The sections of the page, in page order.
@@ -33,6 +35,14 @@ export function pageSections(root) {
  */
 export function inHiddenSection(el) {
   return el.closest('[hidden]')?.matches(SECTION_SELECTOR) === true
+}
+
+/**
+ * True for the overview, a stop, or a layer section, the elements one at a time shows and hides.
+ * @param {Element} el
+ */
+export function isPageSection(el) {
+  return el.matches(SECTION_SELECTOR)
 }
 
 /**
@@ -76,8 +86,8 @@ export function elementForHash(root, hash) {
 }
 
 /**
- * Keeps one section on screen at a time while the view is `one`, and gets out of the way while
- * it is `all`. Made once for the app element; `redraw` runs after every render, before the deep
+ * Keeps one section on screen at a time while the view is `one` or `points`, and gets out of the
+ * way while it is `all`. Made once for the app element; `redraw` runs after every render, before the deep
  * links follow the URL, so a link into a layer lands on a layer that is showing. The URL names
  * the section on the first draw; after that the section last shown is the reader's place.
  * @param {HTMLElement} root
@@ -88,7 +98,7 @@ export function initOneLayer(root, opts) {
   const win = opts.win ?? window
   let view = opts.view
   /**
-   * The fragment of the section on screen while the view is `one`, empty before the first draw.
+   * The fragment of the section on screen while one shows at a time, empty before the first draw.
    * A fragment and not the element, since a render replaces the sections.
    */
   let shownHash = ''
@@ -105,7 +115,7 @@ export function initOneLayer(root, opts) {
 
   /** @param {HTMLElement | null} section */
   const show = section => {
-    if (view === 'one' && section !== null && section.hidden) {
+    if (view !== 'all' && section !== null && section.hidden) {
       showSection(section)
     }
   }
@@ -120,7 +130,14 @@ export function initOneLayer(root, opts) {
       }
       return
     }
-    const section = sectionFor(shownHash) ?? sectionFor(win.location.hash) ?? pageSections(root)[0] ?? null
+    // The one-point view opens on its first stop, and on the overview of a canvas with none.
+    const firstStop = view === 'points' ? root.querySelector('section.point-step') : null
+    const section =
+      sectionFor(shownHash) ??
+      sectionFor(win.location.hash) ??
+      (firstStop instanceof HTMLElement ? firstStop : null) ??
+      pageSections(root)[0] ??
+      null
     if (section !== null) {
       showSection(section)
     }
@@ -132,6 +149,23 @@ export function initOneLayer(root, opts) {
     signal: listeners.signal,
   })
 
+  /**
+   * In the one-point view, a link to a whole section puts it in place of the one before, under a
+   * page that stays at the top: the header and the rail do not scroll away, whatever the section's
+   * height or where the reader was. True when it moved to the section `fragment` names, which the
+   * URL then records.
+   * @param {string} fragment
+   */
+  const swapInPlace = fragment => {
+    const target = elementForHash(root, fragment)
+    if (view !== 'points' || target === null || !isPageSection(target)) {
+      return false
+    }
+    show(target)
+    win.scrollTo({ top: 0 })
+    return true
+  }
+
   // A rail link or a "more chunks in layer 4" link is a plain fragment the browser scrolls to on
   // its own; its section is shown here, before that default scroll runs.
   root.addEventListener(
@@ -139,8 +173,15 @@ export function initOneLayer(root, opts) {
     event => {
       const link = event.target instanceof Element ? event.target.closest('a[href^="#"]') : null
       // A modified click opens the link in a new tab and leaves this page where it is.
-      if (link !== null && plainClick(/** @type {MouseEvent} */ (event))) {
-        show(sectionOf(root, elementForHash(root, link.getAttribute('href') ?? '')))
+      if (link === null || !plainClick(/** @type {MouseEvent} */ (event))) {
+        return
+      }
+      const href = link.getAttribute('href') ?? ''
+      if (swapInPlace(href)) {
+        event.preventDefault()
+        win.history.pushState(null, '', href)
+      } else {
+        show(sectionOf(root, elementForHash(root, href)))
       }
     },
     { signal: listeners.signal }
@@ -151,6 +192,9 @@ export function initOneLayer(root, opts) {
   win.addEventListener(
     'hashchange',
     () => {
+      if (swapInPlace(win.location.hash || '#overview')) {
+        return
+      }
       const el = elementForHash(root, win.location.hash || '#overview')
       const section = sectionOf(root, el)
       if (el !== null && section?.hidden === true) {
@@ -167,8 +211,12 @@ export function initOneLayer(root, opts) {
     setView(next) {
       if (next !== view) {
         view = next
-        // Coming from `all`, the reader is on the section the rail marks as being read.
-        shownHash = root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') ?? ''
+        // Coming from `all`, the reader is on the section the rail marks as being read. The
+        // one-point view starts where the URL points, else from its first stop.
+        shownHash =
+          next === 'points'
+            ? ''
+            : (root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') ?? '')
         redraw()
       }
     },

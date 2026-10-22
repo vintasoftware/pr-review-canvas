@@ -553,7 +553,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `skin`                 | `github`  | `terminal`, `github`, `olive`                                                    |
 | `theme`                | `auto`    | `auto`, `light`, `dark`                                                          |
 | `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
-| `layerView`            | `all`     | `all`, `one`                                                                     |
+| `layerView`            | `all`     | `all`, `one`, `points`                                                           |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
@@ -702,6 +702,34 @@ first. Navigation writes the layer hash so a reload keeps your place. `k` on the
 returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
+
+### One point at a time
+
+Switch the rail to **Attention points**, or set **Show layers** to **one point at a time** in the
+settings dialog, to read the canvas by its attention points, one section at a time:
+
+- Each layer with points or tests opens with a stop of its own: its heading with the **reviewed**
+  mark and **ask about this layer**, its description, and its tests table. **go to its N attention
+  points** leads on.
+- Each point's stop shows the point whole, then its file drawn with only the chunk that holds its
+  lines. The point's line carries its title; **show** there opens the whole point and its commands,
+  for a line far below the card.
+- A layer's points come from the most severe: decide, then check, then fyi, a decide point's impact
+  worst first. A point you acted on keeps its stop, and dims in the rail.
+- Every stop ends with the way back and on; after the last point, **the rest of the diff, by layer**
+  leads to the layers, shown one at a time. The overview ends with **start with Layer 1**.
+
+The view opens on its first stop. The rail lists the points under their layers, each layer's title
+leading to its opening stop, and marks the stop that shows. A stop takes the place of the one before
+under a page that stays at the top, and the URL names it, so a reload or back and forward keep your
+place. A link to a line or a chunk lands in its layer. On a canvas with no point the view shows the
+overview and the layers, one at a time.
+
+On a canvas with points, a switch at the head of the rail moves between **Attention points** and
+**Layers**, and the rail lists what the view shows. **Layers** goes back to the layer view you read
+in last, all at once or one at a time. The switch keeps your place: from a layer, or a point of it,
+to the layer's opening stop, and from a stop to its layer's section. It saves `layerView` as the
+settings dialog does.
 
 ### Finding shared canvases
 
