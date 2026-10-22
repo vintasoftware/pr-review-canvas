@@ -99,8 +99,6 @@
   --stop-locked: light-dark(#a9b2c0, #6b7587);
   --stop-locked-bg: light-dark(#f7f9fb, #1f2734);
   /* AI Chat's glyphs that the skin's Octicons lack, from Lucide (ISC), drawn as masks like them. */
-  --i-ask-thread: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
-  --i-ask-threads: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13'/%3E%3C/svg%3E");
   --i-ask-goto: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 4v7a4 4 0 0 1-4 4H4'/%3E%3Cpath d='m9 10-5 5 5 5'/%3E%3C/svg%3E");
   --i-ask-stop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3C/svg%3E");
   --stop-locked-fg: light-dark(#5e6676, #a3acbd);
@@ -1728,13 +1726,11 @@ pr-tour[data-at='plan'] {
   width: min(420px, 100vw);
   font-size: 15px;
 }
-.tour-ask[hidden],
-.tour-ask-head[hidden],
-.tour-ask-threads[hidden] {
+.tour-ask[hidden] {
   display: none;
 }
 /* The pane is not a ticket: it keeps the tour's lilac whatever the step. Its head is one row that
-   never wraps: the title gives way first, then the tabs keep their icons and lose their words. */
+   never wraps: the title gives way first, then new thread keeps its icon and loses its words. */
 .tour-ask .chat-h {
   flex-wrap: nowrap;
   gap: 10px;
@@ -1793,41 +1789,6 @@ pr-tour[data-at='plan'] {
   opacity: 0.55;
   cursor: default;
 }
-.tour-ask-tabs {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--lilac) 12%, transparent);
-}
-.tour-ask-tabs .cmd {
-  position: relative;
-  border-color: transparent;
-  background: transparent;
-  color: var(--tour-ink-soft);
-}
-.tour-ask-tabs .cmd:hover:not([aria-selected='true']) {
-  background: color-mix(in srgb, var(--lilac) 10%, transparent);
-  color: var(--tour-ink);
-}
-.tour-ask-tabs [aria-selected='true'] {
-  border-color: var(--tour-line);
-  background: var(--tour-card);
-  color: var(--lilac);
-}
-/* Threads' dot for an answer not seen sits on the tab's corner, not in its words. */
-.tour-ask-tabs .threads-new {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-}
-.tour-ask [data-view='thread'] {
-  --icon: var(--i-ask-thread);
-}
-.tour-ask [data-view='threads'] {
-  --icon: var(--i-ask-threads);
-}
 .tour-ask [data-act='ask-close'] {
   --icon: var(--i-x);
 
@@ -1855,18 +1816,52 @@ pr-tour[data-at='plan'] {
 .tour-ask .ctx-line {
   padding: 8px 16px 0;
 }
+/* The thread's name, which opens the list of every thread under it. */
 .tour-ask-head {
+  position: relative;
   display: flex;
   gap: 10px;
   align-items: center;
   min-width: 0;
-  padding: 4px 16px 10px;
+  padding: 6px 16px 10px;
   border-bottom: 1px solid var(--tour-line);
 }
-.tour-ask-head .thread-title {
-  flex: 1 1 0;
-  min-width: 0;
+.tour-ask .thread-switch {
+  min-height: 32px;
+  margin: 0;
+  border-color: var(--tour-line-strong);
+  border-radius: 8px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
   font-size: 15px;
+}
+.tour-ask .thread-switch:hover,
+.tour-ask .thread-switch[aria-expanded='true'] {
+  border-color: var(--lilac);
+}
+.tour-ask .thread-pop {
+  border-color: var(--tour-line-strong);
+  border-radius: 10px;
+  background: var(--tour-card);
+}
+.tour-ask .thread-filter {
+  border-color: var(--tour-line-strong);
+  background: var(--tour-bg);
+  color: var(--tour-ink);
+}
+.tour-ask .thread-item {
+  color: var(--tour-ink);
+}
+.tour-ask .thread-item:hover,
+.tour-ask .thread-item:focus-visible {
+  background: var(--tour-well);
+}
+.tour-ask .thread-item.current::before,
+.tour-ask .thread-pop-new {
+  color: var(--lilac);
+}
+.tour-ask .thread-pop-new {
+  border-top-color: var(--tour-line);
 }
 /* Nothing inside widens the pane: a long title or a wide answer gives way within it. */
 .tour-ask .tour-chat-box {
@@ -1878,33 +1873,15 @@ pr-tour[data-at='plan'] {
 .tour-ask .chat-composer {
   padding: 10px 16px 14px;
 }
-/* A narrow pane keeps the tabs' icons and drops their words. */
+/* A narrow pane keeps new thread's icon and drops its words. */
 @media (width <= 420px) {
-  .tour-ask-tabs .cmd {
+  .tour-ask .chat-h [data-act='ask-new'] {
     width: var(--btn-h);
     padding: 0;
     gap: 0;
     font-size: 0;
     justify-content: center;
   }
-}
-.tour-ask-threads {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-}
-.tour-ask .threads-h {
-  border-bottom-color: var(--tour-line);
-  background: var(--tour-card);
-}
-.tour-ask .thread-item {
-  border-color: var(--tour-line-strong);
-  background: var(--tour-card);
-  color: var(--tour-ink);
-}
-.tour-ask .thread-item.current {
-  border-color: var(--lilac);
 }
 /* A wide window keeps the whole tour in view beside the open pane; a narrower one keeps the nav
    beside it, so the reader can move on with the pane open. A phone's pane is a sheet over both. */
@@ -1918,28 +1895,74 @@ pr-tour[data-at='plan'] {
     padding-right: 432px;
   }
 }
-.tour-nav-side {
+/* A toast keeps off the open pane, where it would cover the message box. */
+@media (width > 720px) {
+  pr-tour[data-asking] > .toast {
+    right: 436px;
+  }
+}
+/* AI Chat's launcher floats at the right, as on the canvas, but above the nav, so it never covers
+   next, whatever the window's width. A window wide enough to have room beside the nav sets it
+   there. It is dotted when this stop has a thread and counts the answers not seen yet. */
+.tour-ask-launcher {
+  position: absolute;
+  right: 20px;
+  bottom: calc(100% + 10px);
   display: flex;
   gap: 8px;
   align-items: center;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--lilac);
+  color: var(--tour-card);
+  box-shadow: 0 6px 20px -6px rgb(31 36 48 / 45%);
+  font: 700 15px var(--tour-display);
+  cursor: pointer;
 }
-/* Ask carries a dot when this stop has a thread, and counts the answers not seen yet. */
-.tour-ask-cmd[data-thread]::after {
+.tour-ask-launcher::before {
   content: '';
-  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: currentcolor;
+  mask: var(--i-robot) center / contain no-repeat;
+}
+.tour-ask-launcher:hover {
+  background: color-mix(in srgb, var(--lilac) 85%, var(--tour-ink));
+}
+.tour-ask-launcher:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.tour-ask-launcher[hidden] {
+  display: none;
+}
+.tour-ask-launcher[data-thread]::after {
+  content: '';
   width: 7px;
   height: 7px;
-  margin-left: 6px;
   border-radius: 50%;
-  background: var(--tour-ink-soft);
-  vertical-align: middle;
+  background: currentcolor;
+}
+/* The nav's box is at most the page wide and centred: past that and the launcher's width on both
+   sides, the launcher fits beside it, level with it. */
+@media (width >= 1500px) {
+  .tour-ask-launcher {
+    bottom: 18px;
+  }
+}
+@media (width <= 720px) {
+  .tour-ask-launcher {
+    right: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
 }
 .tour-ask-new {
   display: inline-grid;
   place-items: center;
   min-width: 18px;
   height: 18px;
-  margin-left: 6px;
   padding: 0 4px;
   border-radius: 9px;
   background: var(--sun);

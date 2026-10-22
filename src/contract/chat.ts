@@ -126,6 +126,8 @@ export interface TourChatThreadsResponse {
     /** The turns the thread has taken. */
     turns: number
     place: TourPlace
+    /** The answers the reader has not seen there yet. */
+    unseen?: number
   }>
   /** The agent the next thread would use, from the settings plus any flag override. */
   agent: string

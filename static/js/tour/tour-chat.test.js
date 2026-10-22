@@ -27,19 +27,22 @@ function chatBundle() {
 
 /**
  * The tour chat server as the pane sees it: its threads, their turns, and the answers it streams.
- * An answer of `HOLD` waits for `release()`.
- * @param {{ threads?: Array<{ name: string, place: TourPlace, turns: ChatTurn[] }>, answers?: string[], failHistory?: boolean }} [opts]
+ * An answer of `HOLD` waits for `release()`. `marked` logs what the pane says the reader has not seen.
+ * @param {{ threads?: Array<{ name: string, place: TourPlace, turns: ChatTurn[], unseen?: number }>, answers?: string[], failHistory?: boolean }} [opts]
  */
 function fakeServer(opts = {}) {
   const threads = (opts.threads ?? []).map(t => ({ ...t, agent: 'claude', title: 't', createdAt: 'x' }))
   const answers = [...(opts.answers ?? [])]
   /** @type {Array<{ message: string, context: TourPlace, thread?: string }>} */
   const sent = []
+  /** @type {Array<[string, number]>} */
+  const marked = []
   let cancels = 0
   let release = () => {}
   let made = threads.length
   return {
     sent,
+    marked,
     cancels: () => cancels,
     release: () => release(),
     api: {
@@ -55,6 +58,11 @@ function fakeServer(opts = {}) {
       cancelTourChat: async () => {
         cancels += 1
         return { cancelled: true }
+      },
+      /** @param {string} _key @param {string} name @param {number} unseen */
+      markTourThreadUnseen: async (_key, name, unseen) => {
+        marked.push([name, unseen])
+        return { name, unseen }
       },
       /** @type {typeof import('./tour-api.js').streamTourChat} */
       streamTourChat: async (_key, input, streamOpts) => {
@@ -74,7 +82,7 @@ function fakeServer(opts = {}) {
           thread = {
             name: `t${++made}`,
             place: input.context,
-            turns: [],
+            turns: /** @type {ChatTurn[]} */ ([]),
             agent: 'claude',
             title: 't',
             createdAt: 'x',
@@ -142,6 +150,11 @@ function el(selector) {
 }
 
 const box = () => /** @type {HTMLTextAreaElement} */ (el('#tour-ask-box'))
+/** Opens the list of threads under the thread's name. */
+const openList = async () => {
+  el('#tour-ask-switch').click()
+  await settle()
+}
 const title = () => el('#tour-ask-title').textContent
 const answers = () =>
   [...document.querySelectorAll('#tour-ask-log .turn.a .prose')].map(a => a.textContent?.trim())
@@ -284,19 +297,49 @@ describe('createTourChat', () => {
       'AI Chat is answering in “landmark · Sum, not product”. Ask here once it is done.'
     )
     expect(el('[data-act="ask-stop"]').hidden).toBe(true)
-    el('[data-view="threads"]').click()
-    await settle()
+    await openList()
+    expect(el('#tour-ask-pop').hidden).toBe(false)
+    expect(el('#tour-ask-switch').getAttribute('aria-expanded')).toBe('true')
     expect(el('.thread-item').textContent).toContain('answering…')
     server.release()
     await settle()
     expect(chat.marks().unseen).toBe(1)
-    expect(el('[data-view="threads"] .threads-new').hidden).toBe(false)
+    expect(server.marked).toEqual([['t1', 1]])
+    const note = el('#tour-ask-switch .threads-new')
+    expect(note.hidden).toBe(false)
+    expect(note.textContent).toBe('1 new')
     expect(el('.thread-item').textContent).toContain('new answer')
     el('.thread-item').click()
     await settle()
+    // The pick closes the list and puts the focus in the box.
+    expect(el('#tour-ask-pop').hidden).toBe(true)
+    expect(document.activeElement).toBe(box())
     expect(answers()).toEqual(['HOLD'])
     expect(chat.marks().unseen).toBe(0)
+    expect(server.marked).toEqual([
+      ['t1', 1],
+      ['t1', 0],
+    ])
+    expect(note.hidden).toBe(true)
     expect(box().disabled).toBe(false)
+  })
+
+  it('marks what the reader had not seen before a reload, until they open it', async () => {
+    const server = fakeServer({
+      threads: [
+        { name: 't1', place: LANDMARK, turns: [], unseen: 2 },
+        { name: 't2', place: WHOLE, turns: [], unseen: 1 },
+      ],
+    })
+    const { chat } = mount({ server })
+    await settle()
+    expect(chat.marks().unseen).toBe(3)
+    expect(el('#tour-ask-switch .threads-new').textContent).toBe('2 new')
+    chat.follow(LANDMARK)
+    chat.toggle()
+    await settle()
+    expect(chat.marks().unseen).toBe(1)
+    expect(server.marked).toEqual([['t1', 0]])
   })
 
   it('draws the answer coming in over a history read in the middle of it', async () => {
@@ -308,7 +351,8 @@ describe('createTourChat', () => {
     await settle()
     await ask('Why a sum?')
     // The server has the question already; drawn again, the thread shows it once.
-    el('[data-view="thread"]').click()
+    chat.follow(WHOLE)
+    chat.follow(LANDMARK)
     await settle()
     expect(document.querySelectorAll('#tour-ask-log .turn.u')).toHaveLength(1)
     expect(document.querySelectorAll('#tour-ask-log .turn.a')).toHaveLength(1)
@@ -378,8 +422,7 @@ describe('createTourChat', () => {
     await settle()
     chat.follow(WHOLE)
     chat.toggle()
-    el('[data-view="threads"]').click()
-    await settle()
+    await openList()
     expect([...document.querySelectorAll('.thread-group')].map(g => g.textContent)).toEqual([
       'Landmarks',
       'Questions',
@@ -390,7 +433,13 @@ describe('createTourChat', () => {
       '2 questions',
       '0 questions',
     ])
-    expect(el('#tour-ask-log').hidden).toBe(true)
+    // The filter keeps the threads whose name or group matches.
+    const filter = /** @type {HTMLInputElement} */ (el('#tour-ask-filter'))
+    filter.value = 'question'
+    filter.dispatchEvent(new Event('input'))
+    expect(
+      [...document.querySelectorAll('.thread-item')].filter(i => i.closest('[hidden]') === null)
+    ).toHaveLength(1)
     el('[data-thread="t2"]').click()
     await settle()
     expect(title()).toBe('landmark · Sum, not product')
@@ -402,30 +451,37 @@ describe('createTourChat', () => {
     )
     // A stop the reader cannot reach yet offers no way there.
     reachable = false
-    el('[data-view="threads"]').click()
+    await openList()
     el('[data-thread="t3"]').click()
     expect(goto.hidden).toBe(true)
-    // New thread starts one about the whole tour, which names no thread.
-    el('[data-view="threads"]').click()
-    el('[data-act="ask-new"]').click()
+    // Picking the thread on screen again keeps it, and closes the list.
+    await openList()
+    el('[data-thread="t3"]').click()
+    expect(el('#tour-ask-pop').hidden).toBe(true)
+    // New thread, in the list or the head, starts one about the whole tour, which names no thread.
+    await openList()
+    el('.thread-pop-new').click()
+    expect(el('#tour-ask-pop').hidden).toBe(true)
     expect(title()).toBe('the whole tour')
+    expect(document.activeElement).toBe(box())
     await ask('Overall?')
     expect(server.sent.at(-1)).toEqual({ message: 'Overall?', context: WHOLE })
-    // An unknown thread opens nothing.
-    el('[data-view="threads"]').click()
+    el('.chat-h [data-act="ask-new"]').click()
+    expect(title()).toBe('the whole tour')
+    // An unknown thread opens nothing, and leaves the list open.
+    await openList()
     const stray = document.createElement('button')
     stray.dataset['act'] = 'ask-open'
     stray.dataset['thread'] = 'gone'
     el('#tour-ask-threads').append(stray)
     stray.click()
-    expect(el('#tour-ask-log').hidden).toBe(true)
+    expect(el('#tour-ask-pop').hidden).toBe(false)
   })
 
   it('says there are no threads yet', async () => {
     const { chat } = mount()
     chat.toggle()
-    el('[data-view="threads"]').click()
-    await settle()
+    await openList()
     expect(el('#tour-ask-threads').textContent).toContain('No threads yet')
   })
 
@@ -468,10 +524,13 @@ describe('createTourChat', () => {
     chat.focus()
     expect(document.activeElement).toBe(box())
     chat.follow(LANDMARK)
-    el('[data-view="threads"]').click()
     chat.focus()
     expect(title()).toBe('landmark · Sum, not product')
-    expect(el('#tour-ask-log').hidden).toBe(false)
+    // Escape in the list closes the list, not the pane.
+    await openList()
+    el('#tour-ask-filter').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(el('#tour-ask-pop').hidden).toBe(true)
+    expect(pane.hidden).toBe(false)
     chat.focus()
     box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(pane.hidden).toBe(true)
@@ -485,8 +544,7 @@ describe('createTourChat', () => {
     box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }))
     expect(box().value).toBe('line')
     // A click on plain text in the pane does nothing; closing with the focus elsewhere leaves it.
-    title()
-    el('#tour-ask-title').click()
+    el('.ctx-line').click()
     expect(pane.hidden).toBe(false)
     box().blur()
     el('[data-act="ask-close"]').click()

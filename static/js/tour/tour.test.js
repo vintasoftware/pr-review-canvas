@@ -745,9 +745,12 @@ describe('the tour page', () => {
     // The pane follows the reader to the next stop.
     click('[data-nav="next"]')
     expect(pane.querySelector('#tour-ask-title')?.textContent).toBe('landmark · run() returned a() alone')
-    click('[data-act="ask"]')
+    // The launcher is gone while the pane is open, and back once it closes.
+    expect(/** @type {HTMLElement} */ (document.querySelector('[data-act="ask"]')).hidden).toBe(true)
+    click('[data-act="ask-close"]')
     expect(pane.hidden).toBe(true)
     expect(page.hasAttribute('data-asking')).toBe(false)
+    expect(/** @type {HTMLElement} */ (document.querySelector('[data-act="ask"]')).hidden).toBe(false)
     press('/')
     expect(pane.hidden).toBe(false)
     expect(document.activeElement).toBe(pane.querySelector('#tour-ask-box'))

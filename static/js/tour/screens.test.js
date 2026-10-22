@@ -190,6 +190,30 @@ describe('railHtml and navHtml', () => {
       'a preview is not finished: publish the tour first'
     )
   })
+
+  it('floats the AI Chat launcher after the nav’s box, dotted and counting, and gone while the pane is open', () => {
+    const bundle = bundleWith()
+    const steps = stepsOf(bundle)
+    document.body.innerHTML = navHtml(steps, 1, bundle.reader)
+    expect(document.querySelector('[data-act="ask"]')).toBeNull()
+    document.body.innerHTML = navHtml(steps, 1, bundle.reader, {
+      ask: { open: false, thread: true, unseen: 12 },
+    })
+    const launcher = /** @type {HTMLElement} */ (
+      document.querySelector('.tour-nav-inner + .tour-ask-launcher')
+    )
+    expect(launcher.hidden).toBe(false)
+    expect(launcher.hasAttribute('data-thread')).toBe(true)
+    expect(launcher.querySelector('.tour-ask-new')?.textContent).toBe('9')
+    expect(launcher.querySelector('.tour-ask-new')?.getAttribute('aria-label')).toBe('12 new answers')
+    document.body.innerHTML = navHtml(steps, 1, bundle.reader, {
+      ask: { open: true, thread: false, unseen: 0 },
+    })
+    const open = /** @type {HTMLElement} */ (document.querySelector('.tour-ask-launcher'))
+    expect(open.hidden).toBe(true)
+    expect(open.getAttribute('aria-expanded')).toBe('true')
+    expect(open.querySelector('.tour-ask-new')).toBeNull()
+  })
 })
 
 describe('coverHtml', () => {

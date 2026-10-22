@@ -192,6 +192,23 @@ export function fetchTourThreadHistory(key, name, opts = {}) {
 }
 
 /**
+ * Records how many of a tour thread's answers the reader has not seen, so a reload still marks
+ * them. Zero clears the mark.
+ * @param {string} key
+ * @param {string} name
+ * @param {number} unseen
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ name: string, unseen: number }>}
+ */
+export function markTourThreadUnseen(key, name, unseen, opts = {}) {
+  return fetchJson(`/api/tours/${encodeURIComponent(key)}/chat/threads/${encodeURIComponent(name)}/unseen`, {
+    method: 'PUT',
+    body: { unseen },
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
  * @param {string} key
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ cancelled: boolean }>}

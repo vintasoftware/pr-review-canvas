@@ -705,6 +705,7 @@ export function createChatManager(deps: ChatManagerDeps): ChatManager {
                   createdAt: t.createdAt,
                   turns: t.rev,
                   place: t.place,
+                  ...(t.unseen === undefined || t.unseen === 0 ? {} : { unseen: t.unseen }),
                 },
               ]
         ),

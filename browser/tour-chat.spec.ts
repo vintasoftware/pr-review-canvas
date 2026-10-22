@@ -42,7 +42,7 @@ test('asks AI Chat from any stop of the tour, in a thread per stop that follows 
   await page.goto(new URL('../tour/42', url).href)
   const pane = page.locator('#tour-ask')
   await expect(pane).toBeHidden()
-  const ask = page.locator('.tour-nav [data-act="ask"]')
+  const ask = page.locator('.tour-nav .tour-ask-launcher')
   await ask.click()
   await expect(pane).toBeVisible()
   await expect(pane.locator('#tour-ask-title')).toHaveText('the whole tour')
@@ -69,8 +69,8 @@ test('asks AI Chat from any stop of the tour, in a thread per stop that follows 
   ])
   expect((await ctx.chat.threads(42)).threads).toEqual([])
 
-  // Threads lists them by kind; opening the whole tour's offers no stop to go to.
-  await pane.locator('[data-view="threads"]').click()
+  // The thread's name opens the list of them by kind; the whole tour's offers no stop to go to.
+  await pane.locator('#tour-ask-switch').click()
   await expect(pane.locator('.thread-group')).toHaveText(['Landmarks', 'Whole tour'])
   await pane.locator('.thread-item', { hasText: 'the whole tour' }).click()
   await expect(pane.locator('.turn.u')).toContainText('What is this tour about?')
@@ -79,7 +79,7 @@ test('asks AI Chat from any stop of the tour, in a thread per stop that follows 
   // Back at the cover the pane shows the same thread; the landmark's brings its stop back.
   await page.locator('.tour-nav [data-nav="prev"]').click()
   await expect(pane.locator('.turn.a')).toContainText('covers the JSON output')
-  await pane.locator('[data-view="threads"]').click()
+  await pane.locator('#tour-ask-switch').click()
   await pane.locator('.thread-item', { hasText: 'landmark ·' }).click()
   await pane.locator('[data-act="ask-goto"]').click()
   await expect(page).toHaveURL(/#landmark-l0$/)
@@ -89,8 +89,18 @@ test('asks AI Chat from any stop of the tour, in a thread per stop that follows 
   await page.reload()
   await expect(pane).toBeVisible()
   await expect(pane.locator('.turn.a')).toContainText('src/commands.ts:66')
+  await expect(ask).toBeHidden()
   await pane.locator('#tour-ask-box').press('Escape')
   await expect(pane).toBeHidden()
+  // The launcher is back, floating clear of next.
+  await expect(ask).toBeVisible()
+  const launcher = await ask.boundingBox()
+  const next = await page.locator('.tour-nav [data-nav="next"]').boundingBox()
+  const apart =
+    launcher !== null &&
+    next !== null &&
+    (launcher.y + launcher.height <= next.y || launcher.x >= next.x + next.width)
+  expect(apart).toBe(true)
   await page.keyboard.press('/')
   await expect(pane).toBeVisible()
   await expect(pane.locator('#tour-ask-box')).toBeFocused()

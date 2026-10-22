@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { isThreadNameFor } from '../../chat/threads.js'
 import {
   type ChatHistoryResponse,
+  ChatUnseenSchema,
   TourChatSendSchema,
   type TourGrillContext,
   TourGrillSendSchema,
@@ -258,6 +259,18 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
     }
     const body: ChatHistoryResponse = { name, turns: await ctx.transcripts.read(key, name) }
     return c.json(body)
+  })
+
+  api.put('/tours/:n/chat/threads/:name/unseen', async c => {
+    requireChat()
+    const key = parseTargetKey(c.req.param('n'))
+    const name = c.req.param('name')
+    const body = await readBody(c.req.raw, ChatUnseenSchema, '{ "unseen": 1 }')
+    const thread = isThreadNameFor(name, key) ? await ctx.chat.markUnseen(key, name, body.unseen) : null
+    if (thread === null) {
+      throw new AppError('NOT_FOUND', `no chat thread named ${name} on this review`, 404)
+    }
+    return c.json({ name: thread.name, unseen: thread.unseen ?? 0 })
   })
 
   api.post('/tours/:n/chat/cancel', async c => {

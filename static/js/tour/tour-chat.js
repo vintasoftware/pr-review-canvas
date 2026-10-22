@@ -1,9 +1,9 @@
 // @ts-check
 // The tour's AI Chat: a pane beside the tour, on every step, with a thread per place of the tour
 // (the tour as a whole, a landmark, a decision, a quiz question, the plan). It shows the thread of
-// the step on screen and follows the reader from step to step. Threads lists every thread, and
-// go to stop brings a thread's step back. An answer keeps coming in while the reader reads
-// another thread, and that thread is marked until they open it.
+// the step on screen and follows the reader from step to step. The thread's name opens the list of
+// every thread, and go to stop brings a thread's step back. An answer keeps coming in while the
+// reader reads another thread, and that thread is marked until they open it, across a reload too.
 /** @typedef {import('../contract-types.js').ChatTurn} ChatTurn */
 /** @typedef {import('../contract-types.js').TourBundle} TourBundle */
 /** @typedef {import('../contract-types.js').TourPlace} TourPlace */
@@ -14,8 +14,15 @@ import { liveAnswer } from '../chat-answer.js'
 import { sameChatContext, tourPlaceLabel } from '../chat-context.js'
 import { esc, qs } from '../dom.js'
 import { renderMarkdown } from '../markdown.js'
+import { wireThreadList } from '../thread-list.js'
 import { stepIndexOf } from './steps.js'
-import { cancelTourChat, fetchTourThreadHistory, fetchTourThreads, streamTourChat } from './tour-api.js'
+import {
+  cancelTourChat,
+  fetchTourThreadHistory,
+  fetchTourThreads,
+  markTourThreadUnseen,
+  streamTourChat,
+} from './tour-api.js'
 
 export const TOUR_CHAT_ID = 'tour-ask'
 
@@ -73,7 +80,7 @@ export function stepOfPlace(steps, place) {
 
 /**
  * The thread a question about a place goes to: this agent's newest thread of it. An older thread
- * of the whole tour, which new thread makes, is opened from Threads.
+ * of the whole tour, which new thread makes, is opened from the list of threads.
  * @template {{ agent: string, place: TourPlace }} Thread
  * @param {readonly Thread[]} threads
  * @param {string} agent
@@ -97,6 +104,7 @@ const GROUPS = /** @type {const} */ ([
  *   fetchTourThreadHistory: typeof fetchTourThreadHistory,
  *   streamTourChat: typeof streamTourChat,
  *   cancelTourChat: typeof cancelTourChat,
+ *   markTourThreadUnseen: typeof markTourThreadUnseen,
  * }} TourChatApi
  */
 
@@ -120,14 +128,19 @@ const GROUPS = /** @type {const} */ ([
  */
 export function createTourChat(options) {
   const { pane, key, bundle, steps } = options
-  const api = { fetchTourThreads, fetchTourThreadHistory, streamTourChat, cancelTourChat, ...options.api }
+  const api = {
+    fetchTourThreads,
+    fetchTourThreadHistory,
+    streamTourChat,
+    cancelTourChat,
+    markTourThreadUnseen,
+    ...options.api,
+  }
   const storage = options.storage === undefined ? safeStorage() : options.storage
   /** @type {TourChatThreadsResponse['threads']} */
   let threads = []
   let agent = bundle.chat.agent ?? ''
   let open = false
-  /** @type {'thread' | 'threads'} */
-  let view = 'thread'
   /** The place of the step on screen, which an open pane follows. */
   /** @type {TourPlace} */
   let stepPlace = { kind: 'tour' }
@@ -155,9 +168,9 @@ export function createTourChat(options) {
    * @type {Live | null}
    */
   let live = null
-  /** The threads with an answer the reader has not seen: one that ended off screen. */
-  /** @type {Set<string>} */
-  const unseen = new Set()
+  /** How many answers the reader has not seen, by thread: answers that ended off screen. */
+  /** @type {Map<string, number>} */
+  const unseen = new Map()
   /** Set once the pane is taken down: an answer that ends after it draws nothing. */
   let stopped = false
   /** What the reader typed and has not sent, by thread, so moving between steps keeps it. */
@@ -168,8 +181,15 @@ export function createTourChat(options) {
   const title = /** @type {HTMLElement} */ (qs('#tour-ask-title', pane))
   const goto = /** @type {HTMLButtonElement} */ (qs('[data-act="ask-goto"]', pane))
   const log = /** @type {HTMLElement} */ (qs('#tour-ask-log', pane))
-  const panel = /** @type {HTMLElement} */ (qs('#tour-ask-threads-panel', pane))
   const index = /** @type {HTMLElement} */ (qs('#tour-ask-threads', pane))
+  // The list redraws its entries as it opens; `drawIndex` is defined below and runs only then.
+  const threadList = wireThreadList({
+    head: /** @type {HTMLElement} */ (qs('#tour-ask-switch', pane)),
+    pop: /** @type {HTMLElement} */ (qs('#tour-ask-pop', pane)),
+    filter: /** @type {HTMLInputElement} */ (qs('#tour-ask-filter', pane)),
+    index,
+    draw: () => drawIndex(),
+  })
   const form = /** @type {HTMLFormElement} */ (qs('.chat-composer', pane))
   const box = /** @type {HTMLTextAreaElement} */ (qs('#tour-ask-box', pane))
   const send = /** @type {HTMLButtonElement} */ (qs('[data-act="ask-send"]', pane))
@@ -180,7 +200,7 @@ export function createTourChat(options) {
   const placeName = p => tourPlaceLabel(p, tour)
   /** Where the box's text is kept for the thread on screen. */
   const draftKey = () => thread ?? `new:${JSON.stringify(place)}`
-  const onScreen = () => open && view === 'thread'
+  const onScreen = () => open
   /** Whether the answer coming in belongs to the thread on screen. */
   const liveHere = () =>
     live !== null &&
@@ -252,8 +272,16 @@ export function createTourChat(options) {
   }
 
   const drawIndex = () => {
-    const tabDot = qs('[data-view="threads"] .threads-new', pane)
-    tabDot?.toggleAttribute('hidden', unseen.size === 0)
+    // The thread's name counts the threads with an answer not seen yet: the answer can be in any
+    // thread, not only the one named.
+    const fresh = unseen.size
+    const note = /** @type {HTMLElement} */ (qs('#tour-ask-switch .threads-new', pane))
+    note.hidden = fresh === 0
+    note.textContent = `${fresh} new`
+    note.title =
+      fresh === 1
+        ? 'A thread has an answer you have not seen'
+        : `${fresh} threads have an answer you have not seen`
     if (threads.length === 0) {
       index.innerHTML =
         '<p class="empty">No threads yet. Ask AI Chat from any stop of the tour, or start a thread about the whole tour.</p>'
@@ -272,7 +300,7 @@ export function createTourChat(options) {
                     ? '1 question'
                     : `${t.turns} questions`
             return (
-              `<li><button type="button" class="thread-item${t.name === thread ? ' current' : ''}" data-act="ask-open" data-thread="${esc(t.name)}">` +
+              `<li><button type="button" class="thread-item${t.name === thread ? ' current" aria-current="true' : ''}" data-act="ask-open" data-thread="${esc(t.name)}">` +
               `<span class="thread-item-t">${esc(placeName(t.place))}</span>` +
               `<span class="small ${status === 'new answer' ? 'thread-new' : 'muted'}">${esc(status)}</span></button></li>`
             )
@@ -281,32 +309,48 @@ export function createTourChat(options) {
         return `<h3 class="thread-group">${esc(label)}</h3><ul class="thread-list">${items}</ul>`
       }).join('')
     }
+    threadList.refilter()
   }
 
-  const drawView = () => {
-    for (const tab of pane.querySelectorAll('[data-view]')) {
-      tab.setAttribute('aria-selected', String(tab.getAttribute('data-view') === view))
+  /**
+   * Counts a thread's answers the reader has not seen, here and on the server, so a reload still
+   * marks them. Zero clears the mark.
+   * @param {string} name
+   * @param {number} count
+   */
+  const setUnseen = (name, count) => {
+    if (count === 0) {
+      unseen.delete(name)
+    } else {
+      unseen.set(name, count)
     }
-    const listing = view === 'threads'
-    panel.hidden = !listing
-    log.hidden = listing
-    form.hidden = listing
-    qs('.tour-ask-head', pane)?.toggleAttribute('hidden', listing)
+    void api.markTourThreadUnseen(key, name, count).catch(() => undefined)
   }
 
   /** Marks the thread on screen as seen. */
   const see = () => {
-    if (onScreen() && thread !== null && unseen.delete(thread)) {
+    if (onScreen() && thread !== null && unseen.has(thread)) {
+      setUnseen(thread, 0)
       drawIndex()
       options.onChange()
     }
   }
 
+  /** Whether the list has come back once, which brings the marks the server kept. */
+  let marked = false
   const refreshThreads = async () => {
     try {
       const data = await api.fetchTourThreads(key)
       threads = data.threads
       agent = data.agent
+      if (!marked) {
+        marked = true
+        // Answers the reader had not seen before the reload are still marked.
+        for (const t of threads) {
+          if (t.unseen !== undefined && t.unseen > 0) unseen.set(t.name, t.unseen)
+        }
+        see()
+      }
     } catch {
       // The list keeps what it had; the next answer or opening reads it again.
     }
@@ -325,12 +369,10 @@ export function createTourChat(options) {
     drafts.set(draftKey(), box.value)
     place = next
     thread = name
-    view = 'thread'
     turns = []
     drawn.clear()
     loaded = name === null
     box.value = drafts.get(draftKey()) ?? ''
-    drawView()
     drawHead()
     drawLog()
     drawComposer()
@@ -490,7 +532,7 @@ export function createTourChat(options) {
           drawn.set(reply, answer)
         }
         if (named !== null && !(here && onScreen())) {
-          unseen.add(named)
+          setUnseen(named, (unseen.get(named) ?? 0) + 1)
         }
         drawComposer()
         await refreshThreads()
@@ -503,20 +545,8 @@ export function createTourChat(options) {
 
   /** @param {Event} e */
   const onClick = e => {
-    const target = /** @type {Element} */ (e.target).closest('[data-act], [data-view]')
+    const target = /** @type {Element} */ (e.target).closest('[data-act]')
     if (!(target instanceof HTMLElement)) {
-      return
-    }
-    const tab = target.dataset['view']
-    if (tab === 'thread' || tab === 'threads') {
-      if (tab === 'threads') {
-        view = 'threads'
-        drawView()
-        drawIndex()
-        void refreshThreads()
-      } else {
-        showThread(place, thread)
-      }
       return
     }
     const act = target.dataset['act']
@@ -524,13 +554,22 @@ export function createTourChat(options) {
       hide()
     } else if (act === 'ask-goto') {
       options.onGoto(stepOfPlace(steps, place))
+    } else if (act === 'ask-switch') {
+      threadList.toggle()
+      void refreshThreads()
     } else if (act === 'ask-new') {
+      threadList.close()
       showThread({ kind: 'tour' }, null)
       box.focus()
     } else if (act === 'ask-open') {
       const t = threads.find(x => x.name === target.dataset['thread'])
       if (t !== undefined) {
-        showThread(t.place, t.name)
+        threadList.close()
+        if (t.name !== thread) {
+          showThread(t.place, t.name)
+        }
+        // The list is gone from under the focus: the box takes it.
+        box.focus()
       }
     } else if (act === 'ask-stop' && live !== null) {
       live.request.abort()
@@ -591,23 +630,24 @@ export function createTourChat(options) {
     /** Opens the pane on the step on screen and puts the cursor in its box. */
     focus() {
       if (!open) show()
-      else if (!sameChatContext(place, stepPlace) || view !== 'thread') showPlace(stepPlace)
+      else if (!sameChatContext(place, stepPlace)) showPlace(stepPlace)
       box.focus()
     },
     isOpen: () => open,
     /**
-     * What the nav's ask command says: whether the step on screen has a thread, and how many
-     * threads have an answer the reader has not seen.
+     * What the AI Chat launcher says: whether the step on screen has a thread, and how many
+     * answers the reader has not seen.
      */
     marks() {
       return {
         open,
         thread: threadOfTourPlace(threads, agent, stepPlace) !== undefined,
-        unseen: unseen.size,
+        unseen: [...unseen.values()].reduce((sum, n) => sum + n, 0),
       }
     },
     stop() {
       stopped = true
+      threadList.stop()
       live?.request.abort()
       live?.stop()
       live = null
@@ -622,18 +662,23 @@ export function createTourChat(options) {
 function shellHtml(bundle) {
   const agent = bundle.chat.agent ?? 'agent'
   const model = bundle.chat.model ? ` · ${esc(bundle.chat.model)}` : ''
+  // The thread's name opens the list of every thread under it, which can also start one about the
+  // whole tour.
   return `<div class="tour-chat-box">
     <div class="chat-h"><h2 id="tour-ask-h">AI Chat</h2>
-      <div class="tour-ask-tabs" role="tablist" aria-label="AI Chat">
-        <button class="cmd" type="button" role="tab" data-view="thread" aria-selected="true" title="The thread of this stop">thread</button>
-        <button class="cmd" type="button" role="tab" data-view="threads" aria-selected="false" title="Every thread of this tour">threads<span class="threads-new" hidden></span></button>
-      </div>
+      <button class="cmd" type="button" data-act="ask-new" title="New thread about the whole tour">new thread</button>
       <button class="cmd" type="button" data-act="ask-close" title="Close AI Chat (esc)">close</button></div>
     <p class="ctx-line">${esc(agent)}${model} · read-only · a thread per stop</p>
-    <div class="tour-ask-head"><p class="thread-title" id="tour-ask-title"></p><button class="cmd" type="button" data-act="ask-goto" hidden>go to stop</button></div>
+    <div class="tour-ask-head">
+      <button class="thread-switch" type="button" id="tour-ask-switch" data-act="ask-switch" aria-haspopup="dialog" aria-expanded="false" aria-controls="tour-ask-pop" title="Switch thread">
+        <span class="thread-title" id="tour-ask-title"></span><span class="threads-new" hidden></span><span class="thread-caret" aria-hidden="true"></span></button>
+      <button class="cmd" type="button" data-act="ask-goto" hidden>go to stop</button>
+      <div class="thread-pop" id="tour-ask-pop" role="dialog" aria-label="Threads" hidden>
+        <input class="thread-filter" id="tour-ask-filter" type="search" placeholder="Filter threads…" aria-label="Filter threads" autocomplete="off">
+        <nav class="thread-index" id="tour-ask-threads" aria-label="Threads"></nav>
+        <button class="thread-pop-new" type="button" data-act="ask-new">+ New thread about the whole tour</button>
+      </div></div>
     <div class="transcript" id="tour-ask-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0"></div>
-    <section class="tour-ask-threads" id="tour-ask-threads-panel" hidden><div class="threads-h"><button class="cmd" type="button" data-act="ask-new">new thread</button></div>
-      <nav class="thread-index" id="tour-ask-threads" aria-label="Threads"></nav></section>
     <form class="chat-composer"><label class="sr" for="tour-ask-box">Message</label><textarea id="tour-ask-box" rows="2"></textarea>
       <div class="tbtns"><button class="cmd fill" type="submit" data-act="ask-send">send</button><button class="cmd" type="button" data-act="ask-stop" hidden>stop</button><span class="muted small">enter to send</span></div></form>
   </div>`

@@ -745,6 +745,15 @@ describe('the tour chat routes', () => {
       await get(`/api/tours/42/chat/threads/${T1}/history`)
     )
     expect(history.turns.map(turn => turn.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    // An answer the reader has not seen stays marked across a reload.
+    const unseen = await send(`/api/tours/42/chat/threads/${T1}/unseen`, 'PUT', { unseen: 2 })
+    expect(await json<{ name: string; unseen: number }>(unseen)).toEqual({ name: T1, unseen: 2 })
+    const marked = await json<TourChatThreadsResponse>(await get('/api/tours/42/chat/threads'))
+    expect(marked.threads[0]?.unseen).toBe(2)
+    expect((await send(`/api/tours/42/chat/threads/${T1}/unseen`, 'PUT', { unseen: -1 })).status).toBe(400)
+    await send(`/api/tours/42/chat/threads/${T1}/unseen`, 'PUT', { unseen: 0 })
+    const seen = await json<TourChatThreadsResponse>(await get('/api/tours/42/chat/threads'))
+    expect(seen.threads[0]).not.toHaveProperty('unseen')
     expect(await json<{ cancelled: boolean }>(await send('/api/tours/42/chat/cancel', 'POST', {}))).toEqual({
       cancelled: false,
     })
@@ -761,6 +770,7 @@ describe('the tour chat routes', () => {
     expect((await ask({ message: 'x', context: { kind: 'tour' } })).status).toBe(404)
     expect((await get('/api/tours/42/chat/threads')).status).toBe(404)
     expect((await get(`/api/tours/42/chat/threads/${T1}/history`)).status).toBe(404)
+    expect((await send(`/api/tours/42/chat/threads/${T1}/unseen`, 'PUT', { unseen: 1 })).status).toBe(404)
     expect((await send('/api/tours/42/chat/cancel', 'POST', {})).status).toBe(404)
     await t.cleanup()
     t = await context({ projectConfig: CHAT_ON })
@@ -773,6 +783,12 @@ describe('the tour chat routes', () => {
     expect((await get('/api/tours/42/chat/threads/pr-review-acme-widgets-7-claude-t1/history')).status).toBe(
       404
     )
+    // A thread this review does not have takes no mark, nor does another review's.
+    expect((await send(`/api/tours/42/chat/threads/${T1}/unseen`, 'PUT', { unseen: 1 })).status).toBe(404)
+    const other = await send('/api/tours/42/chat/threads/pr-review-acme-widgets-7-claude-t1/unseen', 'PUT', {
+      unseen: 1,
+    })
+    expect(other.status).toBe(404)
     expect(await json<TourChatThreadsResponse>(await get('/api/tours/42/chat/threads'))).toEqual({
       threads: [],
       agent: 'claude',

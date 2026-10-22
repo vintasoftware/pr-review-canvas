@@ -266,8 +266,9 @@ function stepDone(step, i, current, reader, tour) {
 
 /**
  * The footer nav. The rail and the strip say where the reader is, so the space between the buttons
- * says why next is closed, when it is. With AI Chat, ask opens it beside the tour, dotted when this
- * stop has a thread, and counts the answers the reader has not seen.
+ * says why next is closed, when it is. With AI Chat, its launcher floats at the right, above the
+ * nav so it never covers next, and opens it beside the tour. It is dotted when this stop has a
+ * thread, counts the answers the reader has not seen, and is gone while the pane is open.
  * @param {Step[]} steps
  * @param {number} i
  * @param {TourReaderState} reader
@@ -300,16 +301,16 @@ export function navHtml(steps, i, reader, opts = {}) {
   const askHtml =
     ask === undefined
       ? ''
-      : `<button class="cmd tour-ask-cmd" type="button" data-act="ask" aria-controls="tour-ask" aria-expanded="${ask.open}"${ask.thread ? ' data-thread' : ''}>ask AI Chat${
+      : `<button class="tour-ask-launcher" type="button" data-act="ask" aria-controls="tour-ask" aria-expanded="${ask.open}"${ask.thread ? ' data-thread' : ''}${ask.open ? ' hidden' : ''}>AI Chat${
           counted === ''
             ? ''
             : `<span class="tour-ask-new" aria-label="${counted}" title="${counted}">${Math.min(ask.unseen, 9)}</span>`
         }</button>`
   return `<div class="tour-nav-inner">
-    <span class="tour-nav-side"><button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>${askHtml}</span>
+    <button class="cmd" type="button" data-nav="prev"${i === 0 ? ' disabled' : ''}>← back</button>
     <span class="tour-nav-why" id="nav-why">${esc(why)}</span>
     <button class="cmd${fill ? ' fill' : ''}" type="button" data-nav="next"${canNext ? '' : ` disabled${why === '' ? '' : ' aria-describedby="nav-why"'}`}>${esc(nextLabel(steps, i))} →</button>
-  </div>`
+  </div>${askHtml}`
 }
 
 /** @param {TourBundle} bundle */
