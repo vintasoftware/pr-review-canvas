@@ -133,8 +133,8 @@ A landmark the reader plays with: inputs of the changed behavior go in, outcomes
 _Avoid_: Demo, Sandbox, Playground
 
 **Decision**:
-A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it, takes the tour's alternative, or asks for something else, which starts a grilling.
-_Avoid_: Attention point, Card, Finding, Issue
+A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it, takes the tour's alternative, or asks for something else, which starts a grilling. It is not the canvas's design choice, an attention point (stored with kind `decision`) that marks a choice for the reviewer to judge; a tour decision is one the reader picks.
+_Avoid_: Attention point, Card, Design choice, Finding, Issue
 
 **Pokayoke**:
 A structure in the change that makes a class of mistake impossible, or a place where the change lacks one. A decision category.
