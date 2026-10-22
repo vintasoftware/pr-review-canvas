@@ -63,6 +63,12 @@ tr.composer .x {
   font-size: 12px;
   max-width: 340px;
 }
+/* Beside a docked side pane, a toast keeps off it, where it would cover the message box. */
+@media (width > 1360px) {
+  .layout:not(.no-chat) ~ .toast {
+    right: calc(var(--chat-w) + 16px);
+  }
+}
 .toast.failed {
   border-color: var(--bad);
   color: var(--bad);
@@ -139,19 +145,23 @@ table.keys td:first-child {
 .pill.audience {
   font-weight: 500;
 }
-/* Critical is the high red, filled, so the two read apart. */
+/* Every impact takes the decide level's color, so none reads as a kind or an audience tag, and
+   weighs less the less a wrong call costs: critical filled, high outlined, low dashed. */
+.pill.impact.critical,
+.pill.impact.high,
+.pill.impact.low {
+  color: var(--level-decide);
+  background: transparent;
+  border-color: currentcolor;
+}
 .pill.impact.critical {
   color: var(--bg);
-  background: var(--point-red);
-  border-color: var(--point-red);
-}
-.pill.impact.high {
-  color: var(--point-red);
-  border-color: currentcolor;
+  background: var(--level-decide);
+  border-color: var(--level-decide);
 }
 .pill.impact.low {
-  color: var(--fg-muted);
-  border-color: currentcolor;
+  border-style: dashed;
+  font-weight: 500;
 }
 .pill.audience.author {
   color: var(--accent);

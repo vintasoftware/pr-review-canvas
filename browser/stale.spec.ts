@@ -58,6 +58,10 @@ test('warns above an outdated canvas and clears the warning after refresh', asyn
   await expect(warning).toContainText('1 commit behind')
   await expect(page.locator('#main > :first-child')).toHaveClass('stale-bar outdated-bar')
   await expect(warning).toHaveCSS('position', 'sticky')
+  // The outdated canvas is drawn, so how much of its diff to hide is still the reader's choice.
+  await expect(page.locator('#fold-level')).toBeVisible()
+  await page.locator('#fold-level').selectOption('aggressive')
+  await expect(page.locator('.fold-hint')).toContainText('only the code you have to judge stays open')
   await warning.locator('#stale-generate').click()
   await expect(page.locator('#regenerate-dialog code')).toHaveText('/pr-review-canvas 42')
   await page.locator('#regenerate-dialog button[value="close"]').click()

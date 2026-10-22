@@ -7,7 +7,7 @@ import { CheckoutBusyError } from '../../chat/checkouts.js'
 import { ChatContextError } from '../../chat/context.js'
 import { isThreadNameFor } from '../../chat/threads.js'
 import type { ChatEvent, ChatHistoryResponse } from '../../contract/chat.js'
-import { ChatSendSchema } from '../../contract/chat.js'
+import { ChatSendSchema, ChatUnseenSchema } from '../../contract/chat.js'
 import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import type { CheckoutsResponse, SettingsResponse } from '../../contract/settings.js'
 import { isChatAgent, SettingsInputSchema } from '../../contract/settings.js'
@@ -234,6 +234,17 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
       throw new AppError('NOT_FOUND', `no chat thread named ${name} on this review`, 404)
     }
     return c.json({ activeThread: thread.name })
+  })
+
+  api.put('/prs/:n/chat/threads/:name/unseen', async c => {
+    const key = parseTargetKey(c.req.param('n'))
+    const name = c.req.param('name')
+    const body = await readJsonBody(c.req.raw, ChatUnseenSchema, '{ "unseen": 1 }')
+    const thread = isThreadNameFor(name, key) ? await ctx.chat.markUnseen(key, name, body.unseen) : null
+    if (thread === null) {
+      throw new AppError('NOT_FOUND', `no chat thread named ${name} on this review`, 404)
+    }
+    return c.json({ name: thread.name, unseen: thread.unseen ?? 0 })
   })
 
   api.post('/prs/:n/chat/cancel', async c => {

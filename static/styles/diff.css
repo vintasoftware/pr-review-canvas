@@ -1,7 +1,18 @@
 /* ---- Diff table ---- */
+/* One column as wide as the widest hunk, and at least the card: a short hunk under a long one
+   keeps its row colors across the whole width the reader scrolls through. The wrapper is a
+   container, so a wide row's content can be as wide as the visible part (100cqi). */
 .diff-wrap {
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
   overflow-x: auto;
   max-width: 100%;
+  container-type: inline-size;
+}
+/* A percentage width would size the column by the card; the hunk's own width sizes it. */
+.diff-wrap > .diff {
+  width: auto;
+  min-width: 100%;
 }
 .diff {
   border-collapse: collapse;
@@ -103,33 +114,49 @@ tr.is-target td {
   border-bottom: 1px solid var(--ink);
   line-height: var(--lh);
 }
+/* A card, note, thread, or composer: its text is as wide as the visible part of the diff and stays
+   at its left edge, so only code lines set how far the diff scrolls, and the text wraps in view. */
+.diff .x:has(> .x-in) {
+  padding-inline: 0;
+}
+.x-in {
+  position: sticky;
+  left: 0;
+  box-sizing: border-box;
+  width: 100cqi;
+  padding-inline: 14px;
+}
 tr.annot .x {
   background: var(--annot-bg);
+}
+tr.annot .x-in {
   box-shadow: inset 4px 0 0 var(--purple);
 }
 tr.ifind .x {
   background: var(--panel);
+}
+tr.ifind .x-in {
   box-shadow: inset 4px 0 0 var(--level-check);
 }
-tr.ifind.decide .x {
+tr.ifind.decide .x-in {
   box-shadow: inset 4px 0 0 var(--level-decide);
 }
-tr.ifind.fyi .x {
+tr.ifind.fyi .x-in {
   box-shadow: inset 4px 0 0 var(--level-fyi);
 }
 tr.ifind.is-handled:not([data-expanded]) .x {
-  padding: 6px 14px;
+  padding-block: 6px;
 }
 tr.thread .x {
   background: var(--panel-2);
 }
 tr.thread.resolved .x,
 tr.thread.hidden-thread .x {
-  padding: 6px 14px;
+  padding-block: 6px;
   color: var(--fg-muted);
   font-size: 12px;
 }
-tr.is-approx .x::before {
+tr.is-approx .x-in::before {
   content: 'near line ';
   color: var(--fg-muted);
   font-size: 11px;
@@ -161,6 +188,12 @@ tr.more td {
 .fold-toggle {
   white-space: normal;
   text-align: left;
+}
+/* Its title wraps at the visible width and stays in view, like a card. */
+tr.code-fold .fold-toggle {
+  position: sticky;
+  left: 14px;
+  max-width: calc(100cqi - 28px);
 }
 .fold-toggle .chev {
   vertical-align: middle;

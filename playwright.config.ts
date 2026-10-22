@@ -3,6 +3,8 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './browser',
   fullyParallel: true,
+  // Half the cores, as for the unit tests: each worker runs its own Chromium. `--workers` overrides.
+  workers: '50%',
   forbidOnly: true,
   use: {
     browserName: 'chromium',

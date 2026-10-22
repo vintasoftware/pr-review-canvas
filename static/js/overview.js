@@ -4,6 +4,7 @@
 
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
+import { hostLabel } from './host.js'
 import { renderMarkdown } from './markdown.js'
 import { openPoints, pointStatusesHtml, sevsumHtml } from './points.js'
 import { selfReviewNoteHtml } from './self-review.js'
@@ -89,7 +90,7 @@ export function renderOverview(bundle, ctx) {
   const active = artifact ? openPoints(artifact.points, bundle.state) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
   const description = bundle.pr.body.trim()
-    ? `<details class="pr-desc">${detailsSummaryHtml('<span>PR description (from GitHub)</span>', 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
+    ? `<details class="pr-desc">${detailsSummaryHtml(`<span>PR description (from ${esc(hostLabel())})</span>`, 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
     : '<div class="pr-desc body muted">No PR description.</div>'
   return (
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +

@@ -225,6 +225,27 @@ describe('the chat thread routes', () => {
     expect(list.activeThread).toBe(T1)
   })
 
+  it('records the answers of a thread the reader has not seen, so a reload still marks them', async () => {
+    const app = createApp(t.ctx)
+    await app.request('/api/prs/42/chat/threads', { method: 'POST', headers: POST })
+    const res = await app.request(`/api/prs/42/chat/threads/${T1}/unseen`, {
+      method: 'PUT',
+      headers: POST,
+      body: JSON.stringify({ unseen: 1 }),
+    })
+    expect(await json<{ name: string; unseen: number }>(res)).toEqual({ name: T1, unseen: 1 })
+    const list = await json<ChatThreadsResponse>(
+      await app.request('/api/prs/42/chat/threads', { headers: LOCAL })
+    )
+    expect(list.threads.find(th => th.name === T1)?.unseen).toBe(1)
+    const bad = await app.request(`/api/prs/42/chat/threads/${T1}/unseen`, {
+      method: 'PUT',
+      headers: POST,
+      body: JSON.stringify({ unseen: -1 }),
+    })
+    expect(bad.status).toBe(400)
+  })
+
   it('refuses to open a thread this review does not have', async () => {
     const app = createApp(t.ctx)
     for (const name of ['pr-review-acme-widgets-42-claude-t9', 'pr-review-acme-widgets-43-claude-t1']) {
@@ -410,6 +431,7 @@ describe('with chat turned off in the project config', () => {
       ['/api/prs/42/chat/threads', { method: 'POST', headers: POST }],
       [`/api/prs/42/chat/threads/${T1}/history`, { headers: LOCAL }],
       [`/api/prs/42/chat/threads/${T1}/active`, { method: 'PUT', headers: POST }],
+      [`/api/prs/42/chat/threads/${T1}/unseen`, { method: 'PUT', headers: POST, body: '{"unseen":0}' }],
       ['/api/prs/42/chat/cancel', { method: 'POST', headers: POST }],
       ['/api/prs/42/chat', { method: 'POST', headers: POST, body: '{}' }],
     ]

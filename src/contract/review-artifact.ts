@@ -325,11 +325,29 @@ export const PointSchema = z.object({
   audience: z.enum(POINT_AUDIENCES).default('reviewer'),
   id: z.string().min(1),
   fingerprint: z.string().min(1),
+  /**
+   * Who wrote the point: the generator, or publish for a missing test. `model` also covers the
+   * point publish makes for a settled decision, which `decisionCommit` marks.
+   */
   origin: z.enum(['model', 'tests']),
+  /**
+   * The commit whose `Settled-decision` line publish made the point from; absent on every other
+   * point. Such a point keeps origin `model`, so a release that predates settled decisions still
+   * opens the canvas and shows it as a resolved point.
+   */
+  decisionCommit: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
   /** The layer that owns the point's hunk; publish fills it from the file's layer. */
   layerId: z.string().optional(),
 })
 export type Point = z.infer<typeof PointSchema>
+
+/** Whether the generator wrote the point: not a missing test's, and not a settled decision's. */
+export function isGeneratorPoint(point: Point): boolean {
+  return point.origin === 'model' && point.decisionCommit === undefined
+}
 
 // The longest reason the author may give for settling a point lives with the proposal parser, so a
 // resolution AI Chat proposes is checked against the same limit the route enforces.
@@ -343,8 +361,20 @@ export const SettlementSchema = z.object({
   reason: z.string().trim().min(1).max(SETTLEMENT_REASON_MAX),
   at: z.string(),
   commentUrl: z.string().optional(),
+  /** The commit whose `Settled-decision` line gave the reason, when the answer came from one. */
+  commit: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
 })
 export type Settlement = z.infer<typeof SettlementSchema>
+
+/** A settled decision the author reopened on the canvas: the commit whose answer it set aside, and when. */
+export const ReopenedDecisionSchema = z.object({
+  commit: z.string().regex(/^[0-9a-f]{40}$/),
+  at: z.string(),
+})
+export type ReopenedDecision = z.infer<typeof ReopenedDecisionSchema>
 
 export const GeneratorSchema = z.object({
   agent: z.string().min(1),
@@ -378,6 +408,11 @@ export const ReviewArtifactSchema = z.object({
     .optional(),
   /** The points the author settled, by fingerprint. Absent until the author settles one. */
   settled: z.record(z.string(), SettlementSchema).optional(),
+  /**
+   * The settled decisions the author reopened, by fingerprint. Publish leaves such a point open on
+   * every later canvas, until a later commit decides it again. A release that predates it drops it.
+   */
+  reopened: z.record(z.string(), ReopenedDecisionSchema).optional(),
   /**
    * When the author last changed the canvas after it was generated. An import keeps whichever copy
    * of a commit's canvas is newest by this time, or by `generatedAt` when it was never revised.

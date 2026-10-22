@@ -1,7 +1,9 @@
 // Turns a validated ModelOutput into the ReviewArtifact the server stores: ids, fingerprints,
-// isTest, config risk tags, the points that missing tests add, and the generator stamp.
+// isTest, config risk tags, the points that missing tests and settled decisions add, and the
+// generator stamp.
 import { missingTestAnchor } from './missing-tests.js'
 import { createHash } from 'node:crypto'
+import { type SettledDecision, statedDecision } from '../contract/generation-context.js'
 import type {
   FileEntry,
   Generator,
@@ -13,10 +15,11 @@ import type {
   Pr,
   ReviewArtifact,
   RiskTag,
+  Settlement,
   Side,
   TextCaps,
 } from '../contract/review-artifact.js'
-import { POINT_IMPACTS, POINT_LEVELS } from '../contract/review-artifact.js'
+import { isGeneratorPoint, POINT_IMPACTS, POINT_LEVELS } from '../contract/review-artifact.js'
 import { hunkForLine } from '../git/patch-lines.js'
 import type { HighRiskRule } from '../project-config.js'
 import { matchesGlob } from './glob.js'
@@ -35,6 +38,8 @@ export interface NormalizeInput {
   basisCanvasSha?: string | undefined
   /** The globs that make a file a test; the project config's list, or the built-in one. */
   testPatterns?: readonly string[] | undefined
+  /** The author's settled decisions; each one in the diff becomes a resolved point. */
+  decisions?: readonly SettledDecision[] | undefined
 }
 
 /** Lowercase, one space between words, so a retitled point keeps its fingerprint when only spacing changed. */
@@ -142,12 +147,7 @@ function testPoints(
     if (anchor === null) return t
     const title =
       t.title ??
-      (t.behavior.length <= titleCap
-        ? t.behavior
-        : (t.behavior
-            .slice(0, titleCap - 1)
-            .replace(/\S*$/, '')
-            .trimEnd() || (titleCap >= 13 ? 'Missing test' : titleCap >= 5 ? 'Test' : '')) + '…')
+      shortTitle(t.behavior, titleCap, titleCap >= 13 ? 'Missing test' : titleCap >= 5 ? 'Test' : '')
     const note = t.note === undefined ? '' : ` ${t.note}`
     const point: Unassigned = {
       kind: 'tests',
@@ -164,6 +164,77 @@ function testPoints(
     return { ...t, title, audience: point.audience, anchor }
   })
   return { layer: { ...layer, tests }, points }
+}
+
+/** `text` when it fits `cap`, else its words up to the cap and an ellipsis; `fallback` stands in for no word. */
+function shortTitle(text: string, cap: number, fallback: string): string {
+  if (text.length <= cap) {
+    return text
+  }
+  return `${
+    text
+      .slice(0, cap - 1)
+      .replace(/\S*$/, '')
+      .trimEnd() || fallback
+  }…`
+}
+
+/**
+ * One resolved point for each settled decision in the diff, on its line, titled by the question it
+ * answers (or by the decision itself when the line states no question) and resolved with the
+ * decision and its reason. Publish writes these, not the generator, so a decision costs the
+ * generator none of its points and reads the same in every canvas built from its commit.
+ */
+function decisionPoints(
+  decisions: readonly SettledDecision[],
+  layers: readonly Layer[],
+  files: readonly FileEntry[],
+  titleCap: number
+): { points: Unassigned[]; settled: Record<string, Settlement> } {
+  const points: Unassigned[] = []
+  const settled: Record<string, Settlement> = {}
+  for (const decision of decisions) {
+    // A question raised without an answer is only ever context.
+    if (decision.line === null || decision.text === undefined) {
+      continue
+    }
+    const asked = decision.question ?? decision.text
+    const title = shortTitle(asked, titleCap, 'Settled decision')
+    const commit = `Commit \`${decision.commit.slice(0, 7)}\``
+    const on = decision.date.slice(0, 10)
+    // The body states what the commit said, true whether the point is resolved or the author
+    // reopened it, so a copy of the point or what AI Chat is told about it keeps the answer. A
+    // question or a decision cut to fit the title is given whole.
+    const said =
+      decision.question === undefined
+        ? title === asked
+          ? `${commit} decided this on ${on}.`
+          : `${commit} decided this on ${on}: ${decision.text}`
+        : `${title === asked ? '' : `${asked}\n\n`}${commit} answered this on ${on}: ${decision.text}`
+    const point: Unassigned = {
+      kind: 'decision',
+      level: 'fyi',
+      title,
+      path: decision.path,
+      line: decision.line,
+      side: decision.side,
+      body: said,
+      audience: 'author',
+      // The whole line, not the title, names the decision: two decisions asking one question are
+      // two points, and a revised answer is a new one, so a reason written on the canvas for the
+      // old answer does not cover it.
+      fingerprint: fingerprint({ kind: 'decision', path: decision.path, title: statedDecision(decision) }),
+      origin: 'model',
+      decisionCommit: decision.commit,
+    }
+    const layerId = layerIdForLine(layers, files, decision.path, decision.side, decision.line)
+    if (layerId !== undefined) {
+      point.layerId = layerId
+    }
+    points.push(point)
+    settled[point.fingerprint] = { reason: decision.text, at: decision.date, commit: decision.commit }
+  }
+  return { points, settled }
 }
 
 const LEVEL_ORDER = new Map(POINT_LEVELS.map((l, i) => [l, i]))
@@ -198,9 +269,11 @@ export function normalize(output: ModelOutput, input: NormalizeInput): ReviewArt
     )
   )
   const layers = generated.map(g => g.layer)
+  const decided = decisionPoints(input.decisions ?? [], layers, input.files, input.caps.pointTitle)
   const points = [
     ...output.points.map(p => modelPoint(p, layers, input.files)),
     ...generated.flatMap(g => g.points),
+    ...decided.points,
   ]
   const artifact: ReviewArtifact = {
     version: 1,
@@ -216,6 +289,9 @@ export function normalize(output: ModelOutput, input: NormalizeInput): ReviewArt
   }
   if (input.basisCanvasSha !== undefined) {
     artifact.basisCanvasSha = input.basisCanvasSha
+  }
+  if (Object.keys(decided.settled).length > 0) {
+    artifact.settled = decided.settled
   }
   return artifact
 }
@@ -254,7 +330,7 @@ export function artifactToModelOutput(artifact: ReviewArtifact): ModelOutput {
       return out
     }),
     points: artifact.points
-      .filter(p => p.origin === 'model')
+      .filter(isGeneratorPoint)
       .map(({ id: _id, fingerprint: _fp, origin: _origin, layerId: _layerId, ...p }) => p),
   }
 }

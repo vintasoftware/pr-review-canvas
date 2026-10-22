@@ -463,7 +463,7 @@ describe('validateModelOutput', () => {
     output.points = [
       {
         kind: 'question',
-        level: 'fyi',
+        level: 'check',
         audience: 'reviewer',
         title: 'Context',
         path: 'src/app.ts',
@@ -640,6 +640,26 @@ describe('validateModelOutput', () => {
       'POINT_IMPACT point 3 "Checked": only a decide point has an impact',
       'POINT_IMPACT point 4 "Noted": only a decide point has an impact',
     ])
+  })
+
+  it('POINT_LEVEL: a question point that only notes something', () => {
+    const output = clean()
+    const point = {
+      kind: 'question' as const,
+      audience: 'reviewer' as const,
+      path: 'src/app.ts',
+      line: 4,
+      body: 'b',
+    }
+    output.points = [
+      { ...point, level: 'check', title: 'Asked' },
+      { ...point, level: 'fyi', title: 'Unrelated' },
+    ]
+    expect(errorsOf(output).map(formatValidationError)).toEqual([
+      'POINT_LEVEL point 2 "Unrelated": a question point is decide or check; one that asks nothing is another kind',
+    ])
+    // A stored canvas written before the rule still opens.
+    expect(errorsOf(output, { storedArtifact: true })).toEqual([])
   })
 
   it('TOO_MANY_POINTS: counts the written points plus the missing test entries', () => {

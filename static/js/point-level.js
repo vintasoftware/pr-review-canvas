@@ -37,3 +37,12 @@ export function levelIconHtml(level, label = level) {
 export function pointLevelText(p) {
   return p.impact === undefined ? p.level : `${p.level} (${p.impact} impact)`
 }
+
+/**
+ * The kind as the page names it. A `decision` point is any choice the change makes, at any level,
+ * so it reads as a design choice rather than as something to decide; the stored kind stays.
+ * @param {Pick<Point, 'kind'>} p
+ */
+export function pointKindText(p) {
+  return p.kind === 'decision' ? 'design choice' : p.kind
+}

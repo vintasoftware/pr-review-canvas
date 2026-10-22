@@ -137,7 +137,7 @@ function skillCommandHtml(bundle) {
   const run = bundle.chat.enabled ? 'Or run this' : 'Run this'
   return (
     `<p class="hint">${run} in Claude Code or Codex from this repo. The page updates when the canvas is published.</p>` +
-    `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd${bundle.chat.enabled ? '' : ' fill'}" type="button" data-copy="${esc(bundle.skillCommand)}">copy</button></div>`
+    `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd${bundle.chat.enabled ? '' : ' fill'}" type="button" data-copy="${esc(bundle.skillCommand)}" title="Copy">copy</button></div>`
   )
 }
 

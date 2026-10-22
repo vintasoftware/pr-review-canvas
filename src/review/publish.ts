@@ -6,7 +6,7 @@ import { appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import { type GenerationContext, GenerationContextSchema } from '../contract/generation-context.js'
-import type { Generator, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
+import type { Generator, ReopenedDecision, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { UNCOMMITTED_STATE, resolveLocalHead } from '../git/local-target.js'
 import type { ValidationError, ValidationReport } from '../contract/validation.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
@@ -14,7 +14,7 @@ import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { standsForHead } from './carry-over.js'
 import { normalize } from './normalize.js'
-import { keptSettlements } from './self-review.js'
+import { keptReopens, keptSettlements } from './self-review.js'
 import { coveredTestPaths, type ValidationInput, validateModelOutput } from './validate.js'
 
 export interface PublishOptions {
@@ -200,18 +200,20 @@ export function buildManifest(
 }
 
 /**
- * The author's settlements that still answer this canvas: those of the canvas `prepare` took the
- * resolutions from, read again now, under the points this canvas still has. A context written before
- * that canvas was recorded reads the basis canvas, or the one this run replaces.
+ * What the author did on the canvas that still applies to this one: the settlements and reopened
+ * decisions of the canvas `prepare` took the resolutions from, read again now, under the points this
+ * canvas still has. A context written before that canvas was recorded reads the basis canvas, or
+ * the one this run replaces.
  */
-async function settlementsToKeep(
+async function answersToKeep(
   ctx: AppContext,
   context: GenerationContext,
   artifact: ReviewArtifact
-): Promise<Record<string, Settlement>> {
+): Promise<{ settled: Record<string, Settlement>; reopened: Record<string, ReopenedDecision> }> {
   const sha = context.resolutions?.canvasSha ?? context.basis?.canvasSha ?? context.headSha
   // A canvas in a format this version no longer reads has no settlement it could keep.
-  return keptSettlements(artifact, await ctx.canvases.readArtifact(sha).catch(() => null))
+  const source = await ctx.canvases.readArtifact(sha).catch(() => null)
+  return { settled: keptSettlements(artifact, source), reopened: keptReopens(artifact, source) }
 }
 
 export async function publish(
@@ -266,10 +268,27 @@ export async function publish(
     generator,
     testPatterns: context.tests.patterns,
     basisCanvasSha: context.basis?.canvasSha,
+    decisions: context.decisions,
   })
-  const settled = await settlementsToKeep(ctx, context, artifact)
+  // A resolution the author wrote on a canvas stands over a decision's own words. One an earlier
+  // publish took from a commit does not: the decisions read now are the current ones. A decision
+  // the author reopened stays open until a later commit answers it again.
+  const kept = await answersToKeep(ctx, context, artifact)
+  const writtenOnCanvas = Object.entries(kept.settled).filter(
+    ([, settlement]) => settlement.commit === undefined
+  )
+  const settled = Object.fromEntries(
+    Object.entries({ ...artifact.settled, ...Object.fromEntries(writtenOnCanvas) }).filter(
+      ([fp]) => kept.reopened[fp] === undefined
+    )
+  )
   if (Object.keys(settled).length > 0) {
     artifact.settled = settled
+  } else {
+    delete artifact.settled
+  }
+  if (Object.keys(kept.reopened).length > 0) {
+    artifact.reopened = kept.reopened
   }
   const manifest = buildManifest(context, artifact, ctx.version)
   // A snapshot commit is on no branch, so it must never be offered as a pull request's canvas.

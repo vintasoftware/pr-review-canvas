@@ -51,15 +51,17 @@
   --line: light-dark(#ddd, #3a3d4b);
   --line-strong: var(--ink);
   --fg: light-dark(#3a3739, #eaf2f1);
-  --fg-muted: light-dark(#565554, #a4a8b3);
+  --fg-muted: light-dark(#565554, #b0b4be);
   --fg-dim: var(--fg-muted);
   --accent: light-dark(#3b5bdb, #91a7ff);
   --accent-bg: light-dark(#edf2ff, rgb(145 167 255 / 14%));
   --purple: light-dark(#8b4dff, #c39ac9);
   --annot-bg: light-dark(#f3f0ff, rgb(195 154 201 / 14%));
   --ok: light-dark(#0c7411, #bad761);
-  --bad: light-dark(#c40400, #ff657a);
+  --bad: light-dark(#c40400, #ff95a5);
   --warn: light-dark(#caa512, #ffd76d);
+  /* Text on a --warn fill: the yellow is light in both themes, so it takes dark text. */
+  --on-warn: light-dark(#3a3739, #1e1f2b);
   --warn-bg: var(--annot-bg);
   /* The colors attention points draw from: the level icons through --level-*, which the
      pointColors setting picks, and the impact pills. A skin sets its red, amber, and gray; purple
@@ -75,9 +77,9 @@
   /* Added and deleted lines carry GitHub's light tints in both skins, so a diff reads the same
      here as it does on the pull request. */
   --add-bg: light-dark(#e6ffec, rgb(186 215 97 / 14%));
-  --add-w: light-dark(#abf2bc, rgb(186 215 97 / 40%));
+  --add-w: light-dark(#c6f5d0, rgb(186 215 97 / 12%));
   --del-bg: light-dark(#ffebe9, rgb(255 101 122 / 14%));
-  --del-w: light-dark(#ffc1c0, rgb(255 101 122 / 42%));
+  --del-w: light-dark(#ffd5d4, rgb(255 101 122 / 18%));
   --mv-bg: light-dark(rgb(139 77 255 / 7%), rgb(195 154 201 / 10%));
   --hunk-bg: var(--accent-bg);
   --focus: var(--accent);
@@ -85,13 +87,13 @@
 
   /* Syntax tokens: Monokai Light (light) and Monokai Pro Octagon (dark), both ≥ 4.5:1 on the panel. */
   --syn-comment: light-dark(#75715e, #888d94);
-  --syn-keyword: light-dark(#a626a4, #ff657a);
-  --syn-string: light-dark(#986801, #ffd76d);
-  --syn-number: light-dark(#8b4dff, #c39ac9);
+  --syn-keyword: light-dark(#a626a4, #ff95a5);
+  --syn-string: light-dark(#855a00, #ffd76d);
+  --syn-number: light-dark(#7a3cf0, #c9a5ce);
   --syn-title: light-dark(#0b6a2f, #bad761);
   --syn-type: light-dark(#0b5cad, #9cd1bb);
   --syn-attr: light-dark(#0b6a2f, #ffd76d);
-  --syn-tag: light-dark(#c40400, #ff657a);
+  --syn-tag: light-dark(#c40400, #ff95a5);
   --syn-meta: light-dark(#3b5bdb, #91a7ff);
 }
 

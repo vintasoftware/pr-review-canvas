@@ -3,7 +3,7 @@
 import type { Pr, ReviewArtifact } from '../contract/review-artifact.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
-import { pointLevelText } from '../../static/js/point-level.js'
+import { pointKindText, pointLevelText } from '../../static/js/point-level.js'
 import { pointRef } from '../../static/js/proposed-comment.js'
 
 /**
@@ -60,7 +60,7 @@ export function pointsMarkdown(artifact: ReviewArtifact): string {
     .map(p => {
       const settled = artifact.settled?.[p.fingerprint]
       const answer = settled === undefined ? '' : ` — settled by the author: ${settled.reason}`
-      return `- ${pointLevelText(p)} · ${p.kind} · for the ${p.audience} · ${p.title} (\`${p.path}:${p.line}\`) · point \`${pointRef(p.fingerprint)}\`${answer}`
+      return `- ${pointLevelText(p)} · ${pointKindText(p)} · for the ${p.audience} · ${p.title} (\`${p.path}:${p.line}\`) · point \`${pointRef(p.fingerprint)}\`${answer}`
     })
     .join('\n')
 }

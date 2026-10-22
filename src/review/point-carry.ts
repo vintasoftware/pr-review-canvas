@@ -24,7 +24,7 @@ export interface SideText {
 export const MAX_LINE_EDITS = 2000
 
 /** The diff row (marker and text) that shows each line of `side`, keyed by line number. */
-function rowsOnSide(patch: string, side: Side): Map<number, string> {
+export function rowsOnSide(patch: string, side: Side): Map<number, string> {
   const rows = new Map<number, string>()
   for (const hunk of splitHunks(patch)) {
     let line = side === 'new' ? hunk.newStart : hunk.oldStart
@@ -40,31 +40,47 @@ function rowsOnSide(patch: string, side: Side): Map<number, string> {
 }
 
 /**
+ * Every line of `from` that the shortest edit script to `to` leaves in place, mapped to its line in
+ * `to`. Null past `MAX_LINE_EDITS`, when the script is not computed.
+ */
+export function unchangedLines(from: readonly string[], to: readonly string[]): Map<number, number> | null {
+  const changes = diffArrays([...from], [...to], { maxEditLength: MAX_LINE_EDITS })
+  if (changes === undefined) {
+    return null
+  }
+  const kept = new Map<number, number>()
+  let fromLine = 1
+  let toLine = 1
+  for (const change of changes) {
+    if (!change.added && !change.removed) {
+      for (let offset = 0; offset < change.count; offset += 1) {
+        kept.set(fromLine + offset, toLine + offset)
+      }
+    }
+    fromLine += change.added ? 0 : change.count
+    toLine += change.removed ? 0 : change.count
+  }
+  return kept
+}
+
+/**
  * The lines of the basis diff that the head keeps as they were, mapped to their line in the head:
  * the edit script from the basis version to the head version leaves the line in place, and the
  * head diff shows it with the same row the basis diff did. Null past `MAX_LINE_EDITS`.
  */
 export function stableLines(basis: SideText, head: SideText, side: Side): Map<number, number> | null {
-  const changes = diffArrays([...basis.lines], [...head.lines], { maxEditLength: MAX_LINE_EDITS })
-  if (changes === undefined) {
+  const kept = unchangedLines(basis.lines, head.lines)
+  if (kept === null) {
     return null
   }
   const basisRows = rowsOnSide(basis.patch, side)
   const headRows = rowsOnSide(head.patch, side)
   const stable = new Map<number, number>()
-  let from = 1
-  let to = 1
-  for (const change of changes) {
-    if (!change.added && !change.removed) {
-      for (let i = 0; i < change.count; i += 1) {
-        const row = basisRows.get(from + i)
-        if (row !== undefined && headRows.get(to + i) === row) {
-          stable.set(from + i, to + i)
-        }
-      }
+  for (const [from, to] of kept) {
+    const row = basisRows.get(from)
+    if (row !== undefined && headRows.get(to) === row) {
+      stable.set(from, to)
     }
-    from += change.added ? 0 : change.count
-    to += change.removed ? 0 : change.count
   }
   return stable
 }

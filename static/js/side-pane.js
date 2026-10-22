@@ -1,14 +1,10 @@
 // @ts-check
-// The pane on the right of the review: AI Chat, its threads, and the review being written share it
-// as tabs. With AI Chat off the pane holds the review alone, and stays minimized until the reader
+// The pane on the right of the review: AI Chat and the review being written share it as tabs. With AI Chat off the pane holds the review alone, and stays minimized until the reader
 // opens it.
 import { wireChatPanel } from './chat-panel.js'
 import { REVIEW_PANEL_ID } from './review-panel.js'
 
-/** @typedef {'chat' | 'threads' | 'review'} SideTab */
-
-/** The id of the threads tab's panel: the index of the review's chat threads. */
-export const THREADS_PANEL_ID = 'threads-panel'
+/** @typedef {'chat' | 'review'} SideTab */
 
 /**
  * The count of answers the reader has not seen, on the AI Chat tab and its launcher. The chat
@@ -21,13 +17,12 @@ export const CHAT_NEW_BADGE = '<span class="chat-new" hidden></span>'
  * @returns {SideTab}
  */
 function sideTabOf(name) {
-  return name === 'review' || name === 'threads' ? name : 'chat'
+  return name === 'review' ? name : 'chat'
 }
 
 /**
  * The tab strip at the top of the pane, which also holds the command that minimizes it.
- * @param {{ chat: boolean }} opts `chat` adds the AI Chat and Threads tabs; without it the review
- *   is alone
+ * @param {{ chat: boolean }} opts `chat` adds the AI Chat tab; without it the review is alone
  */
 export function sideTabsHtml(opts) {
   const tab =
@@ -40,12 +35,9 @@ export function sideTabsHtml(opts) {
       `<button class="side-tab" type="button" role="tab" id="side-tab-${name}" data-side-tab="${name}" aria-controls="${controls}" aria-selected="${selected}"${selected ? '' : ' tabindex="-1"'}>${label}</button>`
   return (
     '<div class="side-tabs" role="tablist" aria-label="Side pane">' +
-    (opts.chat
-      ? tab('chat', `AI Chat${CHAT_NEW_BADGE}`, 'chat-log', true) +
-        tab('threads', 'Threads<span class="threads-new" hidden></span>', THREADS_PANEL_ID, false)
-      : '') +
+    (opts.chat ? tab('chat', `AI Chat${CHAT_NEW_BADGE}`, 'chat-log', true) : '') +
     tab('review', 'Your review <span class="review-count" data-empty>0</span>', REVIEW_PANEL_ID, !opts.chat) +
-    `<button class="cmd chat-minimize" type="button" id="chat-minimize" aria-label="Minimize ${opts.chat ? 'AI Chat' : 'your review'}">minimize</button>` +
+    `<button class="cmd chat-minimize" type="button" id="chat-minimize" aria-label="Minimize ${opts.chat ? 'AI Chat' : 'your review'}" title="Minimize">minimize</button>` +
     '</div>'
   )
 }
@@ -83,7 +75,6 @@ export function selectSideTab(pane, tab) {
     }
   }
   pane.querySelector(`#${REVIEW_PANEL_ID}`)?.toggleAttribute('hidden', tab !== 'review')
-  pane.querySelector(`#${THREADS_PANEL_ID}`)?.toggleAttribute('hidden', tab !== 'threads')
 }
 
 /**

@@ -6,6 +6,9 @@ import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { renderChatShell } from './chat.js'
+import { fullDate } from './dom.js'
+import { setHost } from './host.js'
+import { drawnCanvas } from './layers.js'
 import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
 import {
   bareHeaderHtml,
@@ -255,9 +258,11 @@ describe('header', () => {
     )
     expect(hdr?.querySelector('.meta .pill.open')?.textContent).toBe('open')
     expect(hdr?.querySelector('.diffstat')?.textContent).toBe('+7 −5 (code +5 −4 · tests +2 −1)')
-    expect(hdr?.querySelector('.pill.agent')?.textContent).toBe(
-      'canvas by claude · claude-opus-4-1 · claude-code'
-    )
+    expect(hdr?.querySelector('.pill.agent')?.textContent).toBe('canvas by claude · claude-opus-4-1')
+    // The relative time shows the full date on hover.
+    const generated = hdr?.querySelector('.pill.agent + span')
+    expect(generated?.textContent).toMatch(/^generated /)
+    expect(generated?.getAttribute('title')).toBe(fullDate(syntheticArtifact().generatedAt))
     expect(hdr?.querySelector('.touches')?.textContent).toBe('touches:schema')
     expect(hdr?.querySelector('.ptext')?.textContent).toBe('0 of 1 layers reviewed')
     expect(hdr?.querySelector('.pline span')?.getAttribute('style')).toBe('width:0%')
@@ -276,6 +281,22 @@ describe('header', () => {
     expect(hdr?.querySelector('.stripe')).not.toBeNull()
     // A normal change set says nothing about caps.
     expect(hdr?.querySelector('.notice.large-pr')).toBeNull()
+  })
+
+  it('leaves out when the canvas was generated if its time does not parse', () => {
+    const b = bundle()
+    if (b.artifact === undefined) throw new Error('fixture has a canvas')
+    b.artifact.generatedAt = 'not a date'
+    document.body.innerHTML = renderHeader(b, {
+      host: 'localhost:3010',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+    })
+    const meta = document.querySelector('.hdr .meta')
+    expect(meta?.querySelector('.pill.agent')?.textContent).toBe('canvas by claude · claude-opus-4-1')
+    expect(meta?.querySelector('.pill.agent + span')).toBeNull()
+    expect(meta?.textContent).not.toContain('generated')
   })
 
   it('says the canvas was capped when the change set is large, on every screen', () => {
@@ -348,7 +369,7 @@ describe('header', () => {
       skin: 'terminal',
       now: NOW,
     })
-    expect(document.querySelector('.pill.agent')?.textContent).toBe('canvas by codex · codex')
+    expect(document.querySelector('.pill.agent')?.textContent).toBe('canvas by codex')
   })
 
   it('redraws the line, its text, and the approve gate from the state', () => {
@@ -398,6 +419,22 @@ describe('header', () => {
     expect(document.querySelector('#export-zip')?.hasAttribute('disabled')).toBe(false)
     expect(document.querySelector('#regenerate')?.hasAttribute('disabled')).toBe(false)
     expect(document.querySelector('#regenerate')?.textContent).toBe('update')
+  })
+
+  it('offers the reading level on an outdated canvas once the reader opens it', () => {
+    const opts = {
+      host: 'localhost:3010',
+      theme: /** @type {const} */ ('auto'),
+      skin: /** @type {const} */ ('terminal'),
+      now: NOW,
+    }
+    document.body.innerHTML = renderHeader(bundle({ status: 'stale' }), opts)
+    expect(document.querySelector('#fold-level')).toBeNull()
+    const stale = bundle({ status: 'stale' })
+    document.body.innerHTML = renderHeader(stale, { ...opts, drawn: drawnCanvas(stale, true) })
+    expect(document.querySelector('#fold-level')).not.toBeNull()
+    // The review's progress belongs to the current head, so it stays off.
+    expect(document.querySelector('.ptext')).toBeNull()
   })
 
   it('names the generate command for what it does, and falls back to regenerate without an agent', () => {
@@ -501,6 +538,15 @@ describe('overview', () => {
     expect(panel?.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
       'PR description (from GitHub)'
     )
+    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    try {
+      document.body.innerHTML = renderOverview(bundle(), { paths, now: NOW })
+      expect(document.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
+        'PR description (from GitLab)'
+      )
+    } finally {
+      setHost(undefined)
+    }
     expect(panel?.querySelector('details.pr-desc summary > .chev')?.getAttribute('aria-hidden')).toBe('true')
     expect(panel?.querySelector('details.pr-desc')?.hasAttribute('open')).toBe(false)
     expect(panel?.querySelector('details.pr-desc summary .cmd')).toBeNull()
@@ -640,8 +686,9 @@ describe('chat shell', () => {
     expect(aside?.querySelector('.handle')?.getAttribute('aria-label')).toBe('Resize AI Chat')
     expect(aside?.querySelector('.transcript .empty')?.textContent).toMatch(/^Ask AI Chat about/)
     expect(aside?.querySelector('#thread-title')?.textContent).toBe('New thread')
-    expect(aside?.querySelector('#side-tab-threads')?.textContent).toBe('Threads')
-    expect(aside?.querySelector('.ctx-line')?.textContent).toBe('Context: whole PR clear')
+    expect(aside?.querySelector('#side-tab-threads')).toBeNull()
+    expect(aside?.querySelector('#thread-switch #thread-title')?.textContent).toBe('New thread')
+    expect(aside?.querySelector('.ctx-line')?.textContent).toBe('Context: whole PR go to code clear')
     expect(aside?.querySelector('textarea')?.hasAttribute('disabled')).toBe(false)
     expect(aside?.querySelector('.chat-composer .cmd.fill')?.textContent).toBe('send')
     expect(aside?.querySelectorAll('button:disabled').length).toBe(0)
@@ -663,7 +710,7 @@ describe('the reading level control', () => {
 
   it('names what each level adds and how much of the diff it hides', () => {
     // A level that hides nothing says so rather than showing 0.
-    expect(foldLevelHint('light', { total: 40, hidden: 0 })).toContain('nothing hidden yet')
+    expect(foldLevelHint('light', { total: 40, hidden: 0 })).toContain('nothing else hidden')
     expect(foldLevelHint('moderate', { total: 40, hidden: 12 })).toContain(
       'also test bodies, helpers, wiring, templates'
     )

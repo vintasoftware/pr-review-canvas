@@ -3,10 +3,10 @@
 /** @typedef {import('./contract-types.js').RiskTag} RiskTag */
 import { setDisabledReason } from './composer.js'
 import { diffstatHtml, testChanges } from './diffstat.js'
-import { esc, timeAgo } from './dom.js'
+import { esc, fullDate, timeAgo } from './dom.js'
 import { generationMode } from './generate.js'
 import { authorProfileUrl, currentHost, hostLabel } from './host.js'
-import { canvasHiddenLines, getFoldLevel, refreshRail } from './layers.js'
+import { canvasHiddenLines, drawnCanvas, getFoldLevel, refreshRail } from './layers.js'
 import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { foldLevelControlHtml } from './reading-level.js'
@@ -97,8 +97,9 @@ export function bareHeaderHtml(opts) {
 
 /**
  * @param {PrBundle} bundle
- * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date, project?: ProjectLink | undefined }} opts
+ * @param {{ host: string, theme: import('./theme.js').Theme, skin: import('./skin.js').Skin, now: Date, project?: ProjectLink | undefined, drawn?: ReturnType<typeof drawnCanvas> }} opts
  *   The wordmark links to the project list; the project, when the page has one, gets a link home.
+ *   `drawn` is the canvas the page draws, as `drawnCanvas` says; the page passes it.
  * @returns {string}
  */
 export function renderHeader(bundle, opts) {
@@ -107,8 +108,13 @@ export function renderHeader(bundle, opts) {
   // A stale canvas can be exported and regenerated too, so both commands stay live for it.
   const hasCanvas = artifact !== undefined && (bundle.status === 'ready' || bundle.status === 'stale')
   const generate = generateCommand(bundle, hasCanvas)
+  // A time that does not parse says nothing, so the page leaves it out.
+  const when = ready ? fullDate(artifact.generatedAt) : ''
   const agent = ready
-    ? `<span class="pill agent" title="The agent, model, and harness that generated this canvas">canvas by ${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''} · ${esc(artifact.generator.harness)}</span><span>generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`
+    ? `<span class="pill agent" title="The agent and model that generated this canvas">canvas by ${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''}</span>` +
+      (when === ''
+        ? ''
+        : `<span title="${esc(when)}">generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`)
     : ''
   const number = pr.number === null ? '' : `<span class="mono num">#${pr.number}</span>`
   // Work that is not pushed has no page on the forge, and nothing to refresh from it either.
@@ -116,28 +122,32 @@ export function renderHeader(bundle, opts) {
   const forgeLink =
     pr.url === ''
       ? ''
-      : `<a class="cmd" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(currentHost().kind)}</a>`
+      : `<a class="cmd forge-link" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" title="Open on ${esc(hostLabel())}">${esc(currentHost().kind)}</a>`
   const refreshTitle = local
     ? 'Snapshot the working tree again and redraw'
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
   const progress = ready ? progressHtml(artifact, bundle.state, pr) : ''
   const level = getFoldLevel()
-  const reading = ready
-    ? foldLevelControlHtml(
-        level,
-        canvasHiddenLines(
-          {
-            artifact,
-            files: bundle.files,
-            comments: bundle.comments.reviewComments,
-            state: bundle.state,
-            headSha: pr.headSha,
-            mergeBaseSha: pr.mergeBaseSha,
-          },
-          level
+  // How much of the diff to hide is the reader's choice for any canvas on screen, an outdated one
+  // they opened too, counted over the diff the page draws.
+  const drawn = opts.drawn === undefined ? drawnCanvas(bundle, false) : opts.drawn
+  const reading =
+    drawn === null
+      ? ''
+      : foldLevelControlHtml(
+          level,
+          canvasHiddenLines(
+            {
+              artifact: drawn.artifact,
+              files: drawn.files,
+              comments: bundle.comments.reviewComments,
+              state: bundle.state,
+              headSha: drawn.on.headSha,
+              mergeBaseSha: drawn.on.mergeBaseSha,
+            },
+            level
+          )
         )
-      )
-    : ''
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +

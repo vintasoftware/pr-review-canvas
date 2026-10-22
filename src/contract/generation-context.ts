@@ -132,6 +132,35 @@ export const ResolutionsSchema = z.object({
 export type Resolutions = z.infer<typeof ResolutionsSchema>
 
 /**
+ * A decision the author already took about this change, read from a `Settled-decision` line in the
+ * message of one of its commits. `line` is where the decision's code sits at the head, inside a
+ * chunk of this diff; null when that code changed after the commit, or sits outside the diff.
+ */
+export const SettledDecisionSchema = z.object({
+  /** `<short sha>-<n>`: the commit and which of its decision lines this is, stable across runs. */
+  id: z.string().min(1),
+  commit: z.string().regex(/^[0-9a-f]{40}$/),
+  /** The commit's author date. */
+  date: z.string(),
+  /** The question the decision answers, when the line states one before the answer. */
+  question: z.string().min(1).optional(),
+  /**
+   * The decision and its reason, as the line states them after any question. Absent when the line
+   * asks its question and gives no answer; such a decision is always context (`line` null).
+   */
+  text: z.string().min(1).optional(),
+  path: z.string().min(1),
+  side: SideSchema,
+  line: z.number().int().positive().nullable(),
+})
+export type SettledDecision = z.infer<typeof SettledDecisionSchema>
+
+/** A decision as its line states it: the question, then the answer, each when there is one. */
+export function statedDecision(decision: SettledDecision): string {
+  return [decision.question, decision.text].filter(part => part !== undefined).join(' ')
+}
+
+/**
  * `context.json`: everything the agent and `publish` need about one prepared canvas. Written by
  * `prepare` next to `prompt.md`; `publish` validates `model.json` against the hunk index and the
  * caps recorded here, so a config change between the two commands does not change the rules.
@@ -177,6 +206,8 @@ export const GenerationContextSchema = z.object({
   /** Absent when no earlier canvas of this review exists. `--force` keeps it: a resolution is not
    * the basis's wording, it is the author's answer. */
   resolutions: ResolutionsSchema.optional(),
+  /** The author's settled decisions on these commits. Defaulted, so an older context still reads. */
+  decisions: z.array(SettledDecisionSchema).default([]),
   preparedAt: z.string(),
 })
 export type GenerationContext = z.infer<typeof GenerationContextSchema>

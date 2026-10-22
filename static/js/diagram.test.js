@@ -6,14 +6,18 @@ import { wireCopyCommands } from './commands.js'
 import {
   activateNodeLink,
   attachNodeLinks,
+  compactFlowchart,
+  DECISION_CLASS,
   DIRECTIVE_NOTE,
   diagramFallbackHtml,
   diagramKind,
   diagramMarkdown,
   diagramPlaceholderHtml,
+  drawnSource,
   findNodeGroups,
   initDiagrams,
   mermaidConfig,
+  mixHex,
   nodeGroupPattern,
   observeTheme,
   readThemeColors,
@@ -158,6 +162,92 @@ describe('the copy command', () => {
     await vi.waitFor(() => expect(written).toEqual(['```mermaid\nflowchart LR\n  A --> B\n```']))
     expect(written[0]).toBe(diagramMarkdown(SOURCE))
     await vi.waitFor(() => expect(copy.textContent).toBe('copied'))
+  })
+})
+
+describe('compactFlowchart', () => {
+  it('draws each decision of a flowchart as a hexagon under the same id', () => {
+    const source =
+      "flowchart TD\n  q[Question] --> named{Names this agent's thread?}\n  named -->|yes| cont[Continue it]"
+    expect(compactFlowchart(source)).toEqual({
+      source:
+        "flowchart TD\n  q[Question] --> named{{Names this agent's thread?}}\n  named -->|yes| cont[Continue it]",
+      decisions: ['named'],
+    })
+  })
+
+  it('finds decisions on a one-line source and names each id once', () => {
+    expect(compactFlowchart('graph LR; a{x} --> b{y}; b{y} --> a')).toEqual({
+      source: 'graph LR; a{{x}} --> b{{y}}; b{{y}} --> a',
+      decisions: ['a', 'b'],
+    })
+  })
+
+  it('takes an id with dashes, dots, or other letters whole, and not the link before it', () => {
+    const source = [
+      'flowchart TD',
+      '  start-->is-ready{Ready?}',
+      '  is-ready---v1.2{Newer?}',
+      '  v1.2-.->é_ok{Accents?}',
+      '  é_ok==>done',
+    ].join('\n')
+    const result = compactFlowchart(source)
+    expect(result.decisions).toEqual(['is-ready', 'v1.2', 'é_ok'])
+    expect(result.source).toBe(
+      [
+        'flowchart TD',
+        '  start-->is-ready{{Ready?}}',
+        '  is-ready---v1.2{{Newer?}}',
+        '  v1.2-.->é_ok{{Accents?}}',
+        '  é_ok==>done',
+      ].join('\n')
+    )
+  })
+
+  it('tints a decision whose id has a dash', () => {
+    const drawn = drawnSource('flowchart TD\n  is-ready{Ready?} --> b', COLORS)
+    expect(drawn).toContain('is-ready{{Ready?}}')
+    expect(drawn).toMatch(/\n {2}class is-ready \S+$/)
+  })
+
+  it('leaves braces in quotes, edge labels, other shapes, and styling lines alone', () => {
+    const source = [
+      'flowchart LR',
+      '  a["obj {x}"] -->|"{y}"| b(fn {z})',
+      '  c{{hexagon}} --> d@{ shape: diam }',
+      '  e{"a {b} c"} --> f',
+      '  %% n{comment}',
+      '  style a fill:#fff',
+    ].join('\n')
+    const result = compactFlowchart(source)
+    expect(result.decisions).toEqual(['e'])
+    expect(result.source).toBe(source.replace('e{"a {b} c"}', 'e{{"a {b} c"}}'))
+  })
+
+  it('returns any other kind of diagram as it was', () => {
+    const state = 'stateDiagram-v2\n  [*] --> active\n  state choice <<choice>>'
+    expect(compactFlowchart(state)).toEqual({ source: state, decisions: [] })
+    const er = 'erDiagram\n  THREAD {\n    string name\n  }'
+    expect(compactFlowchart(er)).toEqual({ source: er, decisions: [] })
+  })
+})
+
+describe('drawnSource', () => {
+  it('gives the decisions the page class, in hex colors mermaid can split', () => {
+    const drawn = drawnSource('flowchart TD\n  a{x} --> b', COLORS)
+    const fill = mixHex(COLORS['--accent'], COLORS['--panel'], 0.14)
+    expect(drawn).toContain(`classDef ${DECISION_CLASS} fill:${fill},stroke:`)
+    expect(drawn.endsWith(`class a ${DECISION_CLASS}`)).toBe(true)
+    expect(drawn).not.toContain('rgb(')
+  })
+
+  it('adds nothing to a flowchart without decisions', () => {
+    expect(drawnSource(SOURCE, COLORS)).toBe(SOURCE)
+  })
+
+  it('mixes rgb and hex colors, and falls back on one it cannot read', () => {
+    expect(mixHex('rgb(255, 0, 0)', '#0000ff', 0.5)).toBe('#800080')
+    expect(mixHex('nonsense', '#102030', 0.5)).toBe('#102030')
   })
 })
 
@@ -347,6 +437,15 @@ describe('renderDiagrams', () => {
     expect(bodies).toHaveLength(2)
     await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })
     expect(mermaid.calls.loads).toBe(1)
+  })
+
+  it('draws a flowchart compact while the copy command keeps the source as written', async () => {
+    const mermaid = fakeMermaid()
+    const source = 'flowchart TD\n  a{Ready?} --> b'
+    document.body.innerHTML = diagramPlaceholderHtml(source)
+    await renderDiagrams(document.body, { load: mermaid.load, colors: COLORS })
+    expect(mermaid.calls.texts).toEqual([drawnSource(source, COLORS)])
+    expect(document.querySelector('.diagram-h .cmd')?.getAttribute('data-copy')).toBe(diagramMarkdown(source))
   })
 
   it('shows the source and a muted note when mermaid cannot draw it', async () => {

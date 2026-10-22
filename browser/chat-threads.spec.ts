@@ -13,7 +13,7 @@ async function askAbout(page: Page, command: ReturnType<Page['locator']>, questi
   await expect(page.locator('#chat-log')).toContainText('covered at')
 }
 
-test('each ask opens the thread of its place, and the Threads tab lists them', async ({
+test('each ask opens the thread of its place, and the list under the thread head holds them', async ({
   page,
   chatServer,
 }, testInfo) => {
@@ -31,11 +31,10 @@ test('each ask opens the thread of its place, and the Threads tab lists them', a
   await expect(page.locator('#thread-title')).toHaveText('Sum instead of product')
 
   await askAbout(page, layerAsk, 'Anything risky here?')
-  await expect(page.locator('#thread-title')).toHaveText('layer · Run path')
+  await expect(page.locator('#thread-title')).toHaveText('Run path')
   await expect(page.locator('#chat-log')).not.toContainText('Is the sum intended?')
 
-  const threadsTab = page.locator('#side-tab-threads')
-  await threadsTab.click()
+  await page.locator('#thread-switch').click()
   await expect(page.locator('#thread-index [data-thread-open]')).toHaveCount(2)
   await page.locator('#thread-index').getByText('Sum instead of product').click()
   await expect(page.locator('#thread-title')).toHaveText('Sum instead of product')
@@ -70,18 +69,19 @@ test('with a thread per place off, every ask goes to the open thread until the r
     'about point · Sum instead of product',
     'about layer · Run path',
   ])
-  await page.locator('#side-tab-threads').click()
+  await page.locator('#thread-switch').click()
   await expect(page.locator('#thread-index [data-thread-open]')).toHaveCount(1)
   expect(await pointAsk.locator('.ask-label').evaluate(el => getComputedStyle(el, '::after').content)).toBe(
     'none'
   )
-  await page.locator('#side-tab-chat').click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#thread-pop')).toBeHidden()
 
   await page.locator('#settings').click()
   await page.locator('dialog').getByRole('tab', { name: 'AI Chat' }).click()
   await page.locator('#set-thread-per-place').check()
   await page.locator('[data-act="settings-save"]').click()
-  await expect(page.locator('#chat-ctx-line')).toBeHidden()
+  await expect(page.locator('dialog[open]')).toHaveCount(0)
 
   await pointAsk.click()
   await page.getByText('ask something else…', { exact: true }).first().click()
@@ -89,7 +89,7 @@ test('with a thread per place off, every ask goes to the open thread until the r
   await expect(page.locator('#chat-log')).toContainText('A new thread about point · Sum instead of product')
 })
 
-test('the wheel scrolls a long Threads list, and the page under a short one', async ({
+test('the wheel scrolls a long list of threads, and the page under a short one', async ({
   page,
   chatServer,
 }, testInfo) => {
@@ -103,7 +103,7 @@ test('the wheel scrolls a long Threads list, and the page under a short one', as
     },
   })
   await page.goto(url)
-  await page.locator('#side-tab-threads').click()
+  await page.locator('#thread-switch').click()
   const index = page.locator('#thread-index')
   await expect(index.locator('[data-thread-open]')).toHaveCount(threads)
   await index.hover()
@@ -117,7 +117,7 @@ test('the wheel scrolls a long Threads list, and the page under a short one', as
     chat: { ...current.chat, threads: current.chat.threads.slice(0, threads) },
   }))
   await page.reload()
-  await page.locator('#side-tab-threads').click()
+  await page.locator('#thread-switch').click()
   await expect(index.locator('[data-thread-open]')).toHaveCount(threads)
   const box = await index.boundingBox()
   await page.mouse.move(box!.x + box!.width / 2, box!.y + 40)
@@ -150,19 +150,21 @@ test('another thread opens while an answer comes in, and a question asked there 
   await page.keyboard.press('Enter')
   await expect(page.locator('#chat-stop')).toBeVisible()
 
-  await page.locator('#side-tab-threads').click()
+  await page.locator('#thread-switch').click()
   await page.locator('#thread-index').getByText('New thread').click()
   await expect(page.locator('#thread-title')).toHaveText('New thread')
   await page.locator('#msg').fill('And overall?')
   await page.keyboard.press('Enter')
-  await expect(page.locator('#chat-log')).toContainText('Waiting for the answer in “Sum instead of product”.')
+  await expect(page.locator('#chat-log')).toContainText(
+    'Waiting for the answer in “point · Sum instead of product”.'
+  )
 
   release()
   // The waiting question went once the first answer ended, and its answer arrives here.
   await expect(page.locator('#chat-log')).toContainText('covered at')
   await expect(page.locator('#chat-log')).not.toContainText('Waiting for the answer in')
   // The first answer arrived in its own thread meanwhile.
-  await page.locator('#side-tab-threads').click()
+  await page.locator('#thread-switch').click()
   await page.locator('#thread-index').getByText('Sum instead of product').click()
   await expect(page.locator('#chat-log')).toContainText('Is the sum intended?')
   await expect(page.locator('#chat-log')).toContainText('covered at')

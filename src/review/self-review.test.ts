@@ -1,5 +1,12 @@
 import { syntheticArtifact } from '../testing/synthetic.js'
-import { isAuthor, keptSettlements, tallyCanvas, tallyMarkdown, withSettlement } from './self-review.js'
+import {
+  isAuthor,
+  keptReopens,
+  keptSettlements,
+  tallyCanvas,
+  tallyMarkdown,
+  withSettlement,
+} from './self-review.js'
 
 const settlement = { reason: 'Known.', at: '2026-09-10T12:00:00.000Z' }
 
@@ -54,5 +61,35 @@ describe('keptSettlements', () => {
     expect(keptSettlements(artifact, { settled: { [kept]: settlement, gone: settlement } })).toEqual({
       [kept]: settlement,
     })
+  })
+})
+
+describe('reopened decisions', () => {
+  const commit = 'c'.repeat(40)
+  function withDecision() {
+    const artifact = syntheticArtifact()
+    const [first, ...rest] = artifact.points
+    return { ...artifact, points: [{ ...first!, decisionCommit: commit }, ...rest] }
+  }
+
+  it("records the commit of a decision's point the author reopens, and drops it once settled again", () => {
+    const artifact = withDecision()
+    const fp = artifact.points[0]!.fingerprint
+    const reopened = withSettlement(artifact, fp, undefined, 'r1')
+    expect(reopened.reopened).toEqual({ [fp]: { commit, at: 'r1' } })
+    expect(withSettlement(reopened, fp, settlement, 'r2')).not.toHaveProperty('reopened')
+    // Any other point reopens with no record.
+    expect(withSettlement(artifact, artifact.points[1]!.fingerprint, undefined, 'r3')).not.toHaveProperty(
+      'reopened'
+    )
+  })
+
+  it('keeps a reopen while the point still comes from the same commit', () => {
+    const artifact = withDecision()
+    const fp = artifact.points[0]!.fingerprint
+    const reopen = { commit, at: 'r1' }
+    expect(keptReopens(artifact, null)).toEqual({})
+    expect(keptReopens(artifact, { reopened: { [fp]: reopen, gone: reopen } })).toEqual({ [fp]: reopen })
+    expect(keptReopens(artifact, { reopened: { [fp]: { ...reopen, commit: 'd'.repeat(40) } } })).toEqual({})
   })
 })

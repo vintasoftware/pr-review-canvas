@@ -455,6 +455,14 @@ function checkPoints(
     if (p.level !== 'decide' && p.impact !== undefined) {
       report.add('POINT_IMPACT', where, `point ${i + 1} "${p.title}": only a decide point has an impact`)
     }
+    // A question asks something of the reader, so it is decided or checked, never only noted.
+    if (p.kind === 'question' && p.level === 'fyi' && !storedArtifact) {
+      report.add(
+        'POINT_LEVEL',
+        where,
+        `point ${i + 1} "${p.title}": a question point is decide or check; one that asks nothing is another kind`
+      )
+    }
     const side = p.side ?? 'new'
     const entry = index.byPath.get(p.path)
     const start = hunkAt(entry, side, p.line)

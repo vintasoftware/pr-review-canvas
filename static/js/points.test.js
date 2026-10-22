@@ -57,7 +57,7 @@ describe('points', () => {
     expect(li?.id).toBe('point-p-1')
     expect(li?.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('decide')
     expect(li?.querySelector('.pill.impact.high')?.textContent).toBe('high')
-    expect(li?.querySelector('.pill.kind')?.textContent).toBe('decision')
+    expect(li?.querySelector('.pill.kind')?.textContent).toBe('design choice')
     expect(li?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
     expect(li?.querySelector('.prose p')?.textContent).toContain('Look at the operator')
     expect([...(li?.querySelectorAll('button.cmd') ?? [])].map(b => b.textContent)).toEqual([
@@ -122,14 +122,14 @@ describe('where a point stands', () => {
     expect(pointToMarkdown(first)).toBe(
       '**Sum instead of product**\n\n' +
         'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.\n\n' +
-        '_src/app.ts:4 · decision · decide (high impact) · from the pr-review canvas_'
+        '_src/app.ts:4 · design choice · decide (high impact) · from the pr-review canvas_'
     )
   })
 
   it('leaves the canvas out of the comment when mentionCanvas is off', () => {
     setMentionCanvas(false)
     try {
-      expect(pointToMarkdown(first)).toMatch(/_src\/app\.ts:4 · decision · decide \(high impact\)_$/)
+      expect(pointToMarkdown(first)).toMatch(/_src\/app\.ts:4 · design choice · decide \(high impact\)_$/)
       expect(pointToMarkdown(first).toLowerCase()).not.toContain('canvas')
     } finally {
       setMentionCanvas(true)
@@ -189,6 +189,36 @@ describe('where a point stands', () => {
     } finally {
       setSettled({})
     }
+  })
+
+  it('keeps the draft of a point the author resolved, says so, and counts it in the overview', () => {
+    setSettled({ [first.fingerprint]: { reason: 'Known.', at: '2026-09-10T12:00:00.000Z' } })
+    const state = { ...BASE, pending: [draftFor(first)] }
+    try {
+      document.body.innerHTML = pointStatusesHtml(points, state)
+      expect(document.querySelector('.point-statuses')?.textContent).toBe(
+        'Attention points: 2 open · 1 resolved by the author (1 with your draft in the review) show the 1 resolved'
+      )
+      document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state })}</ol>`
+      expect(document.querySelector('.p-summary')?.textContent).toBe(
+        'Resolved by the author: Known. · your draft still waits in your review'
+      )
+      expect(document.querySelector('.p-outcome .pending-cmt .pending-resolved')?.textContent).toBe(
+        'The author resolved this point. Your draft stays in your review until you send or delete it.'
+      )
+    } finally {
+      setSettled({})
+    }
+  })
+
+  it("says a settled decision's point is open because the author reopened it", () => {
+    const decision = { ...first, decisionCommit: 'c'.repeat(40) }
+    document.body.innerHTML = `<ol>${pointCardHtml(decision, ctx)}</ol>`
+    expect(document.querySelector('.p-summary')?.textContent).toBe(
+      'The author reopened this on the canvas; the commit’s answer below no longer settles it.'
+    )
+    document.body.innerHTML = `<ol>${pointCardHtml(first, ctx)}</ol>`
+    expect(document.querySelector('.p-summary')).toBeNull()
   })
 
   it('links a posted point to its comment, and says it was sent when the comment is unknown', () => {

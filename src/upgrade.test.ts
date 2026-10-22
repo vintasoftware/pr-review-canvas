@@ -380,6 +380,62 @@ describe('runUpgrade', () => {
     expect(JSON.parse(again.out[0] ?? '').prompts).toEqual([gap])
   })
 
+  it('still names the missing tokens when the plan is declined or cannot be asked', async () => {
+    await mkdir(path.join(repo, 'review-prompts'), { recursive: true })
+    await writeFile(path.join(repo, 'review-prompts', 'format.md'), '## Attention points\n\nno token here\n')
+    await writeFile(
+      path.join(repo, 'pr-review.config.yml'),
+      'prompts:\n  generation-format.md: review-prompts/format.md\n'
+    )
+    const addedTokens = [{ since: '0.6.0', template: 'generation-format.md', token: 'RESOLVED' }] as const
+    const gap = {
+      since: '0.6.0',
+      template: 'generation-format.md',
+      token: 'RESOLVED',
+      file: 'review-prompts/format.md',
+      heading: '## Attention points',
+    }
+    for (const answer of [false, null]) {
+      // Running 0.6.0 with an acpx upgrade pending, which the user declines.
+      const { deps } = fake({
+        version: '0.6.0',
+        latest: { [NAME]: '0.6.0', acpx: '0.19.1' },
+        confirm: answer,
+        addedTokens,
+      })
+      const { io, out, err } = capture()
+      expect(await runUpgrade(deps, [], io)).toBe(0)
+      expect(JSON.parse(out[0] ?? '')).toMatchObject({ applied: false, prompts: [gap] })
+      expect(err).toContain(
+        '  - add {{RESOLVED}} to review-prompts/format.md under "## Attention points", where pr-review 0.6.0\'s generation-format.md has it'
+      )
+      expect(err.at(-1)).toBe(
+        answer === null ? 'Nothing changed. Re-run with --yes to apply.' : 'Nothing changed.'
+      )
+    }
+  })
+
+  it('does not call everything current while a template lacks a token', async () => {
+    await installCopies()
+    await mkdir(path.join(repo, 'review-prompts'), { recursive: true })
+    await writeFile(path.join(repo, 'review-prompts', 'format.md'), '## Attention points\n\nno token here\n')
+    await writeFile(
+      path.join(repo, 'pr-review.config.yml'),
+      'prompts:\n  generation-format.md: review-prompts/format.md\n'
+    )
+    const { deps } = fake({
+      version: '0.6.0',
+      latest: { [NAME]: '0.6.0', acpx: '0.19.1' },
+      acpx: '0.19.1',
+      addedTokens: [{ since: '0.6.0', template: 'generation-format.md', token: 'RESOLVED' }],
+    })
+    const { io, err } = capture(false)
+    expect(await runUpgrade(deps, [], io)).toBe(0)
+    expect(err).not.toContain('Everything is up to date.')
+    expect(err.at(-1)).toBe('Nothing to upgrade; add the tokens above.')
+    expect(err.at(-2)).toMatch(/^ {2}- add \{\{RESOLVED\}\} to review-prompts\/format\.md/)
+  })
+
   it('takes only the kinds of step --only names, and says what it left out', async () => {
     await installCopies()
     await appendFile(path.join(repo, CODEX_SKILLS_DIR, 'pr-review-canvas', 'SKILL.md'), '\nold\n')

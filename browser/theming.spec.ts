@@ -262,3 +262,42 @@ test('matches the GitHub dark screenshot palette', async ({ page, reviewUrl }, t
   await expect(page.locator('tr.hunk > .code').first()).toHaveCSS('color', 'rgb(145, 152, 161)')
   await page.screenshot({ path: testInfo.outputPath('github-dark.png'), fullPage: true })
 })
+
+for (const skin of ['github', 'olive']) {
+  test(`in the ${skin} skin, a command box's copy icon shows how the copy went`, async ({
+    page,
+    noChatUrl,
+  }) => {
+    // With AI Chat off, regenerate opens the dialog with the command to copy.
+    await page.goto(`${noChatUrl}?skin=${skin}&theme=light`)
+    await page.locator('#regenerate').click()
+    const copy = page.locator('#regenerate-dialog .cmdbox [data-copy]')
+    await expect(copy).toHaveAttribute('title', 'Copy')
+    await expect(copy).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    const color = (name: string) =>
+      page.evaluate(n => {
+        const probe = document.createElement('i')
+        probe.style.color = `var(${n})`
+        document.body.append(probe)
+        const value = getComputedStyle(probe).color
+        probe.remove()
+        return value
+      }, name)
+    const clipboard = (ok: boolean) =>
+      page.evaluate(resolves => {
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { writeText: () => (resolves ? Promise.resolve() : Promise.reject(new Error('denied'))) },
+          configurable: true,
+        })
+      }, ok)
+    await clipboard(false)
+    await copy.click()
+    await expect(copy).toHaveAttribute('data-copied', 'failed')
+    await expect(copy).toHaveCSS('color', await color('--bad'))
+    await clipboard(true)
+    await expect(copy).not.toHaveAttribute('data-copied')
+    await copy.click()
+    await expect(copy).toHaveAttribute('data-copied', 'copied')
+    await expect(copy).toHaveCSS('color', await color('--ok'))
+  })
+}

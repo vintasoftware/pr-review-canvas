@@ -71,7 +71,7 @@ function envDialogHtml(opts) {
     '<ul><li>A token for another account: comments may post as that account.</li>' +
     '<li>Its own <code>PATH</code>: the chat agent or the CLI may not be found.</li></ul></div>' +
     "<div><p>To use this project's terminal environment again, run:</p>" +
-    `<div class="cmdbox"><code>${esc(command)}</code><button class="cmd" type="button" data-copy="${esc(command)}">copy</button></div></div>` +
+    `<div class="cmdbox"><code>${esc(command)}</code><button class="cmd" type="button" data-copy="${esc(command)}" title="Copy">copy</button></div></div>` +
     '<div class="dialog-actions"><button class="cmd" type="submit" value="close" autofocus>close</button></div>' +
     '</form></dialog>'
   )

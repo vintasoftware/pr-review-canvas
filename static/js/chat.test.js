@@ -19,7 +19,6 @@ import {
   CHAT_WIDTH_MIN,
   clampWidth,
   proposedCommentHtml,
-  QUICK_QUESTIONS,
   readChatMinimized,
   readChatWidth,
   renderChatShell,
@@ -67,6 +66,7 @@ function mount(api = {}, extra = {}) {
       fetchThreads: async () => ({ threads: [], activeThread: null, agent: 'claude' }),
       fetchThreadHistory: async () => ({ name: 't', turns: [] }),
       selectThread: async (_pr, name) => ({ activeThread: name }),
+      markThreadUnseen: async (_pr, name, unseen) => ({ name, unseen }),
       cancelChat: async () => ({ cancelled: true }),
       streamChat: async () => undefined,
       ...api,
@@ -80,12 +80,12 @@ function mount(api = {}, extra = {}) {
 }
 
 /**
- * Opens a thread the way a reader does: from its entry in the Threads tab.
+ * Opens a thread the way a reader does: from its entry in the list under the thread head.
  * @param {ParentNode} root
  * @param {string} name
  */
 function pickThread(root, name) {
-  el(root, '#side-tab-threads').click()
+  el(root, '#thread-switch').click()
   el(root, `[data-thread-open="${name}"]`).click()
 }
 
@@ -109,12 +109,14 @@ describe('renderChatShell', () => {
     expect(renderChatShell({ enabled: false })).toBe('')
   })
 
-  it('renders the thread head, the Threads tab, the context line, the transcript, and the composer', () => {
+  it('renders the thread head and its list of threads, the context line, the transcript, and the composer', () => {
     const html = renderChatShell({ enabled: true, width: 400 })
     expect(html).toContain('id="thread-title"')
-    expect(html).toContain('id="side-tab-threads"')
+    expect(html).toContain('id="thread-switch"')
+    expect(html).not.toContain('id="side-tab-threads"')
     expect(html).toContain('id="thread-index"')
     expect(html).toContain('id="new-thread"')
+    expect(html).toContain('id="chat-new-thread"')
     expect(html).not.toContain('id="thread-close"')
     expect(html).toContain('id="chat-ctx"')
     expect(html).toContain('id="chat-log"')
@@ -266,7 +268,12 @@ describe('the context chip', () => {
       expect(el(root, '#qq-menu').hidden).toBe(true)
       expect(chip.tabIndex).toBe(-1)
 
+      // A file is as wide as the whole PR for the quick questions: no menu.
       chat.setContext({ kind: 'file', path: 'src/app.ts' })
+      chip.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      expect(el(root, '#qq-menu').hidden).toBe(true)
+
+      chat.setContext({ kind: 'layer', layerId: 'run-path' })
       chip.focus()
       expect(el(root, '#qq-menu').hidden).toBe(false)
       expect(chip.tabIndex).toBe(0)
@@ -369,7 +376,7 @@ describe('sending a message', () => {
     el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await flush()
     // The head already says what the thread is about.
-    expect(el(root, '#thread-title').textContent).toBe('layer · Run path')
+    expect(el(root, '#thread-title').textContent).toBe('Run path')
     expect(root.querySelector('.turn.u .turn-ctx')).toBeNull()
   })
 
@@ -545,6 +552,115 @@ describe('threads', () => {
     expect(el(root, '#thread-title').textContent).toBe('second')
   })
 
+  it('opens the list from the thread head, filters it, and closes it on Escape or outside', async () => {
+    const { root } = mount({ fetchThreads: async () => PLACED })
+    document.body.append(root)
+    await flush()
+    const head = el(root, '#thread-switch')
+    const pop = el(root, '#thread-pop')
+    const filter = el(root, '#thread-filter')
+    if (!(filter instanceof HTMLInputElement)) throw new Error('no filter')
+    expect(pop.hidden).toBe(true)
+    head.click()
+    expect(pop.hidden).toBe(false)
+    expect(head.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(filter)
+    // The filter keeps the threads whose name matches, and drops a group it empties.
+    filter.value = 'sum'
+    filter.dispatchEvent(new Event('input'))
+    const shown = () =>
+      [...root.querySelectorAll('#thread-index .thread-item')]
+        .filter(item => item.closest('[hidden]') === null)
+        .map(item => item.querySelector('.thread-item-t')?.textContent)
+    expect(shown()).toEqual(['Sum instead of product'])
+    expect([...root.querySelectorAll('.thread-group:not([hidden])')].map(g => g.textContent)).toEqual([
+      'Attention points',
+    ])
+    // The arrows walk the threads it leaves; Escape closes and gives the focus back to the head.
+    filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(document.activeElement?.getAttribute('data-thread-open')).toBe('pr-review-a-b-42-claude-t1')
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(pop.hidden).toBe(true)
+    expect(document.activeElement).toBe(head)
+    // Opened again it starts unfiltered, and a press outside closes it.
+    head.click()
+    expect(shown()).toHaveLength(2)
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    expect(pop.hidden).toBe(true)
+    root.remove()
+  })
+
+  it('gives the box the focus after a pick, closes on Tab out, and filters by the kind of place', async () => {
+    const { root } = mount({ fetchThreads: async () => PLACED })
+    document.body.append(root)
+    await flush()
+    el(root, '#thread-switch').click()
+    // Each entry's tooltip has its whole name.
+    expect(el(root, '[data-thread-open="pr-review-a-b-42-claude-t1"]').title).toMatch(
+      /^Sum instead of product/
+    )
+    const filter = el(root, '#thread-filter')
+    if (!(filter instanceof HTMLInputElement)) throw new Error('no filter')
+    filter.value = 'attention'
+    filter.dispatchEvent(new Event('input'))
+    expect(
+      [...root.querySelectorAll('#thread-index .thread-item')].filter(i => i.closest('[hidden]') === null)
+    ).toHaveLength(1)
+    filter.value = 'nothing like it'
+    filter.dispatchEvent(new Event('input'))
+    expect(el(root, '#thread-index .thread-nomatch').textContent).toBe('No thread matches “nothing like it”.')
+    filter.value = ''
+    filter.dispatchEvent(new Event('input'))
+    el(root, '[data-thread-open="pr-review-a-b-42-claude-t1"]').click()
+    expect(document.activeElement).toBe(el(root, '#msg'))
+    // Tabbing out of the open list closes it.
+    el(root, '#thread-switch').click()
+    el(root, '#thread-pop').dispatchEvent(
+      new FocusEvent('focusout', { bubbles: true, relatedTarget: el(root, '#msg') })
+    )
+    expect(el(root, '#thread-pop').hidden).toBe(true)
+    root.remove()
+  })
+
+  it('keeps each thread’s unsent text to itself, and clear adds it under the whole PR’s', async () => {
+    const { root, chat } = mount({ fetchThreads: async () => PLACED })
+    await flush()
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'about the whole PR, half written'
+    chat.ask(POINT)
+    await flush()
+    expect(box.value).toBe('')
+    box.value = 'about the point'
+    chat.ask(LAYER)
+    await flush()
+    expect(box.value).toBe('')
+    chat.ask(POINT)
+    await flush()
+    expect(box.value).toBe('about the point')
+    el(root, '#chat-clear').click()
+    await flush()
+    expect(el(root, '#thread-title').textContent).toBe('overall')
+    // The whole PR's own unsent text stays, with the carried text under it.
+    expect(box.value).toBe('about the whole PR, half written\n\nabout the point')
+  })
+
+  it('opens the first thread the filter leaves on Enter, and closes the list', async () => {
+    const { root } = mount({ fetchThreads: async () => PLACED })
+    document.body.append(root)
+    await flush()
+    el(root, '#thread-switch').click()
+    const filter = el(root, '#thread-filter')
+    if (!(filter instanceof HTMLInputElement)) throw new Error('no filter')
+    filter.value = 'sum'
+    filter.dispatchEvent(new Event('input'))
+    filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await flush()
+    expect(el(root, '#thread-pop').hidden).toBe(true)
+    expect(el(root, '#thread-title').textContent).toBe('Sum instead of product')
+    root.remove()
+  })
+
   it('says how a thread starts while there is none', async () => {
     const { root } = mount()
     await flush()
@@ -571,7 +687,7 @@ describe('threads', () => {
       },
     })
     await flush()
-    el(root, '#side-tab-threads').click()
+    el(root, '#thread-switch').click()
     el(root, '#new-thread').click()
     await flush()
     // The AI Chat tab shows the draft, and nothing is made until it is asked something.
@@ -691,7 +807,8 @@ describe('a thread per place', () => {
     await flush()
     chat.ask(LAYER)
     await flush()
-    expect(el(root, '#thread-title').textContent).toBe('layer · Run path')
+    expect(el(root, '#thread-kind').textContent).toBe('layer')
+    expect(el(root, '#thread-title').textContent).toBe('Run path')
     expect(el(root, '#chat-log').textContent).toContain('A new thread about layer · Run path')
     expect(el(root, '#thread-goto').hidden).toBe(false)
     // Only the thread open at the start was loaded: a draft has no turns to fetch.
@@ -742,6 +859,80 @@ describe('a thread per place', () => {
     expect(el(root, '#thread-title').textContent).toBe('overall')
     expect(loaded).toEqual(['pr-review-a-b-42-claude-t1', 'pr-review-a-b-42-claude-t2'])
     expect(el(root, '#thread-goto').hidden).toBe(true)
+  })
+
+  it('clear leaves a place’s thread for the whole PR’s, with what the box holds', async () => {
+    const { root, chat } = mount({ fetchThreads: async () => PLACED })
+    await flush()
+    chat.ask(POINT)
+    await flush()
+    expect(el(root, '#thread-kind').textContent).toBe('point')
+    expect(el(root, '#chat-clear').hidden).toBe(false)
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'and overall?'
+    el(root, '#chat-clear').click()
+    await flush()
+    expect(el(root, '#thread-title').textContent).toBe('overall')
+    expect(el(root, '#thread-kind').hidden).toBe(true)
+    expect(chat.context).toEqual({ kind: 'pr' })
+    expect(el(root, '#chat-clear').hidden).toBe(true)
+    expect(box.value).toBe('and overall?')
+  })
+
+  it('starts a thread about the whole PR from the AI Chat tab’s own new thread', async () => {
+    const { root, chat } = mount({ fetchThreads: async () => PLACED })
+    await flush()
+    chat.ask(POINT)
+    await flush()
+    el(root, '#chat-new-thread').click()
+    expect(el(root, '#thread-title').textContent).toBe('New thread')
+    expect(el(root, '#chat-log').textContent).toContain('A new thread about the whole PR.')
+  })
+
+  it('leads a draft back to the thread the ask left, until its first question', async () => {
+    const { root, chat } = mount({ fetchThreads: async () => PLACED, streamChat: async () => undefined })
+    await flush()
+    chat.ask(LAYER)
+    await flush()
+    const back = el(root, '#chat-log [data-thread-open]')
+    expect(back.textContent).toBe('back to “overall”')
+    back.click()
+    await flush()
+    expect(el(root, '#thread-title').textContent).toBe('overall')
+    chat.ask(LAYER)
+    await flush()
+    await sendMessage(root, 'why this order?')
+    expect(root.querySelector('#chat-log [data-thread-open]')).toBe(null)
+  })
+
+  it('renames the way back once the thread it leads to gets its title', async () => {
+    let list = PLACED
+    const { root, chat } = mount({ fetchThreads: async () => list })
+    await flush()
+    chat.ask(LAYER)
+    await flush()
+    expect(el(root, '#chat-log [data-thread-open]').textContent).toBe('back to “overall”')
+    list = {
+      ...PLACED,
+      threads: PLACED.threads.map(t => (t.anchor === undefined ? { ...t, title: 'why sum?' } : t)),
+    }
+    chat.followSettings({ ...DEFAULT_SETTINGS, chatThreadPerPlace: true })
+    await flush()
+    expect(el(root, '#chat-log [data-thread-open]').textContent).toBe('back to “why sum?”')
+  })
+
+  it('leads no way back from a draft the reader opened, with new thread or clear', async () => {
+    const { root, chat } = mount({ fetchThreads: async () => PLACED })
+    await flush()
+    el(root, '#chat-new-thread').click()
+    expect(el(root, '#chat-log').textContent).toContain('A new thread about the whole PR.')
+    expect(root.querySelector('#chat-log [data-thread-open], #chat-log [data-draft-open]')).toBe(null)
+    chat.ask({ kind: 'file', path: 'src/app.ts' })
+    await flush()
+    el(root, '#chat-clear').click()
+    await flush()
+    expect(root.querySelector('#chat-log [data-thread-open], #chat-log [data-draft-open]')).toBe(null)
   })
 
   it('opens a draft about the whole PR when there is no thread about it yet', async () => {
@@ -862,16 +1053,16 @@ describe('a thread per place', () => {
     await flush()
     const marks = () => el(root, '#chat-thread-marks').textContent ?? ''
     expect(marks()).toContain(
-      '[data-ask-point="fp-1"] > .ask-label::after { content: "" / "new answer"; background: var(--accent); }'
+      '[data-ask-point="fp-1"] > .ask-label::after { content: "" / "new answer"; --ask-dot: var(--accent); }'
     )
-    expect(el(root, '#side-tab-threads .threads-new').hidden).toBe(false)
+    expect(el(root, '#thread-switch .threads-new').hidden).toBe(false)
     const entry = el(root, '[data-thread-open="pr-review-a-b-42-claude-t1"] .thread-new')
     expect(entry.textContent).toBe('new answer')
     // Opening the thread is seeing it.
     chat.ask(POINT)
     await flush()
     expect(marks()).toContain('[data-ask-point="fp-1"] > .ask-label::after { content: "" / "thread"; }')
-    expect(el(root, '#side-tab-threads .threads-new').hidden).toBe(true)
+    expect(el(root, '#thread-switch .threads-new').hidden).toBe(true)
     expect(root.querySelector('.thread-new')).toBeNull()
   })
 
@@ -887,7 +1078,7 @@ describe('a thread per place', () => {
     await flush()
     await sendMessage(root, 'is the sum intended?')
     expect(el(root, '#chat-thread-marks').textContent).not.toContain('new answer')
-    expect(el(root, '#side-tab-threads .threads-new').hidden).toBe(true)
+    expect(el(root, '#thread-switch .threads-new').hidden).toBe(true)
   })
 
   /** A point's thread whose answer comes in when the test ends it. */
@@ -910,6 +1101,57 @@ describe('a thread per place', () => {
       b instanceof HTMLElement && !b.hidden ? b.textContent : null
     )
 
+  it('says on the thread head how many threads have an unseen answer, and keeps them over a reload', async () => {
+    /** @type {Array<[string, number]>} */
+    const marked = []
+    const { root, chat, stream } = heldAnswer()
+    chat.stop()
+    root.remove()
+    const again = mount({
+      fetchThreads: async () => ({
+        ...PLACED,
+        threads: PLACED.threads.map(t => (t.name.endsWith('t1') ? { ...t, unseen: 1 } : t)),
+      }),
+      markThreadUnseen: async (_pr, name, unseen) => {
+        marked.push([name, unseen])
+        return { name, unseen }
+      },
+    })
+    void stream
+    await flush()
+    // The unseen answer from before the reload is still counted.
+    expect(el(again.root, '#thread-switch .threads-new').textContent).toBe('1 new')
+    expect(badges(again.root)).toEqual(['1', '1'])
+    again.chat.ask(POINT)
+    await flush()
+    expect(marked).toEqual([['pr-review-a-b-42-claude-t1', 0]])
+    expect(el(again.root, '#thread-switch .threads-new').hidden).toBe(true)
+  })
+
+  it('lists a first question’s thread by its place while it starts, with the way back to it', async () => {
+    const { root, chat } = mount({
+      fetchThreads: async () => PLACED,
+      // The turn never starts: the server has not named the thread yet.
+      streamChat: () => new Promise(() => {}),
+    })
+    await flush()
+    chat.ask(LAYER)
+    await flush()
+    await sendMessage(root, 'why this order?')
+    // Another place with no thread yet: its draft leads back to the layer's.
+    chat.ask({ kind: 'file', path: 'src/app.ts' })
+    await flush()
+    const back = el(root, '#chat-log [data-draft-open]')
+    expect(back.textContent).toBe('back to “layer · Run path”')
+    el(root, '#thread-switch').click()
+    const starting = el(root, '#thread-index [data-draft-open]')
+    expect(starting.textContent).toBe('Run pathstarting…')
+    back.click()
+    await flush()
+    expect(el(root, '#thread-title').textContent).toBe('Run path')
+    expect(el(root, '#chat-log').textContent).toContain('why this order?')
+  })
+
   it('counts an answer that ended in the open thread while the pane was minimized, until it opens', async () => {
     const { root, chat, stream } = heldAnswer()
     await flush()
@@ -926,7 +1168,7 @@ describe('a thread per place', () => {
     el(root, '#chat-launcher').click()
     expect(badges(root)).toEqual([null, null])
     expect(el(root, '#chat-thread-marks').textContent).not.toContain('new answer')
-    expect(el(root, '#side-tab-threads .threads-new').hidden).toBe(true)
+    expect(el(root, '#thread-switch .threads-new').hidden).toBe(true)
   })
 
   it('counts an answer that ended in the open thread while another tab showed, until AI Chat does', async () => {
@@ -938,9 +1180,6 @@ describe('a thread per place', () => {
     el(root, '#side-tab-review').click()
     stream.end?.()
     await flush()
-    expect(badges(root)).toEqual(['1', '1'])
-    // The Threads tab shows the thread's answer as new; it is not seen there.
-    el(root, '#side-tab-threads').click()
     expect(badges(root)).toEqual(['1', '1'])
     el(root, '#side-tab-chat').click()
     expect(badges(root)).toEqual([null, null])
@@ -1269,10 +1508,10 @@ describe('a place’s thread, in its corners', () => {
     streams[1]?.fail(new Error('a canvas generation holds the review checkout'))
     await flush()
     expect(root.querySelector('.toast')?.textContent).toBe(
-      'Your question in “Sum instead of product” was not sent: a canvas generation holds the review checkout'
+      'Your question in “point · Sum instead of product” was not sent: a canvas generation holds the review checkout'
     )
     expect(el(root, '#chat-thread-marks').textContent).not.toContain('new answer')
-    expect(el(root, '#side-tab-threads .threads-new').hidden).toBe(true)
+    expect(el(root, '#thread-switch .threads-new').hidden).toBe(true)
     // In its thread, the question and the reason are there.
     chat.ask(POINT)
     await flush()
@@ -1312,7 +1551,7 @@ describe('a place’s thread, in its corners', () => {
     await flush()
     // The agent took it, so it was sent: no "not sent", and its thread has an answer to see.
     expect(root.querySelector('.toast')).toBeNull()
-    expect(el(root, '#side-tab-threads .threads-new').hidden).toBe(false)
+    expect(el(root, '#thread-switch .threads-new').hidden).toBe(false)
     chat.ask(POINT)
     await flush()
     const questions = [...root.querySelectorAll('#chat-log .turn.u')].map(turn => turn.textContent)
@@ -1331,7 +1570,7 @@ describe('a place’s thread, in its corners', () => {
     })
     await flush()
     await sendMessage(root, 'overall?')
-    el(root, '#side-tab-threads').click()
+    el(root, '#thread-switch').click()
     el(root, '#new-thread').click()
     await flush()
     await sendMessage(root, 'what changed overall?')
@@ -1341,7 +1580,7 @@ describe('a place’s thread, in its corners', () => {
     await flush()
     streams[1]?.fail(new Error('a canvas generation holds the review checkout'))
     await flush()
-    el(root, '#side-tab-threads').click()
+    el(root, '#thread-switch').click()
     el(root, '#new-thread').click()
     await flush()
     const log = el(root, '#chat-log').textContent ?? ''
@@ -1350,7 +1589,7 @@ describe('a place’s thread, in its corners', () => {
     // Once seen, it is not brought back again.
     chat.ask(POINT)
     await flush()
-    el(root, '#side-tab-threads').click()
+    el(root, '#thread-switch').click()
     el(root, '#new-thread').click()
     await flush()
     expect(el(root, '#chat-log').textContent).not.toContain('what changed overall?')
@@ -1432,20 +1671,22 @@ describe('a place’s thread, in its corners', () => {
     await flush()
     await sendMessage(root, 'is the sum intended?')
     // New thread opens a fresh draft, not the draft whose answer is coming in.
-    el(root, '#side-tab-threads').click()
+    el(root, '#thread-switch').click()
     el(root, '#new-thread').click()
     await flush()
     expect(el(root, '#thread-title').textContent).toBe('New thread')
     expect(el(root, '#chat-log').textContent).not.toContain('is the sum intended?')
     chat.askQuestion(LAYER, 'What could break?')
     await flush()
-    expect(el(root, '#thread-title').textContent).toBe('layer · Run path')
+    expect(el(root, '#thread-title').textContent).toBe('Run path')
     expect(sent).toHaveLength(1)
-    expect(el(root, '#chat-log').textContent).toContain('Waiting for the answer in “Sum instead of product”.')
+    expect(el(root, '#chat-log').textContent).toContain(
+      'Waiting for the answer in “point · Sum instead of product”.'
+    )
     const box = el(root, '#msg')
     expect(box.hasAttribute('disabled')).toBe(true)
     expect(box.getAttribute('placeholder')).toBe(
-      'A question already waits for the answer in “Sum instead of product”.'
+      'A question already waits for the answer in “point · Sum instead of product”.'
     )
     ends[0]?.()
     await flush()
@@ -1507,7 +1748,7 @@ describe('with a thread per place off', () => {
       { threadPerPlace: false }
     )
     await flush()
-    el(root, '#side-tab-threads').click()
+    el(root, '#thread-switch').click()
     el(root, '#new-thread').click()
     chat.ask(POINT)
     await flush()
@@ -1553,7 +1794,8 @@ describe('with a thread per place off', () => {
     chat.ask(POINT)
     chat.followSettings({ ...DEFAULT_SETTINGS, chatThreadPerPlace: true })
     await flush()
-    expect(el(root, '#chat-ctx-line').hidden).toBe(true)
+    // The context line stays: it says what the next question is about in both modes.
+    expect(el(root, '#chat-ctx-line').hidden).toBe(false)
     expect(el(root, '#chat-thread-marks').textContent).toContain('data-ask-point="fp-1"')
     // The open thread is about the whole PR again, so the next question is too.
     await sendMessage(root, 'overall?')
@@ -2000,18 +2242,6 @@ describe('the tie a reader takes off', () => {
     expect(root.querySelector('.proposed-point')).toBeNull()
     el(root, '[data-act="proposed-queue"]').click()
     expect(seen).toEqual([undefined])
-  })
-})
-
-describe('QUICK_QUESTIONS', () => {
-  it('holds the fixed quick questions', () => {
-    expect(QUICK_QUESTIONS).toEqual([
-      'Suggestion to solve this?',
-      'Why this way, and what were the alternatives?',
-      'What could break?',
-      'Does this follow how the codebase already does it?',
-      'Is this covered by tests?',
-    ])
   })
 })
 

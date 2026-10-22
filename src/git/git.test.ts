@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process'
 import { access, chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { makeTempDir } from '../testing/fakes.js'
+import { execGitAsRepoConfig, makeTempDir } from '../testing/fakes.js'
 import { envWithoutRepo, REPO_ENV_VARS } from './environment.mjs'
 import {
   CANVAS_ANCHOR_PREFIX,
@@ -239,6 +239,138 @@ describe('createGit (real adapter)', () => {
     await g(repo.dir, 'checkout', '-q', '--detach')
     expect(await git.currentBranch()).toBeNull()
     await g(repo.dir, 'checkout', '-q', 'main')
+  })
+
+  it('reads the email this clone commits as, the environment over the config, and none when git has none', async () => {
+    expect(await createGit(repo.dir, execGitAsRepoConfig).authorEmail()).toBe('test@example.com')
+    const fromEnv = execGitIn({ ...process.env, GIT_AUTHOR_EMAIL: 'env@example.com' })
+    expect(await createGit(repo.dir, fromEnv).authorEmail()).toBe('env@example.com')
+    const failed: GitExec = async () => ({ code: 1, stdout: Buffer.alloc(0), stderr: '' })
+    expect(await createGit('/tmp', failed).authorEmail()).toBeNull()
+    const unnamed: GitExec = async () => ({ code: 0, stdout: Buffer.from('Test <> 1 +0000'), stderr: '' })
+    expect(await createGit('/tmp', unnamed).authorEmail()).toBeNull()
+  })
+
+  it('reads the keyed lines of the commits in a range, oldest first, wherever in the message they sit', async () => {
+    const dir = await makeTempDir('pr-review-git-keyed-')
+    const inRepo = async (cwd: string, ...args: string[]): Promise<string> => {
+      const result = await execGitAsRepoConfig(cwd, args)
+      if (result.code !== 0) {
+        throw new GitError(args, result.stderr, result.code)
+      }
+      return result.stdout.toString('utf8').trim()
+    }
+    try {
+      await inRepo(dir, 'init', '-q', '-b', 'main')
+      await inRepo(dir, 'config', 'user.email', 'test@example.com')
+      await inRepo(dir, 'config', 'user.name', 'Test')
+      await inRepo(dir, 'commit', '-q', '--allow-empty', '-m', 'base')
+      const base = await inRepo(dir, 'rev-parse', 'HEAD')
+      const message = [
+        'first',
+        'This is not a Settled-decision: line, it only names one.',
+        'Settled-decision: a.ts:1 one\nsettled-decision:   b.ts:2 two  \nReviewed-by: Someone',
+        // Indented, as under a list item.
+        '- the list\n  Settled-decision: e.ts:5 five',
+      ]
+      await inRepo(dir, 'commit', '-q', '--allow-empty', ...message.flatMap(paragraph => ['-m', paragraph]))
+      const first = await inRepo(dir, 'rev-parse', 'HEAD')
+      await inRepo(dir, 'commit', '-q', '--allow-empty', '-m', 'none', '-m', 'Reviewed-by: Someone')
+      // A blank line keeps this decision out of the block git reads as trailers.
+      const apart = [
+        'second',
+        'Settled-decision: c.ts:3:old three',
+        'Co-Authored-By: Someone <s@example.com>',
+      ]
+      await inRepo(dir, 'commit', '-q', '--allow-empty', ...apart.flatMap(paragraph => ['-m', paragraph]))
+      const second = await inRepo(dir, 'rev-parse', 'HEAD')
+      // A message committed verbatim keeps the CRLF line ends another tool wrote.
+      const crlf = 'third\r\n\r\nSettled-decision: d.ts:4 four\r\nCo-Authored-By: Someone <s@example.com>'
+      await inRepo(dir, 'commit', '-q', '--allow-empty', '--cleanup=verbatim', '-m', crlf)
+      const third = await inRepo(dir, 'rev-parse', 'HEAD')
+      const git = createGit(dir, execGitAsRepoConfig)
+      expect(await git.commitKeyedLines(base, 'HEAD', 'Settled-decision')).toEqual([
+        {
+          sha: first,
+          authorEmail: 'test@example.com',
+          date: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+          values: ['a.ts:1 one', 'b.ts:2 two', 'e.ts:5 five'],
+        },
+        {
+          sha: second,
+          authorEmail: 'test@example.com',
+          date: expect.any(String),
+          values: ['c.ts:3:old three'],
+        },
+        {
+          sha: third,
+          authorEmail: 'test@example.com',
+          date: expect.any(String),
+          values: ['d.ts:4 four'],
+        },
+      ])
+      expect(await git.commitKeyedLines(third, 'HEAD', 'Settled-decision')).toEqual([])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a merged history parents first, even when the commit dates run backwards', async () => {
+    const dir = await makeTempDir('pr-review-git-topo-')
+    // Each commit gets its own dates, so the date order can disagree with the history.
+    const inRepo = async (date: string, ...args: string[]): Promise<string> => {
+      const env = { ...process.env, GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date }
+      const result = await execGitIn(env)(dir, [
+        '-c',
+        'user.email=t@example.com',
+        '-c',
+        'user.name=T',
+        ...args,
+      ])
+      if (result.code !== 0) {
+        throw new GitError(args, result.stderr, result.code)
+      }
+      return result.stdout.toString('utf8').trim()
+    }
+    try {
+      await inRepo('2026-01-01T00:00:00Z', 'init', '-q', '-b', 'main')
+      await inRepo('2026-01-01T00:00:00Z', 'commit', '-q', '--allow-empty', '-m', 'base')
+      const base = await inRepo('2026-01-01T00:00:00Z', 'rev-parse', 'HEAD')
+      // The first answer, then its revision on a child whose clock ran behind.
+      await inRepo(
+        '2026-01-05T00:00:00Z',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'a',
+        '-m',
+        'Settled-decision: a.ts:1 first'
+      )
+      const first = await inRepo('2026-01-05T00:00:00Z', 'rev-parse', 'HEAD')
+      await inRepo(
+        '2026-01-02T00:00:00Z',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'b',
+        '-m',
+        'Settled-decision: a.ts:1 revised'
+      )
+      const revised = await inRepo('2026-01-02T00:00:00Z', 'rev-parse', 'HEAD')
+      await inRepo('2026-01-06T00:00:00Z', 'checkout', '-q', '-b', 'side', first)
+      await inRepo('2026-01-06T00:00:00Z', 'commit', '-q', '--allow-empty', '-m', 'side')
+      await inRepo('2026-01-07T00:00:00Z', 'merge', '-q', '--no-ff', '-m', 'merge', revised)
+      const keyed = await createGit(dir, execGitAsRepoConfig).commitKeyedLines(
+        base,
+        'HEAD',
+        'Settled-decision'
+      )
+      expect(keyed.map(commit => commit.sha)).toEqual([first, revised])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('snapshots the working tree, untracked files included, without touching the real index', async () => {

@@ -30,6 +30,7 @@
   --ok: light-dark(#4a6a2e, #a8c97f);
   --bad: light-dark(#a8432c, #e98a6f);
   --warn: light-dark(#86681a, #d4b25a);
+  --on-warn: light-dark(#f7f7f2, #1d1f1a);
   --warn-bg: light-dark(#f6f0d9, rgb(212 178 90 / 15%));
   --progress: light-dark(#50643f, #a8c97f);
 

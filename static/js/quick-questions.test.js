@@ -2,16 +2,20 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { askButtonHtml, setChatEnabled } from './ask.js'
-import { QUICK_QUESTIONS } from './chat.js'
 import {
   ASK_SOMETHING_ELSE,
   CLOSE_DELAY_MS,
   HOVER_DELAY_MS,
+  LAYER_QUESTIONS,
   MENU_EDGE_PX,
   QQ_MENU_ID,
+  QUICK_QUESTIONS,
   quickMenuHtml,
+  quickQuestionsFor,
   wireQuickQuestions,
 } from './quick-questions.js'
+
+const LINES = /** @type {const} */ ({ kind: 'lines', path: 'src/app.ts', side: 'new', start: 3, end: 4 })
 
 /** @type {HTMLElement} */
 let root
@@ -26,9 +30,9 @@ beforeEach(() => {
   picked = []
   root = document.createElement('div')
   root.innerHTML =
-    askButtonHtml({ kind: 'file', path: 'src/app.ts' }) +
+    askButtonHtml(LINES) +
     askButtonHtml({ kind: 'layer', layerId: 'layer-1' }) +
-    '<span id="chip" data-ask-menu data-ask-path="src/app.ts" tabindex="0">src/app.ts</span>'
+    '<span id="chip" data-ask-menu data-ask-path="src/app.ts" data-ask-side="new" data-ask-start="3" data-ask-end="4" tabindex="0">src/app.ts lines 3–4</span>'
   document.body.replaceChildren(root)
   menu = wireQuickQuestions(root, { onPick: (context, question) => picked.push([context, question]) })
 })
@@ -81,8 +85,15 @@ describe('wireQuickQuestions', () => {
   it('sends the question with the context of the command it opened on', () => {
     el('[data-ask-layer]').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     items()[0]?.click()
-    expect(picked).toEqual([[{ kind: 'layer', layerId: 'layer-1' }, QUICK_QUESTIONS[0]]])
+    expect(picked).toEqual([[{ kind: 'layer', layerId: 'layer-1' }, LAYER_QUESTIONS[0]]])
     expect(menuEl().hidden).toBe(true)
+  })
+
+  it('offers a layer its own questions, and anything narrower the general ones', () => {
+    el('[data-ask-layer]').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(items().map(i => i.textContent)).toEqual([...LAYER_QUESTIONS, ASK_SOMETHING_ELSE])
+    el('[data-ask-path]').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(items().map(i => i.textContent)).toEqual([...QUICK_QUESTIONS, ASK_SOMETHING_ELSE])
   })
 
   it('opens on the context chip too, and "ask something else" sends no question', () => {
@@ -90,7 +101,7 @@ describe('wireQuickQuestions', () => {
     items()
       .find(item => item.textContent === ASK_SOMETHING_ELSE)
       ?.click()
-    expect(picked).toEqual([[{ kind: 'file', path: 'src/app.ts' }, null]])
+    expect(picked).toEqual([[LINES, null]])
   })
 
   it('moves between the questions with the arrow keys and closes on Escape', () => {
@@ -277,5 +288,24 @@ describe('wireQuickQuestions without a menu it can use', () => {
     const wired = wireQuickQuestions(bare, { onPick: () => undefined })
     expect(wired.stop).toBeTypeOf('function')
     wired.stop()
+  })
+})
+
+describe('quickQuestionsFor', () => {
+  it('offers a point and lines the general questions, a layer its own, and a file or the PR none', () => {
+    expect(QUICK_QUESTIONS).toEqual([
+      'Suggestion to solve this?',
+      'Why this way, and what were the alternatives?',
+      'What could break?',
+      'Does this follow how the codebase already does it?',
+      'Is this covered by tests?',
+    ])
+    expect(quickQuestionsFor({ kind: 'point', fingerprint: 'fp' })).toBe(QUICK_QUESTIONS)
+    expect(quickQuestionsFor({ kind: 'lines', path: 'a.ts', side: 'new', start: 1, end: 2 })).toBe(
+      QUICK_QUESTIONS
+    )
+    expect(quickQuestionsFor({ kind: 'layer', layerId: 'l' })).toBe(LAYER_QUESTIONS)
+    expect(quickQuestionsFor({ kind: 'file', path: 'a.ts' })).toEqual([])
+    expect(quickQuestionsFor({ kind: 'pr' })).toEqual([])
   })
 })

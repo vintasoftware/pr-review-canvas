@@ -32,6 +32,9 @@ export const ChatContextSchema = z.discriminatedUnion('kind', [
 /** A message longer than this is a paste, not a question. */
 export const CHAT_MESSAGE_MAX = 8000
 
+/** How many of a thread's answers the reader has not seen. */
+export const ChatUnseenSchema = z.object({ unseen: z.number().int().min(0).max(1000) })
+
 export const ChatSendSchema = z.object({
   message: z.string().min(1).max(CHAT_MESSAGE_MAX),
   context: ChatContextSchema,
@@ -105,6 +108,8 @@ export interface ChatThreadsResponse {
     /** The turns the thread has taken. */
     turns: number
     anchor?: ChatContext
+    /** The answers the reader has not seen there yet. */
+    unseen?: number
   }>
   activeThread: string | null
   /** The agent the next thread would use, from the settings plus any flag override. */

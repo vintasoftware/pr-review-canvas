@@ -638,6 +638,22 @@ export function fetchThreadHistory(prNumber, name, opts = {}) {
 }
 
 /**
+ * Records how many of a thread's answers the reader has not seen, so a reload still marks them.
+ * @param {ReviewKey} prNumber
+ * @param {string} name
+ * @param {number} unseen
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ name: string, unseen: number }>}
+ */
+export function markThreadUnseen(prNumber, name, unseen, opts = {}) {
+  return fetchJson(`/api/prs/${prNumber}/chat/threads/${encodeURIComponent(name)}/unseen`, {
+    method: 'PUT',
+    body: { unseen },
+    fetchImpl: opts.fetchImpl,
+  })
+}
+
+/**
  * Makes a thread the one that opens next time.
  * @param {ReviewKey} prNumber
  * @param {string} name

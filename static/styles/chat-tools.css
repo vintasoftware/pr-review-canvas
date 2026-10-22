@@ -44,6 +44,24 @@
   overflow-wrap: anywhere;
   cursor: default;
 }
+/* Above the box, the chip keeps to one line beside its commands; its tooltip has the whole name. */
+.ctx-line {
+  flex-wrap: nowrap;
+  /* Centered, not on the baseline: an icon command has no text to line up. */
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.ctx-line > .cmd {
+  flex: none;
+}
+.ctx-line .ctx-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ctx-chip:focus-visible,
 .qq-item:focus-visible {
   outline: 2px solid var(--accent);

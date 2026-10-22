@@ -59,6 +59,26 @@ export function getFoldLevel() {
 /** @type {RenderContext | null} */
 let renderContext = null
 
+/**
+ * The canvas the page draws, and the files and commits its diff comes from: the PR's own for a
+ * ready canvas, the canvas's own for an outdated one the reader chose to open, since it describes
+ * its own commit. Null when the page draws no canvas. The page and its header both ask this, so
+ * they agree on which diff is on screen.
+ * @param {import('./contract-types.js').PrBundle} bundle
+ * @param {boolean} viewStale whether the reader opened an outdated canvas
+ * @returns {{ artifact: ReviewArtifact, files: FileEntry[], on: { headSha: string, mergeBaseSha: string } } | null}
+ */
+export function drawnCanvas(bundle, viewStale) {
+  const { artifact } = bundle
+  if (artifact === undefined) {
+    return null
+  }
+  if (bundle.status === 'ready') {
+    return { artifact, files: bundle.files, on: bundle.pr }
+  }
+  return bundle.status === 'stale' && viewStale ? { artifact, files: artifact.files, on: artifact.pr } : null
+}
+
 /** @param {RenderContext | null} ctx */
 export function setRenderContext(ctx) {
   renderContext = ctx
@@ -533,7 +553,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     `<pr-layer><section class="layer${reviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
     `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !reviewed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${esc(layer.title)}${risks}</h2>` +
     `<div class="layer-ctl"><label class="chk"><input type="checkbox" data-reviewed-id="${esc(layerReviewedId)}"${reviewed ? ' checked' : ''}> reviewed</label>` +
-    `${askButtonHtml({ kind: 'layer', layerId: layer.id }, { label: 'ask about this layer' })}</div></div>` +
+    `${askButtonHtml({ kind: 'layer', layerId: layer.id }, { label: 'ask about this layer', title: 'Ask AI Chat about this layer' })}</div></div>` +
     `<div class="layer-body"${reviewed ? ' hidden' : ''}>` +
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
     testMapHtml(layer, ctx.paths) +

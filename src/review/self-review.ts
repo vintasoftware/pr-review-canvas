@@ -1,7 +1,7 @@
 // Self-review: the author settles attention points before asking for review, and the canvas carries
 // each answer to every reviewer. Any point can be settled, a reviewer point too when it does not
 // apply. A settled point leaves the reviewer's list; its reason stays.
-import type { Point, Pr, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
+import type { Point, Pr, ReopenedDecision, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
 import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
 
@@ -59,7 +59,11 @@ export function tallyMarkdown(tally: CanvasTally): string {
   return lines.join('\n')
 }
 
-/** The canvas with the point settled, or reopened when `settlement` is undefined, stamped as revised. */
+/**
+ * The canvas with the point settled, or reopened when `settlement` is undefined, stamped as revised.
+ * Reopening a settled decision's point records the commit whose answer it sets aside, so the next
+ * canvas leaves it open; settling it again takes the record back.
+ */
 export function withSettlement(
   artifact: ReviewArtifact,
   pointFingerprint: string,
@@ -68,7 +72,19 @@ export function withSettlement(
 ): ReviewArtifact & { settled: Record<string, Settlement>; revisedAt: string } {
   const { [pointFingerprint]: _previous, ...rest } = artifact.settled ?? {}
   const settled = settlement === undefined ? rest : { ...rest, [pointFingerprint]: settlement }
-  return { ...artifact, settled, revisedAt }
+  const { [pointFingerprint]: _reopened, ...stillReopened } = artifact.reopened ?? {}
+  const commit = artifact.points.find(p => p.fingerprint === pointFingerprint)?.decisionCommit
+  const reopened =
+    settlement === undefined && commit !== undefined
+      ? { ...stillReopened, [pointFingerprint]: { commit, at: revisedAt } }
+      : stillReopened
+  const { reopened: _old, ...revised } = artifact
+  return {
+    ...revised,
+    settled,
+    ...(Object.keys(reopened).length === 0 ? {} : { reopened }),
+    revisedAt,
+  }
 }
 
 /**
@@ -119,4 +135,19 @@ export function keptSettlements(
 ): Record<string, Settlement> {
   const present = new Set(artifact.points.map(p => p.fingerprint))
   return Object.fromEntries(Object.entries(source?.settled ?? {}).filter(([fp]) => present.has(fp)))
+}
+
+/**
+ * The settled decisions a newly generated canvas keeps open: those the author reopened on the
+ * canvas it took its resolutions from, while the point still comes from the same commit. A later
+ * commit that decides the same question again is a new answer, which resolves the point once more.
+ */
+export function keptReopens(
+  artifact: Pick<ReviewArtifact, 'points'>,
+  source: Pick<ReviewArtifact, 'reopened'> | null
+): Record<string, ReopenedDecision> {
+  const fromCommit = new Map(artifact.points.map(p => [p.fingerprint, p.decisionCommit]))
+  return Object.fromEntries(
+    Object.entries(source?.reopened ?? {}).filter(([fp, reopen]) => fromCommit.get(fp) === reopen.commit)
+  )
 }

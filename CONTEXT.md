@@ -48,6 +48,10 @@ _Avoid_: Self-approval, pre-review
 An attention point the author answered with a reason saved in the canvas. The author may resolve any point, a reviewer point too when it does not apply. It leaves the open-point list and starts hidden for every reader, who can show it in place, collapsed with its reason. The resolution follows the pull request to every later canvas while the point comes back with the same kind, path, and title; the generator reopens it under a new title only when the reason no longer holds.
 _Avoid_: Dismissed, approved, closed
 
+**Settled decision**:
+A question about the change that the author answered before the canvas existed, recorded as a `Settled-decision` line, with the question and then the answer, in the message of the commit that carries the answer. The canvas shows it as a resolved point titled by the question, with the author's answer as its reason, instead of asking it again.
+_Avoid_: Waiver, accepted finding
+
 **Dismissal**:
 A reader's personal mark that takes an attention point off their own open list; on their page the point stays in place, collapsed. Anyone may dismiss, the author too. It does not answer the point for other readers or complete the author's self-review.
 _Avoid_: Resolution, approval

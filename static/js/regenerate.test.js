@@ -56,6 +56,7 @@ describe('regenerate dialog', () => {
       '/pr-review-canvas 42 --force'
     )
     expect(dialog?.querySelector('.cmd.fill')?.textContent).toBe('copy')
+    expect(dialog?.querySelector('.cmd.fill')?.getAttribute('title')).toBe('Copy')
     expect(dialog?.querySelector('.dialog-actions .cmd')?.textContent).toBe('close')
   })
 

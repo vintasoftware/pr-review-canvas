@@ -70,12 +70,24 @@
   transform: translate(-2px, -2px);
   box-shadow: 7px 7px 0 var(--shadow);
 }
+/* A filled command that is off drops its fill and lift, so it does not read as ready. */
+.cmd:is(.fill, .big):disabled {
+  background: none;
+  color: var(--fg-dim);
+  box-shadow: none;
+  transform: none;
+}
 /* How the last copy went, for a moment after the click. */
 .cmd[data-copied='copied'] {
   color: var(--ok);
 }
 .cmd[data-copied='failed'] {
   color: var(--bad);
+}
+/* A filled command drops its fill while it says how the copy went, so the color reads. */
+.cmd.fill:is([data-copied='copied'], [data-copied='failed']) {
+  background: none;
+  box-shadow: inset 0 0 0 1px currentcolor;
 }
 .cmd-err {
   display: inline-block;

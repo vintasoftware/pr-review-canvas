@@ -15,7 +15,7 @@ export function regenerateDialogHtml(command) {
     `<dialog id="${REGENERATE_DIALOG_ID}" class="regen" aria-labelledby="regen-h"><form method="dialog">` +
     '<h2 id="regen-h">Regenerate the canvas</h2>' +
     '<p class="hint">Run this in Claude Code or Codex from this repo. The current canvas stays until the new one is published; this page then updates on its own.</p>' +
-    `<div class="cmdbox"><code>${esc(command)}</code><button class="cmd fill" type="button" data-copy="${esc(command)}">copy</button></div>` +
+    `<div class="cmdbox"><code>${esc(command)}</code><button class="cmd fill" type="button" data-copy="${esc(command)}" title="Copy">copy</button></div>` +
     '<div class="dialog-actions"><button class="cmd" type="submit" value="close">close</button></div>' +
     '</form></dialog>'
   )

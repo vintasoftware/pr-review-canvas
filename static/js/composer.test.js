@@ -12,7 +12,8 @@ import {
   setDisabledReason,
   toggleMarkdownPreview,
 } from './composer.js'
-import { noPostingTitle } from './host.js'
+import { sendCommandsHtml } from './comment-link.js'
+import { noPostingTitle, setHost } from './host.js'
 
 /** @param {string} html */
 function mount(html) {
@@ -317,6 +318,21 @@ describe('applyCapabilityGating', () => {
     )
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     expect(document.querySelector('.capability-note')?.textContent).toBe('')
+    // On GitLab the line names GitLab.
+    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    try {
+      applyCapabilityGating(document, {
+        canComment: false,
+        tokenKind: 'classic',
+        login: null,
+        reason: 'no api scope',
+      })
+      expect(document.querySelector('.capability-note')?.textContent).toBe(
+        'Posting to GitLab is off: no api scope'
+      )
+    } finally {
+      setHost(undefined)
+    }
   })
 
   it('keeps a command that is disabled for a reason of its own disabled', () => {
@@ -347,6 +363,27 @@ describe('applyCapabilityGating', () => {
     }
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     expect(button?.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('gives a post command back its capitalized tooltip, with the host cased', () => {
+    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    try {
+      document.body.innerHTML = sendCommandsHtml({ kind: 'point', id: 'p1' })
+      const post = document.querySelector('[data-act="point-post"]')
+      expect(post?.textContent).toBe('post to gitlab')
+      expect(post?.getAttribute('title')).toBe('Post to GitLab')
+      applyCapabilityGating(document, {
+        canComment: false,
+        tokenKind: 'classic',
+        login: null,
+        reason: 'no scope',
+      })
+      expect(post?.getAttribute('title')).toBe('no scope')
+      applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
+      expect(post?.getAttribute('title')).toBe('Post to GitLab')
+    } finally {
+      setHost(undefined)
+    }
   })
 
   it('ignores an element that is not a command', () => {

@@ -356,8 +356,11 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
   for (const note of plan.notes) io.stderr(`  ${note}`)
   if (plan.steps.length === 0) {
     const prompts = await ownPromptGaps(deps, values.from)
-    io.stderr('Everything is up to date.')
     printPromptGaps(io, prompts)
+    // The templates are the one thing left, so the last line does not call everything current.
+    io.stderr(
+      prompts.length === 0 ? 'Everything is up to date.' : 'Nothing to upgrade; add the tokens above.'
+    )
     if (io.json) printJson(io, { applied: false, steps: [], notes: plan.notes, prompts })
     return EXIT.ok
   }
@@ -369,8 +372,11 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
 
   const confirmed = values.yes === true ? true : await deps.confirm('Proceed? [y/N] ')
   if (confirmed !== true) {
+    // Declining the upgrade leaves the templates as they are, so their gaps still stand.
+    const prompts = await ownPromptGaps(deps, values.from)
+    printPromptGaps(io, prompts)
     io.stderr(confirmed === null ? 'Nothing changed. Re-run with --yes to apply.' : 'Nothing changed.')
-    if (io.json) printJson(io, { applied: false, steps: plan.steps, notes: plan.notes })
+    if (io.json) printJson(io, { applied: false, steps: plan.steps, notes: plan.notes, prompts })
     return EXIT.ok
   }
 

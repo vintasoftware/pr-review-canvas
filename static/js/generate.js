@@ -150,7 +150,7 @@ export function skillHtml(skill) {
 function skillFallbackHtml(command) {
   return (
     '<p class="hint">Or run it yourself in Claude Code or Codex from this repo:</p>' +
-    `<div class="cmdbox"><code>${esc(command)}</code><button class="cmd" type="button" data-copy="${esc(command)}">copy</button></div>`
+    `<div class="cmdbox"><code>${esc(command)}</code><button class="cmd" type="button" data-copy="${esc(command)}" title="Copy">copy</button></div>`
   )
 }
 

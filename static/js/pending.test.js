@@ -11,7 +11,9 @@ import {
   pendingRange,
   pendingRowHtml,
   refreshPendingBar,
+  refreshResolvedDrafts,
 } from './pending.js'
+import { setSettled } from './self-review.js'
 
 const NOW = new Date('2026-09-10T12:00:00.000Z')
 const BASE = emptyState(NOW.toISOString())
@@ -89,6 +91,29 @@ describe('pendingRowHtml', () => {
     expect(
       [...document.querySelectorAll('.pending-cmt')].map(c => c.getAttribute('data-pending-id'))
     ).toEqual(['p1', 'p2'])
+  })
+})
+
+describe('refreshResolvedDrafts', () => {
+  it('says on a drawn draft that the author resolved its point, and takes it back once reopened', () => {
+    const onPoint = draft({ pointFingerprint: 'fp-1' })
+    const state = { ...BASE, pending: [onPoint, draft({ id: 'p2' })] }
+    document.body.innerHTML = `<table><tbody>${pendingRowHtml(state.pending, NOW)}</tbody></table>`
+    const notes = () =>
+      [...document.querySelectorAll('.pending-cmt')].map(c => c.querySelector('.pending-resolved') !== null)
+    try {
+      setSettled({ 'fp-1': { reason: 'Known.', at: NOW.toISOString() } })
+      refreshResolvedDrafts(document, state)
+      refreshResolvedDrafts(document, state)
+      expect(notes()).toEqual([true, false])
+      // Above the commands, so the draft can still be sent or deleted under it.
+      expect(document.querySelector('.pending-resolved')?.nextElementSibling?.className).toBe('tbtns')
+      setSettled({})
+      refreshResolvedDrafts(document, state)
+      expect(notes()).toEqual([false, false])
+    } finally {
+      setSettled({})
+    }
   })
 })
 

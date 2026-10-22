@@ -93,7 +93,7 @@ export function reviewPanelHtml(state, ctx) {
               `<p class="review-where">${esc(pendingRange(p))} <span class="muted">· commit ${esc(p.headSha.slice(0, 7))}${p.mergeBaseSha === undefined ? '' : ` from ${esc(p.mergeBaseSha.slice(0, 7))}`} · ${draftOrigin(p, ctx.points)}</span></p>` +
               `<div class="prose">${renderMarkdown(p.body, { github: true })}</div>` +
               '<span class="tbtns">' +
-              `<button class="cmd" type="button" data-copy="${esc(p.body)}">copy</button>` +
+              `<button class="cmd" type="button" data-copy="${esc(p.body)}" title="Copy">copy</button>` +
               `<button class="cmd" type="button" data-act="pending-delete" data-pending-id="${esc(p.id)}">delete</button></span></li>`
           )
           .join('') +

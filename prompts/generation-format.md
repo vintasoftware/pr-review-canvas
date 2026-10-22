@@ -252,7 +252,10 @@ of each chunk. They are not the manifest's additions plus deletions.
 
 At most {{MAX_POINTS}} per canvas, counting the ones missing tests will add. Each has a `kind`
 (`decision`, `risk`, `drift`, `tests`, `debt`, `question`) and a `level` (`decide`, `check`, `fyi`).
-State the observation, why it matters, and any decision or check the reviewer should make.
+The page shows `decision` as **design choice**: a choice the change makes, whatever its level. A
+`question` point asks the reader something, so its level is `decide` or `check`; something only to
+note is another kind. State the observation, why it matters, and any decision or check the reviewer
+should make.
 An `fyi` point can simply explain useful context. Anchor each on `path` and `line` inside a
 hunk of the diff, on the head side unless you set `side: "old"`; any line inside the hunk works,
 changed or not. Do not nitpick.
@@ -284,7 +287,7 @@ When in doubt, choose `reviewer`: a point the author resolves leaves every revie
 
 {{RESOLVED}}
 
-- Every decision or trade-off you surface gets a `kind: "decision"` point. Use `level: "fyi"`
+- Every design choice or trade-off you surface gets a `kind: "decision"` point. Use `level: "fyi"`
   to explain a chosen approach, its benefit and cost; use `level: "decide"` when human agreement
   is needed. Label inferred rationale as an inference. Sound design choices belong here too.
 - Build an inventory for each semantic layer before drafting: the consequential design choices
@@ -313,6 +316,10 @@ When in doubt, choose `reviewer`: a point the author resolves leaves every revie
   requested manual check, identify its attention point in the same layer. Move any unmatched
   item into a point. Also compare the points with the inventory: deleting a layer paragraph must
   not delete its decision or check. Confirm `decisions` and `checkByHand` are absent from every layer.
+
+### Settled decisions
+
+{{SETTLED_DECISIONS}}
 
 ## Risk
 

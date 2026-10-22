@@ -892,6 +892,9 @@ describe('the ask command on a card', () => {
       expect(layerAsk?.getAttribute('data-ask-layer')).toBe('run-path')
       const fileAsk = document.querySelector('article.file [data-act="ask"]')
       expect(fileAsk?.getAttribute('data-ask-path')).toBe('src/app.ts')
+      // A layer's ask opens the quick questions; a file's asks at once, without them.
+      expect(layerAsk?.hasAttribute('data-ask')).toBe(true)
+      expect(fileAsk?.hasAttribute('data-ask')).toBe(false)
     } finally {
       setChatEnabled(false)
     }

@@ -120,7 +120,7 @@ describe('renderChatContext', () => {
       [
         '## Context: attention point — Sum instead of product',
         '',
-        'decision · decide (high impact) · point `fp-1`',
+        'design choice · decide (high impact) · point `fp-1`',
         '',
         'Look at the operator because the spec is ambiguous; if the spec says sum, this is fine.',
         '',

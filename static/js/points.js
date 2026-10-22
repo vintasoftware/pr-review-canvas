@@ -4,12 +4,12 @@
 /** @typedef {import('./contract-types.js').PrState} PrState */
 import { askButtonHtml } from './ask.js'
 import { sendCommandsHtml, viewCommentHtml } from './comment-link.js'
-import { esc } from './dom.js'
+import { esc, wideCellHtml } from './dom.js'
 import { hostLabel } from './host.js'
 import { lineLink } from './links.js'
 import { pendingCommentHtml, pendingForPoint, pendingRange } from './pending.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
-import { LEVELS, levelIconHtml, pointLevelText } from './point-level.js'
+import { LEVELS, levelIconHtml, pointKindText, pointLevelText } from './point-level.js'
 import { renderMarkdown } from './markdown.js'
 import {
   audiencePillHtml,
@@ -136,7 +136,7 @@ export function setMentionCanvas(on) {
  */
 export function pointToMarkdown(p) {
   const source = mentionCanvas ? ' · from the pr-review canvas' : ''
-  return `**${p.title}**\n\n${p.body}\n\n_${pointLocation(p)} · ${p.kind} · ${pointLevelText(p)}${source}_`
+  return `**${p.title}**\n\n${p.body}\n\n_${pointLocation(p)} · ${pointKindText(p)} · ${pointLevelText(p)}${source}_`
 }
 
 /**
@@ -304,12 +304,24 @@ function statusPartsHtml(p, status, ctx, opts) {
     }
     case 'resolved': {
       const reason = settlementOf(p)?.reason ?? ''
+      const first = reason.split('\n')[0] ?? ''
+      // A draft the reviewer queued before the author resolved the point stays theirs to send or drop.
+      const drafts = pendingForPoint(ctx.state, p.fingerprint).length
+      const waiting =
+        drafts === 0
+          ? ''
+          : `${drafts === 1 ? 'your draft still waits' : `${drafts} drafts still wait`} in your review`
+      // A settled decision that states no question is titled by its reason; the line would repeat it.
+      const said = [first === p.title ? '' : `Resolved by the author: ${esc(first)}`, waiting]
+        .filter(part => part !== '')
+        .join(' · ')
       return {
         pill,
-        summary: line(`Resolved by the author: ${esc(reason.split('\n')[0] ?? '')}`),
+        summary: said === '' ? '' : line(said.charAt(0).toUpperCase() + said.slice(1)),
         outcome:
           '<div class="p-outcome"><h4 class="lbl">Author’s reason</h4>' +
-          `<div class="prose settled-reason">${renderMarkdown(reason, { paths: ctx.paths })}</div></div>`,
+          `<div class="prose settled-reason">${renderMarkdown(reason, { paths: ctx.paths })}</div></div>` +
+          (opts.card ? draftsHtml(p, ctx) : ''),
       }
     }
     case 'dismissed':
@@ -358,8 +370,14 @@ export function impactPillHtml(p) {
  */
 function pointPartsHtml(p, ctx, opts) {
   const status = pointStatus(p, ctx.state)
+  // A settled decision's point is open only when the author reopened it: its body still gives the
+  // commit's answer, which no longer settles it.
+  const reopened =
+    p.decisionCommit === undefined
+      ? ''
+      : '<p class="p-summary muted">The author reopened this on the canvas; the commit’s answer below no longer settles it.</p>'
   const parts =
-    status === 'open' ? { pill: '', summary: '', outcome: '' } : statusPartsHtml(p, status, ctx, opts)
+    status === 'open' ? { pill: '', summary: reopened, outcome: '' } : statusPartsHtml(p, status, ctx, opts)
   const toggle =
     status === 'open'
       ? ''
@@ -370,7 +388,7 @@ function pointPartsHtml(p, ctx, opts) {
       `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +
       `data-sig="${esc(pointSignature(p, status, ctx))}"`,
     handled: status === 'open' ? '' : status === 'resolved' ? ' is-handled is-resolved' : ' is-handled',
-    title: `<span class="p-title">${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(p.kind)}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
+    title: `<span class="p-title">${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
     rest:
       parts.summary +
       `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
@@ -400,8 +418,9 @@ export function pointCardHtml(p, ctx) {
 export function pointRowHtml(p, ctx) {
   const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: false })
   return (
-    `<tr class="ifind ${p.level}${handled}" ${attrs}><td class="code x" colspan="4">` +
-    `<div class="f-title">${levelIconHtml(p.level)}${title}</div>${rest}</td></tr>`
+    `<tr class="ifind ${p.level}${handled}" ${attrs}>` +
+    wideCellHtml(`<div class="f-title">${levelIconHtml(p.level)}${title}</div>${rest}`) +
+    '</tr>'
   )
 }
 
@@ -426,11 +445,17 @@ export function pointStatusesHtml(points, state, switches = {}) {
     counts[pointStatus(p, state)] += 1
   }
   const handled = points.length - counts.open - counts.resolved
+  // A resolved point counts as resolved, so the drafts that still wait on one are named apart.
+  const drafted = points.filter(
+    p => pointStatus(p, state) === 'resolved' && pendingForPoint(state, p.fingerprint).length > 0
+  ).length
   const parts = [`<b>${counts.open} open</b>`]
   for (const status of /** @type {const} */ (['queued', 'posted', 'resolved', 'dismissed'])) {
     if (counts[status] > 0) {
       parts.push(
-        `${counts[status]} ${status === 'resolved' ? 'resolved by the author' : STATUS_LABELS[status]}`
+        status === 'resolved'
+          ? `${counts.resolved} resolved by the author${drafted === 0 ? '' : ` (${drafted} with your draft in the review)`}`
+          : `${counts[status]} ${STATUS_LABELS[status]}`
       )
     }
   }

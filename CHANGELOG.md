@@ -69,13 +69,17 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
 - A reviewer's page reads the author's resolutions back from the canvas comment when it opens and
   every two minutes after while its tab is in view, hides the newly resolved points, and says so.
   Before, a reviewer who had already loaded the canvas saw them only after **refresh**.
+- A draft the reviewer added to the review stays when the author resolves its point. The message
+  says the review keeps it, the draft says the author resolved its point, and the overview line
+  counts the resolved points that still hold one.
 
 ### Prompt templates
 
 - `pr-review upgrade` checks the project's own prompt templates once pr-review moves: each token
   the new release added to a bundled template that a custom copy lacks is named, with the heading
-  to add it under. `pr-review doctor` has the same check as its `prompts` line, for any release up
-  to the running one.
+  to add it under, also when the upgrade is declined or cannot be asked without a terminal, and in
+  `--json` as `prompts`. `pr-review doctor` has the same check as its `prompts` line, for any
+  release up to the running one.
 
 ### Attention points
 
@@ -86,11 +90,44 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
   default) or **action** (purple, blue, gray), for readers who took the red and amber for a
   severity scale. It is saved as `pointColors` in `settings.yml`.
 - A **decide** point has an impact: **critical**, **high**, or **low**, for what a wrong call would
-  cost. Its card shows it next to the title, and decide points list the worst impact first. A
+  cost. Its card shows it next to the title in the decide icon's color, filled for critical,
+  outlined for high, and dashed for low, apart from the kind and audience tags. Decide
+  points list the worst impact first. A
   canvas generated before this version shows its decide points without one; generate again to get
   them.
 - A generation that leaves a decide point without an impact, or gives one to another point, is
   sent back to the agent to fix (`POINT_IMPACT`).
+- A `decision` point's tag reads **design choice**, on its card, in a copied or posted comment, and
+  in what AI Chat is told. It marks a choice the change makes at any level, so an fyi one no longer
+  reads as something to decide. Canvases still store `decision`, so resolutions and threads hold.
+- A generation that writes a **question** point at fyi level is sent back to the agent to fix
+  (`POINT_LEVEL`): a question asks the reader to decide or check. Stored canvases still open.
+
+### Settled decisions
+
+- A question the author already answered is recorded in the commit that carries the answer, as a
+  `Settled-decision: <path>:<line> <question>? <decision and reason>` line, and publish adds it to
+  the canvas as a resolved attention point titled by the question, with the answer as its reason,
+  so the canvas does not ask it again. The question is optional. The point costs the generator
+  none of its own.
+- `prepare` reads the decisions of the author's own commits, and on a pull request only when its
+  author prepares the canvas. A decision is carried to its line while the line reads the same at
+  the head, and kept as context the generator does not reopen once it does not, or once a deleted
+  line it is about comes back. The line counts
+  anywhere in the message, so a blank line before `Co-Authored-By` loses nothing.
+- A reason the author wrote on the canvas stands over the commit's until a later commit changes
+  the answer; a later decision on the same line and question replaces an earlier one. Two
+  questions about one line, in one commit or two, are two resolved points, each with its answer.
+- **reopen** on a decision's point lasts: every later canvas keeps it open until a later commit
+  answers its question on that line again. While it is open, the point says the author reopened
+  it, with the commit's answer as context.
+- A decision's point gives its commit's answer in its text, so **copy** and **ask** carry it.
+- A line that asks its question and gives no answer, such as `src/app.ts:9 Is this the answer?`,
+  resolves nothing: the generator is told the question is open.
+- An indented `Settled-decision` line counts. A decision on a line deleted in a commit that also
+  renames its file is found under the old name.
+- The review loop skill writes a decision line for each question its gate asks, and its Claude and
+  Codex copies are the same again.
 
 ### AI Chat threads
 
@@ -98,21 +135,72 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
   a file, or a layer. The first ask about a place starts a thread titled after it, and asking about
   the place again comes back to that thread. Each thread is its own agent session, so a
   conversation about one point no longer mixes with another's.
-- The chat pane shows one thread at a time, with its place on top and **go to code** to lead back
-  to it. The new **Threads** tab lists them by kind of place, with the questions in each, and
-  **new thread** starts one about the whole PR; an ask about the whole PR comes back to the latest
-  of those. It replaces the thread list in the pane's head.
-- The ask command of a place with a thread carries a dot. The dot fills, and the **Threads** tab
-  shows one too, when an answer arrived there while the reader was not reading it: in another
+- The chat pane shows one thread at a time, its place named on top with a tag for its kind. The
+  context line above the message box stays, with **go to code** to lead back to the place and
+  **clear** to take what the box holds to the latest thread about the whole PR. The place's name
+  opens the list of every thread, by kind of place, with the questions in each and a filter, in
+  place of the pane's old thread select. **new thread**, beside it and at the bottom of the list,
+  starts one about the whole PR.
+- An ask that leaves the thread the reader was reading for a new one offers **back to** that thread
+  until its first question. A thread whose first question is still starting is listed by its place
+  until the server has made it.
+- Each thread keeps its own unsent text: a half-written question stays with the thread it was
+  written in when an ask opens another one. **clear** still takes it along to the whole PR, below
+  any text that thread already had.
+- The thread list matches the filter against each thread's name and its kind of place, says when
+  nothing matches, opens at the open thread, and gives each entry its whole name as a tooltip.
+  Picking a thread puts the focus in the message box, and tabbing out of the list closes it.
+- The ask command of a place with a thread carries a dot. The dot fills, and the thread's name on
+  top of the pane counts the threads, as in **2 new**, when an answer arrived there while the reader was not reading it: in another
   thread, with the pane minimized, or on another tab. The **AI Chat** tab and its launcher count
-  those answers, up to 9.
-- While an answer comes in, ask, the Threads tab and **new thread** still open any thread, and the
+  those answers, up to 9. The marks are kept with the review, so a reload keeps them.
+- While an answer comes in, ask, the list of threads, and **new thread** still open any thread, and the
   answer keeps arriving in its own. A question asked elsewhere meanwhile is sent once it ends.
 - The open thread comes back when the page is reloaded.
 - `chatThreadPerPlace: false` in `settings.yml`, or **A thread per place** cleared in the settings
   dialog, sends every ask to the open thread as before.
-- Threads saved by earlier versions still appear in the Threads tab, under whole PR, since they have
-  no place.
+- Threads saved by earlier versions still appear in the list of threads, under whole PR, since they
+  have no place.
+
+### Commands
+
+- The GitHub skin draws more commands as icons, each with its word as tooltip and accessible name:
+  the AI Chat pane's minimize, **new thread**, **go to code**, and **clear**; a point's and a chat
+  card's **post to github**, a chat card's **edit** and **copy**; the copy of a diagram or a
+  command box; and the link to the pull request on the forge, which opens in a new tab.
+- A layer's ask is an icon too, and its menu offers questions about the whole layer: a walkthrough,
+  what it could break, whether it follows the codebase, and whether its tests are enough. A file's
+  ask opens the file's thread at once, with no menu, and so does the context chip of a file.
+- The context chip above the message box keeps to one line, with the whole name as its tooltip.
+
+### Reading
+
+- A file's hunks share one width: scrolled sideways past the end of a short hunk under a long one,
+  its added, removed, and hunk rows keep their colors. Before, they stopped at the card's width.
+- Only code lines make a diff scroll sideways. Attention points, annotations, comment threads,
+  comment boxes, and folded-code titles wrap at the visible width and stay in view while a long
+  line scrolls. Before, a line long enough to scroll stretched them to its width.
+- Diagrams draw smaller. A flowchart's decisions are hexagons tinted with the page's accent instead
+  of diamonds that grow with their question, its steps have rounded corners, and nodes sit closer.
+  A sequence diagram draws its participants once, on top. **copy** still gives the source as
+  written.
+- Every row of an `erDiagram` entity is readable in the dark theme; every other row was light, with
+  text in the dark theme's light color.
+- The terminal skin's text reads at WCAG AA contrast: a filled copy drops its fill while it says
+  **copied** or **failed**, pending pills and the review count take dark text on their yellow, and
+  changed words, red text, muted text, and some syntax colors are adjusted, in light and dark.
+- **Hide code** shows on an outdated canvas too, once **view stale canvas** opens it, and counts
+  what it hides from that canvas's own diff.
+- The line under **Hide code** says **nothing else hidden** when the level hides nothing beyond
+  imports, whitespace, and moved blocks, which the diff folds at every level. It used to say
+  **nothing hidden yet** next to a diff that had folded them.
+- On a GitLab project the overview's description reads **PR description (from GitLab)**.
+- A toast shows left of the docked side pane instead of over its message box.
+- A draft's **back to** link names the thread by its title once the server gives it one, not as
+  **New thread**.
+- The header names the agent and model that generated the canvas, without the harness, which a
+  canvas generated from the review app always gave as `other`. Hover **generated … ago** for the
+  full date and time.
 
 ### Upgrade
 
@@ -120,11 +208,18 @@ checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes th
   template has it under **Attention points**; `pr-review upgrade` and `doctor` say so. Without it
   the generator is not told which points the author resolved: a point that comes back with the same
   title stays resolved unchecked, and one reworded comes back open.
+- A project with its own `generation-format.md` adds the `{{SETTLED_DECISIONS}}` token, where the
+  bundled template has it under **Settled decisions**; `pr-review upgrade` and `doctor` say so.
+  Without it the generator is not told the author's settled decisions and may ask their questions
+  again; publish still adds the ones in the diff as resolved points.
 - A project with its own `generation-format.md`, `quality-standards.md`, `judging-strict.md`, or
   `judging-surfacing.md` merges in the bundled copies' definitions of impact. `pr-review upgrade`
   and `doctor` do not name this one, since it adds no token. Without them, every generated decide
   point comes back with `POINT_IMPACT`, and the agent picks an impact without the definitions.
-- Teammates on 0.9.0 can still open new canvases; they do not see the impact.
+- Teammates on 0.9.0 can still open new canvases; they do not see the impact, and see a settled
+  decision as a point the author resolved. A pull request author who resolves or reopens a point
+  on 0.9.0 saves the canvas without the marks that tell settled decisions apart, so the next
+  canvas built on it can ask a decision's question again.
 
 ## 0.9.0
 

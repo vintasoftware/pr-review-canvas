@@ -7,9 +7,10 @@
 /** @typedef {import('./contract-types.js').Side} Side */
 /** The diff on screen: its commit, and the merge base it runs from. @typedef {import('./diff-identity.js').Diff} DiffOnScreen */
 import { writtenOn } from './diff-identity.js'
-import { esc, timeAgo } from './dom.js'
+import { esc, timeAgo, wideCellHtml } from './dom.js'
 import { hostLabel } from './host.js'
 import { renderMarkdown } from './markdown.js'
+import { settlementOf } from './self-review.js'
 
 export const PENDING_BAR_ID = 'pending-bar'
 
@@ -66,6 +67,39 @@ export function pendingRange(p) {
   return `${p.path}:${range}${p.side === 'old' ? ' (old)' : ''}`
 }
 
+// The author may resolve a point while a draft about it waits. The draft stays: whether to send it
+// anyway is the reviewer's call, so it only says so.
+const RESOLVED_NOTE =
+  '<p class="pending-resolved muted small">The author resolved this point. Your draft stays in your review until you send or delete it.</p>'
+
+/**
+ * Whether the draft acts on a point the author has resolved.
+ * @param {PendingComment} p
+ */
+function resolvedUnder(p) {
+  return p.pointFingerprint !== undefined && settlementOf({ fingerprint: p.pointFingerprint }) !== undefined
+}
+
+/**
+ * Says on every draft drawn on the page whether the author resolved its point since, without
+ * drawing the draft again, so an edit being written in it stays.
+ * @param {ParentNode} root
+ * @param {PrState} state
+ */
+export function refreshResolvedDrafts(root, state) {
+  const byId = new Map(pendingComments(state).map(draft => [draft.id, draft]))
+  for (const el of Array.from(root.querySelectorAll('.pending-cmt[data-pending-id]'))) {
+    const draft = byId.get(el.getAttribute('data-pending-id') ?? '')
+    const resolved = draft !== undefined && resolvedUnder(draft)
+    const note = el.querySelector(':scope > .pending-resolved')
+    if (resolved && note === null) {
+      el.querySelector(':scope > .tbtns')?.insertAdjacentHTML('beforebegin', RESOLVED_NOTE)
+    } else if (!resolved) {
+      note?.remove()
+    }
+  }
+}
+
 /**
  * One draft as it is drawn under the line it comments on: the body, when it was written, and the
  * commands that edit or drop it. The badge is what tells the reviewer it is not on the forge yet.
@@ -81,6 +115,7 @@ export function pendingCommentHtml(p, now) {
     `<span class="who"><span class="pill pending">pending</span> ` +
     `<span class="muted">${esc(timeAgo(p.createdAt, now))} · not posted to ${esc(hostLabel())} yet</span></span>` +
     `<div class="prose">${renderMarkdown(p.body, { github: true })}</div>` +
+    (resolvedUnder(p) ? RESOLVED_NOTE : '') +
     '<span class="tbtns">' +
     `<button class="cmd" type="button" data-act="pending-edit" data-pending-id="${esc(p.id)}">edit</button>` +
     `<button class="cmd" type="button" data-act="pending-delete" data-pending-id="${esc(p.id)}">delete</button>` +
@@ -94,11 +129,7 @@ export function pendingCommentHtml(p, now) {
  * @param {Date} now
  */
 export function pendingRowHtml(drafts, now) {
-  return (
-    '<tr class="pending-row"><td class="code x" colspan="4">' +
-    drafts.map(p => pendingCommentHtml(p, now)).join('') +
-    '</td></tr>'
-  )
+  return `<tr class="pending-row">${wideCellHtml(drafts.map(p => pendingCommentHtml(p, now)).join(''))}</tr>`
 }
 
 /**

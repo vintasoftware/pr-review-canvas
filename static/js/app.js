@@ -14,6 +14,7 @@ import {
 } from './api.js'
 import { setChatEnabled } from './ask.js'
 import { setMentionCanvas } from './points.js'
+import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
 import { readChatMinimized, readChatWidth, renderChatShell, wireChat } from './chat.js'
@@ -37,6 +38,7 @@ import { wireDropZone } from './import-zone.js'
 import { wireReview } from './interactions.js'
 import {
   defineLayerElements,
+  drawnCanvas,
   pathSet,
   renderLayers,
   renderRail,
@@ -252,19 +254,20 @@ export class PrAppElement extends HTMLElement {
     this.stopPolling()
     this.settledPoller?.stop()
     this.settledPoller = null
-    const showsCanvas = bundle.artifact !== undefined && (bundle.status === 'ready' || this.viewStale)
+    const drawn = drawnCanvas(bundle, this.viewStale)
     const staleSha = bundle.status === 'stale' ? bundle.stale?.canvasHeadSha : undefined
-    const patches = showsCanvas
-      ? await settlePatches(
-          boot.prNumber,
-          patchesPromise ??
-            fetchPatches(boot.prNumber, staleSha === undefined ? {} : { headSha: staleSha }).then(
-              r => r.patches,
-              () => null
-            ),
-          staleSha
-        )
-      : {}
+    const patches =
+      drawn !== null
+        ? await settlePatches(
+            boot.prNumber,
+            patchesPromise ??
+              fetchPatches(boot.prNumber, staleSha === undefined ? {} : { headSha: staleSha }).then(
+                r => r.patches,
+                () => null
+              ),
+            staleSha
+          )
+        : {}
     // Check after the requests finish, before tearing down the current screen: the reader may
     // have kept typing while the refresh was loading.
     const hasUnfinishedText =
@@ -291,6 +294,7 @@ export class PrAppElement extends HTMLElement {
       skin: readSkin(document.documentElement),
       now,
       project: this.bootstrap ? projectLinkOf(this.bootstrap) : undefined,
+      drawn,
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
@@ -298,16 +302,12 @@ export class PrAppElement extends HTMLElement {
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
-    if (bundle.artifact && showsCanvas) {
-      const { artifact } = bundle
+    if (drawn !== null) {
+      const { artifact, files, on } = drawn
       // The server says whether this reader resolves points here: the author, on the current head's canvas.
       setSelfReview(bundle.selfReview, artifact.settled, bundle.canvasComment)
-      // A stale canvas describes its own commit, so its files and diffs come from that sha.
-      const files = staleSha === undefined ? bundle.files : artifact.files
       const paths = pathSet(files)
       // The context is set before any <pr-file> connects, so each card renders once, when visible.
-      // A stale canvas's drafts belong to its own diff, which its artifact names.
-      const on = staleSha === undefined ? bundle.pr : artifact.pr
       setRenderContext({
         artifact,
         files,
@@ -418,9 +418,14 @@ export class PrAppElement extends HTMLElement {
           }
           const added = session.takeSettled(answer)
           if (added.length > 0) {
+            // A resolved point leaves the page, but a draft about it stays in the review: say so.
+            const drafted = added.filter(fp => pendingForPoint(session.state, fp).length > 0).length
+            const about =
+              added.length === 1 ? 'draft on it' : `draft${drafted === 1 ? '' : 's'} on ${drafted} of them`
+            const kept = drafted === 0 ? '' : `; your review keeps your ${about}`
             toast(
               this,
-              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}; show the resolved ones from the overview`
+              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`
             )
           }
         })

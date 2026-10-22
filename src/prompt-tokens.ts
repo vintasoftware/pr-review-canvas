@@ -24,6 +24,7 @@ export interface AddedToken {
  */
 export const ADDED_TOKENS: readonly AddedToken[] = [
   { since: '0.10.0', template: 'generation-format.md', token: 'RESOLVED' },
+  { since: '0.10.0', template: 'generation-format.md', token: 'SETTLED_DECISIONS' },
 ]
 
 export const TokenGapSchema = z.object({

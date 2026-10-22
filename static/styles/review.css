@@ -111,6 +111,11 @@
   max-width: none;
   height: auto;
 }
+/* Rounded steps, as the page's own cards are; a shape the source asked for keeps its corners. */
+.diagram-body .node > rect {
+  rx: 6px;
+  ry: 6px;
+}
 /* A node the model linked: clicking it jumps to the code it stands for. */
 .diagram-body [data-link] {
   cursor: pointer;

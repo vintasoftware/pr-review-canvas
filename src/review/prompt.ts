@@ -7,6 +7,8 @@ import {
   type GenerationContext,
   LARGE_PR,
   type Resolutions,
+  type SettledDecision,
+  statedDecision,
 } from '../contract/generation-context.js'
 import { type FileEntry, modelOutputSchema, type Pr } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
@@ -326,6 +328,38 @@ function reJudgedMarkdown(basis: BasisSplit | undefined, resolutions: Resolution
   ].join('\n\n')
 }
 
+function decisionLine(decision: SettledDecision): string {
+  const where =
+    decision.line === null
+      ? `\`${decision.path}\``
+      : `\`${decision.path}\` ${decision.side}-side line ${decision.line}`
+  return `- \`${decision.id}\` on ${where} (commit \`${decision.commit.slice(0, 7)}\`, ${decision.date.slice(0, 10)}): ${statedDecision(decision)}`
+}
+
+/**
+ * The author's settled decisions. Publish adds the ones in the diff to the canvas as resolved
+ * points; the generator only has to leave them, and the rest, unasked.
+ */
+function decisionsMarkdown(decisions: readonly SettledDecision[]): string {
+  if (decisions.length === 0) {
+    return '_No settled decisions are recorded on these commits._'
+  }
+  const answered = decisions.filter(decision => decision.text !== undefined)
+  const anchored = answered.filter(decision => decision.line !== null).map(decisionLine)
+  const context = answered.filter(decision => decision.line === null).map(decisionLine)
+  const unanswered = decisions.filter(decision => decision.text === undefined).map(decisionLine)
+  return [
+    'The author already settled these questions, each in a `Settled-decision` line of one of the commits. Do not raise any of them again, and write no point for them. A question one of them answers comes back only if the code contradicts the answer.',
+    `**In this diff** — publish adds each to the canvas as a point resolved with the author's reason:\n\n${anchored.length === 0 ? '_none_' : anchored.join('\n')}`,
+    `**Not in this diff** — the code changed after the commit, or sits outside the diff:\n\n${context.length === 0 ? '_none_' : context.join('\n')}`,
+    ...(unanswered.length === 0
+      ? []
+      : [
+          `**Raised, not answered** — the author asked these in a commit and gave no answer, so they are not settled. Write a point for one when the code still raises it:\n\n${unanswered.join('\n')}`,
+        ]),
+  ].join('\n\n')
+}
+
 /**
  * The points the author resolved on an earlier canvas, with their reasons, and how to keep them. A
  * resolution follows the point's kind, path, and title, so the generator decides whether each one
@@ -388,6 +422,7 @@ export function renderPrompt(
     CARRIED: carriedMarkdown(ctx.basis),
     RE_JUDGED: reJudgedMarkdown(ctx.basis, ctx.resolutions),
     RESOLVED: resolvedMarkdown(ctx.resolutions),
+    SETTLED_DECISIONS: decisionsMarkdown(ctx.decisions),
   }
   // A prepared basis picks the incremental wording: one prompt states one job, with no conditions.
   // Both wordings end with the mode's judging rules, which are assembled first so the tokens inside

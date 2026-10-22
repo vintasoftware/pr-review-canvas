@@ -78,7 +78,7 @@ export function diagramPlaceholderHtml(source, links = {}) {
   return (
     `<div class="diagram" data-mermaid="${esc(source)}"${map}>` +
     `<div class="diagram-h">${chevronHtml('Toggle diagram')}<span class="lbl">${label}</span>` +
-    `<button class="cmd" type="button" data-copy="${esc(diagramMarkdown(source))}">copy</button></div>` +
+    `<button class="cmd" type="button" data-copy="${esc(diagramMarkdown(source))}" title="Copy">copy</button></div>` +
     '<div class="diagram-body"></div></div>'
   )
 }
@@ -231,6 +231,140 @@ export function setsOptions(source) {
   return source.includes('%%{') || /^\s*---\s*[\n\r]/.test(source)
 }
 
+/** The class the page gives a flowchart's decisions, so they stand apart from its steps. */
+export const DECISION_CLASS = 'prdecision'
+
+/**
+ * A line of flowchart source with the text a decision's braces could hide behind blanked out:
+ * quoted strings, edge labels between pipes, and the text of the other shapes. Lengths stay the
+ * same, so a brace found here sits at the same index in the line itself.
+ * @param {string} line
+ * @returns {string}
+ */
+function maskFlowchartText(line) {
+  const out = line.split('')
+  /** @type {string[]} closers still open, innermost last */
+  const open = []
+  /** @type {'"' | '|' | null} */
+  let quote = null
+  for (let i = 0; i < out.length; i += 1) {
+    const ch = out[i]
+    if (quote !== null) {
+      if (ch === quote) quote = null
+      else out[i] = ' '
+      continue
+    }
+    if (ch === '"' || (ch === '|' && open.length === 0)) {
+      quote = ch
+      continue
+    }
+    if (ch === '[' || ch === '(') {
+      open.push(ch === '[' ? ']' : ')')
+      continue
+    }
+    if (open.length > 0) {
+      if (ch === open[open.length - 1]) open.pop()
+      else if (ch !== undefined) out[i] = ' '
+    }
+  }
+  return out.join('')
+}
+
+/**
+ * An id right before a decision's brace, in the characters mermaid takes for a node id: letters
+ * and digits, `_`, `.`, a few symbols, and a dash inside it that does not start a link (`--`,
+ * `->`, `-.`). `&` is left out, since it joins two nodes.
+ */
+const ID_CHAR = String.raw`[\p{L}\p{N}_.!#$%*+?/\\]`
+const DECISION_ID = new RegExp(String.raw`(${ID_CHAR}(?:${ID_CHAR}|-(?![->.]))*)\{(?!\{)`, 'gu')
+
+/**
+ * A flowchart drawn compact: every decision `id{text}` becomes a hexagon `id{{text}}`. Mermaid
+ * grows a diamond with its text, so a decision that asks a full question took most of the
+ * drawing; a hexagon is as wide as its text and only a line taller. The ids stay, so node links
+ * still find their nodes. Any other diagram, and every line that only styles or links nodes,
+ * comes back as it was.
+ * @param {string} source mermaid text
+ * @returns {{ source: string, decisions: string[] }} the source to draw and the decisions' ids
+ */
+export function compactFlowchart(source) {
+  const kind = diagramKind(source)
+  if (kind !== 'flowchart' && kind !== 'graph') {
+    return { source, decisions: [] }
+  }
+  /** @type {string[]} */
+  const decisions = []
+  const lines = source.split('\n').map(line => {
+    const head = line.trim()
+    if (head.startsWith('%%') || /^(classDef|class|style|linkStyle|click)\s/.test(head)) {
+      return line
+    }
+    const masked = maskFlowchartText(line)
+    const chars = line.split('')
+    // An id right before one brace opens a diamond; `{{` is a hexagon already, and `@{` a shape.
+    for (const match of masked.matchAll(DECISION_ID)) {
+      const id = match[1] ?? ''
+      const at = (match.index ?? 0) + id.length
+      const close = masked.indexOf('}', at)
+      if (close === -1) continue
+      chars[at] = '{{'
+      chars[close] = '}}'
+      decisions.push(id)
+    }
+    return chars.join('')
+  })
+  return { source: lines.join('\n'), decisions: [...new Set(decisions)] }
+}
+
+/**
+ * The source mermaid draws: a compact flowchart, with its decisions given the page's class.
+ * @param {string} source mermaid text
+ * @param {ThemeColors} colors
+ * @returns {string}
+ */
+export function drawnSource(source, colors) {
+  const compact = compactFlowchart(source)
+  if (compact.decisions.length === 0) {
+    return compact.source
+  }
+  const fill = mixHex(colors['--accent'], colors['--panel'], 0.14)
+  const stroke = mixHex(colors['--accent'], colors['--fg'], 0.55)
+  return (
+    `${compact.source}\n  classDef ${DECISION_CLASS} fill:${fill},stroke:${stroke}\n` +
+    `  class ${compact.decisions.join(',')} ${DECISION_CLASS}`
+  )
+}
+
+/**
+ * A color as `#rrggbb`, from the `rgb()` the page reports or a hex. Mermaid's class lines split
+ * on commas, so an `rgb(…)` value cannot go in one.
+ * @param {string} color
+ * @returns {[number, number, number] | null}
+ */
+function channels(color) {
+  const rgb = color.match(/rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/)
+  if (rgb !== null) {
+    return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+  }
+  const hex = color.match(/^#([0-9a-f]{6})$/i)?.[1]
+  return hex === undefined
+    ? null
+    : [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+}
+
+/**
+ * `share` of `a` over `b`, as a hex color. A color it cannot read leaves `b`'s, or a mid gray.
+ * @param {string} a
+ * @param {string} b
+ * @param {number} share
+ */
+export function mixHex(a, b, share) {
+  const x = channels(a)
+  const y = channels(b) ?? [128, 128, 128]
+  const mixed = x === null ? y : x.map((v, i) => Math.round(v * share + (y[i] ?? 0) * (1 - share)))
+  return `#${mixed.map(v => v.toString(16).padStart(2, '0')).join('')}`
+}
+
 /**
  * The page's colors, resolved. The tokens use `light-dark()`, which a custom property keeps
  * unresolved, so each one is read back through a probe element's `color`. A token the page never
@@ -281,12 +415,36 @@ export function mermaidConfig(c) {
     theme: /** @type {const} */ ('base'),
     // SVG text labels: an HTML label would be stripped by the SVG sanitizer.
     htmlLabels: false,
-    flowchart: { htmlLabels: false, ...own },
-    sequence: own,
+    // Tighter than mermaid's defaults, so a flowchart of a few steps fits on screen beside its
+    // layer's text.
+    flowchart: {
+      htmlLabels: false,
+      nodeSpacing: 28,
+      rankSpacing: 34,
+      padding: 10,
+      diagramPadding: 6,
+      wrappingWidth: 220,
+      curve: /** @type {const} */ ('monotoneY'),
+      ...own,
+    },
+    // Narrower actors and no second row of them under the lifelines: the names are on top.
+    sequence: {
+      ...own,
+      width: 120,
+      height: 40,
+      actorMargin: 36,
+      boxMargin: 6,
+      messageMargin: 30,
+      mirrorActors: false,
+    },
     state: own,
     er: own,
     themeVariables: {
+      fontSize: '14px',
       background: c['--bg'],
+      // An entity's attribute rows; mermaid's own pick is a light row that dark text cannot read.
+      rowOdd: c['--panel'],
+      rowEven: c['--bg'],
       mainBkg: c['--panel'],
       primaryColor: c['--panel'],
       primaryTextColor: c['--fg'],
@@ -436,7 +594,8 @@ async function drawNodes(nodes, opts) {
   if (cancelled()) {
     return { rendered: 0, failed: 0 }
   }
-  mermaid.initialize(mermaidConfig(opts.colors ?? readThemeColors()))
+  const colors = opts.colors ?? readThemeColors()
+  mermaid.initialize(mermaidConfig(colors))
   let rendered = 0
   let failed = 0
   for (const node of open) {
@@ -450,7 +609,7 @@ async function drawNodes(nodes, opts) {
     }
     nextId += 1
     try {
-      const result = await mermaid.render(`pr-diagram-${nextId}`, source)
+      const result = await mermaid.render(`pr-diagram-${nextId}`, drawnSource(source, colors))
       if (cancelled()) {
         break
       }

@@ -7,16 +7,27 @@
 /** @typedef {import('./proposed-comment.js').ProposedComment} ProposedComment */
 /** @typedef {import('./proposed-comment.js').ProposedResolution} ProposedResolution */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
-import { cancelChat, fetchThreadHistory, fetchThreads, selectThread, streamChat } from './api.js'
+import {
+  cancelChat,
+  fetchThreadHistory,
+  fetchThreads,
+  markThreadUnseen,
+  selectThread,
+  streamChat,
+} from './api.js'
 import {
   chatContextAttrs,
+  chatContextFromElement,
   chatContextLabel,
+  chatContextName,
   sameChatContext,
   threadOfPlace,
   WHOLE_PR,
 } from './chat-context.js'
 import { checkoutWarningHtml, liveAnswer } from './chat-answer.js'
 import { wireChatPanel } from './chat-panel.js'
+import { quickQuestionsFor } from './quick-questions.js'
+import { wireThreadList } from './thread-list.js'
 import { navigateLink } from './deep-link.js'
 import {
   canScrollBy,
@@ -29,7 +40,7 @@ import {
 } from './chat-scroll.js'
 import { runCommand, toast } from './commands.js'
 import { isQueuedComment, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
-import { esc, flash, qs, scrollIntoViewSafe } from './dom.js'
+import { esc, flash, qs, scrollIntoViewSafe, timeAgo } from './dom.js'
 import { cssEscape } from './anchors.js'
 import { getRenderContext } from './layers.js'
 import { lineLink } from './links.js'
@@ -39,19 +50,12 @@ import { pointStatus, resolvable } from './points.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
 import { REVIEW_PANEL_ID } from './review-panel.js'
 import { canSettle } from './self-review.js'
-import {
-  CHAT_NEW_BADGE,
-  THREADS_PANEL_ID,
-  openReviewTab,
-  selectSideTab,
-  sideTabsHtml,
-  wireSideTabs,
-} from './side-pane.js'
+import { CHAT_NEW_BADGE, openReviewTab, selectSideTab, sideTabsHtml, wireSideTabs } from './side-pane.js'
 
 export const CHAT_WIDTH_KEY = 'pr-review.chat-width'
 export const CHAT_MINIMIZED_KEY = 'pr-review.chat-minimized'
-// The narrowest pane still fits its tab strip with every count on it: AI Chat at 9, the Threads
-// dot, and a two-digit review.
+// The narrowest pane still fits the thread head's name, and its tab strip with every count on it:
+// AI Chat at 9 and a two-digit review.
 export const CHAT_WIDTH_MIN = 360
 export const CHAT_WIDTH_MAX = 560
 export const CHAT_WIDTH_DEFAULT = 380
@@ -72,14 +76,19 @@ export function renderChatShell(opts) {
     `<button class="handle" type="button" id="chat-handle" role="separator" aria-orientation="vertical" aria-label="Resize AI Chat" aria-valuenow="${width}" aria-valuemin="${CHAT_WIDTH_MIN}" aria-valuemax="${CHAT_WIDTH_MAX}"></button>` +
     sideTabsHtml({ chat: true }) +
     // The tab names the pane on screen; the heading stays for screen readers and the dialog's name.
-    // One thread at a time, under a head naming what it is about. The Threads tab lists them all,
-    // and is where a thread about the whole PR starts.
+    // One thread at a time, under a head naming what it is about. The head opens the list of every
+    // thread, which can also start one about the whole PR.
     '<div class="chat-h"><h2 class="sr" id="chat-h">AI Chat</h2>' +
-    '<p class="thread-title" id="thread-title">New thread</p>' +
-    '<button class="cmd" type="button" id="thread-goto" hidden>go to code</button></div>' +
-    `<section class="threads-panel" id="${THREADS_PANEL_ID}" role="tabpanel" aria-labelledby="side-tab-threads" hidden>` +
-    '<div class="threads-h"><button class="cmd" type="button" id="new-thread">new thread</button></div>' +
-    '<nav class="thread-index" id="thread-index" aria-label="Threads"></nav></section>' +
+    '<button class="thread-switch" type="button" id="thread-switch" aria-haspopup="dialog" aria-expanded="false" aria-controls="thread-pop" title="Switch thread">' +
+    '<span class="thread-kind" id="thread-kind" hidden></span>' +
+    '<span class="thread-title" id="thread-title">New thread</span>' +
+    '<span class="threads-new" hidden></span><span class="thread-caret" aria-hidden="true"></span></button>' +
+    '<button class="cmd" type="button" id="chat-new-thread" title="New thread about the whole PR">new thread</button>' +
+    '<div class="thread-pop" id="thread-pop" role="dialog" aria-label="Threads" hidden>' +
+    '<input class="thread-filter" id="thread-filter" type="search" placeholder="Filter threads…" aria-label="Filter threads" autocomplete="off">' +
+    '<nav class="thread-index" id="thread-index" aria-label="Threads"></nav>' +
+    '<button class="thread-pop-new" type="button" id="new-thread">+ New thread about the whole PR</button>' +
+    '</div></div>' +
     '<div class="transcript" id="chat-log" role="log" aria-label="Transcript" aria-live="polite" tabindex="0">' +
     '<p class="empty">Ask AI Chat about a layer, a file, or a selection. Answers come with a verdict first, then evidence.</p>' +
     '</div>' +
@@ -87,8 +96,9 @@ export function renderChatShell(opts) {
     // thread. The bubble sits on the composer too, so it clears it at any height.
     '<form class="chat-composer" id="chat-form">' +
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
-    '<p class="ctx-line" id="chat-ctx-line" hidden>Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
-    ' <button class="cmd" type="button" id="chat-clear" hidden>clear</button></p>' +
+    '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
+    ' <button class="cmd" type="button" id="thread-goto" title="Go to the code" hidden>go to code</button>' +
+    ' <button class="cmd" type="button" id="chat-clear" title="Clear: ask about the whole PR" hidden>clear</button></p>' +
     '<label class="sr" for="msg">Message</label>' +
     '<textarea id="msg" rows="3" placeholder="Ask AI Chat about this PR…"></textarea>' +
     '<div class="tbtns"><button class="cmd fill" type="submit" id="chat-send">send</button>' +
@@ -156,15 +166,6 @@ export function writeChatMinimized(storage, minimized) {
   storage?.setItem(CHAT_MINIMIZED_KEY, minimized ? '1' : '0')
 }
 
-/** The questions the quick menu offers, and the one that just focuses the box. */
-export const QUICK_QUESTIONS = [
-  'Suggestion to solve this?',
-  'Why this way, and what were the alternatives?',
-  'What could break?',
-  'Does this follow how the codebase already does it?',
-  'Is this covered by tests?',
-]
-
 /** @typedef {'post' | 'queue' | 'edit'} ProposedAct */
 
 /** What each proposed-comment button asks the page to do. */
@@ -196,6 +197,7 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
  *   fetchThreads: typeof fetchThreads,
  *   fetchThreadHistory: typeof fetchThreadHistory,
  *   selectThread: typeof selectThread,
+ *   markThreadUnseen: typeof markThreadUnseen,
  *   cancelChat: typeof cancelChat,
  *   streamChat: typeof streamChat,
  * }} ChatApi
@@ -207,6 +209,7 @@ function withDefaults(overrides) {
     fetchThreads,
     fetchThreadHistory,
     selectThread,
+    markThreadUnseen,
     cancelChat,
     streamChat,
     ...overrides,
@@ -287,8 +290,8 @@ function proposedCommandsHtml(comment, id, send) {
   return (
     `<span class="tbtns" data-key="${shown}">` +
     sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true }) +
-    `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post>edit</button>` +
-    `<button class="cmd" type="button" data-copy="${esc(comment.body)}">copy</button>` +
+    `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post data-tooltip="Edit" title="Edit">edit</button>` +
+    `<button class="cmd" type="button" data-copy="${esc(comment.body)}" title="Copy">copy</button>` +
     '</span>'
   )
 }
@@ -374,7 +377,7 @@ function resolutionCommandsHtml(resolution, id, state) {
   const acts =
     shown === 'open'
       ? `<button class="cmd fill" type="button" data-act="resolution-save" ${target}>resolve</button>` +
-        `<button class="cmd" type="button" data-act="resolution-edit" ${target}>edit</button>`
+        `<button class="cmd" type="button" data-act="resolution-edit" ${target} title="Edit">edit</button>`
       : shown === 'resolved'
         ? '<span class="pill status resolved">resolved</span>'
         : shown === 'dismissed'
@@ -382,7 +385,7 @@ function resolutionCommandsHtml(resolution, id, state) {
           : ''
   return (
     `<span class="tbtns" data-key="${shown}">${acts}` +
-    `<button class="cmd" type="button" data-copy="${esc(resolution.reason)}">copy</button></span>`
+    `<button class="cmd" type="button" data-copy="${esc(resolution.reason)}" title="Copy">copy</button></span>`
   )
 }
 
@@ -519,11 +522,21 @@ export function wireChat(options) {
   const log = mustFind(root, '#chat-log', HTMLElement)
   const box = mustFind(root, '#msg', HTMLTextAreaElement)
   const form = mustFind(root, '#chat-form', HTMLFormElement)
+  const threadKindEl = mustFind(root, '#thread-kind', HTMLElement)
   const threadTitleEl = mustFind(root, '#thread-title', HTMLElement)
   const gotoButton = mustFind(root, '#thread-goto', HTMLElement)
   const index = mustFind(root, '#thread-index', HTMLElement)
+  const switchButton = mustFind(root, '#thread-switch', HTMLElement)
+  const pop = mustFind(root, '#thread-pop', HTMLElement)
+  // The list redraws its entries as it opens; `drawIndex` is defined below and runs only then.
+  const threadList = wireThreadList({
+    head: switchButton,
+    pop,
+    filter: mustFind(root, '#thread-filter', HTMLInputElement),
+    index,
+    draw: () => drawIndex(),
+  })
   const chip = mustFind(root, '#chat-ctx', HTMLElement)
-  const contextLine = mustFind(root, '#chat-ctx-line', HTMLElement)
   const clearButton = mustFind(root, '#chat-clear', HTMLElement)
   const bubble = mustFind(root, '#chat-unseen', HTMLElement)
   const sendButton = mustFind(root, '#chat-send', HTMLButtonElement)
@@ -575,9 +588,6 @@ export function wireChat(options) {
   let openPlace
   /** The reader's `chatThreadPerPlace`: an ask opens the thread of its place, or the open one. */
   let threadPerPlace = options.threadPerPlace ?? true
-  // A thread of its own place is titled after it; the open thread takes questions about anything,
-  // so the line above the composer says what the next one is about.
-  contextLine.hidden = threadPerPlace
   /** @type {import('./contract-types.js').ChatThreadsResponse['threads']} */
   let threads = []
   /** The agent a new thread would use: a thread of another agent is not continued. */
@@ -693,13 +703,12 @@ export function wireChat(options) {
       ? {}
       : { context: chatContextLabel(about, layerTitle, pointTitle) }
   /**
-   * A place as a thread's head names it: a point by its own title, since the head already says
-   * it is a thread about that point.
+   * A place as the head and the Threads tab name it: without its kind, which the head's tag and
+   * the tab's group already say.
    * @param {ChatContext} anchor
    */
   const placeName = anchor =>
-    (anchor.kind === 'point' ? pointTitle(anchor.fingerprint) : undefined) ??
-    chatContextLabel(anchor, layerTitle, pointTitle)
+    anchor.kind === 'pr' ? 'whole PR' : chatContextName(anchor, layerTitle, pointTitle)
   /**
    * A thread as the head and the index name it: by its place while the canvas has it, by the title
    * it was saved with otherwise.
@@ -719,28 +728,43 @@ export function wireChat(options) {
     const gone = openPlace !== undefined && !onCanvas(openPlace)
     threadTitleEl.textContent = gone ? `${title} · not on this canvas` : title
     threadTitleEl.title = threadTitleEl.textContent
+    // The tag says what kind of place the title names; a thread about the whole PR has none.
+    const kind = openPlace === undefined || openPlace.kind === 'pr' || gone ? '' : openPlace.kind
+    threadKindEl.hidden = kind === ''
+    threadKindEl.textContent = kind
     gotoButton.hidden = askedIn(openPlace).kind === 'pr'
     drawComposer()
   }
 
   /**
-   * The thread whose answer is coming in, as the index names it, so a question that waits for it
-   * says which one it waits for.
+   * The thread whose answer is coming in, as running text names it, so a question that waits for
+   * it says which one it waits for.
    */
   const answeringName = () => (live === null ? '' : threadLabel(live))
 
   /**
-   * A question's thread, as the index names it.
+   * A thread, or a draft's place, as running text names it: with the kind of its place, since no
+   * tag or group says it there.
+   * @param {(typeof threads)[number] | undefined} thread
+   * @param {ChatContext | undefined} draftPlace
+   */
+  const runningName = (thread, draftPlace) => {
+    const place = thread !== undefined ? thread.anchor : draftPlace
+    if (place !== undefined && onCanvas(place)) {
+      return chatContextLabel(place, layerTitle, pointTitle)
+    }
+    return thread !== undefined ? thread.title : 'New thread'
+  }
+
+  /**
+   * A question's thread, as running text names it.
    * @param {Question} question
    */
-  const threadLabel = question => {
-    const thread = threads.find(t => t.name === question.thread)
-    return thread !== undefined
-      ? shownTitle(thread)
-      : question.place !== undefined
-        ? placeName(question.place)
-        : 'New thread'
-  }
+  const threadLabel = question =>
+    runningName(
+      threads.find(t => t.name === question.thread),
+      question.place
+    )
 
   /**
    * The composer of the thread on screen: stop while its own answer comes in; while another
@@ -770,18 +794,33 @@ export function wireChat(options) {
     seeOpenThread()
   }
 
-  const INDEX_GROUPS = /** @type {const} */ ([
-    ['point', 'Attention points'],
-    ['lines', 'Lines'],
-    ['file', 'Files'],
-    ['layer', 'Layers'],
-    ['pr', 'Whole PR'],
-  ])
+  /**
+   * The Threads tab's group for each kind of place, in the order the tab draws them. Typed over
+   * every kind, so a new kind of place does not build until it has a group.
+   * @type {Record<ChatContext['kind'], string>}
+   */
+  const INDEX_LABELS = {
+    point: 'Attention points',
+    lines: 'Lines',
+    file: 'Files',
+    layer: 'Layers',
+    pr: 'Whole PR',
+  }
+  const INDEX_GROUPS = /** @type {Array<[ChatContext['kind'], string]>} */ (Object.entries(INDEX_LABELS))
 
   const drawIndex = () => {
-    for (const dot of Array.from(root.querySelectorAll('.threads-new'))) {
-      dot.toggleAttribute('hidden', unseen.size === 0)
-      dot.setAttribute('title', 'A thread has an answer you have not seen')
+    // The thread's name counts the threads with an answer not seen yet, at the end by the list's
+    // caret: the answer can be in any thread, not only the one named.
+    const fresh = unseen.size
+    for (const note of Array.from(root.querySelectorAll('.threads-new'))) {
+      note.toggleAttribute('hidden', fresh === 0)
+      note.textContent = `${fresh} new`
+      note.setAttribute(
+        'title',
+        fresh === 1
+          ? 'A thread has an answer you have not seen'
+          : `${fresh} threads have an answer you have not seen`
+      )
     }
     // The AI Chat tab and its launcher count every answer not seen yet, up to 9.
     const count = [...unseen.values()].reduce((sum, n) => sum + n, 0)
@@ -792,14 +831,33 @@ export function wireChat(options) {
       badge.setAttribute('aria-label', counted)
       badge.setAttribute('title', counted)
     }
-    if (threads.length === 0) {
+    // A thread's first question is in no list until the server has made the thread, which takes
+    // the review checkout and the agent's session first. Until then it is listed by its place.
+    const drafts = /** @type {Array<{ place: ChatContext | undefined, status: string }>} */ ([
+      ...(live !== null && live.thread === null ? [{ place: live.place, status: 'starting…' }] : []),
+      ...(queued !== null && queued.thread === null
+        ? [{ place: queued.place, status: 'question waiting' }]
+        : []),
+    ])
+    if (threads.length === 0 && drafts.length === 0) {
       index.innerHTML =
         '<p class="empty">No threads yet. Use ask on an attention point, a selection of lines, a file or a layer, or start a thread about the whole PR.</p>'
       return
     }
+    // A redraw while the list is open keeps the reader's filter and the thread they are on.
+    const focused = document.activeElement?.closest?.('[data-thread-open]')?.getAttribute('data-thread-open')
     index.innerHTML = INDEX_GROUPS.map(([kind, label]) => {
       const group = threads.filter(t => (t.anchor?.kind ?? 'pr') === kind)
-      if (group.length === 0) return ''
+      const unsaved = drafts
+        .filter(d => (d.place?.kind ?? 'pr') === kind)
+        .map(
+          d =>
+            `<li><button type="button" class="thread-item${activeThread === null && sameChatContext(d.place ?? WHOLE_PR, openPlace ?? WHOLE_PR) ? ' current" aria-current="true' : ''}" data-draft-open${chatContextAttrs(d.place ?? WHOLE_PR)}>` +
+            `<span class="thread-item-t">${esc(d.place === undefined ? 'New thread' : placeName(d.place))}</span>` +
+            `<span class="small muted">${esc(d.status)}</span></button></li>`
+        )
+        .join('')
+      if (group.length === 0 && unsaved === '') return ''
       const items = group
         .map(t => {
           const status =
@@ -813,14 +871,62 @@ export function wireChat(options) {
                     ? '1 question'
                     : `${t.turns} questions`
           return (
-            `<li><button type="button" class="thread-item${t.name === activeThread ? ' current' : ''}" data-thread-open="${esc(t.name)}">` +
+            `<li><button type="button" class="thread-item${t.name === activeThread ? ' current" aria-current="true' : ''}" data-thread-open="${esc(t.name)}" title="${esc(itemTooltip(t))}">` +
             `<span class="thread-item-t">${esc(shownTitle(t))}</span>` +
             `<span class="small ${status === 'new answer' ? 'thread-new' : 'muted'}">${esc(status)}</span></button></li>`
           )
         })
         .join('')
-      return `<h3 class="thread-group">${esc(label)}</h3><ul class="thread-list">${items}</ul>`
+      return `<h3 class="thread-group">${esc(label)}</h3><ul class="thread-list">${items}${unsaved}</ul>`
     }).join('')
+    threadList.refilter()
+    if (focused !== undefined && focused !== null) {
+      ;/** @type {HTMLElement | null} */ (qs(`[data-thread-open="${cssEscape(focused)}"]`, index))?.focus()
+    }
+  }
+
+  /**
+   * An entry's tooltip: its whole name, cut short in the list, and when it started, which tells
+   * apart threads of the same name.
+   * @param {(typeof threads)[number]} thread
+   */
+  const itemTooltip = thread => {
+    const started = timeAgo(thread.createdAt)
+    return started === '' ? shownTitle(thread) : `${shownTitle(thread)} · started ${started}`
+  }
+
+  /**
+   * The unsent text of each thread, by its name, or by its place for a draft, so a switch does
+   * not carry a half-written question into another thread.
+   * @type {Map<string, string>}
+   */
+  const unsent = new Map()
+  const unsentKey = () => activeThread ?? `place:${JSON.stringify(openPlace ?? WHOLE_PR)}`
+  /** Keeps what the box holds for the thread on screen; call before the pane leaves it. */
+  const keepUnsent = () => {
+    if (box.value.trim() === '') {
+      unsent.delete(unsentKey())
+    } else {
+      unsent.set(unsentKey(), box.value)
+    }
+  }
+  /**
+   * Puts back what the thread now on screen had in the box, and below it any text the switch
+   * carried from the thread it left.
+   * @param {string | undefined} carry
+   */
+  const restoreUnsent = carry => {
+    const own = unsent.get(unsentKey()) ?? ''
+    box.value = carry === undefined ? own : own.trim() === '' ? carry : `${own}\n\n${carry}`
+  }
+
+  /** Puts the focus in the message box, or on the thread's name while the box waits. */
+  const focusBox = () => {
+    if (box.disabled) {
+      switchButton.focus()
+    } else {
+      box.focus()
+    }
   }
 
   /**
@@ -863,7 +969,7 @@ export function wireChat(options) {
         }
         return [
           unseen.has(t.name)
-            ? `${selector} > .ask-label::after { content: "" / "new answer"; background: var(--accent); }`
+            ? `${selector} > .ask-label::after { content: "" / "new answer"; --ask-dot: var(--accent); }`
             : `${selector} > .ask-label::after { content: "" / "thread"; }`,
         ]
       })
@@ -872,9 +978,11 @@ export function wireChat(options) {
 
   const drawContext = () => {
     chip.textContent = chatContextLabel(context, layerTitle, pointTitle)
+    chip.title = chip.textContent
     clearButton.hidden = context.kind === 'pr'
-    chip.toggleAttribute('data-ask-menu', context.kind !== 'pr')
-    if (context.kind === 'pr') {
+    const menu = quickQuestionsFor(context).length > 0
+    chip.toggleAttribute('data-ask-menu', menu)
+    if (!menu) {
       chip.removeAttribute('tabindex')
       chip.removeAttribute('aria-expanded')
     } else {
@@ -977,6 +1085,18 @@ export function wireChat(options) {
     drawIndex()
     drawHead()
     drawMarks()
+    drawBackLinks()
+  }
+
+  /**
+   * A draft's way back names its thread as the list now does, so a thread the server titled after
+   * the link was drawn reads by its title and not as a new thread.
+   */
+  const drawBackLinks = () => {
+    for (const el of Array.from(log.querySelectorAll('.empty [data-thread-open]'))) {
+      const thread = threads.find(t => t.name === el.getAttribute('data-thread-open'))
+      if (thread !== undefined) el.textContent = `back to “${runningName(thread, undefined)}”`
+    }
   }
 
   /**
@@ -1095,12 +1215,19 @@ export function wireChat(options) {
    * Sends what the box holds, or has it wait for the answer coming in. It does not wait for the
    * answer itself: the reader may be on another thread by the time it ends.
    */
-  const send = () => {
-    const message = box.value.trim()
+  /**
+   * @param {string} [asked] a question asked for the reader, such as a quick one; the box, and
+   *   what the reader wrote in it, stay as they are
+   */
+  const send = asked => {
+    const message = (asked ?? box.value).trim()
     if (message === '' || box.disabled) {
       return
     }
-    box.value = ''
+    if (asked === undefined) {
+      box.value = ''
+      unsent.delete(unsentKey())
+    }
     /** @type {Question} */
     const question = { message, context, thread: activeThread, place: openPlace }
     const { turn } = appendTurn('user', renderMarkdown(message, { paths }), turnContext(context))
@@ -1134,6 +1261,8 @@ export function wireChat(options) {
     const answer = shown ? appendTurn('assistant', '') : makeTurn('assistant', '')
     const current = { ...question, user, answer: answer.turn, shown, redraw: () => {} }
     live = current
+    // A first question's thread is listed by its place until the server names it.
+    drawIndex()
     /** Whether the agent took the turn: until then there is no answer to have missed. */
     let agentTookTurn = false
     const turnKey = answer.turn.id
@@ -1221,7 +1350,7 @@ export function wireChat(options) {
         // counted on the AI Chat tab and launcher. Its own thread is off screen too while the
         // pane is minimized or shows another tab.
         if ((!current.shown || !chatOnScreen()) && current.thread !== null && agentTookTurn) {
-          unseen.set(current.thread, (unseen.get(current.thread) ?? 0) + 1)
+          setUnseen(current.thread, (unseen.get(current.thread) ?? 0) + 1)
         }
         void refreshThreads().catch(() => undefined)
         stream.finish()
@@ -1253,16 +1382,36 @@ export function wireChat(options) {
     openPlace = data.threads.find(t => t.name === activeThread)?.anchor
     context = askedIn(openPlace)
     drawContext()
+    // Answers the reader had not seen before the reload are still marked.
+    for (const t of data.threads) {
+      if (t.unseen !== undefined && t.unseen > 0) unseen.set(t.name, t.unseen)
+    }
     drawThreads(data)
+    seeOpenThread()
     if (activeThread !== null) {
       await loadHistory(activeThread)
     }
   }
 
+  /**
+   * Counts a thread's answers the reader has not seen, here and on the server, so a reload still
+   * marks them. Zero clears the mark.
+   * @param {string} name
+   * @param {number} count
+   */
+  const setUnseen = (name, count) => {
+    if (count === 0) {
+      unseen.delete(name)
+    } else {
+      unseen.set(name, count)
+    }
+    void api.markThreadUnseen(prNumber, name, count).catch(() => undefined)
+  }
+
   /** The open thread's new answers are seen once the AI Chat tab is on screen. */
   const seeOpenThread = () => {
     if (activeThread !== null && unseen.has(activeThread) && chatOnScreen()) {
-      unseen.delete(activeThread)
+      setUnseen(activeThread, 0)
       drawMarks()
       drawIndex()
     }
@@ -1271,14 +1420,17 @@ export function wireChat(options) {
   /**
    * Opens a saved thread, with its place as the context of what is asked in it.
    * @param {string} name
+   * @param {{ carry?: string }} [opts] `carry`: text the reader takes along from the thread left
    */
-  const openThread = async name => {
+  const openThread = async (name, opts = {}) => {
+    keepUnsent()
     activeThread = name
-    unseen.delete(name)
+    if (unseen.has(name)) setUnseen(name, 0)
     drawMarks()
     openPlace = currentThread()?.anchor
     context = askedIn(openPlace)
     drawContext()
+    restoreUnsent(opts.carry)
     showThread()
     drawIndex()
     void api.selectThread(prNumber, name).catch(() => undefined)
@@ -1289,20 +1441,38 @@ export function wireChat(options) {
    * Opens a thread not made yet: a place's, or one about the whole PR. Nothing is saved until its
    * first message, which the server files under that place. A draft whose question is being
    * answered, or waits, comes back with that question, unless the reader asked for a fresh one.
+   * An ask leaves the thread the reader was reading unasked for, so a draft an ask opened leads
+   * back to it until its first question; new thread, clear, and the list are the reader's own move.
    * @param {ChatContext} anchor
-   * @param {{ fresh?: boolean }} [opts]
+   * @param {{ fresh?: boolean, back?: boolean, carry?: string }} [opts]
    */
   const openDraft = (anchor, opts = {}) => {
+    const left = currentThread()
+    // A draft whose first question is still on its way has no thread yet; the way back is its place.
+    const leftDraft =
+      left === undefined && [live, queued].some(q => q !== null && q.thread === null && isHere(q))
+        ? (openPlace ?? WHOLE_PR)
+        : undefined
+    keepUnsent()
     claimLog()
     activeThread = null
     openPlace = anchor.kind === 'pr' ? undefined : anchor
     context = anchor
     drawContext()
+    restoreUnsent(opts.carry)
     proposed.clear()
+    const back =
+      opts.back !== true
+        ? ''
+        : left !== undefined
+          ? ` <button class="cmd" type="button" data-thread-open="${esc(left.name)}">back to “${esc(runningName(left, undefined))}”</button>`
+          : leftDraft !== undefined && !sameChatContext(leftDraft, anchor)
+            ? ` <button class="cmd" type="button" data-draft-open${chatContextAttrs(leftDraft)}>back to “${esc(runningName(undefined, leftDraft.kind === 'pr' ? undefined : leftDraft))}”</button>`
+            : ''
     log.innerHTML =
       anchor.kind === 'pr'
-        ? '<p class="empty">A new thread about the whole PR.</p>'
-        : `<p class="empty">A new thread about ${esc(chatContextLabel(anchor, layerTitle, pointTitle))}. Asking about it again comes back here.</p>`
+        ? `<p class="empty">A new thread about the whole PR.${back}</p>`
+        : `<p class="empty">A new thread about ${esc(chatContextLabel(anchor, layerTitle, pointTitle))}. Asking about it again comes back here.${back}</p>`
     dispatch({ type: 'thread-switch', pinned: true })
     if (opts.fresh === true) {
       putBackRefused()
@@ -1317,17 +1487,20 @@ export function wireChat(options) {
    * Shows the thread of a place: the one on screen, the one it has, or a new one. An answer coming
    * in elsewhere keeps arriving in its own thread.
    * @param {ChatContext} next
+   * @param {{ fromAsk?: boolean, carry?: string }} [opts] `fromAsk`: an ask opened it, so a new
+   *   draft leads back; `carry`: text the reader takes along
    */
-  const goToThread = async next => {
+  const goToThread = async (next, opts = {}) => {
     if (sameChatContext(openPlace ?? WHOLE_PR, next)) {
       showThread()
       return
     }
+    const carry = opts.carry === undefined ? {} : { carry: opts.carry }
     const placed = threadOfPlace(threads, agentName, next)
     if (placed === undefined) {
-      openDraft(next)
+      openDraft(next, { back: opts.fromAsk === true, ...carry })
     } else {
-      await openThread(placed.name)
+      await openThread(placed.name, carry)
     }
   }
 
@@ -1344,28 +1517,63 @@ export function wireChat(options) {
       return
     }
     if (el.id === 'chat-clear') {
-      setContext(WHOLE_PR)
+      // A thread keeps one place, so leaving a place's thread for the whole PR opens the whole
+      // PR's thread. What the box holds goes along, under what that thread had of its own.
+      if (threadPerPlace && openPlace !== undefined) {
+        const carried = box.value
+        box.value = ''
+        void goToThread(WHOLE_PR, carried.trim() === '' ? {} : { carry: carried })
+      } else {
+        setContext(WHOLE_PR)
+      }
+      // The command hides once the context is the whole PR, so the focus goes on to the box.
+      focusBox()
       return
     }
     if (el.id === 'chat-stop') {
       void runCommand(el, () => api.cancelChat(prNumber), { pendingLabel: 'stopping…' })
       return
     }
-    if (el.id === 'new-thread') {
+    if (el.id === 'thread-switch') {
+      threadList.toggle()
+      return
+    }
+    if (el.id === 'new-thread' || el.id === 'chat-new-thread') {
+      threadList.close()
       openDraft(WHOLE_PR, { fresh: true })
+      focusBox()
       return
     }
     if (el.id === 'thread-goto') {
       goToAnchor()
       return
     }
+    if (el.hasAttribute('data-draft-open')) {
+      // A thread whose first question is on its way: its draft, with that question. Once the
+      // server has made it, the thread itself.
+      threadList.close()
+      const place = chatContextFromElement(el)
+      const pending = [live, queued].some(
+        q => q !== null && q.thread === null && sameChatContext(q.place ?? WHOLE_PR, place)
+      )
+      if (pending) {
+        openDraft(place)
+      } else {
+        void goToThread(place)
+      }
+      focusBox()
+      return
+    }
     const picked = el.getAttribute('data-thread-open')
     if (picked !== null) {
+      threadList.close()
       if (picked === activeThread) {
         showThread()
       } else {
         void openThread(picked)
       }
+      // The list, or the draft's way back, is gone from under the focus: the box takes it.
+      focusBox()
       return
     }
     if (el.id === 'chat-unseen') {
@@ -1422,10 +1630,13 @@ export function wireChat(options) {
    */
   const onPaneWheel = event => {
     const target = event.target instanceof Element ? event.target : null
-    // The tab on screen owns the wheel: the transcript, the list of threads, or the list of the
-    // review being written.
+    // The open list of threads scrolls itself.
+    if (target !== null && pop.contains(target)) {
+      return
+    }
+    // The tab on screen owns the wheel: the transcript, or the list of the review being written.
     const tab = pane.getAttribute('data-tab')
-    const scroller = (tab === 'review' ? reviewPanel : tab === 'threads' ? index : null) ?? log
+    const scroller = (tab === 'review' ? reviewPanel : null) ?? log
     const insideOwnScroller =
       target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
         ? canScrollBy(target, event.deltaY)
@@ -1484,24 +1695,26 @@ export function wireChat(options) {
       return
     }
     panel.uncover()
-    if (anchor.kind === 'point') {
-      const el = root.querySelector(`[data-point][data-fingerprint="${cssEscape(anchor.fingerprint)}"]`)
-      if (el instanceof HTMLElement) {
-        scrollIntoViewSafe(el)
-        flash(el)
+    switch (anchor.kind) {
+      case 'point': {
+        const el = root.querySelector(`[data-point][data-fingerprint="${cssEscape(anchor.fingerprint)}"]`)
+        if (el instanceof HTMLElement) {
+          scrollIntoViewSafe(el)
+          flash(el)
+        }
+        return
       }
-      return
+      case 'layer': {
+        const key = session.artifact.layers.find(l => l.id === anchor.layerId)?.key
+        if (key !== undefined) navigateLink(`#layer:${key}`, root)
+        return
+      }
+      case 'file':
+        navigateLink(`#file:${anchor.path}`, root)
+        return
+      case 'lines':
+        navigateLink(lineLink(anchor), root)
     }
-    if (anchor.kind === 'layer') {
-      const key = session.artifact.layers.find(l => l.id === anchor.layerId)?.key
-      if (key !== undefined) navigateLink(`#layer:${key}`, root)
-      return
-    }
-    if (anchor.kind === 'file') {
-      navigateLink(`#file:${anchor.path}`, root)
-      return
-    }
-    navigateLink(lineLink(anchor), root)
   }
   // Whatever asks the chat for something shows its tab first.
   const openChat = () => {
@@ -1539,7 +1752,7 @@ export function wireChat(options) {
       // Off, an ask only says what the open thread's next question is about. The thread goes on
       // screen before the pane opens, so the answers seen are its own and not the one it replaces.
       if (threadPerPlace) {
-        void goToThread(next)
+        void goToThread(next, { fromAsk: true })
       } else {
         setContext(next)
       }
@@ -1552,7 +1765,6 @@ export function wireChat(options) {
      */
     followSettings(settings) {
       threadPerPlace = settings.chatThreadPerPlace
-      contextLine.hidden = threadPerPlace
       if (threadPerPlace) {
         context = askedIn(openPlace)
         drawContext()
@@ -1599,7 +1811,7 @@ export function wireChat(options) {
     askQuestion(next, question) {
       void (async () => {
         // As for an ask, the thread goes on screen before the pane opens.
-        const going = threadPerPlace ? goToThread(next) : null
+        const going = threadPerPlace ? goToThread(next, { fromAsk: true }) : null
         if (!threadPerPlace) setContext(next)
         openChat()
         await going
@@ -1612,8 +1824,7 @@ export function wireChat(options) {
           )
           return
         }
-        box.value = question
-        send()
+        send(question)
       })()
     },
     /** Whether a question asked here waits to be sent, which a re-render would drop. */
@@ -1630,6 +1841,7 @@ export function wireChat(options) {
       root.removeEventListener('click', onClick)
       log.removeEventListener('scroll', onScroll)
       marks.remove()
+      threadList.stop()
       box.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
       stopResize()
       panel.stop()

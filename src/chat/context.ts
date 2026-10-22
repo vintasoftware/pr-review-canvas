@@ -2,7 +2,7 @@
 // Every value is checked against the canvas first, so a made-up path never reaches a file read.
 import type { ChatContext, TourPlace } from '../contract/chat.js'
 import { chatContextLabel } from '../contract/chat.js'
-import { pointLevelText } from '../../static/js/point-level.js'
+import { pointKindText, pointLevelText } from '../../static/js/point-level.js'
 import { pointRef } from '../../static/js/proposed-comment.js'
 import type { FileEntry, Hunk, Layer, ReviewArtifact } from '../contract/review-artifact.js'
 import type { TourReaderState } from '../contract/tour-api.js'
@@ -262,7 +262,7 @@ async function renderPoint(
   return [
     `## Context: attention point — ${point.title}`,
     '',
-    `${point.kind} · ${pointLevelText(point)} · point \`${pointRef(point.fingerprint)}\``,
+    `${pointKindText(point)} · ${pointLevelText(point)} · point \`${pointRef(point.fingerprint)}\``,
     '',
     point.body,
     '',

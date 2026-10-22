@@ -17,6 +17,9 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'static/js/**/*.test.js'],
     setupFiles: ['./vitest.setup.ts'],
+    // Half the cores, so a run (the pre-commit hook runs one on every commit) leaves the machine
+    // usable. `--maxWorkers` on the command line overrides it.
+    maxWorkers: '50%',
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts', 'src/git/**/*.mjs', 'static/js/**/*.js'],

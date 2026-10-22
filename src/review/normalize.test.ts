@@ -259,6 +259,129 @@ describe('normalize', () => {
     expect(long?.title).toBe('Missing test…')
   })
 
+  it('adds one resolved point for each settled decision in the diff, titled by the decision', () => {
+    const commit = 'c'.repeat(40)
+    const decision = (id: string, text: string, line: number | null) => ({
+      id,
+      commit,
+      date: '2026-10-13T10:00:00-03:00',
+      text,
+      path: 'src/app.ts',
+      side: 'new' as const,
+      line,
+    })
+    const long = `keep the sum ${'because the spec says so '.repeat(5)}`.trim()
+    const unbroken = 'x'.repeat(TEXT_CAPS.pointTitle + 5)
+    const artifact = normalize(artifactToModelOutput(syntheticArtifact()), {
+      ...input(),
+      decisions: [
+        decision('c-1', long, 2),
+        decision('c-2', unbroken, 4),
+        decision('c-3', 'not in the diff', null),
+      ],
+    })
+    const points = artifact.points.filter(point => point.decisionCommit !== undefined)
+    expect(points.map(point => [point.title, point.line, point.layerId])).toEqual([
+      [
+        `${long
+          .slice(0, TEXT_CAPS.pointTitle - 1)
+          .replace(/\S*$/, '')
+          .trimEnd()}…`,
+        2,
+        'run-path',
+      ],
+      ['Settled decision…', 4, 'run-path'],
+    ])
+    expect(points[0]).toMatchObject({
+      origin: 'model',
+      decisionCommit: commit,
+      kind: 'decision',
+      level: 'fyi',
+      audience: 'author',
+      side: 'new',
+      body: `Commit \`ccccccc\` decided this on 2026-10-13: ${long}`,
+    })
+    expect(artifact.settled).toEqual({
+      [points[0]!.fingerprint]: { reason: long, at: '2026-10-13T10:00:00-03:00', commit },
+      [points[1]!.fingerprint]: { reason: unbroken, at: '2026-10-13T10:00:00-03:00', commit },
+    })
+    // They are publish's, so a saved canvas hands none of them back to the generator.
+    expect(artifactToModelOutput(artifact).points.map(point => point.title)).not.toContain(
+      'Settled decision…'
+    )
+  })
+
+  it('titles a decision point by the question its line asks, resolved with the answer, and gives a cut question whole', () => {
+    const commit = 'c'.repeat(40)
+    const decision = (id: string, question: string, line: number) => ({
+      id,
+      commit,
+      date: '2026-10-13T10:00:00-03:00',
+      question,
+      text: 'No: the spec says sum.',
+      path: 'src/app.ts',
+      side: 'new' as const,
+      line,
+    })
+    const long = `Should run() ${'multiply the results instead of adding them '.repeat(3)}?`
+    const artifact = normalize(artifactToModelOutput(syntheticArtifact()), {
+      ...input(),
+      decisions: [decision('c-1', 'Should run() multiply?', 2), decision('c-2', long, 4)],
+    })
+    const [short, cut] = artifact.points.filter(point => point.decisionCommit !== undefined)
+    expect(short).toMatchObject({
+      title: 'Should run() multiply?',
+      body: 'Commit `ccccccc` answered this on 2026-10-13: No: the spec says sum.',
+    })
+    expect(artifact.settled?.[short!.fingerprint]?.reason).toBe('No: the spec says sum.')
+    expect(cut?.title.endsWith('…')).toBe(true)
+    expect(cut?.fingerprint).not.toBe(short?.fingerprint)
+    expect(cut?.body).toBe(
+      `${long}\n\nCommit \`ccccccc\` answered this on 2026-10-13: No: the spec says sum.`
+    )
+  })
+
+  it('keeps two decisions asking one question on one file apart, each with its own answer', () => {
+    const commit = 'c'.repeat(40)
+    const decision = (id: string, text: string, line: number) => ({
+      id,
+      commit,
+      date: '2026-10-13T10:00:00-03:00',
+      question: 'Is this intended?',
+      text,
+      path: 'src/app.ts',
+      side: 'new' as const,
+      line,
+    })
+    const artifact = normalize(artifactToModelOutput(syntheticArtifact()), {
+      ...input(),
+      decisions: [decision('c-1', 'Yes: the sum is wanted.', 2), decision('c-2', 'No: a leftover.', 4)],
+    })
+    const points = artifact.points.filter(point => point.decisionCommit !== undefined)
+    expect(
+      points.map(point => [point.title, point.line, artifact.settled?.[point.fingerprint]?.reason])
+    ).toEqual([
+      ['Is this intended?', 2, 'Yes: the sum is wanted.'],
+      ['Is this intended?', 4, 'No: a leftover.'],
+    ])
+    expect(new Set(points.map(point => point.fingerprint)).size).toBe(2)
+  })
+
+  it('adds no point for a question asked with no answer, and states a whole decision as decided', () => {
+    const commit = 'c'.repeat(40)
+    const at = { commit, date: '2026-10-13T10:00:00-03:00', path: 'src/app.ts', side: 'new' as const }
+    const artifact = normalize(artifactToModelOutput(syntheticArtifact()), {
+      ...input(),
+      decisions: [
+        { ...at, id: 'c-1', question: 'Is the sum right?', line: 2 },
+        { ...at, id: 'c-2', text: 'keep the sum', line: 4 },
+      ],
+    })
+    expect(
+      artifact.points.filter(point => point.decisionCommit !== undefined).map(p => [p.title, p.body])
+    ).toEqual([['keep the sum', 'Commit `ccccccc` decided this on 2026-10-13.']])
+  })
+
   it('keeps the fingerprint stable across spacing and case, and distinct across kind or path', () => {
     const a = fingerprint({ kind: 'risk', path: 'src/a.ts', title: 'Retry  loop' })
     expect(fingerprint({ kind: 'risk', path: 'src/a.ts', title: '  retry LOOP ' })).toBe(a)

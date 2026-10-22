@@ -35,7 +35,6 @@ describe('the side pane tabs', () => {
     expect([...document.querySelectorAll('[role="tab"]')].map(t => t.getAttribute('aria-selected'))).toEqual([
       'true',
       'false',
-      'false',
     ])
     expect(document.querySelector('#chat-minimize')?.getAttribute('aria-label')).toBe('Minimize AI Chat')
     document.body.innerHTML = sideTabsHtml({ chat: false })
@@ -74,25 +73,6 @@ describe('the side pane tabs', () => {
     stop()
     chatTab.click()
     expect(pane.getAttribute('data-tab')).toBe('review')
-  })
-
-  it('shows the threads in their own tab, and walks all three tabs with the arrows', () => {
-    const { pane } = mount(renderChatShell({ enabled: true }))
-    const stop = wireSideTabs(pane)
-    const chatTab = /** @type {HTMLElement} */ (pane.querySelector('#side-tab-chat'))
-    const threadsTab = /** @type {HTMLElement} */ (pane.querySelector('#side-tab-threads'))
-    const threadsPanel = /** @type {HTMLElement} */ (pane.querySelector('#threads-panel'))
-    expect(threadsPanel.hidden).toBe(true)
-    threadsTab.click()
-    expect(pane.getAttribute('data-tab')).toBe('threads')
-    expect(threadsPanel.hidden).toBe(false)
-    expect(pane.querySelector('#review-panel')?.hasAttribute('hidden')).toBe(true)
-    chatTab.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-    expect(pane.getAttribute('data-tab')).toBe('threads')
-    threadsTab.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-    expect(pane.getAttribute('data-tab')).toBe('review')
-    expect(threadsPanel.hidden).toBe(true)
-    stop()
   })
 
   it('opens a minimized pane on the review tab and focuses the tab', () => {

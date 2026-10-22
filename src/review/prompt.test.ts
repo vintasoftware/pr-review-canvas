@@ -37,6 +37,7 @@ function context(over: Partial<GenerationContext> = {}): GenerationContext {
     tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
     smallPr: true,
     largePr: false,
+    decisions: [],
     preparedAt: '2026-09-10T12:00:00.000Z',
     ...over,
   }
@@ -379,6 +380,65 @@ describe('renderPrompt', () => {
       })
     ).toThrow('generation-strict-incremental.md uses an unknown token {{NOPE}}')
   })
+
+  it.each(['strict', 'surfacing'] as const)(
+    "lists the author's settled decisions in the %s prompt, in the diff and out of it, as questions not to raise",
+    mode => {
+      const none = context()
+      none.generation.mode = mode
+      expect(renderPrompt(none, PATCHES, sources)).toContain(
+        '### Settled decisions\n\n_No settled decisions are recorded on these commits._'
+      )
+      const ctx = context({
+        decisions: [
+          {
+            id: 'abc1234-1',
+            commit: `abc1234${'0'.repeat(33)}`,
+            date: '2026-10-13T10:00:00-03:00',
+            text: 'keep the sum; the spec says sum',
+            path: 'src/app.ts',
+            side: 'new',
+            line: 4,
+          },
+          {
+            id: 'abc1234-2',
+            commit: `abc1234${'0'.repeat(33)}`,
+            date: '2026-10-13T10:00:00-03:00',
+            question: 'Should other() be exported?',
+            text: 'No: it stays private',
+            path: 'src/app.ts',
+            side: 'new',
+            line: null,
+          },
+          {
+            id: 'abc1234-3',
+            commit: `abc1234${'0'.repeat(33)}`,
+            date: '2026-10-13T10:00:00-03:00',
+            question: 'Is the sum right?',
+            path: 'src/app.ts',
+            side: 'new',
+            line: null,
+          },
+        ],
+      })
+      ctx.generation.mode = mode
+      const prompt = renderPrompt(ctx, PATCHES, sources)
+      expect(renderPrompt(none, PATCHES, sources)).not.toContain('**Raised, not answered**')
+      // A question with no answer is listed apart, as open.
+      expect(prompt).toContain(
+        'not settled. Write a point for one when the code still raises it:\n\n- `abc1234-3` on `src/app.ts` (commit `abc1234`, 2026-10-13): Is the sum right?'
+      )
+      expect(prompt).not.toContain('it stays private\n- `abc1234-3`')
+      expect(prompt).toContain('Do not raise any of them again, and write no point for them.')
+      expect(prompt).toContain(
+        '- `abc1234-1` on `src/app.ts` new-side line 4 (commit `abc1234`, 2026-10-13): keep the sum; the spec says sum\n\n**Not in this diff**'
+      )
+      expect(prompt).toContain(
+        '- `abc1234-2` on `src/app.ts` (commit `abc1234`, 2026-10-13): Should other() be exported? No: it stays private'
+      )
+      expect(prompt).not.toContain('settledDecision')
+    }
+  )
 
   it.each(['strict', 'surfacing'] as const)(
     'lists the points the author resolved for the %s generator, fresh or incremental, and marks a re-judged one',

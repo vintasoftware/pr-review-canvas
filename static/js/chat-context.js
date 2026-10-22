@@ -136,6 +136,26 @@ export function chatContextLabel(context, layerTitle, pointTitle) {
 }
 
 /**
+ * A target's name without its kind, for a place that says the kind already: a group of the
+ * Threads tab, or the tag beside a thread's title. The whole PR has no name of its own.
+ * @param {Exclude<ChatContext, { kind: 'pr' }>} context
+ * @param {(layerId: string) => string | undefined} [layerTitle]
+ * @param {(fingerprint: string) => string | undefined} [pointTitle]
+ * @returns {string}
+ */
+export function chatContextName(context, layerTitle, pointTitle) {
+  switch (context.kind) {
+    case 'layer':
+      return layerTitle?.(context.layerId) ?? context.layerId
+    case 'point':
+      return pointTitle?.(context.fingerprint) ?? 'attention point'
+    case 'file':
+    case 'lines':
+      return chatContextLabel(context)
+  }
+}
+
+/**
  * The context a `[ ask ]` element names, read from its data attributes. Returns the whole-PR
  * context for an element that names nothing.
  * @param {Element} el

@@ -572,6 +572,15 @@ describe('createChatManager() threads and settings', () => {
     expect((await manager.threads(42)).activeThread).toBe(b.name)
   })
 
+  it('keeps how many answers of a thread the reader has not seen, and clears it at zero', async () => {
+    const a = await manager.createThread(42)
+    expect((await manager.markUnseen(42, a.name, 2))?.unseen).toBe(2)
+    expect((await manager.threads(42)).threads.find(t => t.name === a.name)?.unseen).toBe(2)
+    await manager.markUnseen(42, a.name, 0)
+    expect((await manager.threads(42)).threads.find(t => t.name === a.name)).not.toHaveProperty('unseen')
+    expect(await manager.markUnseen(42, 'pr-review-acme-widgets-42-claude-t9', 1)).toBeNull()
+  })
+
   it('selects a thread the reader picked, and says so when there is no such thread', async () => {
     const a = await manager.createThread(42)
     await manager.createThread(42)

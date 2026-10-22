@@ -1,6 +1,6 @@
 // @ts-check
 import { esc } from './dom.js'
-import { postToLabel } from './host.js'
+import { hostLabel, postToLabel } from './host.js'
 import { normalizedCommentBody } from './proposed-comment.js'
 
 /** @param {string} url */
@@ -87,7 +87,9 @@ export function sendCommandsHtml(opts) {
     return '<span class="pill pending queued">in your review</span>'
   }
   const target = `data-${opts.kind}="${esc(opts.id)}"`
-  const post = `<button class="cmd" type="button" data-act="${opts.kind}-post" ${target} data-needs-post>${postToLabel()}</button>`
+  // The tooltip is cased like its neighbours' (Edit, Copy); the word stays the command's.
+  const tip = esc(`Post to ${hostLabel()}`)
+  const post = `<button class="cmd" type="button" data-act="${opts.kind}-post" ${target} data-needs-post data-tooltip="${tip}" title="${tip}">${postToLabel()}</button>`
   const queue = `<button class="cmd${opts.leadWithQueue === true ? ' fill' : ''}" type="button" data-act="${opts.kind}-queue" ${target}>add to review</button>`
   return opts.leadWithQueue === true ? queue + post : post + queue
 }

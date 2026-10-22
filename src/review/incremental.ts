@@ -10,7 +10,7 @@ import type {
   FileDelta,
 } from '../contract/generation-context.js'
 import { extractLinks, parseLink } from '../contract/links.js'
-import type { Point, ReviewArtifact } from '../contract/review-artifact.js'
+import { isGeneratorPoint, type Point, type ReviewArtifact } from '../contract/review-artifact.js'
 import type { CanvasEntry } from '../contract/canvas-manifest.js'
 import type { ReviewKey } from '../contract/review-key.js'
 import type { Git } from '../git/git.js'
@@ -64,7 +64,7 @@ export function fileDelta(basis: Derived, head: Derived): FileDelta {
  */
 function linksStand(point: Point, unchanged: ReadonlySet<string>): boolean {
   return (
-    point.origin !== 'model' ||
+    !isGeneratorPoint(point) ||
     extractLinks(point.body).every(href => {
       const link = parseLink(href)
       return link === null || link.kind === 'layer' || unchanged.has(link.path)
@@ -97,17 +97,21 @@ export function splitBasis(
       reJudgedFiles,
     }
   })
-  const points: BasisSplitPoint[] = artifact.points.map(point => {
-    const split = { kind: point.kind, path: point.path, title: point.title }
-    const headLines = !linksStand(point, unchanged)
-      ? undefined
-      : unchanged.has(point.path)
-        ? { side: point.side ?? 'new', line: point.line, endLine: point.endLine ?? point.line }
-        : lineCarried.get(point)
-    return headLines === undefined
-      ? { ...split, status: 're-judged' }
-      : { ...split, status: 'carried', headLines }
-  })
+  // Publish writes a settled decision's point again from the commits, so the generator is never
+  // asked to copy one.
+  const points: BasisSplitPoint[] = artifact.points
+    .filter(point => point.decisionCommit === undefined)
+    .map(point => {
+      const split = { kind: point.kind, path: point.path, title: point.title }
+      const headLines = !linksStand(point, unchanged)
+        ? undefined
+        : unchanged.has(point.path)
+          ? { side: point.side ?? 'new', line: point.line, endLine: point.endLine ?? point.line }
+          : lineCarried.get(point)
+      return headLines === undefined
+        ? { ...split, status: 're-judged' }
+        : { ...split, status: 'carried', headLines }
+    })
   return { layers, points }
 }
 

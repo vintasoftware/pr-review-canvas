@@ -2,6 +2,7 @@ import { TEXT_CAPS } from '../src/contract/review-artifact.js'
 import { toPatchMap } from '../src/git/diff-collector.js'
 import { artifactToModelOutput, normalize } from '../src/review/normalize.js'
 import { SYNTHETIC_FILES, syntheticArtifact } from '../src/testing/synthetic.js'
+import { SETTLED_POLL_MS } from '../static/js/api.js'
 import { expect, test } from './fixtures.js'
 
 test('the author settles a reviewer point with a reason, reads it after a reload, and reopens it', async ({
@@ -138,4 +139,106 @@ test('a reviewer loads the author’s resolved points off the page, and the laye
   await expect(heading).toBeVisible()
   await expect(card.locator('.p-summary')).toHaveText('Resolved by the author: The spec says sum.')
   await expect(card.locator('[data-act="point-unsettle"]')).toHaveCount(0)
+})
+
+test('a reviewer whose queued point the author resolves keeps the draft, and is told so where it shows', async ({
+  page,
+  chatServer,
+}, testInfo) => {
+  // Narrower screens float the pane, minimized, over the canvas; the wide one docks its tabs.
+  test.skip(testInfo.project.name !== 'desktop')
+  const artifact = syntheticArtifact()
+  const server = await chatServer({
+    setup: async t => {
+      t.ctx.fixtureArtifact = artifact
+    },
+  })
+  await page.clock.install()
+  await page.goto(server.url)
+  const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+  await card.locator('[data-act="point-queue"]').click()
+  await expect(card).toHaveAttribute('data-status', 'queued')
+  // The author resolves the point; the reviewer's page reads it on its next poll.
+  server.ctx.fixtureArtifact = {
+    ...artifact,
+    settled: { 'fp-1': { reason: 'The spec says sum.', at: '2026-09-10T12:00:00.000Z' } },
+  }
+  await page.clock.runFor(SETTLED_POLL_MS)
+  await expect(page.locator('.toast')).toContainText(
+    'the author resolved a point; your review keeps your draft on it'
+  )
+  await expect(card).toBeHidden()
+  await expect(page.locator('.point-statuses')).toContainText(
+    '1 resolved by the author (1 with your draft in the review)'
+  )
+  const note = 'The author resolved this point. Your draft stays in your review until you send or delete it.'
+  await expect(page.locator('tr.pending-row .pending-resolved')).toHaveText(note)
+  await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
+  await page
+    .locator('aside.chat')
+    .getByRole('tab', { name: /Your review/ })
+    .click()
+  await expect(page.locator('#review-panel .pending-resolved')).toHaveText(note)
+  await page.locator('[data-act="toggle-resolved"]').click()
+  await expect(card.locator('.p-summary')).toHaveText(
+    'Resolved by the author: The spec says sum. · your draft still waits in your review'
+  )
+})
+
+test('the author reopens a settled decision, which then gives the commit’s answer as context', async ({
+  page,
+  chatServer,
+}) => {
+  const base = syntheticArtifact()
+  const commit = 'c'.repeat(40)
+  const decision = {
+    ...base.points[0]!,
+    id: 'p-4',
+    fingerprint: 'fp-4',
+    kind: 'decision' as const,
+    level: 'fyi' as const,
+    title: 'Should run() multiply?',
+    body: 'Commit `ccccccc` answered this on 2026-10-13: No: the spec says sum.',
+    audience: 'author' as const,
+    decisionCommit: commit,
+  }
+  const { impact: _impact, ...point } = decision
+  const artifact = {
+    ...base,
+    points: [...base.points, point],
+    settled: { 'fp-4': { reason: 'No: the spec says sum.', at: '2026-10-13T10:00:00.000Z', commit } },
+  }
+  const server = await chatServer({
+    setup: async t => {
+      t.ctx.fixtureArtifact = null
+      await t.ctx.canvases.write(artifact.pr.headSha, artifact, {
+        formatVersion: 1,
+        tool: { name: 'pr-review', version: '0.0.0-test' },
+        repo: artifact.pr.repo,
+        prNumber: 42,
+        headSha: artifact.pr.headSha,
+        mergeBaseSha: artifact.pr.mergeBaseSha,
+        baseRef: 'main',
+        headRef: 'feat/b',
+        generatedAt: artifact.generatedAt,
+        generator: artifact.generator,
+      })
+    },
+  })
+  await page.goto(server.url)
+  await page.locator('[data-act="toggle-resolved"]').click()
+  const card = page.locator('section.layer li.finding[data-fingerprint="fp-4"]')
+  await card.locator('[data-act="point-expand"]').click()
+  await card.locator('[data-act="point-unsettle"]').click()
+  await expect(card).toHaveAttribute('data-status', 'open')
+  await expect(card.locator('.p-summary')).toHaveText(
+    'The author reopened this on the canvas; the commit’s answer below no longer settles it.'
+  )
+  await expect(card.locator('.prose').first()).toHaveText(
+    'Commit ccccccc answered this on 2026-10-13: No: the spec says sum.'
+  )
+  const stored = await server.ctx.canvases.readArtifact(artifact.pr.headSha)
+  expect(stored?.reopened).toEqual({ 'fp-4': { commit, at: expect.any(String) } })
+  await page.reload()
+  await expect(card).toHaveAttribute('data-status', 'open')
 })

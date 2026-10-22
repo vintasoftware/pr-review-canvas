@@ -66,6 +66,12 @@
   border-color: var(--warn);
 }
 
+/* Under the body, across both columns, like the commands under it. */
+.cmt.pending-cmt .pending-resolved {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+}
+
 /* The avatar column covers the byline and the body, so the commands clear both. */
 .cmt.pending-cmt .tbtns {
   display: flex;
@@ -75,7 +81,7 @@
 }
 
 .pill.pending {
-  color: var(--bg);
+  color: var(--on-warn);
   background: var(--warn);
 }
 

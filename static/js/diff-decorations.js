@@ -7,7 +7,7 @@
 /** @typedef {import('./threads.js').Thread} Thread */
 import { findRow, nearestRow } from './anchors.js'
 import { viewCommentHtml } from './comment-link.js'
-import { esc, fragment, avatarHtml, timeAgo } from './dom.js'
+import { esc, fragment, avatarHtml, timeAgo, wideCellHtml } from './dom.js'
 import { renderMarkdown } from './markdown.js'
 import { pendingRowHtml } from './pending.js'
 import { pointRowHtml } from './points.js'
@@ -42,9 +42,12 @@ export function insertNoteRow(card, key, a) {
   }
   const range = a.startLine === a.endLine ? `line ${a.startLine}` : `lines ${a.startLine}–${a.endLine}`
   const html =
-    `<tr class="annot ann${approx ? ' is-approx' : ''}" ${DECORATION}="note"><td class="code x" colspan="4">` +
-    `<span class="lbl">Annotation · ${esc(range)}${a.side === 'old' ? ' (old)' : ''}</span>` +
-    `<div class="prose">${renderMarkdown(a.text)}</div></td></tr>`
+    `<tr class="annot ann${approx ? ' is-approx' : ''}" ${DECORATION}="note">` +
+    wideCellHtml(
+      `<span class="lbl">Annotation · ${esc(range)}${a.side === 'old' ? ' (old)' : ''}</span>` +
+        `<div class="prose">${renderMarkdown(a.text)}</div>`
+    ) +
+    '</tr>'
   last.insertAdjacentElement('afterend', firstRow(html))
   return true
 }
@@ -103,12 +106,13 @@ export function threadRowHtml(t, opts) {
     : `<button class="cmd" type="button" data-act="thread-hide" data-thread="${rootId}">hide</button>`
   return (
     `<tr class="thread${t.resolved ? ' resolved' : ''}${hidden ? ' hidden-thread' : ''}" data-thread="${rootId}">` +
-    '<td class="code x" colspan="4">' +
-    `<div class="thread-full"${collapsed ? ' hidden' : ''}>${comments}` +
-    `<span class="tbtns"><button class="cmd" type="button" data-act="thread-reply" data-thread="${rootId}" data-needs-post>reply</button>${hide}</span></div>` +
-    `<div class="thread-collapsed"${collapsed ? '' : ' hidden'}>${label} · ` +
-    `<button class="cmd" type="button" data-act="thread-show" data-thread="${rootId}">show</button></div>` +
-    '</td></tr>'
+    wideCellHtml(
+      `<div class="thread-full"${collapsed ? ' hidden' : ''}>${comments}` +
+        `<span class="tbtns"><button class="cmd" type="button" data-act="thread-reply" data-thread="${rootId}" data-needs-post>reply</button>${hide}</span></div>` +
+        `<div class="thread-collapsed"${collapsed ? '' : ' hidden'}>${label} · ` +
+        `<button class="cmd" type="button" data-act="thread-show" data-thread="${rootId}">show</button></div>`
+    ) +
+    '</tr>'
   )
 }
 

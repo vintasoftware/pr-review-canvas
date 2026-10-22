@@ -5,8 +5,8 @@
 /** @typedef {import('./contract-types.js').PostCommentInput} PostCommentInput */
 import { cssEscape } from './anchors.js'
 import { renderMarkdown } from './markdown.js'
-import { esc } from './dom.js'
-import { noPostingTitle, postToLabel } from './host.js'
+import { esc, wideCellHtml } from './dom.js'
+import { hostLabel, noPostingTitle, postToLabel } from './host.js'
 
 /**
  * @typedef {{
@@ -116,10 +116,7 @@ export function composerHtml(opts) {
  * @param {ComposerOptions} opts
  */
 export function composerRowHtml(opts) {
-  return (
-    `<tr class="composer" data-decoration="composer">` +
-    `<td class="code x" colspan="4">${composerHtml(opts)}</td></tr>`
-  )
+  return `<tr class="composer" data-decoration="composer">${wideCellHtml(composerHtml(opts))}</tr>`
 }
 
 /** The pending item shown while GitHub answers, replaced by the comment it returns. */
@@ -296,7 +293,7 @@ export function applyCapabilityGating(root, capabilities) {
   const note = root.querySelector('.capability-note')
   if (note !== null) {
     // A disabled command cannot take focus, so the reason is also said in plain sight.
-    note.textContent = blocked ? `Posting to GitHub is off: ${reason}` : ''
+    note.textContent = blocked ? `Posting to ${hostLabel()} is off: ${reason}` : ''
   }
   return blocked
 }

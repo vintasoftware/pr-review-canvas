@@ -45,7 +45,9 @@ export function foldCountText(counts) {
  * @returns {string}
  */
 export function foldLevelHint(level, counts) {
-  const amount = counts.hidden === 0 ? 'nothing hidden yet' : `${hiddenLabel(counts)} of the diff`
+  // The renderer's own folds (imports, whitespace, moved blocks) hide at every level and are not
+  // counted, so an empty count says the level hides nothing beyond them.
+  const amount = counts.hidden === 0 ? 'nothing else hidden' : `${hiddenLabel(counts)} of the diff`
   return `${FOLD_LEVEL_WHAT[level]} · ${amount}`
 }
 

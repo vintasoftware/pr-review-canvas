@@ -78,6 +78,13 @@ describe('what a reader sees', () => {
     expect(card?.querySelector('[data-act="point-settle"]')).toBeNull()
   })
 
+  it('leaves out the summary line when the reason only repeats the title, as a settled decision does', () => {
+    setSelfReview(false, { [tests.fingerprint]: { ...settlement, reason: `${tests.title}\n\nMore.` } })
+    document.body.innerHTML = `<ol>${pointCardHtml(tests, { ...ctx, state })}</ol>`
+    expect(document.querySelector('.p-summary')).toBeNull()
+    expect(document.querySelector('.settled-reason')?.textContent).toContain('More.')
+  })
+
   it('keeps dismiss as a personal hide in self-review, which does not resolve the point', () => {
     const dismissed = {
       ...state,
