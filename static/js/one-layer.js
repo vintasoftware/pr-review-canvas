@@ -27,12 +27,21 @@ export function pageSections(root) {
 }
 
 /**
- * True for an element that a section the page is not showing hides. It hides nothing for good:
- * `reveal-code` on anything inside it shows the section.
+ * True for an element in a section the page is not showing, whatever else hides it inside that
+ * section, such as its closed layer. It hides nothing for good: `reveal-code` on anything inside
+ * it shows the section.
  * @param {Element} el
  */
 export function inHiddenSection(el) {
-  return el.closest('[hidden]')?.matches(SECTION_SELECTOR) === true
+  return el.closest(SECTION_SELECTOR)?.hasAttribute('hidden') === true
+}
+
+/**
+ * True for the overview or a layer section, the elements one layer at a time shows and hides.
+ * @param {Element} el
+ */
+export function isPageSection(el) {
+  return el.matches(SECTION_SELECTOR)
 }
 
 /**
@@ -113,7 +122,18 @@ export function initOneLayer(root, opts) {
   /** @param {string} fragment */
   const sectionFor = fragment => sectionOf(root, elementForHash(root, fragment))
 
+  /**
+   * A plain fragment, such as a rail link or the `#layer-…` that `j` and `k` leave in the URL, is
+   * one the browser scrolls to on its own, so nothing raises `reveal-code` on its target: it is
+   * raised here, which shows the target's section and opens the layer or file it names.
+   * @param {string} fragment
+   */
+  const revealFragment = fragment => {
+    elementForHash(root, fragment)?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+  }
+
   const redraw = () => {
+    revealFragment(win.location.hash)
     if (view === 'all') {
       for (const section of pageSections(root)) {
         section.hidden = false
@@ -132,29 +152,31 @@ export function initOneLayer(root, opts) {
     signal: listeners.signal,
   })
 
-  // A rail link or a "more chunks in layer 4" link is a plain fragment the browser scrolls to on
-  // its own; its section is shown here, before that default scroll runs.
+  // A rail link or a "more chunks in layer 4" link is a plain fragment: what it names opens here,
+  // before the browser's own scroll runs.
   root.addEventListener(
     'click',
     event => {
       const link = event.target instanceof Element ? event.target.closest('a[href^="#"]') : null
       // A modified click opens the link in a new tab and leaves this page where it is.
       if (link !== null && plainClick(/** @type {MouseEvent} */ (event))) {
-        show(sectionOf(root, elementForHash(root, link.getAttribute('href') ?? '')))
+        revealFragment(link.getAttribute('href') ?? '')
       }
     },
     { signal: listeners.signal }
   )
 
-  // Back and forward between plain fragments: the browser has already tried to scroll to the
-  // target, and could not while its section was hidden, so the scroll is repeated here.
+  // Back and forward between plain fragments: what the fragment names opens, and when its section
+  // was hidden the browser could not scroll to it, so the scroll is repeated here.
   win.addEventListener(
     'hashchange',
     () => {
       const el = elementForHash(root, win.location.hash || '#overview')
-      const section = sectionOf(root, el)
-      if (el !== null && section?.hidden === true) {
+      if (el === null) return
+      if (sectionOf(root, el)?.hidden === true) {
         scrollIntoViewSafe(el, 'start')
+      } else {
+        revealFragment(win.location.hash)
       }
     },
     { signal: listeners.signal }

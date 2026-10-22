@@ -493,7 +493,10 @@ describe('overview', () => {
 
   it('renders the conversation with bots collapsed and a comment command', () => {
     document.body.innerHTML = conversationHtml(bundle().comments.issueComments, NOW)
-    expect(document.querySelector('h3.lbl.sub')?.textContent).toBe('Conversation · 2')
+    expect(document.querySelector('details.pr-conversation > summary .chev + span')?.textContent).toBe(
+      'Conversation · 2'
+    )
+    expect(document.querySelector('details.pr-conversation')?.hasAttribute('open')).toBe(false)
     expect(document.querySelector('.cmt .who b')?.textContent).toBe('reviewer')
     expect(document.querySelector('.cmt .prose strong')?.textContent).toBe('good')
     expect(document.querySelector('details.bots summary .chev + span')?.textContent).toBe('1 bot comment')
@@ -530,7 +533,9 @@ describe('overview', () => {
       '#layer-other',
     ])
     expect(panel?.querySelector('.findings')).toBeNull()
-    expect(panel?.querySelector('.lbl.sub')?.textContent).toBe('Conversation · 2')
+    expect(panel?.querySelector('details.pr-conversation summary .chev + span')?.textContent).toBe(
+      'Conversation · 2'
+    )
     expect(panel?.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
       'PR description (from GitHub)'
     )

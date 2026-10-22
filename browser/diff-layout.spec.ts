@@ -1,10 +1,11 @@
-import { expect, test } from './fixtures.js'
+import { expect, openFiles, test } from './fixtures.js'
 
 test('a short hunk under a long one spans the width the reader scrolls through', async ({
   page,
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
   await file.scrollIntoViewIfNeeded()
   await file.locator('table.diff td.code').first().waitFor()
@@ -35,6 +36,7 @@ test('a long point body wraps at the card and does not scroll a diff with no lon
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
   await file.scrollIntoViewIfNeeded()
   await file.locator('tr.ifind').first().waitFor()
@@ -63,6 +65,7 @@ test('under a long line, a point in a short hunk stays at the card width and in 
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
   await file.scrollIntoViewIfNeeded()
   await file.locator('tr.ifind').first().waitFor()

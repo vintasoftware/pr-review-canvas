@@ -149,12 +149,13 @@ export function writeChatWidth(storage, width) {
 }
 
 /**
- * Only a wide screen stores this: a floating chat always starts minimized.
+ * Only a wide screen stores this: a floating chat always starts minimized. The chat also starts
+ * minimized until the reader opens it once, so it takes no width from a canvas nobody chats on.
  * @param {Storage | null} storage
  * @returns {boolean}
  */
 export function readChatMinimized(storage) {
-  return (storage === null ? null : storage.getItem(CHAT_MINIMIZED_KEY)) === '1'
+  return (storage === null ? null : storage.getItem(CHAT_MINIMIZED_KEY)) !== '0'
 }
 
 /**

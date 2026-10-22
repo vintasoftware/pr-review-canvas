@@ -14,7 +14,7 @@ import {
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { setMentionCanvas } from './points.js'
+import { readPointsDensity, setMentionCanvas, setPointsDensity } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -315,6 +315,7 @@ export class PrAppElement extends HTMLElement {
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
     const chatMinimized = chatEnabled && readChatMinimized(storage)
+    setPointsDensity(document.documentElement, readPointsDensity(storage))
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)

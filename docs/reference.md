@@ -640,6 +640,14 @@ server and the corresponding canvas to use a localhost link.
 
 ### Collapsed diffs
 
+The page opens with the first layer open and the others closed; a layer marked reviewed stays
+closed. Every file starts closed under its name, its counts, and its **reviewed** box: click the
+name or the chevron, or press `o` on it, to read its diff. The rail, the keys that step through
+layers and files (`j`, `k`, `n`, `p`), and any link into a layer or a file open what they land on.
+A click that opens or closes a file or a point keeps its title where you clicked it, so the file
+reads from its start; only closing one at the very end of the page moves it, as the page gets
+shorter than the scroll.
+
 Import-only changes, whitespace changes, moved code, and ranges selected by the generator may
 start collapsed. Click the summary to expand them. Moves are detected within a file; moves
 between files appear as deletions and additions. Edited moves keep their changed text visible.
@@ -662,14 +670,15 @@ in its Files heading, and the sign-off dialog records the total.
 
 The page opens at `foldLevel` from `settings.yml` (`light` by default), which the **Hide code by
 default** field in the settings dialog sets. The control and the `f` key change the level for the
-current page only. Changing the level redraws the visible diffs and re-applies file collapse,
-including cards opened by hand.
+current page only. Changing the level redraws the visible diffs and closes the files it hides
+whole, including cards opened by hand. It never opens a file: lowering the level leaves closed
+files closed.
 
 These always stay visible:
 
 - Attention points, comment threads, and pending review drafts. A file with a thread or a draft
   folds nothing.
-- Files with an annotation or an attention point. They never collapse whole.
+- Files with an annotation or an attention point. No level closes them whole.
 - Annotations, except under an `aggressive` fold that covers the whole annotation and no other. That
   fold shows the annotation's text instead of its title.
 - Test files at `light`, except snapshots and fixtures. From `moderate`, each test body folds under
@@ -724,7 +733,8 @@ zone or `pr-review import <zip> --pr <n>`.
 ### Attention point levels and impact
 
 Each attention point has a level, which says what it asks of you rather than how bad it is. Its
-icon shows the level by shape:
+icon shows the level by shape, and the level's name stands beside it on its card, on its line in
+the diff, and in the overview's counts:
 
 - **decide** (a diamond): a choice only a person can make, or a structural problem that holds the
   merge until the author justifies it.
@@ -770,17 +780,23 @@ in the layer, your draft with **edit** and **delete**; in the diff the draft has
 under the point), and the commands that undo it: **reopen**, **restore**, or
 deleting the draft. The point collapses again when its status changes. A reload also collapses it.
 
-The counts in the rail, the layer headings, and the overview squares include only open points. The
-overview line **Attention points: 2 open · 1 in your review · 1 resolved by the author · …** counts
-each status, and adds **(N with your draft in the review)** after the resolved ones that still hold
-a draft. Resolved points start off the page for every reader, the author too: **show the N
-resolved** brings them back, collapsed in place, until you click it again. A layer whose points are
-all resolved drops its **Attention points** heading while they are hidden. A link to a resolved
-point shows that one point, and a point you just resolved stays shown until the next load. The
-line's **hide the N acted on** command removes your other collapsed points from the page until you
-click it again; **edit** on an AI Chat proposed resolution brings its point back while the reason
-box is open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
-it again.
+In a layer's list every point starts as one line: its level, title, a `decide` point's impact,
+kind, audience, and location. Click the title or **show** to read it and use its commands. **show
+details** in the heading of a list shows every open point whole, in every layer, and **compact**
+goes back; the browser remembers the choice. A point on its line in the diff is always drawn whole
+while it is open.
+
+The counts in the rail, the layer headings, and the overview's level counts include only open
+points. The overview line **Attention points: 2 open · 1 in your review · 1 resolved by the author ·
+…** counts each status, and adds **(N with your draft in the review)** after the resolved ones that
+still hold a draft. Resolved points start off the page for every reader, the author too: **show
+the N resolved** brings them back, collapsed in place, until you click it again. A layer whose
+points are all resolved drops its **Attention points** heading while they are hidden. A link to a
+resolved point shows that one point, and a point you just resolved stays shown until the next load.
+The line's **hide the N acted on** command removes your other collapsed points from the page until
+you click it again; **edit** on an AI Chat proposed resolution brings its point back while the
+reason box is open. `]` and `[` step only through open points. `o` on a point drawn as one line
+expands it or collapses it again.
 
 ### Self-review
 

@@ -549,10 +549,6 @@
   .prose ul {
     list-style: disc;
   }
-  .sevsum > .legend {
-    border-radius: var(--r);
-    box-shadow: var(--drop-shadow);
-  }
   /* GitHub draws progress as a filled track rather than a hairline. */
   .pline {
     background: var(--line);
@@ -589,28 +585,14 @@
     font-size: 13px;
     font-weight: 600;
   }
-  .lbl.sub + :is(.testmap, .findings, .conversation) {
+  .lbl.sub + :is(.testmap, .findings),
+  .pr-conversation > .conversation {
     margin: 0 var(--inset);
     border: 1px solid var(--line);
     border-radius: var(--r);
   }
-  /* The conversation box keeps the inset below it, as on its sides. */
-  .lbl.sub + .conversation {
+  .pr-conversation > .conversation {
     margin-bottom: var(--inset);
-  }
-  /* A square before the title says what the section holds: green for tests, purple for points. */
-  .lbl.sub:is(:has(+ .testmap), :has(+ .findings))::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--sect);
-  }
-  .lbl.sub:has(+ .testmap) {
-    --sect: var(--progress);
-  }
-  .lbl.sub:has(+ .findings) {
-    --sect: var(--purple);
   }
   .lbl.sub:has(+ .files) {
     margin-top: 20px;

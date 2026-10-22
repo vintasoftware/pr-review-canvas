@@ -50,7 +50,7 @@ import {
   updateRenderState,
 } from './layers.js'
 import { buildNavOrder, layerOf, readingItem, step } from './nav.js'
-import { inHiddenSection } from './one-layer.js'
+import { inHiddenSection, isPageSection } from './one-layer.js'
 import { issueCommentHtml } from './overview.js'
 import { pendingCount, refreshPendingBar, refreshResolvedDrafts } from './pending.js'
 import { refreshReviewPanel } from './review-panel.js'
@@ -61,7 +61,10 @@ import {
   pointSwitches,
   pointToMarkdown,
   postedUrls,
+  pointCollapses,
+  readPageDensity,
   setPointExpanded,
+  setPointsDensity,
 } from './points.js'
 import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
@@ -105,15 +108,22 @@ function drawnTop(el) {
 }
 
 /**
- * False for an element inside a collapsed card or a closed details, which a key should not stop at.
- * A layer the page is not showing does not count: the key shows it.
+ * False for an element a key should not stop at: inside a closed details, a closed file card, or
+ * a layer marked reviewed. A layer the page is not showing, or one not opened yet, does not count:
+ * the key lands there and `reveal-code` opens it.
  * @param {Element} el
  */
 function isShown(el) {
-  return (
-    (el.closest('[hidden]') === null || inHiddenSection(el)) &&
-    (el.parentElement?.closest('details:not([open])') ?? null) === null
-  )
+  for (
+    let hider = el.closest('[hidden]');
+    hider !== null;
+    hider = hider.parentElement?.closest('[hidden]') ?? null
+  ) {
+    if (!isPageSection(hider) && !hider.matches('section.layer:not(.is-reviewed) > .layer-body')) {
+      return false
+    }
+  }
+  return (el.parentElement?.closest('details:not([open])') ?? null) === null
 }
 
 /**
@@ -302,18 +312,20 @@ export function wireReview(root, session, opts = {}) {
   const onState = (/** @type {PrState} */ state) => {
     updateRenderState(state)
     if (session.issueComments !== null && session.issueComments !== drawnIssues) {
-      const conversation = root.querySelector('.conversation')
-      if (conversation !== null) {
+      const conversation = root.querySelector('.pr-conversation')
+      if (conversation instanceof HTMLDetailsElement) {
         const replacement = doc.createElement('template')
         replacement.innerHTML = conversationHtml(session.issueComments, new Date())
+        const next = /** @type {HTMLDetailsElement} */ (replacement.content.firstElementChild)
+        // The block stays open or closed as the reader left it.
+        next.open = conversation.open
         const composer = conversation.querySelector('.pr-composer-host')
         const focused = doc.activeElement
         if (composer !== null) {
-          const slot = /** @type {Element} */ (replacement.content.querySelector('.pr-composer-host'))
+          const slot = /** @type {Element} */ (next.querySelector('.pr-composer-host'))
           slot.replaceWith(composer)
         }
-        conversation.previousElementSibling?.remove()
-        conversation.replaceWith(replacement.content)
+        conversation.replaceWith(next)
         if (focused instanceof HTMLElement && composer?.contains(focused)) focused.focus()
       }
       drawnIssues = session.issueComments
@@ -357,11 +369,13 @@ export function wireReview(root, session, opts = {}) {
       }
       const reviewed = isCardReviewed(id, state)
       input.checked = reviewed
-      // A card the server reopened (marking a layer reopens its files) opens here as well.
+      // A card marked reviewed closes. One the server reopened (unmarking a layer reopens its
+      // files) stays as it is, closed like every file at first; markReviewed opens the card whose
+      // box the reader unticked.
       const parts = cardOf(input)
       if (parts !== null && parts.card.classList.contains('is-reviewed') !== reviewed) {
         parts.card.classList.toggle('is-reviewed', reviewed)
-        setCardCollapsed(parts.card, reviewed)
+        if (reviewed) setCardCollapsed(parts.card, true)
       }
     }
     refreshPendingBar(root, state, session)
@@ -960,37 +974,70 @@ export function wireReview(root, session, opts = {}) {
     }
   }
 
+  /**
+   * A click on a file's or a point's title, or its toggle, flips what it heads. A double or triple
+   * click selects the title to copy it: its first click already flipped it, so the second flips it
+   * back and the third does nothing. The click that ends a drag selecting the title flips nothing.
+   * @param {HTMLElement} el the title or toggle clicked
+   * @param {MouseEvent} event
+   * @param {() => void} flip
+   */
+  const toggleFromTitle = (el, event, flip) => {
+    if (event.detail > 1) {
+      if (event.detail === 2 && toggledByClick === el) {
+        flipInPlace(el, flip)
+      }
+      toggledByClick = null
+      return
+    }
+    const picked = window.getSelection()
+    if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
+      toggledByClick = null
+      return
+    }
+    flipInPlace(el, flip)
+    toggledByClick = el
+  }
+
+  /**
+   * Flips what a title heads and keeps the title where it was on screen. Near the end of the page
+   * the browser's scroll anchoring would otherwise move it as the body opens or closes: the reader
+   * would see the end of a file instead of its start, and the second click of a double click would
+   * land on whatever moved under the pointer.
+   * @param {HTMLElement} el the title or toggle clicked
+   * @param {() => void} flip
+   */
+  const flipInPlace = (el, flip) => {
+    const before = el.getBoundingClientRect().top
+    flip()
+    const moved = el.getBoundingClientRect().top - before
+    if (moved !== 0) {
+      window.scrollBy(0, moved)
+    }
+  }
+
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
-    'toggle-card': (el, event) => {
-      // A double or triple click selects the file name. Its first click already flipped the card,
-      // so the second one flips it back and the third does nothing.
-      if (event.detail > 1) {
-        if (event.detail === 2 && toggledByClick === el) {
-          setCardCollapsed(el)
-        }
-        toggledByClick = null
-        return
-      }
-      // A file's title toggles its card too, but not at the end of a drag that selected its text.
-      const picked = window.getSelection()
-      if (picked !== null && !picked.isCollapsed && el.contains(picked.anchorNode)) {
-        toggledByClick = null
-        return
-      }
-      setCardCollapsed(el)
-      toggledByClick = el
-    },
+    'toggle-card': (el, event) => toggleFromTitle(el, event, () => setCardCollapsed(el)),
     'mark-layer': el => {
       const id = el.getAttribute('data-reviewed-id') ?? ''
       markReviewed(el, id, !session.isReviewed(id), 'layer')
     },
     'point-dismiss': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', true),
     'point-restore': el => setDismissed(el, el.getAttribute('data-fingerprint') ?? '', false),
-    'point-expand': el => {
+    'point-expand': (el, event) => {
       const point = el.closest('[data-point]')
       if (point !== null) {
-        setPointExpanded(point)
+        toggleFromTitle(el, event, () => setPointExpanded(point))
+      }
+    },
+    'points-density': () => {
+      const page = doc.documentElement
+      const storage = typeof localStorage === 'undefined' ? null : localStorage
+      setPointsDensity(page, readPageDensity(page) === 'detailed' ? 'compact' : 'detailed', storage)
+      // A point opened by hand closes with the switch, so the list reads as the switch says.
+      for (const point of Array.from(root.querySelectorAll('.findings > li[data-expanded]'))) {
+        setPointExpanded(point, false)
       }
     },
     'toggle-handled': el => flipSwitch(el, 'hiding'),
@@ -1299,10 +1346,10 @@ export function wireReview(root, session, opts = {}) {
         stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
         break
       case 'toggle': {
-        // A point already acted on opens or collapses itself.
-        const handled = focused()?.closest('[data-point].is-handled')
-        if (handled !== null && handled !== undefined) {
-          setPointExpanded(handled)
+        // A point drawn as its title line opens or collapses itself.
+        const collapsible = focused()?.closest('[data-point]')
+        if (collapsible !== null && collapsible !== undefined && pointCollapses(collapsible)) {
+          setPointExpanded(collapsible)
           break
         }
         // An open point in focus stands for the file card that holds its line, not the layer it is listed in.

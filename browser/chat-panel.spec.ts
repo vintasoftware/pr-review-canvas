@@ -1,4 +1,7 @@
-import { expect, test } from './fixtures.js'
+import { expect, openFiles, test } from './fixtures.js'
+
+// A first visit: nothing in storage says the reader opened the chat before.
+test.use({ chatOpened: false })
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/prs/42', async route => {
@@ -70,12 +73,23 @@ test('opens a mobile modal with focus containment and Escape to minimize', async
   await expect(dialog).toBeHidden()
 })
 
-test('minimizes the docked chat on a wide screen and remembers it', async ({ page, reviewUrl }) => {
+test('starts the docked chat minimized on a wide screen and remembers how it was left', async ({
+  page,
+  reviewUrl,
+}) => {
   await page.setViewportSize({ width: 1600, height: 900 })
   await page.goto(reviewUrl)
   const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
   const pane = page.locator('.layout > .chat')
   const layout = page.locator('.layout')
+  await expect(pane).toBeHidden()
+  await expect(layout).toHaveClass(/no-chat/)
+  await launcher.click()
+  await expect(pane).toBeVisible()
+  await expect(launcher).toBeHidden()
+
+  // Opened once, the chat stays docked across a reload.
+  await page.reload()
   await expect(pane).toBeVisible()
   await expect(launcher).toBeHidden()
   await page.locator('#msg').fill('Wide draft')
@@ -105,9 +119,9 @@ test('minimizes the docked chat on a wide screen and remembers it', async ({ pag
 test('leaves the canvas scrolled where it was across minimize and restore', async ({ page, reviewUrl }) => {
   await page.setViewportSize({ width: 1600, height: 900 })
   await page.goto(reviewUrl)
+  await openFiles(page)
   const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
   const minimize = page.getByRole('button', { name: 'Minimize AI Chat' })
-  await minimize.click()
   await launcher.click()
   await expect(page.locator('#msg')).toBeFocused()
   expect(await page.evaluate(() => window.scrollY)).toBe(0)
@@ -126,7 +140,7 @@ test('keeps the quick-question menu inside the window with the chat minimized', 
 }) => {
   await page.setViewportSize({ width: 1600, height: 900 })
   await page.goto(reviewUrl)
-  await page.getByRole('button', { name: 'Minimize AI Chat' }).click()
+  await expect(page.locator('.layout')).toHaveClass(/no-chat/)
   // With the chat gone the layer command sits near the right edge, where the menu used to spill.
   await page.getByRole('button', { name: 'Ask about this layer' }).hover()
   const menu = page.locator('#qq-menu')

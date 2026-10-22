@@ -1,7 +1,7 @@
 import { parseUnifiedDiff, toFileEntry } from '../src/git/diff-collector.js'
 import type { FakeGit } from '../src/testing/fakes.js'
 import { BASE_SHA, HEAD_SHA, SYNTHETIC_DIFF, syntheticArtifact } from '../src/testing/synthetic.js'
-import { expect, test } from './fixtures.js'
+import { expect, openFiles, test } from './fixtures.js'
 
 const summary =
   '[File start](#file:src/app.ts) · [Later line](#line:src/app.ts:13) · [Later hunk](#hunk:src/app.ts#2)'
@@ -120,6 +120,7 @@ test('refresh protects unfinished text, including edits made while patches are l
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   const file = page.locator('#file-src_app_ts')
   await file.scrollIntoViewIfNeeded()
   await file.locator('#L-src_app_ts-new-4 .plus').click()
@@ -142,6 +143,8 @@ test('refresh protects unfinished text, including edits made while patches are l
   page.once('dialog', dialog => dialog.accept())
   await page.locator('#refresh').click()
   await expect(page.locator('#refresh')).toBeEnabled()
+  // The refresh draws the page again, with its files closed.
+  await openFiles(page)
   await file.scrollIntoViewIfNeeded()
   await expect(file.locator('.pending-cmt .prose')).toContainText('Keep this unfinished comment')
   await expect(file.locator('textarea')).toHaveCount(0)

@@ -74,10 +74,15 @@
   color: var(--fg-muted);
   font-weight: 400;
 }
-.summary,
-.rationale,
+/* Prose in cards and comments keeps a readable line length. The summary, a layer's rationale and
+   the PR description span the whole panel, diagrams included, so they fill it. */
 .prose {
   max-width: 100ch;
+}
+.summary,
+.rationale,
+.pr-desc .prose {
+  max-width: none;
 }
 .summary {
   font-size: 15px;
@@ -254,7 +259,6 @@
 }
 
 .sevsum {
-  position: relative;
   display: inline-flex;
   gap: 14px;
   align-items: center;
@@ -275,6 +279,15 @@
 .sevsum > a:hover {
   text-decoration: underline;
 }
+.lvl {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
 .lv {
   display: inline-flex;
   width: 14px;
@@ -293,36 +306,6 @@
 .lv.check {
   fill: var(--level-check);
 }
-.sevsum > .legend {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  display: none;
-  z-index: 4;
-  background: var(--panel);
-  border: 1px solid var(--ink);
-  box-shadow: 2px 2px 0 var(--shadow);
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
-  color: var(--fg);
-}
-.legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: 12px;
-}
-.legend span:last-child {
-  margin-right: 0;
-}
-.sevsum:hover > .legend,
-.sevsum:focus > .legend,
-.sevsum:focus-within > .legend {
-  display: block;
-}
-
 .findings li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -334,8 +317,11 @@
 .findings li:first-child {
   border-top: 0;
 }
-.findings > li > .lv {
-  margin-top: 5px;
+/* The level label is the card's first column; a width for the longest level keeps the titles of
+   a list in line. */
+.findings > li > .lvl {
+  min-width: 5.5em;
+  margin-top: 2px;
 }
 .findings p {
   max-width: 100ch;
@@ -373,6 +359,37 @@
 }
 .is-handled:not([data-expanded]) .p-title {
   color: var(--fg-muted);
+}
+/* In a compact list (anything but `data-points="detailed"`, as `readPageDensity` reads it) each
+   open point shows its title line until the reader opens it; a point acted on keeps the rules
+   above, with its one-line summary. A detailed list shows open points whole, with no toggle. */
+:root:not([data-points='detailed'])
+  .findings
+  > li[data-point]:not(.is-handled, [data-expanded])
+  :is(.prose, .tbtns, .settle-box) {
+  display: none;
+}
+:root:not([data-points='detailed']) .findings > li:not(.is-handled, [data-expanded]) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+:root:not([data-points='detailed']) .findings > li:not(.is-handled, [data-expanded]) .f-title {
+  margin-bottom: 0;
+}
+:root[data-points='detailed'] .findings > li:not(.is-handled) .p-toggle,
+:root:not([data-points='detailed']) .points-density .when-detailed,
+:root[data-points='detailed'] .points-density .when-compact {
+  display: none;
+}
+.findings .p-title[data-act] {
+  cursor: pointer;
+}
+.points-density {
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 .f-title .p-toggle {
   margin-left: auto;
@@ -430,6 +447,7 @@ body:not(:has(.point-statuses [data-act='toggle-resolved'][aria-pressed='true'])
 .pr-desc {
   border-top: 1px solid var(--ink);
 }
+.pr-conversation,
 .review-history {
   border-top: 1px solid var(--line);
 }
@@ -475,7 +493,28 @@ details[open] > summary .chev,
   overflow-wrap: anywhere;
 }
 
-/* test map */
+/* test map: closed under a header whose label says how well the tests cover the layer */
+.test-map > summary.lbl.sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.test-map > summary h3 {
+  margin: 0;
+  font: inherit;
+}
+.test-cov.full {
+  color: var(--ok);
+}
+.test-cov.partial {
+  color: var(--warn);
+}
+.test-cov.none {
+  color: var(--bad);
+}
+.test-cov.not-needed {
+  color: var(--fg-muted);
+}
 .testmap {
   width: 100%;
   border-collapse: collapse;

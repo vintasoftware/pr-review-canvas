@@ -1,9 +1,10 @@
-import { expect, test } from './fixtures.js'
+import { expect, openFiles, test } from './fixtures.js'
 
 const postedUrl = 'https://github.com/acme/widgets/pull/42#discussion_r5001'
 
 test('opens the editor below the code line and links to the posted comment', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
   await file.scrollIntoViewIfNeeded()
   const line = file.locator('#L-src_app_ts-new-4')
@@ -30,6 +31,7 @@ test('opens the editor below the code line and links to the posted comment', asy
   const link = file.locator('tr.thread[data-thread="5001"]').getByRole('link', { name: /view comment/ })
   await expect(link).toHaveAttribute('href', postedUrl)
   await page.reload()
+  await openFiles(page)
   await file.scrollIntoViewIfNeeded()
   await expect(link).toHaveAttribute('href', postedUrl)
 })
@@ -39,6 +41,7 @@ test('collapses a posted point to its comment link, everywhere it shows and afte
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await card.locator('[data-act="point-post"]').click()
   await expect(card).toHaveAttribute('data-status', 'posted')
@@ -52,10 +55,11 @@ test('collapses a posted point to its comment link, everywhere it shows and afte
   await expect(inline.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
 
   // Expanded, the point shows its text again with the commands left to it.
-  await card.locator('[data-act="point-expand"]').click()
+  await card.locator('.p-toggle').click()
   await expect(card.locator('.prose')).toBeVisible()
   await expect(card.locator('.tbtns').getByRole('link', { name: /view comment/ })).toBeVisible()
   await page.reload()
+  await openFiles(page)
   await expect(card).toHaveAttribute('data-status', 'posted')
   await expect(card.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
   await expect(card.locator('[data-act="point-post"]')).toHaveCount(0)
@@ -63,6 +67,7 @@ test('collapses a posted point to its comment link, everywhere it shows and afte
 
 test('previews Markdown and preserves the comment draft', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
+  await page.locator('.pr-conversation > summary').click()
   await page.locator('[data-act="pr-comment"]').click()
   const editor = page.locator('.conversation .composer-box')
   await editor

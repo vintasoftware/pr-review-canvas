@@ -28,3 +28,16 @@ test('aligns the overview with the layers in both skins', async ({ page, reviewU
     await page.locator('#skin-toggle').click()
   }
 })
+
+test('lets the summary and its diagram fill the overview panel', async ({ page, reviewUrl }) => {
+  await page.setViewportSize({ width: 1800, height: 900 })
+  await page.goto(reviewUrl)
+  const body = await page.locator('#overview > .body').first().boundingBox()
+  const summary = await page.locator('#overview .summary').boundingBox()
+  if (!body || !summary) throw new Error('missing overview body or summary')
+  const padding = await page
+    .locator('#overview > .body')
+    .first()
+    .evaluate(element => Number.parseFloat(getComputedStyle(element).paddingLeft) * 2)
+  expect(Math.abs(summary.width - (body.width - padding))).toBeLessThan(2)
+})

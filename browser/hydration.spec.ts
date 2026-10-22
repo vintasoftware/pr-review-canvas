@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures.js'
 
-test('keeps a file collapsed when lazy rendering completes after the click', async ({ page, reviewUrl }) => {
+test('keeps a file closed when lazy rendering completes after the click', async ({ page, reviewUrl }) => {
   await page.addInitScript(() => {
     window.IntersectionObserver = class extends IntersectionObserver {
       override observe(target: Element) {
@@ -16,6 +16,9 @@ test('keeps a file collapsed when lazy rendering completes after the click', asy
   const file = page.locator('article.file[data-path="src/app.ts"]').first()
   const body = file.locator(':scope > .file-body')
   const toggle = file.locator(':scope > .file-h > .chev')
+  await expect(body).toBeHidden()
+  // The reader opens the file while its diff waits to draw, then closes it again.
+  await toggle.click()
   await expect(file.locator('.diff-host .loading')).toBeVisible()
   await toggle.click()
   await expect(body).toBeHidden()

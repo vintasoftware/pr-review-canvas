@@ -387,6 +387,8 @@ test('a draft being edited keeps the focus and caret when another draft finishes
   const input = page.locator('#review-panel textarea')
   await input.fill('In progress')
   await page.locator('#layer-other summary').click()
+  // Every file starts closed, so the reader opens the one whose point they add.
+  await page.locator('#layer-other article.file[data-path="src/app.ts"] > .file-h > .chev').click()
   let release!: () => void
   const gate = new Promise<void>(resolve => {
     release = resolve

@@ -6,7 +6,7 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../src/testing/synthetic.js'
-import { expect, test } from './fixtures.js'
+import { expect, openFiles, test } from './fixtures.js'
 
 test('notes a canvas carried over to a head with the identical diff, without disabling posting', async ({
   page,
@@ -146,6 +146,7 @@ test('dismisses the outdated bar for its pair of commits, and shows it again for
   })
   await page.goto(reviewUrl)
   await page.locator('#view-stale').click()
+  await openFiles(page)
   const warning = page.locator('#main > .outdated-bar')
   await expect(warning).toBeVisible()
   await warning.getByRole('button', { name: 'dismiss' }).click()

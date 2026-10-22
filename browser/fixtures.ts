@@ -24,6 +24,24 @@ import {
 
 export { expect } from '@playwright/test'
 
+/**
+ * Opens every file of the layers that are open, as a reader who reads each one: a file starts
+ * closed, and a spec that works in its diff opens it first. The chevrons are clicked in the page,
+ * through the app's own click handler, in one round trip; a scripted click moves neither the
+ * focus nor the scroll.
+ */
+export async function openFiles(page: Page): Promise<void> {
+  await expect(page.locator('section.layer').first()).toBeVisible()
+  await page.evaluate(() => {
+    const closed = document.querySelectorAll(
+      'section.layer:has(> .layer-body:not([hidden])) article.file > .file-h > .chev[aria-expanded="false"]'
+    )
+    for (const chevron of closed) {
+      if (chevron instanceof HTMLElement) chevron.click()
+    }
+  })
+}
+
 /** What a chat-enabled server is built with: how the fake agent and the fake checkout behave. */
 export interface ChatServerOptions {
   runner?: FakeRunnerOptions
@@ -48,11 +66,26 @@ const POSTED_INLINE = ghPost(body => ({
 }))
 
 export const test = base.extend<{
+  /** The reader opened AI Chat before, so a wide screen docks it; false starts as a first visit. */
+  chatOpened: boolean
+  /** The density the reader chose for the layers' point lists; most specs act on whole points. */
+  pointsDensity: 'compact' | 'detailed'
   reviewUrl: string
   selfReviewUrl: string
   noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
+  chatOpened: [true, { option: true }],
+  pointsDensity: ['detailed', { option: true }],
+  page: async ({ page, chatOpened, pointsDensity }, use) => {
+    if (chatOpened) {
+      await page.addInitScript(() => localStorage.setItem('pr-review.chat-minimized', '0'))
+    }
+    if (pointsDensity === 'detailed') {
+      await page.addInitScript(() => localStorage.setItem('pr-review.points-density', 'detailed'))
+    }
+    await use(page)
+  },
   chatServer: async ({ page }, use) => {
     const stops: Array<() => Promise<void>> = []
     await use(async (options = {}) => {

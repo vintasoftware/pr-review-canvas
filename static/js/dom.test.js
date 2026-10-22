@@ -44,6 +44,9 @@ describe('chevronHtml and detailsSummaryHtml', () => {
     expect(detailsSummaryHtml('<span>T</span>', 'Toggle T')).toBe(
       `<summary aria-label="Toggle T"><span class="chev" aria-hidden="true">${CHEVRON_ICON}</span><span>T</span></summary>`
     )
+    expect(detailsSummaryHtml('<span>T</span>', 'Toggle T', 'lbl sub')).toBe(
+      `<summary class="lbl sub" aria-label="Toggle T"><span class="chev" aria-hidden="true">${CHEVRON_ICON}</span><span>T</span></summary>`
+    )
     document.body.innerHTML = `<details open>${detailsSummaryHtml('<span>T</span>', 'Toggle "T"')}</details>`
     expect(document.querySelector('summary')?.getAttribute('aria-label')).toBe('Toggle "T"')
     expect(document.querySelector('summary > .chev')?.getAttribute('aria-hidden')).toBe('true')

@@ -30,8 +30,8 @@
 ### Attention points
 
 - Each level has its own shape: a diamond for **decide**, a checked box for **check**, and an info
-  circle for **fyi**. The shapes replace the colored squares on cards, diff rows, the overview
-  counts, and the legend, so the level reads without color.
+  circle for **fyi**. The shapes replace the colored squares on cards, diff rows, and the overview
+  counts, so the level reads without color.
 - **Point colors** in the settings dialog picks the palette: **classic** (red, amber, gray, the
   default) or **action** (purple, blue, gray), for readers who took the red and amber for a
   severity scale. It is saved as `pointColors` in `settings.yml`.
@@ -74,6 +74,11 @@
   renames its file is found under the old name.
 - The review loop skill writes a decision line for each question its gate asks, and its Claude and
   Codex copies are the same again.
+
+### AI Chat
+
+- On a wide screen AI Chat starts minimized until you open it once, so a canvas you do not chat
+  on keeps its full width. After that it opens the way you last left it.
 
 ### AI Chat threads
 
@@ -147,6 +152,25 @@
 - The header names the agent and model that generated the canvas, without the harness, which a
   canvas generated from the review app always gave as `other`. Hover **generated … ago** for the
   full date and time.
+- The overview summary, a layer's rationale and the PR description fill the width of their panel,
+  diagrams included, instead of stopping at 100 characters.
+- The overview header names each level next to its count, as in `3 decide · 1 check · 2 fyi`, in
+  place of the legend that opened on hover.
+- The overview's Conversation starts closed, like the PR description and the review history, with
+  its comment count in the title.
+- A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,
+  `2 of 3 covered`, `not covered`, or `no tests needed`. A behavior that needs no test counts
+  toward neither side.
+- A layer's attention points start as one line each, with their level, kind, audience, and location.
+  Click the title, **show**, or press `o` to read one. **show details** in the list's heading opens
+  every open point, and the browser remembers it.
+- Every attention point names its level beside its shape, as in `◆ decide`, in its layer and on
+  its line in the diff. The GitHub skin drops the colored squares before the Tests and Attention
+  points headings, which named nothing the heading did not.
+- The page opens with only the first layer open, and every file closed under its name. The rail,
+  `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a file or
+  a point keeps its title where you clicked it, also at the end of the page. Raising **Hide code**
+  closes the files it hides whole; lowering it no longer reopens them.
 
 ### Upgrade
 

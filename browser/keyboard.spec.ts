@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, test } from './fixtures.js'
+import { expect, openFiles, test } from './fixtures.js'
 
 /** Where an element's top sits in the viewport, in CSS pixels. */
 async function topOf(page: Page, selector: string): Promise<number> {
@@ -8,6 +8,7 @@ async function topOf(page: Page, selector: string): Promise<number> {
 
 test('j and k bring the top of each layer to the top of the screen', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   await expect(page.locator('#layer-run-path')).toBeVisible()
   await page.keyboard.press('j')
   await expect(page.locator('#layer-run-path')).toBeFocused()
@@ -25,6 +26,7 @@ test('j and k bring the top of each layer to the top of the screen', async ({ pa
 
 test('after a scroll, the keys step from the card at the top of the screen', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
+  await openFiles(page)
   await expect(page.locator('#layer-run-path')).toBeVisible()
   await page.keyboard.press('j')
   await expect(page.locator('#layer-run-path')).toBeFocused()

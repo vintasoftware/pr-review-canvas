@@ -3,6 +3,7 @@
 import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact } from '../../src/testing/synthetic.js'
 import {
+  POINTS_DENSITY_KEY,
   applyPointStates,
   openPoints,
   pointCardHtml,
@@ -15,8 +16,11 @@ import {
   impactPillHtml,
   pointsByLevel,
   pointToMarkdown,
+  readPageDensity,
+  readPointsDensity,
   setMentionCanvas,
   setPointExpanded,
+  setPointsDensity,
   postedUrls,
   refreshPoint,
   sevsumHtml,
@@ -55,12 +59,14 @@ describe('points', () => {
     document.body.innerHTML = `<ol>${pointCardHtml(p, ctx)}</ol>`
     const li = document.querySelector('li.finding')
     expect(li?.id).toBe('point-p-1')
-    expect(li?.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('decide')
+    expect(li?.querySelector(':scope > .lvl')?.textContent).toBe('decide')
+    expect(li?.querySelector('.lvl .lv.decide')?.getAttribute('aria-hidden')).toBe('true')
     expect(li?.querySelector('.pill.impact.high')?.textContent).toBe('high')
     expect(li?.querySelector('.pill.kind')?.textContent).toBe('design choice')
     expect(li?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
     expect(li?.querySelector('.prose p')?.textContent).toContain('Look at the operator')
     expect([...(li?.querySelectorAll('button.cmd') ?? [])].map(b => b.textContent)).toEqual([
+      'show',
       'copy',
       'post to github',
       'add to review',
@@ -91,9 +97,10 @@ describe('points', () => {
     const tr = document.querySelector('tr.ifind')
     expect(tr?.classList.contains('check')).toBe(true)
     expect(tr?.getAttribute('data-point')).toBe('p-2')
-    expect(tr?.querySelector('.f-title span:not(.lv):not(.pill)')?.textContent).toBe(p.title)
+    expect(tr?.querySelector('.f-title .p-title')?.textContent).toBe(p.title)
+    expect(tr?.querySelector('.f-title > .lvl')?.textContent).toBe('check')
     document.body.innerHTML = sevsumHtml(points)
-    expect(document.querySelector('.sevsum')?.textContent).toBe('111decidecheckfyi')
+    expect(document.querySelector('.sevsum')?.textContent).toBe('1 decide1 check1 fyi')
     expect(document.querySelector('.sevsum a')).toBeNull()
     document.body.innerHTML = sevsumHtml(points, syntheticArtifact().layers)
     expect([...document.querySelectorAll('.sevsum > a')].map(a => a.getAttribute('href'))).toEqual([
@@ -101,15 +108,20 @@ describe('points', () => {
       '#layer-other',
       '#layer-other',
     ])
-    expect(document.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('1 decide')
-    expect(document.querySelectorAll('.legend .lv[aria-hidden="true"]')).toHaveLength(3)
+    expect(document.querySelector('.sevsum .lv.decide')?.getAttribute('aria-hidden')).toBe('true')
+    expect(document.querySelector('.sevsum .legend')).toBeNull()
     document.body.innerHTML = sevsumHtml([], syntheticArtifact().layers)
     expect(document.querySelector('.sevsum a')).toBeNull()
-    expect(document.querySelector('.sevsum')?.textContent).toBe('000decidecheckfyi')
+    expect(document.querySelector('.sevsum')?.textContent).toBe('0 decide0 check0 fyi')
   })
 })
 
 describe('where a point stands', () => {
+  // A test that picks the points' density leaves the page at the default, compact.
+  afterEach(() => {
+    delete document.documentElement.dataset['points']
+  })
+
   const artifact = syntheticArtifact()
   const BASE = emptyState('2026-09-10T12:00:00.000Z')
   const dismissed = { ...BASE, dismissed: { 'fp-1': { at: BASE.updatedAt } } }
@@ -262,15 +274,19 @@ describe('where a point stands', () => {
         'point-restore',
       ])
     }
-    // An open point is drawn whole and has nothing to expand.
+    // An open point in a list has its toggle, for the compact list, and nothing acted on to sum up.
     document.body.innerHTML = `<ol>${pointCardHtml(first, ctx)}</ol>`
+    expect(document.querySelector('.is-handled, .p-summary')).toBeNull()
+    expect(document.querySelector('.p-toggle')).not.toBeNull()
+    // Its row in the diff is drawn whole and has nothing to expand.
+    document.body.innerHTML = `<table><tbody>${pointRowHtml(first, ctx)}</tbody></table>`
     expect(document.querySelector('.is-handled, [data-act="point-expand"], .p-summary')).toBeNull()
   })
 
-  it('expands and collapses a point acted on, never an open one', () => {
-    document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state: dismissed })}</ol>`
+  it('expands and collapses a point acted on, and an open one only in a compact list', () => {
+    document.body.innerHTML = `<ol class="findings">${pointCardHtml(first, { ...ctx, state: dismissed })}</ol>`
     const el = document.querySelector('li.finding')
-    const toggle = el?.querySelector('[data-act="point-expand"]')
+    const toggle = el?.querySelector('.p-toggle')
     if (el === null || toggle === null || toggle === undefined) throw new Error('no point')
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     setPointExpanded(el)
@@ -281,11 +297,44 @@ describe('where a point stands', () => {
     setPointExpanded(el)
     expect(el.hasAttribute('data-expanded')).toBe(false)
     expect(toggle.textContent).toBe('show')
-    document.body.innerHTML = `<ol>${pointCardHtml(first, ctx)}</ol>`
+    document.body.innerHTML = `<ol class="findings">${pointCardHtml(first, ctx)}</ol>`
     const open = document.querySelector('li.finding')
     if (open === null) throw new Error('no point')
     setPointExpanded(open, true)
+    expect(open.hasAttribute('data-expanded')).toBe(true)
+    setPointExpanded(open, false)
+    document.documentElement.dataset['points'] = 'detailed'
+    setPointExpanded(open, true)
     expect(open.hasAttribute('data-expanded')).toBe(false)
+    document.body.innerHTML = `<table><tbody>${pointRowHtml(first, ctx)}</tbody></table>`
+    const row = document.querySelector('tr.ifind')
+    if (row === null) throw new Error('no row')
+    setPointExpanded(row, true)
+    expect(row.hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('reads the compact density unless the reader chose detailed, and remembers the choice', () => {
+    /** @type {Record<string, string>} */
+    const store = {}
+    const storage = /** @type {Storage} */ (
+      /** @type {unknown} */ ({
+        getItem: (/** @type {string} */ key) => store[key] ?? null,
+        setItem: (/** @type {string} */ key, /** @type {string} */ value) => {
+          store[key] = value
+        },
+      })
+    )
+    const page = document.documentElement
+    expect(readPointsDensity(storage)).toBe('compact')
+    expect(readPointsDensity(null)).toBe('compact')
+    expect(readPageDensity(page)).toBe('compact')
+    setPointsDensity(page, 'detailed', storage)
+    expect(store[POINTS_DENSITY_KEY]).toBe('detailed')
+    expect(readPointsDensity(storage)).toBe('detailed')
+    expect(readPageDensity(page)).toBe('detailed')
+    setPointsDensity(page, 'compact')
+    expect(readPageDensity(page)).toBe('compact')
+    expect(store[POINTS_DENSITY_KEY]).toBe('detailed')
   })
 
   it('leaves a page that holds none of its parts alone', () => {
@@ -323,6 +372,7 @@ describe('where a point stands', () => {
     document.body.innerHTML = `<ol>${pointCardHtml(first, { ...ctx, state })}</ol>`
     // A point's text is written in advance, so it keeps both ways out even with a review open.
     expect([...document.querySelectorAll('li.finding button.cmd')].map(b => b.textContent)).toEqual([
+      'show',
       'copy',
       'post to github',
       'add to review',
@@ -415,7 +465,7 @@ describe('where a point stands', () => {
     const edited = { ...state, pending: [{ ...draftFor(first), body: 'my words' }] }
     expect(refreshPoint(el, first, { ...ctx, state: edited })).toBe(true)
     expect(el.hasAttribute('data-expanded')).toBe(true)
-    expect(el.querySelector('[data-act="point-expand"]')?.textContent).toBe('hide')
+    expect(el.querySelector('.p-toggle')?.textContent).toBe('hide')
     expect(el.querySelector('.pending-cmt .prose')?.textContent).toContain('my words')
 
     // Taking the draft away opens the point again, with every command back.
@@ -423,6 +473,7 @@ describe('where a point stands', () => {
     expect(el.classList.contains('is-handled')).toBe(false)
     expect(el.hasAttribute('data-expanded')).toBe(false)
     expect([...el.querySelectorAll('button.cmd')].map(b => b.getAttribute('data-act'))).toEqual([
+      'point-expand',
       null,
       'point-post',
       'point-queue',
@@ -438,7 +489,17 @@ describe('where a point stands', () => {
     if (el === null || !(dismiss instanceof HTMLElement)) throw new Error('no point')
     dismiss.focus()
     refreshPoint(el, first, { ...ctx, state: dismissed })
-    expect(document.activeElement?.getAttribute('data-act')).toBe('point-expand')
+    expect(document.activeElement?.classList.contains('p-toggle')).toBe(true)
+
+    // Restored in a detailed list, the point is whole and its toggle hidden: the focus goes to its
+    // first command.
+    document.documentElement.dataset['points'] = 'detailed'
+    setPointExpanded(el, true)
+    const restore = el.querySelector('[data-act="point-restore"]')
+    if (!(restore instanceof HTMLElement)) throw new Error('no restore')
+    restore.focus()
+    refreshPoint(el, first, { ...ctx, state })
+    expect(document.activeElement).toBe(el.querySelector('.tbtns button'))
   })
 
   it('redraws a row in the diff in place', () => {
