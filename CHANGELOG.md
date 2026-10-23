@@ -30,6 +30,13 @@
 
 ### Attention points
 
+- An open point has **edit** next to **post to github** and **add to review**. It opens the composer
+  on the point's line with the point's text in it, so the text can change before it is posted or
+  added to the review. The comment still acts on the point, which collapses as **posted** or **in
+  your review**. Before, the only way to change a point's text was to add it to the review first.
+- A composer opened by **edit** on a point or on a comment AI Chat proposed keeps **post to github**
+  while a review is open, next to **add review comment**, as the point and the card do. Before, it
+  could only join the review.
 - Each level has its own shape: a diamond for **decide**, a checked box for **check**, and an info
   circle for **fyi**. The shapes replace the colored squares on cards, diff rows, the overview
   counts, and the legend, so the level reads without color.

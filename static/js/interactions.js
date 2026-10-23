@@ -928,6 +928,48 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /**
+   * Opens the composer on a comment's line with text written in advance (an attention point, a
+   * comment the AI Chat proposes) in it, for the reader to change before posting or adding it.
+   * @param {HTMLElement} el the command that asked, which shows why the box could not open
+   * @param {{ path: string, line: number, side: import('./contract-types.js').Side, startLine?: number | undefined, body: string, pointFingerprint?: string | undefined, proposalFingerprint?: string | undefined }} target
+   */
+  const openPrefilledComposer = (el, target) => {
+    const key = keyForPath(target.path)
+    if (key === null) {
+      showCommandError(el, `${target.path} is not a file of this pull request`)
+      return
+    }
+    composerSeq += 1
+    /** @type {import('./composer.js').ComposerOptions} */
+    const options = {
+      id: `composer-${composerSeq}`,
+      label: `Comment on ${target.path}:${target.line}`,
+      kind: 'inline',
+      path: target.path,
+      line: target.line,
+      side: target.side,
+      body: target.body,
+      prefilled: true,
+      ...(target.proposalFingerprint === undefined
+        ? {}
+        : { proposalFingerprint: target.proposalFingerprint }),
+      ...(target.pointFingerprint === undefined ? {} : { pointFingerprint: target.pointFingerprint }),
+    }
+    if (target.startLine !== undefined && target.startLine !== target.line) {
+      options.startLine = target.startLine
+    }
+    // The line's diff may not be drawn yet, as in a collapsed Other layer.
+    drawCardsOf(root, target.path)
+    const row = findRow(root, key, target.side, target.line)
+    if (row === null) {
+      showCommandError(el, 'that line is not on screen; open the file card first')
+      return
+    }
+    opts.uncover?.()
+    openComposer(row, options, 'row')
+  }
+
+  /**
    * @param {HTMLElement} button
    * @param {string} id
    */
@@ -1005,6 +1047,20 @@ export function wireReview(root, session, opts = {}) {
       const point = pointById(el.getAttribute('data-point') ?? '')
       if (point !== undefined) {
         queuePoint(el, point)
+      }
+    },
+    'point-edit': el => {
+      const point = pointById(el.getAttribute('data-point') ?? '')
+      if (point !== undefined) {
+        // The posted or added comment carries the point's fingerprint, so the point collapses with
+        // it as it does with its own text.
+        openPrefilledComposer(el, {
+          path: point.path,
+          line: point.line,
+          side: point.side ?? 'new',
+          body: pointToMarkdown(point),
+          pointFingerprint: point.fingerprint,
+        })
       }
     },
     'comment-line': el => {
@@ -1453,39 +1509,16 @@ export function wireReview(root, session, opts = {}) {
      * @param {HTMLElement} el
      */
     onProposedComment(what, comment, el) {
-      const key = keyForPath(comment.path)
       if (what === 'edit') {
-        if (key === null) {
-          showCommandError(el, `${comment.path} is not a file of this pull request`)
-          return
-        }
-        composerSeq += 1
-        /** @type {import('./composer.js').ComposerOptions} */
-        const options = {
-          id: `composer-${composerSeq}`,
-          label: `Comment on ${comment.path}:${comment.line}`,
-          kind: 'inline',
+        openPrefilledComposer(el, {
           path: comment.path,
           line: comment.line,
           side: comment.side,
+          startLine: comment.startLine,
           body: comment.body,
-          ...(comment.proposalFingerprint === undefined
-            ? {}
-            : { proposalFingerprint: comment.proposalFingerprint }),
-          ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
-        }
-        if (comment.startLine !== undefined && comment.startLine !== comment.line) {
-          options.startLine = comment.startLine
-        }
-        // The line's diff may not be drawn yet, as in a collapsed Other layer.
-        drawCardsOf(root, comment.path)
-        const row = findRow(root, key, comment.side, comment.line)
-        if (row === null) {
-          showCommandError(el, 'that line is not on screen; open the file card first')
-          return
-        }
-        opts.uncover?.()
-        openComposer(row, options, 'row')
+          proposalFingerprint: comment.proposalFingerprint,
+          pointFingerprint: comment.point?.fingerprint,
+        })
         return
       }
       const target = {
