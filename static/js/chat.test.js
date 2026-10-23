@@ -9,6 +9,7 @@ import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { cssEscape } from './anchors.js'
 import { setChatEnabled } from './ask.js'
+import { checkoutActivityText, checkoutWarningHtml } from './chat-answer.js'
 import {
   answerHtml,
   CHAT_MINIMIZED_KEY,
@@ -16,8 +17,6 @@ import {
   CHAT_WIDTH_KEY,
   CHAT_WIDTH_MAX,
   CHAT_WIDTH_MIN,
-  checkoutActivityText,
-  checkoutWarningHtml,
   clampWidth,
   proposedCommentHtml,
   readChatMinimized,

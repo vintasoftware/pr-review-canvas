@@ -11,6 +11,7 @@ export {
   chatContextLabel,
   sameChatContext,
   threadOfPlace,
+  tourPlaceLabel,
   WHOLE_PR,
 } from '../../static/js/chat-context.js'
 
@@ -45,6 +46,40 @@ export const ChatSendSchema = z.object({
 })
 export type ChatSendInput = z.infer<typeof ChatSendSchema>
 
+const TourDecisionPlace = z.object({ kind: z.literal('tour-decision'), key: z.string().min(1).max(40) })
+const TourPlanPlace = z.object({ kind: z.literal('tour-plan') })
+
+/** The contexts a grilling turn may name: one decision the reader wants changed, or the plan as a whole. */
+export const TourGrillContextSchema = z.discriminatedUnion('kind', [TourDecisionPlace, TourPlanPlace])
+export type TourGrillContext = z.infer<typeof TourGrillContextSchema>
+
+/**
+ * The places of a tour a reader asks AI Chat about, one per step: the tour as a whole (the cover),
+ * a landmark, a decision, a quiz question, or the plan. Each has its own thread.
+ */
+export const TourPlaceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('tour') }),
+  z.object({ kind: z.literal('tour-landmark'), id: z.string().min(1).max(40) }),
+  TourDecisionPlace,
+  z.object({ kind: z.literal('tour-question'), id: z.string().min(1).max(40) }),
+  TourPlanPlace,
+])
+export type TourPlace = z.infer<typeof TourPlaceSchema>
+
+export const TourChatSendSchema = z.object({
+  message: z.string().min(1).max(CHAT_MESSAGE_MAX),
+  context: TourPlaceSchema,
+  /** The tour thread to answer in, while it is the chat agent's; absent, the place's thread. */
+  thread: z.string().min(1).max(200).optional(),
+})
+export type TourChatSendInput = z.infer<typeof TourChatSendSchema>
+
+export const TourGrillSendSchema = z.object({
+  message: z.string().min(1).max(CHAT_MESSAGE_MAX),
+  context: TourGrillContextSchema,
+})
+export type TourGrillSendInput = z.infer<typeof TourGrillSendSchema>
+
 export const ChatThreadInputSchema = z.object({ agent: z.string().min(1).max(40).optional() })
 
 /** One saved turn of a thread, as `chat/<name>.jsonl` stores it. */
@@ -52,7 +87,8 @@ export const ChatTurnSchema = z.object({
   role: z.enum(['user', 'assistant']),
   text: z.string(),
   at: z.string(),
-  context: ChatContextSchema.optional(),
+  /** What the turn pointed at: the canvas's contexts in a canvas thread, the tour's in a tour's. */
+  context: z.union([ChatContextSchema, TourPlaceSchema]).optional(),
   /** Why the turn ended, on an assistant turn that did not finish. */
   incomplete: z.string().optional(),
   /**
@@ -76,6 +112,23 @@ export interface ChatThreadsResponse {
     unseen?: number
   }>
   activeThread: string | null
+  /** The agent the next thread would use, from the settings plus any flag override. */
+  agent: string
+}
+
+/** The tour chat's threads of a review: every thread has a place. */
+export interface TourChatThreadsResponse {
+  threads: Array<{
+    name: string
+    agent: string
+    title: string
+    createdAt: string
+    /** The turns the thread has taken. */
+    turns: number
+    place: TourPlace
+    /** The answers the reader has not seen there yet. */
+    unseen?: number
+  }>
   /** The agent the next thread would use, from the settings plus any flag override. */
   agent: string
 }

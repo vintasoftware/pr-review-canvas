@@ -10,7 +10,7 @@ import {
   type SettledDecision,
   statedDecision,
 } from '../contract/generation-context.js'
-import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
+import { type FileEntry, modelOutputSchema, type Pr } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
@@ -140,7 +140,10 @@ function highRiskMarkdown(ctx: GenerationContext): string {
   return ctx.highRisk.map(r => `- \`${r.pattern}\` → **${r.label}**`).join('\n')
 }
 
-function metaMarkdown(ctx: GenerationContext): string {
+/** The pull request's facts, as the review and the tour prompts both list them. */
+export function metaMarkdown(
+  ctx: Pick<GenerationContext, 'repo' | 'target' | 'pr' | 'headSha' | 'mergeBaseSha'>
+): string {
   const pr = ctx.pr
   const number = pr.number === null ? 'no pull request yet' : `#${pr.number}`
   return [
@@ -157,12 +160,16 @@ function metaMarkdown(ctx: GenerationContext): string {
   ].join('\n')
 }
 
-function bodyMarkdown(ctx: GenerationContext): string {
-  const body = ctx.pr.body.trim()
+/** The description, quoted. A change set with no pull request has its commit messages instead. */
+export function bodyMarkdown(pr: Pr): string {
+  const body = pr.body.trim()
   if (body === '') {
-    return '_No description._'
+    return pr.number === null ? '_No pull request yet, and no commit messages._' : '_No description._'
   }
-  return `> ${body.replace(/\n/g, '\n> ')}`
+  const quoted = `> ${body.replace(/\n/g, '\n> ')}`
+  return pr.number === null
+    ? `_No pull request yet. The commit messages stand in for a description, oldest first:_\n\n${quoted}`
+    : quoted
 }
 
 function rulebookMarkdown(ctx: GenerationContext): string {
@@ -391,7 +398,7 @@ export function renderPrompt(
     META: metaMarkdown(ctx),
     HEAD_SHA: ctx.headSha,
     MERGE_BASE_SHA: ctx.mergeBaseSha,
-    BODY: bodyMarkdown(ctx),
+    BODY: bodyMarkdown(ctx.pr),
     PATHS: pathsMarkdown(ctx),
     MODEL_PATH: ctx.paths.model,
     MANIFEST: manifestMarkdown(ctx.files),

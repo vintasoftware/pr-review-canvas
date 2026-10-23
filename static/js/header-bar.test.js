@@ -24,7 +24,10 @@ const look = /** @type {const} */ ({ theme: 'dark', skin: 'olive' })
 describe('headerBarHtml', () => {
   it("links the project's name to its home page next to the wordmark", () => {
     const root = bar(
-      headerBarHtml({ project: { slug: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' }, ...look })
+      headerBarHtml({
+        project: { slug: 'acme/widgets~fix', name: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
+        ...look,
+      })
     )
     const [brand, context, ...rest] = brandChildren(root)
     expect(rest).toEqual([])
@@ -46,7 +49,7 @@ describe('headerBarHtml', () => {
       bar(
         headerBarHtml({
           host: 'localhost:3010',
-          project: { slug: 'acme/widgets', home: '/r/acme/widgets/' },
+          project: { slug: 'acme/widgets', name: 'acme/widgets', home: '/r/acme/widgets/' },
           ...look,
         })
       )
@@ -79,9 +82,14 @@ describe('headerBarHtml', () => {
     expect([...(group?.children ?? [])].map(el => el.textContent)).toEqual(['skin: github', 'theme: auto'])
   })
 
+  it('leaves out the skin command on a page with a look of its own', () => {
+    const group = bar(headerBarHtml({ theme: 'auto' })).querySelector('.hdr-actions')
+    expect([...(group?.children ?? [])].map(el => el.id)).toEqual(['theme-toggle'])
+  })
+
   it('escapes the project, its home, and the host', () => {
     const html = headerBarHtml({
-      project: { slug: '<b>acme</b>', home: '/r/"x"/' },
+      project: { slug: '<b>acme</b>', name: '<b>acme</b>', home: '/r/"x"/' },
       ...look,
     })
     expect(html).toContain('href="/r/&quot;x&quot;/"')
@@ -97,7 +105,12 @@ describe('headerBarHtml', () => {
 
   describe("a project running under the server's environment", () => {
     const restored = {
-      project: { slug: 'acme/widgets', home: '/r/acme/widgets/', reopenIn: "/src/<it's>" },
+      project: {
+        slug: 'acme/widgets',
+        name: 'acme/widgets',
+        home: '/r/acme/widgets/',
+        reopenIn: "/src/<it's>",
+      },
       ...look,
     }
 
@@ -143,7 +156,7 @@ describe('headerBarHtml', () => {
 
   it('has no badge and no dialog for a project with the shell environment, or on a page of the server', () => {
     for (const opts of [
-      { project: { slug: 'acme/widgets', home: '/r/acme/widgets/' }, ...look },
+      { project: { slug: 'acme/widgets', name: 'acme/widgets', home: '/r/acme/widgets/' }, ...look },
       { host: 'localhost:3010', ...look },
     ]) {
       const html = headerBarHtml(opts)

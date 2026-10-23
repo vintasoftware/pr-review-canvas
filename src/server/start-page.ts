@@ -13,10 +13,15 @@ export async function branchPr(ctx: AppContext): Promise<number | null> {
 /**
  * The page `<base>start` sends the browser to: the review of the open PR whose head is the
  * checked-out branch, so a project opened from a PR's worktree lands on that PR. Anything else
- * goes to the project's home page, and a failed lookup does too, with a log line.
+ * goes to the project's home page, and a failed lookup does too, with a log line. `tour`
+ * (`<base>start?page=tour`, from `pr-review tour open`) lands on that PR's tour, or the tours tab.
  */
-export async function startPage(ctx: AppContext, log: (line: string) => void): Promise<string> {
-  const home = ctx.config.basePath
+export async function startPage(
+  ctx: AppContext,
+  log: (line: string) => void,
+  page: 'review' | 'tour' = 'review'
+): Promise<string> {
+  const home = page === 'tour' ? `${ctx.config.basePath}?tab=tours` : ctx.config.basePath
   const { nounShort } = ctx.config.host
   let prNumber: number | null
   try {
@@ -31,5 +36,5 @@ export async function startPage(ctx: AppContext, log: (line: string) => void): P
     return home
   }
   log(`opening ${nounShort} #${prNumber}, the open review of this branch`)
-  return `${home}review/${prNumber}`
+  return `${ctx.config.basePath}${page}/${prNumber}`
 }

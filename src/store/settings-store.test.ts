@@ -57,6 +57,7 @@ describe('createSettingsStore', () => {
       checkoutSweepMinutes: 60,
       canvasComment: null,
       mentionCanvas: null,
+      tourComment: null,
     })
     const text = await readFile(store.file, 'utf8')
     expect(text).toContain('# Which agent answers in the AI Chat pane')
@@ -85,6 +86,7 @@ describe('createSettingsStore', () => {
       checkoutSweepMinutes: 60,
       canvasComment: null,
       mentionCanvas: null,
+      tourComment: null,
     })
   })
 
@@ -286,6 +288,7 @@ describe('two saves that arrive together', () => {
       checkoutSweepMinutes: 60,
       canvasComment: null,
       mentionCanvas: null,
+      tourComment: null,
     })
   })
 

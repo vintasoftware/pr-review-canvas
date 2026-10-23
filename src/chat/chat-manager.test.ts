@@ -1,9 +1,11 @@
 // @vitest-environment node
+import { freshReaderState } from '../contract/tour-api.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
-import type { ChatContext, ChatEvent } from '../contract/chat.js'
+import type { ChatContext, ChatEvent, TourGrillContext, TourPlace } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { createPrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
@@ -17,6 +19,7 @@ import {
   type ChatManager,
   type ChatTarget,
   createChatManager,
+  STOPPED_TURN_WAIT_MS,
 } from './chat-manager.js'
 import { CheckoutBusyError, checkoutsFor, createReviewCheckouts, type ReviewCheckouts } from './checkouts.js'
 import { createTranscriptStore, THREAD_TITLE_MAX, type TranscriptStore } from './threads.js'
@@ -36,16 +39,16 @@ let manager: ChatManager
 let checkoutGit: FakeCheckoutGit
 let checkouts: ReviewCheckouts
 
-function target(): ChatTarget {
+/** A turn on the canvas, about `context`, in `thread` or the active one. */
+function target(context: ChatContext = { kind: 'pr' }, thread?: string): ChatTarget {
   return {
     key: 42,
     headSha: HEAD_SHA,
-    artifact,
+    subject: { kind: 'canvas', artifact, readerResolves: false, context, thread },
     files,
     patches,
     derivedDir: '/data/derived',
     readLines: async () => ['a line'],
-    readerResolves: false,
   }
 }
 
@@ -80,6 +83,8 @@ function build(
     repoRoot: '/repo',
     overrides: opts.overrides ?? {},
     loadSeedTemplate: async () => 'SEED for {{PR_META}}\n{{READER}}',
+    loadTourSeedTemplate: async () => 'TOUR SEED for {{PR_META}}\n{{DECISIONS}}',
+    loadTourChatSeedTemplate: async () => 'TOUR CHAT SEED for {{PR_META}}',
     checkouts,
     currentBranch: async () => 'main',
     now: () => new Date('2026-09-11T10:00:00.000Z'),
@@ -120,7 +125,7 @@ const LAYER: ChatContext = { kind: 'layer', layerId: 'run-path' }
 
 /** Sends one question and reads the answer to its end. */
 async function ask(context: ChatContext, message = 'why?', thread?: string): Promise<void> {
-  await collect(manager.send(target(), { message, context, ...(thread === undefined ? {} : { thread }) }))
+  await collect(manager.send(target(context, thread), message))
 }
 
 describe('a thread per place', () => {
@@ -221,7 +226,18 @@ describe('a thread per place', () => {
       layer.id === 'run-path' ? { ...layer, title: 'A layer with a long title '.repeat(4) } : layer
     )
     await collect(
-      manager.send({ ...target(), artifact: { ...artifact, layers } }, { message: 'x', context: LAYER })
+      manager.send(
+        {
+          ...target(),
+          subject: {
+            kind: 'canvas',
+            artifact: { ...artifact, layers },
+            readerResolves: false,
+            context: LAYER,
+          },
+        },
+        'x'
+      )
     )
     const title = (await manager.threads(42)).threads[0]?.title ?? ''
     expect(title.endsWith('…')).toBe(true)
@@ -231,9 +247,7 @@ describe('a thread per place', () => {
 
 describe('createChatManager().send', () => {
   it('opens a thread, seeds it, and streams the answer', async () => {
-    const events = await collect(
-      manager.send(target(), { message: 'is this covered?', context: { kind: 'pr' } })
-    )
+    const events = await collect(manager.send(target(), 'is this covered?'))
     expect(events).toEqual([
       { event: 'checkout', status: 'preparing', sha: HEAD_SHA, creating: true },
       { event: 'turn', thread: T1, agent: 'claude', seeded: true },
@@ -250,14 +264,12 @@ describe('createChatManager().send', () => {
   })
 
   it('seeds once per thread, and again after the head moves', async () => {
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target(), 'one'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(runner.runs[1]?.prompt).not.toContain('SEED for')
 
-    const moved = { ...target(), headSha: 'c'.repeat(40) }
-    const events = await collect(
-      manager.send(moved, { message: 'three', context: { kind: 'pr' }, thread: T1 })
-    )
+    const moved = { ...target({ kind: 'pr' }, T1), headSha: 'c'.repeat(40) }
+    const events = await collect(manager.send(moved, 'three'))
     expect(events.find(e => e.event === 'turn')).toEqual({
       event: 'turn',
       thread: T1,
@@ -268,15 +280,16 @@ describe('createChatManager().send', () => {
   })
 
   it('seeds again when the reader gains or loses the right to resolve on the same commit', async () => {
-    const author = { ...target(), readerResolves: true }
-    await collect(manager.send(author, { message: 'one', context: { kind: 'pr' } }))
+    const author = target()
+    author.subject = { kind: 'canvas', artifact, readerResolves: true, context: { kind: 'pr' } }
+    await collect(manager.send(author, 'one'))
     expect(runner.runs[0]?.prompt).toContain('may resolve its attention points')
 
     // The author pushed, and the canvas on screen is now outdated: same commit, no resolving.
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(runner.runs[1]?.prompt).toContain('may not resolve attention points here')
 
-    await collect(manager.send(target(), { message: 'three', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'three'))
     expect(runner.runs[2]?.prompt).not.toContain('SEED for')
   })
 
@@ -302,7 +315,7 @@ describe('createChatManager().send', () => {
         ],
       }),
     })
-    const events = await collect(manager.send(target(), { message: 'check', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'check'))
     expect(
       events
         .filter(event => event.event === 'chunk')
@@ -327,7 +340,7 @@ describe('createChatManager().send', () => {
         ],
       }),
     })
-    const events = await collect(manager.send(target(), { message: 'check', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'check'))
     const expected = 'Checking. Found it. Confirmed.'
     expect(
       events
@@ -341,9 +354,7 @@ describe('createChatManager().send', () => {
   it('writes both turns to the transcript and titles the thread from the first message', async () => {
     // With a thread per place, a question about a file goes to that file's thread instead.
     await settings.write({ chatThreadPerPlace: false })
-    await collect(
-      manager.send(target(), { message: 'is this covered?', context: { kind: 'file', path: 'src/app.ts' } })
-    )
+    await collect(manager.send(target({ kind: 'file', path: 'src/app.ts' }), 'is this covered?'))
     expect(await transcripts.read(42, T1)).toEqual([
       {
         role: 'user',
@@ -371,27 +382,25 @@ describe('createChatManager().send', () => {
   })
 
   it('keeps the first message as the title when more are sent', async () => {
-    await collect(manager.send(target(), { message: 'first', context: { kind: 'pr' } }))
-    await collect(manager.send(target(), { message: 'second', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target(), 'first'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'second'))
     expect((await manager.threads(42)).threads[0]?.title).toBe('first')
   })
 
   it('writes the scrubbed acpx lines to the raw event log', async () => {
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     const log = await readFile(path.join(transcripts.dir(42), `${T1}.events.ndjson`), 'utf8')
     expect(log.trim().split('\n').length).toBeGreaterThan(0)
   })
 
   it('refuses a second turn while one is running', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     // The lock is taken by the time the first event comes back.
     await iterator.next()
     expect(manager.running()).toContain(42)
-    await expect(
-      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
-    ).rejects.toBeInstanceOf(ChatBusyError)
+    await expect(collect(manager.send(target(), 'two'))).rejects.toBeInstanceOf(ChatBusyError)
     for (;;) {
       if ((await iterator.next()).done === true) {
         break
@@ -403,7 +412,7 @@ describe('createChatManager().send', () => {
   it('reports a turn that was stopped as cancelled and saves what was said', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
     const events: ChatEvent[] = []
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     events.push((await iterator.next()).value)
     events.push((await iterator.next()).value)
@@ -423,7 +432,7 @@ describe('createChatManager().send', () => {
   it('lists the reviews with a turn running', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
     expect(manager.running()).toEqual([])
-    const turn = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const turn = manager.send(target(), 'one')
     const iterator = turn[Symbol.asyncIterator]()
     await iterator.next()
     expect(manager.running()).toEqual([42])
@@ -439,33 +448,30 @@ describe('createChatManager().send', () => {
     build({ turns })
     const second = manager
     const secondRunner = runner
-    const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const turn = first.send(target(), 'one')
     const iterator = turn[Symbol.asyncIterator]()
     await iterator.next()
     expect([...turns.keys()]).toEqual(['42'])
-    await expect(
-      collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))
-    ).rejects.toBeInstanceOf(ChatBusyError)
+    await expect(collect(second.send(target(), 'two'))).rejects.toBeInstanceOf(ChatBusyError)
     expect(secondRunner.runs).toEqual([])
     // A pull request's turn is every sibling's: the second manager counts it as running.
     expect(second.running()).toEqual([42])
     await advanceTo(iterator, 'done')
     await iterator.next()
     expect([...turns.keys()]).toEqual([])
-    expect(
-      (await collect(second.send(target(), { message: 'two', context: { kind: 'pr' } }))).at(-1)
-    ).toEqual({ event: 'done', stopReason: 'end_turn' })
+    expect((await collect(second.send(target(), 'two'))).at(-1)).toEqual({
+      event: 'done',
+      stopReason: 'end_turn',
+    })
     expect([...turns.keys()]).toEqual([])
   })
 
   it('refuses a second turn on the same review in one manager, which keeps its own set', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const turn = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const turn = manager.send(target(), 'one')
     const iterator = turn[Symbol.asyncIterator]()
     await iterator.next()
-    await expect(
-      collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
-    ).rejects.toBeInstanceOf(ChatBusyError)
+    await expect(collect(manager.send(target(), 'two'))).rejects.toBeInstanceOf(ChatBusyError)
     await advanceTo(iterator, 'done')
     await iterator.next()
   })
@@ -475,7 +481,7 @@ describe('createChatManager().send', () => {
     build({ runner: createFakeRunner({ delayMs: 5 }), turns })
     const first = manager
     build({ turns })
-    const turn = first.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const turn = first.send(target(), 'one')
     const iterator = turn[Symbol.asyncIterator]()
     await iterator.next()
     expect(await manager.cancel(42)).toBe(true)
@@ -493,7 +499,7 @@ describe('createChatManager().send', () => {
 
   it('reports a stop reason that is not end_turn as an incomplete answer', async () => {
     build({ runner: createFakeRunner({ script: [{ type: 'done', stopReason: 'max_turn_requests' }] }) })
-    const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'x'))
     expect(events.at(-1)).toEqual({
       event: 'error',
       code: 'AGENT_INCOMPLETE',
@@ -504,7 +510,7 @@ describe('createChatManager().send', () => {
   it('passes an agent error through with a hint the reader can act on', async () => {
     const script: AgentEvent[] = [{ type: 'error', code: 'AGENT_AUTH_REQUIRED', message: 'not logged in' }]
     build({ runner: createFakeRunner({ script }) })
-    const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'x'))
     expect(events.at(-1)).toEqual({
       event: 'error',
       code: 'AGENT_AUTH_REQUIRED',
@@ -522,7 +528,7 @@ describe('createChatManager().send', () => {
       { type: 'done', stopReason: 'end_turn' },
     ]
     build({ runner: createFakeRunner({ script }) })
-    const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'x'))
     expect(events.filter(e => e.event !== 'turn' && e.event !== 'checkout')).toEqual([
       { event: 'thought', text: 'hmm' },
       { event: 'tool', id: 't1', title: 'Read File', status: 'pending' },
@@ -531,9 +537,9 @@ describe('createChatManager().send', () => {
   })
 
   it('refuses a context the canvas does not have, before the agent is started', async () => {
-    await expect(
-      collect(manager.send(target(), { message: 'x', context: { kind: 'file', path: 'nope.ts' } }))
-    ).rejects.toThrow(/not a file of this pull request/)
+    await expect(collect(manager.send(target({ kind: 'file', path: 'nope.ts' }), 'x'))).rejects.toThrow(
+      /not a file of this pull request/
+    )
     expect(runner.runs).toEqual([])
   })
 })
@@ -547,9 +553,9 @@ describe('createChatManager() threads and settings', () => {
   })
 
   it('starts a new thread when the agent changes', async () => {
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     await settings.write({ chatAgent: 'codex' })
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     const { threads } = await manager.threads(42)
     expect(threads.map(t => t.agent)).toEqual(['claude', 'codex'])
     expect(threads[1]?.name).toBe('pr-review-acme-widgets-42-codex-t2')
@@ -558,11 +564,11 @@ describe('createChatManager() threads and settings', () => {
   it('answers in the thread the message names, and leaves the open thread to the pane', async () => {
     const a = await manager.createThread(42)
     const b = await manager.createThread(42)
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' }, thread: a.name }))
+    await collect(manager.send(target({ kind: 'pr' }, a.name), 'x'))
     expect(runner.runs[0]?.session).toBe(a.name)
     // The reader may be reading b while a's question is answered; a reload opens b.
     expect((await manager.threads(42)).activeThread).toBe(b.name)
-    await collect(manager.send(target(), { message: 'y', context: { kind: 'point', fingerprint: 'fp-1' } }))
+    await collect(manager.send(target({ kind: 'point', fingerprint: 'fp-1' }), 'y'))
     expect((await manager.threads(42)).activeThread).toBe(b.name)
   })
 
@@ -587,7 +593,7 @@ describe('createChatManager() threads and settings', () => {
     await settings.write({ chatAgent: 'claude', chatModel: 'from-file' })
     build({ overrides: { chatAgent: 'codex', chatModel: 'from-flag' } })
     expect(await manager.effectiveSettings()).toMatchObject({ chatAgent: 'codex', chatModel: 'from-flag' })
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     expect(runner.runs[0]?.model).toBe('from-flag')
     expect(runner.runs[0]?.agent).toBe('codex')
   })
@@ -595,13 +601,13 @@ describe('createChatManager() threads and settings', () => {
   it('runs the newest model of the saved family', async () => {
     await settings.write({ chatAgent: 'codex', chatModel: 'gpt-5.6-terra[high]' })
     build({ runner: createFakeRunner({ modelUpgrades: { codex: { 'gpt-5.6-terra': 'gpt-6-sol' } } }) })
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     expect(runner.runs[0]?.model).toBe('gpt-6-sol[high]')
   })
 
   it('moves a Claude thread with no saved model from a versioned id to its alias', async () => {
     build({ runner: createFakeRunner({ sessionModel: 'claude-opus-5' }) })
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     expect(runner.runs[0]?.model).toBe('opus')
   })
 
@@ -613,19 +619,19 @@ describe('createChatManager() threads and settings', () => {
         modelUpgrades: { codex: { 'gpt-5.6-terra': 'gpt-6-sol' } },
       }),
     })
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     expect(runner.runs[0]?.model).toBe('gpt-6-sol')
   })
 
   it("leaves a thread with no saved model on the agent's default when it is current", async () => {
     build({ runner: createFakeRunner({ sessionModel: 'opus[1m]' }) })
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     expect(runner.runs[0]?.model).toBeUndefined()
   })
 
   it('passes the timeout and the turn cap the settings hold', async () => {
     await settings.write({ chatTimeoutSec: 120, maxTurns: 3 })
-    await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'x'))
     expect(runner.runs[0]).toMatchObject({ timeoutSec: 120, maxTurns: 3, model: undefined })
   })
 })
@@ -635,7 +641,7 @@ describe('the hints on an agent failure', () => {
     build({
       runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_MISSING', message: 'no acpx' }] }),
     })
-    const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'x'))
     expect(events.at(-1)).toEqual({
       event: 'error',
       code: 'AGENT_MISSING',
@@ -648,7 +654,7 @@ describe('the hints on an agent failure', () => {
     build({
       runner: createFakeRunner({ script: [{ type: 'error', code: 'AGENT_FAILED', message: 'boom' }] }),
     })
-    const events = await collect(manager.send(target(), { message: 'x', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'x'))
     expect(events.at(-1)).toEqual({ event: 'error', code: 'AGENT_FAILED', message: 'boom' })
   })
 
@@ -663,24 +669,24 @@ describe('the hints on an agent failure', () => {
 
 describe('the acpx session behind a thread', () => {
   it('is created before the first turn and not again after it', async () => {
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     expect(runner.ensured).toEqual([T1])
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(runner.ensured).toEqual([T1])
   })
 
   it('is created for each new thread', async () => {
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     const second = await manager.createThread(42)
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: second.name }))
+    await collect(manager.send(target({ kind: 'pr' }, second.name), 'two'))
     expect(runner.ensured).toEqual([T1, second.name])
   })
 })
 
 describe('two turns that arrive together', () => {
   it('starts one agent, even when the second arrives before the first has read its settings', async () => {
-    const first = manager.send(target(), { message: 'one', context: { kind: 'pr' } })[Symbol.asyncIterator]()
-    const second = manager.send(target(), { message: 'two', context: { kind: 'pr' } })[Symbol.asyncIterator]()
+    const first = manager.send(target(), 'one')[Symbol.asyncIterator]()
+    const second = manager.send(target(), 'two')[Symbol.asyncIterator]()
     const started = first.next()
     await expect(second.next()).rejects.toBeInstanceOf(ChatBusyError)
     await started
@@ -694,7 +700,7 @@ describe('two turns that arrive together', () => {
 
   it('stops the agent and frees the chat when the reader goes away mid-answer', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     await iterator.next()
     await iterator.next()
@@ -705,7 +711,7 @@ describe('two turns that arrive together', () => {
 
   it('frees the chat when the reader goes away before the first event', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     const started = iterator.next()
     await iterator.return?.(undefined)
@@ -721,19 +727,19 @@ describe('a turn the agent never took', () => {
         script: [{ type: 'error', code: 'AGENT_NO_SESSION', message: 'no session' }],
       }),
     })
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     expect(runner.ensured).toEqual([T1])
     const after = await manager.threads(42)
     expect(after.threads[0]?.title).toBe('New thread')
 
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[1]?.prompt).toContain('SEED for')
   })
 
   it('keeps a cancelled turn as a turn that happened', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     await advanceTo(iterator, 'turn')
     await manager.cancel(42)
@@ -753,7 +759,7 @@ describe('a stop that arrives before the agent has started', () => {
       openGate = resolve
     })
     build({ runner: createFakeRunner({ delayMs: 5, ensureGate: gate }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     const first = iterator.next()
     expect(await manager.cancel(42)).toBe(true)
@@ -782,7 +788,7 @@ describe('a stop that arrives before the agent has started', () => {
       openGate = resolve
     })
     build({ runner: createFakeRunner({ ensureGate: gate }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     const first = iterator.next()
     await manager.cancel(42)
@@ -793,16 +799,81 @@ describe('a stop that arrives before the agent has started', () => {
         break
       }
     }
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(runner.runs[0]?.prompt).toContain('SEED for')
     expect((await manager.threads(42)).threads[0]?.title).toBe('two')
+  })
+})
+
+describe('a turn sent while a stopped one is still finishing', () => {
+  /** A turn the reader left while it was still setting up: stopped, with its return queued. */
+  async function abandonDuringSetup(gate: Promise<void>): Promise<{ left: Promise<unknown> }> {
+    build({ runner: createFakeRunner({ ensureGate: gate }) })
+    const stream = manager.send(target(), 'one')
+    const abandoned = stream[Symbol.asyncIterator]()
+    await advanceTo(abandoned, 'checkout')
+    const setup = abandoned.next()
+    await manager.cancel(42)
+    return { left: Promise.all([setup, abandoned.return?.(undefined)]) }
+  }
+
+  it('waits for the stopped turn to let go, then answers', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    const { left } = await abandonDuringSetup(gate)
+    const back = collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
+    openGate()
+    await left
+    expect((await back).at(-1)).toEqual({ event: 'done', stopReason: 'end_turn' })
+    const turns = await transcripts.read(42, T1)
+    expect(turns.map(turn => [turn.role, turn.text, turn.incomplete])).toEqual([
+      ['user', 'one', undefined],
+      ['assistant', '', 'cancelled'],
+      ['user', 'two', undefined],
+      ['assistant', 'Yes. The behavior is covered at `src/a.ts:10`.', undefined],
+    ])
+  })
+
+  it('is refused when the stopped turn outstays the wait', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    const { left } = await abandonDuringSetup(gate)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const back = manager.send(target(), 'two')[Symbol.asyncIterator]()
+      const refused = expect(back.next()).rejects.toBeInstanceOf(ChatBusyError)
+      await vi.advanceTimersByTimeAsync(STOPPED_TURN_WAIT_MS)
+      await refused
+    } finally {
+      vi.useRealTimers()
+    }
+    openGate()
+    await left
+    expect(manager.running()).not.toContain(42)
+  })
+
+  it('is still refused while the running turn was not stopped', async () => {
+    let openGate = (): void => undefined
+    const gate = new Promise<void>(resolve => {
+      openGate = resolve
+    })
+    build({ runner: createFakeRunner({ ensureGate: gate }) })
+    const running = collect(manager.send(target(), 'one'))
+    await vi.waitFor(() => expect(runner.ensured).toHaveLength(1))
+    await expect(collect(manager.send(target(), 'two'))).rejects.toBeInstanceOf(ChatBusyError)
+    openGate()
+    await running
   })
 })
 
 describe('an answer the reader walked out on', () => {
   it('is kept as an incomplete answer, not as one the agent finished', async () => {
     build({ runner: createFakeRunner({ delayMs: 5 }) })
-    const stream = manager.send(target(), { message: 'one', context: { kind: 'pr' } })
+    const stream = manager.send(target(), 'one')
     const iterator = stream[Symbol.asyncIterator]()
     await advanceTo(iterator, 'chunk')
     await iterator.return?.(undefined)
@@ -824,15 +895,13 @@ describe('a thread whose acpx session is gone', () => {
               ],
       }),
     })
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
-    await collect(
-      manager.send(target(), { message: 'the session went away', context: { kind: 'pr' }, thread: T1 })
-    )
+    await collect(manager.send(target(), 'one'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'the session went away'))
     // The second turn found the session already there, so it neither ensured nor seeded.
     expect(runner.ensured).toEqual([T1])
     expect(runner.runs[1]?.prompt).not.toContain('SEED for')
 
-    await collect(manager.send(target(), { message: 'three', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'three'))
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[2]?.prompt).toContain('SEED for')
     // The thread keeps the title its first message gave it.
@@ -842,10 +911,8 @@ describe('a thread whose acpx session is gone', () => {
 
 describe('a thread whose first message reads like the placeholder', () => {
   it('keeps that title, instead of taking the next message as its first', async () => {
-    await collect(manager.send(target(), { message: 'New thread', context: { kind: 'pr' } }))
-    await collect(
-      manager.send(target(), { message: 'and now a real question', context: { kind: 'pr' }, thread: T1 })
-    )
+    await collect(manager.send(target(), 'New thread'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'and now a real question'))
     expect((await manager.threads(42)).threads[0]?.title).toBe('New thread')
   })
 
@@ -861,13 +928,9 @@ describe('a thread whose first message reads like the placeholder', () => {
               ],
       }),
     })
-    await collect(manager.send(target(), { message: 'New thread', context: { kind: 'pr' } }))
-    await collect(
-      manager.send(target(), { message: 'the session went away', context: { kind: 'pr' }, thread: T1 })
-    )
-    await collect(
-      manager.send(target(), { message: 'and now a real question', context: { kind: 'pr' }, thread: T1 })
-    )
+    await collect(manager.send(target(), 'New thread'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'the session went away'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'and now a real question'))
     expect(runner.runs[2]?.prompt).toContain('SEED for')
     expect((await manager.threads(42)).threads[0]?.title).toBe('New thread')
   })
@@ -878,15 +941,11 @@ describe('the review checkout a turn reads', () => {
   const checkoutDir = (): string => path.join(dataDir, 'checkouts', '42')
 
   it('creates it on the first turn and moves it only when the commit changes', async () => {
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
-    const second = await collect(
-      manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 })
-    )
+    await collect(manager.send(target(), 'one'))
+    const second = await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(second.filter(e => e.event === 'checkout')).toEqual([])
     const moved = 'c'.repeat(40)
-    const third = await collect(
-      manager.send({ ...target(), headSha: moved }, { message: 'three', context: { kind: 'pr' } })
-    )
+    const third = await collect(manager.send({ ...target(), headSha: moved }, 'three'))
     expect(third[0]).toEqual({ event: 'checkout', status: 'preparing', sha: moved, creating: false })
     expect(checkoutGit.calls.map(c => c[0])).toEqual(['add', 'move'])
     expect(runner.runs.every(r => r.cwd === checkoutDir())).toBe(true)
@@ -903,11 +962,13 @@ describe('the review checkout a turn reads', () => {
       repoRoot: '/repo',
       overrides: {},
       loadSeedTemplate: async () => '{{CODE_LOCATION}}',
+      loadTourSeedTemplate: async () => '{{CODE_LOCATION}}',
+      loadTourChatSeedTemplate: async () => '{{CODE_LOCATION}}',
       checkouts,
       currentBranch: async () => 'main',
       now: () => new Date('2026-09-11T10:00:00.000Z'),
     })
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     const prompt = runner.runs[0]?.prompt ?? ''
     expect(prompt).toContain(`Your working directory, \`${checkoutDir()}\``)
     expect(prompt).toContain('/repo')
@@ -915,9 +976,7 @@ describe('the review checkout a turn reads', () => {
   })
 
   it('reads the working tree for uncommitted work, without a checkout', async () => {
-    const events = await collect(
-      manager.send({ ...target(), key: 'uncommitted' }, { message: 'one', context: { kind: 'pr' } })
-    )
+    const events = await collect(manager.send({ ...target(), key: 'uncommitted' }, 'one'))
     expect(events.filter(e => e.event === 'checkout')).toEqual([])
     expect(runner.runs[0]?.cwd).toBe('/repo')
     expect(checkoutGit.calls).toEqual([])
@@ -925,7 +984,7 @@ describe('the review checkout a turn reads', () => {
 
   it("reads the reader's checkout when checkouts are turned off", async () => {
     await settings.write({ checkoutEnabled: false })
-    const events = await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'one'))
     expect(events.filter(e => e.event === 'checkout')).toEqual([])
     expect(runner.runs[0]?.cwd).toBe('/repo')
     expect(checkoutGit.calls).toEqual([])
@@ -933,7 +992,7 @@ describe('the review checkout a turn reads', () => {
 
   it("falls back to the reader's checkout with a warning when the checkout fails", async () => {
     build({ checkoutGit: createFakeCheckoutGit({ fail: 'disk full' }) })
-    const events = await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    const events = await collect(manager.send(target(), 'one'))
     expect(events.filter(e => e.event === 'checkout')).toEqual([
       { event: 'checkout', status: 'preparing', sha: HEAD_SHA, creating: true },
       { event: 'checkout', status: 'fallback', message: FALLBACK, branch: 'main' },
@@ -949,13 +1008,11 @@ describe('the review checkout a turn reads', () => {
 
   it('is busy while another process holds the checkout, and free again after the turn', async () => {
     const held = await checkouts.lease(42, 'chat')
-    await expect(
-      collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
-    ).rejects.toThrow(CheckoutBusyError)
+    await expect(collect(manager.send(target(), 'one'))).rejects.toThrow(CheckoutBusyError)
     // The refused question made no thread, so asking it again, still unnamed, makes one.
     expect((await manager.threads(42)).threads).toEqual([])
     await held.release()
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'two'))
     expect((await manager.threads(42)).threads.map(thread => [thread.title, thread.turns])).toEqual([
       ['two', 1],
     ])
@@ -965,7 +1022,7 @@ describe('the review checkout a turn reads', () => {
 
   it('keeps a thread from before review checkouts on its session in the reader checkout', async () => {
     await settings.write({ checkoutEnabled: false })
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     // A state file written before threads recorded their folder.
     await state.update(42, current => ({
       ...current,
@@ -974,13 +1031,13 @@ describe('the review checkout a turn reads', () => {
         threads: current.chat.threads.map(({ seededCwd: _cwd, ...thread }) => thread),
       },
     }))
-    await collect(manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(runner.ensured).toEqual([T1])
     expect(runner.runs[1]?.prompt).not.toContain('SEED for')
     // Turning review checkouts on moves it to a new session in the checkout, once.
     await settings.write({ checkoutEnabled: true })
-    await collect(manager.send(target(), { message: 'three', context: { kind: 'pr' }, thread: T1 }))
-    await collect(manager.send(target(), { message: 'four', context: { kind: 'pr' }, thread: T1 }))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'three'))
+    await collect(manager.send(target({ kind: 'pr' }, T1), 'four'))
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[2]?.prompt).toContain('SEED for')
     expect(runner.runs[3]?.prompt).not.toContain('SEED for')
@@ -988,14 +1045,143 @@ describe('the review checkout a turn reads', () => {
 
   it('starts a new session and seeds again when the thread last ran in another folder', async () => {
     await settings.write({ checkoutEnabled: false })
-    await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
+    await collect(manager.send(target(), 'one'))
     await settings.write({ checkoutEnabled: true })
-    const events = await collect(
-      manager.send(target(), { message: 'two', context: { kind: 'pr' }, thread: T1 })
-    )
+    const events = await collect(manager.send(target({ kind: 'pr' }, T1), 'two'))
     expect(events.find(e => e.event === 'turn')).toMatchObject({ seeded: true })
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[1]?.prompt).toContain('SEED for')
     expect(runner.runs[1]?.cwd).toBe(checkoutDir())
+  })
+})
+
+describe("createChatManager() and the tour's grilling", () => {
+  const T0 = 'pr-review-acme-widgets-42-claude-t0'
+
+  function tourTarget(context: TourGrillContext): ChatTarget {
+    return {
+      ...target(),
+      subject: { kind: 'tour', artifact: syntheticTour(), reader: freshReaderState(), context },
+    }
+  }
+
+  it('runs in the tour thread with the tour seed, which the canvas pane never lists', async () => {
+    const events = await collect(
+      manager.send(tourTarget({ kind: 'tour-decision', key: 'sum-over-product' }), 'I want to change this')
+    )
+    expect(events.find(e => e.event === 'turn')).toEqual({
+      event: 'turn',
+      thread: T0,
+      agent: 'claude',
+      seeded: true,
+    })
+    const prompt = runner.runs[0]?.prompt ?? ''
+    expect(prompt).toContain('TOUR SEED for')
+    expect(prompt).toContain('`sum-over-product` · trade-off')
+    expect(prompt).toContain('## Context: decision `sum-over-product`')
+    expect(prompt).not.toContain('SEED for {{')
+    expect(runner.runs[0]?.session).toBe(T0)
+    expect((await manager.threads(42)).threads).toEqual([])
+    expect((await manager.threads(42)).activeThread).toBeNull()
+    const history = await manager.tourHistory(42)
+    expect(history.name).toBe(T0)
+    expect(history.turns.map(t => t.role)).toEqual(['user', 'assistant'])
+    // The second turn reuses the thread and the session, so the seed is not sent again.
+    await collect(manager.send(tourTarget({ kind: 'tour-plan' }), 'more'))
+    expect(runner.runs[1]?.prompt).not.toContain('TOUR SEED')
+    expect(runner.runs[1]?.prompt).toContain('## Context: the plan')
+    // A canvas thread made afterwards is numbered from one, and the tour thread stays out of the list.
+    const canvas = await manager.createThread(42)
+    expect(canvas.name).toBe(T1)
+    expect((await manager.threads(42)).threads.map(t => t.name)).toEqual([T1])
+    // A canvas question naming the tour thread goes to a thread of its own instead.
+    await collect(manager.send(target({ kind: 'pr' }, T0), 'x'))
+    expect(runner.runs[2]?.session).toBe(T2)
+  })
+})
+
+describe('createChatManager() and the tour’s AI Chat', () => {
+  const T0 = 'pr-review-acme-widgets-42-claude-t0'
+  const LANDMARK: TourPlace = { kind: 'tour-landmark', id: 'sum' }
+  const QUESTION: TourPlace = { kind: 'tour-question', id: 'q-run' }
+
+  function chatTarget(context: TourPlace, thread?: string): ChatTarget {
+    return {
+      ...target(),
+      subject: { kind: 'tour-chat', artifact: syntheticTour(), reader: freshReaderState(), context, thread },
+    }
+  }
+
+  async function askTour(context: TourPlace, message = 'why?', thread?: string): Promise<void> {
+    await collect(manager.send(chatTarget(context, thread), message))
+  }
+
+  it('opens a thread per place of the tour, titled after it, with the tour chat seed', async () => {
+    await askTour(LANDMARK, 'where is this?')
+    await askTour(QUESTION, 'a hint?')
+    await askTour(LANDMARK, 'and the test?')
+    const { threads, agent } = await manager.tourThreads(42)
+    expect(agent).toBe('claude')
+    expect(threads.map(t => [t.name, t.title, t.place, t.turns])).toEqual([
+      [T1, 'landmark · Sum, not product', LANDMARK, 2],
+      [T2, 'question · What does run() return now?', QUESTION, 1],
+    ])
+    expect(runner.runs.map(run => [run.session, run.prompt.startsWith('TOUR CHAT SEED')])).toEqual([
+      [T1, true],
+      [T2, true],
+      [T1, false],
+    ])
+    expect(runner.runs[0]?.prompt).toContain('## Context: landmark "Sum, not product"')
+    // The canvas's pane lists none of them, and none is the open thread a reload brings back.
+    expect(await manager.threads(42)).toMatchObject({ threads: [], activeThread: null })
+  })
+
+  it('starts a thread about the whole tour for a question that names none, and continues a named one', async () => {
+    await askTour({ kind: 'tour' }, 'first')
+    await askTour({ kind: 'tour' }, 'second')
+    await askTour({ kind: 'tour' }, 'third', T1)
+    const { threads } = await manager.tourThreads(42)
+    expect(threads.map(t => [t.name, t.title, t.turns])).toEqual([
+      [T1, 'the whole tour', 2],
+      [T2, 'the whole tour', 1],
+    ])
+  })
+
+  it('keeps to this agent’s threads, and to the tour’s: a canvas thread named is not continued', async () => {
+    await askTour(LANDMARK)
+    const canvas = await manager.createThread(42)
+    await askTour(LANDMARK, 'here?', canvas.name)
+    await settings.write({ chatAgent: 'codex' })
+    await askTour(LANDMARK, 'and now?', T1)
+    const { threads } = await manager.tourThreads(42)
+    expect(threads.map(t => [t.agent, t.turns])).toEqual([
+      ['claude', 2],
+      ['codex', 1],
+    ])
+  })
+
+  it('stays apart from the grilling’s thread, which it never lists', async () => {
+    await collect(
+      manager.send(
+        {
+          ...target(),
+          subject: {
+            kind: 'tour',
+            artifact: syntheticTour(),
+            reader: freshReaderState(),
+            context: { kind: 'tour-plan' },
+          },
+        },
+        'the plan?'
+      )
+    )
+    await askTour({ kind: 'tour-plan' }, 'what is open?')
+    expect(runner.runs.map(run => run.session)).toEqual([T0, T1])
+    expect((await manager.tourThreads(42)).threads.map(t => t.name)).toEqual([T1])
+  })
+
+  it('makes no thread for a place the tour does not have', async () => {
+    await expect(askTour({ kind: 'tour-landmark', id: 'gone' })).rejects.toThrow('no landmark gone')
+    expect((await manager.tourThreads(42)).threads).toEqual([])
   })
 })

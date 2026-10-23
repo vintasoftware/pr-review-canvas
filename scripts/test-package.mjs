@@ -121,7 +121,7 @@ try {
     server.once('error', onError)
     server.once('exit', onExit)
   })
-  assert.match(logs, /pr-review doctor: outdated or modified skill/)
+  assert.match(logs, /pr-review doctor: outdated, modified, or missing skill/)
   assert.match(logs, /pr-review install-skill/)
   for (const route of [
     '/',

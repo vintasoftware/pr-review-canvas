@@ -9,12 +9,13 @@ export async function shareGithubCanvas(
   client: HostClient,
   repo: Repo,
   number: number,
-  body: string
+  body: string,
+  marker: string = CANVAS_COMMENT_MARKER
 ): Promise<IssueComment> {
   const user = z.object({ login: z.string() }).parse(await client.api('user'))
   const base = `repos/${repo.owner}/${repo.name}`
   const comments = (await fetchAllPages(client, `${base}/issues/${number}/comments`)).map(mapIssueComment)
-  const existing = comments.find(c => c.author === user.login && c.body.includes(CANVAS_COMMENT_MARKER))
+  const existing = comments.find(c => c.author === user.login && c.body.includes(marker))
   const response =
     existing === undefined
       ? await client.post(`${base}/issues/${number}/comments`, { body })

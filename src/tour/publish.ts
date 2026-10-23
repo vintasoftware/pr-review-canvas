@@ -1,0 +1,235 @@
+// `pr-review tour publish`: read the model and the scene files, validate them against
+// context.json, store the tour, and share it on the pull request. An invalid tour is never stored.
+import path from 'node:path'
+import type { CanvasSharing } from '../contract/self-review.js'
+import type { Generator } from '../contract/review-artifact.js'
+import {
+  type TourArtifact,
+  type TourContext,
+  TourContextSchema,
+  type TourModel,
+  type TourRecord,
+  type TourValidationReport,
+} from '../contract/tour.js'
+import { UNCOMMITTED_STATE } from '../git/local-target.js'
+import { currentHead, parseModelText, PublishError, recordAttempt } from '../review/publish.js'
+import type { AppContext } from '../server/context.js'
+import { readJson, readText } from '../store/atomic-json.js'
+import { shareTourOnPr } from './share.js'
+import { type TourValidationInput, validateTourModel } from './validate.js'
+
+export interface TourPublishOptions {
+  agent: string
+  model?: string | undefined
+  harness: Generator['harness']
+  allowStale: boolean
+  /** False keeps the tour off the pull request whatever the sharing settings say (`tour generate --out`). */
+  share?: boolean | undefined
+}
+
+export interface TourPublishResult {
+  status: 'published'
+  headSha: string
+  tourJsonPath: string
+  attempts: number
+  sharing: CanvasSharing | { status: 'local' }
+  /** Where the tour shows once the server runs; absent for a `--base/--head` change set. */
+  tourUrl?: string
+}
+
+/** The report of a failed tour publish. The CLI prints one line per error and exits 5. */
+export class TourInvalidError extends Error {
+  readonly report: TourValidationReport
+  readonly attempts: number
+
+  constructor(report: TourValidationReport, attempts: number) {
+    super(`tour-model.json has ${report.errors.length} problem${report.errors.length === 1 ? '' : 's'}`)
+    this.name = 'TourInvalidError'
+    this.report = report
+    this.attempts = attempts
+  }
+}
+
+export async function readTourContext(tourDir: string): Promise<TourContext> {
+  const context = await readJson(path.join(tourDir, 'context.json'), TourContextSchema)
+  if (context === null) {
+    throw new PublishError(
+      'NOT_FOUND',
+      `${tourDir} has no context.json`,
+      'run `pr-review tour prepare` first'
+    )
+  }
+  return context
+}
+
+/** The model as written, with each landmark's scene and micro-world read from the scenes dir. */
+export async function readTourModel(
+  context: TourContext,
+  file = context.paths.model
+): Promise<ReturnType<typeof parseModelText>> {
+  const text = await readText(file)
+  if (text === null) {
+    throw new PublishError(
+      'NOT_FOUND',
+      `${file} does not exist`,
+      'write the tour model there and publish again'
+    )
+  }
+  const parsed = parseModelText(text, path.basename(file))
+  if ('error' in parsed) return parsed
+  await attachScenes(parsed.raw, context.scenesDir)
+  return parsed
+}
+
+/** Fills `scene` and `micro` from `<scenes>/<id>.scene.html` and `<id>.micro.html` where the model left them out. */
+async function attachScenes(raw: unknown, scenesDir: string): Promise<void> {
+  const landmarks = (raw as { landmarks?: unknown })?.landmarks
+  if (!Array.isArray(landmarks)) return
+  for (const landmark of landmarks) {
+    const l = landmark as { id?: unknown; scene?: unknown; micro?: unknown }
+    if (typeof l.id !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(l.id)) continue
+    for (const [field, suffix] of [
+      ['scene', 'scene'],
+      ['micro', 'micro'],
+    ] as const) {
+      if (l[field] !== undefined && l[field] !== null) continue
+      const text = await readText(path.join(scenesDir, `${l.id}.${suffix}.html`))
+      if (text !== null) l[field] = text
+    }
+  }
+}
+
+export function tourValidationInput(context: TourContext): TourValidationInput {
+  return {
+    files: context.files,
+    caps: context.caps,
+    budget: context.budget,
+    categories: context.categories,
+    stateRequired: context.stateRequired,
+    options: context.options,
+  }
+}
+
+/**
+ * The stored tour: the prepared context and the validated model, with when, by whom, and the
+ * record. Publishing and the preview build it the same way.
+ */
+export function tourArtifactOf(
+  context: TourContext,
+  model: TourModel,
+  rest: Pick<TourArtifact, 'generatedAt' | 'generator' | 'record'>
+): TourArtifact {
+  return {
+    version: 1,
+    pr: context.pr,
+    repo: context.repo,
+    headSha: context.headSha,
+    mergeBaseSha: context.mergeBaseSha,
+    blastRadius: context.blastRadius,
+    budget: context.budget,
+    guide: context.guide.path,
+    landmarks: model.landmarks,
+    decisions: model.decisions,
+    quiz: model.quiz,
+    notToured: model.notToured,
+    source: 'local',
+    ...rest,
+  }
+}
+
+/**
+ * The record a regenerated tour keeps: who toured the earlier tour of the same commit, and the
+ * author's picks whose decision key survived. A pick on a decision that is gone goes with it.
+ */
+export function carriedRecord(previous: TourArtifact | null, model: TourModel): TourRecord {
+  if (previous === null) return { touredBy: [] }
+  const keys = new Set(model.decisions.map(d => d.key))
+  const record: TourRecord = { touredBy: previous.record.touredBy }
+  const author = previous.record.author
+  if (author !== undefined) {
+    record.author = {
+      ...author,
+      picks: Object.fromEntries(Object.entries(author.picks).filter(([key]) => keys.has(key))),
+    }
+  }
+  return record
+}
+
+/**
+ * The record a tour that updates an earlier commit's starts with: the author's picks whose decision
+ * key survived. Who toured the earlier tour took another change, so nobody has toured this one yet.
+ */
+export function basisRecord(basis: TourArtifact | null, model: TourModel): TourRecord {
+  return { ...carriedRecord(basis, model), touredBy: [] }
+}
+
+export async function publishTour(
+  ctx: AppContext,
+  tourDir: string,
+  opts: TourPublishOptions
+): Promise<TourPublishResult> {
+  const context = await readTourContext(tourDir)
+  const storedDir = ctx.tours.tourDir(context.headSha)
+  if (path.resolve(tourDir) !== storedDir) {
+    throw new PublishError(
+      'CANVAS_ELSEWHERE',
+      `${tourDir} is not the tour dir of ${context.headSha.slice(0, 7)} in ${ctx.config.dataDir}; publishing would write ${storedDir}`,
+      'publish the tourDir prepare printed, with the --data-dir prepare used or none'
+    )
+  }
+  if (!opts.allowStale) {
+    const head = await currentHead(ctx, context)
+    if (head.moved) {
+      throw new PublishError(
+        'CANVAS_STALE',
+        `the target moved to ${head.headSha.slice(0, 7)} while this tour was prepared for ${context.headSha.slice(0, 7)}`,
+        'run `pr-review tour prepare` again, or pass --allow-stale to publish for the old commit'
+      )
+    }
+  }
+  const model = await readTourModel(context)
+  const result =
+    'error' in model
+      ? {
+          ok: false,
+          errors: [{ code: 'SCHEMA' as const, where: '(root)', message: model.error.message }],
+          output: null,
+        }
+      : validateTourModel(model.raw, tourValidationInput(context))
+  const now = ctx.now().toISOString()
+  const attempts = await recordAttempt(path.join(tourDir, 'tour.log'), now, result)
+  if (!result.ok || result.output === null)
+    throw new TourInvalidError({ ok: false, errors: result.errors }, attempts)
+  const generator: Generator = { agent: opts.agent, harness: opts.harness, attempts }
+  if (opts.model !== undefined) generator.model = opts.model
+  const previous = await ctx.tours.read(context.headSha).catch(() => null)
+  const artifact = tourArtifactOf(context, result.output, {
+    generatedAt: now,
+    generator,
+    record:
+      previous === null && context.basis !== undefined
+        ? basisRecord(await ctx.tours.read(context.basis.tourSha).catch(() => null), result.output)
+        : carriedRecord(previous, result.output),
+  })
+  const worktree = context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE
+  await ctx.tours.write(context.headSha, artifact, { worktree })
+  if (worktree) await ctx.git.anchorCommit(context.headSha)
+  const published: TourPublishResult = {
+    status: 'published',
+    headSha: context.headSha,
+    tourJsonPath: path.join(storedDir, 'tour.json'),
+    attempts,
+    sharing: { status: 'local' },
+  }
+  if (context.target.kind === 'local') {
+    published.tourUrl = `http://localhost:${ctx.config.port}${ctx.config.basePath}tour/${context.target.source}`
+  }
+  if (context.target.kind === 'pr') {
+    published.tourUrl = `http://localhost:${ctx.config.port}${ctx.config.basePath}tour/${context.target.number}`
+    published.sharing =
+      opts.share === false
+        ? { status: 'off' }
+        : await shareTourOnPr(ctx, context.headSha, context.target.number)
+  }
+  return published
+}

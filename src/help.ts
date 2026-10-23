@@ -108,8 +108,35 @@ const COMMANDS: CommandHelp[] = [
     ],
   },
   {
+    name: 'tour <step>',
+    summary:
+      'The tour, a guided pass over a change: the same steps as a canvas, apart from it. The steps: open, generate, prepare, validate, preview, publish, plan, gallery, hunk, checkout, export, import.',
+    flags: [
+      { form: 'open [<n>|branch|uncommitted]', detail: 'the tour in the browser, as open does a review' },
+      {
+        form: 'generate [<n>|branch|uncommitted]',
+        detail: 'in the running server, as generate does a canvas',
+      },
+      { form: 'prepare --pr <n> [--force]', detail: 'or --branch, --uncommitted, --base <ref> --head <ref>' },
+      { form: 'validate <model> --tour <dir>', detail: '[--human]' },
+      { form: 'preview <dir> [--landmark <id>]', detail: 'screenshots of every landmark' },
+      {
+        form: 'publish <dir> --agent <id>',
+        detail: '--harness claude-code|codex|other [--model <id>] [--allow-stale]',
+      },
+      { form: 'plan --pr <n>', detail: 'or --branch, --uncommitted: the confirmed plan' },
+      { form: 'checkout <dir> head|base', detail: 'a worktree to run things in' },
+      { form: 'export --pr <n>', detail: 'or --branch, --uncommitted, --head <sha>; [--out <file|dir>]' },
+      { form: 'import <zip> [--pr <n>]', detail: '[--force]: store a tour someone exported' },
+    ],
+    notes: [
+      'A tour is stored beside the canvases and shared as its own comment. The pr-tour skill runs these.',
+      'tour generate takes the flags generate does (--force, --base, --agent, --model, --out, --open, --json). Its agent runs the pr-tour skill from the repository root with every permission approved: it writes the scene files, runs these steps, and runs try-it recipes.',
+    ],
+  },
+  {
     name: 'install-skill',
-    summary: 'Copy the skill into Claude Code and Codex.',
+    summary: 'Copy the bundled skills into Claude Code and Codex.',
     flags: [
       { form: '--claude-dir <dir>', detail: `default ${CLAUDE_SKILLS_DIR}` },
       { form: '--codex-dir <dir>', detail: `default ${CODEX_SKILLS_DIR}` },

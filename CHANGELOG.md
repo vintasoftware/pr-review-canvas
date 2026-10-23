@@ -4,6 +4,60 @@
 
 Changes since 0.9.0.
 
+### The tour
+
+- A tour is a guided pass over one change, apart from the canvas: landmarks with a generated
+  scene each (one may be a micro-world to play with), decisions to keep, change to the tour's
+  alternative, or change to something else through a grilling, and a quiz.
+  `/pr-tour <n|branch|uncommitted>` generates and shares it; `/pr-tour-setup` writes the
+  project's tour guide; `/pr-tour-apply` carries the confirmed plan out. `pr-review tour
+prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; scenes run in a
+  sandboxed frame (ADR 0006).
+- The page is `/r/<owner>/<repo>/tour/<n|branch|uncommitted>`, linked from the canvas header: every step a history entry, keyboard and phone
+  parity, the code behind a landmark as a literate or raw diff, a note per landmark, and a plan
+  that writes the re-implementation prompt and shares who toured on the pull request. A change
+  pick is grilled through AI Chat in the tour's own thread, with a restatement card to approve,
+  edit, or reject, and speech input with a one-time notice.
+- A reviewer's approved changes go into their pending review as comments on the decisions'
+  lines.
+- With AI Chat on, the tour page has AI Chat on every step: **ask AI Chat** in the nav, or `/`,
+  opens a pane beside the tour with a thread per place (the whole tour, each landmark, decision,
+  and quiz question, and the plan), as the canvas keeps a thread per place. The pane follows the
+  reader from step to step, **threads** lists them, and an answer that ends while the reader is
+  on another stop is counted until they open its thread. A quiz question's answer stays out of the
+  agent's context until the reader has it right. The seed is the new `prompts/tour-chat.md`.
+- Config: `tour:` in `pr-review.config.yml` (budget, quiz, grilling, audio, micro-world, try-it,
+  categories, sharing, models, guide); `tourComment` in `.pr-review/settings.yml`; prompt
+  templates `tour.md` and `tour-grill.md`.
+- Skill install, doctor, and upgrade handle every bundled skill.
+- The generator works in checkouts of its own at the head and the merge base (`pr-review tour
+checkout <tourDir> head|base`), apart from the one AI Chat reads, and removes them when done
+  (`--remove`); `serve` also removes them once the pull request is merged or closed.
+- The project home has canvases and tours tabs (`?tab=tours`). The tours tab opens a tour by
+  number and lists the local tours and the recent pull requests with whether each has one.
+- The tour page generates the tour itself when an agent runs here, as the review page does the
+  canvas: from the empty page, the stale bar, the header, or the tours tab. The server prepares
+  and publishes; between those, the agent runs the pr-tour skill from the repository root with
+  every permission approved, since it writes scene files, previews them, and runs try-it recipes.
+  One generation of either kind runs at a time in a clone. `pr-review tour generate` does the same
+  from a terminal, with `generate`'s flags, and `pr-review tour open` opens a tour as `open` does
+  a review.
+- A tour of a later commit updates the earlier one, as an incremental canvas does: what the new
+  commits left untouched carries, the rest is judged again, and the author's picks carry by decision
+  key (`tour.incremental`, on by default; `--force` starts blank). An outdated tour says so, as an
+  outdated canvas does, and offers the update, with a blank-page choice.
+- `tour.generate` (`author` by default, `on`, or `off`) decides who generates a tour from the review
+  app. Its agent runs with every permission while reading a diff that could steer it, so by
+  default only the pull request's author, or the owner of local work, may.
+- Tours travel as zips like canvases: `pr-review tour export` and `tour import`, the tour page's
+  export command, and a drop zone on a pull request with no tour. Opening the tour page of a pull
+  request with no tour of its head loads one someone shared on it, as the review page does a
+  canvas; a command looks again on demand.
+- The tour page has a look of its own, a hop-on hop-off sightseeing bus, apart from the canvas's
+  skins: each screen a ticket, the rail a road of bus stops, pastel colors in light and dark, and
+  fonts served by the app. It offers the theme command and no skin command. Scene frames and the
+  scene kit follow the same palette.
+
 ### Self-review
 
 - A resolution now lasts. Every later canvas of the pull request starts from the resolutions of its

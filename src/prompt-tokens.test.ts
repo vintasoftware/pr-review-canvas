@@ -6,7 +6,10 @@ import type { PromptOverrides } from './project-config.js'
 import { ADDED_TOKENS } from './prompt-tokens.js'
 import { isNewer } from './version.js'
 
-/** The tokens each bundled template had at 0.9.0, before `ADDED_TOKENS` began. Frozen history. */
+/**
+ * The tokens each bundled template had at 0.9.0, before `ADDED_TOKENS` began, or when it first
+ * shipped, for a template new since: no copy of it predates those. Frozen history.
+ */
 const AT_0_9_0: Record<keyof PromptOverrides, readonly string[]> = {
   'chat-seed.md': ['CODE_LOCATION', 'LAYERS', 'POINTS', 'PR_META', 'READER', 'TESTS'],
   'generation-format.md': [
@@ -54,6 +57,29 @@ const AT_0_9_0: Record<keyof PromptOverrides, readonly string[]> = {
   'judging-surfacing.md': ['FORMAT', 'QUALITY_STANDARDS', 'RULEBOOK'],
   'layering-guidance.md': [],
   'quality-standards.md': [],
+  'tour.md': [
+    'BASIS',
+    'BODY',
+    'BUDGET',
+    'CAPS',
+    'CATEGORIES',
+    'DIFFS',
+    'GUIDE',
+    'HEAD_SHA',
+    'MANIFEST',
+    'MAX_REPAIR_ROUNDS',
+    'MERGE_BASE_SHA',
+    'META',
+    'MICRO_WORLD',
+    'PATHS',
+    'SCENE_GUIDE',
+    'SCHEMA',
+    'TARGET_WORD',
+    'TEST_PATTERNS',
+    'TRY_IT',
+  ],
+  'tour-grill.md': ['CODE_LOCATION', 'DECISIONS', 'GUIDE', 'LANDMARKS', 'PR_META'],
+  'tour-chat.md': ['CODE_LOCATION', 'DECISIONS', 'GUIDE', 'LANDMARKS', 'PR_META'],
 }
 
 const templates = Object.keys(AT_0_9_0) as Array<keyof PromptOverrides>

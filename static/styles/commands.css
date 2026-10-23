@@ -55,6 +55,12 @@
   transform: translate(1px, 1px);
   box-shadow: 1px 1px 0 var(--shadow);
 }
+/* A filled command waiting on something reads as off, not as one more press away. */
+.cmd.fill:is(:disabled, [aria-disabled='true']) {
+  opacity: 0.45;
+  transform: none;
+  box-shadow: none;
+}
 .cmd.big {
   font-size: 16px;
   padding: 12px 24px;

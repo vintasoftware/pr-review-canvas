@@ -1,7 +1,7 @@
 // The AI Chat pane's routes and the personal settings behind it. Every chat and agent route here
 // answers 404 when the project config turns chat off, so a repository that does not want an agent
 // in the loop has no agent surface at all; the settings file stays reachable for the reading level.
-import { Hono, type MiddlewareHandler } from 'hono'
+import { Hono, type HonoRequest, type MiddlewareHandler } from 'hono'
 import { ChatBusyError } from '../../chat/chat-manager.js'
 import { CheckoutBusyError } from '../../chat/checkouts.js'
 import { ChatContextError } from '../../chat/context.js'
@@ -265,41 +265,57 @@ export function chatRoutes(ctx: AppContext, loader: PrLoader): Hono {
       {
         key,
         headSha: diff.headSha,
-        artifact,
+        subject: {
+          kind: 'canvas',
+          artifact,
+          // The same reader the page offers resolve to: an outdated canvas is read with its own
+          // commit, so its points are not resolved here. The probe answers from its cache.
+          readerResolves: readerResolves(key, (await ctx.capabilities.get()).login, pr, current),
+          context: input.context,
+          thread: input.thread,
+        },
         files,
         patches,
         derivedDir: ctx.derived.derivedDir(diff),
         readLines: (side, filePath, from, to) => ctx.derived.readLines(diff, side, filePath, from, to),
-        // The same reader the page offers resolve to: an outdated canvas is read with its own
-        // commit, so its points are not resolved here. The probe answers from its cache.
-        readerResolves: readerResolves(key, (await ctx.capabilities.get()).login, pr, current),
       },
-      { message: input.message, context: input.context, thread: input.thread }
+      input.message
     )
-    // The first event comes back before the response starts, so a refusal is a JSON envelope
-    // with a status rather than an error frame inside a 200.
-    const iterator = events[Symbol.asyncIterator]()
-    let first: IteratorResult<ChatEvent>
-    try {
-      first = await iterator.next()
-    } catch (err) {
-      throw toChatError(err)
-    }
-    // A browser that goes away stops the agent; the turn is nobody's answer any more.
-    return new Response(
-      sseStream(
-        replayFrom(first, iterator),
-        undefined,
-        () => {
-          void ctx.chat.cancel(key)
-        },
-        err => logRequestError(ctx.log, c.req, err)
-      ),
-      { headers: SSE_HEADERS }
-    )
+    return turnResponse(ctx, c.req, key, events)
   })
 
   return api
+}
+
+/**
+ * The answer to a send: the turn as an event stream. The first event comes back before the
+ * response starts, so a refusal is a JSON envelope with a status rather than an error frame
+ * inside a 200.
+ */
+export async function turnResponse(
+  ctx: AppContext,
+  request: HonoRequest,
+  key: ReviewKey,
+  events: AsyncIterable<ChatEvent>
+): Promise<Response> {
+  const iterator = events[Symbol.asyncIterator]()
+  let first: IteratorResult<ChatEvent>
+  try {
+    first = await iterator.next()
+  } catch (err) {
+    throw toChatError(err)
+  }
+  return new Response(
+    sseStream(replayFrom(first, iterator), {
+      // A browser that goes away stops the agent; the turn is nobody's answer any more.
+      onCancel: () => {
+        void ctx.chat.cancel(key)
+      },
+      onError: err => logRequestError(ctx.log, request, err),
+      signal: request.raw.signal,
+    }),
+    { headers: SSE_HEADERS }
+  )
 }
 
 /**

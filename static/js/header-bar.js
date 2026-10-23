@@ -2,16 +2,17 @@
 // The bar every page starts with: the wordmark, which leads to the list of every project the server
 // serves; next to it the project's name, which leads to its home page, or where the page is served
 // from on a page of the server's own; then the page's own commands, and the skin and theme commands
-// last. The server draws it on its pages and the review page draws it in the browser, from this
+// last. The tour page has a look of its own, so it offers the theme command alone. The server draws it on its pages and the review page draws it in the browser, from this
 // one module, so every page has the same header.
 import { esc } from './dom.js'
 import { skinLabel } from './skin.js'
 import { themeLabel } from './theme.js'
 
 /**
- * @typedef {{ slug: string, home: string, reopenIn?: string | undefined }} ProjectLink The project's
- *   name and home page; `reopenIn` is its folder when it runs under the server's environment
- *   rather than the shell's that opened it.
+ * @typedef {{ slug: string, name: string, home: string, reopenIn?: string | undefined }} ProjectLink
+ *   The project's slug, the name the header shows for it (a linked worktree by its folder), and its
+ *   home page; `reopenIn` is its folder when it runs under the server's environment rather than the
+ *   shell's that opened it.
  */
 
 /**
@@ -19,8 +20,8 @@ import { themeLabel } from './theme.js'
  *   host?: string | undefined,
  *   project?: ProjectLink | undefined,
  *   theme: import('./theme.js').Theme,
- *   skin: import('./skin.js').Skin,
- * }} BarOptions
+ *   skin?: import('./skin.js').Skin | undefined,
+ * }} BarOptions A page without `skin` has a look of its own and offers no skin command
  */
 
 const BRAND_HTML =
@@ -82,7 +83,9 @@ function envDialogHtml(opts) {
  */
 function contextHtml(opts) {
   if (opts.project !== undefined) {
-    return `<a class="mono muted" href="${esc(opts.project.home)}" title="This project's home page">${esc(opts.project.slug)}</a>${envBadgeHtml(opts.project)}`
+    const { slug, name } = opts.project
+    const title = name === slug ? "This project's home page" : `This project's home page (${slug})`
+    return `<a class="mono muted" href="${esc(opts.project.home)}" title="${esc(title)}">${esc(name)}</a>${envBadgeHtml(opts.project)}`
   }
   return opts.host === undefined ? '' : `<span class="mono muted">${esc(opts.host)}</span>`
 }
@@ -120,7 +123,9 @@ export function headerBarHtml(opts, commands = '') {
     `<div class="hdr-bar"><div class="brand">${BRAND_HTML}${contextHtml(opts)}</div>` +
     '<div class="hdr-actions" role="group" aria-label="Page actions">' +
     commands +
-    `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>` +
+    (opts.skin === undefined
+      ? ''
+      : `<button class="cmd" type="button" id="skin-toggle" title="Switch between Terminal, GitHub, and Olive styling">${esc(skinLabel(opts.skin))}</button>`) +
     `<button class="cmd" type="button" id="theme-toggle" title="Switch between Light, Dark, and Auto themes">${esc(themeLabel(opts.theme))}</button>` +
     '</div></div>' +
     envDialogHtml(opts)

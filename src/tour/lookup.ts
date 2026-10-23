@@ -1,0 +1,133 @@
+// The tour a page or a scene frame shows for a review key: the stored tour for the head, the
+// newest older one when the head moved, or, in preview, the model as the generator has written it.
+import path from 'node:path'
+import type { TourStaleInfo } from '../contract/tour-api.js'
+import { formatTourError, type TourArtifact } from '../contract/tour.js'
+import type { Pr } from '../contract/review-artifact.js'
+import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
+import type { PrLoader } from '../server/bundle.js'
+import type { AppContext } from '../server/context.js'
+import { AppError } from '../server/errors.js'
+import { readText } from '../store/atomic-json.js'
+import { readTourContext, readTourModel, tourArtifactOf, tourValidationInput } from './publish.js'
+import { validateTourModel } from './validate.js'
+
+export type TourLookupResult =
+  | { status: 'ready'; pr: Pr; headSha: string; artifact: TourArtifact; preview: boolean }
+  | { status: 'stale'; pr: Pr; headSha: string; artifact: TourArtifact; stale: TourStaleInfo; preview: false }
+  | { status: 'missing'; pr: Pr; preview: false }
+
+/**
+ * The tour as written in `tours/<head>/tour-model.json`, validated as `tour publish` would, or
+ * null when nothing is being written there. An invalid model is an error with its problems, one
+ * line each, so the generator sees in the page what publish would refuse.
+ */
+export async function previewArtifact(ctx: AppContext, pr: Pr): Promise<TourArtifact | null> {
+  const tourDir = ctx.tours.tourDir(pr.headSha)
+  if ((await readText(path.join(tourDir, 'context.json'))) === null) return null
+  const context = await readTourContext(tourDir)
+  const model = await readTourModel(context)
+  const result =
+    'error' in model
+      ? {
+          ok: false,
+          errors: [{ code: 'SCHEMA' as const, where: '(root)', message: model.error.message }],
+          output: null,
+        }
+      : validateTourModel(model.raw, tourValidationInput(context))
+  if (!result.ok || result.output === null) {
+    throw new AppError(
+      'MODEL_INVALID',
+      'tour-model.json does not validate',
+      422,
+      'fix it and reload',
+      result.errors.map(formatTourError)
+    )
+  }
+  return tourArtifactOf(context, result.output, {
+    generatedAt: ctx.now().toISOString(),
+    generator: { agent: 'preview', harness: 'other', attempts: 0 },
+    record: { touredBy: [] },
+  })
+}
+
+export async function lookupTour(
+  ctx: AppContext,
+  loader: PrLoader,
+  key: ReviewKey,
+  opts: { preview?: boolean | undefined; pr?: Pr | undefined } = {}
+): Promise<TourLookupResult> {
+  // The page resolves the head afresh and passes it; the other callers take the one on file.
+  const pr = opts.pr ?? (await loader.currentTarget(key))
+  if (opts.preview === true) {
+    const artifact = await previewArtifact(ctx, pr)
+    if (artifact !== null) return { status: 'ready', pr, headSha: pr.headSha, artifact, preview: true }
+  }
+  const found = await ctx.tours.findFor(key, pr.headSha)
+  if (found.status === 'missing') return { status: 'missing', pr, preview: false }
+  const artifact = await ctx.tours.read(found.headSha)
+  if (artifact === null) {
+    throw new AppError(
+      'CANVAS_INVALID',
+      `the tour of ${found.headSha.slice(0, 7)} cannot be read`,
+      500,
+      'generate it again'
+    )
+  }
+  if (found.status === 'ready')
+    return { status: 'ready', pr, headSha: found.headSha, artifact, preview: false }
+  const stale: TourStaleInfo = {
+    tourHeadSha: found.headSha,
+    currentHeadSha: pr.headSha,
+    relation: found.relation,
+  }
+  if (found.relation === 'ancestor') stale.commitsBehind = found.commitsBehind
+  return { status: 'stale', pr, headSha: found.headSha, artifact, stale, preview: false }
+}
+
+/** The head the page's bundle resolved for `key`: a pull request's on file, local work's as last read. */
+function headOnScreen(loader: PrLoader, key: ReviewKey): Promise<Pr> {
+  return isLocalKey(key) ? loader.localHead(key, { refresh: false, poll: true }) : loader.currentTarget(key)
+}
+
+/**
+ * Refuses a commit that is not a tour this key shows: one the index files under the key, or the
+ * key's own head, whose tour belongs to its commit whoever filed it, as `findFor` says. The page
+ * sends back the commit its bundle named, so a save or a frame costs the index and the head on
+ * file, no forge or git work.
+ */
+export async function requireTourOf(
+  ctx: AppContext,
+  loader: PrLoader,
+  key: ReviewKey,
+  headSha: string
+): Promise<void> {
+  const entry = (await ctx.tours.readIndex()).tours[headSha]
+  if (
+    entry !== undefined &&
+    (ctx.tours.belongsTo(entry, key) || headSha === (await headOnScreen(loader, key)).headSha)
+  ) {
+    return
+  }
+  throw new AppError('CANVAS_NOT_FOUND', `no tour of ${String(key)} at ${headSha.slice(0, 7)}`, 404)
+}
+
+/** The tour at a given commit, when this key shows it; for the scene frames. */
+export async function tourAt(
+  ctx: AppContext,
+  loader: PrLoader,
+  key: ReviewKey,
+  headSha: string
+): Promise<TourArtifact> {
+  await requireTourOf(ctx, loader, key, headSha)
+  const artifact = await ctx.tours.read(headSha)
+  if (artifact === null) {
+    throw new AppError(
+      'CANVAS_INVALID',
+      `the tour of ${headSha.slice(0, 7)} cannot be read`,
+      500,
+      'generate it again'
+    )
+  }
+  return artifact
+}

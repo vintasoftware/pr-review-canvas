@@ -24,6 +24,7 @@ import {
   threadOfPlace,
   WHOLE_PR,
 } from './chat-context.js'
+import { checkoutWarningHtml, liveAnswer } from './chat-answer.js'
 import { wireChatPanel } from './chat-panel.js'
 import { quickQuestionsFor } from './quick-questions.js'
 import { wireThreadList } from './thread-list.js'
@@ -247,30 +248,6 @@ function turnInnerHtml(role, bodyHtml, opts = {}) {
       : `<p class="turn-ctx">about <span class="ctx-chip">${esc(opts.context)}</span></p>`) +
     (opts.fallback === undefined ? '' : checkoutWarningHtml(opts.fallback)) +
     `<div class="prose">${bodyHtml}</div>${note}`
-  )
-}
-
-/**
- * What the activity line says while a review checkout is created or moved.
- * @param {{ sha: string, creating: boolean }} event
- */
-export function checkoutActivityText(event) {
-  const sha = event.sha.slice(0, 7)
-  return event.creating ? `Creating the review checkout at ${sha}` : `Checking out ${sha}`
-}
-
-/**
- * The warning a turn shows when its review checkout failed and it read the reader's checkout.
- * @param {{ message: string, branch: string | null }} event
- */
-export function checkoutWarningHtml(event) {
-  const where =
-    event.branch === null
-      ? 'your checkout'
-      : `your checkout on <span class="mono">${esc(event.branch)}</span>`
-  return (
-    `<p class="chat-warning small" role="status">The review checkout could not be updated, so AI Chat read ${where}. ` +
-    `Answers may describe another version of the code. <span class="muted">${esc(event.message)}</span></p>`
   )
 }
 
@@ -653,12 +630,11 @@ export function wireChat(options) {
   const marks = document.createElement('style')
   marks.id = 'chat-thread-marks'
   root.append(marks)
-  let stopActivity = () => {}
+  /** Drops the timers of the answer coming in. */
+  let stopLive = () => {}
   /** The turn in flight, so taking the pane down stops its request too. */
   /** @type {AbortController | null} */
   let inFlight = null
-  /** @type {number | ReturnType<typeof setTimeout>} */
-  let frame = 0
   let turnSeq = 0
   /**
    * Counts the things that replace the whole transcript. A history load that comes back after
@@ -718,7 +694,7 @@ export function wireChat(options) {
    * What a sent message names above its text, so a reader scrolling back sees what each question
    * was about. A message about the whole PR, about the thread's own place, or one saved before
    * turns kept a context, names none.
-   * @param {ChatContext | undefined} about
+   * @param {import('./chat-context.js').ChatTurnContext | undefined} about
    */
   const turnContext = about =>
     about === undefined ||
@@ -1089,38 +1065,6 @@ export function wireChat(options) {
   }
 
   /**
-   * Redraws a streaming answer at most once per frame: a chunk every few milliseconds must not
-   * mean a markdown parse every few milliseconds.
-   * @param {HTMLElement} body the turn's `.prose` element
-   * @param {() => string} html
-   */
-  const scheduleRender = (body, html) => {
-    if (frame !== 0) {
-      return
-    }
-    // requestAnimationFrame is what batches the redraws; setTimeout stands in for it in a test
-    // environment that has none.
-    const run = () => {
-      frame = 0
-      body.innerHTML = html()
-      // An answer drawn off screen leaves the log on screen where it is.
-      if (scroll.pinned && body.isConnected) {
-        scrollToBottom('follow')
-      }
-    }
-    frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : setTimeout(run, 16)
-  }
-
-  /** @param {number | ReturnType<typeof setTimeout>} handle */
-  const cancelFrame = handle => {
-    if (typeof handle === 'number' && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(handle)
-      return
-    }
-    clearTimeout(handle)
-  }
-
-  /**
    * Takes the review's thread list. The open thread stays the pane's own: a draft is in no list,
    * and a turn names its thread before the list is fetched again. Once the list holds the open
    * thread, its place is the one the server keeps: a draft's question can land in a thread with
@@ -1321,32 +1265,48 @@ export function wireChat(options) {
     drawIndex()
     /** Whether the agent took the turn: until then there is no answer to have missed. */
     let agentTookTurn = false
-    const activity = document.createElement('p')
-    activity.className = 'muted small chat-activity'
-    activity.setAttribute('aria-live', 'off')
-    answer.turn.append(activity)
-    const started = Date.now()
-    /** What the turn is waiting on: the answer, or a review checkout first. */
-    let phase = 'Preparing answer'
-    const updateActivity = () => {
-      const elapsed = Date.now() - started
-      activity.textContent = `${phase}${'.'.repeat((Math.floor(elapsed / 400) % 3) + 1)} · ${Math.floor(elapsed / 1000)}s`
-    }
-    updateActivity()
-    const timer = setInterval(updateActivity, 400)
-    stopActivity = () => clearInterval(timer)
-    const toolDetails = document.createElement('details')
-    toolDetails.className = 'chat-tool-calls muted small'
-    toolDetails.hidden = true
-    answer.turn.append(toolDetails)
-    const tools = new Map()
     const turnKey = answer.turn.id
+    const stream = liveAnswer({
+      ...answer,
+      render: text => renderAnswer(text, turnKey),
+      // An answer drawn off screen leaves the log on screen where it is.
+      onDraw: () => {
+        if (current.shown && scroll.pinned) {
+          scrollToBottom('follow')
+        }
+      },
+      // An answer growing out of sight is one thing to catch up on, however many chunks it
+      // arrives in; catching up clears the count, so drifting away again counts anew.
+      onChunk: () => {
+        if (current.shown && !scroll.pinned && scroll.unseen === 0) {
+          dispatch({ type: 'append', id: turnKey, belowFold: true })
+        }
+      },
+      onThread: thread => {
+        current.thread = thread
+        agentTookTurn = true
+        // A draft's question names its thread here; the reader may be reading another one.
+        // The thread on screen is the one a reload opens, which only the pane knows.
+        if (current.shown) {
+          activeThread = thread
+          void api.selectThread(prNumber, thread).catch(() => undefined)
+        }
+        void refreshThreads()
+      },
+      // In the answer it belongs to, which may be off screen by now.
+      onError: message =>
+        answer.turn.insertAdjacentHTML(
+          'beforeend',
+          `<p class="chat-warning small" role="alert">${esc(message)}</p>`
+        ),
+      onCancelled: () => answer.turn.insertAdjacentHTML('beforeend', '<p class="muted small">stopped</p>'),
+    })
+    stopLive = stream.stop
     drawComposer()
     drawIndex()
-    let text = ''
     current.redraw = () => {
-      if (text !== '') {
-        answer.body.innerHTML = renderAnswer(text, turnKey)
+      if (stream.text() !== '') {
+        answer.body.innerHTML = renderAnswer(stream.text(), turnKey)
       }
     }
     const request = new AbortController()
@@ -1361,79 +1321,7 @@ export function wireChat(options) {
         },
         {
           signal: request.signal,
-          onEvent: event => {
-            const data = /** @type {Record<string, unknown>} */ (event.data ?? {})
-            const field = /** @param {string} key */ key => data[key]
-            const thread = field('thread')
-            if (event.event === 'turn' && typeof thread === 'string') {
-              current.thread = thread
-              agentTookTurn = true
-              // A draft's question names its thread here; the reader may be reading another one.
-              // The thread on screen is the one a reload opens, which only the pane knows.
-              if (current.shown) {
-                activeThread = thread
-                void api.selectThread(prNumber, thread).catch(() => undefined)
-              }
-              void refreshThreads()
-              // The checkout, if there was one, is done once the turn starts.
-              phase = 'Preparing answer'
-              activity.classList.remove('checking-out')
-              updateActivity()
-              return
-            }
-            if (event.event === 'checkout') {
-              const checkout = /** @type {import('./contract-types.js').ChatCheckoutEvent} */ ({
-                event: 'checkout',
-                ...data,
-              })
-              if (checkout.status === 'preparing') {
-                phase = checkoutActivityText(checkout)
-                activity.classList.add('checking-out')
-                updateActivity()
-              } else {
-                answer.turn
-                  .querySelector('.role')
-                  ?.insertAdjacentHTML('afterend', checkoutWarningHtml(checkout))
-              }
-              return
-            }
-            if (event.event === 'tool') {
-              const id = String(field('id') ?? '')
-              const previous = tools.get(id)
-              const title = String(field('title') ?? 'tool')
-              tools.delete(id)
-              tools.set(id, {
-                title: title === 'tool' && previous ? previous.title : title,
-                status: String(field('status') ?? 'pending'),
-              })
-              toolDetails.hidden = false
-              const latest = tools.get(id)
-              toolDetails.innerHTML = `<summary>${esc(latest.title)} · ${esc(latest.status)} (${tools.size} tool calls)</summary><ul>${[...tools.values()].map(t => `<li>${esc(t.title)} · ${esc(t.status)}</li>`).join('')}</ul>`
-              return
-            }
-            const chunk = field('text')
-            if (event.event === 'chunk' && typeof chunk === 'string') {
-              text += chunk
-              // An answer growing out of sight is one thing to catch up on, however many chunks
-              // it arrives in; catching up clears the count, so drifting away again counts anew.
-              if (current.shown && !scroll.pinned && scroll.unseen === 0) {
-                dispatch({ type: 'append', id: turnKey, belowFold: true })
-              }
-              scheduleRender(answer.body, () => renderAnswer(text, turnKey))
-              return
-            }
-            if (event.event === 'error') {
-              // In the answer it belongs to, which may be off screen by now.
-              answer.turn.insertAdjacentHTML(
-                'beforeend',
-                `<p class="chat-warning small" role="alert">${esc(String(field('message') ?? 'the agent failed'))}</p>`
-              )
-              return
-            }
-            if (event.event === 'cancelled') {
-              answer.turn.insertAdjacentHTML('beforeend', '<p class="muted small">stopped</p>')
-            }
-          },
+          onEvent: stream.onEvent,
         }
       )
     } catch (error) {
@@ -1465,20 +1353,7 @@ export function wireChat(options) {
           setUnseen(current.thread, (unseen.get(current.thread) ?? 0) + 1)
         }
         void refreshThreads().catch(() => undefined)
-        stopActivity()
-        toolDetails.open = false
-        const toolSummary = toolDetails.querySelector('summary')
-        if (toolSummary) toolSummary.textContent = `${tools.size} tool calls`
-        activity.textContent = `Elapsed: ${Math.floor((Date.now() - started) / 1000)}s`
-        if (frame !== 0) {
-          cancelFrame(frame)
-          frame = 0
-        }
-        answer.body.innerHTML =
-          text === '' ? '<span class="muted">no answer</span>' : renderAnswer(text, turnKey)
-        if (current.shown && scroll.pinned) {
-          scrollToBottom('follow')
-        }
+        stream.finish()
         const next = queued
         queued = null
         drawComposer()
@@ -1959,13 +1834,9 @@ export function wireChat(options) {
     stop() {
       stopped = true
       queued = null
-      stopActivity()
+      stopLive()
       inFlight?.abort()
       inFlight = null
-      if (frame !== 0) {
-        cancelFrame(frame)
-        frame = 0
-      }
       form.removeEventListener('submit', onSubmit)
       root.removeEventListener('click', onClick)
       log.removeEventListener('scroll', onScroll)

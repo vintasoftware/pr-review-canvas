@@ -3,13 +3,24 @@ import { appendFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type CliIo, outputMode, splitCommonFlags } from './commands.js'
-import { findSkillCopies } from './review/install-skill.js'
-import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill } from './review/install-skill.js'
+import {
+  CLAUDE_SKILLS_DIR,
+  CODEX_SKILLS_DIR,
+  findSkillCopies,
+  installBundledSkills,
+  listBundledSkills,
+} from './review/install-skill.js'
 import { makeTempDir } from './testing/fakes.js'
 import { type CommandResult, planUpgrade, runUpgrade, type UpgradeDeps } from './upgrade.js'
 import { isNewer } from './version.js'
 
 const NAME = '@vintasoftware/pr-review-canvas'
+const BUNDLED = await listBundledSkills()
+/** Every bundled skill's copy under `dir`, in install order. */
+const copiesIn = (dir: string): string[] => BUNDLED.map(name => `${dir}/${name}`)
+/** The companions that an upgrade adds beside a canvas skill copy. */
+const companionsIn = (dir: string): string[] =>
+  BUNDLED.filter(name => name !== 'pr-review-canvas').map(name => `${dir}/${name}`)
 
 let tmp: string
 let repo: string
@@ -114,7 +125,7 @@ function capture(json = true): { io: CliIo; out: string[]; err: string[] } {
 }
 
 async function installCopies(): Promise<void> {
-  await installSkill({
+  await installBundledSkills({
     targets: [
       { kind: 'claude', dir: path.join(repo, CLAUDE_SKILLS_DIR) },
       { kind: 'codex', dir: path.join(repo, CODEX_SKILLS_DIR) },
@@ -147,7 +158,7 @@ describe('planUpgrade', () => {
       { kind: 'acpx', name: 'acpx', from: '0.13.2', to: '0.19.1' },
       {
         kind: 'skill',
-        paths: [`${CLAUDE_SKILLS_DIR}/pr-review-canvas`, `${CODEX_SKILLS_DIR}/pr-review-canvas`],
+        paths: [...copiesIn(CLAUDE_SKILLS_DIR), ...copiesIn(CODEX_SKILLS_DIR)],
       },
     ])
   })
@@ -307,15 +318,16 @@ describe('runUpgrade', () => {
     const { deps } = fake({ latest: { [NAME]: '0.5.0', acpx: '0.13.2' } })
     const { io, out, err } = capture()
     expect(await runUpgrade(deps, ['--yes'], io)).toBe(1)
+    // The companions are the installer's own, so they are written beside the hand-made copy.
     expect(JSON.parse(out[0] ?? '').steps).toEqual([
       {
         kind: 'skill',
-        paths: [],
+        paths: companionsIn(CLAUDE_SKILLS_DIR),
         status: 'failed',
         detail: `not a managed copy, left alone: ${CLAUDE_SKILLS_DIR}/pr-review-canvas; run \`pr-review install-skill --force\` to replace it`,
       },
     ])
-    expect(err.some(line => line.startsWith('The project skill changed.'))).toBe(false)
+    expect(err.some(line => line.startsWith('The project skill changed.'))).toBe(true)
   })
 
   it('hands off without --repo outside a repository', async () => {

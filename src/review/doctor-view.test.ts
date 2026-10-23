@@ -53,7 +53,7 @@ describe('printDoctorReport', () => {
     const failed = report({
       skill: {
         ok: false,
-        detail: 'outdated or modified skill: .agents/skills/pr-review-canvas',
+        detail: 'outdated, modified, or missing skill: .agents/skills/pr-review-canvas',
         hint: 'run `pr-review upgrade` or `pr-review install-skill`',
       },
     })

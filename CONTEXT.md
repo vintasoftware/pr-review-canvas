@@ -101,3 +101,77 @@ _Avoid_: PR checkout, reader's checkout, working tree, materialized head
 **Illustrative sample**:
 An attributed walkthrough of selected changes from a public pull request, with editorial layer groupings and scripted chat examples. It demonstrates concepts without claiming to be a complete generated canvas.
 _Avoid_: Live review, live AI chat
+
+## Tour
+
+**Tour**:
+A guided pass over one change that builds the reader's theory of it: landmarks that explain, decisions the reader keeps or changes, and a quiz. It is generated once per head commit and shared like a canvas, so the author and every reviewer take the same tour; it stands beside the canvas, and either can be used without the other.
+_Avoid_: Self-review, Walkthrough, Deck, Onboarding
+
+**Landmark**:
+One idea of a tour, told in order: first the world before the change and why the change matters, then what the change means to the world, then why each part is the way it is, last what a later change must respect. The code behind a landmark is available but never required.
+_Avoid_: Beat, Semantic layer, Slide, File
+
+**Scene**:
+A picture, drawn for this change, of what a landmark or a decision's side does. It comes right under the landmark's lead, wider than the prose, and carries the landmark's idea.
+_Avoid_: Screenshot, Illustration
+
+**Technique**:
+The kind of picture a scene draws for its idea, named on the scene: a sequence, a lineage map, a scenario matrix, a code-map. A tour draws no technique more than twice.
+_Avoid_: Template, Chart type, Style
+
+**Change grammar**:
+How every scene draws change: added in green, changed in amber, removed in red and struck through, unchanged context in gray, and one hero emphasized.
+_Avoid_: Legend, Color scheme, Diff colors
+
+**Gallery**:
+Real pull requests from open-source projects, each drawn with one technique at its best, shipped with the generation skill for a generator to look at before it draws.
+_Avoid_: Examples, Templates, Showcase
+
+**Micro-world**:
+A landmark the reader plays with: inputs of the changed behavior go in, outcomes come out. A tour has up to two, only where the change has behavior worth playing with, and one may stand in for its landmark's scene.
+_Avoid_: Demo, Sandbox, Playground
+
+**Decision**:
+A choice the change makes that a reasonable engineer could make another way, anchored on a landmark. The reader keeps it, takes the tour's alternative, or asks for something else, which starts a grilling. It is not the canvas's design choice, an attention point (stored with kind `decision`) that marks a choice for the reviewer to judge; a tour decision is one the reader picks.
+_Avoid_: Attention point, Card, Design choice, Finding, Issue
+
+**Pokayoke**:
+A structure in the change that makes a class of mistake impossible, or a place where the change lacks one. A decision category.
+_Avoid_: Validation, Guardrail, Defensive code
+
+**Grilling**:
+The agent's questions after the reader asks for something else, asked until it can restate the change or the reader says that is enough.
+_Avoid_: Chat, Interview, Clarification
+
+**Restatement**:
+The agent's own words for a requested change: what changes, where, and what stays the same. The reader approves, edits, or rejects it, and only an approved restatement enters the plan.
+_Avoid_: Summary, Transcript, Spec
+
+**Plan**:
+The approved restatements of a tour, restated once as a whole at the end and confirmed by the reader. It needs no further review before an agent implements it.
+_Avoid_: Fix list, Prompt, Task list
+
+**Quiz**:
+A few plain questions after the decisions that check the reader read the landmarks: what users would notice, and which decisions were made and why. A wrong answer reopens the landmark, and the result stays with the reader.
+_Avoid_: Test, Score, Assessment
+
+**Try-it**:
+A recipe, verified when the tour was generated, for experiencing the real change: how to run it, which synthetic data to use, and what to look at.
+_Avoid_: Screenshot, Demo, Smoke test
+
+**Guide**:
+The project's committed notes for tours: how to run the app, how to make synthetic test data, which non-functional requirements matter, where specs and designs live, and what the agent may run. Written in setup and edited as the reader steers the skills.
+_Avoid_: Config, Rulebook, Runbook
+
+**State landmark**:
+The landmark a tour gives a change to a schema, a migration, or the shape of stored data: the shape before and after, what happens to existing rows, and how it is undone. Never cut by the budget.
+_Avoid_: Migration landmark, Database landmark
+
+**Blast radius**:
+What a change touches among the areas the project marks as high risk, shown on the cover. It raises the tour's budget and tells a team whether the tour is required.
+_Avoid_: Risk score, Severity
+
+**Not toured**:
+What a tour's budget left out, listed at the end with a link to the code.
+_Avoid_: Excluded, Skipped, Fold

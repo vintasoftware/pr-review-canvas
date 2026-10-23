@@ -92,6 +92,30 @@ describe('createGit (real adapter)', () => {
     await expect(git.commitAuthor('nope-ref')).rejects.toThrow()
   })
 
+  it('reads the commit messages of a range, oldest first, without merges', async () => {
+    const own = await initRepo()
+    try {
+      await writeFile(path.join(own.dir, 'src/a.ts'), 'export const a = 3\n')
+      await g(own.dir, 'commit', '-q', '-am', 'three', '-m', 'Why it is three.\n\nA second paragraph.')
+      const sha3 = await g(own.dir, 'rev-parse', 'HEAD')
+      await g(own.dir, 'checkout', '-q', '-b', 'side', own.sha2)
+      await writeFile(path.join(own.dir, 'src/b.ts'), 'export const b = 1\n')
+      await g(own.dir, 'add', '.')
+      await g(own.dir, 'commit', '-q', '-m', 'side')
+      await g(own.dir, 'checkout', '-q', 'main')
+      await g(own.dir, 'merge', '-q', '--no-ff', '-m', 'merge side', 'side')
+      const git = createGit(own.dir)
+      expect(await git.commitMessages(own.sha1, sha3)).toEqual([
+        { subject: 'two', body: '' },
+        { subject: 'three', body: 'Why it is three.\n\nA second paragraph.' },
+      ])
+      expect((await git.commitMessages(sha3, 'HEAD')).map(m => m.subject)).toEqual(['side'])
+      expect(await git.commitMessages(sha3, sha3)).toEqual([])
+    } finally {
+      await rm(own.dir, { recursive: true, force: true })
+    }
+  })
+
   it('reports the top level, the common dir, and the origin url', async () => {
     const git = createGit(repo.dir)
     const real = await run('realpath', [repo.dir])

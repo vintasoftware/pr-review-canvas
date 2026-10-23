@@ -1,0 +1,157 @@
+<div class="scene" data-technique="record-bench">
+<div class="dp-top">
+  <div class="file" data-title="app/models/user.rb · the User from the PR's docs">
+    <span>class User &lt; ActiveRecord::Base</span>
+    <span class="add">  normalizes :email, with: -&gt; email { email.strip.downcase }</span>
+    <span class="add">  normalizes :phone, with: -&gt; phone { phone.delete("^0-9").delete_prefix("1") }</span>
+    <span>end</span>
+  </div>
+  <div class="controls">
+    <fieldset><legend>User.create(…)</legend>
+      <label>email: <input type="text" name="email" spellcheck="false" value='" CRUISE-CONTROL@EXAMPLE.COM\n"'></label>
+      <label>phone: <input type="text" name="phone" spellcheck="false" value='"+1 (555) 867-5309"'></label>
+    </fieldset>
+    <fieldset><legend>then User.exists?</legend>
+      <label><input type="radio" name="form" value="kw" checked> (email: value)</label>
+      <label><input type="radio" name="form" value="sql"> (["email = ?", value])</label>
+      <label>value: <input type="text" name="find" spellcheck="false" value='"\tCRUISE-CONTROL@EXAMPLE.COM "'></label>
+    </fieldset>
+  </div>
+</div>
+<div class="dp-g">
+  <span class="dp-h"></span><span class="dp-h"></span><span class="dp-h dp-type">NormalizedValueType#cast: normalize(super(value))</span><span class="dp-h"></span><span class="dp-h"></span>
+  <span class="dp-h"></span><span class="dp-h label">you pass</span><span class="dp-h label">cast · Type::String</span><span class="dp-h label good">normalize · new</span><span class="dp-h label">validations see</span><span class="dp-h label">the database</span>
+</div>
+<p class="small dp-why"></p>
+<p class="small dp-note">Values are Ruby literals: type <code class="code">\n</code>, <code class="code">\t</code>, or <code class="code">nil</code>. Strings compare exactly, as in SQLite and PostgreSQL.</p>
+<style>
+.dp-top{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1rem;width:100%;align-items:center}
+.dp-top .file{max-width:none;font-size:.72rem}
+.dp-top .controls{flex-direction:column}
+.dp-top fieldset>label:has(input[type=radio]){display:inline-flex;margin-right:.8rem}
+.dp-top fieldset label:has(input[type=text]){display:grid;grid-template-columns:3.4rem 1fr}
+.dp-top input[type=text]{font:.8rem ui-monospace,monospace;width:100%}
+.dp-g{display:grid;grid-template-columns:5.6rem minmax(0,1.4fr) minmax(0,.55fr) minmax(0,1.45fr) minmax(0,.55fr) minmax(0,1.3fr);gap:.45rem .8rem;width:100%;margin-top:.6rem;align-items:stretch}
+.dp-type{grid-column:span 2;align-self:end;padding-bottom:.25rem;border-bottom:.2rem solid var(--good);font:.72rem ui-monospace,monospace;color:var(--good);text-align:center}
+.dp-g>.label{font-size:.7rem}
+.dp-lane{align-self:center;font-weight:700;font-size:.85rem;text-align:right;overflow-wrap:anywhere}
+.dp-lane small{display:block;font:400 .72rem ui-monospace,monospace;color:var(--muted)}
+.dp-c{position:relative;display:flex;flex-direction:column;justify-content:center;gap:.2rem;padding:.45rem .55rem;border:.1rem solid var(--line);border-radius:.5rem;background:var(--paper);font:.8rem/1.4 ui-monospace,monospace;overflow-wrap:anywhere}
+.dp-c::before{content:'→';position:absolute;left:-.9rem;top:50%;translate:0 -50%;color:var(--muted);font-family:ui-sans-serif,sans-serif}
+.dp-lane+.dp-c::before{content:none}
+.dp-c .small{font-family:ui-sans-serif,system-ui,sans-serif;font-size:.7rem}
+.dp-n{border:.18rem solid var(--good);box-shadow:0 0 0 .25rem color-mix(in srgb,var(--good) 14%,transparent)}
+.dp-c.hatch{color:var(--muted);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.75rem;border-style:dashed}
+.dp-c.good,.dp-c.bad{border-color:var(--c);background:var(--tint);font-weight:700}
+.dp-sep{grid-column:1/-1;border-top:.1rem dashed var(--line);margin:.2rem 0}
+.dp-g i{font-style:normal}
+.dp-g i.ws{margin:0 .06rem;padding:0 .08rem;border-radius:.2rem;background:color-mix(in srgb,var(--muted) 16%,transparent);color:var(--muted)}
+.dp-g i.del{color:var(--bad);text-decoration:line-through;opacity:.6}
+.dp-g i.chg{color:var(--warn);font-weight:800}
+.dp-g i.add{color:var(--good)}
+.dp-nil{color:var(--muted);font-style:italic}
+.dp-why,.dp-note{margin:0}
+.dp-why{font-size:.9rem;color:var(--fg)}
+@media (max-width:700px){
+  .dp-top{grid-template-columns:1fr}
+  .dp-g{grid-template-columns:1fr;gap:.35rem}
+  .dp-h{display:none}
+  .dp-lane{text-align:left;margin-top:.5rem}
+  .dp-c{display:grid;grid-template-columns:5.6rem minmax(0,1fr);gap:.1rem .5rem;align-items:center}
+  .dp-c>*{grid-column:2}
+  .dp-c::before{content:attr(data-h);position:static;grid-row:1/span 2;translate:none;font-size:.62rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .dp-lane+.dp-c::before{content:attr(data-h)}
+  .dp-sep{display:none}
+}
+</style>
+<script>
+// The model: ActiveRecord::Normalization at the PR head, with the User model from its docs.
+const NORMALIZERS = {
+  email: v => v.replace(/^[\0\t\n\v\f\r ]+|[\0\t\n\v\f\r ]+$/g, '').toLowerCase(), // strip.downcase
+  phone: v => v.replace(/[^0-9]/g, '').replace(/^1/, ''), // delete("^0-9").delete_prefix("1")
+}
+const APPLY_TO_NIL = false // normalizes(*names, with:, apply_to_nil: false)
+// ActiveModel::Type::String#cast leaves a string a string; NormalizedValueType#cast then runs
+// the normalizer, unless the value is nil and apply_to_nil is off.
+const cast = v => v
+const normalize = (name, v) => (v === null && !APPLY_TO_NIL ? null : NORMALIZERS[name](v))
+// A finder's keyword argument is serialized through the same type; a SQL string is bound as typed.
+const lookup = (form, v) => (form === 'kw' ? normalize('email', cast(v)) : v)
+// The database compares strings exactly; a keyword nil becomes IS NULL, a bound nil never matches.
+const matches = (form, v, stored) => (v === null ? form === 'kw' && stored === null : v === stored)
+
+// A Ruby literal as typed: "…" with \n \t \r escapes, or nil.
+function literal(text) {
+  const t = text.trim()
+  if (t === 'nil') return null
+  const inner = /^".*"$/s.test(t) ? t.slice(1, -1) : t
+  return inner.replace(/\\([ntr\\"])/g, (_, c) => ({ n: '\n', t: '\t', r: '\r' })[c] ?? c)
+}
+
+// Drawing: whitespace made visible, and each stage marked against the one before it.
+const GLYPH = { ' ': '␣', '\n': '\\n', '\t': '\\t', '\r': '\\r' }
+const esc = c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c
+const ch = (c, cls = '') => `<i class="${c in GLYPH ? 'ws ' : ''}${cls}">${GLYPH[c] ?? esc(c)}</i>`
+const show = v => (v === null ? '<span class="dp-nil">nil</span>' : `<span>"${[...v].map(c => ch(c)).join('')}"</span>`)
+// What the normalizer did: a character diff, matched ignoring case.
+function diff(a, b) {
+  a = [...a]
+  b = [...b]
+  const same = (x, y) => x.toLowerCase() === y.toLowerCase()
+  const L = a.map(() => Array(b.length + 1).fill(0)).concat([Array(b.length + 1).fill(0)])
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--) L[i][j] = same(a[i], b[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  let i = 0, j = 0, html = '', del = 0, chg = 0
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && same(a[i], b[j])) {
+      const changed = a[i++] !== b[j]
+      chg += changed
+      html += ch(b[j++], changed ? 'chg' : '')
+    } else if (j < b.length && (i === a.length || L[i][j + 1] >= L[i + 1][j])) {
+      html += ch(b[j++], 'add')
+    } else {
+      html += ch(a[i++], 'del')
+      del++
+    }
+  }
+  const note = [del && `${del} removed`, chg && `${chg} lowercased`].filter(Boolean).join(', ') || 'unchanged'
+  return `<span>"${html}"</span><span class="small ${del || chg ? 'warn' : 'muted'}">${note}</span>`
+}
+
+const STAGES = ['you pass', 'cast · Type::String', 'normalize · new', 'validations see', 'the database']
+const cell = (k, html, cls = '') => `<div class="dp-c ${cls}" data-h="${STAGES[k]}">${html}</div>`
+const skip = (k, why) => cell(k, why, 'hatch')
+function lane(name, raw) {
+  const v = cast(raw), n = normalize(name, v)
+  return `<div class="dp-lane">${name}<small>create</small></div>` +
+    cell(0, show(raw)) +
+    cell(1, `<span class="small">${raw === null ? 'nil stays nil' : 'a String stays a String'}</span>`, 'muted') +
+    (raw === null ? skip(2, 'skipped: nil, and apply_to_nil is false') : cell(2, diff(v, n), 'dp-n')) +
+    cell(3, `<span class="small">${n === null ? 'nil' : 'the normalized value'}</span>`, 'muted') +
+    cell(4, `<span class="small muted">users.${name}</span>${n === null ? 'NULL' : show(n)}`)
+}
+const $ = q => document.querySelector(q)
+const val = name => literal($(`input[name="${name}"]`).value)
+function render() {
+  const email = val('email'), phone = val('phone'), find = val('find')
+  const form = $('input[name="form"]:checked').value
+  const stored = normalize('email', cast(email)), by = lookup(form, find), hit = matches(form, by, stored)
+  const call = form === 'kw' ? 'exists?(email:)' : 'exists?(["email = ?"])'
+  const where = `<span class="small">WHERE email ${by === null ? (form === 'kw' ? 'IS NULL' : '= NULL') : '='}</span>${by === null ? '' : show(by)}`
+  const findLane = `<div class="dp-lane">lookup<small>${call}</small></div>` + cell(0, show(find)) +
+    (form === 'kw'
+      ? cell(1, `<span class="small">the email type: unchanged</span>`, 'muted') +
+        (find === null ? skip(2, 'skipped: nil') : cell(2, diff(cast(find), by), 'dp-n'))
+      : skip(1, 'bypassed: a SQL string skips the type') + skip(2, 'not normalized')) +
+    skip(3, 'none on a lookup') +
+    cell(4, `${where}<b>→ ${hit}</b>`, hit ? 'good' : 'bad')
+  document.querySelectorAll('.dp-g > :not(.dp-h)').forEach(e => e.remove())
+  $('.dp-g').insertAdjacentHTML('beforeend', lane('email', email) + lane('phone', phone) + '<div class="dp-sep"></div>' + findLane)
+  $('.dp-why').textContent = form === 'kw'
+    ? `The keyword goes through the email attribute's type, so the lookup is normalized as the stored value was: ${hit ? 'they match' : 'they still differ'}.`
+    : `A SQL string skips the attribute type, so the value is compared as typed: ${hit ? 'it already equals the stored value' : 'no row matches'}.`
+}
+document.addEventListener('input', render)
+render()
+</script>
+</div>

@@ -10,7 +10,7 @@ import { createFakeGh, makeTempDir, makeTestContext, type TestContext } from '..
 import { ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { createApp } from './app.js'
 import { PACKAGE_ROOT } from './context.js'
-import { contentSecurityPolicy, createNonce } from './security.js'
+import { applyResponseHeaders, contentSecurityPolicy, createNonce, sceneFramePolicy } from './security.js'
 
 const LOCAL = { host: 'localhost:3010' }
 
@@ -134,6 +134,38 @@ describe('content security policy', () => {
         "img-src 'self' data: https:; font-src 'self'; connect-src 'self'; form-action 'self'; " +
         "base-uri 'none'; frame-ancestors 'none'; object-src 'none'"
     )
+  })
+
+  it('lets only a tour page frame anything, and only from this server', () => {
+    expect(contentSecurityPolicy('abc')).not.toContain('frame-src')
+    expect(contentSecurityPolicy('abc', { frames: true })).toContain(
+      "connect-src 'self'; frame-src 'self'; form-action"
+    )
+    const page = (route: string) => {
+      const res = new Response('', { headers: { 'content-type': 'text/html' } })
+      applyResponseHeaders(res, route, 'abc')
+      return res.headers
+    }
+    expect(page('/tour/42').get('content-security-policy')).toContain("frame-src 'self'")
+    expect(page('/review/42').get('content-security-policy')).not.toContain('frame-src')
+    expect(page('/tour-scene/42/l1/scene').get('content-security-policy')).toBe(sceneFramePolicy())
+    expect(page('/tour-scene/42/l1/scene').get('x-dns-prefetch-control')).toBe('off')
+    expect(page('/tour/42').get('x-dns-prefetch-control')).toBeNull()
+  })
+
+  it('locks a scene frame down: scripts with no origin, and no forms, popups, navigation, or network', () => {
+    const policy = sceneFramePolicy().split('; ')
+    // Scripts run, but in a sandbox with no origin: nothing inside reaches this server's pages,
+    // API, or storage.
+    expect(policy[0]).toBe('sandbox allow-scripts')
+    expect(policy).toContain("default-src 'none'")
+    expect(policy).toContain("form-action 'none'")
+    expect(policy).toContain("frame-ancestors 'self'")
+    // The kit, the runtime, and the scene are all inline: the frame loads nothing.
+    expect(policy).toContain("script-src 'unsafe-inline'")
+    expect(policy).toContain("style-src 'unsafe-inline'")
+    expect(policy).toContain('img-src data: blob:')
+    expect(policy.filter(d => d.includes("'self'"))).toEqual(["frame-ancestors 'self'"])
   })
 
   it('gives each page a fresh nonce and puts it on every inline script', async () => {

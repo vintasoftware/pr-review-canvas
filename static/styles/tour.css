@@ -1,0 +1,2079 @@
+/* The tour page: a hop-on hop-off sightseeing bus. It has one look of its own, apart from the
+   canvas's skins: the server renders `data-skin="tour"` on <html>, skin-github.css lays it out as
+   it does its own skins (real buttons, rounded boxes), and this file sets its palette and draws
+   the tour. Every tour-* class belongs to this page; the scenes are drawn in their own frames with
+   the kit (scene.css), whose tokens follow the same palette.
+
+   Pastels are fills only; each has a darker ink for the text on it, at AA contrast in both themes.
+   Purple marks every selection: the chosen option, the open code tab, a checked box, the rail.
+   The primary button is GitHub's green, and red means an error or a wrong answer, nothing else. */
+
+/* ---- Fonts: served from this app, as the page's policy allows only its own ---- */
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('../fonts/source-sans-3-latin-wght-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('../fonts/source-sans-3-latin-wght-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url('../fonts/archivo-latin-wdth-wght-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}
+
+/* ---- Palette ---- */
+:root[data-skin='tour'] {
+  --stage-w: 760px;
+  --page-w: 1120px;
+
+  --tour-bg: light-dark(#f2f7fc, #121821);
+  --tour-card: light-dark(#fff, #1b2230);
+  /* Rows inside a card: the agenda, the kept list, the code bar. */
+  --tour-well: light-dark(#f7f9fc, #212a39);
+  --tour-ink: light-dark(#1f2430, #e6eaf2);
+  --tour-ink-2: light-dark(#2f3644, #cfd5e0);
+  --tour-ink-soft: light-dark(#4b5363, #a9b2c3);
+  --tour-line: light-dark(#dce3ec, #2f3949);
+  --tour-line-strong: light-dark(#c3ccd9, #4a5669);
+
+  /* Pastels, for fills; in the dark, muted tints of the same hues. */
+  --p-red: light-dark(#ffe1dc, #3b2427);
+  --p-yellow: light-dark(#fff2c2, #352e17);
+  --p-blue: light-dark(#dcebff, #1b2b42);
+  --p-mint: light-dark(#d8f2e5, #17322a);
+  --p-lilac: light-dark(#e8e2ff, #2a2550);
+  /* The ink that sits on each pastel, AA on it and on the card. */
+  --red: light-dark(#b3342b, #ff9e93);
+  --yellow-ink: light-dark(#6e5200, #f0cf72);
+  --blue: light-dark(#1b5aa6, #8fbaff);
+  --green: light-dark(#146b3c, #7fd8a6);
+  --lilac: light-dark(#5638a8, #bcaaff);
+
+  /* The sign on the current stop and the "Tour" badge: always yellow, always dark text. */
+  --sun: #ffd95e;
+  --on-sun: #1f2430;
+  /* The ring around the current stop: dark on the light rail, light on the dark one. */
+  --sun-ring: light-dark(#1f2430, #fff6d6);
+  --bus: light-dark(#ef8a82, #e0766d);
+  --frame-bg: light-dark(#f7fbff, #222b3b);
+  --sky-1: light-dark(#cfe6ff, #1d2c44);
+  --sky-2: light-dark(#e3f0ff, #17202f);
+  --sky-3: light-dark(#eef6ff, #141b26);
+  --city: light-dark(#bcd8f5, #25354e);
+  --cloud: light-dark(#d6e7fa, #1f2c40);
+  --road: light-dark(#e3e8ef, #2a3342);
+  --lane: #f0c440;
+  --stop-pole: light-dark(#c3ccd9, #4a5669);
+  --stop-locked: light-dark(#a9b2c0, #6b7587);
+  --stop-locked-bg: light-dark(#f7f9fb, #1f2734);
+  /* AI Chat's glyphs that the skin's Octicons lack, from Lucide (ISC), drawn as masks like them. */
+  --i-ask-goto: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 4v7a4 4 0 0 1-4 4H4'/%3E%3Cpath d='m9 10-5 5 5 5'/%3E%3C/svg%3E");
+  --i-ask-stop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3C/svg%3E");
+  --stop-locked-fg: light-dark(#5e6676, #a3acbd);
+
+  --tour-display: archivo, 'Source Sans 3', system-ui, sans-serif;
+
+  /* The tokens the shared rules read: the header bar, the commands, the chat drawer, the banner. */
+  --sans:
+    'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs: 15px;
+  --ink: var(--tour-line);
+  --line: var(--tour-line);
+  --bg: var(--tour-bg);
+  --panel: var(--tour-card);
+  --panel-2: var(--tour-well);
+  --fg: var(--tour-ink);
+  --fg-muted: var(--tour-ink-soft);
+  --fg-dim: light-dark(#697182, #8a93a5);
+  --accent: var(--blue);
+  --accent-bg: var(--p-blue);
+  --purple: var(--lilac);
+  --annot-bg: var(--p-lilac);
+  --tint-attention: var(--p-lilac);
+  --tint-done: var(--p-mint);
+  --here: var(--lilac);
+  --here-bg: var(--p-lilac);
+  --ok: var(--green);
+  --bad: light-dark(#b3261e, #ff8a80);
+  --warn: var(--yellow-ink);
+  --warn-bg: var(--p-yellow);
+  --progress: var(--btn-primary);
+  --sev-blocker: var(--bad);
+  --sev-major: var(--yellow-ink);
+  --sev-minor: var(--fg-dim);
+  --sq-mark: var(--tour-card);
+  --add-bg: light-dark(#dafbe1, rgb(87 171 90 / 18%));
+  --add-w: light-dark(#abf2bc, rgb(87 171 90 / 40%));
+  --del-bg: light-dark(#ffebe9, rgb(229 83 75 / 16%));
+  --del-w: light-dark(#ffc1c0, rgb(229 83 75 / 40%));
+  --mv-bg: var(--p-lilac);
+  --hunk-bg: light-dark(#ddf4ff, #1e2d44);
+  --btn-bg: light-dark(#fff, #2b3446);
+  --btn-bg-hover: light-dark(#f4f7fa, #343f53);
+  /* A button stands up from the page like a key: a light top edge and a darker bottom one. */
+  --btn-hi: light-dark(rgb(255 255 255 / 100%), rgb(255 255 255 / 8%));
+  --btn-edge: light-dark(#c3ccd9, #0d1219);
+  --btn-primary-edge: light-dark(#15692f, #0f4d22);
+  --btn-primary: light-dark(#1f883d, #238636);
+  --btn-primary-hover: light-dark(#1c8139, #2ea043);
+  --btn-primary-fg: #fff;
+  --btn-h: 32px;
+  --btn-pad: 12px;
+  --btn-fs: 14px;
+  --drop-shadow: light-dark(0 8px 24px rgb(31 36 48 / 18%), 0 8px 24px rgb(0 0 0 / 60%));
+  --syn-comment: light-dark(#59636e, #9198a1);
+  --syn-keyword: light-dark(#cf222e, #f47067);
+  --syn-string: light-dark(#0a3069, #96d0ff);
+  --syn-number: light-dark(#0550ae, #6cb6ff);
+  --syn-title: light-dark(#5638a8, #dcbdfb);
+  --syn-type: light-dark(#953800, #f69d50);
+  --syn-attr: light-dark(#0550ae, #6cb6ff);
+  --syn-tag: light-dark(#116329, #8ddb8c);
+  --syn-meta: light-dark(#0550ae, #6cb6ff);
+  --hdr-bg: transparent;
+  --on-fill: #fff;
+  --state-open: var(--btn-primary);
+  --state-merged: light-dark(#5638a8, #8256d0);
+  --state-closed: light-dark(#cf222e, #c93c37);
+  --state-draft: light-dark(#6e7781, #636e7b);
+  --state-local: light-dark(#1b5aa6, #1f6feb);
+  --hunk-fg: light-dark(#3b5068, #a9b2c3);
+  --ln-rule: light-dark(#dce3ec, transparent);
+  --add-ln-bg: light-dark(#dafbe1, #2c4a38);
+  --del-ln-bg: light-dark(#ffebe9, rgb(229 83 75 / 30%));
+  --ln-fg-changed: light-dark(#697182, #cfd5e0);
+  --code-bg: light-dark(#eef2f7, #263042);
+  --backdrop: rgb(18 24 33 / 55%);
+}
+
+/* Each kind of step tints its ticket and its tag: the cover blue, a landmark and the plan lilac, a
+   decision mint, a question yellow. */
+pr-tour {
+  --tour-tint: var(--p-blue);
+  --tour-tink: var(--blue);
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+pr-tour[data-at='landmark'] {
+  --tour-tint: var(--p-lilac);
+  --tour-tink: var(--lilac);
+}
+pr-tour[data-at='decision'] {
+  --tour-tint: var(--p-mint);
+  --tour-tink: var(--green);
+}
+pr-tour[data-at='quiz'] {
+  --tour-tint: var(--p-yellow);
+  --tour-tink: var(--yellow-ink);
+}
+pr-tour[data-at='plan'] {
+  --tour-tint: var(--p-lilac);
+  --tour-tink: var(--lilac);
+}
+.tour-page :is(button, a, textarea, input):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.tour-stage a,
+.tour-stale a {
+  color: var(--blue);
+  text-underline-offset: 3px;
+}
+.tour-page .hdr-actions a.cmd {
+  text-decoration: none;
+}
+
+/* ---- Buttons: GitHub's shape, standing up from the page ---- */
+:root[data-skin='tour']
+  .tour-page
+  :is(
+    .hdr-actions,
+    .tour-actions,
+    .tour-cover-actions,
+    .tour-nav,
+    .tour-return,
+    .tour-restate,
+    .tour-notice,
+    .tour-help,
+    .tour-missing
+  )
+  .cmd:not(:disabled) {
+  border-color: color-mix(in srgb, var(--btn-edge) 70%, var(--tour-line));
+  box-shadow:
+    inset 0 1px 0 var(--btn-hi),
+    0 2px 0 var(--btn-edge),
+    0 3px 6px -2px rgb(31 36 48 / 22%);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+
+  &.fill {
+    border-color: var(--btn-primary-edge);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 22%),
+      0 2px 0 var(--btn-primary-edge),
+      0 3px 6px -2px rgb(31 36 48 / 30%);
+  }
+  &:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 1px 2px rgb(31 36 48 / 18%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin='tour'] .tour-page .cmd {
+    transition: none;
+  }
+}
+
+/* ---- Header: a pastel sky over a skyline, and the bus ---- */
+.tour-page .hdr {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 70%, var(--sky-3) 100%);
+}
+.tour-page .hdr-bar {
+  position: relative;
+  z-index: 1;
+}
+.tour-page .hdr-title {
+  position: relative;
+  z-index: 1;
+  max-width: calc(var(--page-w) + 40px);
+  margin: 0 auto;
+}
+:root[data-skin='tour'] .tour-page .hdr-actions {
+  --btn-h: 32px;
+  --btn-pad: 12px;
+
+  /* When the bar wraps, the commands stay at the right, apart from the meta line below. */
+  margin-left: auto;
+}
+:root[data-skin='tour'] .tour-page .hdr-title {
+  border-bottom: 0;
+  padding: 18px 20px 28px;
+}
+.tour-page .hdr-title h1 {
+  margin: 0 0 14px;
+  max-width: 820px;
+  font: 800 clamp(24px, 3vw, 32px) / 1.18 var(--tour-display);
+  font-stretch: 95%;
+  text-wrap: balance;
+}
+.tour-page .hdr-title h1 .num {
+  font: 500 0.6em var(--mono);
+  white-space: nowrap;
+}
+.tour-forge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 6px;
+  border-radius: 6px;
+  color: var(--tour-ink-soft);
+  vertical-align: 0.1em;
+}
+.tour-forge:hover {
+  background: color-mix(in srgb, var(--tour-card) 70%, transparent);
+  color: var(--blue);
+}
+.tour-word {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--sun);
+  color: var(--on-sun);
+  transform: rotate(-2deg);
+}
+.tour-page .hdr-title .meta {
+  display: inline-flex;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tour-card) 90%, transparent);
+  color: var(--tour-ink);
+  font-size: 15px;
+}
+.tour-page .hdr-title .meta .pill.agent {
+  background: var(--p-yellow);
+  color: var(--yellow-ink);
+  border: 0;
+  font-weight: 700;
+}
+/* The skyline is the header's backdrop: it adds no height, and the bus parks behind the meta line
+   at the right. A short header draws it smaller; a phone has no room for it. */
+.tour-skyline {
+  position: absolute;
+  inset: auto 0 0;
+  width: 100%;
+  height: min(124px, 100%);
+}
+.tour-sky-city {
+  fill: var(--city);
+}
+.tour-sky-cloud {
+  fill: var(--cloud);
+}
+.tour-sky-road {
+  fill: var(--road);
+}
+.tour-sky-lane {
+  fill: var(--lane);
+  opacity: 0.8;
+}
+.tour-bus-body {
+  fill: var(--bus);
+  stroke: #1f2430;
+  stroke-width: 2;
+}
+.tour-bus-band {
+  fill: var(--sun);
+}
+.tour-bus-glass {
+  fill: light-dark(#fff, #dfe6f0);
+}
+.tour-bus-wheel {
+  fill: #1f2430;
+}
+
+/* ---- Warnings: the preview banner and the stale bar ---- */
+/* The dark yellow pastel reads as olive, not a warning: in the dark a warning is a card with a sun
+   stripe at its edge. */
+:root[data-skin='tour'] .tour-page .banner {
+  border-bottom: 1px solid var(--tour-line);
+  border-left: 5px solid var(--sun);
+  background: light-dark(var(--p-yellow), var(--tour-card));
+  color: light-dark(var(--tour-ink), var(--yellow-ink));
+  font-size: 14px;
+  font-weight: 600;
+}
+.tour-stale {
+  width: calc(100% - 40px);
+  max-width: var(--page-w);
+  margin: 14px auto 0;
+  padding: 10px 16px;
+  border-left: 5px solid var(--sun);
+  border-radius: 10px;
+  background: light-dark(var(--p-yellow), var(--tour-card));
+  color: var(--tour-ink);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.tour-stale strong {
+  color: var(--yellow-ink);
+}
+
+/* ---- Rail: a road with bus stops ---- */
+.tour-rail-wrap {
+  background: var(--tour-card);
+  border-bottom: 1px solid var(--tour-line);
+  box-shadow: 0 6px 16px -12px rgb(31 36 48 / 35%);
+}
+.tour-rail,
+.tour-rail-legend {
+  max-width: calc(var(--page-w) + 40px);
+  margin: 0 auto;
+  padding: 8px 20px 10px;
+}
+.tour-rail {
+  display: flex;
+  gap: 26px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+/* More stops past the window's edge: that end fades out, so the rail reads as one that scrolls. */
+.tour-rail[data-more='right'] {
+  mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent);
+}
+.tour-rail[data-more='left'] {
+  mask-image: linear-gradient(90deg, transparent, #000 48px);
+}
+.tour-rail[data-more='left right'] {
+  mask-image: linear-gradient(90deg, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+}
+.tour-rail-group {
+  flex: none;
+  display: grid;
+  gap: 2px;
+}
+.tour-rail-label {
+  min-height: 18px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tour-ink-soft);
+}
+.tour-rail-segs {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 0 6px 9px;
+}
+/* The road, and its dashed yellow centre line. */
+.tour-rail-segs::after {
+  content: '';
+  position: absolute;
+  inset: auto -8px 0;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--road);
+}
+.tour-rail-segs::before {
+  content: '';
+  position: absolute;
+  inset: auto -2px 3px;
+  z-index: 1;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--lane) 0 8px, transparent 8px 14px);
+}
+/* A stop: a round sign on a pole. Its state shows in fill, ring, and dashes as well as color. */
+.tour-rail-seg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 30px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.tour-rail-seg::after {
+  content: '';
+  flex: 1;
+  width: 3px;
+  background: var(--stop-pole);
+}
+.tour-rail-seg span {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--lilac);
+  border-radius: 50%;
+  background: var(--tour-card);
+  color: var(--lilac);
+  font: 800 13px var(--tour-display);
+}
+.tour-rail-seg[data-state='done'] span {
+  background: var(--p-lilac);
+}
+.tour-rail-seg[data-state='current'] {
+  width: 34px;
+  height: 48px;
+}
+.tour-rail-seg[data-state='current'] span {
+  width: 32px;
+  height: 32px;
+  border-color: var(--sun-ring);
+  background: var(--sun);
+  color: var(--on-sun);
+}
+/* The bus, on the road at the foot of the stop the reader is at, in front of the pole. */
+.tour-rail-seg[data-state='current']::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  translate: -50% 0;
+  z-index: 2;
+  width: 34px;
+  height: 20px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 20'%3E%3Crect x='1' y='1' width='32' height='14' rx='4' fill='%23ef8a82' stroke='%231f2430' stroke-width='1.4'/%3E%3Crect x='4' y='4' width='5' height='5' rx='1' fill='%23fff'/%3E%3Crect x='11' y='4' width='5' height='5' rx='1' fill='%23fff'/%3E%3Crect x='18' y='4' width='5' height='5' rx='1' fill='%23fff'/%3E%3Crect x='25' y='4' width='5' height='8' rx='1' fill='%23fff'/%3E%3Ccircle cx='9' cy='16' r='3' fill='%231f2430'/%3E%3Ccircle cx='25' cy='16' r='3' fill='%231f2430'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+.tour-rail-seg[data-state='ahead'] {
+  cursor: not-allowed;
+}
+/* The ring goes round the stop's sign, not the whole pole. */
+.tour-page .tour-rail-seg:focus-visible {
+  outline: 0;
+}
+.tour-rail-seg:focus-visible span {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.tour-rail-seg[data-state='ahead'] span {
+  border: 2px dashed var(--stop-locked);
+  background: var(--stop-locked-bg);
+  color: var(--stop-locked-fg);
+}
+.tour-rail-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding-top: 0;
+  font-size: 13px;
+  color: var(--tour-ink-soft);
+}
+.tour-rail-legend i {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 6px;
+  border: 2px solid var(--lilac);
+  border-radius: 50%;
+  background: var(--tour-card);
+  vertical-align: -2px;
+}
+.tour-rail-legend i[data-state='done'] {
+  background: var(--p-lilac);
+}
+.tour-rail-legend i[data-state='current'] {
+  border-color: var(--sun-ring);
+  background: var(--sun);
+}
+.tour-rail-legend i[data-state='ahead'] {
+  border: 2px dashed var(--stop-locked);
+  background: var(--stop-locked-bg);
+}
+
+/* ---- The ticket: a perforated strip on top, then the stop ---- */
+.tour-main {
+  flex: 1 1 auto;
+  padding: 28px 20px 40px;
+}
+.tour-ticket {
+  max-width: var(--page-w);
+  margin: 0 auto;
+  border-radius: 18px;
+  background: var(--tour-card);
+  box-shadow:
+    0 1px 2px rgb(31 36 48 / 5%),
+    0 18px 36px -24px light-dark(rgb(27 90 166 / 45%), rgb(0 0 0 / 70%));
+}
+.tour-strip {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  align-items: center;
+  padding: 14px 28px 16px;
+  border-radius: 18px 18px 0 0;
+  border-bottom: 2px dashed light-dark(rgb(31 36 48 / 22%), rgb(230 234 242 / 22%));
+  background: var(--tour-tint);
+}
+/* The notches where the ticket tears. */
+.tour-strip::before,
+.tour-strip::after {
+  content: '';
+  position: absolute;
+  bottom: -11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--tour-bg);
+}
+.tour-strip::before {
+  left: -10px;
+}
+.tour-strip::after {
+  right: -10px;
+}
+.tour-strip-no {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--tour-tink);
+}
+.tour-strip-no small {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tour-strip-no b {
+  font: 800 34px / 1 var(--tour-display);
+  font-stretch: 110%;
+}
+.tour-strip-what {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tour-ink);
+}
+/* Prose lives in the stage column; pictures and code use the ticket's whole width. */
+.tour-stage {
+  padding: 34px 40px;
+  color: var(--tour-ink);
+  font-size: 18px;
+  line-height: 1.65;
+}
+.tour-stage > * {
+  max-width: var(--stage-w);
+  margin-left: auto;
+  margin-right: auto;
+}
+.tour-stage > .tour-figure {
+  max-width: none;
+}
+/* Code reads best a little wider than prose, not across the whole ticket. */
+.tour-stage > .tour-code {
+  max-width: 920px;
+}
+.tour-stage code {
+  padding: 0.05em 0.35em;
+  border: 1px solid var(--tour-line);
+  border-radius: 5px;
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+.tour-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 15px;
+  color: var(--tour-ink-soft);
+}
+.tour-state-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--p-yellow);
+  color: var(--yellow-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.tour-title {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font: 800 clamp(28px, 4vw, 36px) / 1.18 var(--tour-display);
+  font-stretch: 95%;
+}
+.tour-lead {
+  margin-top: 0;
+  margin-bottom: 24px;
+  font-size: 20px;
+  line-height: 1.55;
+  color: var(--tour-ink-2);
+}
+.tour-body p {
+  margin: 0 0 16px;
+}
+.tour-hint {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tour-ink-soft);
+}
+.tour-page kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 2px 5px;
+  border: 1px solid var(--tour-line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--btn-bg);
+  color: var(--tour-ink);
+  font: 600 11px / 1.3 var(--mono);
+  text-align: center;
+}
+.tour-actions .cmd kbd {
+  margin-left: 2px;
+}
+.tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+/* ---- Cover ---- */
+.tour-cover-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  margin-top: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tour-ink-soft);
+}
+/* The route ahead: the landmarks by title, each numbered on a red stop with its stage. */
+.tour-agenda {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+  margin-bottom: 24px;
+  padding: 0;
+  list-style: none;
+  counter-reset: stop;
+}
+.tour-agenda li {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 0 14px;
+  align-items: center;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--tour-line);
+  border-radius: 12px;
+  background: var(--tour-well);
+  counter-increment: stop;
+}
+.tour-agenda li::before {
+  content: counter(stop);
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--lilac);
+  border-radius: 50%;
+  background: var(--p-lilac);
+  color: var(--lilac);
+  font: 800 16px var(--tour-display);
+}
+.tour-agenda-stage {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tour-ink-soft);
+}
+.tour-agenda-name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.tour-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: center;
+}
+.tour-cover-actions .cmd.big {
+  height: 40px;
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ---- Landmark ---- */
+.tour-return {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -6px;
+  margin-bottom: 22px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 10px;
+  background: var(--p-yellow);
+  font-size: 15px;
+}
+.tour-figure {
+  display: grid;
+  gap: 16px;
+  margin-top: 26px;
+  margin-bottom: 30px;
+}
+.tour-scene,
+.tour-micro {
+  overflow: hidden;
+  /* In the dark a scene's own dark terminal meets the page: a lighter hairline sets it apart. */
+  border: 1px solid light-dark(var(--tour-line), #56647b);
+  border-radius: 14px;
+  background: var(--frame-bg);
+}
+/* Neutral, not green: green on this page means the primary button, not "try this". */
+.tour-micro-h {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--tour-line);
+  background: var(--tour-well);
+  color: var(--tour-ink-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+/* The frame is as wide as its box and as tall as the scene says; until it says, a short strip. */
+.tour-frame-host {
+  display: grid;
+}
+.tour-frame {
+  display: block;
+  width: 100%;
+  height: 120px;
+  border: 0;
+  background: transparent;
+  color-scheme: light dark;
+}
+.tour-frame-error {
+  margin: 8px 14px;
+  font-size: 13px;
+  color: var(--bad);
+}
+.tour-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+.tour-chip {
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tour-well);
+  color: var(--tour-ink-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+.tour-chip.link {
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+  background: var(--p-red);
+  color: var(--red);
+  font-family: inherit;
+  cursor: pointer;
+}
+.tour-chip.link:hover {
+  background: color-mix(in srgb, var(--red) 14%, var(--p-red));
+}
+.tour-note {
+  display: grid;
+  gap: 6px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+.tour-note label {
+  font-size: 15px;
+  font-weight: 700;
+}
+.tour-note label .tour-hint {
+  margin-left: 6px;
+  font-weight: 400;
+}
+.tour-note textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 8px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  font: 16px / 1.5 var(--sans);
+  resize: vertical;
+}
+.tour-note textarea::placeholder {
+  color: var(--fg-dim);
+}
+
+/* Code behind a landmark: two views of the same chunks, a literate diff or the raw one. */
+.tour-code {
+  /* clip, not hidden: a hidden overflow would hold the file bars from sticking to the page. */
+  overflow: clip;
+  margin-top: 12px;
+  margin-bottom: 24px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 12px;
+  scroll-margin-top: 12px;
+}
+.tour-code:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.tour-code[hidden] {
+  display: none;
+}
+.tour-code-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 6px 0;
+  border-bottom: 1px solid var(--tour-line-strong);
+  background: var(--tour-well);
+}
+.tour-code-tab {
+  margin-bottom: -1px;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--tour-ink-soft);
+  font: 700 14px var(--sans);
+  cursor: pointer;
+}
+.tour-code-tab[aria-selected='true'] {
+  border-color: var(--tour-line-strong);
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  box-shadow: inset 0 3px 0 var(--lilac);
+}
+.tour-code-body {
+  padding: 16px;
+}
+.tour-literate p {
+  max-width: var(--stage-w);
+  margin: 14px 0 10px;
+  font-size: 17px;
+}
+.tour-literate p:first-child {
+  margin-top: 0;
+}
+.tour-chunk {
+  margin-top: 12px;
+}
+.tour-code-body > .tour-chunk:first-child,
+.tour-literate > .tour-chunk:first-child {
+  margin-top: 0;
+}
+/* The file's bar sticks to the top while its diff scrolls past, so a long diff keeps its name. */
+.tour-code-file {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border: 1px solid var(--tour-line-strong);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--tour-well);
+  font: 600 12px var(--mono);
+}
+/* The file on the forge, at the commit the tour reads. */
+.tour-file-link {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px -4px -4px 0;
+  border-radius: 6px;
+  color: var(--tour-ink-soft);
+}
+.tour-file-link:hover {
+  background: var(--btn-bg-hover);
+  color: var(--blue);
+}
+.tour-diff {
+  overflow-x: auto;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 0 0 6px 6px;
+  background: var(--tour-card);
+  /* GitHub's diff size. One column as wide as the longest line, so every row's tint runs the full
+     width when the diff scrolls sideways. */
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
+  font: 12px / 20px var(--mono);
+}
+.tour-diff div {
+  padding: 0 12px;
+  white-space: pre;
+}
+.tour-diff .hunk {
+  background: var(--hunk-bg);
+  color: var(--hunk-fg);
+}
+.tour-diff .add {
+  background: var(--add-bg);
+  color: light-dark(#11421f, #b7f0c6);
+}
+.tour-diff .del {
+  background: var(--del-bg);
+  color: light-dark(#7a1c12, #ffc2bb);
+}
+
+/* ---- Footer nav: floats over the bottom of the window ---- */
+.tour-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: 0 20px 12px;
+}
+.tour-nav-why {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tour-ink-soft);
+  text-align: center;
+}
+.tour-nav-inner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--page-w);
+  margin: 0 auto;
+  padding: 10px 12px;
+  border: 1px solid var(--tour-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tour-card) 94%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px -14px rgb(31 36 48 / 45%);
+}
+
+/* ---- Decision ---- */
+.tour-anchor {
+  margin-top: -6px;
+  margin-bottom: 20px;
+  font-size: 15px;
+}
+.tour-anchor span {
+  padding: 2px 8px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 6px;
+  background: var(--tour-well);
+}
+.tour-landmark-note {
+  margin-bottom: 22px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--p-yellow);
+  font-size: 16px;
+  white-space: pre-wrap;
+}
+.tour-landmark-note b {
+  display: block;
+  font-size: 14px;
+  color: var(--yellow-ink);
+}
+.tour-options {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+/* A radio card: the ring on the left fills with purple once chosen. */
+.tour-option {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px 16px 54px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 12px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Each card stands up like a button, so it reads as one to press. */
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--btn-edge) 60%, transparent),
+    0 4px 10px -6px rgb(31 36 48 / 25%);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+}
+.tour-option:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-option {
+    transition: none;
+  }
+}
+.tour-option::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 19px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--stop-locked);
+  border-radius: 50%;
+  background: var(--tour-card);
+}
+.tour-option:hover {
+  border-color: var(--lilac);
+  background: color-mix(in srgb, var(--lilac) 4%, var(--tour-card));
+}
+.tour-option[aria-checked='true'] {
+  padding: 15px 17px 15px 53px;
+  border: 2px solid var(--lilac);
+  background: color-mix(in srgb, var(--lilac) 7%, var(--tour-card));
+}
+.tour-option[aria-checked='true']::before {
+  left: 17px;
+  top: 18px;
+  border-color: var(--lilac);
+  background: radial-gradient(circle, var(--lilac) 0 5px, var(--tour-card) 6px);
+}
+.tour-option-k {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tour-ink-soft);
+}
+.tour-option-k > span:first-child {
+  display: inline-block;
+}
+.tour-option-k > span:first-child::first-letter {
+  text-transform: uppercase;
+}
+.tour-option-k .now {
+  font-weight: 400;
+}
+/* The tour's advice is the one badge on the cards; what the code does is said in plain text. */
+.tour-option-k .rec {
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: var(--p-mint);
+  color: var(--green);
+}
+.tour-option-k .rec::before {
+  content: '★ ';
+}
+.tour-option-l {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.tour-option-c {
+  font-size: 16px;
+  color: var(--tour-ink-2);
+}
+.tour-card {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--p-blue);
+  font-size: 16px;
+}
+.tour-card-h {
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue);
+}
+.tour-card-h span::first-letter {
+  text-transform: uppercase;
+}
+.tour-tryit :is(ol, ul) {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+.tour-tryit ol {
+  list-style: decimal;
+}
+.tour-tryit ul {
+  list-style: disc;
+}
+.tour-tryit li {
+  margin: 4px 0;
+}
+.tour-tryit code {
+  user-select: all;
+}
+.tour-tryit label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+.tour-tryit input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--lilac);
+}
+.tour-state {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--green);
+}
+.tour-state.change {
+  color: var(--lilac);
+}
+.tour-restated {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--p-lilac);
+  font-size: 16px;
+}
+.tour-restated b {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--lilac);
+}
+.tour-restated b:first-child {
+  margin-top: 0;
+}
+
+/* ---- Quiz ---- */
+.tour-quiz-q {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font: 800 clamp(24px, 3.6vw, 30px) / 1.28 var(--tour-display);
+  font-stretch: 95%;
+}
+.tour-quiz-opts {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.tour-quiz-opt {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 16px;
+  border: 1px solid var(--tour-line);
+  border-radius: 12px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  font: 17px / 1.45 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+.tour-quiz-opt::before {
+  content: attr(data-n);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--p-yellow);
+  color: var(--yellow-ink);
+  font: 800 15px var(--tour-display);
+}
+.tour-quiz-opt:hover:not(:disabled) {
+  border-color: var(--tour-line-strong);
+}
+.tour-quiz-opt:disabled {
+  cursor: default;
+}
+.tour-quiz-opt[data-result] {
+  padding: 12px 15px;
+  border-width: 2px;
+}
+.tour-quiz-opt[data-result='wrong'] {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 7%, var(--tour-card));
+}
+.tour-quiz-opt[data-result='right'] {
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green) 9%, var(--tour-card));
+}
+.tour-quiz-opt[data-result='wrong']::before {
+  background: var(--bad);
+  color: var(--tour-card);
+}
+.tour-quiz-opt[data-result='right']::before {
+  background: var(--green);
+  color: var(--tour-card);
+}
+.tour-quiz-res {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+[data-result='wrong'] > .tour-quiz-res {
+  color: var(--bad);
+}
+[data-result='right'] > .tour-quiz-res {
+  color: var(--green);
+}
+.tour-quiz-why {
+  padding: 16px 18px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+.tour-quiz-why.wrong {
+  background: var(--p-red);
+}
+.tour-quiz-why.right {
+  background: var(--p-mint);
+}
+.tour-quiz-why .tour-actions {
+  margin-top: 12px;
+}
+.tour-quiz-why .cmd {
+  height: auto;
+  min-height: 32px;
+  padding: 6px 12px;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+}
+.tour-quiz-hint {
+  margin-top: 0;
+}
+
+/* ---- Plan ---- */
+.tour-section-h {
+  margin-top: 28px;
+  margin-bottom: 10px;
+  font: 800 18px var(--tour-display);
+}
+.tour-plan-list {
+  padding-left: 22px;
+}
+.tour-plan-list li {
+  margin-bottom: 10px;
+}
+.tour-plan-list li .where {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 6px;
+  background: var(--tour-well);
+  color: var(--tour-ink-soft);
+  font: 13px var(--mono);
+}
+.tour-plan-list li .stays {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  color: var(--tour-ink-soft);
+}
+.tour-kept,
+.tour-not,
+.tour-sharing {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 16px;
+}
+.tour-kept li,
+.tour-not li {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) 1fr;
+  gap: 4px 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--tour-line);
+  border-radius: 10px;
+  background: var(--tour-well);
+}
+.tour-kept li > span:first-child,
+.tour-not li > span:first-child {
+  font-weight: 700;
+}
+.tour-kept .place {
+  grid-column: 2;
+  font-size: 14px;
+  color: var(--tour-ink-soft);
+}
+.tour-not .path {
+  color: var(--tour-ink-soft);
+  font: 13px / 1.6 var(--mono);
+}
+.tour-sharing li {
+  padding-left: 26px;
+  text-indent: -26px;
+}
+.tour-sharing li::before {
+  content: '✓';
+  display: inline-block;
+  width: 26px;
+  text-indent: 0;
+  color: var(--green);
+  font-weight: 700;
+}
+.tour-sharing li.private::before {
+  content: '⌂';
+  color: var(--tour-ink-soft);
+}
+.tour-sharing li.failed::before {
+  content: '!';
+  color: var(--bad);
+}
+.tour-prompt .tour-actions {
+  margin: 0 0 8px;
+}
+.tour-prompt pre {
+  overflow: auto;
+  max-height: 360px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--tour-line);
+  border-radius: 10px;
+  background: var(--tour-well);
+  font: 13px / 1.55 var(--mono);
+  white-space: pre-wrap;
+}
+.tour-plan-changed {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--p-yellow);
+  font-size: 16px;
+}
+
+/* ---- No tour yet, and the tour being generated ---- */
+.tour-missing.panel {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.tour-missing .panel-h {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.tour-missing .panel-h h2 {
+  margin: 0 0 12px;
+  font: 800 clamp(26px, 3.6vw, 32px) / 1.2 var(--tour-display);
+  font-stretch: 95%;
+}
+:root[data-skin='tour'] .tour-missing .body {
+  padding: 0;
+}
+.tour-missing .body p {
+  margin: 0 0 14px;
+}
+.tour-missing .tour-cmd {
+  padding: 2px 8px;
+}
+
+/* ---- Help ---- */
+.tour-help {
+  width: min(520px, calc(100vw - 32px));
+  padding: 22px 24px;
+  border: 1px solid var(--tour-line);
+  border-radius: 14px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  box-shadow: var(--drop-shadow);
+  font-size: 16px;
+}
+.tour-help::backdrop {
+  background: var(--backdrop);
+}
+.tour-help h3 {
+  margin: 0 0 12px;
+  font: 800 22px var(--tour-display);
+}
+.tour-help dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+}
+.tour-help dt {
+  text-align: right;
+}
+.tour-help dd {
+  margin: 0;
+}
+.tour-help p {
+  color: var(--tour-ink-soft);
+}
+
+/* ---- The drawer: a change, said in the reader's words ---- */
+.tour-chat {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+}
+.tour-chat::backdrop {
+  background: var(--backdrop);
+}
+.tour-chat[open] {
+  position: fixed;
+  inset: 0 0 0 auto;
+  display: flex;
+  width: min(440px, 100vw);
+}
+/* A long decision title wraps beside close, not over it. */
+.tour-chat .chat-h {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  background: var(--tour-tint);
+}
+.tour-chat .chat-h h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--tour-display);
+  font-weight: 800;
+}
+.tour-chat-box {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--tour-line);
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  box-shadow: var(--drop-shadow);
+}
+.tour-grill-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--tour-line);
+  list-style: none;
+  font-size: 13px;
+  color: var(--tour-ink-soft);
+}
+.tour-grill-steps li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tour-grill-steps b {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--lilac);
+  border-radius: 50%;
+  background: var(--tour-card);
+  color: var(--lilac);
+  font: 800 11px var(--tour-display);
+}
+.tour-grill-steps [data-state='now'] {
+  font-weight: 700;
+  color: var(--tour-ink);
+}
+.tour-grill-steps [data-state='now'] b {
+  border-color: var(--sun-ring);
+  background: var(--sun);
+  color: var(--on-sun);
+}
+.tour-grill-steps [data-state='done'] b {
+  background: var(--p-lilac);
+}
+.tour-grill-guide {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--tour-line);
+  background: var(--p-lilac);
+  font-size: 14px;
+}
+.tour-grill-guide p {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.tour-restate {
+  align-self: stretch;
+  padding: 12px 14px;
+  border: 2px solid var(--lilac);
+  border-radius: 12px;
+  background: var(--tour-card);
+  font-size: 15px;
+}
+.tour-restate h4 {
+  margin: 0 0 8px;
+  color: var(--lilac);
+  font: 800 16px var(--tour-display);
+}
+.tour-restate label {
+  display: block;
+}
+.tour-restate b {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--tour-ink-soft);
+}
+.tour-restate textarea {
+  width: 100%;
+  /* Each field grows to fit what it holds, so an edit starts with the whole text in view. A
+     browser without field-sizing keeps the minimum, five lines, and the resize handle. */
+  field-sizing: content;
+  min-height: calc(5lh + 14px);
+  max-height: 50vh;
+  padding: 6px 8px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 8px;
+  background: var(--tour-bg);
+  color: var(--tour-ink);
+  font: 15px / 1.5 var(--sans);
+  resize: vertical;
+}
+.tour-restate .tour-actions {
+  margin-top: 12px;
+}
+.tour-restate .where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tour-restate .where span {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--tour-well);
+  font: 12px var(--mono);
+}
+.tour-restate.earlier {
+  border-style: dashed;
+  border-color: var(--tour-line-strong);
+  opacity: 0.75;
+}
+.tour-restate.earlier h4 {
+  color: var(--tour-ink-soft);
+}
+.tour-plan-card :is(ol, ul) {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+.tour-plan-card li {
+  margin: 4px 0;
+}
+.tour-invalid {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--p-red);
+  color: var(--tour-ink);
+  font: 12px var(--mono);
+  white-space: pre-wrap;
+}
+.tour-notice {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--p-yellow);
+  font-size: 14px;
+}
+.tour-notice .tbtns {
+  margin-top: 8px;
+}
+.tour-mic[data-state='listening'] {
+  border-color: var(--bad);
+  color: var(--bad);
+  animation: tour-pulse 1s infinite;
+}
+@keyframes tour-pulse {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--bad) 25%, transparent);
+  }
+}
+.tour-writing {
+  margin: 8px 0 0;
+  color: var(--tour-ink-soft);
+  font-style: italic;
+  animation: tour-writing 1.4s ease-in-out infinite;
+}
+@keyframes tour-writing {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-writing,
+  .tour-mic[data-state='listening'] {
+    animation: none;
+  }
+}
+
+/* ---- AI Chat: a pane beside the tour, on every stop, with a thread per stop ---- */
+.tour-ask {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  display: flex;
+  width: min(420px, 100vw);
+  font-size: 15px;
+}
+.tour-ask[hidden] {
+  display: none;
+}
+/* The pane is not a ticket: it keeps the tour's lilac whatever the step. Its head is one row that
+   never wraps: the title gives way first, then new thread keeps its icon and loses its words. */
+.tour-ask .chat-h {
+  flex-wrap: nowrap;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  padding: 8px 10px 8px 16px;
+  background: var(--p-lilac);
+}
+.tour-ask .chat-h h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font: 800 17px var(--tour-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The pane's commands are buttons with a glyph each, which the skin's button list leaves to it. */
+.tour-ask .cmd {
+  --btn-h: 30px;
+
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: var(--btn-h);
+  padding: 0 10px;
+  border: 1px solid var(--tour-line-strong);
+  border-radius: 8px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  font: 600 13px / 1 var(--sans);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+/* Under the skin's root, since the skin blanks every command's ::before after this file. */
+:root[data-skin='tour'] .tour-ask .cmd::before {
+  content: '';
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  background: currentcolor;
+  mask: var(--icon) center / contain no-repeat;
+}
+.tour-ask .cmd:hover:not(:disabled) {
+  background: var(--tour-well);
+}
+.tour-ask .cmd.fill:not(:disabled) {
+  border-color: transparent;
+  background: var(--btn-primary);
+  color: var(--btn-primary-fg);
+}
+.tour-ask .cmd.fill:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+.tour-ask .cmd:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tour-ask [data-act='ask-close'] {
+  --icon: var(--i-x);
+
+  flex: 0 0 auto;
+  justify-content: center;
+  width: var(--btn-h);
+  padding: 0;
+  gap: 0;
+  font-size: 0;
+}
+.tour-ask [data-act='ask-goto'] {
+  --icon: var(--i-ask-goto);
+
+  flex: 0 0 auto;
+}
+.tour-ask [data-act='ask-new'] {
+  --icon: var(--i-plus);
+}
+.tour-ask [data-act='ask-send'] {
+  --icon: var(--i-send);
+}
+.tour-ask [data-act='ask-stop'] {
+  --icon: var(--i-ask-stop);
+}
+.tour-ask .ctx-line {
+  padding: 8px 16px 0;
+}
+/* The thread's name, which opens the list of every thread under it. */
+.tour-ask-head {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 16px 10px;
+  border-bottom: 1px solid var(--tour-line);
+}
+.tour-ask .thread-switch {
+  min-height: 32px;
+  margin: 0;
+  border-color: var(--tour-line-strong);
+  border-radius: 8px;
+  background: var(--tour-card);
+  color: var(--tour-ink);
+  font-size: 15px;
+}
+.tour-ask .thread-switch:hover,
+.tour-ask .thread-switch[aria-expanded='true'] {
+  border-color: var(--lilac);
+}
+.tour-ask .thread-pop {
+  border-color: var(--tour-line-strong);
+  border-radius: 10px;
+  background: var(--tour-card);
+}
+.tour-ask .thread-filter {
+  border-color: var(--tour-line-strong);
+  background: var(--tour-bg);
+  color: var(--tour-ink);
+}
+.tour-ask .thread-item {
+  color: var(--tour-ink);
+}
+.tour-ask .thread-item:hover,
+.tour-ask .thread-item:focus-visible {
+  background: var(--tour-well);
+}
+.tour-ask .thread-item.current::before,
+.tour-ask .thread-pop-new {
+  color: var(--lilac);
+}
+.tour-ask .thread-pop-new {
+  border-top-color: var(--tour-line);
+}
+/* Nothing inside widens the pane: a long title or a wide answer gives way within it. */
+.tour-ask .tour-chat-box {
+  min-width: 0;
+}
+.tour-ask .transcript {
+  padding: 14px 16px;
+}
+.tour-ask .chat-composer {
+  padding: 10px 16px 14px;
+}
+/* A narrow pane keeps new thread's icon and drops its words. */
+@media (width <= 420px) {
+  .tour-ask .chat-h [data-act='ask-new'] {
+    width: var(--btn-h);
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    justify-content: center;
+  }
+}
+/* A wide window keeps the whole tour in view beside the open pane; a narrower one keeps the nav
+   beside it, so the reader can move on with the pane open. A phone's pane is a sheet over both. */
+@media (width >= 1100px) {
+  pr-tour[data-asking] {
+    padding-right: 420px;
+  }
+}
+@media (720px < width < 1100px) {
+  pr-tour[data-asking] .tour-nav {
+    padding-right: 432px;
+  }
+}
+/* A toast keeps off the open pane, where it would cover the message box. */
+@media (width > 720px) {
+  pr-tour[data-asking] > .toast {
+    right: 436px;
+  }
+}
+/* AI Chat's launcher floats at the right, as on the canvas, but above the nav, so it never covers
+   next, whatever the window's width. A window wide enough to have room beside the nav sets it
+   there. It is dotted when this stop has a thread and counts the answers not seen yet. */
+.tour-ask-launcher {
+  position: absolute;
+  right: 20px;
+  bottom: calc(100% + 10px);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--lilac);
+  color: var(--tour-card);
+  box-shadow: 0 6px 20px -6px rgb(31 36 48 / 45%);
+  font: 700 15px var(--tour-display);
+  cursor: pointer;
+}
+.tour-ask-launcher::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: currentcolor;
+  mask: var(--i-robot) center / contain no-repeat;
+}
+.tour-ask-launcher:hover {
+  background: color-mix(in srgb, var(--lilac) 85%, var(--tour-ink));
+}
+.tour-ask-launcher:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.tour-ask-launcher[hidden] {
+  display: none;
+}
+.tour-ask-launcher[data-thread]::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+/* The nav's box is at most the page wide and centred: past that and the launcher's width on both
+   sides, the launcher fits beside it, level with it. */
+@media (width >= 1500px) {
+  .tour-ask-launcher {
+    bottom: 18px;
+  }
+}
+@media (width <= 720px) {
+  .tour-ask-launcher {
+    right: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+}
+.tour-ask-new {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--sun);
+  color: var(--on-sun);
+  font: 800 11px var(--tour-display);
+}
+
+/* The cover is the title page: the header does not say the title above it again. */
+pr-tour[data-at='cover'] .hdr-title .title {
+  display: none;
+}
+
+/* ---- Narrow windows ---- */
+@media (width <= 720px) {
+  .tour-main {
+    padding: 18px 14px 32px;
+  }
+  .tour-stage {
+    padding: 26px 18px;
+  }
+  .tour-strip {
+    padding: 12px 18px 14px;
+  }
+  .tour-chat[open],
+  .tour-ask {
+    inset: auto 0 0;
+    width: 100vw;
+    height: min(85vh, 640px);
+  }
+  .tour-chat-box {
+    border-top: 1px solid var(--tour-line);
+    border-left: 0;
+  }
+  /* The drawer's height goes to the conversation: its fixed parts shrink. */
+  .tour-chat .ctx-line,
+  .tour-ask .ctx-line {
+    display: none;
+  }
+  .tour-chat .chat-h h2 {
+    font-size: 15px;
+  }
+  .tour-grill-steps {
+    padding: 6px 14px;
+  }
+  .tour-grill-guide {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
+@media (width <= 600px) {
+  .tour-stage {
+    font-size: 17px;
+  }
+  .tour-lead {
+    font-size: 18px;
+  }
+  .tour-kept li,
+  .tour-not li {
+    grid-template-columns: 1fr;
+  }
+  .tour-kept .place {
+    grid-column: auto;
+  }
+  .tour-nav {
+    padding: 0 10px 10px;
+  }
+  .tour-nav-why {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  /* The stops say what they are by their signs; a phone's height goes to the step. */
+  .tour-rail-legend {
+    display: none;
+  }
+  .tour-strip-no b {
+    font-size: 26px;
+  }
+  .tour-strip-what {
+    order: 3;
+    width: 100%;
+  }
+  .tour-rail,
+  .tour-rail-legend {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  :root[data-skin='tour'] .tour-page .hdr-title {
+    padding: 12px 14px 18px;
+  }
+  .tour-skyline {
+    display: none;
+  }
+  /* A phone's height goes to the step: past the cover, the header keeps only a short title. */
+  pr-tour:not([data-at='cover']) .hdr-title h1 {
+    margin: 0;
+    font-size: 20px;
+  }
+  pr-tour:not([data-at='cover']) .hdr-title .meta {
+    display: none;
+  }
+}
+
+/* Key hints are for a keyboard: a touch screen has none to press, so it shows none. */
+@media (hover: none) {
+  .tour-keys,
+  .tour-page .cmd kbd {
+    display: none;
+  }
+}
+
+/* A short code span or a command-line flag stays on one line: a line may break after a hyphen. */
+.nw {
+  white-space: nowrap;
+}

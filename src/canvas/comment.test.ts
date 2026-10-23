@@ -1,6 +1,6 @@
 import { tallyCanvas } from '../review/self-review.js'
 import { syntheticArtifact } from '../testing/synthetic.js'
-import { buildCanvasComment, CANVAS_COMMENT_MARKER, readCanvasComment } from './comment.js'
+import { buildCanvasComment, CANVAS_COMMENT_MARKER, readZipEnvelope } from './comment.js'
 
 const zip = {
   name: 'pr-42-canvas.zip',
@@ -13,7 +13,10 @@ const tally = tallyCanvas(syntheticArtifact())
 it('round-trips binary bytes in one hidden comment and measures the complete body', () => {
   const body = buildCanvasComment(zip, tally, 65_536)
   expect(body).toContain('Run `pr-review serve`')
-  expect(readCanvasComment(body)).toEqual({ name: zip.name, bytes: Buffer.from(zip.bytes) })
+  expect(readZipEnvelope(CANVAS_COMMENT_MARKER, body)).toEqual({
+    name: zip.name,
+    bytes: Buffer.from(zip.bytes),
+  })
   expect(buildCanvasComment(zip, tally, body.length)).toBe(body)
   expect(() => buildCanvasComment(zip, tally, body.length - 1)).toThrow(/host limit/)
 })
@@ -38,5 +41,5 @@ it.each([
   `${CANVAS_COMMENT_MARKER}pr-42-canvas.zip\nAAA\n-->`,
   `${CANVAS_COMMENT_MARKER}pr-42-canvas.zip\n${'A'.repeat(1_000_004)}\n-->`,
 ])('ignores unsupported or malformed envelopes %#', body => {
-  expect(readCanvasComment(body)).toBeNull()
+  expect(readZipEnvelope(CANVAS_COMMENT_MARKER, body)).toBeNull()
 })

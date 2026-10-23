@@ -15,6 +15,7 @@ import {
   type TestContext,
 } from '../testing/fakes.js'
 import { BASE_SHA, ghFor42, gitFor42, HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import { headerBarHtml } from '../../static/js/header-bar.js'
 import { createApp } from './app.js'
 import { rekeyFixture } from './bundle.js'
@@ -136,6 +137,73 @@ describe('createApp', () => {
       expect(html).toContain('acme/widgets')
     })
 
+    it('splits the home page into canvases and tours tabs, picked by ?tab', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const canvases = await (await app.request('/', { headers: LOCAL })).text()
+      expect(canvases).toContain(
+        '<a class="home-tab" href="/r/acme/widgets/" aria-current="page">Canvases</a>'
+      )
+      expect(canvases).toContain('<a class="home-tab" href="/r/acme/widgets/?tab=tours">Tours</a>')
+      expect(canvases).toContain('action="/r/acme/widgets/review"')
+      expect(canvases).not.toContain('action="/r/acme/widgets/tour"')
+
+      const tours = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(tours).toContain(
+        '<a class="home-tab" href="/r/acme/widgets/?tab=tours" aria-current="page">Tours</a>'
+      )
+      expect(tours).toContain('action="/r/acme/widgets/tour"')
+      expect(tours).toContain('href="/r/acme/widgets/tour/42"')
+      expect(tours).toContain('no tour yet')
+      expect(tours).toContain('No tour of local work yet.')
+      expect(tours).not.toContain('action="/r/acme/widgets/review"')
+
+      // An unknown tab reads as the canvases one.
+      const other = await (await app.request('/?tab=nope', { headers: LOCAL })).text()
+      expect(other).toContain('href="/r/acme/widgets/" aria-current="page"')
+
+      const redirect = await app.request('/tour?n=42', { headers: LOCAL })
+      expect(redirect.status).toBe(303)
+      expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42')
+    })
+
+    it('offers to generate a tour on the tours tab, and carries the flag to the tour page', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const html = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).toContain(
+        '<button class="cmd" type="submit" name="generate" value="1" title="Open the tour page'
+      )
+      expect(html).toContain('href="/r/acme/widgets/tour/42?generate=1"')
+      expect(html).toContain('href="/r/acme/widgets/tour/branch?generate=1"')
+      expect(html).toContain('href="/r/acme/widgets/tour/uncommitted?generate=1"')
+      const redirect = await app.request('/tour?n=42&generate=1', { headers: LOCAL })
+      expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42?generate=1')
+    })
+
+    it('offers no tour generation on the tours tab when tour.generate is off', async () => {
+      const app = createApp(t.ctx)
+      await app.request('/api/prs/42', { headers: LOCAL })
+      const config = t.ctx.projectConfig.config
+      t.ctx.projectConfig = {
+        ...t.ctx.projectConfig,
+        config: { ...config, tour: { ...config.tour, generate: 'off' } },
+      }
+      const html = await (await createApp(t.ctx).request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).not.toContain('?generate=1')
+      expect(html).not.toContain('generate tour</button>')
+    })
+
+    it('lists the local tours on the tours tab, with a link to their canvas', async () => {
+      const app = createApp(t.ctx)
+      await t.ctx.prs.writePr('branch', syntheticArtifact().pr)
+      await t.ctx.tours.write(HEAD_SHA, syntheticTour({ pr: { ...syntheticArtifact().pr, number: null } }))
+      const html = await (await app.request('/?tab=tours', { headers: LOCAL })).text()
+      expect(html).toContain('<a href="/r/acme/widgets/tour/branch">')
+      expect(html).toContain(' · <a href="/r/acme/widgets/review/branch">canvas</a>')
+      expect(html).not.toContain('No tour of local work yet.')
+    })
+
     it('offers to generate a canvas when an agent can run, and carries the flag to the review page', async () => {
       const app = createApp(t.ctx)
       await app.request('/api/prs/42', { headers: LOCAL })
@@ -186,7 +254,7 @@ describe('createApp', () => {
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
       expect(html).toContain(
-        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all","pointColors":"classic"}</script>'
+        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","projectName":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all","pointColors":"classic"}</script>'
       )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
@@ -250,7 +318,7 @@ describe('createApp', () => {
 
     it('draws the same header bar the review page draws in the browser', async () => {
       const app = createApp(t.ctx)
-      const project = { slug: 'acme/widgets', home: '/r/acme/widgets/' }
+      const project = { slug: 'acme/widgets', name: 'acme/widgets', home: '/r/acme/widgets/' }
       const look = { theme: 'auto', skin: 'github' } as const
       const home = await (await app.request('/', { headers: LOCAL })).text()
       expect(home).toContain(
@@ -295,7 +363,7 @@ describe('createApp', () => {
       const errorHtml = await error.text()
       // The project's name, as on every page of it, leads back to its home page.
       expect(errorHtml).toContain(
-        '<a class="mono muted" href="/r/acme/widgets/" title="This project\'s home page">acme/widgets</a>'
+        '<a class="mono muted" href="/r/acme/widgets/" title="This project&#39;s home page">acme/widgets</a>'
       )
       expect(errorHtml).toContain('"base":"/r/acme/widgets/"')
       expect(errorHtml).toContain('<script type="module" src="/static/js/page-appearance.js"></script>')
@@ -312,13 +380,17 @@ describe('createApp', () => {
       const app = createApp(t.ctx)
       const home = await (await app.request('/', { headers: LOCAL })).text()
       expect(home).toContain(
-        '<a class="mono muted" href="/r/acme/widgets~fix-login/" title="This project\'s home page">acme/widgets~fix-login</a>'
+        '<a class="mono muted" href="/r/acme/widgets~fix-login/" title="This project&#39;s home page (acme/widgets~fix-login)">acme/widgets · fix-login</a>'
       )
       expect(home).toContain('action="/r/acme/widgets~fix-login/review"')
       const review = await (await app.request('/review/42', { headers: LOCAL })).text()
-      expect(review).toContain('"base":"/r/acme/widgets~fix-login/","project":"acme/widgets~fix-login"')
+      expect(review).toContain(
+        '"base":"/r/acme/widgets~fix-login/","project":"acme/widgets~fix-login","projectName":"acme/widgets · fix-login"'
+      )
       const error = await (await app.request('/review/abc', { headers: LOCAL })).text()
-      expect(error).toContain('href="/r/acme/widgets~fix-login/" title="This project\'s home page"')
+      expect(error).toContain(
+        'href="/r/acme/widgets~fix-login/" title="This project&#39;s home page (acme/widgets~fix-login)"'
+      )
     })
 
     it('answers 400 for a non-numeric PR', async () => {
@@ -816,6 +888,7 @@ describe('createApp', () => {
     it('has helpers for content types and safe resolution', async () => {
       expect(contentTypeFor('a.css')).toBe('text/css; charset=utf-8')
       expect(contentTypeFor('a.mjs')).toBe('text/javascript; charset=utf-8')
+      expect(contentTypeFor('a.woff2')).toBe('font/woff2')
       expect(contentTypeFor('a.bin')).toBe('application/octet-stream')
       const dir = await makeTempDir()
       expect(await resolveUnder(dir, '../x')).toBeNull()

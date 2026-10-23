@@ -1,0 +1,148 @@
+<div class="scene" data-technique="race-lab">
+<style>
+.r-tl{position:relative;width:100%;display:grid;grid-template-columns:14rem 1fr;gap:.45rem .6rem;align-items:center;cursor:crosshair}
+.r-tl>div:not(.r-lane){display:grid;line-height:1.2}
+.r-tl b{font-size:.78rem}
+.r-axis span:first-child{translate:0}
+#r-now{top:1rem;color:var(--fg);font-weight:700;white-space:nowrap}
+.r-lane{position:relative;height:1.7rem}
+.r-axis{height:2rem;border-top:.1rem solid var(--line)}
+.r-axis span{position:absolute;top:.15rem;translate:-50%;font:.65rem ui-monospace,monospace;color:var(--muted)}
+.r-bar,.r-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;padding:0 .35rem;border-radius:.35rem;font:600 .72rem ui-monospace,monospace;white-space:nowrap;overflow:hidden}
+.r-bar{border:.12rem solid var(--c,var(--fg));background:var(--tint);color:var(--fg)}
+.r-bar.dis{border-style:dashed;opacity:.55}
+.r-x{position:absolute;top:50%;translate:-50% -50%;font:900 1rem system-ui;color:var(--c,var(--bad));z-index:1}
+.r-seg{justify-content:center;border-radius:0;border-right:.1rem solid var(--paper);background:color-mix(in srgb,var(--fg) 9%,var(--paper));font-size:.85rem}
+.r-seg.opt{background:color-mix(in srgb,var(--fg) 22%,var(--paper))}
+.r-seg.bad{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--bad) 30%,var(--paper)) 0 .3rem,color-mix(in srgb,var(--bad) 14%,var(--paper)) .3rem .6rem);color:var(--bad);font-weight:800}
+.r-race{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--warn) 14%,transparent);border-inline:.1rem dashed var(--warn)}
+.r-head{position:absolute;top:0;bottom:0;width:.14rem;background:var(--fg);pointer-events:none}
+.r-out{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:.9rem;width:100%;align-items:start}
+.r-out .window{max-width:none}
+.r-data{font:800 1.6rem ui-monospace,monospace}
+@media (max-width:640px){.r-tl{grid-template-columns:1fr}.r-out{grid-template-columns:1fr 1fr}.r-out .file{grid-column:1/-1}}
+</style>
+<div class="controls">
+<fieldset><legend>mutate #1 fails after</legend><label><input type="range" id="r-d1" min="5" max="60" step="5" value="20"><b id="r-d1v"></b></label></fieldset>
+<fieldset><legend>mutate #2 starts at</legend><label><input type="range" id="r-t2" min="0" max="60" step="5" value="10"><b id="r-t2v"></b></label></fieldset>
+<fieldset><legend>mutate #2 fails after</legend><label><input type="range" id="r-d2" min="5" max="60" step="5" value="20"><b id="r-d2v"></b></label></fieldset>
+<fieldset><legend>option</legend><label><input type="checkbox" id="r-rv" checked> revalidate (default)</label></fieldset>
+</div>
+<div class="r-tl" id="r-tl"></div>
+<div class="r-out">
+<div class="window" data-title="the page · before #1970"><span class="r-data" id="r-b"></span><span class="small" id="r-bw"></span></div>
+<div class="window" data-title="the page · after #1970"><span class="r-data" id="r-a"></span><span class="small" id="r-aw"></span></div>
+<div class="file" data-title="_internal/utils/mutate.ts in #1970">
+<span class="del">const originalData = get().data</span>
+<span class="add">const state = get()</span>
+<span class="add">const currentData = state.data</span>
+<span class="add">const originalData = isUndefined(state._o) ? currentData : state._o</span>
+<span class="del">set({ data: optimisticData })</span>
+<span class="add">set({ data: optimisticData, _o: originalData })</span>
+<span class="muted">// … the request rejects; rollback: set({ data: originalData })</span>
+<span class="add">set({ error, _o: UNDEFINED })</span>
+</div>
+</div>
+<p class="small" id="r-why" style="font-size:.95rem;max-width:62rem;margin:0"></p>
+<script>
+// The model: internalMutate (_internal/utils/mutate.ts) before and after #1970 and the hook's
+// revalidate (core/use-swr.ts), on virtual time in ms. As in the PR's test, the cache holds data 0,
+// both mutate calls fail with optimisticData 1 and 2, and a refetch returns 0 after 20 ms.
+const FETCH_MS = 20
+function simulate({ d1, t2, d2, revalidate }, fixed) {
+  let __timestamp = 0, data = 0, _o, MUTATION, FETCH
+  const getTimestamp = () => ++__timestamp
+  const queue = [], screen = [[0, 0]], lanes = { m1: {}, m2: {}, r: [] }
+  const at = (t, fn) => queue.push({ t, n: queue.length, fn }) // timers: by time, then by when set
+  const set = (t, v) => v !== data && screen.push([t, (data = v)])
+  function internalMutate(t, optimisticData, delay, lane) {
+    const beforeMutationTs = getTimestamp()
+    MUTATION = [beforeMutationTs, 0]
+    const currentData = data
+    const originalData = fixed && _o !== undefined ? _o : currentData
+    set(t, optimisticData)
+    if (fixed) _o = originalData
+    Object.assign(lane, { t, end: t + delay, optimisticData, originalData })
+    at(t + delay, t => {
+      // the request rejects: a newer mutate discards this one, else roll back
+      if (beforeMutationTs !== MUTATION[0]) return (lane.discarded = true)
+      set(t, originalData)
+      if (fixed) _o = undefined
+      MUTATION[1] = getTimestamp()
+      if (!revalidate) return
+      const startAt = (FETCH = getTimestamp()), r = { t }
+      lanes.r.push(r)
+      at(t + FETCH_MS, t => {
+        r.discarded = FETCH !== startAt || startAt <= MUTATION[0] || startAt <= MUTATION[1] || MUTATION[1] === 0
+        if (!r.discarded) set(t, 0)
+      })
+    })
+  }
+  internalMutate(0, 1, d1, lanes.m1)
+  at(t2, t => internalMutate(t, 2, d2, lanes.m2))
+  for (let e; (e = queue.sort((a, b) => a.t - b.t || a.n - b.n).shift()); ) e.fn(e.t)
+  return { screen, lanes }
+}
+
+const $ = s => document.querySelector(s), MAX = 150
+const X = t => `${(Math.min(t, MAX) / MAX) * 100}%`
+let runs, T
+// What the page shows over time; a value is a phantom when no request is in flight to explain it.
+function segments({ screen, lanes }) {
+  const ts = [...new Set([...screen.map(s => s[0]), lanes.m1.end, lanes.m2.end])].sort((a, b) => a - b)
+  const val = t => screen.filter(s => s[0] <= t).at(-1)[1], busy = t => [lanes.m1, lanes.m2].some(m => m.t <= t && t < m.end)
+  return ts.map((t, i) => ({ t, v: val(t), end: ts[i + 1] ?? MAX, phantom: val(t) !== 0 && !busy(t) }))
+    .reduce((a, g) => { const p = a.at(-1); p && p.v === g.v && p.phantom === g.phantom ? (p.end = g.end) : a.push(g); return a }, [])
+}
+const verdict = s => {
+  const ghost = s.filter(g => g.phantom), ms = ghost.reduce((x, g) => x + g.end - g.t, 0)
+  return ghost.length ? [`bad`, s.at(-1).phantom ? `${ghost[0].v} stays, though both POSTs failed` : `${ghost[0].v} for ${ms} ms after both POSTs failed`] : ['good', 'back to 0 when both fail']
+}
+let over = ''
+const lane = (name, sub, html, tone = '') => `<div><b>${name}</b><span class="small ${tone}">${sub}</span></div><div class="r-lane">${over}${html}<i class="r-head"></i></div>`
+function mut(n, run, other) {
+  const m = run.lanes[n], b = other.lanes[n].originalData, a = m.originalData
+  const sub = m.discarded ? `fails at ${m.end} ms: discarded, a newer mutate started` : `fails at ${m.end} ms: rolls back to ${b === a ? a : `${b} before, ${a} after`}`
+  return lane(`mutate #${n[1]} · optimisticData: ${m.optimisticData}`, sub, `<div class="r-bar${m.discarded ? ' dis' : ''}" style="left:${X(m.t)};width:${X(m.end - m.t)}">POST</div><span class="r-x" style="left:${X(m.end)}">✕</span>`, b === a || m.discarded ? '' : 'warn')
+}
+function render(sweep) {
+  const o = { d1: +$('#r-d1').value, t2: +$('#r-t2').value, d2: +$('#r-d2').value, revalidate: $('#r-rv').checked }
+  for (const k of ['d1', 't2', 'd2']) $(`#r-${k}v`).textContent = ` ${o[k]} ms`
+  runs = [simulate(o, false), simulate(o, true)]
+  const [B, A] = runs, race = o.t2 < o.d1, sB = segments(B), sA = segments(A), [tb, vb] = verdict(sB), [ta, va] = verdict(sA)
+  const seg = s => s.map(g => `<div class="r-seg${g.phantom ? ' bad' : g.v ? ' opt' : ''}" style="left:${X(g.t)};width:${X(g.end - g.t)}">${g.v}</div>`).join('')
+  const refs = A.lanes.r.map(r => `<div class="r-bar muted${r.discarded ? ' dis' : ''}" style="left:${X(r.t)};width:${X(FETCH_MS)}">GET</div>`).join('')
+  over = race ? `<div class="r-race" style="left:${X(o.t2)};width:${X(Math.min(o.d1, o.t2 + o.d2) - o.t2)}"></div>` : ''
+  $('#r-tl').innerHTML = `<span class="small">${race ? '<b class="warn">amber: both POSTs in flight</b>' : 'no overlap'}</span><div class="r-lane r-axis">` + [0, 25, 50, 75, 100, 125].map(t => `<span style="left:${X(t)}">${t} ms</span>`).join('') + '<span id="r-now"></span></div>' +
+    mut('m1', A, B) + mut('m2', A, B) +
+    ((over = ''), '') +
+    (o.revalidate ? lane('refetch, after the newest mutate', A.lanes.r.map(r => (r.discarded ? `${r.t + FETCH_MS} ms: discarded` : `${r.t + FETCH_MS} ms: data 0`)).join(' · '), refs) : '') +
+    lane('the page · before #1970', vb, seg(sB), tb) + lane('the page · after #1970', va, seg(sA), ta)
+  $('#r-why').textContent = race
+    ? `mutate #2 starts at ${o.t2} ms, while #1's optimistic 1 is on the page. Before #1970 it keeps currentData, 1, as the data to roll back to; after, it keeps _o, the data from before any optimistic write: 0. #2 is the newer mutate, so #1's failure is discarded and #2's rollback decides what stays.`
+    : `mutate #2 starts after #1 has rolled back, so there is no race: both versions roll back to 0.`
+  T = sB.find(g => g.phantom)?.t ?? Math.max(o.d1, o.t2 + o.d2)
+  if (!sweep || scene.reducedMotion) return show(T)
+  const t0 = performance.now(), step = now => { const t = Math.min(T, Math.max(0, ((now - t0) / 2500) * MAX)); show(t); if (t < T) requestAnimationFrame(step) }
+  requestAnimationFrame(step)
+}
+// The two pages at time t: what the user sees then.
+function show(t) {
+  document.querySelectorAll('.r-head').forEach(h => (h.style.left = X(t)))
+  $('#r-now').style.cssText = `left:${X(t)};translate:${t > 120 ? -100 : -50}%`
+  $('#r-now').textContent = `▼ ${Math.round(t)} ms`
+  runs.forEach((run, k) => {
+    const now = segments(run).filter(g => g.t <= t).at(-1)
+    $(`#r-${'ba'[k]}`).textContent = `data: ${now.v}`
+    $(`#r-${'ba'[k]}`).className = `r-data ${now.phantom ? 'bad' : ''}`
+    $(`#r-${'ba'[k]}w`).textContent = `at ${Math.round(t)} ms${now.phantom ? ': both POSTs have failed' : ''}`
+  })
+}
+document.addEventListener('input', () => render(false))
+$('#r-tl').addEventListener('click', e => {
+  const r = $('.r-axis').getBoundingClientRect()
+  if (e.clientX >= r.left) show(((e.clientX - r.left) / r.width) * MAX)
+})
+render(true)
+</script>
+</div>

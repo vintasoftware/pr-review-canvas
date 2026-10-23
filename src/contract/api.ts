@@ -36,6 +36,7 @@ export const ERROR_CODES = [
   'COMMENT_LINE_NOT_IN_DIFF',
   'SIGNOFF_INCOMPLETE',
   'CHAT_BUSY',
+  'CHECKOUT_BUSY',
   'GENERATION_BUSY',
   'GENERATION_FAILED',
   'SERVER_NOT_RUNNING',
@@ -254,7 +255,13 @@ export interface ChatStatus {
 }
 
 export interface HomeData {
-  recentPrs: Array<{ number: number; title: string; updatedAt: string; hasCanvas?: boolean }>
+  recentPrs: Array<{
+    number: number
+    title: string
+    updatedAt: string
+    hasCanvas?: boolean
+    hasTour?: boolean
+  }>
 }
 
 /** The JSON the review page carries in its bootstrap script; the app reads it before any request. */
@@ -264,6 +271,8 @@ export interface ReviewBootstrap {
   repo: string
   /** The project's name on the server: `<owner>/<repo>`, or `<owner>/<repo>~<worktree>`. */
   project: string
+  /** The project as the header shows it: a linked worktree by its folder. */
+  projectName: string
   /** The checkout's folder when the project runs under the server's environment, not the shell's. */
   reopenIn?: string | undefined
   /** Where the project's pages and API live on the server, with a trailing slash. */

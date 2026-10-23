@@ -1,10 +1,13 @@
 // The block that goes above the reader's message: what they pointed at, in the agent's terms.
 // Every value is checked against the canvas first, so a made-up path never reaches a file read.
-import type { ChatContext } from '../contract/chat.js'
+import type { ChatContext, TourPlace } from '../contract/chat.js'
 import { chatContextLabel } from '../contract/chat.js'
 import { pointKindText, pointLevelText } from '../../static/js/point-level.js'
 import { pointRef } from '../../static/js/proposed-comment.js'
 import type { FileEntry, Hunk, Layer, ReviewArtifact } from '../contract/review-artifact.js'
+import type { TourReaderState } from '../contract/tour-api.js'
+import type { TourArtifact } from '../contract/tour.js'
+import { pickSettled, planOf } from '../tour/plan.js'
 
 /** A file's patch goes into the message up to this many lines; past it the agent reads the file. */
 export const INLINE_PATCH_MAX_LINES = 400
@@ -16,6 +19,12 @@ export class ChatContextError extends Error {
     super(message)
     this.name = 'ChatContextError'
   }
+}
+
+/** The tour a turn on the tour page talks about, and where its reader stands. */
+export interface TourSources {
+  artifact: TourArtifact
+  reader: TourReaderState
 }
 
 export interface ContextSources {
@@ -102,6 +111,133 @@ export async function renderChatContext(context: ChatContext, sources: ContextSo
     case 'point':
       return renderPoint(context, sources)
   }
+}
+
+/**
+ * The context block of a turn on the tour page: the place of the tour it is about. The grilling
+ * names a decision or the plan; the tour's AI Chat names any place.
+ */
+export function renderTourContext(place: TourPlace, tour: TourSources): string {
+  switch (place.kind) {
+    case 'tour':
+      return '## Context: the whole tour\n\nThe reader asks about the tour as a whole, or the change it explains.'
+    case 'tour-landmark':
+      return renderTourLandmark(place.id, tour)
+    case 'tour-decision':
+      return renderTourDecision(place.key, tour)
+    case 'tour-question':
+      return renderTourQuestion(place.id, tour)
+    case 'tour-plan':
+      return renderTourPlan(tour)
+  }
+}
+
+/** A landmark as the reader reads it: its story, the files of its code, and the reader's note. */
+function renderTourLandmark(id: string, tour: TourSources): string {
+  const landmark = tour.artifact.landmarks.find(l => l.id === id)
+  if (landmark === undefined) {
+    throw new ChatContextError(`this tour has no landmark ${id}`)
+  }
+  const files = [...new Set(landmark.code.map(chunk => chunk.path))]
+  const note = (tour.reader.notes[id] ?? '').trim()
+  return [
+    `## Context: landmark "${landmark.title}"`,
+    '',
+    `${landmark.stage}${landmark.state === true ? ', the state landmark' : ''} · ${landmark.lead}`,
+    '',
+    ...landmark.body.flatMap(paragraph => [paragraph, '']),
+    files.length === 0 ? 'Its code: none quoted.' : `Its code: ${files.map(f => `\`${f}\``).join(', ')}`,
+    ...(note === '' ? [] : ['', `The reader's note on it: ${note}`]),
+  ].join('\n')
+}
+
+/**
+ * A quiz question. Until the reader has it right, the agent is not told the answer, so it helps
+ * them reason from the code instead of giving the answer away.
+ */
+function renderTourQuestion(id: string, tour: TourSources): string {
+  const question = tour.artifact.quiz.find(q => q.id === id)
+  if (question === undefined) {
+    throw new ChatContextError(`this tour has no question ${id}`)
+  }
+  const landmark = tour.artifact.landmarks.find(l => l.id === question.landmark)
+  const answered = tour.reader.quiz[id]
+  const stands =
+    answered === undefined
+      ? 'The reader has not answered yet.'
+      : answered.right
+        ? `The reader answered right. Why: ${question.why}`
+        : `The reader answered ${answered.answered + 1}, which is wrong.`
+  return [
+    `## Context: quiz question — ${question.question}`,
+    '',
+    ...(landmark === undefined ? [] : [`From the landmark "${landmark.title}".`, '']),
+    ...question.options.map((option, i) => `${i + 1}. ${option}`),
+    '',
+    stands,
+    ...(answered?.right === true
+      ? []
+      : ['', 'Do not say which option is right: help the reader reason about it from the code.']),
+  ].join('\n')
+}
+
+/** A decision the reader wants changed: both sides, the tour's reason, and where the reader stands. */
+function renderTourDecision(key: string, tour: TourSources): string {
+  const decision = tour.artifact.decisions.find(d => d.key === key)
+  if (decision === undefined) {
+    throw new ChatContextError(`this tour has no decision ${key}`)
+  }
+  const landmark = tour.artifact.landmarks.find(l => l.id === decision.landmark)
+  const pick = tour.reader.picks[decision.key]
+  const stands =
+    pick === undefined
+      ? 'The reader has not answered yet.'
+      : pick.pick === 'keep'
+        ? `The reader keeps it${pickSettled(pick) ? '' : ' so far'}.`
+        : pick.pick === 'change'
+          ? `The reader picks the tour's alternative${pickSettled(pick) ? '' : ' so far'}.`
+          : pick.restatement === undefined
+            ? 'The reader wants something else and has not said what yet.'
+            : `The reader wants something else; the restatement so far: ${pick.restatement.what} (where: ${pick.restatement.where.join(', ')}; unchanged: ${pick.restatement.unchanged}).`
+  const note = (tour.reader.notes[decision.landmark] ?? '').trim()
+  return [
+    `## Context: decision \`${decision.key}\` — ${decision.title}`,
+    '',
+    `${decision.category}${landmark === undefined ? '' : ` · from the landmark "${landmark.title}"`} · \`${decision.anchor.path}:${decision.anchor.line}\``,
+    '',
+    decision.context,
+    '',
+    `- keep: ${decision.keep.label}. ${decision.keep.consequence}`,
+    `- change: ${decision.change.label}. ${decision.change.consequence}`,
+    `- the tour recommended: ${decision.recommended}`,
+    '',
+    stands,
+    ...(note === '' ? [] : ['', `The reader's note on that landmark: ${note}`]),
+  ].join('\n')
+}
+
+/** The plan as it stands: what the reader kept, what they approved changing, what is still open. */
+function renderTourPlan(tour: TourSources): string {
+  const plan = planOf(tour.artifact, tour.reader)
+  const open = tour.artifact.decisions.filter(d => !pickSettled(tour.reader.picks[d.key]))
+  const list = (items: string[]) => (items.length === 0 ? '_none_' : items.join('\n'))
+  return [
+    '## Context: the plan',
+    '',
+    'Kept:',
+    list(plan.kept.map(({ decision }) => `- \`${decision.key}\`: ${decision.keep.label}`)),
+    '',
+    'Approved changes:',
+    list(
+      plan.changes.map(
+        ({ decision, restatement }) =>
+          `- \`${decision.key}\`: ${restatement.what} (where: ${restatement.where.join(', ')}${restatement.unchanged === undefined ? '' : `; unchanged: ${restatement.unchanged}`})`
+      )
+    ),
+    '',
+    'Still open:',
+    list(open.map(d => `- \`${d.key}\`: ${d.title}`)),
+  ].join('\n')
 }
 
 /**

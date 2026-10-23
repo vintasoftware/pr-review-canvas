@@ -27,6 +27,16 @@ export function projectSlug(repo: Repo, worktree: string | null): string {
   return worktree === null ? name : `${name}${WORKTREE_MARK}${worktree}`
 }
 
+/**
+ * How a page names the checkout: `<owner>/<repo>`, and a linked worktree by its folder. git's name
+ * for a worktree is usually its folder's, but a tool that names worktrees by id makes the slug
+ * unreadable, and the folder is what the person chose.
+ */
+export function projectName(repo: Repo, worktree: string | null, repoRoot: string): string {
+  const name = `${repo.owner}/${repo.name}`
+  return worktree === null ? name : `${name} · ${path.basename(repoRoot)}`
+}
+
 /** The repository and the worktree folder a slug names; a main checkout names no worktree. */
 export function slugParts(slug: string): { repo: string; worktree: string | null } {
   const cut = slug.indexOf(WORKTREE_MARK)

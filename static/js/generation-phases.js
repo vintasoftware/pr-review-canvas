@@ -17,6 +17,14 @@ export const PHASE_LABELS = {
 }
 
 /**
+ * The phase in words, naming what the job writes.
+ * @param {Pick<GenerationJob, 'phase' | 'kind'>} job
+ */
+export function phaseLabel(job) {
+  return job.phase === 'generating' ? `The agent is writing the ${job.kind}` : PHASE_LABELS[job.phase]
+}
+
+/**
  * True while the job can still change.
  * @param {Pick<GenerationJob, 'phase'>} job
  */
