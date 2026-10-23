@@ -1017,6 +1017,53 @@ describe('attention points', () => {
     expect(root.querySelector('.findings .cmd-err')?.textContent).toBe('github is unavailable')
     expect(root.querySelector('.findings .tbtns a')).toBeNull()
   })
+
+  it('opens a point in the composer on its line, and posts the edited text as the point', async () => {
+    const { root, calls } = setup()
+    click(root, '.findings [data-point="p-1"] [data-act="point-edit"]')
+    const box = root.querySelector('#L-src_app_ts-new-4 + tr.composer .composer-box')
+    const area = box?.querySelector('textarea')
+    if (!(area instanceof HTMLTextAreaElement)) throw new Error('no textarea')
+    expect(area.value).toContain('**Sum instead of product**')
+    expect([...(box?.querySelectorAll('.composer-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
+      'start a review',
+      'post to github',
+      'cancel',
+    ])
+    area.value = 'Should this be a product?'
+    click(root, '.composer-box [data-act="composer-post"]')
+    await flush()
+    expect(calls).toEqual([
+      [
+        'comment',
+        {
+          kind: 'inline',
+          path: 'src/app.ts',
+          line: 4,
+          side: 'new',
+          body: 'Should this be a product?',
+          pointFingerprint: 'fp-1',
+          headSha: artifact.pr.headSha,
+          mergeBaseSha: artifact.pr.mergeBaseSha,
+        },
+      ],
+    ])
+    expect(root.querySelector('li.finding[data-point="p-1"] .tbtns a')?.textContent).toBe('view comment')
+    expect(root.querySelector('li.finding[data-point="p-1"] [data-act="point-edit"]')).toBeNull()
+  })
+
+  it('says why a point cannot be edited when its file is not in the pull request', () => {
+    const canvas = {
+      ...artifact,
+      points: artifact.points.map(p => (p.id === 'p-1' ? { ...p, path: 'src/elsewhere.ts' } : p)),
+    }
+    const { root } = setup({ artifact: canvas })
+    click(root, '.findings [data-point="p-1"] [data-act="point-edit"]')
+    expect(root.querySelector('.composer-box')).toBeNull()
+    expect(root.querySelector('.findings .cmd-err')?.textContent).toBe(
+      'src/elsewhere.ts is not a file of this pull request'
+    )
+  })
 })
 
 describe('comment composers', () => {
@@ -2514,7 +2561,7 @@ describe('the pending review', () => {
     expect(root.querySelector('tr.pending-row .prose')?.textContent).toContain('queued while dismissing')
   })
 
-  it('keeps an AI-edited inline comment inside the open review', async () => {
+  it('keeps both ways out for an AI-edited inline comment while a review is open', async () => {
     const { root, wiring } = setup()
     write(root, 'first comment')
     click(root, 'tr.composer [data-act="composer-queue"]')
@@ -2527,9 +2574,41 @@ describe('the pending review', () => {
       button
     )
     expect(root.querySelector('.composer-box')?.querySelector('textarea')?.value).toBe('AI suggestion')
-    expect(root.querySelector('.composer-box [data-act="composer-post"]')).toBeNull()
-    expect(root.querySelector('.composer-box [data-act="composer-queue"]')?.textContent).toBe(
-      'add review comment'
+    // Its text was written in advance, as on the card it came from, which offers both.
+    expect(
+      [...root.querySelectorAll('.composer-box .composer-actions .cmd')].map(b => b.textContent)
+    ).toEqual(['add review comment', 'post to github', 'cancel'])
+  })
+
+  it('keeps both ways out for a point being edited when another action opens a review', async () => {
+    const { root } = setup()
+    click(root, '.findings [data-point="p-1"] [data-act="point-edit"]')
+    expect(root.querySelector('.composer-box')?.getAttribute('data-prefilled')).toBe('1')
+    // Another point added to the review opens one while the box is still open.
+    click(root, '[data-point="p-2"] [data-act="point-queue"]')
+    await flush()
+    expect(
+      [...root.querySelectorAll('.composer-box .composer-actions .cmd')].map(b => b.textContent)
+    ).toEqual(['add review comment', 'post to github', 'cancel'])
+  })
+
+  it('adds an edited point to the open review as a draft of the point', async () => {
+    const { root, session } = setup()
+    write(root, 'first comment')
+    click(root, 'tr.composer [data-act="composer-queue"]')
+    await flush()
+    click(root, '.findings [data-point="p-1"] [data-act="point-edit"]')
+    const area = root.querySelector('.composer-box textarea')
+    if (!(area instanceof HTMLTextAreaElement)) throw new Error('no textarea')
+    area.value = 'my words on the operator'
+    click(root, '.composer-box [data-act="composer-queue"]')
+    await flush()
+    expect(session.pending.map(d => [d.body, d.pointFingerprint])).toEqual([
+      ['first comment', undefined],
+      ['my words on the operator', 'fp-1'],
+    ])
+    expect(root.querySelector('li.finding[data-point="p-1"] .pill.queued')?.textContent).toBe(
+      'in your review'
     )
   })
 

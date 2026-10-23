@@ -186,6 +186,45 @@ test('adds an attention point to the review and gives it back on delete', async 
   await expect(point.locator('[data-act="point-queue"]')).toHaveCount(1)
 })
 
+for (const skin of ['terminal', 'github'] as const) {
+  test(`edits an attention point on its line and posts it while a review is open in the ${skin} skin`, async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(`${reviewUrl}?skin=${skin}`)
+    const file = page.locator('article.file[data-path="src/app.ts"]').first()
+    await file.scrollIntoViewIfNeeded()
+    // A review is open: a comment of the reader's own can only join it.
+    await file.locator('#L-src_app_ts-new-5 .plus').click()
+    await file.locator('tr.composer textarea').fill('a first thought')
+    await file.locator('tr.composer [data-act="composer-queue"]').click()
+    await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
+
+    const point = page.locator('.findings li.finding[data-fingerprint="fp-1"]').first()
+    await point.scrollIntoViewIfNeeded()
+    await point.locator('[data-act="point-edit"]').click()
+    // The point's text opens under its line, with both ways out still there.
+    const editor = file.locator('#L-src_app_ts-new-4 + tr.composer')
+    await expect(editor.locator('textarea')).toBeFocused()
+    await expect(editor.locator('textarea')).toHaveValue(/\*\*Sum instead of product\*\*/)
+    await expect(editor.locator('.composer-actions .cmd')).toHaveText([
+      'add review comment',
+      'post to github',
+      'cancel',
+    ])
+    await editor.locator('textarea').fill('Should this be a product, as the spec says?')
+    await editor.locator('[data-act="composer-post"]').click()
+
+    // The edited text went out as the point, which now links to it; the first draft still waits.
+    await expect(point.locator('.tbtns a')).toHaveAttribute('href', /discussion_r5001$/)
+    await expect(point.locator('[data-act="point-edit"]')).toHaveCount(0)
+    await expect(file.locator('tr.thread[data-thread="5001"]')).toContainText(
+      'Should this be a product, as the spec says?'
+    )
+    await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
+  })
+}
+
 test('turns a submitted attention point into a posted thread and link', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
   const point = page.locator('li[data-point="p-1"]')

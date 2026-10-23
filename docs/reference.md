@@ -929,11 +929,13 @@ A pending review holds comments on your machine until you submit them together.
   publishes ahead of the review. Replies and pull-request comments are not part of a forge review,
   so they still post at once.
 - An attention point keeps both **post to github** and **add to review**, since its text is written
-  in advance. A point in the review collapses with **in your review**. Edit or delete its draft on the
+  in advance. **edit** opens the composer on the point's line with that text in it, to change before
+  sending; the composer keeps both ways out too, and the comment still acts on the point. A point in
+  the review collapses with **in your review**. Edit or delete its draft on the
   expanded point in its layer, on its line, or in the review tab. After submission, the point collapses with
   the comment it became.
-- A comment the AI Chat proposes works the same way: it offers **post to github** and **add to
-  review**, and shows **in your review** once it is queued. After submission it shows **view
+- A comment the AI Chat proposes works the same way: it offers **post to github**, **add to
+  review**, and **edit**, and shows **in your review** once it is queued. After submission it shows **view
   comment** when the comment link is known, or **submitted** when the receipt could not be loaded.
   Neither state offers to submit that proposal again. **refresh** recovers the link when GitHub
   supplies the submitted review's comments. Older submitted records without a saved review ID

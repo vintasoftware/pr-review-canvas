@@ -153,7 +153,8 @@ export function pointContext(p) {
 /**
  * The commands a point carries, by where it stands. An open point offers every way to act on it:
  * `copy` puts the markdown on the clipboard, `post to github` posts it at the anchor, `add to
- * review` holds it as a draft instead, `resolve` lets the author answer it for every reviewer, and
+ * review` holds it as a draft instead, `edit` opens the text in a composer on its line to change
+ * before either, `resolve` lets the author answer it for every reviewer, and
  * `dismiss` takes it off this reader's list. A point already acted on keeps `copy` and `ask`, and
  * offers the way back from what was done to it: its draft carries its own edit and delete,
  * `reopen` takes back a resolution, and `restore` a dismissal.
@@ -171,6 +172,7 @@ export function pointCommandsHtml(p, opts = {}) {
   const byStatus = {
     open:
       sendCommandsHtml({ kind: 'point', id: p.id }) +
+      `<button class="cmd" type="button" data-act="point-edit" data-point="${esc(p.id)}" data-needs-post data-tooltip="Edit" title="Edit">edit</button>` +
       ask +
       settle +
       `<button class="cmd" type="button" data-act="point-dismiss" data-fingerprint="${fp}">dismiss</button>`,
