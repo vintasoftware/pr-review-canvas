@@ -417,9 +417,9 @@ export function landmarkHtml(bundle, steps, landmark) {
     <h2 class="tour-title">${plain(landmark.title)}</h2>
     <p class="tour-lead">${inline(landmark.lead)}</p>
     ${figure}
-    ${code}
     <div class="tour-body">${landmark.body.map(p => `<p>${inline(p)}</p>`).join('')}</div>
     ${chips}
+    ${code}
     <div class="tour-note"><label for="note-${esc(landmark.id)}">Something I noticed <span class="tour-hint">optional</span></label><textarea id="note-${esc(landmark.id)}" data-act="note" data-landmark="${esc(landmark.id)}" rows="2" maxlength="${NOTE_MAX}" placeholder="A thought while reading, so you do not have to hold it until the decisions">${esc(note)}</textarea></div>`
 }
 
