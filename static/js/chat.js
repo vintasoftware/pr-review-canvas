@@ -296,12 +296,14 @@ export function checkoutWarningHtml(event) {
  * The commands under a card. `add to review` leads, as it does on a diff-line comment, and both
  * ways of sending go through the same paths as every other post and draft, so capability gating
  * and the pending state apply here too. `data-key` names what the send commands show, so a
- * change of state redraws only the cards it changed.
+ * change of state redraws only the cards it changed. A range across two chunks disables both ways
+ * of sending; edit and copy stay.
  * @param {ProposedComment} comment
  * @param {string} id the key the pane stores this card's comment under
  * @param {SendState} send
+ * @param {string | null} anchorError
  */
-function proposedCommandsHtml(comment, id, send) {
+function proposedCommandsHtml(comment, id, send, anchorError) {
   const shown =
     send.postedUrl !== undefined
       ? 'posted'
@@ -312,7 +314,7 @@ function proposedCommandsHtml(comment, id, send) {
           : 'open'
   return (
     `<span class="tbtns" data-key="${shown}">` +
-    sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true }) +
+    sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true, blocked: anchorError }) +
     `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post data-tooltip="Edit" title="Edit">edit</button>` +
     `<button class="cmd" type="button" data-copy="${esc(comment.body)}" title="Copy">copy</button>` +
     '</span>'
@@ -340,12 +342,15 @@ function proposedPointHtml(id, send) {
 }
 
 /**
- * The card a proposed comment renders as.
+ * The card a proposed comment renders as. `anchorError` is set when its range crosses two chunks,
+ * which the server refuses. The card shows it and keeps the agent's lines: moving them would put
+ * the comment where the reader did not choose.
  * @param {ProposedComment} comment
  * @param {string} id the key the pane stores this card's comment under
  * @param {SendState} [send]
+ * @param {string | null} [anchorError]
  */
-export function proposedCommentHtml(comment, id, send = {}) {
+export function proposedCommentHtml(comment, id, send = {}, anchorError = null) {
   const range = comment.startLine === undefined ? `${comment.line}` : `${comment.startLine}–${comment.line}`
   const side = comment.side === 'old' ? ' (old side)' : ''
   return (
@@ -353,8 +358,9 @@ export function proposedCommentHtml(comment, id, send = {}) {
     `<div class="proposed-h"><span class="lbl">proposed comment</span>` +
     `<span class="mono">${esc(comment.path)}:${esc(range)}${side}</span></div>` +
     proposedPointHtml(id, send) +
+    (anchorError === null ? '' : `<p class="proposed-anchor bad small">${esc(anchorError)}</p>`) +
     `<div class="prose">${renderMarkdown(comment.body)}</div>` +
-    proposedCommandsHtml(comment, id, send) +
+    proposedCommandsHtml(comment, id, send, anchorError) +
     '</div>'
   )
 }
@@ -494,7 +500,7 @@ export function answerHtml(text, targets, sink, paths, opts = {}) {
       }
       const comment = { ...segment.comment, proposalFingerprint: proposalFingerprint(segment.comment) }
       sink.set(id, comment)
-      return proposedCommentHtml(comment, id, sendStateOf(comment, opts))
+      return proposedCommentHtml(comment, id, sendStateOf(comment, opts), targets.anchorError(comment))
     })
     .join('')
 }
@@ -1917,7 +1923,7 @@ export function wireChat(options) {
           continue
         }
         const sendState = sendStateOf(entry, now)
-        redrawOnKey(tbtns, proposedCommandsHtml(entry, id, sendState))
+        redrawOnKey(tbtns, proposedCommandsHtml(entry, id, sendState, targets.anchorError(entry)))
         // The point line follows the same state: put in, changed, or taken out.
         const line = proposedPointHtml(id, sendState)
         const drawn = card.querySelector(':scope > .proposed-point')

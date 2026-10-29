@@ -4,6 +4,7 @@
 // are model output, so every field is checked against the pull request's own files and points
 // before a card offers to act on it; a block that does not check out stays a code block.
 import { splitFences } from './fences.js'
+import { resolveLink } from './links.js'
 
 /**
  * `point` is the attention point the comment acts on, when the agent named one this canvas has.
@@ -68,11 +69,14 @@ export function proposalFingerprint(comment) {
 
 /**
  * What a target has to satisfy to be postable: the file is in this pull request, and the line is
- * one the diff shows on that side. `pointFor` finds the attention point a `point` field names, and
- * `resolves` says whether this reader may resolve points here, which a resolution needs.
+ * one the diff shows on that side. Both ends of a range can pass that and still be in two chunks,
+ * which the server refuses: `anchorError` returns the link check's message for that, or null.
+ * `pointFor` finds the attention point a `point` field names, and `resolves` says whether this
+ * reader may resolve points here, which a resolution needs.
  * @typedef {{
  *   hasPath: (path: string) => boolean,
  *   hasLine: (path: string, side: 'new' | 'old', line: number) => boolean,
+ *   anchorError: (comment: ProposedComment) => string | null,
  *   pointFor?: (ref: string) => ProposalPoint | undefined,
  *   resolves?: boolean,
  * }} CommentTargets
@@ -234,6 +238,18 @@ export function targetsFromFiles(files, points = [], resolves = false) {
       return only === undefined ? undefined : { fingerprint: only.fingerprint, title: only.title }
     },
     hasPath: path => byPath.has(path),
+    // The `#line:` link check, so the message names the file's chunk ranges.
+    anchorError: comment => {
+      const link = {
+        kind: /** @type {const} */ ('line'),
+        path: comment.path,
+        start: comment.startLine ?? comment.line,
+        end: comment.line,
+        side: comment.side,
+      }
+      const resolved = resolveLink(link, { layers: [], files })
+      return resolved.ok ? null : resolved.message
+    },
     hasLine: (path, side, line) => {
       const entry = byPath.get(path)
       if (entry === undefined) {

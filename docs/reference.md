@@ -917,7 +917,8 @@ repository permissions.
 Click a line number to comment on one line. Shift-click a second line number, or drag across a
 range, to select several lines: the comment then covers the whole range, and posts as a multi-line
 comment (`start_line` on GitHub, a `line_range` position on GitLab). A range must stay inside one
-chunk of the diff.
+chunk of the diff. This holds for a comment AI Chat proposes too: see
+[Pending reviews](#pending-reviews).
 
 ### Pending reviews
 
@@ -942,6 +943,10 @@ A pending review holds comments on your machine until you submit them together.
   other turns share the same status. The fingerprint follows its draft and identifies the posted
   comment, so its link survives draft edits, GitHub edits, and later commits moving the lines.
   Delayed receipts and older records use GitHub's complete original range to find the comment.
+  When the proposal's range crosses two chunks, the card says so and names the chunk ranges of
+  that side, as a `#line:` link check does. **post to github** and **add to review** are then
+  disabled; **edit** and **copy** stay. The card keeps the lines AI Chat chose: it does not move
+  the comment to one line for you.
 - AI Chat can tie a proposed comment to an attention point when the comment acts on it, for
   example when it answers what the point asks you to decide. The card then says **about the
   point "…"**. AI Chat decides this from the conversation: the context chip names where the talk
@@ -1124,7 +1129,8 @@ An ask then only chooses the context of your next message, which the line above 
 names; choosing another target replaces it, and **clear** returns to the whole PR.
 
 Chat can propose an inline comment. A valid proposal appears with controls to post, edit,
-or copy it. A proposal outside the current diff remains text with an explanation.
+or copy it. A proposal outside the current diff remains text with an explanation. A proposal
+whose range crosses two chunks shows as a card with the reason, and only edit and copy work.
 
 Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. While an answer is
 coming in, ask, the list of threads, and **new thread** still open any thread, and the answer keeps

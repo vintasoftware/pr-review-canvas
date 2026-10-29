@@ -8,6 +8,7 @@ import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { cssEscape } from './anchors.js'
+import { applyCapabilityGating } from './composer.js'
 import { setChatEnabled } from './ask.js'
 import {
   answerHtml,
@@ -1870,7 +1871,7 @@ describe('answerHtml', () => {
       const sink = new Map()
       answerHtml(
         text,
-        { hasPath: path => present.includes(path), hasLine: () => true },
+        { hasPath: path => present.includes(path), hasLine: () => true, anchorError: () => null },
         sink,
         new Set(present),
         { turnKey: 'turn' }
@@ -2074,6 +2075,72 @@ describe('the proposed-comment commands', () => {
     // Untied before it went out: the agent's text links it again on a redraw, the draft does not.
     document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, { pending: [queued(undefined)] })
     expect(document.querySelector('.proposed-point')).toBeNull()
+  })
+})
+
+describe('a proposed comment whose range crosses two chunks', () => {
+  // src/app.ts shows new-side lines 1-5 and 11-14, in two chunks.
+  /** @param {string} json */
+  const card = json => {
+    document.body.innerHTML = answerHtml('```comment\n' + json + '\n```', targets, new Map(), paths)
+    return /** @type {HTMLElement} */ (document.querySelector('.proposed'))
+  }
+  /** @param {string} selector */
+  const button = selector => /** @type {HTMLButtonElement} */ (document.querySelector(selector))
+
+  it('offers both ways of sending for a range inside one chunk', () => {
+    card('{"path":"src/app.ts","startLine":2,"line":4,"body":"Rename."}')
+    expect(document.querySelector('.proposed-anchor')).toBeNull()
+    expect(button('[data-act="proposed-post"]').disabled).toBe(false)
+    expect(button('[data-act="proposed-queue"]').disabled).toBe(false)
+  })
+
+  it('says why a range across two chunks cannot be sent, and keeps edit and copy', () => {
+    const message = 'src/app.ts:3-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)'
+    const drawn = card('{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}')
+    // The agent's lines stay as it wrote them; the card does not move the anchor.
+    expect(drawn.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:3–12')
+    expect(drawn.querySelector('.proposed-anchor')?.textContent).toBe(message)
+    for (const act of ['proposed-post', 'proposed-queue']) {
+      expect(button(`[data-act="${act}"]`).disabled).toBe(true)
+      expect(button(`[data-act="${act}"]`).title).toBe(message)
+    }
+    expect(button('[data-act="proposed-edit"]').disabled).toBe(false)
+    expect(button('[data-copy]').disabled).toBe(false)
+    // Posting rights coming back do not enable a command the anchor blocks.
+    applyCapabilityGating(document, { ...UNKNOWN_CAPABILITIES, canComment: true })
+    expect(button('[data-act="proposed-post"]').disabled).toBe(true)
+    expect(button('[data-act="proposed-edit"]').disabled).toBe(false)
+  })
+
+  it('keeps a line outside the diff as a code block with the reason, not a card', () => {
+    expect(card('{"path":"src/app.ts","line":8,"body":"x"}')).toBeNull()
+    expect(document.querySelector('.proposed-invalid + p')?.textContent).toBe(
+      'src/app.ts:8 is not a line the diff shows'
+    )
+  })
+
+  it('keeps sending blocked when the pane draws the card again', async () => {
+    const { root, chat } = mount({
+      streamChat: async (_pr, _input, opts) => {
+        opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+        opts.onEvent({
+          event: 'chunk',
+          data: { text: '```comment\n{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}\n```\n' },
+        })
+      },
+    })
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    // A stale key makes the refresh draw the commands again.
+    el(root, '.proposed .tbtns').setAttribute('data-key', 'stale')
+    chat.refreshProposed()
+    expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-post"]')).disabled).toBe(true)
+    expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-queue"]')).disabled).toBe(true)
+    expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-edit"]')).disabled).toBe(false)
   })
 })
 

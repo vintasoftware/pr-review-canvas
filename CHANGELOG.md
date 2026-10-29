@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### AI Chat
+
+- A proposed comment whose range crosses two chunks says so on its card, in the words of the
+  `#line:` link check, with the chunk ranges of that side. Its **post to github** and **add to
+  review** are disabled; **edit** and **copy** stay. The card keeps the lines AI Chat chose and
+  does not move the comment to one line. Before, the card offered both commands and the server
+  then refused the comment as spanning more than one chunk.
+
 ## 0.10.0
 
 Changes since 0.9.0.

@@ -74,7 +74,9 @@ export function isQueuedComment(proposed, pending) {
  *   queued?: boolean | undefined,
  *   submitted?: boolean | undefined,
  *   leadWithQueue?: boolean,
- * }} opts `kind` names the commands (`point-post`) and the attribute that carries `id`
+ *   blocked?: string | null,
+ * }} opts `kind` names the commands (`point-post`) and the attribute that carries `id`; `blocked`
+ *   disables both ways of sending and is their title
  */
 export function sendCommandsHtml(opts) {
   if (opts.postedUrl !== undefined) {
@@ -89,7 +91,13 @@ export function sendCommandsHtml(opts) {
   const target = `data-${opts.kind}="${esc(opts.id)}"`
   // The tooltip is cased like its neighbours' (Edit, Copy); the word stays the command's.
   const tip = esc(`Post to ${hostLabel()}`)
-  const post = `<button class="cmd" type="button" data-act="${opts.kind}-post" ${target} data-needs-post data-tooltip="${tip}" title="${tip}">${postToLabel()}</button>`
-  const queue = `<button class="cmd${opts.leadWithQueue === true ? ' fill' : ''}" type="button" data-act="${opts.kind}-queue" ${target}>add to review</button>`
+  // `data-disabled-reason` keeps the capability gate from enabling it again.
+  const blocked =
+    opts.blocked === undefined || opts.blocked === null
+      ? ''
+      : ` disabled data-disabled-reason="${esc(opts.blocked)}" title="${esc(opts.blocked)}"`
+  const postTitle = blocked === '' ? ` title="${tip}"` : blocked
+  const post = `<button class="cmd" type="button" data-act="${opts.kind}-post" ${target} data-needs-post data-tooltip="${tip}"${postTitle}>${postToLabel()}</button>`
+  const queue = `<button class="cmd${opts.leadWithQueue === true ? ' fill' : ''}" type="button" data-act="${opts.kind}-queue" ${target}${blocked}>add to review</button>`
   return opts.leadWithQueue === true ? queue + post : post + queue
 }
