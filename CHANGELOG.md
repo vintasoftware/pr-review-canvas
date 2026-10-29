@@ -9,6 +9,13 @@
   review** are disabled; **edit** and **copy** stay. The card keeps the lines AI Chat chose and
   does not move the comment to one line. Before, the card offered both commands and the server
   then refused the comment as spanning more than one chunk.
+- AI Chat gets the line ranges of each file's chunks on each side, listed by layer in its opening
+  instructions, and is told to keep a proposed comment's `startLine` and `line` inside one of
+  them. Before, it saw only file paths and the code, where lines across two chunks look like one
+  block. A side with no lines in a chunk, such as the old side of an added file, is not listed.
+  This applies to threads started after the upgrade. A project's own `chat-seed.md` gets the ranges
+  through `{{LAYERS}}`; copy the new sentence about `startLine` from the bundled template to tell
+  AI Chat to use them.
 
 ## 0.10.0
 

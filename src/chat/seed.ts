@@ -1,6 +1,7 @@
 // Renders the seed that opens a chat thread: who the agent is, what the pull request changes,
 // and where the code sits on disk. The prose lives in prompts/chat-seed.md.
-import type { Pr, ReviewArtifact } from '../contract/review-artifact.js'
+import type { Hunk, Pr, ReviewArtifact } from '../contract/review-artifact.js'
+import { hunkLineRanges } from '../git/patch-lines.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
 import { pointKindText, pointLevelText } from '../../static/js/point-level.js'
@@ -39,13 +40,33 @@ export function prMetaMarkdown(pr: Pr): string {
   ].join('\n')
 }
 
+/**
+ * The line ranges of these chunks on each side, worded as the comment card words them, so AI Chat
+ * can keep a proposed range inside one chunk. A side with no lines in a chunk (the old side of an
+ * added file) is left out: no comment can anchor there.
+ */
+function chunkRanges(hunks: ReadonlyArray<Hunk>): string {
+  const sides = (['new', 'old'] as const).flatMap(side => {
+    const shown = hunks.filter(h => (side === 'new' ? h.newLines : h.oldLines) > 0)
+    return shown.length === 0 ? [] : [hunkLineRanges(shown, side)]
+  })
+  return `: ${sides.join('; ')}`
+}
+
 export function layersMarkdown(artifact: ReviewArtifact): string {
   if (artifact.layers.length === 0) {
     return '_none_'
   }
+  const hunkById = new Map(artifact.files.flatMap(f => f.hunks.map(h => [h.id, h] as const)))
   return artifact.layers
     .map(layer => {
-      const files = layer.files.map(f => `  - \`${f.path}\``).join('\n')
+      // Only this layer's chunks: a file split across layers lists the others under their layer.
+      const files = layer.files
+        .map(f => {
+          const hunks = f.hunks.flatMap(id => hunkById.get(id) ?? [])
+          return `  - \`${f.path}\`${chunkRanges(hunks)}`
+        })
+        .join('\n')
       const other = layer.kind === 'other' ? ' (mechanical)' : ''
       return files === '' ? `- **${layer.title}**${other}` : `- **${layer.title}**${other}\n${files}`
     })

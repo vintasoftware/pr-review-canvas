@@ -1128,9 +1128,11 @@ To send every ask to the open thread instead, clear **A thread per place** under
 An ask then only chooses the context of your next message, which the line above the message box
 names; choosing another target replaces it, and **clear** returns to the whole PR.
 
-Chat can propose an inline comment. A valid proposal appears with controls to post, edit,
-or copy it. A proposal outside the current diff remains text with an explanation. A proposal
-whose range crosses two chunks shows as a card with the reason, and only edit and copy work.
+Chat can propose an inline comment. The opening instructions list the line ranges of each file's
+chunks on each side, by layer, so AI Chat can keep a proposed range inside one chunk. A valid
+proposal appears with controls to post, edit, or copy it. A proposal outside the current diff
+remains text with an explanation. A proposal whose range crosses two chunks shows as a card with
+the reason, and only edit and copy work.
 
 Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. While an answer is
 coming in, ask, the list of threads, and **new thread** still open any thread, and the answer keeps
