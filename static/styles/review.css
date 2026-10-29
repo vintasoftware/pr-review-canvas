@@ -475,7 +475,26 @@ details[open] > summary .chev,
   overflow-wrap: anywhere;
 }
 
-/* test map */
+/* test map: closed under a title that counts the tests, opened for the table */
+.tests > summary.lbl.sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  cursor: pointer;
+}
+.tests > summary :is(.t-covered, .t-skip) {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.tests > summary .t-missing {
+  color: var(--bad);
+}
+.tests > summary :is(.t-missing, .t-skip)::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--fg-muted);
+}
 .testmap {
   width: 100%;
   border-collapse: collapse;

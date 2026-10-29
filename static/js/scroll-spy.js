@@ -33,6 +33,10 @@ export function initScrollSpy(root) {
   let frame = 0
   const update = () => {
     frame = 0
+    // The board (board.js) hides the rail, and its sections do not run down the page.
+    if (root.querySelector('.board-viewport') !== null) {
+      return
+    }
     const shown = sections.filter(section => !section.hidden)
     let active = shown[0]
     for (const section of shown) {

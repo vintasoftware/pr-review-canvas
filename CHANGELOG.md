@@ -4,6 +4,17 @@
 
 Changes since 0.9.0.
 
+### Reading
+
+- **Show layers** has a third choice, **on a board**: the review as a tree you pan, zoom, and
+  rearrange. The pull request is the root, its layers hang under it with their descriptions, and
+  an open layer's attention points under it. You review a layer through its points: its title bar
+  counts the ones you dismissed or acted on, and once you act on one the board opens the next. An opened point shows the code it is about, and a link
+  to a file opens it in a side panel. The board has no rail, and AI Chat floats over it. See
+  [On a board](docs/reference.md#on-a-board).
+- A layer's **Tests** table starts closed, in every view. Its title counts the tests: how many are
+  covered, missing, or not needed. Click it to open the table.
+
 ### Self-review
 
 - A resolution now lasts. Every later canvas of the pull request starts from the resolutions of its

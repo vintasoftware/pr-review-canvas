@@ -60,13 +60,13 @@ const click = el => el?.dispatchEvent(new MouseEvent('click', { bubbles: true, c
 const reveal = el => el?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
 
 describe('the layer views', () => {
-  it('names two views, all by default, each with a label', () => {
-    expect(LAYER_VIEWS).toEqual(['all', 'one'])
+  it('names three views, all by default, each with a label', () => {
+    expect(LAYER_VIEWS).toEqual(['all', 'one', 'board'])
     expect(DEFAULT_LAYER_VIEW).toBe('all')
     expect(isLayerView('one')).toBe(true)
     expect(isLayerView('some')).toBe(false)
     expect(isLayerView(1)).toBe(false)
-    expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one'])
+    expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one', 'board'])
   })
 })
 
@@ -113,6 +113,15 @@ describe('initOneLayer', () => {
     expect(shownIds()).toHaveLength(4)
     // A target inside a layer changes nothing here.
     reveal(section('layer-auth'))
+    expect(shownIds()).toHaveLength(4)
+  })
+
+  it('leaves every section on the page in the board view, and shows them all again from one', () => {
+    oneLayer = initOneLayer(root, { view: 'board' })
+    expect(shownIds()).toHaveLength(4)
+    oneLayer.setView('one')
+    expect(shownIds()).toEqual(['overview'])
+    oneLayer.setView('board')
     expect(shownIds()).toHaveLength(4)
   })
 

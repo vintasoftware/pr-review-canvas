@@ -704,7 +704,8 @@ export function wireReview(root, session, opts = {}) {
       if (parts !== null) {
         setCardCollapsed(parts.card, reviewed)
         parts.card.classList.toggle('is-reviewed', reviewed)
-        if (reviewed) {
+        // On the board the board takes the reader on to the next point itself (board.js).
+        if (reviewed && parts.card.closest('.board-plane') === null) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
             focusItem(next)

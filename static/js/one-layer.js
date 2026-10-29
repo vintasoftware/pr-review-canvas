@@ -4,7 +4,7 @@
 // scrolls through one layer only. Whatever brings something on screen (a rail link, the j/k and
 // n/p keys, a canvas link) shows the section that holds it first, so nothing the reader is sent
 // to stays hidden. A review mark is the exception: it moves on to the next card only inside the
-// layer on screen. With `all` this module does nothing.
+// layer on screen. With `all` and `board` this module does nothing.
 import { cssEscape } from './anchors.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
@@ -114,7 +114,8 @@ export function initOneLayer(root, opts) {
   const sectionFor = fragment => sectionOf(root, elementForHash(root, fragment))
 
   const redraw = () => {
-    if (view === 'all') {
+    // The board lays every section out side by side, so it hides none, as `all` does.
+    if (view !== 'one') {
       for (const section of pageSections(root)) {
         section.hidden = false
       }

@@ -272,7 +272,7 @@ export interface ReviewBootstrap {
   host: PublicHost
   /** The reading level the canvas opens at, from the settings file. */
   foldLevel: FoldLevel
-  /** Whether the canvas shows every layer, or one at a time, from the settings file. */
+  /** Whether the canvas shows every layer, one at a time, or on a board, from the settings file. */
   layerView: LayerView
   /** The palette of the point level icons, from the settings file. */
   pointColors: PointColors

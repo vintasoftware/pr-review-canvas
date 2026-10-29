@@ -56,6 +56,7 @@ import { initScrollSpy } from './scroll-spy.js'
 import { setSelfReview } from './self-review.js'
 import { openSettingsDialog } from './settings.js'
 import { wireAppearanceCommands } from './appearance-commands.js'
+import { initBoard } from './board.js'
 import { readSkin } from './skin.js'
 import { readTheme } from './theme.js'
 import { hostLabel, setHost } from './host.js'
@@ -158,6 +159,11 @@ export class PrAppElement extends HTMLElement {
    * @type {ReturnType<typeof initOneLayer> | null}
    */
   layerView = null
+  /**
+   * The board, for `layerView: board`. Made and kept like `layerView`, and redrawn with it.
+   * @type {ReturnType<typeof initBoard> | null}
+   */
+  board = null
   /** @type {{ stop: () => void } | null} */
   interactions = null
   /** @type {ReturnType<typeof wireChat>} */
@@ -197,6 +203,8 @@ export class PrAppElement extends HTMLElement {
     this.scrollSpy = null
     this.layerView?.stop()
     this.layerView = null
+    this.board?.stop()
+    this.board = null
     this.interactions?.stop()
     this.interactions = null
     this.stopChat()
@@ -225,6 +233,8 @@ export class PrAppElement extends HTMLElement {
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
     this.layerView?.stop()
     this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
+    this.board?.stop()
+    this.board = initBoard(this, { view: this.bootstrap.layerView })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
       () => null
@@ -386,6 +396,7 @@ export class PrAppElement extends HTMLElement {
           void openSettingsDialog(this, el, {
             onSaved: data => {
               this.layerView?.setView(data.settings.layerView)
+              this.board?.setView(data.settings.layerView)
               this.chat?.followSettings(data.settings)
               applyPointColors(data.settings.pointColors, document.documentElement)
             },
@@ -461,6 +472,8 @@ export class PrAppElement extends HTMLElement {
     // One layer at a time hides the rest before the URL is followed, so a link into a layer lands
     // on a layer that is showing.
     this.layerView?.redraw()
+    // The board moves the sections onto its plane before the URL is followed, for the same reason.
+    this.board?.redraw()
     // The cards are in the page now, so a link in the URL has something to land on.
     this.deepLinks = initDeepLinks(this)
     this.scrollSpy = initScrollSpy(this)

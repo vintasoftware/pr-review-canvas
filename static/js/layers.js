@@ -220,6 +220,28 @@ export function fileCount(n) {
 }
 
 /**
+ * How a layer's tests stand, for the title of its test map: how many are covered, and how many are
+ * missing or not needed.
+ * @param {ReadonlyArray<{ status: string }>} tests
+ * @returns {{ html: string, text: string }}
+ */
+export function testCountsOf(tests) {
+  const count = /** @param {string} status */ status => tests.filter(t => t.status === status).length
+  const missing = count('missing')
+  const notNeeded = count('not-needed')
+  const parts = [
+    { cls: 't-covered', text: `${count('covered')}/${tests.length} covered` },
+    ...(missing > 0 ? [{ cls: 't-missing', text: `${missing} missing` }] : []),
+    ...(notNeeded > 0 ? [{ cls: 't-skip', text: `${notNeeded} not needed` }] : []),
+  ]
+  return {
+    html: parts.map(p => `<span class="${p.cls}">${p.text}</span>`).join(''),
+    text: parts.map(p => p.text).join(', '),
+  }
+}
+
+/**
+ * The layer's tests, closed under a title that counts them; the reader opens it for the table.
  * @param {Layer} layer
  * @param {ReadonlySet<string>} paths
  */
@@ -227,6 +249,7 @@ export function testMapHtml(layer, paths) {
   if (layer.tests.length === 0) {
     return ''
   }
+  const counts = testCountsOf(layer.tests)
   const rows = layer.tests
     .map(t => {
       const where = t.testPath ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath)}</a>` : ''
@@ -234,7 +257,12 @@ export function testMapHtml(layer, paths) {
       return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })
     .join('')
-  return `<h3 class="lbl sub">Tests</h3><table class="testmap"><thead><tr><th scope="col">Behavior</th><th scope="col">Status</th><th scope="col">Test</th></tr></thead><tbody>${rows}</tbody></table>`
+  const title = detailsSummaryHtml(
+    `<span class="t-name">Tests</span>${counts.html}`,
+    `Tests: ${counts.text}`,
+    'lbl sub'
+  )
+  return `<details class="tests">${title}<table class="testmap"><thead><tr><th scope="col">Behavior</th><th scope="col">Status</th><th scope="col">Test</th></tr></thead><tbody>${rows}</tbody></table></details>`
 }
 
 /**

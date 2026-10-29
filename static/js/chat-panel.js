@@ -3,8 +3,9 @@ import { clickedCanvasLink } from './deep-link.js'
 
 /** Keeps the same chat mounted while switching between the sidebar and floating panel.
  *
- * The chat minimizes at every width. Narrow screens float it over the canvas, so minimizing
- * closes the dialog; wide screens dock it in the layout grid, so minimizing drops the column.
+ * The chat minimizes at every width. Narrow screens and the board float it over the canvas, so
+ * minimizing closes the dialog; wide screens dock it in the layout grid, so minimizing drops the
+ * column.
  * Either way the launcher brings back the same pane with its draft and transcript intact.
  *
  * @param {HTMLElement} root
@@ -22,12 +23,14 @@ export function wireChatPanel(root, pane, opts = {}) {
   /** Floating panels start minimized; a docked one starts the way the reader last left it. */
   let floating = false
   let docked = !opts.minimized
+  /** The pane floats on a narrow screen, and over the board (board.js) at any width. */
+  const floats = () => narrow.matches || (layout?.querySelector(':scope > main.board') ?? null) !== null
 
-  const shown = () => (narrow.matches ? floating : docked)
+  const shown = () => (floats() ? floating : docked)
 
   function sync() {
     if (dialog.open) dialog.close()
-    if (narrow.matches) {
+    if (floats()) {
       dialog.append(pane)
       pane.hidden = false
       if (floating) {
@@ -38,7 +41,7 @@ export function wireChatPanel(root, pane, opts = {}) {
       dialog.before(pane)
       pane.hidden = !docked
     }
-    layout?.classList.toggle('no-chat', !narrow.matches && !docked)
+    layout?.classList.toggle('no-chat', !floats() && !docked)
     launcher.setAttribute('aria-expanded', String(shown()))
     launcher.hidden = shown()
     opts.onShownChange?.(shown())
@@ -46,7 +49,7 @@ export function wireChatPanel(root, pane, opts = {}) {
 
   function open() {
     if (!shown()) {
-      if (narrow.matches) floating = true
+      if (floats()) floating = true
       else {
         docked = true
         opts.onMinimizedChange?.(false)
@@ -58,7 +61,7 @@ export function wireChatPanel(root, pane, opts = {}) {
   }
 
   function close() {
-    if (narrow.matches) floating = false
+    if (floats()) floating = false
     else {
       docked = false
       opts.onMinimizedChange?.(true)
@@ -72,7 +75,7 @@ export function wireChatPanel(root, pane, opts = {}) {
    * canvas is not left under it. A docked pane covers nothing.
    */
   function uncover() {
-    if (narrow.matches && floating) close()
+    if (floats() && floating) close()
   }
 
   /**
@@ -120,6 +123,7 @@ export function wireChatPanel(root, pane, opts = {}) {
   dialog.addEventListener('keydown', trapFocus)
   narrow.addEventListener('change', sync)
   mobile.addEventListener('change', sync)
+  root.addEventListener('board-change', sync)
   sync()
 
   return {
@@ -134,6 +138,7 @@ export function wireChatPanel(root, pane, opts = {}) {
       dialog.removeEventListener('keydown', trapFocus)
       narrow.removeEventListener('change', sync)
       mobile.removeEventListener('change', sync)
+      root.removeEventListener('board-change', sync)
     },
   }
 }

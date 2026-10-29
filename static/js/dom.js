@@ -64,9 +64,11 @@ export function chevronHtml(label, expanded = true, opts = {}) {
  * native <details> toggle. The decorative chevron lets clicks activate the summary.
  * @param {string} titleHtml already escaped
  * @param {string} label the summary's accessible name
+ * @param {string} [className] classes for the summary, to style it like another heading
  */
-export function detailsSummaryHtml(titleHtml, label) {
-  return `<summary aria-label="${esc(label)}"><span class="chev" aria-hidden="true">${CHEVRON_ICON}</span>${titleHtml}</summary>`
+export function detailsSummaryHtml(titleHtml, label, className) {
+  const cls = className === undefined ? '' : ` class="${esc(className)}"`
+  return `<summary${cls} aria-label="${esc(label)}"><span class="chev" aria-hidden="true">${CHEVRON_ICON}</span>${titleHtml}</summary>`
 }
 
 /**

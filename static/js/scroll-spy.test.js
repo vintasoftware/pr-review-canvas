@@ -115,6 +115,14 @@ describe('initScrollSpy', () => {
     expect(selected()).toEqual(['#layer-auth'])
   })
 
+  it('leaves the rail alone while the sections are on the board', () => {
+    document.querySelector('main')?.insertAdjacentHTML('beforeend', '<div class="board-viewport"></div>')
+    spy = initScrollSpy(document.body)
+    tops = { overview: -700, 'layer-auth': -140, 'layer-storage': 660, 'layer-other': 1460 }
+    scroll()
+    expect(selected()).toEqual(['#overview'])
+  })
+
   it('marks nothing when the rail names no section at all', () => {
     document.body.innerHTML = '<nav class="rail"><a href="#gone">Gone</a></nav><main></main>'
     spy = initScrollSpy(document.body)

@@ -45,6 +45,7 @@ import {
   setCardRenderedHook,
   setFoldLevel,
   setRenderContext,
+  testCountsOf,
   testMapHtml,
   threadsForHunks,
 } from './layers.js'
@@ -168,7 +169,25 @@ describe('layer sections', () => {
     expect(rows.map(r => r.querySelector('.st')?.textContent)).toEqual(['covered', 'missing', 'not-needed'])
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#file:src/app.test.ts')
     expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('y is unused')
+    // The table starts closed under a title that counts the tests.
+    const details = document.querySelector('details.tests')
+    expect(details?.hasAttribute('open')).toBe(false)
+    const summary = details?.querySelector(':scope > summary.lbl.sub')
+    expect(summary?.getAttribute('aria-label')).toBe('Tests: 1/3 covered, 1 missing, 1 not needed')
+    expect([...(summary?.querySelectorAll('span:not(.chev)') ?? [])].map(s => s.className)).toEqual([
+      't-name',
+      't-covered',
+      't-missing',
+      't-skip',
+    ])
     expect(testMapHtml({ ...layer, tests: [] }, paths)).toBe('')
+  })
+
+  it('counts only the kinds of test a layer has', () => {
+    expect(testCountsOf([{ status: 'covered' }, { status: 'covered' }])).toEqual({
+      html: '<span class="t-covered">2/2 covered</span>',
+      text: '2/2 covered',
+    })
   })
 
   it('renders a file card that was already reviewed as checked and folded away', () => {
@@ -223,7 +242,7 @@ describe('layer sections', () => {
       )
     ).toEqual(['body', 'lbl sub', 'testmap', 'lbl sub', 'findings', 'lbl sub', 'files'])
     expect([...(section?.querySelectorAll('.lbl.sub') ?? [])].map(h => h.textContent)).toEqual([
-      'Tests',
+      'Tests1/3 covered1 missing1 not needed',
       'Attention points · 1',
       'Files · 3',
     ])

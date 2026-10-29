@@ -611,6 +611,19 @@ describe('reviewed state', () => {
       expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_ts')
     })
 
+    it('leaves the next move to the board when the layer is on one', async () => {
+      const { root, calls } = setup({ artifact: withSecondLayer(), state: lastOpen })
+      // The board holds the page's own sections on its plane.
+      const plane = document.createElement('div')
+      plane.className = 'board-plane'
+      const layer = /** @type {HTMLElement} */ (root.querySelector('#layer-run-path')?.parentElement)
+      layer.before(plane)
+      plane.append(layer)
+      await markLast(root)
+      expect(calls).toEqual([['reviewed', { id: 'layer:run-path/file:src_app_test_ts', reviewed: true }]])
+      expect(root.querySelector('.is-focused')).toBeNull()
+    })
+
     it('stays in its layer when one layer shows at a time', async () => {
       const { root, calls } = setup({ artifact: withSecondLayer(), state: lastOpen })
       wirings.push(initOneLayer(root, { view: 'one' }))
