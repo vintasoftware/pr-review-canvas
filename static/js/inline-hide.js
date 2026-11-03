@@ -34,6 +34,17 @@ const ROW_SELECTORS = /** @type {Readonly<Record<InlineKind, string>>} */ ({
   annotations: 'tr.annot',
 })
 
+/**
+ * The row an item link goes to. The caller escapes the id: the server imports this module, so
+ * it cannot import anchors.js.
+ * @param {'points' | 'pending'} kind
+ * @param {string} escapedId
+ */
+export function itemRowSelector(kind, escapedId) {
+  const attr = kind === 'points' ? 'data-point' : 'data-pending-id'
+  return `${ROW_SELECTORS[kind]}[${attr}="${escapedId}"]`
+}
+
 /** On <html>: the kinds hidden. Absent while the switch is off. */
 export const HIDE_ATTR = 'data-hide-inline'
 /** On one row: the reader went to it, so it shows while the rest stay hidden. */
