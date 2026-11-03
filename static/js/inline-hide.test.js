@@ -12,11 +12,13 @@ import {
   isHiddenItemClick,
   isHiddenRow,
   isInlineKind,
+  itemRowSelector,
   keepReadingPosition,
   setInlineHide,
   SHOWN_ATTR,
   showRow,
 } from './inline-hide.js'
+import { cssEscape } from './anchors.js'
 
 /** @typedef {import('./inline-hide.js').InlineHide} InlineHide */
 
@@ -168,6 +170,21 @@ describe('isHiddenRow and showRow', () => {
     expect(the(el, 'tr.ifind').hasAttribute(SHOWN_ATTR)).toBe(true)
     expect(isHiddenRow(the(el, 'tr.ifind'), html)).toBe(false)
     expect(isHiddenRow(the(el, 'tr.thread'), html)).toBe(true)
+  })
+})
+
+describe('itemRowSelector', () => {
+  it.each([
+    ['points', 'p:1', '<tr class="ifind" data-point="p:1">'],
+    ['pending', 'd.1', '<tr class="pending-row" data-pending-id="d.1">'],
+  ])('finds the %s row a link goes to, and only that row', (kind, id, row) => {
+    const table = document.createElement('table')
+    table.innerHTML = `<tbody>${row}</tbody><tbody><tr class="${kind === 'points' ? 'thread' : 'ifind'}" data-point="${id}" data-pending-id="${id}"></tr></tbody>`
+    const found = table.querySelectorAll(
+      itemRowSelector(/** @type {'points' | 'pending'} */ (kind), cssEscape(id))
+    )
+    expect(found).toHaveLength(1)
+    expect(found[0]?.closest('tbody')).toBe(table.tBodies[0])
   })
 })
 

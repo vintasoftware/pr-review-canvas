@@ -214,3 +214,43 @@ test('a new comment can be written on a line while items are hidden, and its dra
   await expect(row).toBeVisible()
   await expect(file.locator('tr.ifind[data-point="p-1"]')).toBeHidden()
 })
+
+/** A point of the Other layer. It has no summary card, so ] lands on its row. */
+function otherPoint(page: Page): Locator {
+  return page.locator('#layer-other tr[data-point="p-2"]')
+}
+
+async function stepToOtherPoint(page: Page) {
+  await page.keyboard.press(']')
+  await page.keyboard.press(']')
+}
+
+test('] onto a hidden point of the Other layer shows only that point', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  await expect(page.locator('#layer-run-path')).toBeVisible()
+  await saved(page, () => page.locator('#inline-toggle').click())
+  const row = otherPoint(page)
+  await stepToOtherPoint(page)
+  await expect(row).toBeFocused()
+  await expect(row).toBeInViewport()
+  await expect(row).toHaveAttribute('data-inline-shown', '')
+  await expect(page.locator('html')).toHaveAttribute('data-hide-inline', /points/)
+})
+
+test('with "turn hiding off" chosen, ] onto a hidden point switches it off', async ({ page, reviewUrl }) => {
+  await page.goto(reviewUrl)
+  await expect(page.locator('#layer-run-path')).toBeVisible()
+  const toggle = page.locator('#inline-toggle')
+  await saved(page, () => toggle.click())
+  await page.locator('#settings').click()
+  const dialog = page.locator('dialog.settings')
+  await dialog.locator('#set-hidden-item-click').selectOption('show-all')
+  await saved(page, () => dialog.locator('[data-act="settings-save"]').click())
+  await expect(dialog).toBeHidden()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+
+  await saved(page, () => stepToOtherPoint(page))
+  await expect(otherPoint(page)).toBeFocused()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('html')).not.toHaveAttribute('data-hide-inline')
+})

@@ -69,7 +69,7 @@ import {
 } from './points.js'
 import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
-import { getInlineHide, isHiddenRow, setInlineHide, showRow } from './inline-hide.js'
+import { getInlineHide, isHiddenRow, itemRowSelector, setInlineHide, showRow } from './inline-hide.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
@@ -915,8 +915,8 @@ export function wireReview(root, session, opts = {}) {
     goToHidden(
       root.querySelector(
         pointId === null
-          ? `tr.pending-row[data-pending-id="${cssEscape(draftId)}"]`
-          : `tr.ifind[data-point="${cssEscape(pointId)}"]`
+          ? itemRowSelector('pending', cssEscape(draftId))
+          : itemRowSelector('points', cssEscape(pointId))
       )
     )
   }
