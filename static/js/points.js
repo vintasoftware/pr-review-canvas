@@ -383,7 +383,10 @@ function pointPartsHtml(p, ctx, opts) {
     status === 'open' && !opts.card
       ? ''
       : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
-  const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
+  // data-item-link sets this link apart from code links in the point's text (see onItemLink).
+  const loc = opts.card
+    ? `<a class="loc" data-item-link href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>`
+    : ''
   return {
     attrs:
       `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +

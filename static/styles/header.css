@@ -66,6 +66,21 @@
   font-size: 12px;
   color: var(--fg-muted);
 }
+/* Under Hide code: both change only what the reader sees. */
+.inline-hide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  margin-top: 6px;
+}
+.inline-hide .cmd[aria-pressed='true'] {
+  background: var(--panel-2);
+  font-weight: 600;
+}
+.inline-hint {
+  font-size: 12px;
+}
 .stripe {
   height: 6px;
   background: var(--stripe-y);
