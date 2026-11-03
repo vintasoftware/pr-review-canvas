@@ -24,17 +24,25 @@ export function sameAnchoredComment(a, b) {
 }
 
 /**
- * GitHub's original range names the submitted text even after its current range moves.
+ * The lines a posted comment was written on. GitHub's original range names the submitted text
+ * even after its current range moves. A host that gives no original range start, as GitLab does
+ * not, gives no original range on the comment's side either, so its current lines hold.
+ * @param {{ line: number | null, startLine?: number | undefined, originalLine?: number | null | undefined, originalStartLine?: number | null | undefined }} posted
+ * @returns {{ line: number | null, startLine: number | undefined }}
+ */
+export function postedAnchor(posted) {
+  return typeof posted.originalLine === 'number' && posted.originalStartLine !== undefined
+    ? { line: posted.originalLine, startLine: posted.originalStartLine ?? undefined }
+    : { line: posted.line, startLine: posted.startLine }
+}
+
+/**
  * Callers must scope comments to known posts or one review receipt.
  * @param {{ path: string, line: number | null, side: string, startLine?: number | undefined, body: string, originalLine?: number | null | undefined, originalStartLine?: number | null | undefined }} posted
  * @param {{ path: string, line: number, side: string, startLine?: number | undefined, body: string }} draft
  */
 export function samePostedComment(posted, draft) {
-  const anchor =
-    typeof posted.originalLine === 'number' && posted.originalStartLine !== undefined
-      ? { ...posted, line: posted.originalLine, startLine: posted.originalStartLine ?? undefined }
-      : posted
-  return sameAnchoredComment(anchor, draft)
+  return sameAnchoredComment({ ...posted, ...postedAnchor(posted) }, draft)
 }
 
 /**

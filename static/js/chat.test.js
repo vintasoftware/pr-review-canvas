@@ -2249,6 +2249,16 @@ describe('a proposed comment whose range crosses two chunks', () => {
     document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { posted: [comment] })
     expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
     expect(document.querySelector('.proposed .tbtns a')?.textContent).toBe('view comment')
+    // GitLab gives no original range start, and its original line is the old side's on a context
+    // line: the current lines hold.
+    const { originalStartLine: _github, ...gitlab } = {
+      ...comment,
+      line: 12,
+      startLine: 11,
+      originalLine: 10,
+    }
+    document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { posted: [gitlab] })
+    expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
   })
 })
 

@@ -40,7 +40,7 @@ import {
   unseenLabel,
 } from './chat-scroll.js'
 import { runCommand, toast } from './commands.js'
-import { isQueuedComment, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
+import { isQueuedComment, postedAnchor, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
 import { esc, flash, qs, scrollIntoViewSafe, timeAgo } from './dom.js'
 import { cssEscape } from './anchors.js'
 import { applyCapabilityGating } from './composer.js'
@@ -549,21 +549,13 @@ function sendStateOf(comment, pane) {
 }
 
 /**
- * The lines a sent comment went out on: a draft's own, or a posted comment's original ones, which
- * later commits do not move. A posted comment the host gave no original range for keeps its own.
+ * The lines a sent comment went out on: a draft's own, or the ones a posted comment was written on.
  * @param {import('./contract-types.js').PendingComment | import('./contract-types.js').ReviewComment} sent
  * @returns {ProposedRange | undefined}
  */
 function sentRange(sent) {
-  if (!('originalLine' in sent)) {
-    return { startLine: sent.startLine ?? sent.line, line: sent.line }
-  }
-  const line = sent.originalLine ?? sent.line
-  if (line === null) {
-    return undefined
-  }
-  const start = sent.originalStartLine === undefined ? sent.startLine : sent.originalStartLine
-  return { startLine: start ?? line, line }
+  const { line, startLine } = 'originalLine' in sent ? postedAnchor(sent) : sent
+  return line === null ? undefined : { startLine: startLine ?? line, line }
 }
 
 /**
