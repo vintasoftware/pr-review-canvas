@@ -95,7 +95,8 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
       )
     }
     // One read serves the appearance, the reading level the canvas opens at, how it shows its
-    // layers, whether they start closed, and how its points are drawn.
+    // layers, whether they start closed, how its points are drawn, and whether its inline items
+    // show.
     const settings = await ctx.settings.read()
     return c.html(
       reviewPage(
@@ -115,6 +116,9 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           startCollapsed: settings.startCollapsed,
           compactPoints: settings.compactPoints,
           fullWidthText: settings.fullWidthText,
+          hideInline: settings.hideInline,
+          hideInlineKinds: settings.hideInlineKinds,
+          hiddenItemClick: settings.hiddenItemClick,
         },
         c.get('cspNonce'),
         appearanceForRequest(settings, appearanceQuery(c))

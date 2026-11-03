@@ -10,6 +10,7 @@ import { canvasHiddenLines, drawnCanvas, getFoldLevel } from './layers.js'
 import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { refreshRail } from './rail.js'
+import { getInlineHide, inlineHideControlHtml } from './inline-hide.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { approveBlockedReason } from './signoff.js'
 import { headerBarHtml } from './header-bar.js'
@@ -152,6 +153,7 @@ export function renderHeader(bundle, opts) {
             level
           )
         )
+  const inline = drawn === null ? '' : inlineHideControlHtml(getInlineHide())
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +
@@ -169,7 +171,7 @@ export function renderHeader(bundle, opts) {
     `<p class="meta"><span>by ${authorHtml(pr.author, local)}</span>` +
     `<span class="mono">${esc(pr.headRef)} &rarr; ${esc(pr.baseRef)}</span>${statePill(pr)}` +
     `${diffstatHtml(pr, ready ? testChanges(artifact, bundle.files) : undefined)}${agent}</p>` +
-    `${largePrNoticeHtml(bundle)}${risk}${reading}${progress}</div></header>`
+    `${largePrNoticeHtml(bundle)}${risk}${reading}${inline}${progress}</div></header>`
   )
 }
 

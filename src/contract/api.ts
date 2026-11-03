@@ -4,7 +4,7 @@ import type { CommentsPayload, IssueComment, ReviewComment } from './comments.js
 import type { SharedCanvasInfoSchema } from './discovery.js'
 import type { FileEntry, FoldLevel, Pr, ReviewArtifact } from './review-artifact.js'
 import type { LocalKey, ReviewKey } from './review-key.js'
-import type { LayerView, PointColors } from './settings.js'
+import type { HiddenItemClick, InlineKind, LayerView, PointColors } from './settings.js'
 import type { PrState } from './state.js'
 
 export const ERROR_CODES = [
@@ -286,4 +286,10 @@ export interface ReviewBootstrap {
   compactPoints: boolean
   /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
   fullWidthText: boolean
+  /** Whether the diff hides its inline items, from the settings file. */
+  hideInline: boolean
+  /** Which inline items the switch hides, from the settings file. */
+  hideInlineKinds: InlineKind[]
+  /** What going to a hidden item does, from the settings file. */
+  hiddenItemClick: HiddenItemClick
 }

@@ -26,6 +26,9 @@ const SETTINGS = {
     startCollapsed: false,
     compactPoints: false,
     fullWidthText: false,
+    hideInline: false,
+    hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+    hiddenItemClick: 'reveal',
     chatAgent: 'claude',
     chatModel: null,
     chatTimeoutSec: 600,
@@ -241,6 +244,8 @@ describe('readSettingsForm', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'claude',
       chatModel: null,
       chatTimeoutSec: 600,
@@ -296,6 +301,38 @@ describe('readSettingsForm', () => {
       'action: purple, blue, gray'
     )
     expect(readSettingsForm(holder).pointColors).toBe('action')
+  })
+
+  it('reads what the inline switch hides and what going to a hidden item does, and leaves on and off to the page', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(
+      {
+        ...SETTINGS,
+        settings: {
+          ...SETTINGS.settings,
+          hideInline: true,
+          hideInlineKinds: ['comments', 'annotations'],
+          hiddenItemClick: 'show-all',
+        },
+      },
+      AGENTS
+    )
+    const checked = Array.from(holder.querySelectorAll('input[name="set-inline-kind"]:checked')).map(
+      box => /** @type {HTMLInputElement} */ (box).value
+    )
+    expect(checked).toEqual(['comments', 'annotations'])
+    expect(holder.querySelector('#set-hidden-item-click option[selected]')?.textContent).toBe(
+      'turn hiding off'
+    )
+    expect(readSettingsForm(holder)).toMatchObject({
+      hideInlineKinds: ['comments', 'annotations'],
+      hiddenItemClick: 'show-all',
+    })
+    expect(readSettingsForm(holder)).not.toHaveProperty('hideInline')
+    for (const box of Array.from(holder.querySelectorAll('input[name="set-inline-kind"]'))) {
+      ;/** @type {HTMLInputElement} */ (box).checked = false
+    }
+    expect(readSettingsForm(holder).hideInlineKinds).toEqual([])
   })
 })
 
@@ -365,6 +402,8 @@ describe('openSettingsDialog', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'codex',
       chatModel: null,
       chatTimeoutSec: 600,
@@ -467,6 +506,8 @@ describe('the dialog with parts missing', () => {
       startCollapsed: true,
       compactPoints: true,
       fullWidthText: true,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'claude',
       chatModel: 'gpt-5.2',
       chatTimeoutSec: 120,
