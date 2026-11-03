@@ -2140,7 +2140,7 @@ describe('a proposed comment whose range crosses two chunks', () => {
     el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await flush()
     // A stale key makes the refresh draw the commands again.
-    el(root, '.proposed .tbtns').setAttribute('data-key', 'stale')
+    el(root, '.proposed').setAttribute('data-key', 'stale')
     chat.refreshProposed()
     expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-post"]')).disabled).toBe(true)
     expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-queue"]')).disabled).toBe(true)
@@ -2178,7 +2178,7 @@ describe('a proposed comment whose range crosses two chunks', () => {
     expect(queue.disabled).toBe(false)
     expect(document.activeElement).toBe(queue)
     // A redraw keeps the choice.
-    el(root, '.proposed .tbtns').setAttribute('data-key', 'stale')
+    el(root, '.proposed').setAttribute('data-key', 'stale')
     chat.refreshProposed()
     el(root, '[data-act="proposed-queue"]').click()
     el(root, '[data-act="proposed-edit"]').click()
@@ -2203,7 +2203,7 @@ describe('a proposed comment whose range crosses two chunks', () => {
     ])
   })
 
-  it('offers no other chunk once the comment is in the review', () => {
+  it('shows the lines a sent comment went out on, after the choice itself is gone', () => {
     const proposal = {
       path: 'src/app.ts',
       startLine: 3,
@@ -2221,18 +2221,34 @@ describe('a proposed comment whose range crosses two chunks', () => {
       createdAt: 'x',
       updatedAt: 'x',
     }
-    document.body.innerHTML = answerHtml(
-      '```comment\n' + JSON.stringify(proposal) + '\n```',
-      targets,
-      new Map(),
-      paths,
-      {
-        pending: [draft],
-        chosen: new Map([[fingerprint, { startLine: 11, line: 12 }]]),
-      }
-    )
+    const answer = '```comment\n' + JSON.stringify(proposal) + '\n```'
+    // A reload forgets the choice; the draft still has the lines.
+    document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { pending: [draft] })
+    expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
     expect(document.querySelector('.proposed-anchor')).toBeNull()
     expect(document.querySelector('.proposed .tbtns')?.textContent).toBe('in your revieweditcopy')
+    // Once posted, the comment's original range, which later commits do not move.
+    const comment = {
+      id: 7,
+      author: 'me',
+      body: 'Rename.',
+      path: 'src/app.ts',
+      line: 14,
+      originalLine: 12,
+      originalStartLine: 11,
+      side: /** @type {const} */ ('new'),
+      startLine: 13,
+      outdated: false,
+      commitId: 'c',
+      createdAt: 'x',
+      updatedAt: 'x',
+      url: 'https://example.test/c/7',
+      resolved: false,
+      proposalFingerprint: fingerprint,
+    }
+    document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { posted: [comment] })
+    expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
+    expect(document.querySelector('.proposed .tbtns a')?.textContent).toBe('view comment')
   })
 })
 
