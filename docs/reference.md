@@ -944,9 +944,11 @@ A pending review holds comments on your machine until you submit them together.
   comment, so its link survives draft edits, GitHub edits, and later commits moving the lines.
   Delayed receipts and older records use GitHub's complete original range to find the comment.
   When the proposal's range crosses two chunks, the card says so and names the chunk ranges of
-  that side, as a `#line:` link check does. **post to github** and **add to review** are then
-  disabled; **edit** and **copy** stay. The card keeps the lines AI Chat chose: it does not move
-  the comment to one line for you.
+  that side, as a `#line:` link check does, with a button for the part of the range inside each
+  chunk. **post to github** and **add to review** stay disabled until you choose one; the card
+  then shows that range and sends the comment on it, and still offers the other parts. **edit**
+  and **copy** work throughout. The card does not choose a chunk for you: the comment may be about
+  one chunk only.
 - AI Chat can tie a proposed comment to an attention point when the comment acts on it, for
   example when it answers what the point asks you to decide. The card then says **about the
   point "…"**. AI Chat decides this from the conversation: the context chip names where the talk
@@ -1132,7 +1134,7 @@ Chat can propose an inline comment. The opening instructions list the line range
 chunks on each side, by layer, so AI Chat can keep a proposed range inside one chunk. A valid
 proposal appears with controls to post, edit, or copy it. A proposal outside the current diff
 remains text with an explanation. A proposal whose range crosses two chunks shows as a card with
-the reason, and only edit and copy work.
+the reason, and sends once you choose the part of the range inside one chunk.
 
 Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. While an answer is
 coming in, ask, the list of threads, and **new thread** still open any thread, and the answer keeps

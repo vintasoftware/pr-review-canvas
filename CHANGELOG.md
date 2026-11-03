@@ -6,9 +6,10 @@
 
 - A proposed comment whose range crosses two chunks says so on its card, in the words of the
   `#line:` link check, with the chunk ranges of that side. Its **post to github** and **add to
-  review** are disabled; **edit** and **copy** stay. The card keeps the lines AI Chat chose and
-  does not move the comment to one line. Before, the card offered both commands and the server
-  then refused the comment as spanning more than one chunk.
+  review** stay disabled until you choose the part of the range inside one chunk, from a button
+  for each chunk on the card; **edit** and **copy** work. The card never moves the lines on its
+  own. Before, the card offered both commands and the server then refused the comment as spanning
+  more than one chunk.
 - AI Chat gets the line ranges of each file's chunks on each side, listed by layer in its opening
   instructions, and is told to keep a proposed comment's `startLine` and `line` inside one of
   them. Before, it saw only file paths and the code, where lines across two chunks look like one

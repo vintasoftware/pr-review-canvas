@@ -6,6 +6,8 @@
 /** @typedef {import('./contract-types.js').ChatTurn} ChatTurn */
 /** @typedef {import('./proposed-comment.js').ProposedComment} ProposedComment */
 /** @typedef {import('./proposed-comment.js').ProposedResolution} ProposedResolution */
+/** @typedef {import('./proposed-comment.js').ProposedRange} ProposedRange */
+/** @typedef {import('./proposed-comment.js').AnchorError} AnchorError */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 import {
   cancelChat,
@@ -41,6 +43,7 @@ import { runCommand, toast } from './commands.js'
 import { isQueuedComment, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
 import { esc, flash, qs, scrollIntoViewSafe, timeAgo } from './dom.js'
 import { cssEscape } from './anchors.js'
+import { applyCapabilityGating } from './composer.js'
 import { getRenderContext } from './layers.js'
 import { lineLink } from './links.js'
 import { renderMarkdown } from './markdown.js'
@@ -282,28 +285,58 @@ export function checkoutWarningHtml(event) {
 
 /**
  * What the pane knows when it draws a card: where each comment went, the comments the reader
- * unlinked from their point (by proposal fingerprint), and the state the points stand in.
+ * unlinked from their point (by proposal fingerprint), the part of a range across two chunks the
+ * reader chose (by proposal fingerprint), and the state the points stand in.
  * @typedef {{
  *   posted?: ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined, pointFingerprint?: string | undefined }>,
  *   pending?: ReadonlyArray<import('./contract-types.js').PendingComment>,
  *   submitted?: ReadonlyArray<import('./contract-types.js').PendingComment>,
  *   unlinked?: ReadonlySet<string>,
+ *   chosen?: ReadonlyMap<string, ProposedRange>,
  *   state?: import('./contract-types.js').PrState,
  * }} PaneState
  */
+
+/** @param {SendState} send */
+function isOpen(send) {
+  return send.postedUrl === undefined && send.submitted !== true && send.queued !== true
+}
+
+/** @param {ProposedRange} range */
+function rangeLabel(range) {
+  return range.startLine === range.line ? `line ${range.line}` : `lines ${range.startLine}–${range.line}`
+}
+
+/**
+ * The comment a card shows and sends: the agent's, or the part of its range the reader chose.
+ * It keeps the proposal's fingerprint, so the card finds the comment once it was sent.
+ * @param {ProposedComment} proposal
+ * @param {ProposedRange | undefined} chosen
+ * @returns {ProposedComment}
+ */
+function withChosenRange(proposal, chosen) {
+  if (chosen === undefined) {
+    return proposal
+  }
+  const { startLine: _agents, ...rest } = proposal
+  return chosen.startLine === chosen.line
+    ? { ...rest, line: chosen.line }
+    : { ...rest, startLine: chosen.startLine, line: chosen.line }
+}
 
 /**
  * The commands under a card. `add to review` leads, as it does on a diff-line comment, and both
  * ways of sending go through the same paths as every other post and draft, so capability gating
  * and the pending state apply here too. `data-key` names what the send commands show, so a
  * change of state redraws only the cards it changed. A range across two chunks disables both ways
- * of sending; edit and copy stay.
+ * of sending until the reader chooses one chunk's part; edit and copy stay.
  * @param {ProposedComment} comment
  * @param {string} id the key the pane stores this card's comment under
  * @param {SendState} send
- * @param {string | null} anchorError
+ * @param {AnchorError | null} anchor
+ * @param {ProposedRange | undefined} chosen
  */
-function proposedCommandsHtml(comment, id, send, anchorError) {
+function proposedCommandsHtml(comment, id, send, anchor, chosen) {
   const shown =
     send.postedUrl !== undefined
       ? 'posted'
@@ -312,9 +345,10 @@ function proposedCommandsHtml(comment, id, send, anchorError) {
         : send.queued === true
           ? 'queued'
           : 'open'
+  const blocked = anchor === null || chosen !== undefined ? null : anchor.message
   return (
-    `<span class="tbtns" data-key="${shown}">` +
-    sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true, blocked: anchorError }) +
+    `<span class="tbtns" data-key="${shown}${blocked === null ? '' : ':blocked'}">` +
+    sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true, blocked }) +
     `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post data-tooltip="Edit" title="Edit">edit</button>` +
     `<button class="cmd" type="button" data-copy="${esc(comment.body)}" title="Copy">copy</button>` +
     '</span>'
@@ -332,7 +366,7 @@ function proposedPointHtml(id, send) {
   if (send.point === undefined) {
     return ''
   }
-  const open = send.postedUrl === undefined && send.submitted !== true && send.queued !== true
+  const open = isOpen(send)
   const unlink = open
     ? ` <button class="cmd" type="button" data-act="proposed-unlink" data-proposed="${esc(id)}">unlink</button>`
     : ''
@@ -342,15 +376,50 @@ function proposedPointHtml(id, send) {
 }
 
 /**
- * The card a proposed comment renders as. `anchorError` is set when its range crosses two chunks,
- * which the server refuses. The card shows it and keeps the agent's lines: moving them would put
- * the comment where the reader did not choose.
- * @param {ProposedComment} comment
+ * The line of a card whose range crosses two chunks, while the comment is not sent: why it cannot
+ * be sent, and the part of the range inside each chunk, for the reader to choose. Once the reader
+ * chose one, it names the agent's range and offers the other parts.
+ * @param {string} id
+ * @param {ProposedComment} proposal
+ * @param {SendState} send
+ * @param {AnchorError | null} anchor
+ * @param {ProposedRange | undefined} chosen
+ */
+function proposedAnchorHtml(id, proposal, send, anchor, chosen) {
+  if (anchor === null || !isOpen(send)) {
+    return ''
+  }
+  const others = anchor.parts.filter(
+    p => chosen === undefined || p.startLine !== chosen.startLine || p.line !== chosen.line
+  )
+  const choices = others
+    .map(
+      p =>
+        `<button class="cmd" type="button" data-act="proposed-range" data-proposed="${esc(id)}" data-start-line="${p.startLine}" data-line="${p.line}">${rangeLabel(p)}</button>`
+    )
+    .join(' ')
+  const agents = { startLine: proposal.startLine ?? proposal.line, line: proposal.line }
+  const lead =
+    chosen === undefined
+      ? `<span class="bad">${esc(anchor.message)}</span> Choose one chunk:`
+      : `AI Chat proposed ${rangeLabel(agents)}, across more than one chunk. Or:`
+  const key = chosen === undefined ? 'agent' : rangeLabel(chosen)
+  return `<p class="proposed-anchor small" data-key="${esc(key)}">${lead} ${choices}</p>`
+}
+
+/**
+ * The card a proposed comment renders as. `anchor` is set when the agent's range crosses two
+ * chunks, which the server refuses. The card then offers the part of the range inside each chunk
+ * and sends only once the reader chose one: the page never moves the lines on its own, as the
+ * body may be about one chunk only.
+ * @param {ProposedComment} proposal
  * @param {string} id the key the pane stores this card's comment under
  * @param {SendState} [send]
- * @param {string | null} [anchorError]
+ * @param {AnchorError | null} [anchor]
+ * @param {ProposedRange} [chosen]
  */
-export function proposedCommentHtml(comment, id, send = {}, anchorError = null) {
+export function proposedCommentHtml(proposal, id, send = {}, anchor = null, chosen = undefined) {
+  const comment = withChosenRange(proposal, chosen)
   const range = comment.startLine === undefined ? `${comment.line}` : `${comment.startLine}–${comment.line}`
   const side = comment.side === 'old' ? ' (old side)' : ''
   return (
@@ -358,9 +427,9 @@ export function proposedCommentHtml(comment, id, send = {}, anchorError = null) 
     `<div class="proposed-h"><span class="lbl">proposed comment</span>` +
     `<span class="mono">${esc(comment.path)}:${esc(range)}${side}</span></div>` +
     proposedPointHtml(id, send) +
-    (anchorError === null ? '' : `<p class="proposed-anchor bad small">${esc(anchorError)}</p>`) +
+    proposedAnchorHtml(id, proposal, send, anchor, chosen) +
     `<div class="prose">${renderMarkdown(comment.body)}</div>` +
-    proposedCommandsHtml(comment, id, send, anchorError) +
+    proposedCommandsHtml(comment, id, send, anchor, chosen) +
     '</div>'
   )
 }
@@ -500,7 +569,13 @@ export function answerHtml(text, targets, sink, paths, opts = {}) {
       }
       const comment = { ...segment.comment, proposalFingerprint: proposalFingerprint(segment.comment) }
       sink.set(id, comment)
-      return proposedCommentHtml(comment, id, sendStateOf(comment, opts), targets.anchorError(comment))
+      return proposedCommentHtml(
+        comment,
+        id,
+        sendStateOf(comment, opts),
+        targets.anchorError(comment),
+        opts.chosen?.get(comment.proposalFingerprint)
+      )
     })
     .join('')
 }
@@ -587,6 +662,12 @@ export function wireChat(options) {
    * @type {Set<string>}
    */
   const unlinked = new Set()
+  /**
+   * The part of a range across two chunks the reader chose, by proposal fingerprint. Like
+   * `unlinked`, it holds across redraws of the answer, a reload of the thread aside.
+   * @type {Map<string, ProposedRange>}
+   */
+  const chosen = new Map()
   const postedComments = () => {
     const receipts = new Map(session.state.posted.map(p => [p.commentId, p]))
     return (
@@ -605,6 +686,7 @@ export function wireChat(options) {
     pending: pendingComments(session.state),
     submitted: session.state.submitted,
     unlinked,
+    chosen,
     state: session.state,
   })
   /** @type {string | null} */
@@ -1734,11 +1816,40 @@ export function wireChat(options) {
       el.closest('.proposed-point')?.remove()
       return
     }
+    const fp = entry.proposalFingerprint
+    if (act === 'proposed-range' && fp !== undefined) {
+      const id = el.getAttribute('data-proposed') ?? ''
+      chosen.set(fp, {
+        startLine: Number(el.getAttribute('data-start-line')),
+        line: Number(el.getAttribute('data-line')),
+      })
+      // The range shows in the header and the commands, so the whole card is drawn again.
+      const template = document.createElement('template')
+      template.innerHTML = proposedCommentHtml(
+        entry,
+        id,
+        sendStateOf(entry, paneState()),
+        targets.anchorError(entry),
+        chosen.get(fp)
+      )
+      const card = template.content.firstElementChild
+      if (card instanceof HTMLElement) {
+        el.closest('.proposed')?.replaceWith(card)
+        applyCapabilityGating(card, session.capabilities)
+        // The command that pressed is gone; the focus goes to the one that now sends.
+        const queue = card.querySelector('[data-act="proposed-queue"]')
+        if (queue instanceof HTMLButtonElement) queue.focus()
+      }
+      return
+    }
     const what = act === null ? undefined : PROPOSED_ACTS[act]
     if (what !== undefined) {
-      // The comment goes out tied to the point its card shows, and to no other.
+      // The comment goes out tied to the point its card shows, and to no other, on the lines it shows.
       const { point } = sendStateOf(entry, paneState())
-      const { point: _agents, ...rest } = entry
+      const { point: _agents, ...rest } = withChosenRange(
+        entry,
+        fp === undefined ? undefined : chosen.get(fp)
+      )
       options.onProposed?.(what, point === undefined ? rest : { ...rest, point }, el)
     }
   }
@@ -1923,7 +2034,13 @@ export function wireChat(options) {
           continue
         }
         const sendState = sendStateOf(entry, now)
-        redrawOnKey(tbtns, proposedCommandsHtml(entry, id, sendState, targets.anchorError(entry)))
+        const anchor = targets.anchorError(entry)
+        const picked =
+          entry.proposalFingerprint === undefined ? undefined : chosen.get(entry.proposalFingerprint)
+        redrawOnKey(
+          tbtns,
+          proposedCommandsHtml(withChosenRange(entry, picked), id, sendState, anchor, picked)
+        )
         // The point line follows the same state: put in, changed, or taken out.
         const line = proposedPointHtml(id, sendState)
         const drawn = card.querySelector(':scope > .proposed-point')
@@ -1931,6 +2048,16 @@ export function wireChat(options) {
           redrawOnKey(drawn, line)
         } else if (line !== '') {
           card.querySelector(':scope > .proposed-h')?.insertAdjacentHTML('afterend', line)
+        }
+        // So does the choice of chunk: it goes once the comment is sent, and comes back if it leaves the review.
+        const choices = proposedAnchorHtml(id, entry, sendState, anchor, picked)
+        const shown = card.querySelector(':scope > .proposed-anchor')
+        if (shown !== null) {
+          redrawOnKey(shown, choices)
+        } else if (choices !== '') {
+          const before =
+            card.querySelector(':scope > .proposed-point') ?? card.querySelector(':scope > .proposed-h')
+          before?.insertAdjacentHTML('afterend', choices)
         }
       }
     },

@@ -2098,9 +2098,13 @@ describe('a proposed comment whose range crosses two chunks', () => {
   it('says why a range across two chunks cannot be sent, and keeps edit and copy', () => {
     const message = 'src/app.ts:3-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)'
     const drawn = card('{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}')
-    // The agent's lines stay as it wrote them; the card does not move the anchor.
+    // The agent's lines stay as it wrote them until the reader chooses a chunk.
     expect(drawn.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:3–12')
-    expect(drawn.querySelector('.proposed-anchor')?.textContent).toBe(message)
+    expect(drawn.querySelector('.proposed-anchor .bad')?.textContent).toBe(message)
+    expect([...drawn.querySelectorAll('[data-act="proposed-range"]')].map(b => b.textContent)).toEqual([
+      'lines 3–5',
+      'lines 11–12',
+    ])
     for (const act of ['proposed-post', 'proposed-queue']) {
       expect(button(`[data-act="${act}"]`).disabled).toBe(true)
       expect(button(`[data-act="${act}"]`).title).toBe(message)
@@ -2141,6 +2145,94 @@ describe('a proposed comment whose range crosses two chunks', () => {
     expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-post"]')).disabled).toBe(true)
     expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-queue"]')).disabled).toBe(true)
     expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-edit"]')).disabled).toBe(false)
+  })
+
+  it('sends the part of the range the reader chose, under the proposal it came from', async () => {
+    /** @type {Array<[string, import('./proposed-comment.js').ProposedComment]>} */
+    const seen = []
+    const { root, chat } = mount(
+      {
+        streamChat: async (_pr, _input, opts) => {
+          opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+          opts.onEvent({
+            event: 'chunk',
+            data: {
+              text: '```comment\n{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}\n```\n',
+            },
+          })
+        },
+      },
+      { onProposed: (what, comment) => seen.push([what, comment]) }
+    )
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    el(root, '[data-act="proposed-range"][data-start-line="11"]').click()
+    expect(el(root, '.proposed-h .mono').textContent).toBe('src/app.ts:11–12')
+    expect(el(root, '.proposed-anchor').textContent).toBe(
+      'AI Chat proposed lines 3–12, across more than one chunk. Or: lines 3–5'
+    )
+    const queue = /** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-queue"]'))
+    expect(queue.disabled).toBe(false)
+    expect(document.activeElement).toBe(queue)
+    // A redraw keeps the choice.
+    el(root, '.proposed .tbtns').setAttribute('data-key', 'stale')
+    chat.refreshProposed()
+    el(root, '[data-act="proposed-queue"]').click()
+    el(root, '[data-act="proposed-edit"]').click()
+    const fingerprint = proposalFingerprint({
+      path: 'src/app.ts',
+      startLine: 3,
+      line: 12,
+      side: 'new',
+      body: 'Rename.',
+    })
+    const sent = {
+      path: 'src/app.ts',
+      startLine: 11,
+      line: 12,
+      side: 'new',
+      body: 'Rename.',
+      proposalFingerprint: fingerprint,
+    }
+    expect(seen).toEqual([
+      ['queue', sent],
+      ['edit', sent],
+    ])
+  })
+
+  it('offers no other chunk once the comment is in the review', () => {
+    const proposal = {
+      path: 'src/app.ts',
+      startLine: 3,
+      line: 12,
+      side: /** @type {const} */ ('new'),
+      body: 'Rename.',
+    }
+    const fingerprint = proposalFingerprint(proposal)
+    const draft = {
+      id: 'd1',
+      ...proposal,
+      startLine: 11,
+      proposalFingerprint: fingerprint,
+      headSha: 'h',
+      createdAt: 'x',
+      updatedAt: 'x',
+    }
+    document.body.innerHTML = answerHtml(
+      '```comment\n' + JSON.stringify(proposal) + '\n```',
+      targets,
+      new Map(),
+      paths,
+      {
+        pending: [draft],
+        chosen: new Map([[fingerprint, { startLine: 11, line: 12 }]]),
+      }
+    )
+    expect(document.querySelector('.proposed-anchor')).toBeNull()
+    expect(document.querySelector('.proposed .tbtns')?.textContent).toBe('in your revieweditcopy')
   })
 })
 
