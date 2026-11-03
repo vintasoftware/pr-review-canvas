@@ -554,7 +554,7 @@ function sendStateOf(comment, pane) {
  * @returns {ProposedRange | undefined}
  */
 function sentRange(sent) {
-  const { line, startLine } = 'originalLine' in sent ? postedAnchor(sent) : sent
+  const { line, startLine } = postedAnchor(sent)
   return line === null ? undefined : { startLine: startLine ?? line, line }
 }
 
