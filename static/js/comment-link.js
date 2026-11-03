@@ -24,9 +24,10 @@ export function sameAnchoredComment(a, b) {
 }
 
 /**
- * The lines a posted comment was written on. GitHub's original range names the submitted text
- * even after its current range moves. A host that gives no original range start, as GitLab does
- * not, gives no original range on the comment's side either, so its current lines hold.
+ * The lines a posted comment was written on: its original range when the host gives the range's
+ * start, as GitHub does, because that range stays on the submitted text when later commits move
+ * the current one. Otherwise its current lines: GitLab gives no start, and its original line can
+ * be on the other side.
  * @param {{ line: number | null, startLine?: number | undefined, originalLine?: number | null | undefined, originalStartLine?: number | null | undefined }} posted
  * @returns {{ line: number | null, startLine: number | undefined }}
  */
@@ -37,7 +38,8 @@ export function postedAnchor(posted) {
 }
 
 /**
- * Callers must scope comments to known posts or one review receipt.
+ * Whether a posted comment is this draft, on the lines it was written on. Callers must scope
+ * comments to known posts or one review receipt.
  * @param {{ path: string, line: number | null, side: string, startLine?: number | undefined, body: string, originalLine?: number | null | undefined, originalStartLine?: number | null | undefined }} posted
  * @param {{ path: string, line: number, side: string, startLine?: number | undefined, body: string }} draft
  */

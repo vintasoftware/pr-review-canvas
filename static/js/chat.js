@@ -280,8 +280,8 @@ export function checkoutWarningHtml(event) {
 /**
  * `point` is the attention point the comment is tied to: once it was sent, the one what went out
  * names; before, the one the agent named, unless the reader unlinked it. `range` is the lines it
- * goes out on when they are not the agent's: once it was sent, the ones it went out on; before,
- * the part of the agent's range the reader chose.
+ * is on when the agent's range does not decide them: once it was sent, the lines it went out on;
+ * before, the part of the agent's range the reader chose.
  * @typedef {{ postedUrl?: string | undefined, queued?: boolean, submitted?: boolean, point?: import('./proposed-comment.js').ProposalPoint, range?: ProposedRange }} SendState
  */
 
@@ -338,8 +338,8 @@ function withRange(proposal, range) {
 /**
  * The commands under a card. `add to review` leads, as it does on a diff-line comment, and both
  * ways of sending go through the same paths as every other post and draft, so capability gating
- * and the pending state apply here too. A range across two chunks disables both ways of sending
- * until the reader chooses one chunk's part; edit and copy stay.
+ * and the pending state apply here too. `blocked` disables both ways of sending and is their
+ * title; edit and copy stay.
  * @param {ProposedComment} comment
  * @param {string} id the key the pane stores this card's comment under
  * @param {SendState} send
@@ -676,8 +676,8 @@ export function wireChat(options) {
    */
   const unlinked = new Set()
   /**
-   * The part of a range across two chunks the reader chose, by proposal fingerprint. Like
-   * `unlinked`, it holds across redraws of the answer, a reload of the thread aside.
+   * The part of a range across two chunks the reader chose, by proposal fingerprint. It is kept
+   * only in this page: a page reload loses a choice not sent yet. A sent comment keeps its lines.
    * @type {Map<string, ProposedRange>}
    */
   const chosen = new Map()
@@ -1853,14 +1853,14 @@ export function wireChat(options) {
         startLine: Number(el.getAttribute('data-start-line')),
         line: Number(el.getAttribute('data-line')),
       })
-      // The command that pressed is gone; the focus goes to the one that now sends.
+      // The pressed button is gone with the old card, so the focus goes to add to review.
       const queue = redrawCard(card, entry)?.querySelector('[data-act="proposed-queue"]')
       if (queue instanceof HTMLButtonElement) queue.focus()
       return
     }
     const what = act === null ? undefined : PROPOSED_ACTS[act]
     if (what !== undefined) {
-      // The comment goes out tied to the point its card shows, and to no other, on the lines it shows.
+      // The comment goes out with the point and the lines its card shows.
       const { point, range } = sendStateOf(entry, paneState())
       const { point: _agents, ...rest } = withRange(entry, range)
       options.onProposed?.(what, point === undefined ? rest : { ...rest, point }, el)

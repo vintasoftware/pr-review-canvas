@@ -68,8 +68,10 @@ export function proposalFingerprint(comment) {
   return `proposal:${hash.toString(16).padStart(16, '0')}`
 }
 
-/** The lines a comment covers: `startLine` to `line`, one line when they are equal. */
-/** @typedef {{ startLine: number, line: number }} ProposedRange */
+/**
+ * The lines a comment covers: `startLine` to `line`, one line when they are equal.
+ * @typedef {{ startLine: number, line: number }} ProposedRange
+ */
 
 /**
  * Why a range cannot be sent, in the link check's words, and the part of the range inside each
