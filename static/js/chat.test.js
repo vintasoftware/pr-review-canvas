@@ -20,7 +20,6 @@ import {
   checkoutActivityText,
   checkoutWarningHtml,
   clampWidth,
-  proposedCommentHtml,
   readChatMinimized,
   readChatWidth,
   renderChatShell,
@@ -28,6 +27,7 @@ import {
   writeChatMinimized,
   writeChatWidth,
 } from './chat.js'
+import { proposedCommentHtml } from './proposed-card.js'
 import { proposalFingerprint, SETTLEMENT_REASON_MAX, targetsFromFiles } from './proposed-comment.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createReviewSession } from './review-session.js'
