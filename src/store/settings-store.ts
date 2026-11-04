@@ -51,8 +51,8 @@ fullWidthText: false
 # annotations show only in the diff.
 hideInline: false
 
-# What the switch hides: any of points, comments (earlier and carried), pending (your drafts), and
-# annotations.
+# What the switch hides: one or more of points, comments (earlier and carried), pending (your
+# drafts), and annotations. To hide nothing, leave the switch off.
 hideInlineKinds: [${DEFAULT_SETTINGS.hideInlineKinds.join(', ')}]
 
 # What going to a hidden item does, from a point's link in the layer summary, a draft's link in the
