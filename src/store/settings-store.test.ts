@@ -355,12 +355,6 @@ describe('the inline switch settings', () => {
     expect(await store.read()).toEqual(saved)
   })
 
-  it('saves an empty list of kinds, which hides nothing', async () => {
-    const store = createSettingsStore(dataDir)
-    expect((await store.write({ hideInlineKinds: [] })).hideInlineKinds).toEqual([])
-    expect((await store.read()).hideInlineKinds).toEqual([])
-  })
-
   it('gives a file written before the switch existed its keys, with their comments', () => {
     const { text, settings } = applySettings('version: 1\nskin: github\n', { hideInline: true })
     expect(settings.hideInline).toBe(true)
@@ -368,13 +362,15 @@ describe('the inline switch settings', () => {
     expect(text).toContain('# What going to a hidden item does')
   })
 
-  it('falls back to the defaults for a kind it does not know or a kind named twice', () => {
+  it('falls back to the defaults for no kind, a kind it does not know, or a kind named twice', () => {
+    expect(parseSettings('hideInlineKinds: []\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('hideInlineKinds: [points, tags]\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('hideInlineKinds: [points, points]\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('hiddenItemClick: open\n')).toEqual(DEFAULT_SETTINGS)
   })
 
-  it('refuses a request with a kind it does not know, a kind named twice, or a click it does not know', () => {
+  it('refuses a request with no kind, a kind it does not know, a kind named twice, or a click it does not know', () => {
+    expect(SettingsInputSchema.safeParse({ hideInlineKinds: [] }).success).toBe(false)
     expect(SettingsInputSchema.safeParse({ hideInlineKinds: ['tags'] }).success).toBe(false)
     expect(SettingsInputSchema.safeParse({ hideInlineKinds: ['points', 'points'] }).success).toBe(false)
     expect(SettingsInputSchema.safeParse({ hiddenItemClick: 'open' }).success).toBe(false)

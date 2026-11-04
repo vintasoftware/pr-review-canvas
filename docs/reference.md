@@ -559,7 +559,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
 | `fullWidthText`        | `false`   | `true` lets the summary, rationale and PR description fill their panel           |
 | `hideInline`           | `false`   | `true` hides the inline items; see [Hiding inline items](#hiding-inline-items)   |
-| `hideInlineKinds`      | all four  | A list of `points`, `comments`, `pending`, `annotations`                         |
+| `hideInlineKinds`      | all four  | One or more of `points`, `comments`, `pending`, `annotations`                    |
 | `hiddenItemClick`      | `reveal`  | `reveal` shows only the item gone to; `show-all` turns `hideInline` off          |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
@@ -723,7 +723,8 @@ screen stays in place. You can still comment on a line while items are hidden: t
 as usual, and the review panel lists the draft.
 
 The choice is saved as `hideInline` in `settings.yml`, so the next page opens the same way. In the
-settings dialog, **what it hides** picks the kinds (`hideInlineKinds`). **Going to a hidden item**
+settings dialog, **what it hides** picks the kinds (`hideInlineKinds`); at least one stays
+checked, so to hide nothing you leave the switch off. **Going to a hidden item**
 (`hiddenItemClick`) sets what happens when you follow a point's link in the layer summary, a
 draft's link in the review panel, or press `]` onto a hidden point. **show only that item** brings
 back that one row and keeps the rest hidden until the next switch. **turn hiding off** shows

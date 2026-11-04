@@ -335,11 +335,25 @@ export function inlineHideFieldsHtml(settings) {
       `${settings.hideInlineKinds.includes(kind) ? ' checked' : ''}> ${esc(INLINE_KIND_LABELS[kind])}</label>`
   ).join('')
   return (
-    `<fieldset class="inline-kinds"><legend>Hide inline items: what it hides</legend>${kinds}</fieldset>` +
+    `<fieldset class="inline-kinds"><legend>Hide inline items: what it hides</legend>${kinds}<p class="small" role="status" data-kinds-note></p></fieldset>` +
     '<div class="field"><label for="set-hidden-item-click">Going to a hidden item</label>' +
     `<select id="set-hidden-item-click">${optionsHtml(HIDDEN_ITEM_CLICKS, settings.hiddenItemClick, HIDDEN_ITEM_CLICK_LABELS)}</select></div>` +
     '<p class="muted small">The <span class="mono">i</span> key and the switch under the header hide these items from the diff so you can read the code first. Nothing is deleted. Points stay in the layer summary and drafts in the review panel; comments and annotations show only in the diff. A point&rsquo;s link in the summary, a draft&rsquo;s link in the panel, and the <span class="mono">]</span> key go to a hidden item.</p>'
   )
+}
+
+export const KEEP_ONE_KIND_NOTE = 'Keep at least one kind. To hide nothing, leave the switch off.'
+
+/**
+ * The switch hides at least one kind, so unchecking the last one checks it again with a note.
+ * @param {ParentNode} dialog
+ * @param {HTMLInputElement} box the box just changed
+ */
+export function keepOneKind(dialog, box) {
+  const none = dialog.querySelector('input[name="set-inline-kind"]:checked') === null
+  if (none) box.checked = true
+  const note = dialog.querySelector('[data-kinds-note]')
+  if (note !== null) note.textContent = none ? KEEP_ONE_KIND_NOTE : ''
 }
 
 /** The values the dialog holds right now, as the PUT body. */
@@ -475,6 +489,9 @@ export function wireSettingsDialog(dialog, api, onSaved) {
     next.focus()
   })
   dialog.addEventListener('change', event => {
+    if (event.target instanceof HTMLInputElement && event.target.name === 'set-inline-kind') {
+      keepOneKind(dialog, event.target)
+    }
     if (event.target instanceof HTMLSelectElement && event.target.id === CHAT_AGENT_ID) {
       const list = dialog.querySelector(`#${CHAT_MODEL_LIST_ID}`)
       if (list !== null) {

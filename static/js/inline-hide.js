@@ -107,9 +107,6 @@ export function inlineHideHint(hide) {
   if (!hide.hideInline) {
     return ''
   }
-  if (kinds.length === 0) {
-    return 'nothing chosen to hide · pick what in settings'
-  }
   const where = []
   if (kinds.includes('points')) where.push('points are still in the layer summary and on ]')
   if (kinds.includes('pending')) where.push('drafts in the review panel')

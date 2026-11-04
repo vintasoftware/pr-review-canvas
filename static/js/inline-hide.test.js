@@ -82,14 +82,6 @@ describe('setInlineHide', () => {
     expect(html.hasAttribute(HIDE_ATTR)).toBe(false)
   })
 
-  it('hides nothing when on with no kind chosen, and says so', () => {
-    const el = page()
-    setInlineHide({ ...ON, hideInlineKinds: [] }, el, still)
-    expect(html.hasAttribute(HIDE_ATTR)).toBe(false)
-    expect(the(el, '#inline-toggle').getAttribute('aria-pressed')).toBe('true')
-    expect(the(el, '.inline-hint').textContent).toMatch(/^nothing chosen to hide/)
-  })
-
   it('keeps a copy, so a caller changing its own list later changes nothing', () => {
     /** @type {import('./inline-hide.js').InlineKind[]} */
     const kinds = ['points']

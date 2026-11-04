@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   checkoutListHtml,
   formatBytes,
+  keepOneKind,
+  KEEP_ONE_KIND_NOTE,
   MODEL_SUGGESTIONS,
   SETTINGS_TAB_KEY,
   modelOptionsHtml,
@@ -327,10 +329,29 @@ describe('readSettingsForm', () => {
       hiddenItemClick: 'show-all',
     })
     expect(readSettingsForm(holder)).not.toHaveProperty('hideInline')
-    for (const box of Array.from(holder.querySelectorAll('input[name="set-inline-kind"]'))) {
-      ;/** @type {HTMLInputElement} */ (box).checked = false
-    }
-    expect(readSettingsForm(holder).hideInlineKinds).toEqual([])
+  })
+
+  it('checks the last kind again when it is unchecked, and says why', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(
+      { ...SETTINGS, settings: { ...SETTINGS.settings, hideInlineKinds: ['comments', 'annotations'] } },
+      AGENTS
+    )
+    /** @param {string} kind */
+    const box = kind =>
+      /** @type {HTMLInputElement} */ (holder.querySelector(`input[name="set-inline-kind"][value="${kind}"]`))
+    const note = () => holder.querySelector('[data-kinds-note]')?.textContent
+    box('comments').checked = false
+    keepOneKind(holder, box('comments'))
+    expect(note()).toBe('')
+    box('annotations').checked = false
+    keepOneKind(holder, box('annotations'))
+    expect(box('annotations').checked).toBe(true)
+    expect(note()).toBe(KEEP_ONE_KIND_NOTE)
+    expect(readSettingsForm(holder).hideInlineKinds).toEqual(['annotations'])
+    box('points').checked = true
+    keepOneKind(holder, box('points'))
+    expect(note()).toBe('')
   })
 })
 

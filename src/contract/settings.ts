@@ -57,6 +57,7 @@ const CheckoutIdleDaysSchema = z
 /** The kinds the inline switch hides: each named once, in any order. */
 const InlineKindsSchema = z
   .array(z.enum(INLINE_KINDS))
+  .min(1, { message: 'hideInlineKinds names no kind; leave the switch off to hide nothing' })
   .refine(kinds => new Set(kinds).size === kinds.length, { message: 'hideInlineKinds names a kind twice' })
 const CheckoutSweepMinutesSchema = z
   .number()
