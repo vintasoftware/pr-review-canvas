@@ -35,6 +35,7 @@ export const ERROR_CODES = [
   'NOT_AUTHOR',
   'COMMENT_LINE_NOT_IN_DIFF',
   'SIGNOFF_INCOMPLETE',
+  'SIGNOFF_BY_AUTHOR',
   'CHAT_BUSY',
   'GENERATION_BUSY',
   'GENERATION_FAILED',
@@ -117,6 +118,8 @@ export interface PublicHost {
   kind: 'github' | 'gitlab'
   /** `GitHub` or `GitLab`, for the words on the page. */
   label: string
+  /** `pull request` or `merge request`, for the words on the page. */
+  noun: string
   /** `https://github.com` or the GitLab instance, for links to profiles. */
   webBase: string
 }
@@ -145,6 +148,12 @@ export interface PrBundle {
    * describes the current head. The page then offers to settle attention points.
    */
   selfReview: boolean
+  /**
+   * True on a pull request opened by the login that runs the server. The page then disables approve
+   * and request changes. Unlike `selfReview`, it stays true on an outdated canvas. False on local
+   * work and when the login is unknown, so the forge decides.
+   */
+  readerIsAuthor: boolean
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */
   local?: LocalKey
   comments: CommentsPayload

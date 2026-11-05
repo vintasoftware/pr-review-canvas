@@ -2,9 +2,9 @@ import { expect, test } from './fixtures.js'
 
 test('describes every header action and preserves tooltips after review progress changes', async ({
   page,
-  reviewUrl,
+  reviewerUrl,
 }) => {
-  await page.goto(reviewUrl)
+  await page.goto(reviewerUrl)
   for (const button of await page.locator('.hdr button').all()) {
     await expect(button).toHaveAttribute('title', /\S.+/)
   }

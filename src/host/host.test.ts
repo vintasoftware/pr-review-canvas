@@ -37,11 +37,13 @@ describe('hosts', () => {
     expect(publicHost(gitlabHost('gitlab.com'))).toEqual({
       kind: 'gitlab',
       label: 'GitLab',
+      noun: 'merge request',
       webBase: 'https://gitlab.com',
     })
     expect(JSON.parse(JSON.stringify(publicHost(GITHUB_HOST)))).toEqual({
       kind: 'github',
       label: 'GitHub',
+      noun: 'pull request',
       webBase: 'https://github.com',
     })
   })

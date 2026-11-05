@@ -319,7 +319,7 @@ describe('applyCapabilityGating', () => {
     applyCapabilityGating(document, { canComment: true, tokenKind: 'classic', login: 'octocat' })
     expect(document.querySelector('.capability-note')?.textContent).toBe('')
     // On GitLab the line names GitLab.
-    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    setHost({ kind: 'gitlab', label: 'GitLab', noun: 'merge request', webBase: 'https://gitlab.example.com' })
     try {
       applyCapabilityGating(document, {
         canComment: false,
@@ -366,7 +366,7 @@ describe('applyCapabilityGating', () => {
   })
 
   it('gives a post command back its capitalized tooltip, with the host cased', () => {
-    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    setHost({ kind: 'gitlab', label: 'GitLab', noun: 'merge request', webBase: 'https://gitlab.example.com' })
     try {
       document.body.innerHTML = sendCommandsHtml({ kind: 'point', id: 'p1' })
       const post = document.querySelector('[data-act="point-post"]')

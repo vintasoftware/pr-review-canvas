@@ -989,7 +989,20 @@ page already shows what it changed. When the forge answered with a warning, such
 could not load back, the dialog stays open with it.
 
 Approval requires every layer except **Other changes** to be reviewed for the current head.
-Requesting changes and a comment-only review do not require that completion. On GitLab,
+Requesting changes and a comment-only review do not require that completion.
+
+The author cannot sign off. When the signed-in login opened the pull request, **approve** and
+**request changes** are disabled with the reason "You opened this pull request. Sign-off comes from
+another reviewer." GitLab says "merge request". The server also refuses both with
+`SIGNOFF_BY_AUTHOR`. **comment** stays available. This is intentional and has no setting. It also
+applies on a GitLab project that lets authors approve their own merge requests; approve those in
+GitLab itself.
+
+The server may not know the login, for example after a transient `gh api user` failure, or with a
+GitHub App installation token that cannot read `/user`. It then reads the login once more. If the
+login is still unknown, the server sends the review and the forge applies its own rule.
+
+On GitLab,
 **approve** calls GitLab's approve API; **request changes** and **comment** post the review body
 as a merge request note. If the head moves before submission, reload and review the current
 commit.
@@ -1334,6 +1347,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                                                                                 |
 | `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                                                                                 |
 | `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                                                                    |
+| `SIGNOFF_BY_AUTHOR`                     | The pull request's author cannot approve or request changes; ask another reviewer, or post a comment-only review                                                                                        |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                                                                |
 | `SERVER_NOT_RUNNING`                    | Start the server with `pr-review serve` in any terminal, then run `pr-review open` again                                                                                                                |
 | `SERVER_TOKEN_INVALID`                  | Run the command as the user who started the server, or restart it so `~/.pr-review/server.json` is written again                                                                                        |
