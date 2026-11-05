@@ -127,6 +127,15 @@
   run copies from an older canvas, fails `validate` with `TEXT_TOO_LONG` until the note is
   shortened.
 
+### Sign-off
+
+- The author of a pull request or merge request cannot approve it or request changes on it from
+  the canvas. Both commands are disabled with the reason, and the server refuses them with
+  `SIGNOFF_BY_AUTHOR`. A comment-only review still works. This is intentional and has no setting.
+  It also applies on a GitLab project that lets authors approve their own merge requests. When the
+  server cannot read the signed-in login, it reads it once more. If it is still unknown, the server
+  sends the review and the forge decides.
+
 ## 0.10.0
 
 Changes since 0.9.0.

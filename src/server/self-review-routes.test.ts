@@ -22,6 +22,7 @@ import { publish } from '../review/publish.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
 import {
   type FakeGh,
+  ghError,
   ghJson,
   ghHandler,
   ghPost,
@@ -404,6 +405,47 @@ describe('the bundle', () => {
     })
     const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
     expect(await res.json()).toMatchObject({ status: 'stale', selfReview: false })
+  })
+
+  it.each([
+    ['octocat', true],
+    ['OctoCat', true],
+    ['reviewer', false],
+  ])('says whether %s, who runs the server, opened the pull request: %s', async (login, readerIsAuthor) => {
+    t = await withCanvas(gh({ routes: { user: ghJson({ login }) } }))
+    const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
+    expect(((await res.json()) as { readerIsAuthor: boolean }).readerIsAuthor).toBe(readerIsAuthor)
+  })
+
+  it('names the author on a canvas of another commit too, where self-review is off', async () => {
+    const git = gitFor42()
+    t = await makeTestContext({ git, gh: gh({ routes: { user: ghJson({ login: 'octocat' }) } }) })
+    await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: 'c'.repeat(40),
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF.replace('a() + b()', 'a() * c()'),
+    })
+    const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
+    expect(await res.json()).toMatchObject({ status: 'stale', selfReview: false, readerIsAuthor: true })
+  })
+
+  it('does not name the author when the login is unknown, so the forge decides', async () => {
+    t = await withCanvas(
+      gh({ routes: { user: ghError(new Error('Resource not accessible by integration')) } })
+    )
+    const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
+    expect(await res.json()).toMatchObject({ readerIsAuthor: false, capabilities: { login: null } })
+  })
+
+  it('does not name the author of local work, which has no sign-off', async () => {
+    t = await makeTestContext({ git: gitForLocal(), gh: gh() })
+    const res = await createApp(t.ctx).request('/api/prs/uncommitted', {
+      headers: { host: 'localhost:3010' },
+    })
+    expect(await res.json()).toMatchObject({ readerIsAuthor: false })
   })
 
   it('says whether settling shares the canvas comment again', async () => {

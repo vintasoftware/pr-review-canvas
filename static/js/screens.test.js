@@ -20,6 +20,7 @@ import {
   statePill,
 } from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
+import { setReaderIsAuthor } from './signoff.js'
 import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
@@ -69,6 +70,7 @@ function bundle(over = {}) {
     chat: { enabled: true, acpx: true },
     largePr: false,
     selfReview: false,
+    readerIsAuthor: false,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],
@@ -394,6 +396,72 @@ describe('header', () => {
     )
   })
 
+  describe('when the reader opened the pull request', () => {
+    const REASON = 'You opened this pull request. Sign-off comes from another reviewer.'
+    beforeEach(() => setReaderIsAuthor(true))
+    afterEach(() => {
+      setReaderIsAuthor(false)
+      setHost(undefined)
+    })
+
+    /** @param {import('./contract-types.js').PrState} state */
+    function drawProgress(state) {
+      document.body.innerHTML = `<div id="root">${progressHtml(syntheticArtifact(), state)}<nav class="rail"></nav></div>`
+      const root = document.querySelector('#root')
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('no root')
+      }
+      return root
+    }
+
+    it('disables approve and request changes with the one reason, and leaves comment on', () => {
+      const root = drawProgress(emptyState('x'))
+      for (const id of ['#approve', '#request-changes']) {
+        const el = root.querySelector(id)
+        expect(el?.hasAttribute('disabled')).toBe(true)
+        // The author's reason replaces the layer reason.
+        expect(el?.getAttribute('data-disabled-reason')).toBe(REASON)
+        expect(el?.getAttribute('title')).toBe(REASON)
+      }
+      const comment = root.querySelector('#comment-review')
+      expect(comment?.hasAttribute('disabled')).toBe(false)
+      expect(comment?.hasAttribute('data-disabled-reason')).toBe(false)
+    })
+
+    it('keeps the reason when the approve command is redrawn after every layer is reviewed', () => {
+      const artifact = syntheticArtifact()
+      const base = emptyState('x')
+      const root = drawProgress(base)
+      const done = { ...base, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
+      refreshProgress(root, artifact, done)
+      expect(root.querySelector('#approve')?.getAttribute('data-disabled-reason')).toBe(REASON)
+      expect(root.querySelector('#approve')?.hasAttribute('disabled')).toBe(true)
+      refreshProgress(root, artifact, base)
+      expect(root.querySelector('#approve')?.getAttribute('title')).toBe(REASON)
+      expect(root.querySelector('#request-changes')?.getAttribute('title')).toBe(REASON)
+    })
+
+    it('says merge request on GitLab', () => {
+      setHost({
+        kind: 'gitlab',
+        label: 'GitLab',
+        noun: 'merge request',
+        webBase: 'https://gitlab.example.com',
+      })
+      const root = drawProgress(emptyState('x'))
+      expect(root.querySelector('#request-changes')?.getAttribute('title')).toBe(
+        'You opened this merge request. Sign-off comes from another reviewer.'
+      )
+    })
+  })
+
+  it('leaves request changes on for a reader who did not open the pull request', () => {
+    document.body.innerHTML = progressHtml(syntheticArtifact(), emptyState('x'))
+    const changes = document.querySelector('#request-changes')
+    expect(changes?.hasAttribute('disabled')).toBe(false)
+    expect(changes?.getAttribute('title')).toBe('Write and preview a review requesting changes on GitHub')
+  })
+
   it('changes nothing on a page that has no progress line', () => {
     document.body.innerHTML = '<div id="bare"></div>'
     const root = document.querySelector('#bare')
@@ -544,7 +612,7 @@ describe('overview', () => {
     expect(panel?.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
       'PR description (from GitHub)'
     )
-    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    setHost({ kind: 'gitlab', label: 'GitLab', noun: 'merge request', webBase: 'https://gitlab.example.com' })
     try {
       document.body.innerHTML = renderOverview(bundle(), { paths, now: NOW })
       expect(document.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(

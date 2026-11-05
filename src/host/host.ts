@@ -155,5 +155,5 @@ export function gitlabHost(hostname: string): Host {
 
 /** The part of a Host the page and the health endpoint are told. */
 export function publicHost(host: Host): PublicHost {
-  return { kind: host.kind, label: host.label, webBase: host.webBase }
+  return { kind: host.kind, label: host.label, noun: host.noun, webBase: host.webBase }
 }
