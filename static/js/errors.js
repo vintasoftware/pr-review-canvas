@@ -119,6 +119,10 @@ export const ERROR_CARDS = {
     title: 'Comments must sit on lines the diff shows',
     action: 'Pick a line inside a chunk of this pull request.',
   },
+  SIGNOFF_BY_AUTHOR: {
+    title: 'The author does not sign off',
+    action: 'Ask another reviewer to approve or request changes; a comment-only review still works.',
+  },
   SIGNOFF_INCOMPLETE: {
     title: 'Some layers are not reviewed yet',
     action: 'Mark every layer outside Other as reviewed, then approve.',

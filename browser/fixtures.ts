@@ -9,6 +9,7 @@ import { createFakeRunner, type FakeRunnerOptions } from '../src/testing/fake-ru
 import {
   createFakeCheckoutGit,
   ghHandler,
+  ghJson,
   ghPost,
   makeTestContext,
   type TestContext,
@@ -49,6 +50,7 @@ const POSTED_INLINE = ghPost(body => ({
 
 export const test = base.extend<{
   reviewUrl: string
+  reviewerUrl: string
   selfReviewUrl: string
   noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
@@ -91,6 +93,15 @@ export const test = base.extend<{
   },
   reviewUrl: async ({ page }, use) => {
     const server = await startServer(page)
+    try {
+      await use(server.url)
+    } finally {
+      await server.stop()
+    }
+  },
+  /** PR #42 served to a reviewer who is not its author. */
+  reviewerUrl: async ({ page }, use) => {
+    const server = await startServer(page, {}, { login: 'reviewer' })
     try {
       await use(server.url)
     } finally {
@@ -145,10 +156,14 @@ export const test = base.extend<{
   },
 })
 
-/** Serves PR 42 on a free port; `stop` fails the test if the page threw or a request 500ed. */
+/**
+ * Serves PR 42 on a free port; `stop` fails the test if the page threw or a request 500ed. The
+ * login is octocat, who opened the pull request, unless `opts.login` names another.
+ */
 async function startServer(
   page: Page,
-  extra: Partial<TestContextOptions> = {}
+  extra: Partial<TestContextOptions> = {},
+  opts: { login?: string } = {}
 ): Promise<{ url: string; t: TestContext; stop: () => Promise<void> }> {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
@@ -162,6 +177,7 @@ async function startServer(
     git: gitFor42(),
     gh: ghFor42({
       routes: {
+        ...(opts.login === undefined ? {} : { user: ghJson({ login: opts.login }) }),
         'repos/acme/widgets/pulls/42/reviews/7001/comments': ghHandler(() =>
           submitted.map(
             ({ line: _line, start_line: _start, side: _side, original_line: _original, ...c }) => ({
