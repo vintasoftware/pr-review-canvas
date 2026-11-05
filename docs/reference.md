@@ -1126,9 +1126,10 @@ Requesting changes and a comment-only review do not require that completion.
 The author cannot sign off. When the signed-in login opened the pull request, **approve** and
 **request changes** are disabled with the reason "You opened this pull request. Sign-off comes from
 another reviewer." GitLab says "merge request". The server also refuses both with
-`SIGNOFF_BY_AUTHOR`. **comment** stays available. This is intentional and has no setting. It also
-applies on a GitLab project that lets authors approve their own merge requests; approve those in
-GitLab itself.
+`SIGNOFF_BY_AUTHOR`. **comment** stays available. GitHub refuses both from the author anyway, with a
+422; the canvas says so before the review is written. On GitLab the rule is stricter than the forge:
+it also applies on a project that lets authors approve their own merge requests, so approve those
+in GitLab itself. This is intentional and has no setting.
 
 The server may not know the login, for example after a transient `gh api user` failure, or with a
 GitHub App installation token that cannot read `/user`. It then reads the login once more. If the
