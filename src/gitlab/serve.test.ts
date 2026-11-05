@@ -193,10 +193,15 @@ describe('a GitLab origin', () => {
     ])
     const page = await app.request('/review/42', { headers: LOCAL })
     expect(await page.text()).toContain(
-      '"host":{"kind":"gitlab","label":"GitLab","webBase":"https://gitlab.example.com"}'
+      '"host":{"kind":"gitlab","label":"GitLab","noun":"merge request","webBase":"https://gitlab.example.com"}'
     )
     const health = (await (await app.request('/api/health', { headers: LOCAL })).json()) as { host: unknown }
-    expect(health.host).toEqual({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    expect(health.host).toEqual({
+      kind: 'gitlab',
+      label: 'GitLab',
+      noun: 'merge request',
+      webBase: 'https://gitlab.example.com',
+    })
   })
 
   it('posts an inline discussion, a reply into its thread, and a merge request note', async () => {
@@ -480,6 +485,35 @@ describe('a GitLab origin', () => {
     expect(result.submitted).toBe(1)
     expect(result.comments).toMatchObject([{ id: 7001, body: 'route draft', line: 4 }])
     expect((await t.ctx.prs.readComments(42))?.reviewComments.some(c => c.id === 7001)).toBe(true)
+  })
+  it.each(['APPROVE', 'REQUEST_CHANGES'] as const)(
+    'refuses %s from the merge request author, whatever the project allows',
+    async event => {
+      // MR 42 is by alice, and so is the login glabFor42 answers with.
+      const gh = glabFor42()
+      t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
+      const app = createApp(t.ctx)
+      const bundle = (await (await app.request('/api/prs/42', { headers: LOCAL })).json()) as PrBundle
+      expect(bundle.readerIsAuthor).toBe(true)
+      const res = await app.request(...post('/api/prs/42/review', { event, body: 'mine', headSha: HEAD_SHA }))
+      expect(res.status).toBe(403)
+      expect(await res.json()).toMatchObject({
+        error: {
+          code: 'SIGNOFF_BY_AUTHOR',
+          message: 'You opened this merge request. Sign-off comes from another reviewer.',
+        },
+      })
+      expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
+    }
+  )
+  it('lets the merge request author post a review with no verdict', async () => {
+    const gh = glabFor42()
+    t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
+    const res = await createApp(t.ctx).request(
+      ...post('/api/prs/42/review', { event: 'COMMENT', body: 'a note', headSha: HEAD_SHA })
+    )
+    expect(res.status).toBe(201)
+    expect(gh.calls.filter(c => c.kind === 'post').map(c => c.path)).toEqual([`${MR_API}/notes`])
   })
   it.each(['changed head', 'concurrent draft', 'replaced draft', 'cleanup failure'])(
     'retains local drafts after %s prevents GitLab submission',

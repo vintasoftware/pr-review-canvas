@@ -5,7 +5,7 @@
 /** @typedef {import('./contract-types.js').PublicHost} PublicHost */
 
 /** @type {PublicHost} */
-const DEFAULT_HOST = { kind: 'github', label: 'GitHub', webBase: 'https://github.com' }
+const DEFAULT_HOST = { kind: 'github', label: 'GitHub', noun: 'pull request', webBase: 'https://github.com' }
 
 /** @type {PublicHost} */
 let current = DEFAULT_HOST

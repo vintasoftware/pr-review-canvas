@@ -15,7 +15,7 @@ describe('host words and links', () => {
   })
 
   it('speaks GitLab, with profile links on the instance the server named', () => {
-    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
+    setHost({ kind: 'gitlab', label: 'GitLab', noun: 'merge request', webBase: 'https://gitlab.example.com' })
     expect(currentHost().kind).toBe('gitlab')
     expect(postToLabel()).toBe('post to gitlab')
     expect(noPostingTitle()).toBe('this GitLab login cannot post on this repository')

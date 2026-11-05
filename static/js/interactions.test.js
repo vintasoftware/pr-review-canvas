@@ -36,6 +36,7 @@ import { renderRail } from './rail.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
 import { setSelfReview } from './self-review.js'
+import { setReaderIsAuthor } from './signoff.js'
 
 const NOW = new Date('2026-09-10T12:00:00.000Z')
 const artifact = syntheticArtifact()
@@ -86,6 +87,7 @@ function bundleFor(state, canvas = artifact) {
     chat: { enabled: false, acpx: true },
     largePr: false,
     selfReview: false,
+    readerIsAuthor: false,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],
@@ -94,7 +96,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
+ * @param {{ selfReview?: boolean, readerIsAuthor?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -103,6 +105,7 @@ function setup(opts = {}) {
   const canvas = opts.artifact ?? artifact
   const bundle = bundleFor(state, canvas)
   setSelfReview(opts.selfReview ?? false, canvas.settled)
+  setReaderIsAuthor(opts.readerIsAuthor ?? false)
   const ctx = {
     artifact: canvas,
     headSha: artifact.pr.headSha,
@@ -2137,6 +2140,33 @@ describe('capability gating and sign-off', () => {
     expect(root.querySelector('#request-changes')?.hasAttribute('disabled')).toBe(true)
     plus?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(root.querySelector('.composer-box')).toBeNull()
+  })
+
+  it('keeps approve and request changes off for the author while posting is on and layers change', async () => {
+    const reason = 'You opened this pull request. Sign-off comes from another reviewer.'
+    const { root, calls } = setup({ readerIsAuthor: true })
+    const approve = root.querySelector('#approve')
+    const changes = root.querySelector('#request-changes')
+    const comment = root.querySelector('#comment-review')
+    // Capability checks ran with posting allowed, and the author's reason is still there.
+    for (const el of [approve, changes]) {
+      expect(el?.hasAttribute('disabled')).toBe(true)
+      expect(el?.getAttribute('data-disabled-reason')).toBe(reason)
+      expect(el?.getAttribute('title')).toBe(reason)
+    }
+    expect(comment?.hasAttribute('disabled')).toBe(false)
+    // Reviewing every layer clears the layer reason, not the author's.
+    click(root, '.layer-end [data-act="mark-layer"]')
+    await flush()
+    expect(calls).toEqual([['reviewed', { id: 'layer:run-path', reviewed: true }]])
+    expect(root.querySelector('.ptext')?.textContent).toBe('1 of 1 layers reviewed')
+    expect(approve?.hasAttribute('disabled')).toBe(true)
+    expect(approve?.getAttribute('title')).toBe(reason)
+    expect(changes?.hasAttribute('disabled')).toBe(true)
+    click(root, '#approve')
+    click(root, '#request-changes')
+    await flush()
+    expect(root.querySelector('#signoff-dialog')).toBeNull()
   })
 
   it('shows the generated body and posts the review', async () => {
