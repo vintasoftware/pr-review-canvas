@@ -129,12 +129,15 @@
 
 ### Sign-off
 
-- The author of a pull request or merge request cannot approve it or request changes on it from
-  the canvas. Both commands are disabled with the reason, and the server refuses them with
-  `SIGNOFF_BY_AUTHOR`. A comment-only review still works. This is intentional and has no setting.
-  It also applies on a GitLab project that lets authors approve their own merge requests. When the
-  server cannot read the signed-in login, it reads it once more. If it is still unknown, the server
-  sends the review and the forge decides.
+- The canvas tells the author of a pull request or merge request that they cannot approve it or
+  request changes on it. Both commands are disabled with the reason, and the server refuses them
+  with `SIGNOFF_BY_AUTHOR` before it calls the forge. A comment-only review still works. This is
+  intentional and has no setting. When the server cannot read the signed-in login, it reads it once
+  more. If it is still unknown, the server sends the review and the forge decides.
+  - On GitHub, the forge already refused both from the author with a 422. The dialog showed only
+    "Unprocessable Entity (HTTP 422)", after the review was written.
+  - On GitLab, the rule is new. It also applies on a project that lets authors approve their own
+    merge requests.
 
 ## 0.10.0
 
