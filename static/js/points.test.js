@@ -18,6 +18,8 @@ import {
   pointToMarkdown,
   readPageDensity,
   readPointsDensity,
+  pointsDensityToggleHtml,
+  setCompactPoints,
   setMentionCanvas,
   setPointExpanded,
   setPointsDensity,
@@ -342,6 +344,17 @@ describe('where a point stands', () => {
     setPointsDensity(page, 'compact')
     expect(readPageDensity(page)).toBe('compact')
     expect(store[POINTS_DENSITY_KEY]).toBe('detailed')
+    delete page.dataset['points']
+  })
+
+  it('offers the density switch only with compactPoints on', () => {
+    expect(pointsDensityToggleHtml()).toBe('')
+    setCompactPoints(true)
+    try {
+      expect(pointsDensityToggleHtml()).toContain('data-act="points-density"')
+    } finally {
+      setCompactPoints(false)
+    }
   })
 
   it('leaves a page that holds none of its parts alone', () => {

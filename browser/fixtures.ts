@@ -51,21 +51,12 @@ const POSTED_INLINE = ghPost(body => ({
 export const test = base.extend<{
   /** Personal settings the server saves before the page opens, as the settings dialog would. */
   settings: SettingsInput
-  /** The density the reader chose for the layers' point lists; most specs act on whole points. */
-  pointsDensity: 'compact' | 'detailed'
   reviewUrl: string
   selfReviewUrl: string
   noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
   settings: [{}, { option: true }],
-  pointsDensity: ['detailed', { option: true }],
-  page: async ({ page, pointsDensity }, use) => {
-    if (pointsDensity === 'detailed') {
-      await page.addInitScript(() => localStorage.setItem('pr-review.points-density', 'detailed'))
-    }
-    await use(page)
-  },
   chatServer: async ({ page, settings }, use) => {
     const stops: Array<() => Promise<void>> = []
     await use(async (options = {}) => {

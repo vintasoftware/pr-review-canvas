@@ -30,6 +30,7 @@ import {
   setRenderContext,
   setStartCollapsed,
 } from './layers.js'
+import { setCompactPoints } from './points.js'
 import { initOneLayer } from './one-layer.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
@@ -392,6 +393,7 @@ afterEach(() => {
   }
   setRenderContext(null)
   setStartCollapsed(false)
+  setCompactPoints(false)
   // A test that picks the points' density leaves the page at the default, compact.
   delete document.documentElement.dataset['points']
 })
@@ -685,6 +687,7 @@ describe('attention points', () => {
   })
 
   it('opens an open point of a compact list from its title, and closes every one with the switch', () => {
+    setCompactPoints(true)
     const { root } = setup()
     const card = layerCard(root, 'fp-1')
     click(root, 'section.layer li.finding[data-fingerprint="fp-1"] .p-title')

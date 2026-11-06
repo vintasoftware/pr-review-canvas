@@ -201,8 +201,8 @@ test('hidden takes priority over component display rules', async ({ page, review
   })
 })
 
-test.describe('a first visit', () => {
-  test.use({ pointsDensity: 'compact' })
+test.describe('with compactPoints', () => {
+  test.use({ settings: { compactPoints: true } })
 
   test('lists each point as one line, opens one from its title, and remembers show details', async ({
     page,

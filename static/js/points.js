@@ -120,6 +120,17 @@ export function pointLocation(p) {
 }
 
 /**
+ * Whether the layers' lists may be compact, from the `compactPoints` setting. Off, every list
+ * draws its points whole and offers no switch; `app.js` sets it once per render.
+ */
+let compactPoints = false
+
+/** @param {boolean} on */
+export function setCompactPoints(on) {
+  compactPoints = on
+}
+
+/**
  * Whether a point's comment names the canvas it came from. Off when `sharing.mentionCanvas` is
  * off; `app.js` sets it once per render, before the cards that read it are built.
  */
@@ -662,8 +673,14 @@ export function setPointsDensity(page, density, storage) {
   storage?.setItem(POINTS_DENSITY_KEY, density)
 }
 
-/** The switch in each list's heading; the CSS shows the label for the density the page is in. */
+/**
+ * The switch in each list's heading, with `compactPoints` on; the CSS shows the label for the
+ * density the page is in.
+ */
 export function pointsDensityToggleHtml() {
+  if (!compactPoints) {
+    return ''
+  }
   return (
     '<button class="cmd points-density" type="button" data-act="points-density">' +
     '<span class="when-compact">show details</span><span class="when-detailed">compact</span></button>'

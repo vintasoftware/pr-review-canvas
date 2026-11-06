@@ -11,9 +11,10 @@
 - A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,
   `2 of 3 covered`, `not covered`, or `no tests needed`. A behavior that needs no test counts
   toward neither side.
-- A layer's attention points start as one line each, with their level, kind, audience, and location.
-  Click the title, **show**, or press `o` to read one. **show details** in the list's heading opens
-  every open point, and the browser remembers it.
+- **Compact attention points** in the settings dialog, saved as `compactPoints` in `settings.yml`,
+  lists a layer's attention points as one line each, with their level, kind, audience, and
+  location. Click the title, **show**, or press `o` to read one. **show details** in the list's
+  heading opens every open point, and the browser remembers it. It is off by default.
 - **Start collapsed** in the settings dialog, saved as `startCollapsed` in `settings.yml`, opens a
   review with only the first layer open and every file closed under its name. It is off by
   default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.

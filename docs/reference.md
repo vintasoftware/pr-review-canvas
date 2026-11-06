@@ -556,6 +556,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `layerView`            | `all`     | `all`, `one`                                                                     |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
 | `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
+| `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
 | `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |
@@ -782,11 +783,12 @@ in the layer, your draft with **edit** and **delete**; in the diff the draft has
 under the point), and the commands that undo it: **reopen**, **restore**, or
 deleting the draft. The point collapses again when its status changes. A reload also collapses it.
 
-In a layer's list every point starts as one line: its level, title, a `decide` point's impact,
-kind, audience, and location. Click the title or **show** to read it and use its commands. **show
-details** in the heading of a list shows every open point whole, in every layer, and **compact**
-goes back; the browser remembers the choice. A point on its line in the diff is always drawn whole
-while it is open.
+A layer's list draws each open point whole. With `compactPoints: true` in `settings.yml`
+(**Compact attention points** in the settings dialog), every point in the list starts as one line:
+its level, title, a `decide` point's impact, kind, audience, and location. Click the title or
+**show** to read it and use its commands. **show details** in the heading of a list shows every
+open point whole, in every layer, and **compact** goes back; the browser remembers the choice. A
+point on its line in the diff is always drawn whole while it is open.
 
 The counts in the rail, the layer headings, and the overview's level counts include only open
 points. The overview line **Attention points: 2 open · 1 in your review · 1 resolved by the author ·

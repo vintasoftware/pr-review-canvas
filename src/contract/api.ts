@@ -280,4 +280,6 @@ export interface ReviewBootstrap {
   pointColors: PointColors
   /** Whether the canvas opens with only its first layer open and every file closed. */
   startCollapsed: boolean
+  /** Whether a layer's list draws each attention point as one line until the reader opens it. */
+  compactPoints: boolean
 }
