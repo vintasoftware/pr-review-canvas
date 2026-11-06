@@ -9,7 +9,7 @@ import { toggleMarkdownPreview } from './composer.js'
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 /** @typedef {import('./selection.js').Selection} Selection */
 import { cssEscape, drawCardOf, drawCardsOf, fileCardOf, findRow } from './anchors.js'
-import { fetchReviewBody } from './api.js'
+import { fetchReviewBody, saveSettings } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
 import { runCommand, runControl, showCommandError, toast } from './commands.js'
@@ -69,6 +69,7 @@ import {
 } from './points.js'
 import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
+import { getInlineHide, isHiddenRow, itemRowSelector, setInlineHide, showRow } from './inline-hide.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
@@ -556,6 +557,8 @@ export function wireReview(root, session, opts = {}) {
       found = pick()
     }
     if (found !== undefined) {
+      // A point of the Other layer has only its row, which the inline switch may hide.
+      goToHidden(found.el)
       focusItem(found.el, 'center')
     }
   }
@@ -865,6 +868,57 @@ export function wireReview(root, session, opts = {}) {
     setFoldLevel(root, value)
     refreshFoldLevel(root, value, hiddenAt(value))
     toast(root, `hiding code: ${value}`)
+  }
+
+  /** @param {boolean} on */
+  const switchInline = on => {
+    setInlineHide({ ...getInlineHide(), hideInline: on }, root)
+    toast(root, on ? 'inline items hidden' : 'inline items shown')
+    saveSettings({ hideInline: on }).catch(() => {
+      toast(root, 'could not save the inline switch; it holds for this page only')
+    })
+  }
+
+  /**
+   * Shows a hidden row the reader went to, or turns hiding off, as hiddenItemClick says.
+   * @param {Element | null} row
+   */
+  const goToHidden = row => {
+    if (row === null || !isHiddenRow(row, doc.documentElement)) {
+      return
+    }
+    if (getInlineHide().hiddenItemClick === 'show-all') {
+      switchInline(false)
+    } else {
+      showRow(row)
+    }
+  }
+
+  /**
+   * Runs in the capture phase, before the link scrolls to its line, so the page lands with the row
+   * in place. It draws the row's file first, because a card draws its diff only when on screen.
+   * @param {MouseEvent} event
+   */
+  const onItemLink = event => {
+    const link = event.target instanceof Element ? event.target.closest('a[data-item-link]') : null
+    const item = link?.closest('[data-point], [data-pending-id]') ?? null
+    if (item === null || !getInlineHide().hideInline) {
+      return
+    }
+    const pointId = item.getAttribute('data-point')
+    const draftId = item.getAttribute('data-pending-id') ?? ''
+    const path =
+      pointId === null
+        ? session.pending.find(p => p.id === draftId)?.path
+        : session.artifact.points.find(p => p.id === pointId)?.path
+    if (path !== undefined) drawCardsOf(root, path)
+    goToHidden(
+      root.querySelector(
+        pointId === null
+          ? itemRowSelector('pending', cssEscape(draftId))
+          : itemRowSelector('points', cssEscape(pointId))
+      )
+    )
   }
 
   /**
@@ -1242,6 +1296,9 @@ export function wireReview(root, session, opts = {}) {
     settings: el => {
       opts.openSettings?.(el)
     },
+    'toggle-inline': () => {
+      switchInline(!getInlineHide().hideInline)
+    },
     help: () => {
       openHelpDialog(root)
     },
@@ -1414,6 +1471,9 @@ export function wireReview(root, session, opts = {}) {
         // The key steps through the levels, so the reader can open the code up without the mouse.
         applyFoldLevel(nextFoldLevel(getFoldLevel()))
         break
+      case 'toggle-inline':
+        switchInline(!getInlineHide().hideInline)
+        break
       case 'overview':
         focusItem(byId('overview'))
         break
@@ -1449,6 +1509,7 @@ export function wireReview(root, session, opts = {}) {
   doc.addEventListener('pointerup', onPointerUp)
   doc.addEventListener('pointercancel', onPointerUp)
   doc.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+  doc.addEventListener('click', onItemLink, true)
   const stopCardReveal = wireCardReveal(root)
   applyCapabilityGating(root, session.capabilities)
 
@@ -1585,6 +1646,7 @@ export function wireReview(root, session, opts = {}) {
       doc.removeEventListener('pointerup', onPointerUp)
       doc.removeEventListener('pointercancel', onPointerUp)
       doc.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+      doc.removeEventListener('click', onItemLink, true)
       stopCardReveal()
       stopPaddingUnderBar()
     },

@@ -53,6 +53,9 @@ test('offers the default reading level in the settings dialog and saves it', asy
   const response = {
     settings: {
       foldLevel: 'moderate',
+      hideInline: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'claude',
       chatModel: null,
       chatTimeoutSec: 600,

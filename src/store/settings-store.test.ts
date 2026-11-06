@@ -2,7 +2,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '../contract/settings.js'
+import { DEFAULT_SETTINGS, SettingsInputSchema } from '../contract/settings.js'
 import { makeTempDir } from '../testing/fakes.js'
 import { applySettings, createSettingsStore, parseSettings, SETTINGS_TEMPLATE } from './settings-store.js'
 
@@ -50,6 +50,9 @@ describe('createSettingsStore', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInline: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'codex',
       chatModel: 'gpt-5.2',
       chatTimeoutSec: 900,
@@ -82,6 +85,9 @@ describe('createSettingsStore', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInline: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'codex',
       chatModel: null,
       chatTimeoutSec: 120,
@@ -287,6 +293,9 @@ describe('two saves that arrive together', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInline: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'codex',
       chatModel: null,
       chatTimeoutSec: 900,
@@ -316,5 +325,62 @@ describe('two saves that arrive together', () => {
     await writeFile(store.file, '- a\n- b\n', 'utf8')
     expect((await store.write({ chatAgent: 'codex' })).chatAgent).toBe('codex')
     expect(await readFile(store.file, 'utf8')).toContain('# Personal pr-review settings')
+  })
+})
+
+describe('the inline switch settings', () => {
+  it('starts off, hiding every kind when on, and showing only the item a summary click asks for', () => {
+    expect(DEFAULT_SETTINGS.hideInline).toBe(false)
+    expect(DEFAULT_SETTINGS.hideInlineKinds).toEqual(['points', 'comments', 'pending', 'annotations'])
+    expect(DEFAULT_SETTINGS.hiddenItemClick).toBe('reveal')
+    expect(parseSettings(SETTINGS_TEMPLATE)).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('saves the switch, what it hides, and the click behavior, and reads them back', async () => {
+    const store = createSettingsStore(dataDir)
+    await store.ensureFile()
+    const saved = await store.write({
+      hideInline: true,
+      hideInlineKinds: ['points', 'annotations'],
+      hiddenItemClick: 'show-all',
+    })
+    expect(saved).toMatchObject({
+      hideInline: true,
+      hideInlineKinds: ['points', 'annotations'],
+      hiddenItemClick: 'show-all',
+    })
+    const text = await readFile(store.file, 'utf8')
+    expect(text).toContain('hideInline: true')
+    expect(text).toContain('# What the switch hides')
+    expect(await store.read()).toEqual(saved)
+  })
+
+  it('gives a file written before the switch existed its keys, with their comments', () => {
+    const { text, settings } = applySettings('version: 1\nskin: github\n', { hideInline: true })
+    expect(settings.hideInline).toBe(true)
+    expect(text).toContain('# Whether the diff hides its inline items')
+    expect(text).toContain('# What going to a hidden item does')
+  })
+
+  it('falls back to the defaults for no kind, a kind it does not know, or a kind named twice', () => {
+    expect(parseSettings('hideInlineKinds: []\n')).toEqual(DEFAULT_SETTINGS)
+    expect(parseSettings('hideInlineKinds: [points, tags]\n')).toEqual(DEFAULT_SETTINGS)
+    expect(parseSettings('hideInlineKinds: [points, points]\n')).toEqual(DEFAULT_SETTINGS)
+    expect(parseSettings('hiddenItemClick: open\n')).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('refuses a request with no kind, a kind it does not know, a kind named twice, or a click it does not know', () => {
+    expect(SettingsInputSchema.safeParse({ hideInlineKinds: [] }).success).toBe(false)
+    expect(SettingsInputSchema.safeParse({ hideInlineKinds: ['tags'] }).success).toBe(false)
+    expect(SettingsInputSchema.safeParse({ hideInlineKinds: ['points', 'points'] }).success).toBe(false)
+    expect(SettingsInputSchema.safeParse({ hiddenItemClick: 'open' }).success).toBe(false)
+    expect(SettingsInputSchema.safeParse({ hideInline: 'yes' }).success).toBe(false)
+    expect(
+      SettingsInputSchema.safeParse({
+        hideInline: false,
+        hideInlineKinds: ['pending'],
+        hiddenItemClick: 'reveal',
+      }).success
+    ).toBe(true)
   })
 })

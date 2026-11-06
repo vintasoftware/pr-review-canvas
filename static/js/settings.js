@@ -10,6 +10,14 @@ import { runCommand } from './commands.js'
 import { esc, optionsHtml, qs } from './dom.js'
 import { FOLD_LEVELS, isFoldLevel } from './fold-levels.js'
 import { isLayerView, LAYER_VIEW_LABELS, LAYER_VIEWS } from './layer-views.js'
+import {
+  HIDDEN_ITEM_CLICK_LABELS,
+  HIDDEN_ITEM_CLICKS,
+  INLINE_KIND_LABELS,
+  INLINE_KINDS,
+  isHiddenItemClick,
+  isInlineKind,
+} from './inline-hide.js'
 import { isPointColors, POINT_COLORS, POINT_COLORS_LABELS } from './point-colors.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
@@ -201,7 +209,8 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<p class="muted small">The overview summary, each layer\'s rationale, and the PR description fill the width of their panel, diagrams included. Off, their lines stop at 100 characters.</p>' +
       '<div class="field"><label for="set-point-colors">Point colors</label>' +
       `<select id="set-point-colors">${optionsHtml(POINT_COLORS, settings.pointColors, POINT_COLORS_LABELS)}</select></div>` +
-      '<p class="muted small">The colors of the attention point icons. The shapes say the level in both: a diamond to decide, a checked box to check, an i for context.</p>',
+      '<p class="muted small">The colors of the attention point icons. The shapes say the level in both: a diamond to decide, a checked box to check, an i for context.</p>' +
+      inlineHideFieldsHtml(settings),
     chat: agents === null ? '' : chatFieldsHtml(settings, agents),
     checkouts: agents === null ? '' : checkoutFieldsHtml(settings),
     project:
@@ -315,11 +324,45 @@ export async function openSettingsDialog(root, opener, opts = {}) {
   return dialog
 }
 
+/**
+ * On and off belong to the header switch and the `i` key; the dialog only fine-tunes.
+ * @param {SettingsResponse['settings']} settings
+ */
+export function inlineHideFieldsHtml(settings) {
+  const kinds = INLINE_KINDS.map(
+    kind =>
+      `<label class="field-check"><input type="checkbox" name="set-inline-kind" value="${kind}"` +
+      `${settings.hideInlineKinds.includes(kind) ? ' checked' : ''}> ${esc(INLINE_KIND_LABELS[kind])}</label>`
+  ).join('')
+  return (
+    `<fieldset class="inline-kinds"><legend>Hide inline items: what it hides</legend>${kinds}<p class="small" role="status" data-kinds-note></p></fieldset>` +
+    '<div class="field"><label for="set-hidden-item-click">Going to a hidden item</label>' +
+    `<select id="set-hidden-item-click">${optionsHtml(HIDDEN_ITEM_CLICKS, settings.hiddenItemClick, HIDDEN_ITEM_CLICK_LABELS)}</select></div>` +
+    '<p class="muted small">The <span class="mono">i</span> key and the switch under the header hide these items from the diff so you can read the code first. Nothing is deleted. Points stay in the layer summary and drafts in the review panel; comments and annotations show only in the diff. A point&rsquo;s link in the summary, a draft&rsquo;s link in the panel, and the <span class="mono">]</span> key go to a hidden item.</p>'
+  )
+}
+
+export const KEEP_ONE_KIND_NOTE = 'Keep at least one kind. To hide nothing, leave the switch off.'
+
+/**
+ * The switch hides at least one kind, so unchecking the last one checks it again with a note.
+ * @param {ParentNode} dialog
+ * @param {HTMLInputElement} box the box just changed
+ */
+export function keepOneKind(dialog, box) {
+  const none = dialog.querySelector('input[name="set-inline-kind"]:checked') === null
+  if (none) box.checked = true
+  const note = dialog.querySelector('[data-kinds-note]')
+  if (note !== null) note.textContent = none ? KEEP_ONE_KIND_NOTE : ''
+}
+
 /** The values the dialog holds right now, as the PUT body. */
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const foldLevel = qs('#set-fold-level', dialog)
   const layerView = qs('#set-layer-view', dialog)
   const pointColors = qs('#set-point-colors', dialog)
+  const hiddenItemClick = qs('#set-hidden-item-click', dialog)
+  const kindBoxes = Array.from(dialog.querySelectorAll('input[name="set-inline-kind"]'))
   const agent = qs(`#${CHAT_AGENT_ID}`, dialog)
   const model = qs(`#${CHAT_MODEL_ID}`, dialog)
   const timeout = qs('#set-timeout', dialog)
@@ -351,6 +394,15 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   }
   if (fullWidthText instanceof HTMLInputElement) {
     input.fullWidthText = fullWidthText.checked
+  }
+  if (kindBoxes.length > 0) {
+    input.hideInlineKinds = kindBoxes
+      .filter(box => box instanceof HTMLInputElement && box.checked)
+      .map(box => /** @type {HTMLInputElement} */ (box).value)
+      .filter(isInlineKind)
+  }
+  if (hiddenItemClick instanceof HTMLSelectElement && isHiddenItemClick(hiddenItemClick.value)) {
+    input.hiddenItemClick = hiddenItemClick.value
   }
   if (agent instanceof HTMLSelectElement && agent.value !== '') {
     input.chatAgent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)
@@ -437,6 +489,9 @@ export function wireSettingsDialog(dialog, api, onSaved) {
     next.focus()
   })
   dialog.addEventListener('change', event => {
+    if (event.target instanceof HTMLInputElement && event.target.name === 'set-inline-kind') {
+      keepOneKind(dialog, event.target)
+    }
     if (event.target instanceof HTMLSelectElement && event.target.id === CHAT_AGENT_ID) {
       const list = dialog.querySelector(`#${CHAT_MODEL_LIST_ID}`)
       if (list !== null) {
