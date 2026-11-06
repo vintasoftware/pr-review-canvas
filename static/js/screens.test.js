@@ -417,7 +417,7 @@ describe('header', () => {
     expect(document.querySelector('#regenerate')?.textContent).toBe('update')
   })
 
-  it('offers the reading level on an outdated canvas once the reader opens it', () => {
+  it('offers the reading level and names the generator on an outdated canvas once the reader opens it', () => {
     const opts = {
       host: 'localhost:3010',
       theme: /** @type {const} */ ('auto'),
@@ -426,9 +426,13 @@ describe('header', () => {
     }
     document.body.innerHTML = renderHeader(bundle({ status: 'stale' }), opts)
     expect(document.querySelector('#fold-level')).toBeNull()
+    expect(document.querySelector('.pill.agent')).toBeNull()
     const stale = bundle({ status: 'stale' })
     document.body.innerHTML = renderHeader(stale, { ...opts, drawn: drawnCanvas(stale, true) })
     expect(document.querySelector('#fold-level')).not.toBeNull()
+    // The canvas on screen says who generated it and when, as a current one does.
+    expect(document.querySelector('.pill.agent')?.textContent).toBe('canvas by claude · claude-opus-4-1')
+    expect(document.querySelector('.pill.agent + span')?.textContent).toMatch(/^generated /)
     // The review's progress belongs to the current head, so it stays off.
     expect(document.querySelector('.ptext')).toBeNull()
   })

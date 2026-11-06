@@ -491,6 +491,16 @@ export function pointSwitches(root) {
 }
 
 /**
+ * What a layer's points heading counts: its open points, said in words when there are none, since
+ * a resolved or dismissed point can still be on the page under it.
+ * @param {number} open
+ * @returns {string}
+ */
+export function pointCountText(open) {
+  return open === 0 ? 'none open' : String(open)
+}
+
+/**
  * Draws every point again where it changed, wherever it is on the page, and rebuilds the counts,
  * the overview's status line, and the author's note. A point keeps the reader's expanded view
  * while its status holds, and collapses when it changes. Calling it again with the same state
@@ -511,7 +521,7 @@ export function applyPointStates(root, points, state, ctx) {
   const open = openPoints(points, state)
   for (const counter of Array.from(root.querySelectorAll('.point-count'))) {
     const layerId = counter.closest('[data-layer]')?.getAttribute('data-layer')
-    counter.textContent = String(open.filter(p => p.layerId === layerId).length)
+    counter.textContent = pointCountText(open.filter(p => p.layerId === layerId).length)
   }
   replaceWithHtml(root.querySelector('.point-statuses'), host =>
     pointStatusesHtml(points, state, pointSwitches(host))

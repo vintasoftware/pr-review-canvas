@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Reading
+
+- The overview summary, a layer's rationale and the PR description fill the width of their panel,
+  diagrams included, instead of stopping at 100 characters.
+- The overview header names each level next to its count, as in `3 decide · 1 check · 2 fyi`, in
+  place of the legend that opened on hover.
+- The overview's Conversation starts closed, like the PR description and the review history, with
+  its comment count in the title.
+- A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,
+  `2 of 3 covered`, `not covered`, or `no tests needed`. A behavior that needs no test counts
+  toward neither side.
+- A layer's attention points start as one line each, with their level, kind, audience, and location.
+  Click the title, **show**, or press `o` to read one. **show details** in the list's heading opens
+  every open point, and the browser remembers it.
+- Every attention point names its level beside its shape, as in `◆ decide`, in its layer and on
+  its line in the diff. The GitHub skin drops the colored squares before the Tests and Attention
+  points headings, which named nothing the heading did not.
+- The page opens with only the first layer open, and every file closed under its name. The rail,
+  `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a file or
+  a point keeps its title where you clicked it, also at the end of the page. Raising **Hide code**
+  closes the files it hides whole; lowering it no longer reopens them.
+
+### AI Chat
+
+- On a wide screen AI Chat starts minimized until you open it once, so a canvas you do not chat
+  on keeps its full width. After that it opens the way you last left it.
+
+## 0.10.0
+
+Changes since 0.9.0.
+
 ### Self-review
 
 - A resolution now lasts. Every later canvas of the pull request starts from the resolutions of its
@@ -11,7 +42,8 @@
   point's lines, or any `--force`, brought the point back open.
 - Resolved points start hidden for every reader. The overview line counts them as **resolved by the
   author** and its **show the N resolved** command brings them back, collapsed in place. A layer
-  whose points are all resolved drops its points heading while they are hidden.
+  whose points are all resolved drops its points heading while they are hidden, and the heading
+  says **none open** while one of them is still on the page.
 - A reviewer's page reads the author's resolutions back from the canvas comment when it opens and
   every two minutes after while its tab is in view, hides the newly resolved points, and says so.
   Before, a reviewer who had already loaded the canvas saw them only after **refresh**.
@@ -30,17 +62,16 @@
 ### Attention points
 
 - Each level has its own shape: a diamond for **decide**, a checked box for **check**, and an info
-  circle for **fyi**. The shapes replace the colored squares on cards, diff rows, and the overview
-  counts, so the level reads without color.
+  circle for **fyi**. The shapes replace the colored squares on cards, diff rows, the overview
+  counts, and the legend, so the level reads without color.
 - **Point colors** in the settings dialog picks the palette: **classic** (red, amber, gray, the
   default) or **action** (purple, blue, gray), for readers who took the red and amber for a
   severity scale. It is saved as `pointColors` in `settings.yml`.
 - A **decide** point has an impact: **critical**, **high**, or **low**, for what a wrong call would
   cost. Its card shows it next to the title in the decide icon's color, filled for critical,
-  outlined for high, and dashed for low, apart from the kind and audience tags. Decide
-  points list the worst impact first. A
-  canvas generated before this version shows its decide points without one; generate again to get
-  them.
+  outlined for high, and dashed for low, apart from the kind and audience tags. Decide points list
+  the worst impact first. A canvas generated before this version shows its decide points without
+  one; generate again to get them.
 - A generation that leaves a decide point without an impact, or gives one to another point, is
   sent back to the agent to fix (`POINT_IMPACT`).
 - A `decision` point's tag reads **design choice**, on its card, in a copied or posted comment, and
@@ -57,10 +88,10 @@
   so the canvas does not ask it again. The question is optional. The point costs the generator
   none of its own.
 - `prepare` reads the decisions of the author's own commits, and on a pull request only when its
-  author prepares the canvas. A decision is carried to its line while the line reads the same at
-  the head, and kept as context the generator does not reopen once it does not, or once a deleted
-  line it is about comes back. The line counts
-  anywhere in the message, so a blank line before `Co-Authored-By` loses nothing.
+  author prepares the canvas. A decision is carried to its line while the line reads the same at the
+  head, and kept as context the generator does not reopen once it does not, or once a deleted line
+  it is about comes back. The line counts anywhere in the message, so a blank line before
+  `Co-Authored-By` loses nothing.
 - A reason the author wrote on the canvas stands over the commit's until a later commit changes
   the answer; a later decision on the same line and question replaces an earlier one. Two
   questions about one line, in one commit or two, are two resolved points, each with its answer.
@@ -74,11 +105,6 @@
   renames its file is found under the old name.
 - The review loop skill writes a decision line for each question its gate asks, and its Claude and
   Codex copies are the same again.
-
-### AI Chat
-
-- On a wide screen AI Chat starts minimized until you open it once, so a canvas you do not chat
-  on keeps its full width. After that it opens the way you last left it.
 
 ### AI Chat threads
 
@@ -102,11 +128,12 @@
   nothing matches, opens at the open thread, and gives each entry its whole name as a tooltip.
   Picking a thread puts the focus in the message box, and tabbing out of the list closes it.
 - The ask command of a place with a thread carries a dot. The dot fills, and the thread's name on
-  top of the pane counts the threads, as in **2 new**, when an answer arrived there while the reader was not reading it: in another
-  thread, with the pane minimized, or on another tab. The **AI Chat** tab and its launcher count
-  those answers, up to 9. The marks are kept with the review, so a reload keeps them.
-- While an answer comes in, ask, the list of threads, and **new thread** still open any thread, and the
-  answer keeps arriving in its own. A question asked elsewhere meanwhile is sent once it ends.
+  top of the pane counts the threads, as in **2 new**, when an answer arrived there while the reader
+  was not reading it: in another thread, with the pane minimized, or on another tab. The **AI Chat**
+  tab and its launcher count those answers, up to 9. The marks are kept with the review, so a reload
+  keeps them.
+- While an answer comes in, ask, the list of threads, and **new thread** still open any thread, and
+  the answer keeps arriving in its own. A question asked elsewhere meanwhile is sent once it ends.
 - The open thread comes back when the page is reloaded.
 - `chatThreadPerPlace: false` in `settings.yml`, or **A thread per place** cleared in the settings
   dialog, sends every ask to the open thread as before.
@@ -149,47 +176,34 @@
 - A toast shows left of the docked side pane instead of over its message box.
 - A draft's **back to** link names the thread by its title once the server gives it one, not as
   **New thread**.
-- The header names the agent and model that generated the canvas, without the harness, which a
-  canvas generated from the review app always gave as `other`. Hover **generated … ago** for the
-  full date and time.
-- The overview summary, a layer's rationale and the PR description fill the width of their panel,
-  diagrams included, instead of stopping at 100 characters.
-- The overview header names each level next to its count, as in `3 decide · 1 check · 2 fyi`, in
-  place of the legend that opened on hover.
-- The overview's Conversation starts closed, like the PR description and the review history, with
-  its comment count in the title.
-- A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,
-  `2 of 3 covered`, `not covered`, or `no tests needed`. A behavior that needs no test counts
-  toward neither side.
-- A layer's attention points start as one line each, with their level, kind, audience, and location.
-  Click the title, **show**, or press `o` to read one. **show details** in the list's heading opens
-  every open point, and the browser remembers it.
-- Every attention point names its level beside its shape, as in `◆ decide`, in its layer and on
-  its line in the diff. The GitHub skin drops the colored squares before the Tests and Attention
-  points headings, which named nothing the heading did not.
-- The page opens with only the first layer open, and every file closed under its name. The rail,
-  `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a file or
-  a point keeps its title where you clicked it, also at the end of the page. Raising **Hide code**
-  closes the files it hides whole; lowering it no longer reopens them.
+- The header names the agent and model that generated the canvas on screen, an outdated one
+  opened with **view stale canvas** too, without the harness, which a canvas generated from the
+  review app always gave as `other`. Hover **generated … ago** for the full date and time.
 
-### Upgrade
+### Upgrade from 0.9.0
 
-- A project with its own `generation-format.md` adds the `{{RESOLVED}}` token, where the bundled
-  template has it under **Attention points**; `pr-review upgrade` and `doctor` say so. Without it
-  the generator is not told which points the author resolved: a point that comes back with the same
-  title stays resolved unchecked, and one reworded comes back open.
-- A project with its own `generation-format.md` adds the `{{SETTLED_DECISIONS}}` token, where the
-  bundled template has it under **Settled decisions**; `pr-review upgrade` and `doctor` say so.
-  Without it the generator is not told the author's settled decisions and may ask their questions
-  again; publish still adds the ones in the diff as resolved points.
-- A project with its own `generation-format.md`, `quality-standards.md`, `judging-strict.md`, or
-  `judging-surfacing.md` merges in the bundled copies' definitions of impact. `pr-review upgrade`
-  and `doctor` do not name this one, since it adds no token. Without them, every generated decide
-  point comes back with `POINT_IMPACT`, and the agent picks an impact without the definitions.
-- Teammates on 0.9.0 can still open new canvases; they do not see the impact, and see a settled
-  decision as a point the author resolved. A pull request author who resolves or reopens a point
-  on 0.9.0 saves the canvas without the marks that tell settled decisions apart, so the next
-  canvas built on it can ask a decision's question again.
+1. Run `pr-review upgrade` in each project. It refreshes the project's copy of the skill, which now
+   tells the agent to write no point for a settled decision, and names the tokens the project's own
+   prompt templates lack.
+2. Restart the running `pr-review serve`, so the review page and `pr-review generate` run the new
+   version.
+3. A project with its own prompt templates merges in the bundled changes:
+   - Its own `generation-format.md` adds the `{{RESOLVED}}` token, where the bundled template has it
+     under **Attention points**; `pr-review upgrade` and `doctor` say so. Without it the generator
+     is not told which points the author resolved: a point that comes back with the same title stays
+     resolved unchecked, and one reworded comes back open.
+   - Its own `generation-format.md` adds the `{{SETTLED_DECISIONS}}` token, where the
+     bundled template has it under **Settled decisions**; `pr-review upgrade` and `doctor` say so.
+     Without it the generator is not told the author's settled decisions and may ask their questions
+     again; publish still adds the ones in the diff as resolved points.
+   - Its own `generation-format.md`, `quality-standards.md`, `judging-strict.md`, or
+     `judging-surfacing.md` merges in the bundled copies' definitions of impact. `pr-review upgrade`
+     and `doctor` do not name this one, since it adds no token. Without them, every generated decide
+     point comes back with `POINT_IMPACT`, and the agent picks an impact without the definitions.
+4. Teammates on 0.9.0 can still open new canvases; they do not see the impact, and see a settled
+   decision as a point the author resolved. A pull request author who resolves or reopens a point
+   on 0.9.0 saves the canvas without the marks that tell settled decisions apart, so the next
+   canvas built on it can ask a decision's question again.
 
 ## 0.9.0
 

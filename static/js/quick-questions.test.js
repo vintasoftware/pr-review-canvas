@@ -153,12 +153,6 @@ describe('wireQuickQuestions', () => {
     expect(menuEl().hidden).toBe(false)
   })
 
-  it('opens straight away when a tap asks for it', () => {
-    menu.openFor?.(el('[data-ask-path]'))
-    expect(menuEl().hidden).toBe(false)
-    expect(document.activeElement).toBe(items()[0])
-  })
-
   it('does nothing for a click that is not on a question', () => {
     el('[data-ask-path]').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     menuEl().click()
@@ -208,12 +202,6 @@ describe('wireQuickQuestions in the odd cases', () => {
     el('[data-ask-path]').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }))
     expect(menuEl().hidden).toBe(false)
-  })
-
-  it('reports whether it is open', () => {
-    expect(menu.isOpen?.()).toBe(false)
-    menu.openFor?.(el('[data-ask-path]'))
-    expect(menu.isOpen?.()).toBe(true)
   })
 
   /** happy-dom lays nothing out, so the menu's size is stated. @param {number} w @param {number} h */

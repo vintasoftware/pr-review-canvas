@@ -108,14 +108,18 @@ export function renderHeader(bundle, opts) {
   // A stale canvas can be exported and regenerated too, so both commands stay live for it.
   const hasCanvas = artifact !== undefined && (bundle.status === 'ready' || bundle.status === 'stale')
   const generate = generateCommand(bundle, hasCanvas)
-  // A time that does not parse says nothing, so the page leaves it out.
-  const when = ready ? fullDate(artifact.generatedAt) : ''
-  const agent = ready
-    ? `<span class="pill agent" title="The agent and model that generated this canvas">canvas by ${esc(artifact.generator.agent)}${artifact.generator.model ? ` · ${esc(artifact.generator.model)}` : ''}</span>` +
-      (when === ''
-        ? ''
-        : `<span title="${esc(when)}">generated ${esc(timeAgo(artifact.generatedAt, opts.now))}</span>`)
-    : ''
+  // The canvas on screen names who generated it, an outdated one the reader opened too. A time
+  // that does not parse says nothing, so the page leaves it out.
+  const drawn = opts.drawn === undefined ? drawnCanvas(bundle, false) : opts.drawn
+  const shown = drawn === null ? null : drawn.artifact
+  const when = shown === null ? '' : fullDate(shown.generatedAt)
+  const agent =
+    shown === null
+      ? ''
+      : `<span class="pill agent" title="The agent and model that generated this canvas">canvas by ${esc(shown.generator.agent)}${shown.generator.model ? ` · ${esc(shown.generator.model)}` : ''}</span>` +
+        (when === ''
+          ? ''
+          : `<span title="${esc(when)}">generated ${esc(timeAgo(shown.generatedAt, opts.now))}</span>`)
   const number = pr.number === null ? '' : `<span class="mono num">#${pr.number}</span>`
   // Work that is not pushed has no page on the forge, and nothing to refresh from it either.
   const local = bundle.local !== undefined
@@ -130,7 +134,6 @@ export function renderHeader(bundle, opts) {
   const level = getFoldLevel()
   // How much of the diff to hide is the reader's choice for any canvas on screen, an outdated one
   // they opened too, counted over the diff the page draws.
-  const drawn = opts.drawn === undefined ? drawnCanvas(bundle, false) : opts.drawn
   const reading =
     drawn === null
       ? ''

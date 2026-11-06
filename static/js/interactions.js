@@ -250,7 +250,6 @@ export function padUnderStickyBar(doc, bar) {
  *   document?: Document,
  *   fetchReviewBody?: typeof fetchReviewBody,
  *   chat?: () => ChatHandle | null,
- *   quickQuestions?: () => { openFor: (el: HTMLElement) => void } | null,
  *   openSettings?: (el: HTMLElement) => void,
  *   openReview?: () => void,
  *   uncover?: () => void,
