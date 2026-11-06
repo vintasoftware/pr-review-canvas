@@ -31,8 +31,9 @@
   .tree .rail-points {
     display: contents;
   }
+  /* A layer's opening stop stays in the strip, the way to it beside its points. */
   .tree .pt-layer {
-    display: none;
+    margin-top: 0;
   }
   .tree li {
     flex: 0 0 auto;

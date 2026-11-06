@@ -277,6 +277,20 @@ test.describe('reading by attention points', () => {
     await expect(row.locator('.prose')).toBeVisible()
   })
 
+  test('on a phone the rail keeps the layers’ stops, and a stop fits the screen', async ({
+    page,
+    reviewUrl,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile')
+    await page.goto(reviewUrl)
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'layer')
+    await expect(page.locator('nav.rail .pt-layer a[href="#layer-run-path"]')).toBeVisible()
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
+
   test('the settings turn reading by attention points off and on, on the open page', async ({
     page,
     reviewUrl,

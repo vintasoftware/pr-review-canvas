@@ -151,7 +151,10 @@ export function testMapHtml(layer, paths) {
   }
   const rows = layer.tests
     .map(t => {
-      const where = t.testPath ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath)}</a>` : ''
+      // A path breaks only after a slash, so the table fits a phone without splitting names.
+      const where = t.testPath
+        ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath).replaceAll('/', '/<wbr>')}</a>`
+        : ''
       const note = t.note ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>` : ''
       return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })

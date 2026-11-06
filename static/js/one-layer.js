@@ -10,6 +10,7 @@
 import { cssEscape } from './anchors.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
+import { layerAnchorId } from './keys.js'
 import { getRenderContext, setCardCollapsed } from './layers.js'
 import { clearStop, showStop, stopShowing, stopTarget } from './point-view.js'
 import { stopsOf } from './point-steps.js'
@@ -217,6 +218,19 @@ export function initOneLayer(root, opts) {
   }
 
   /**
+   * Where the reader is: the stop on screen, or in the layers the section being read (the rail's
+   * mark while all show), or the stop the URL names in it, for a reader back from that stop.
+   */
+  const placeNow = () => {
+    const at =
+      view === 'all'
+        ? (root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') ?? '')
+        : shownHash
+    const named = view === 'points' ? undefined : stopNamed(stops(), win.location.hash)
+    return named !== undefined && `#${layerAnchorId(named.layer.key)}` === at ? `#${named.id}` : at
+  }
+
+  /**
    * @param {PageView} next
    * @param {string} [place] where to open, as `#id`; by default where the reader is: the section
    *   the rail marks while all show, else the one on screen
@@ -225,10 +239,9 @@ export function initOneLayer(root, opts) {
     if (next === view) {
       return
     }
-    const here =
-      view === 'all' ? root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') : shownHash
+    const here = placeNow()
     // The points open on their first stop from the top of the page, not on the overview.
-    shownHash = place ?? (next === 'points' && here === '#overview' ? '' : (here ?? ''))
+    shownHash = place ?? (next === 'points' && here === '#overview' ? '' : here)
     view = next
     redraw()
     opts.onView?.(view)
@@ -301,9 +314,11 @@ export function initOneLayer(root, opts) {
      * @param {string} [place]
      */
     switchView(next, place) {
-      const from = place ?? (view === 'all' ? undefined : shownHash)
+      // Out of the stops, the stop on screen; into them, where `setView` finds the reader.
+      const from = place ?? (view === 'points' ? shownHash : undefined)
       setView(next, from)
-      const here = view === 'all' ? from : shownHash
+      // Out of the stops the URL keeps the stop, which the layers show as its card or layer.
+      const here = view === 'points' ? shownHash : from
       if (here !== undefined && here !== '') {
         win.history.replaceState(null, '', `${win.location.pathname}${win.location.search}${here}`)
       }

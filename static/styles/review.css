@@ -494,6 +494,8 @@ details[open] > summary .chev,
   padding: 5px 16px;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+  /* A word too long for a phone breaks rather than widen the page. */
+  overflow-wrap: break-word;
 }
 .testmap tr:last-child td {
   border-bottom: 0;

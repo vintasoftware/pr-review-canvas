@@ -10,6 +10,7 @@ import { initOneLayer } from './one-layer.js'
 import { stopsOf } from './point-steps.js'
 import { stopNavHtml } from './point-view.js'
 import { renderRail } from './rail.js'
+import { markRailCurrent } from './scroll-spy.js'
 
 const artifact = syntheticArtifact()
 const state = emptyState('2026-10-21T10:00:00.000Z')
@@ -178,6 +179,21 @@ describe('the one-point view on a rendered page', () => {
     expect(view?.step(-1, layers)?.id).toBe('layer-other')
     view?.setView('all')
     expect(view?.step(1, any)).toBeUndefined()
+  })
+
+  it('comes back from the layers to the stop the URL still names in the layer being read', () => {
+    view?.step(1, () => true)
+    view?.switchView('one')
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(shown()).toEqual(['layer-run-path'])
+    view?.switchView('points')
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(lensed()?.getAttribute('data-lens')).toBe('point')
+    // The URL's stop counts only while its layer is the one the rail marks as being read.
+    view?.switchView('all')
+    markRailCurrent(document, 'layer-other')
+    view?.switchView('points')
+    expect(window.location.hash).toBe('#layer-other')
   })
 
   it('switches to the layers on the place being read, and back to its stop', () => {
