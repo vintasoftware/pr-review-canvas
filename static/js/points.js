@@ -378,8 +378,9 @@ function pointPartsHtml(p, ctx, opts) {
       : '<p class="p-summary muted">The author reopened this on the canvas; the commit’s answer below no longer settles it.</p>'
   const parts =
     status === 'open' ? { pill: '', summary: reopened, outcome: '' } : statusPartsHtml(p, status, ctx, opts)
+  // A card in a layer's list can collapse while open too, so every card carries the toggle.
   const toggle =
-    status === 'open'
+    status === 'open' && !opts.card
       ? ''
       : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
   const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
@@ -388,7 +389,7 @@ function pointPartsHtml(p, ctx, opts) {
       `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +
       `data-sig="${esc(pointSignature(p, status, ctx))}"`,
     handled: status === 'open' ? '' : status === 'resolved' ? ' is-handled is-resolved' : ' is-handled',
-    title: `<span class="p-title">${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
+    title: `<span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
     rest:
       parts.summary +
       `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
@@ -568,7 +569,7 @@ export function refreshPoint(el, p, ctx) {
   el.replaceChildren(...Array.from(next.childNodes))
   setPointExpanded(el, expanded)
   // The command the reader used is gone; the focus goes to what now stands for the point.
-  const target = focused ? el.querySelector('[data-act="point-expand"], .tbtns button') : null
+  const target = focused ? el.querySelector(pointCollapses(el) ? '.p-toggle' : '.tbtns button') : null
   if (target instanceof HTMLElement) {
     target.focus()
   }
@@ -576,14 +577,26 @@ export function refreshPoint(el, p, ctx) {
 }
 
 /**
- * Shows or hides the rest of a point that was acted on. An open point is always shown whole.
+ * Whether a point is drawn as its title line until the reader opens it: a point acted on, or any
+ * point in a layer's list while the lists are compact. An open point in the diff is always whole.
+ * @param {Element} el the card or row that carries `data-point`
+ */
+export function pointCollapses(el) {
+  return (
+    el.classList.contains('is-handled') ||
+    (el.matches('.findings > li') && readPageDensity(el.ownerDocument.documentElement) === 'compact')
+  )
+}
+
+/**
+ * Shows or hides the rest of a point that `pointCollapses` draws as its title line.
  * @param {Element} el the card or row that carries `data-point`
  * @param {boolean} [expanded] omitted flips it
  */
 export function setPointExpanded(el, expanded = !el.hasAttribute('data-expanded')) {
-  const on = expanded && el.classList.contains('is-handled')
+  const on = expanded && pointCollapses(el)
   el.toggleAttribute('data-expanded', on)
-  const toggle = el.querySelector('[data-act="point-expand"]')
+  const toggle = el.querySelector('.p-toggle')
   if (toggle !== null) {
     const title = el.querySelector('.p-title')?.textContent ?? ''
     toggle.setAttribute('aria-expanded', String(on))
@@ -609,5 +622,54 @@ export function sevsumHtml(points, layers = []) {
   return (
     `<span class="sevsum" tabindex="0" role="group" aria-label="Attention points by level">${cell('decide')}${cell('check')}${cell('fyi')}` +
     `<span class="legend" aria-hidden="true">${LEVELS.map(l => `<span>${levelIconHtml(l, null)}${l}</span>`).join('')}</span></span>`
+  )
+}
+
+/**
+ * How the layers' lists of points are drawn with the `compactPoints` setting on: `compact`, a
+ * title line per point, unless the reader chose `detailed` in this browser. The page carries it as
+ * `data-points` on the document element; without the setting the page has no `data-points`, and
+ * every list draws its points whole, with no switch.
+ */
+export const POINTS_DENSITY_KEY = 'pr-review.points-density'
+
+/**
+ * The density the page shows now; the CSS reads the same attribute. Only `compact` collapses.
+ * @param {HTMLElement} page the document element
+ * @returns {'compact' | 'detailed'}
+ */
+export function readPageDensity(page) {
+  return page.dataset['points'] === 'compact' ? 'compact' : 'detailed'
+}
+
+/**
+ * @param {Storage | null} storage
+ * @returns {'compact' | 'detailed'}
+ */
+export function readPointsDensity(storage) {
+  return (storage === null ? null : storage.getItem(POINTS_DENSITY_KEY)) === 'detailed'
+    ? 'detailed'
+    : 'compact'
+}
+
+/**
+ * Sets the density on the page, where the CSS reads it, and remembers it.
+ * @param {HTMLElement} page the document element
+ * @param {'compact' | 'detailed'} density
+ * @param {Storage | null} [storage] omitted when only applying what was read
+ */
+export function setPointsDensity(page, density, storage) {
+  page.dataset['points'] = density
+  storage?.setItem(POINTS_DENSITY_KEY, density)
+}
+
+/**
+ * The switch in each list's heading. The CSS shows it only while the page has a density, and the
+ * label for that density.
+ */
+export function pointsDensityToggleHtml() {
+  return (
+    '<button class="cmd points-density" type="button" data-act="points-density">' +
+    '<span class="when-compact">show details</span><span class="when-detailed">compact</span></button>'
   )
 }

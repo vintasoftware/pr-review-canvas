@@ -14,7 +14,7 @@ import {
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { setMentionCanvas } from './points.js'
+import { readPointsDensity, setMentionCanvas, setPointsDensity } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -45,6 +45,7 @@ import {
   renderRail,
   setFoldLevel,
   setRenderContext,
+  setStartCollapsed,
 } from './layers.js'
 import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
@@ -222,7 +223,9 @@ export class PrAppElement extends HTMLElement {
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
+    setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
+    document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
     this.layerView?.stop()
     this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
@@ -314,7 +317,11 @@ export class PrAppElement extends HTMLElement {
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
-    const chatMinimized = chatEnabled && readChatMinimized(storage)
+    // A docked chat starts the way the reader last left it, or minimized with chatStartMinimized.
+    const chatMinimized = chatEnabled && (bundle.chat.startMinimized === true || readChatMinimized(storage))
+    if (boot.compactPoints) {
+      setPointsDensity(document.documentElement, readPointsDensity(storage))
+    }
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
@@ -388,6 +395,7 @@ export class PrAppElement extends HTMLElement {
               this.layerView?.setView(data.settings.layerView)
               this.chat?.followSettings(data.settings)
               applyPointColors(data.settings.pointColors, document.documentElement)
+              document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
             },
           }),
       })
@@ -398,6 +406,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
+          minimized: chatMinimized,
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })

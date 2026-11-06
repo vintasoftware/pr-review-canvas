@@ -199,7 +199,8 @@ hides too, behind the annotation's text.
 - Generate no explanation or confidence score for a fold. The title is plain text. Use the actual test title or symbol
   name when it fits. For a longer name, use a faithful excerpt with an ellipsis within the fold-title
   cap, preserving the behavior and distinguishing condition. The full name remains in the expanded
-  code. Omit `collapsed` and `folds` where the code should start open at every level.
+  code. Omit `collapsed` where no level should hide the file whole, and `folds` where no level
+  should hide any of its code.
 
 ## Length rules
 
