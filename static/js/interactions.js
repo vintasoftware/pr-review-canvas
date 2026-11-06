@@ -816,9 +816,10 @@ export function wireReview(root, session, opts = {}) {
             : review.state === 'CHANGES_REQUESTED'
               ? 'changes requested'
               : 'review posted'
+        const receipt = `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
         // A warning is the one thing still to read in the dialog, which shows the receipt with it.
         if (warnings.length > 0) {
-          showSignoffResult(dialog, review)
+          showSignoffResult(dialog, review, receipt)
           for (const warning of warnings) {
             dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
           }
@@ -828,11 +829,7 @@ export function wireReview(root, session, opts = {}) {
         // and so does a pane floating over the page, which would cover the receipt.
         dialog.close()
         opts.uncover?.()
-        toast(
-          root,
-          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
-          { link: { url: review.url, text: `see it on ${hostLabel()}` } }
-        )
+        toast(root, receipt, { link: { url: review.url, text: `see it on ${hostLabel()}` } })
       },
       { pendingLabel: 'posting…' }
     )

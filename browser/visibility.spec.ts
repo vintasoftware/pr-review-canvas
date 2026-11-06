@@ -138,3 +138,29 @@ test('hidden takes priority over component display rules', async ({ page, review
     shown: ['grid', 'flex', 'inline-flex', 'grid', 'table-row'],
   })
 })
+
+test('a toast stays up while the pointer rests on it, also for a message that arrives there', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.clock.install()
+  await page.goto(reviewUrl)
+  await page.locator('#fold-level').selectOption('moderate')
+  const box = page.locator('.toast')
+  await expect(box).toHaveText('hiding code: moderate')
+  await box.hover()
+  // The next message replaces this one under the resting pointer, which fires no new pointerenter.
+  await page.locator('body').press('f')
+  await expect(box).toHaveText('hiding code: aggressive')
+  await page.clock.runFor(6000)
+  await expect(box).toHaveText('hiding code: aggressive')
+  // Once the pointer leaves, it has five seconds.
+  await page.mouse.move(0, 400)
+  await page.clock.runFor(5001)
+  await expect(box).toBeHidden()
+  // A click clears it at once.
+  await page.locator('body').press('f')
+  await expect(box).toHaveText('hiding code: light')
+  await box.click()
+  await expect(box).toBeHidden()
+})

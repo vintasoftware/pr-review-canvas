@@ -91,12 +91,12 @@ describe('the sign-off dialog', () => {
 
   it('shows the link to the review it posted, and clears it when reopened', () => {
     const dialog = openSignoffDialog(root(), { event: 'APPROVE' })
-    showSignoffResult(dialog, {
-      id: 7,
-      state: 'APPROVED',
-      url: 'https://github.com/acme/widgets/pull/42',
-      submittedAt: null,
-    })
+    showSignoffResult(
+      dialog,
+      { id: 7, state: 'APPROVED', url: 'https://github.com/acme/widgets/pull/42', submittedAt: null },
+      'approved'
+    )
+    expect(dialog.querySelector('.signoff-result')?.textContent).toBe('approved · see it on GitHub')
     expect(dialog.querySelector('.signoff-result a')?.getAttribute('href')).toBe(
       'https://github.com/acme/widgets/pull/42'
     )
@@ -162,7 +162,11 @@ describe('a dialog the page stripped of its parts', () => {
       fillSignoffDialog(dialog, { headSha: 'a'.repeat(40), body: 'x', unreviewed: [], pending: 0 })
     ).toBe(dialog)
     expect(
-      showSignoffResult(dialog, { id: 1, state: 'APPROVED', url: 'https://x.test', submittedAt: null })
+      showSignoffResult(
+        dialog,
+        { id: 1, state: 'APPROVED', url: 'https://x.test', submittedAt: null },
+        'approved'
+      )
     ).toBeNull()
   })
 

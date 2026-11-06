@@ -1867,7 +1867,9 @@ describe('capability gating and sign-off', () => {
     // A warning is still to read, so the dialog stays open with it, and its result line, a status
     // region of its own, carries the receipt instead of a toast.
     expect(root.querySelector('#signoff-dialog')?.hasAttribute('open')).toBe(true)
-    expect(root.querySelector('.signoff-result')?.textContent).toBe(`Posted · see it on GitHub ${warning}`)
+    expect(root.querySelector('.signoff-result')?.textContent).toBe(
+      `review posted with 1 comment · see it on GitHub ${warning}`
+    )
     expect(root.querySelector('.toast')).toBeNull()
   })
 

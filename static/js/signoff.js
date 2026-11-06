@@ -190,14 +190,15 @@ export function fillSignoffDialog(dialog, preview) {
 }
 
 /**
- * Shows the link to the review GitHub created.
+ * Shows what was posted and the link to the review the forge created.
  * @param {HTMLDialogElement} dialog
  * @param {import('./contract-types.js').ReviewSummary} review
+ * @param {string} receipt what was posted, such as `review posted with 2 comments`
  */
-export function showSignoffResult(dialog, review) {
+export function showSignoffResult(dialog, review, receipt) {
   const result = dialog.querySelector('.signoff-result')
   if (result !== null) {
-    result.textContent = 'Posted · '
+    result.textContent = `${receipt} · `
     result.append(externalLink(review.url, `see it on ${hostLabel()}`))
   }
   return result
