@@ -62,6 +62,7 @@ function mount(api = {}, extra = {}) {
     prNumber: 42,
     session: session(),
     storage: null,
+    minimized: false,
     reducedMotion: true,
     api: {
       fetchThreads: async () => ({ threads: [], activeThread: null, agent: 'claude' }),
@@ -243,7 +244,7 @@ describe('minimizing a docked chat', () => {
     expect(readChatMinimized(storage)).toBe(true)
 
     // A reload with that memory starts minimized, out of the grid.
-    const again = mount({}, { storage })
+    const again = mount({}, { storage, minimized: readChatMinimized(storage) })
     expect(el(again.root, '.chat').hidden).toBe(true)
     expect(el(again.root, '#chat-launcher').hidden).toBe(false)
     again.root.querySelector('#chat-launcher')?.dispatchEvent(new MouseEvent('click'))
@@ -2250,14 +2251,16 @@ describe('the tie a reader takes off', () => {
 describe('wireChat', () => {
   it('does nothing when the pane is not on the page', () => {
     const root = document.createElement('div')
-    expect(wireChat({ root, prNumber: 42, session: session(), storage: null })).toBeNull()
+    expect(wireChat({ root, prNumber: 42, session: session(), storage: null, minimized: false })).toBeNull()
   })
 
   it('says which part of the pane is missing rather than half-wiring it', () => {
     const root = document.createElement('div')
     root.innerHTML = renderChatShell({ enabled: true })
     root.querySelector('#msg')?.remove()
-    expect(() => wireChat({ root, prNumber: 42, session: session(), storage: null })).toThrow(/no #msg/)
+    expect(() =>
+      wireChat({ root, prNumber: 42, session: session(), storage: null, minimized: false })
+    ).toThrow(/no #msg/)
   })
 
   it('takes its listeners off on stop', async () => {
@@ -2541,7 +2544,7 @@ describe('the pane wiring', () => {
     const root = document.createElement('div')
     root.innerHTML = renderChatShell({ enabled: true })
     document.body.replaceChildren(root)
-    const chat = wireChat({ root, prNumber: 42, session: session(), storage: null })
+    const chat = wireChat({ root, prNumber: 42, session: session(), storage: null, minimized: false })
     expect(chat).not.toBeNull()
     chat?.stop()
   })
@@ -2602,7 +2605,7 @@ describe('the pane in the last few corners', () => {
     root.innerHTML = renderChatShell({ enabled: true })
     document.body.replaceChildren(root)
     localStorage.setItem(CHAT_WIDTH_KEY, '500')
-    const chat = wireChat({ root, prNumber: 42, session: session() })
+    const chat = wireChat({ root, prNumber: 42, session: session(), minimized: false })
     expect(root.style.getPropertyValue('--chat-w')).toBe('500px')
     chat?.stop()
     localStorage.removeItem(CHAT_WIDTH_KEY)

@@ -52,7 +52,7 @@ test('collapses a posted point to its comment link, everywhere it shows and afte
   await expect(inline.getByRole('link', { name: /view comment/ })).toHaveAttribute('href', postedUrl)
 
   // Expanded, the point shows its text again with the commands left to it.
-  await card.locator('[data-act="point-expand"]').click()
+  await card.locator('.p-toggle').click()
   await expect(card.locator('.prose')).toBeVisible()
   await expect(card.locator('.tbtns').getByRole('link', { name: /view comment/ })).toBeVisible()
   await page.reload()
@@ -63,6 +63,7 @@ test('collapses a posted point to its comment link, everywhere it shows and afte
 
 test('previews Markdown and preserves the comment draft', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
+  await page.locator('.pr-conversation > summary').click()
   await page.locator('[data-act="pr-comment"]').click()
   const editor = page.locator('.conversation .composer-box')
   await editor

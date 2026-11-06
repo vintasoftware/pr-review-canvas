@@ -589,13 +589,13 @@
     font-size: 13px;
     font-weight: 600;
   }
-  .lbl.sub + :is(.testmap, .findings, .conversation) {
+  .lbl.sub + :is(.testmap, .findings),
+  .pr-conversation > .conversation {
     margin: 0 var(--inset);
     border: 1px solid var(--line);
     border-radius: var(--r);
   }
-  /* The conversation box keeps the inset below it, as on its sides. */
-  .lbl.sub + .conversation {
+  .pr-conversation > .conversation {
     margin-bottom: var(--inset);
   }
   /* A square before the title says what the section holds: green for tests, purple for points. */

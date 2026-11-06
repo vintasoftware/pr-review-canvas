@@ -232,7 +232,7 @@ for (const skin of ['terminal', 'github', 'olive'] as const) {
     await expect(inline.locator('.prose')).toBeHidden()
     await expect(page.locator('.toast')).toHaveText('attention point dismissed')
 
-    await card.locator('[data-act="point-expand"]').click()
+    await card.locator('.p-toggle').click()
     await expect(card.locator('.prose')).toBeVisible()
     await card.locator('[data-act="point-restore"]').click()
     await expect(card).toHaveAttribute('data-status', 'open')

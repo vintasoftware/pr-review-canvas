@@ -174,6 +174,27 @@ describe('initOneLayer', () => {
     expect(shownIds()).toEqual(['overview'])
   })
 
+  it('raises reveal-code on what a plain fragment names in the all view, at first draw, on a click, and on back or forward', () => {
+    /** @type {string[]} */
+    const revealed = []
+    root.addEventListener('reveal-code', event => {
+      if (event.target instanceof Element) revealed.push(event.target.id)
+    })
+    window.location.hash = '#layer-storage'
+    oneLayer = initOneLayer(root, { view: 'all' })
+    expect(revealed).toEqual(['layer-storage'])
+    click(root.querySelector('.more-hunks a'))
+    expect(revealed).toEqual(['layer-storage', 'layer-auth'])
+    window.location.hash = '#layer-other'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(revealed).toEqual(['layer-storage', 'layer-auth', 'layer-other'])
+    // A fragment that names nothing on the page reveals nothing.
+    window.location.hash = '#nowhere'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(revealed).toHaveLength(3)
+    expect(shownIds()).toHaveLength(4)
+  })
+
   it('switches views on the open page, keeping the section the rail marks as being read', () => {
     oneLayer = initOneLayer(root, { view: 'one' })
     // The URL still names where the reader was sent, not where they scrolled to since.
