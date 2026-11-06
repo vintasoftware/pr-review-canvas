@@ -7,10 +7,10 @@
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 import { diffstatHtml, layerChanges } from './diffstat.js'
 import { esc } from './dom.js'
-import { layerAnchorId, layerStepAnchorId } from './keys.js'
+import { layerAnchorId } from './keys.js'
 import { fileCount, getRenderContext } from './layers.js'
 import { levelIconHtml } from './point-level.js'
-import { pointSteps, stopsOf } from './point-steps.js'
+import { stopsOf } from './point-steps.js'
 import { openPoints, pointStatus } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
 
@@ -20,18 +20,6 @@ import { filesReviewed, layerProgress } from './progress.js'
  */
 export function dotColor(index) {
   return `var(--s${(index % 6) + 1})`
-}
-
-/**
- * A layer's heading over its points in the rail's points group: its title, leading to the layer's
- * opening stop, with its description and tests.
- * @param {Layer | null} layer
- */
-function railPointsLayerHtml(layer) {
-  if (layer === null) {
-    return '<li class="pt-layer"><span class="t">No layer</span></li>'
-  }
-  return `<li class="pt-layer"><a href="#${esc(layerStepAnchorId(layer.key))}"><span class="t">${esc(layer.title)}</span></a></li>`
 }
 
 /**
@@ -46,27 +34,22 @@ function railViewSwitchHtml(points) {
 }
 
 /**
- * The rail's group of attention points in the one-point view: every point in the view's order,
- * under the layer each belongs to. It is drawn from the state, so a point acted on dims at once.
+ * The rail's group of attention points in the one-point view: its stops, each layer's opening
+ * then its points. It is drawn from the state, so a point acted on dims at once.
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @param {(id: string) => string} current
  */
 function railPointsHtml(artifact, state, current) {
-  // The rail lists the view's stops, so a layer that opens with a stop has its title here, points
-  // or none.
-  let unlayered = false
-  const items = stopsOf(artifact, pointSteps(artifact, artifact.points))
+  const items = stopsOf(artifact)
     .map(stop => {
+      const link = (/** @type {string} */ inner) =>
+        `<a href="#${esc(stop.id)}"${current(stop.id)}>${inner}</a>`
       if (stop.kind === 'layer') {
-        return railPointsLayerHtml(stop.layer)
+        return `<li class="pt-layer">${link(`<span class="t">${esc(stop.layer.title)}</span>`)}</li>`
       }
-      const { point, layer } = stop.step
-      // Points of no listed layer have no opening stop; they come last, under one heading.
-      const heading = layer === null && !unlayered ? railPointsLayerHtml(null) : ''
-      unlayered ||= layer === null
-      const handled = pointStatus(point, state) === 'open' ? '' : ' class="is-handled"'
-      return `${heading}<li${handled}><a href="#${esc(stop.id)}"${current(stop.id)}>${levelIconHtml(point.level, null)}<span class="t">${esc(point.title)}</span></a></li>`
+      const handled = pointStatus(stop.point, state) === 'open' ? '' : ' class="is-handled"'
+      return `<li${handled}>${link(`${levelIconHtml(stop.point.level, null)}<span class="t">${esc(stop.point.title)}</span>`)}</li>`
     })
     .join('')
   return `<li class="grp">${railViewSwitchHtml(true)}<ul class="rail-points">${items}</ul></li>`
@@ -124,15 +107,15 @@ export function railInnerHtml(artifact, state, opts = {}) {
 }
 
 /**
- * `switchable` marks the rail of a page that reads by attention points, which keeps the switch
- * between them and the layers when the rail is drawn again.
+ * `points` and `switchable` stay on the rail as attributes, so it is drawn again the same way.
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
- * @param {{ activeId?: string, switchable?: boolean }} [opts]
+ * @param {{ activeId?: string, points?: boolean, switchable?: boolean }} [opts]
  * @returns {string}
  */
 export function renderRail(artifact, state, opts = {}) {
-  return `<nav class="rail" aria-label="Review layers"${opts.switchable === true ? ' data-switchable' : ''}>${railInnerHtml(artifact, state, opts)}</nav>`
+  const attrs = `${opts.points === true ? ' data-points' : ''}${opts.switchable === true ? ' data-switchable' : ''}`
+  return `<nav class="rail" aria-label="Review layers"${attrs}>${railInnerHtml(artifact, state, opts)}</nav>`
 }
 
 /**

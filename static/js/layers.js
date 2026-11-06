@@ -786,31 +786,9 @@ export function hydrateAll(root, ctx) {
 }
 
 /**
- * Whether a file card is collapsed at `level`: when it is marked reviewed, or when its file
- * collapses at that level and nothing on it keeps it open.
- * @param {HTMLElement} card
- * @param {RenderContext} ctx
- * @param {import('./contract-types.js').FoldLevel} level
- * @param {ReadonlySet<string>} commentPaths
- * @returns {boolean | undefined} undefined for a card of no layer file the canvas lists
- */
-function collapsedAt(card, ctx, level, commentPaths) {
-  const layerId = card.getAttribute('data-layer') ?? ''
-  const lf = layerFileOf(ctx, layerId, card.getAttribute('data-path') ?? '')
-  if (lf === undefined) {
-    return undefined
-  }
-  return (
-    card.classList.contains('is-reviewed') ||
-    (collapsesAt(lf, level) && !cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths))
-  )
-}
-
-/**
  * Switches how much code the page hides. A card the reader opened or closed by hand follows the
- * new level too: changing the level is a request to change exactly that. A card a stop of the
- * one-point view holds (`data-open`) stays open. The folds and counters then follow as
- * refreshFolds says.
+ * new level too: changing the level is a request to change exactly that. The folds and counters
+ * then follow as refreshFolds says.
  * @param {ParentNode} root
  * @param {import('./contract-types.js').FoldLevel} level
  */
@@ -822,26 +800,21 @@ export function setFoldLevel(root, level) {
   }
 
   const commentPaths = commentPathsOf(ctx)
-  for (const card of Array.from(root.querySelectorAll('article.file:not([data-open])'))) {
-    const collapsed = card instanceof HTMLElement ? collapsedAt(card, ctx, level, commentPaths) : undefined
-    if (card instanceof HTMLElement && collapsed !== undefined) {
-      setCardCollapsed(card, collapsed)
+  for (const card of Array.from(root.querySelectorAll('article.file'))) {
+    const lf =
+      card instanceof HTMLElement
+        ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
+        : undefined
+    if (card instanceof HTMLElement && lf !== undefined) {
+      setCardCollapsed(
+        card,
+        card.classList.contains('is-reviewed') ||
+          (collapsesAt(lf, level) &&
+            !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths))
+      )
     }
   }
   refreshFolds(root)
-}
-
-/**
- * Puts a file card back as the page's reading level and its reviewed mark say, as it comes back
- * to its layer from a stop of the one-point view, which held it open.
- * @param {HTMLElement} card
- */
-export function refoldCard(card) {
-  const ctx = renderContext
-  const collapsed = ctx === null ? undefined : collapsedAt(card, ctx, foldLevel, commentPathsOf(ctx))
-  if (collapsed !== undefined) {
-    setCardCollapsed(card, collapsed)
-  }
 }
 
 /**

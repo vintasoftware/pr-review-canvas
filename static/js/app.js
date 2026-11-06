@@ -3,7 +3,6 @@
 // the bundle's status, and keep the page current: the empty screen polls until a canvas is
 // published, and the regenerate dialog polls until a newer canvas replaces the one on screen.
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
-import { SHOW_IN_LAYERS } from './anchors.js'
 import {
   ApiError,
   fetchBundle,
@@ -52,7 +51,6 @@ import { initOneLayer } from './one-layer.js'
 import { refreshRail, renderRail } from './rail.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createGeneration } from './generate.js'
-import { overviewWayOnHtml, POINT_STEPS_ID, renderPointSteps, viewSwitchTarget } from './point-view.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
@@ -138,9 +136,6 @@ async function settlePatches(prNumber, started, headSha) {
   )
 }
 
-/** What the page asks before a redraw would throw away text the reader has not sent. */
-const DISCARD_QUESTION = 'Discard unfinished text and update the review?'
-
 export class PrAppElement extends HTMLElement {
   /** @type {{ stop: () => void } | null} */
   poller = null
@@ -153,14 +148,14 @@ export class PrAppElement extends HTMLElement {
   bootstrap = null
   /** @type {{ stop: () => void } | null} */
   diagrams = null
-  /** @type {ReturnType<typeof initDeepLinks> | null} */
+  /** @type {{ stop: () => void } | null} */
   deepLinks = null
   /** @type {{ stop: () => void } | null} */
   scrollSpy = null
   /**
    * Whether the canvas shows every layer, one at a time, or one attention point at a time: the one
    * owner of the view on screen. Made once per boot, from the setting the page came with, and kept
-   * across renders; a switch of view changes the page in place, without drawing it again.
+   * across renders: it redraws with each one, and a switch of view changes the page in place.
    * @type {ReturnType<typeof initOneLayer> | null}
    */
   layerView = null
@@ -171,7 +166,7 @@ export class PrAppElement extends HTMLElement {
   readByPoints = false
   /**
    * The review session of the canvas on screen: the reader's marks and the settled points as they
-   * are now, which a switch into the one-point view draws its stops from.
+   * are now, which the rail is drawn again from when the view changes.
    * @type {ReturnType<typeof createReviewSession> | null}
    */
   session = null
@@ -197,11 +192,6 @@ export class PrAppElement extends HTMLElement {
     // Once per element: the content is re-rendered on every flip, the element itself is not.
     wireCopyCommands(this)
     wireEnvBadge(this)
-    // A line or point the one-point view's stops do not draw is shown in the layers.
-    this.addEventListener(SHOW_IN_LAYERS, event => {
-      const request = /** @type {CustomEvent<import('./anchors.js').ShowInLayers>} */ (event).detail
-      this.switchLayerView('layers', request)
-    })
     void this.boot()
   }
 
@@ -250,6 +240,7 @@ export class PrAppElement extends HTMLElement {
     this.layerView = initOneLayer(this, {
       view: this.readByPoints ? 'points' : this.bootstrap.layerView,
       layersView: this.bootstrap.layerView,
+      onView: view => this.viewShown(view),
     })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
@@ -312,7 +303,12 @@ export class PrAppElement extends HTMLElement {
         : {}
     // Check after the requests finish, before tearing down the current screen: the reader may
     // have kept typing while the refresh was loading.
-    if (this.holdsUnfinishedText() && !window.confirm(DISCARD_QUESTION)) {
+    const hasUnfinishedText =
+      this.chat?.holdsUnsent() === true ||
+      [...this.querySelectorAll('.composer-box textarea, #msg, #signoff-dialog[open] textarea')].some(
+        el => el instanceof HTMLTextAreaElement && el.value !== el.defaultValue
+      )
+    if (hasUnfinishedText && !window.confirm('Discard unfinished text and update the review?')) {
       return
     }
     this.session = null
@@ -367,11 +363,10 @@ export class PrAppElement extends HTMLElement {
         bundle.marksCarriedFrom === undefined
           ? ''
           : marksCarriedBarHtml(bundle.marksCarriedFrom, bundle.canvas?.headSha ?? '')
-      // The layers' page; the one-point view adds its parts once the review session exists.
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { switchable: this.readByPoints })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { switchable: this.readByPoints, points: this.layerView?.view === 'points' })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
         footerHtml(boot.version, bundle)
       // A bar the reader dismissed goes before the review wiring measures the outdated bar.
       wireBarDismissal(this, storage)
@@ -402,14 +397,13 @@ export class PrAppElement extends HTMLElement {
         ...(canvasManifest === null ? {} : { canvasMergeBaseSha: canvasManifest.mergeBaseSha }),
       })
       this.session = session
-      if (this.layerView?.view === 'points') this.drawPointsParts(true)
       const interactions = wireReview(this, session, {
         chat: () => this.chat,
         openReview: () => (this.chat ?? this.reviewPane)?.openReview(),
         uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
         openSettings: el => void openSettingsDialog(this, el, { onSaved: data => this.settingsSaved(data) }),
-        setLayerView: (view, place) =>
-          this.switchLayerView(view, place === undefined ? undefined : { href: place }),
+        setLayerView: (view, place) => this.switchLayerView(view, place),
+        stepStop: (direction, fits, here) => this.layerView?.step(direction, fits, here),
       })
       this.interactions = interactions
       if (chatEnabled) {
@@ -483,7 +477,8 @@ export class PrAppElement extends HTMLElement {
     this.layerView?.redraw()
     // The cards are in the page now, so a link in the URL has something to land on.
     this.deepLinks = initDeepLinks(this)
-    this.scrollSpy = initScrollSpy(this)
+    // The one-point view marks its stop in the rail itself.
+    this.scrollSpy = this.layerView?.view === 'points' ? null : initScrollSpy(this)
     this.wireCommands(bundle)
   }
 
@@ -580,158 +575,46 @@ export class PrAppElement extends HTMLElement {
     }
   }
 
-  /** Whether a composer, the review message, the sign-off or AI Chat holds text not sent yet. */
-  holdsUnfinishedText() {
-    return (
-      this.chat?.holdsUnsent() === true ||
-      [...this.querySelectorAll('.composer-box textarea, #msg, #signoff-dialog[open] textarea')].some(
-        el => el instanceof HTMLTextAreaElement && el.value !== el.defaultValue
-      )
-    )
-  }
-
   /**
-   * Whether moving to `view` would take away text the reader has not sent. Leaving the one-point
-   * view takes its stops off the page, but a card a stop holds goes back to its layer first, with
-   * whatever is typed in it; only a stop's own card, a point's the layers draw none for, goes away.
+   * The rail lists the one-point view's stops, or the layers, and the scrollspy follows the layers.
    * @param {import('./layer-views.js').PageView} view
    */
-  switchDiscards(view) {
-    const stops = this.querySelector(`#${POINT_STEPS_ID}`)
-    return (
-      view !== 'points' &&
-      stops !== null &&
-      [...stops.querySelectorAll('.composer-box textarea')].some(
-        el =>
-          el instanceof HTMLTextAreaElement &&
-          el.value !== el.defaultValue &&
-          el.closest('[data-away]') === null
-      )
-    )
-  }
-
-  /**
-   * Puts on the page what the one-point view adds to it, or takes it away: its stops after the
-   * layers, the overview's way on, and the rail's points. They are drawn from what the page holds
-   * now, the marks and settled points of the review session and the comments the page shows, both
-   * when the page is drawn in that view and when the reader switches to it.
-   * @param {boolean} points
-   * @returns {boolean} false on a screen with no canvas, which has none of them
-   */
-  drawPointsParts(points) {
+  viewShown(view) {
     const ctx = getRenderContext()
-    const session = this.session
-    const main = qs('#main', this)
-    if (ctx === null || session === null || main === null) {
-      return false
+    qs('nav.rail', this)?.toggleAttribute('data-points', view === 'points')
+    if (ctx !== null && this.session !== null) {
+      refreshRail(this, { ...ctx.artifact, settled: this.session.settled }, this.session.state)
     }
-    const artifact = { ...ctx.artifact, settled: session.settled }
-    // The cards a stop holds are the layers' own: they go home before the stops go away.
-    this.layerView?.returnCards()
-    this.querySelector(`#${POINT_STEPS_ID}`)?.remove()
-    this.querySelector('#overview > nav.step-nav')?.remove()
-    if (points) {
-      main.insertAdjacentHTML('beforeend', renderPointSteps(artifact, ctx.files, session.state, ctx.comments))
-      qs('#overview', this)?.insertAdjacentHTML('beforeend', overviewWayOnHtml(artifact))
-    }
-    const rail = qs('nav.rail', this)
-    rail?.toggleAttribute('data-points', points)
-    refreshRail(this, artifact, session.state)
-    return true
-  }
-
-  /**
-   * Shows `view` on the page as it is, without drawing it again: a move into or out of the
-   * one-point view adds or takes away its parts, and every other part, and what the reader did in
-   * it, stays.
-   * @param {import('./layer-views.js').PageView} view
-   */
-  showView(view) {
-    const points = view === 'points'
-    if ((this.layerView?.view === 'points') !== points && this.drawPointsParts(points)) {
-      // The spy reads the rail's links, and the diagrams the page, once each: both start again.
-      this.diagrams?.stop()
-      this.diagrams = initDiagrams(this)
-      this.scrollSpy?.stop()
-      this.scrollSpy = initScrollSpy(this)
-    }
-    this.layerView?.setView(view)
+    this.scrollSpy?.stop()
+    this.scrollSpy = view === 'points' ? null : initScrollSpy(this)
   }
 
   /**
    * The rail's switch between the one-point view and the layers, which open in the layer view the
-   * settings choose. It changes this page only: a reload opens on what the settings say. `request`
-   * is a target the stops do not draw: the layers open on its link, and on its composer when it has
-   * one.
+   * settings choose. It changes this page only: a reload opens on what the settings say.
    * @param {string} choice `points` or `layers`
-   * @param {import('./anchors.js').ShowInLayers} [request] the place to open on, and what to do
-   *   there; without one, where the reader is: out of the one-point view the stop on screen, which
-   *   the URL may not name, else the URL's
+   * @param {string} [place] where to open, as `#id`; by default where the reader is
    */
-  switchLayerView(choice, request) {
-    if (choice !== 'points' && choice !== 'layers') {
-      return
-    }
-    const view = choice === 'points' ? 'points' : (this.layerView?.layersView ?? 'all')
-    if (this.switchDiscards(view) && !window.confirm(DISCARD_QUESTION)) {
-      return
-    }
-    // The other view opens where the reader was, as far as it has that place.
-    const artifact = getRenderContext()?.artifact
-    if (artifact !== undefined) {
-      const place = (choice === 'layers' && this.layerView?.place()) || window.location.hash
-      const target = request?.href ?? viewSwitchTarget(artifact, view, place)
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${target}`)
-    }
-    this.showView(view)
-    if (request !== undefined) {
-      // The page shows the new view under that link; it is followed again now that every layer it
-      // shows is on screen, then the composer opens on it.
-      this.deepLinks?.followHash()
-      if (request.compose !== undefined) {
-        this.interactions?.composeAt(request.compose)
-      }
-      return
-    }
-    // A view of one section at a time shows it under a page at its top, as a move between stops
-    // does; all the layers at once open on the layer that was read.
-    const target = view === 'all' ? document.getElementById(window.location.hash.slice(1)) : null
-    if (target === null) {
-      window.scrollTo({ top: 0 })
-    } else {
-      target.scrollIntoView({ block: 'start' })
+  switchLayerView(choice, place) {
+    const lv = this.layerView
+    if (lv !== null && (choice === 'points' || choice === 'layers')) {
+      lv.switchView(choice === 'points' ? 'points' : lv.layersView, place)
     }
   }
 
   /**
-   * The settings the dialog saved, applied to the open page without a reload. The page moves only
-   * when a setting about its view changed: turning `readByPoints` on opens the attention points,
-   * turning it off the layers, and a new `layerView` shows in place of the layers on screen, and is
-   * where the rail's switch leads from the attention points. Leaving the one-point view with text
-   * unsent in a stop's own card asks first; a reader who keeps the text keeps the view on screen.
+   * The settings the dialog saved, applied to the open page without a reload. Turning
+   * `readByPoints` on opens the attention points, turning it off the layers, and a new `layerView`
+   * shows in place of the layers on screen, and is where the rail's switch leads from the points.
    * @param {import('./contract-types.js').SettingsResponse} data
    */
   settingsSaved(data) {
     const { readByPoints, layerView } = data.settings
-    const turned = readByPoints !== this.readByPoints
+    const points = readByPoints !== this.readByPoints ? readByPoints : this.layerView?.view === 'points'
     this.readByPoints = readByPoints
     this.layerView?.setLayersView(layerView)
-    const shown = this.layerView?.view
-    const points = turned ? readByPoints : shown === 'points'
-    const next = points ? 'points' : layerView
-    if (next !== shown && this.switchDiscards(next) && !window.confirm(DISCARD_QUESTION)) {
-      toast(this, 'the view changes on the next load')
-    } else if (next !== shown) {
-      this.showView(next)
-    }
-    // The layers' heading is the switch on a page that reads by attention points; the points view
-    // heads its list with the switch either way.
-    const ctx = getRenderContext()
-    const rail = qs('nav.rail', this)
-    if (turned && ctx !== null && this.session !== null && rail !== null) {
-      rail.toggleAttribute('data-switchable', readByPoints)
-      refreshRail(this, { ...ctx.artifact, settled: this.session.settled }, this.session.state)
-    }
+    qs('nav.rail', this)?.toggleAttribute('data-switchable', readByPoints)
+    this.layerView?.setView(points ? 'points' : layerView)
     this.chat?.followSettings(data.settings)
     applyPointColors(data.settings.pointColors, document.documentElement)
   }

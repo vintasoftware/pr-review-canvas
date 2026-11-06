@@ -29,9 +29,8 @@ import {
   setRenderContext,
 } from './layers.js'
 import { initOneLayer } from './one-layer.js'
-import { renderPointSteps } from './point-view.js'
+import { renderRail } from './rail.js'
 import { renderOverview } from './overview.js'
-import { refreshRail, renderRail } from './rail.js'
 import { createReviewSession } from './review-session.js'
 import { setSelfReview } from './self-review.js'
 
@@ -90,21 +89,10 @@ function bundleFor(state, canvas = artifact) {
   })
 }
 
-/** The one-layer controller of a page set up in the one-point view, stopped after each test. */
-/** @type {ReturnType<typeof initOneLayer> | null} */
-let pointsView = null
-afterEach(() => {
-  pointsView?.stop()
-  pointsView = null
-  window.location.hash = ''
-})
-
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, setLayerView?: (view: string, place?: string) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, points?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
- *   `points: true` draws the one-point view's stops after the layers, and shows the first point's
- *   stop, which holds that point's card and file card while it shows.
  */
 function setup(opts = {}) {
   const state = opts.state ?? BASE
@@ -137,20 +125,11 @@ function setup(opts = {}) {
   const paths = new Set(files.map(f => f.path))
   document.body.innerHTML =
     `<pr-app id="root">${renderHeader(bundle, { host: 'localhost:3010', theme: 'auto', skin: 'terminal', now: NOW })}` +
-    `<div class="layout">${renderRail(artifact, state, { switchable: true })}<main id="main">${renderOverview(bundle, { paths, now: NOW })}` +
-    `${renderLayers(canvas, files, state, threadComments)}` +
-    `${opts.points === true ? renderPointSteps(canvas, files, state, threadComments) : ''}</main></div></pr-app>`
+    `<div class="layout">${renderRail(artifact, state)}<main id="main">${renderOverview(bundle, { paths, now: NOW })}` +
+    `${renderLayers(canvas, files, state, threadComments)}</main></div></pr-app>`
   const root = document.querySelector('#root')
   if (!(root instanceof HTMLElement)) {
     throw new Error('no root')
-  }
-  if (opts.points === true) {
-    // The page marks its rail for the points view and draws it again, as drawPointsParts does.
-    root.querySelector('nav.rail')?.setAttribute('data-points', '')
-    refreshRail(root, artifact, state)
-    window.location.hash = '#step-p-1'
-    pointsView?.stop()
-    pointsView = initOneLayer(root, { view: 'points' })
   }
   if (opts.drawn !== false) {
     hydrateAll(root, ctx)
@@ -319,7 +298,6 @@ function setup(opts = {}) {
     ...(opts.fetchReviewBody ? { fetchReviewBody: opts.fetchReviewBody } : {}),
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
-    ...(opts.setLayerView ? { setLayerView: opts.setLayerView } : {}),
     ...(opts.uncover ? { uncover: opts.uncover } : {}),
   })
   wirings.push(wiring)
@@ -565,32 +543,6 @@ describe('reviewed state', () => {
     await flush()
     expect(card?.classList.contains('is-reviewed')).toBe(false)
     expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
-  })
-
-  it('keeps a card drawn open in sight when its file is marked reviewed', async () => {
-    const { root } = setup({
-      api: {
-        putReviewed: async () => ({
-          prNumber: 42,
-          state: {
-            ...BASE,
-            reviewedCanvasSha: artifact.pr.headSha,
-            reviewed: { 'layer:run-path/file:src_app_ts': true },
-          },
-        }),
-      },
-    })
-    // A stop's copy of the file: the same reviewed mark, drawn open.
-    root.insertAdjacentHTML(
-      'beforeend',
-      '<article class="file" id="stop-file" data-open><div class="file-h"><input type="checkbox" data-reviewed-id="layer:run-path/file:src_app_ts"></div><div class="file-body"></div></article>'
-    )
-    click(root, 'article.file#file-src_app_ts input[data-reviewed-id]')
-    await flush()
-    const stop = root.querySelector('#stop-file')
-    expect(stop?.classList.contains('is-reviewed')).toBe(true)
-    expect(stop?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
-    expect(root.querySelector('article.file#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
   })
 
   it('leaves a layer that is reviewed through its files alone when something else changes', async () => {
@@ -1300,21 +1252,6 @@ describe('comment composers', () => {
     ).toContain('agreed')
   })
 
-  it('shows a reply posted in a stop in that stop, with the thread on the page once', async () => {
-    const { root } = setup({ points: true, comments: comments.map(c => ({ ...c, resolved: false })) })
-    expect(root.querySelectorAll('tr.thread[data-thread="1001"]')).toHaveLength(1)
-    expect(root.querySelector('#step-p-1 tr.thread[data-thread="1001"]')).not.toBeNull()
-    click(root, '#step-p-1 tr.thread[data-thread="1001"] [data-act="thread-reply"]')
-    const area = root.querySelector('#step-p-1 .thread-full .composer-box textarea')
-    if (!(area instanceof HTMLTextAreaElement)) throw new Error('no textarea in the stop')
-    area.value = 'agreed'
-    click(root, '#step-p-1 .thread-full [data-act="composer-post"]')
-    await flush()
-    expect(
-      [...root.querySelectorAll('#step-p-1 tr.thread[data-thread="1001"] .cmt .prose')].at(-1)?.textContent
-    ).toContain('agreed')
-  })
-
   it('comments on the pull request itself', async () => {
     const { root, calls } = setup()
     click(root, '[data-act="pr-comment"]')
@@ -1526,31 +1463,6 @@ describe('keyboard', () => {
     expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(false)
     key('o')
     expect(card?.hasAttribute('data-expanded')).toBe(false)
-  })
-
-  it('steps to another point’s stop with its card in focus, though the card comes in only as it shows', () => {
-    const { root } = setup({ points: true })
-    // Back to the layer's opening stop: the point's card goes home to its layer.
-    key('p')
-    expect(root.querySelector('#step-p-1 #point-p-1')).toBeNull()
-    key('n')
-    expect(root.querySelector('#step-p-1 .is-focused')?.id).toBe('point-p-1')
-  })
-
-  it('steps to the point on screen with ], its card in focus, and says in the stop a dismissal failed', async () => {
-    const { root } = setup({
-      points: true,
-      api: {
-        putDismissed: async () => {
-          throw new Error('offline')
-        },
-      },
-    })
-    key(']')
-    expect(root.querySelector('#step-p-1 .is-focused')?.id).toBe('point-p-1')
-    key('d')
-    await flush()
-    expect(root.querySelector('#step-p-1 .cmd-err')?.textContent).toBe('offline')
   })
 
   it('moves the keyboard focus with the ring', () => {
@@ -2293,38 +2205,6 @@ describe('the AI Chat commands', () => {
     expect(opened).toEqual(['settings'])
   })
 
-  it('the rail’s switch asks the page for the other view, and does nothing on the one shown', () => {
-    /** @type {string[]} */
-    const asked = []
-    const { root } = setup({ setLayerView: view => asked.push(view) })
-    const option = (/** @type {string} */ view) => {
-      const button = root.querySelector(`.rail-view [data-view="${view}"]`)
-      if (!(button instanceof HTMLElement)) throw new Error(`no ${view} option`)
-      return button
-    }
-    option('layers').click()
-    option('points').click()
-    expect(asked).toEqual(['points'])
-  })
-
-  it('a link that switches the view names the place to open on', () => {
-    /** @type {Array<[string, string | undefined]>} */
-    const asked = []
-    const { root } = setup({ setLayerView: (view, place) => asked.push([view, place]) })
-    root.insertAdjacentHTML(
-      'beforeend',
-      '<a id="rest" href="#layer-auth" data-act="layer-view" data-view="layers">the rest of the diff</a>'
-    )
-    root.querySelector('#rest')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    root
-      .querySelector('.rail-view [data-view="points"]')
-      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    expect(asked).toEqual([
-      ['layers', '#layer-auth'],
-      ['points', undefined],
-    ])
-  })
-
   /**
    * The page and the real AI Chat pane on one root, with an answer that proposes one comment.
    * @param {string} comment the JSON inside the answer's comment block
@@ -2457,135 +2337,6 @@ describe('the AI Chat commands', () => {
     expect(button.nextElementSibling?.textContent).toContain('not a file of this pull request')
     wiring.onProposedComment('edit', { path: 'src/app.ts', line: 900, side: 'new', body: 'x' }, button)
     expect(button.nextElementSibling?.textContent).toContain('not on screen')
-  })
-})
-
-describe('in the one-point view’s stops', () => {
-  /** @param {ParentNode} root @param {string} selector */
-  function pointerDown(root, selector) {
-    const cell = root.querySelector(selector)
-    if (!(cell instanceof HTMLElement)) throw new Error(`no cell for ${selector}`)
-    cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-  }
-
-  /** @param {string} key */
-  const press = key => document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
-
-  /**
-   * Records what the page is asked to show in its layers.
-   * @param {HTMLElement} root
-   * @returns {import('./anchors.js').ShowInLayers[]}
-   */
-  function layerRequests(root) {
-    /** @type {import('./anchors.js').ShowInLayers[]} */
-    const asked = []
-    root.addEventListener('show-in-layers', event => {
-      asked.push(/** @type {CustomEvent<import('./anchors.js').ShowInLayers>} */ (event).detail)
-    })
-    return asked
-  }
-
-  it('marks and comments on the lines selected in a stop, in that stop', () => {
-    const { root } = setup({ points: true })
-    pointerDown(root, '#step-p-1 #L-src_app_ts-new-4 td.ln:nth-child(2)')
-    document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
-    expect(root.querySelectorAll('#step-p-1 tr.is-selected')).toHaveLength(1)
-    expect(root.querySelectorAll('pr-layer tr.is-selected')).toHaveLength(0)
-    click(root, '#step-p-1 [data-act="comment-selection"]')
-    expect(root.querySelector('#step-p-1 .composer-box')?.getAttribute('data-line')).toBe('4')
-    expect(root.querySelector('pr-layer .composer-box')).toBeNull()
-  })
-
-  it('opens the composer of a line number clicked in a stop in that stop', () => {
-    const { root } = setup({ points: true })
-    click(root, '#step-p-1 #L-src_app_ts-new-4 .plus')
-    expect(root.querySelector('#step-p-1 .composer-box')).not.toBeNull()
-    expect(root.querySelector('pr-layer .composer-box')).toBeNull()
-  })
-
-  it('comments with c on the line of the point in focus, in its stop', () => {
-    const { root } = setup({ points: true })
-    press(']')
-    expect(root.querySelector('#step-p-1 .is-focused')?.id).toBe('point-p-1')
-    press('c')
-    expect(root.querySelector('#step-p-1 .composer-box')?.getAttribute('data-line')).toBe('4')
-    expect(root.querySelector('pr-layer .composer-box')).toBeNull()
-  })
-
-  it('opens a proposed comment about a point in that point’s stop', () => {
-    const { root, wiring } = setup({ points: true })
-    const button = document.createElement('button')
-    root.appendChild(button)
-    const p2 = artifact.points.find(p => p.id === 'p-2')
-    if (p2 === undefined) throw new Error('no p-2')
-    wiring.onProposedComment(
-      'edit',
-      {
-        path: p2.path,
-        line: p2.line,
-        side: 'new',
-        body: 'Rename.',
-        point: { fingerprint: p2.fingerprint, title: p2.title },
-      },
-      button
-    )
-    expect(root.querySelector('#step-p-2 .composer-box textarea')).not.toBeNull()
-    expect(root.querySelector('pr-layer .composer-box')).toBeNull()
-  })
-
-  it('asks the page for its layers for a line no stop draws, with the composer to open there', () => {
-    const { root, wiring } = setup({ points: true })
-    const asked = layerRequests(root)
-    const button = document.createElement('button')
-    root.appendChild(button)
-    // The test file has no attention point, so no stop draws it.
-    wiring.onProposedComment('edit', { path: 'src/app.test.ts', line: 1, side: 'new', body: 'x' }, button)
-    expect(root.querySelector('.composer-box')).toBeNull()
-    expect(asked).toEqual([
-      {
-        href: '#line:src/app.test.ts:1',
-        compose: { path: 'src/app.test.ts', side: 'new', line: 1, body: 'x' },
-      },
-    ])
-  })
-
-  it('opens the composer the page hands back once it shows its layers', () => {
-    const { root, wiring } = setup()
-    wiring.composeAt({ path: 'src/app.test.ts', side: 'new', line: 1, body: 'x' })
-    const box = root.querySelector('pr-layer .composer-box textarea')
-    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no composer')
-    expect(box.value).toBe('x')
-  })
-
-  it('jumps to a line in the stop the command is in, and asks for the layers for one no stop draws', () => {
-    const { root } = setup({ points: true })
-    const asked = layerRequests(root)
-    const stop = root.querySelector('#step-p-1')
-    stop?.insertAdjacentHTML(
-      'beforeend',
-      '<button type="button" data-act="jump-line" data-key="src_app_ts" data-line="4" data-side="new">here</button>' +
-        '<button type="button" data-act="jump-line" data-key="src_app_test_ts" data-line="1" data-side="new">away</button>'
-    )
-    click(root, '#step-p-1 [data-act="jump-line"][data-line="4"]')
-    // The stop holds the layer's own card while it shows, so the line is on the page once.
-    expect(root.querySelector('#step-p-1 #L-src_app_ts-new-4')?.classList.contains('is-target')).toBe(true)
-    expect(root.querySelectorAll('#L-src_app_ts-new-4')).toHaveLength(1)
-    click(root, '#step-p-1 [data-act="jump-line"][data-key="src_app_test_ts"]')
-    expect(asked).toEqual([{ href: '#line:src/app.test.ts:1' }])
-  })
-
-  it('opens the reason box of a proposed resolution under the point in its stop', () => {
-    setSelfReview(true, {})
-    const { root, wiring } = setup({ points: true, selfReview: true })
-    const button = document.createElement('button')
-    root.appendChild(button)
-    wiring.onProposedResolution(
-      'edit',
-      { point: { fingerprint: 'fp-1', title: 'Sum' }, reason: 'Kept on purpose.' },
-      button
-    )
-    expect(root.querySelector('#step-p-1 .settle-box')).not.toBeNull()
-    expect(root.querySelector('pr-layer .settle-box')).toBeNull()
   })
 })
 

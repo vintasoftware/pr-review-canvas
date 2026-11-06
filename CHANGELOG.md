@@ -7,14 +7,12 @@
 - **Read by attention points** in **settings** (`readByPoints`, off by default) opens a review on its
   attention points, one at a time: each layer opens with its description and tests, then shows its
   points from the most severe, each with only the chunk of code that holds it. The rail lists the
-  points under their layers. A stop takes the place of the one before under a page that stays at the
-  top, and its way back and on is both at its foot and, as arrows, at its head.
+  points under their layers, and a bar over and under each stop leads back and on.
 - A switch at the head of the rail moves between **Attention points** and **Layers**, keeping your
-  place, and the rail lists what the view shows. **Layers** shows the layer view **Show layers**
-  chooses. The switch changes the open page only; a reload opens on what the settings say.
-- In a stop, selecting lines, commenting and jumping between lines happen in that stop, on the
-  layer's own card. A line or point reached from elsewhere (a link, **go to code**, `c`, a proposed
-  comment) opens the stop that shows it, or moves to the layers when none does.
+  place. **Layers** shows the layer view **Show layers** chooses. The switch changes the open page
+  only; a reload opens on what the settings say.
+- A stop is its layer's own section seen through a lens, so commenting, marking and links work as
+  in the layers. A target no stop shows moves the page to the layers.
 
 ## 0.10.0
 

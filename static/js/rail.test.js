@@ -88,9 +88,7 @@ describe('rail', () => {
    * @param {import('./contract-types.js').ReviewArtifact} canvas
    */
   function pointsRail(canvas) {
-    document.body.innerHTML = renderRail(canvas, state, { switchable: true })
-    document.querySelector('nav.rail')?.setAttribute('data-points', '')
-    refreshRail(document, canvas, state)
+    document.body.innerHTML = renderRail(canvas, state, { switchable: true, points: true })
   }
 
   it('lists the points under their layers in the one-point view, and dims one acted on', () => {
@@ -101,44 +99,19 @@ describe('rail', () => {
           ? `[${li.querySelector('.t')?.textContent}]`
           : li.querySelector('a')?.getAttribute('href')
       )
-    expect(group()).toEqual(['[Run path]', '#step-p-1', '[Other changes]', '#step-p-2', '#step-p-3'])
-    expect(document.querySelector('a[href="#step-p-1"] .lv.decide')).not.toBeNull()
+    expect(group()).toEqual(['[Run path]', '#point-p-1', '[Other changes]', '#point-p-2', '#point-p-3'])
+    expect(document.querySelector('a[href="#point-p-1"] .lv.decide')).not.toBeNull()
     // A layer's heading leads to the layer's opening stop.
-    expect(document.querySelector('.rail-points .pt-layer a')?.getAttribute('href')).toBe(
-      '#step-layer-run-path'
-    )
+    expect(document.querySelector('.rail-points .pt-layer a')?.getAttribute('href')).toBe('#layer-run-path')
     const dismissed = { ...state, dismissed: { 'fp-2': { at: 'x' } } }
     expect(refreshRail(document, artifact, dismissed)).toBe(true)
-    expect(group()).toEqual(['[Run path]', '#step-p-1', '[Other changes]', '#step-p-2', '#step-p-3'])
+    expect(group()).toEqual(['[Run path]', '#point-p-1', '[Other changes]', '#point-p-2', '#point-p-3'])
     expect(
-      document.querySelector('a[href="#step-p-2"]')?.parentElement?.classList.contains('is-handled')
+      document.querySelector('a[href="#point-p-2"]')?.parentElement?.classList.contains('is-handled')
     ).toBe(true)
     expect(
-      document.querySelector('a[href="#step-p-1"]')?.parentElement?.classList.contains('is-handled')
+      document.querySelector('a[href="#point-p-1"]')?.parentElement?.classList.contains('is-handled')
     ).toBe(false)
-  })
-
-  it('lists a layer that opens with a stop though it has no points, and points of no layer last', () => {
-    const [first] = artifact.layers
-    if (first === undefined) throw new Error('the synthetic canvas has a layer')
-    const testsOnly = {
-      ...artifact,
-      points: artifact.points.map(p => (p.layerId === first.id ? { ...p, layerId: 'gone' } : p)),
-    }
-    pointsRail(testsOnly)
-    const group = [...document.querySelectorAll('.rail-points li')].map(li =>
-      li.classList.contains('pt-layer')
-        ? `[${li.querySelector('.t')?.textContent}]`
-        : li.querySelector('a')?.getAttribute('href')
-    )
-    expect(group).toEqual([
-      '[Run path]',
-      '[Other changes]',
-      '#step-p-2',
-      '#step-p-3',
-      '[No layer]',
-      '#step-p-1',
-    ])
   })
 
   it('has no points group in the other views', () => {

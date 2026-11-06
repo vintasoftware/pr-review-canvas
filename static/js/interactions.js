@@ -8,16 +8,7 @@ import { toggleMarkdownPreview } from './composer.js'
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 /** @typedef {import('./selection.js').Selection} Selection */
-import {
-  cssEscape,
-  drawCardOf,
-  drawCardsOf,
-  fileCardOf,
-  findRow,
-  pointPreferringStop,
-  revealPreferringStop,
-  rowPreferringStop,
-} from './anchors.js'
+import { cssEscape, drawCardOf, drawCardsOf, fileCardOf, findRow } from './anchors.js'
 import { fetchReviewBody } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
@@ -42,8 +33,7 @@ import { hostLabel } from './host.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
-import { pointAnchorId, reviewedId, stepAnchorId } from './keys.js'
-import { lineLink } from './links.js'
+import { pointAnchorId, reviewedId } from './keys.js'
 import {
   canvasHiddenLines,
   cardOf,
@@ -188,7 +178,8 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     const id = item.kind === 'file' ? reviewedId(item.layerKey, item.path) : reviewedId(item.layerKey)
     if (!session.isReviewed(id)) {
       const card = root.querySelector(`#${cssEscape(item.id)}`)
-      return card !== null && inHiddenSection(card) ? null : card
+      // The one-point view's lens shows no other card than the one marked.
+      return card !== null && (inHiddenSection(card) || card.closest('[data-lens]') !== null) ? null : card
     }
   }
   return null
@@ -252,6 +243,7 @@ export function padUnderStickyBar(doc, bar) {
  *   chat?: () => ChatHandle | null,
  *   openSettings?: (el: HTMLElement) => void,
  *   setLayerView?: (view: string, place?: string) => void,
+ *   stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -371,10 +363,7 @@ export function wireReview(root, session, opts = {}) {
       const parts = cardOf(input)
       if (parts !== null && parts.card.classList.contains('is-reviewed') !== reviewed) {
         parts.card.classList.toggle('is-reviewed', reviewed)
-        // A card drawn open, such as a stop's, keeps its code in sight whatever its mark.
-        if (!parts.card.hasAttribute('data-open')) {
-          setCardCollapsed(parts.card, reviewed)
-        }
+        setCardCollapsed(parts.card, reviewed)
       }
     }
     refreshPendingBar(root, state, session)
@@ -394,15 +383,10 @@ export function wireReview(root, session, opts = {}) {
     const answer = await session.postComment(input)
     const ctx = getRenderContext()
     if (answer.kind === 'review' && ctx !== null) {
-      const next = {
+      setRenderContext({
         ...ctx,
         comments: [...ctx.comments.filter(c => c.id !== answer.comment.id), answer.comment],
-      }
-      setRenderContext(next)
-      // A new thread shows in the cards drawn already, as a card drawn later shows it.
-      if (answer.comment.inReplyToId === undefined) {
-        refreshCardDecorations(root, next, new Set([answer.comment.path]), [answer.comment])
-      }
+      })
       // A new thread keeps its card's code open at every level, and the counters say so.
       refreshFolds(root)
       refreshFoldLevel(root, getFoldLevel(), hiddenAt(getFoldLevel()))
@@ -517,11 +501,7 @@ export function wireReview(root, session, opts = {}) {
    * @param {1 | -1} direction
    */
   const stepPoint = (order, points, direction) => {
-    // In a stop of the one-point view, the place is the stop until its point is in focus: the
-    // stop's file comes after its point's card, and `]` from it would skip the point.
-    const at = here(order)
-    const stop = at?.closest('section.point-step') ?? null
-    const from = stop !== null && at?.closest('[data-point]') === null ? stop : at
+    const from = here(order)
     /** @type {Set<Element>} */
     const drawn = new Set()
     /**
@@ -568,45 +548,6 @@ export function wireReview(root, session, opts = {}) {
     }
   }
 
-  /**
-   * The step keys in the one-point view, which walk its stops rather than the layers' cards: `j`
-   * and `k` the layers' opening stops, `n` and `p` every stop, `]` and `[` the open points' stops.
-   * False on a page without stops, whose keys walk the layers.
-   * @param {'layer' | 'file' | 'point'} kind
-   * @param {1 | -1} direction
-   * @param {ReadonlyArray<Point>} points the open points
-   */
-  const stepStop = (kind, direction, points) => {
-    const stops = Array.from(root.querySelectorAll('section.point-step'))
-    if (stops.length === 0) {
-      return false
-    }
-    const open = new Set(points.map(p => stepAnchorId(p.id)))
-    const at = stops.findIndex(stop => stop instanceof HTMLElement && !stop.hidden)
-    const fits = (/** @type {Element} */ stop) =>
-      kind === 'file' || (kind === 'layer' ? stop.classList.contains('layer-step') : open.has(stop.id))
-    const shown = stops[at]
-    // The point on screen comes first while nothing in its stop is in focus, as ] does elsewhere.
-    const onScreen =
-      kind === 'point' && shown !== undefined && fits(shown) && !shown.contains(focused()) ? shown : undefined
-    const next =
-      onScreen ??
-      (direction === 1
-        ? stops.find((stop, index) => index > at && fits(stop))
-        : stops.findLast((stop, index) => at >= 0 && index < at && fits(stop)))
-    if (next !== undefined) {
-      // The stop shows first, which moves its point's card into it; then the card takes the focus,
-      // so the point keys act on that point.
-      next.dispatchEvent(new Event('reveal-code', { bubbles: true }))
-      const card = next.querySelector('li.finding[data-point]')
-      focusItem(card ?? next, card === null ? 'start' : 'center')
-      if (next !== shown) {
-        window.history.pushState(null, '', `#${next.id}`)
-      }
-    }
-    return true
-  }
-
   /** @param {Selection | null} next */
   const setSelection = next => {
     selection = next
@@ -639,32 +580,6 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /**
-   * The composer's options for a comment on lines, with the next composer id.
-   * @param {import('./anchors.js').ComposeRequest} request
-   * @returns {import('./composer.js').ComposerOptions}
-   */
-  const lineComposerOptions = request => {
-    composerSeq += 1
-    return {
-      id: `composer-${composerSeq}`,
-      label: `Comment on ${request.path}:${request.line}`,
-      kind: 'inline',
-      path: request.path,
-      line: request.line,
-      side: request.side,
-      ...(request.body === undefined ? {} : { body: request.body }),
-      ...(request.proposalFingerprint === undefined
-        ? {}
-        : { proposalFingerprint: request.proposalFingerprint }),
-      ...(request.pointFingerprint === undefined ? {} : { pointFingerprint: request.pointFingerprint }),
-      ...(request.startLine === undefined || request.startLine === request.line
-        ? {}
-        : { startLine: request.startLine }),
-    }
-  }
-
-  /**
-   * Opens the composer on a line the reader picked in a file card.
    * @param {{ key: string, path: string, side: 'new' | 'old', line: number, startLine?: number }} target
    */
   const openLineComposer = target => {
@@ -672,47 +587,21 @@ export function wireReview(root, session, opts = {}) {
     if (row === null) {
       return null
     }
-    return openComposer(row, lineComposerOptions(target), 'row')
+    composerSeq += 1
+    /** @type {import('./composer.js').ComposerOptions} */
+    const options = {
+      id: `composer-${composerSeq}`,
+      label: `Comment on ${target.path}:${target.line}`,
+      kind: 'inline',
+      path: target.path,
+      line: target.line,
+      side: target.side,
+    }
+    if (target.startLine !== undefined && target.startLine !== target.line) {
+      options.startLine = target.startLine
+    }
+    return openComposer(row, options, 'row')
   }
-
-  /**
-   * Opens the composer on a line the reader did not click, such as an attention point's or one a
-   * chat proposal names. In the one-point view it opens in the stop that shows the line, `stop`
-   * first; with no stop showing it, the page moves to its layers and opens it there. Returns why it
-   * could not, or null.
-   * @param {import('./anchors.js').ComposeRequest} request
-   * @param {HTMLElement | null} [stop] the stop to open it in when that stop shows the line, such as
-   *   the stop of the point at hand
-   * @returns {string | null}
-   */
-  const composeOnLine = (request, stop = null) => {
-    const key = keyForPath(request.path)
-    if (key === null) {
-      return `${request.path} is not a file of this pull request`
-    }
-    // The line's diff may not be drawn yet, as in a collapsed Other layer.
-    drawCardsOf(root, request.path)
-    const found = rowPreferringStop(root, key, request.side, request.line, stop)
-    if (found === null) {
-      return 'that line is not on screen; open the file card first'
-    }
-    const href = lineLink({
-      path: request.path,
-      start: request.startLine ?? request.line,
-      end: request.line,
-      side: request.side,
-    })
-    if (revealPreferringStop({ el: found.row, stop: found.stop }, root, { href, compose: request })) {
-      openComposer(found.row, lineComposerOptions(request), 'row')
-    }
-    return null
-  }
-
-  /**
-   * The stop of the one-point view an attention point has, or null outside that view.
-   * @param {string} fingerprint
-   */
-  const stopOfPoint = fingerprint => pointPreferringStop(root, fingerprint)?.stop ?? null
 
   /** The inline comment that a posted review comment becomes on the page. */
   const insertPostedReviewComment = (
@@ -724,22 +613,23 @@ export function wireReview(root, session, opts = {}) {
     )
     const now = getRenderContext()?.now ?? new Date()
     if (comment.inReplyToId !== undefined && thread !== null) {
-      const node = nodeFrom(doc, commentHtml(comment, now))
+      const full = thread.querySelector('.thread-full')
+      const tbtns = full?.querySelector('.tbtns')
+      const template = doc.createElement('template')
+      template.innerHTML = commentHtml(comment, now)
+      const node = template.content.firstElementChild
       if (node !== null) {
-        thread.querySelector('.thread-full .tbtns')?.before(node)
+        tbtns?.before(node)
       }
       composerNode.remove()
       return
     }
+    const template = doc.createElement('template')
+    template.innerHTML = `<table><tbody>${threadRowHtml({ root: comment, replies: [], resolved: false, outdated: comment.outdated, path: comment.path, side: comment.side, line: comment.line }, { now })}</tbody></table>`
+    const row = template.content.querySelector('tr')
     const host = composerNode.closest('tr') ?? composerNode
-    // The thread is on its line already once posting drew it into the cards; the box just goes.
-    if (thread === null) {
-      const template = doc.createElement('template')
-      template.innerHTML = `<table><tbody>${threadRowHtml({ root: comment, replies: [], resolved: false, outdated: comment.outdated, path: comment.path, side: comment.side, line: comment.line }, { now })}</tbody></table>`
-      const row = template.content.querySelector('tr')
-      if (row !== null) {
-        host.insertAdjacentElement('afterend', row)
-      }
+    if (row !== null) {
+      host.insertAdjacentElement('afterend', row)
     }
     host.remove()
   }
@@ -815,10 +705,7 @@ export function wireReview(root, session, opts = {}) {
       await session.setReviewed(id, reviewed)
       const parts = cardForReviewedId(root, id)
       if (parts !== null) {
-        // A card a stop holds keeps its code in sight; it folds as marked once it goes home.
-        if (!parts.card.hasAttribute('data-open')) {
-          setCardCollapsed(parts.card, reviewed)
-        }
+        setCardCollapsed(parts.card, reviewed)
         parts.card.classList.toggle('is-reviewed', reviewed)
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
@@ -1299,22 +1186,13 @@ export function wireReview(root, session, opts = {}) {
         return
       }
       const side = el.getAttribute('data-side') === 'old' ? 'old' : 'new'
-      const key = el.getAttribute('data-key') ?? ''
-      // The line, in the stop the command is in when that stop shows it.
-      const stop = el.closest('section.point-step')
-      const found = rowPreferringStop(root, key, side, line, stop instanceof HTMLElement ? stop : null)
-      if (found === null) {
+      const row = findRow(root, el.getAttribute('data-key') ?? '', side, line)
+      if (row === null) {
         return
       }
       // scrollIntoViewSafe raises `reveal-code` first, so a target inside a fold opens on the way.
-      const path = session.pathForKey(key) ?? found.row.closest('[data-path]')?.getAttribute('data-path')
-      const href = path === undefined || path === null ? '' : lineLink({ path, start: line, end: line, side })
-      if (href === '') {
-        scrollIntoViewSafe(found.row)
-        flash(found.row)
-      } else if (revealPreferringStop({ el: found.row, stop: found.stop }, root, { href })) {
-        flash(found.row)
-      }
+      scrollIntoViewSafe(row)
+      flash(row)
     },
     settings: el => {
       opts.openSettings?.(el)
@@ -1417,7 +1295,10 @@ export function wireReview(root, session, opts = {}) {
       case 'next-file':
       case 'prev-file': {
         const [kind, direction] = STEPS[decided.action]
-        if (stepStop(kind, direction, points)) {
+        // The one-point view walks its stops: j and k the layers' openings, n and p every stop.
+        const stop = opts.stepStop?.(direction, s => kind !== 'layer' || s.kind === 'layer')
+        if (stop !== undefined) {
+          if (stop !== null) focusItem(stop, 'center')
           break
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
@@ -1428,11 +1309,20 @@ export function wireReview(root, session, opts = {}) {
         break
       }
       case 'next-point':
-      case 'prev-point':
-        if (!stepStop('point', decided.action === 'next-point' ? 1 : -1, points)) {
-          stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
+      case 'prev-point': {
+        const direction = decided.action === 'next-point' ? 1 : -1
+        // The open points' stops, the one on screen first while nothing shown in it has the focus.
+        const open = new Set(points.map(p => p.id))
+        const at = focused()
+        const onStop = at !== null && at.closest('[data-lens]') !== null && at.getClientRects().length > 0
+        const stop = opts.stepStop?.(direction, s => s.kind === 'point' && open.has(s.point.id), !onStop)
+        if (stop === undefined) {
+          stepPoint(order, points, direction)
+        } else if (stop !== null) {
+          focusItem(stop, 'center')
         }
         break
+      }
       case 'toggle': {
         // A point already acted on opens or collapses itself.
         const handled = focused()?.closest('[data-point].is-handled')
@@ -1442,8 +1332,7 @@ export function wireReview(root, session, opts = {}) {
         }
         // An open point in focus stands for the file card that holds its line, not the layer it is listed in.
         const point = focusedPoint(points)
-        const stopCard = focused()?.closest('section.point-step')?.querySelector('article.file') ?? null
-        const el = point === undefined ? focused() : (stopCard ?? fileCardOf(root, point.path, point.layerId))
+        const el = point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
         if (el !== null) {
           setCardCollapsed(el)
         }
@@ -1451,9 +1340,8 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        // A point in focus stands for the card that holds it; in a stop, for the file the stop shows.
-        const inStop = focused()?.closest('section.point-step')?.querySelector('article.file') ?? null
-        const itemId = itemAround(order, inStop ?? focused())
+        // A point in focus stands for the card that holds it.
+        const itemId = itemAround(order, focused())
         const item = order.find(i => i.id === itemId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =
@@ -1474,28 +1362,27 @@ export function wireReview(root, session, opts = {}) {
           openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
           break
         }
-        // With nothing selected, c comments on the line of the attention point in focus, in the
-        // stop it is in; its diff may be undrawn, off screen, or in a collapsed card.
+        // With nothing selected, c comments on the line of the attention point in focus.
         const point = focusedPoint(points)
-        if (point !== undefined) {
+        const key = point === undefined ? null : keyForPath(point.path)
+        if (point !== undefined && key !== null) {
+          const target = { key, path: point.path, side: point.side ?? 'new', line: point.line }
+          // The point's diff may be undrawn, off screen, or in a collapsed card.
           drawCardOf(root, point.path, point.layerId)
-          const inStop = focused()?.closest('section.point-step')
-          composeOnLine(
-            { path: point.path, side: point.side ?? 'new', line: point.line },
-            inStop instanceof HTMLElement ? inStop : stopOfPoint(point.fingerprint)
-          )
+          const row = findRow(root, key, target.side, target.line)
+          if (row !== null) {
+            scrollIntoViewSafe(row)
+          }
+          openLineComposer(target)
         }
         break
       }
       case 'dismiss': {
         const point = focusedPoint(points)
-        // The point in focus, its card or its row in the diff.
-        const holder = focused()?.closest('[data-point]') ?? null
         const button =
           point === undefined
             ? null
-            : (holder?.querySelector('[data-act="point-dismiss"]') ??
-              root.querySelector(`[data-point="${cssEscape(point.id)}"] [data-act="point-dismiss"]`))
+            : root.querySelector(`[data-point="${cssEscape(point.id)}"] [data-act="point-dismiss"]`)
         if (button instanceof HTMLElement && point !== undefined) {
           setDismissed(button, point.fingerprint, true)
         }
@@ -1545,15 +1432,6 @@ export function wireReview(root, session, opts = {}) {
 
   return {
     /**
-     * Opens the composer a request names, as the page asked once it moved to its layers for a line
-     * the one-point view's stops do not draw.
-     * @param {import('./anchors.js').ComposeRequest} request
-     */
-    composeAt(request) {
-      opts.uncover?.()
-      composeOnLine(request)
-    },
-    /**
      * What the chat's proposed-resolution card does: resolve the point with the agent's reason as
      * it stands, posting nothing, or open the point's own reason box with it, where the reason can
      * change and also go out as a comment on the point's line. The card offers both only where the
@@ -1574,11 +1452,6 @@ export function wireReview(root, session, opts = {}) {
       if (point !== undefined) {
         // A point of the Other layer sits in its file's diff, which may not be drawn yet.
         drawCardOf(root, point.path, point.layerId)
-      }
-      // In the one-point view the point's stop shows first, which brings its card into the stop.
-      const stop = stopOfPoint(fingerprint)
-      if (stop !== null) {
-        stop.dispatchEvent(new Event('reveal-code', { bubbles: true }))
       }
       const command =
         root.querySelector(`li.finding[data-fingerprint="${fp}"] [data-act="point-settle"]`) ??
@@ -1606,26 +1479,41 @@ export function wireReview(root, session, opts = {}) {
      * @param {HTMLElement} el
      */
     onProposedComment(what, comment, el) {
+      const key = keyForPath(comment.path)
       if (what === 'edit') {
-        opts.uncover?.()
-        // A comment tied to an attention point opens in that point's stop, in the one-point view.
-        const error = composeOnLine(
-          {
-            path: comment.path,
-            side: comment.side,
-            line: comment.line,
-            body: comment.body,
-            ...(comment.startLine === undefined ? {} : { startLine: comment.startLine }),
-            ...(comment.proposalFingerprint === undefined
-              ? {}
-              : { proposalFingerprint: comment.proposalFingerprint }),
-            ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
-          },
-          comment.point === undefined ? null : stopOfPoint(comment.point.fingerprint)
-        )
-        if (error !== null) {
-          showCommandError(el, error)
+        if (key === null) {
+          showCommandError(el, `${comment.path} is not a file of this pull request`)
+          return
         }
+        composerSeq += 1
+        /** @type {import('./composer.js').ComposerOptions} */
+        const options = {
+          id: `composer-${composerSeq}`,
+          label: `Comment on ${comment.path}:${comment.line}`,
+          kind: 'inline',
+          path: comment.path,
+          line: comment.line,
+          side: comment.side,
+          body: comment.body,
+          ...(comment.proposalFingerprint === undefined
+            ? {}
+            : { proposalFingerprint: comment.proposalFingerprint }),
+          ...(comment.point === undefined ? {} : { pointFingerprint: comment.point.fingerprint }),
+        }
+        if (comment.startLine !== undefined && comment.startLine !== comment.line) {
+          options.startLine = comment.startLine
+        }
+        // The line's diff may not be drawn yet, as in a collapsed Other layer.
+        drawCardsOf(root, comment.path)
+        const row = findRow(root, key, comment.side, comment.line)
+        if (row === null) {
+          showCommandError(el, 'that line is not on screen; open the file card first')
+          return
+        }
+        opts.uncover?.()
+        // Brings the line on screen: its layer, or the stop that shows it.
+        scrollIntoViewSafe(row)
+        openComposer(row, options, 'row')
         return
       }
       const target = {

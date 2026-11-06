@@ -11,7 +11,7 @@ import { esc } from './dom.js'
 
 export const KEY_HELP = [
   { keys: 'j / k', what: 'next / previous layer' },
-  { keys: 'n / p', what: 'next / previous file, or stop in the one-point view' },
+  { keys: 'n / p', what: 'next / previous file, or stop when reading by points' },
   { keys: '] / [', what: 'next / previous open attention point' },
   {
     keys: 'o',

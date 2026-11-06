@@ -1,7 +1,6 @@
 /* ---- Panels, layers, cards ---- */
 .panel,
-.layer,
-.point-step {
+.layer {
   border: 1px solid var(--ink);
   background: var(--panel);
   box-shadow: 2px 2px 0 var(--shadow);
@@ -604,86 +603,33 @@ img.av {
   border-radius: 50%;
 }
 
-/* ---- The one-point view: a stop per attention point (point-view.js) ---- */
-.step-h {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin: 0;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--ink);
-  background: var(--panel-2);
-  font-size: 13px;
+/* ---- The one-point view: a layer section through a lens (point-view.js) ---- */
+/* A layer's stop: its heading, description and tests. */
+[data-lens='layer'] :is(.layer-points, .layer-body > h3:has(.fold-count), .files, .layer-end, details > pr-file),
+/* A point's stop: the layer's heading, the point's card, and its chunk (the lens style sheet). */
+[data-lens='point'] :is(.layer-body > .body, .layer-body > h3, .testmap, .layer-points > h3, .layer-end, details > .body) {
+  /* Over every skin's own layout, as the hidden attribute is. */
+  display: none !important;
 }
-.step-h > p {
-  margin: 0;
+/* The point's code stays in sight whatever its card's reviewed mark or the reading level say. */
+[data-lens='point'] article.file > .file-body[hidden] {
+  display: block !important;
+}
+/* The card above shows the point whole; its line in the diff keeps the title. */
+section.layer[data-lens='point'] tr.ifind :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
+  display: none;
+}
+.step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block: 12px;
+  font-size: 13px;
 }
 .step-n {
   font-weight: 600;
 }
-/* The ways on, as arrows at the head of a stop, at its right end. */
-.step-arrows {
-  display: flex;
-  gap: 4px;
+.step-nav > :last-child {
   margin-left: auto;
-}
-/* A layer's heading already sends what follows it to the right, its commands then the arrows. */
-.layer-h .step-arrows {
-  margin-left: 0;
-}
-.step-arrows a {
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  font-size: 15px;
-  line-height: 24px;
-  text-decoration: none;
-}
-.step-arrows a:hover {
-  border-color: var(--ink);
-}
-.point-step > .findings {
-  margin: 0;
-  padding: 4px 16px 12px;
-}
-.point-step > .files {
-  padding: 0 16px 12px;
-}
-/* The tests table ends a layer's opening stop; its way on keeps a gap from the table's box. */
-.layer-step > .step-nav {
-  margin-top: 12px;
-}
-/* A way on alone, as the overview's, sits on the right, where the stops have theirs. */
-.step-nav > :only-child {
-  margin-left: auto;
-}
-.step-nav {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--line);
-  font-size: 13px;
-}
-/* The card above shows the point whole, whatever the list density. Its line in the diff carries
-   the point's title, and opens to the whole point and its commands for a reader who scrolled
-   down to it. */
-.point-step tr.ifind:not([data-expanded]) :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
-  display: none;
-}
-/* Only the height: the sides stay the diff's own, which hold the text inside the visible width. */
-.point-step tr.ifind:not([data-expanded]) .x {
-  padding-block: 4px;
-}
-.point-step tr.ifind:not([data-expanded]) .f-title {
-  margin: 0;
-  font-size: 13px;
-}
-/* Outside a stop an open point's row shows it whole, so its show command has nothing to open. */
-tr.ifind[data-status='open'] .p-toggle {
-  display: none;
-}
-.point-step tr.ifind[data-status='open'] .p-toggle {
-  display: inline-block;
 }

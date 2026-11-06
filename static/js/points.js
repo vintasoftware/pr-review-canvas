@@ -378,10 +378,8 @@ function pointPartsHtml(p, ctx, opts) {
       : '<p class="p-summary muted">The author reopened this on the canvas; the commit’s answer below no longer settles it.</p>'
   const parts =
     status === 'open' ? { pill: '', summary: reopened, outcome: '' } : statusPartsHtml(p, status, ctx, opts)
-  // An open point's row carries the command too, for a stop of the one-point view, where the row
-  // collapses to its title under the card that shows the point whole; elsewhere CSS hides it.
   const toggle =
-    status === 'open' && opts.card
+    status === 'open'
       ? ''
       : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
   const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
@@ -578,22 +576,12 @@ export function refreshPoint(el, p, ctx) {
 }
 
 /**
- * Whether a point is drawn as its title line until the reader opens it: a point acted on, or a
- * point's line in a stop of the one-point view, whose card above shows it whole. Any other open
- * point is always whole.
- * @param {Element} el the card or row that carries `data-point`
- */
-export function pointCollapses(el) {
-  return el.classList.contains('is-handled') || el.matches('.point-step tr[data-point]')
-}
-
-/**
- * Shows or hides the rest of a point that `pointCollapses` draws as its title line.
+ * Shows or hides the rest of a point that was acted on. An open point is always shown whole.
  * @param {Element} el the card or row that carries `data-point`
  * @param {boolean} [expanded] omitted flips it
  */
 export function setPointExpanded(el, expanded = !el.hasAttribute('data-expanded')) {
-  const on = expanded && pointCollapses(el)
+  const on = expanded && el.classList.contains('is-handled')
   el.toggleAttribute('data-expanded', on)
   const toggle = el.querySelector('[data-act="point-expand"]')
   if (toggle !== null) {

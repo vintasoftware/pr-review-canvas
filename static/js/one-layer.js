@@ -1,23 +1,26 @@
 // @ts-check
-// One layer at a time. With `layerView: one` the page shows the overview or a single layer
-// section and hides the rest, so the rail is how the reader moves between layers and the page
-// scrolls through one layer only. Whatever brings something on screen (a rail link, the j/k and
-// n/p keys, a canvas link) shows the section that holds it first, so nothing the reader is sent
-// to stays hidden. A review mark is the exception: it moves on to the next card only inside the
-// layer on screen. With `points` it shows one stop of the one-point view at a time the same way
-// (`point-view.js`), and a link to a whole section swaps it in under a page that stays at the top.
-// With `all` this module does nothing.
-import { cssEscape, RETURN_STOP_CARDS } from './anchors.js'
+// One layer, or one attention point, at a time. With `layerView: one` the page shows the overview
+// or a single layer section and hides the rest, so the rail is how the reader moves between layers
+// and the page scrolls through one layer only. Whatever brings something on screen (a rail link,
+// the j/k and n/p keys, a canvas link) shows the section that holds it first, so nothing the
+// reader is sent to stays hidden. A review mark is the exception: it moves on to the next card
+// only inside the layer on screen. With `points` the page shows one stop of the one-point view
+// (`point-view.js`) the same way, under a page at its top, and a target no stop shows takes the
+// page to its layers. With `all` this module does nothing.
+import { cssEscape } from './anchors.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
-import { layerAnchorId, layerStepAnchorId, pointAnchorId, stepAnchorId } from './keys.js'
-import { refoldCard, setCardCollapsed } from './layers.js'
+import { getRenderContext, setCardCollapsed } from './layers.js'
+import { clearStop, showStop, stopShowing, stopTarget } from './point-view.js'
+import { stopsOf } from './point-steps.js'
+import { markRailCurrent } from './scroll-spy.js'
 
 /** @typedef {import('./layer-views.js').LayerView} LayerView */
 /** @typedef {import('./layer-views.js').PageView} PageView */
+/** @typedef {import('./point-steps.js').Stop} Stop */
 
-/** The overview, every stop of the one-point view, and every layer section: the parts of the page the rail links to. */
-const SECTION_SELECTOR = '#overview, section.point-step, pr-layer > section'
+/** The overview and every layer section: the parts of the page the rail links to. */
+const SECTION_SELECTOR = '#overview, pr-layer > section'
 
 /**
  * The sections of the page, in page order.
@@ -37,14 +40,6 @@ export function pageSections(root) {
  */
 export function inHiddenSection(el) {
   return el.closest('[hidden]')?.matches(SECTION_SELECTOR) === true
-}
-
-/**
- * True for the overview, a stop, or a layer section, the elements one at a time shows and hides.
- * @param {Element} el
- */
-export function isPageSection(el) {
-  return el.matches(SECTION_SELECTOR)
 }
 
 /**
@@ -87,123 +82,16 @@ export function elementForHash(root, hash) {
   return el instanceof HTMLElement ? el : null
 }
 
-/** The style sheet that shows, in the stop on screen, only its point's chunk and its point's row. */
-const LENS_ID = 'stop-lens'
-
-/** How many nodes were moved into a stop, so each move's way home has a name of its own. */
-let moves = 0
-
-/**
- * Moves `node` into `slot`, leaving a hidden mark of the same kind where it was, so it goes back
- * to that place whatever else moved meanwhile.
- * @param {Element} node
- * @param {Element} slot
- */
-function moveAway(node, slot) {
-  moves += 1
-  const home = node.ownerDocument.createElement(node.tagName === 'LI' ? 'li' : 'span')
-  home.hidden = true
-  home.setAttribute('data-home', String(moves))
-  node.setAttribute('data-away', String(moves))
-  node.before(home)
-  slot.append(node)
-}
-
-/**
- * Puts the layer's own cards a point's stop shows into its slots: the point's card, and the file
- * card that holds the point's chunk, held open whatever its reviewed mark or the reading level
- * say. A style sheet then shows, inside the stop, only that chunk and that point's row. Nothing is
- * drawn again: the card, its lines, threads and composers are the ones the layer had.
- * @param {ParentNode} root
- * @param {HTMLElement} stop
- */
-export function placeStopCards(root, stop) {
-  const pointId = stop.getAttribute('data-stop-point')
-  if (pointId === null) {
-    return
-  }
-  const cardSlot = stop.querySelector(':scope > [data-slot="card"]')
-  const point = root.querySelector(`li.finding#${cssEscape(pointAnchorId(pointId))}`)
-  if (cardSlot !== null && point !== null && !stop.contains(point)) {
-    moveAway(point, cardSlot)
-  }
-  const path = stop.getAttribute('data-stop-path')
-  const layer = stop.getAttribute('data-stop-layer')
-  const hunk = stop.getAttribute('data-stop-hunk')
-  const fileSlot = stop.querySelector(':scope > [data-slot="file"]')
-  const card =
-    path === null || layer === null
-      ? null
-      : root.querySelector(`article.file[data-layer="${cssEscape(layer)}"][data-path="${cssEscape(path)}"]`)
-  if (!(card instanceof HTMLElement) || fileSlot === null || hunk === null) {
-    return
-  }
-  if (!stop.contains(card)) {
-    moveAway(card.closest('pr-file') ?? card, fileSlot)
-  }
-  card.setAttribute('data-open', '')
-  setCardCollapsed(card, false)
-  const fingerprint = stop.getAttribute('data-stop-fingerprint') ?? ''
-  let lens = root.querySelector(`#${LENS_ID}`)
-  if (lens === null) {
-    lens = card.ownerDocument.createElement('style')
-    lens.id = LENS_ID
-    root.append(lens)
-  }
-  lens.textContent =
-    `.point-step article.file table.diff:not([data-hunk="${cssEscape(hunk)}"]) { display: none; }\n` +
-    `.point-step article.file tr.ifind:not([data-fingerprint="${cssEscape(fingerprint)}"]) { display: none; }`
-}
-
-/**
- * Puts every card a stop holds back where it came from in its layer, at the reading level and with
- * the reviewed mark it has now.
- * @param {ParentNode} root
- */
-export function returnStopCards(root) {
-  for (const node of Array.from(root.querySelectorAll('[data-away]'))) {
-    const home = root.querySelector(`[data-home="${cssEscape(node.getAttribute('data-away') ?? '')}"]`)
-    node.removeAttribute('data-away')
-    home?.replaceWith(node)
-    const card = node.matches('article.file') ? node : node.querySelector('article.file')
-    if (card instanceof HTMLElement) {
-      card.removeAttribute('data-open')
-      refoldCard(card)
-    }
-  }
-  const lens = root.querySelector(`#${LENS_ID}`)
-  if (lens !== null) {
-    lens.textContent = ''
-  }
-}
-
-/**
- * Where a stop's fragment points outside the one-point view, which draws no stops: a layer's
- * opening stop to the layer's section, a point's stop to the point's card. Empty for any other
- * fragment. Back and forward after a switch of view bring these fragments back.
- * @param {string} fragment
- */
-export function stopOutside(fragment) {
-  const layerStep = `#${layerStepAnchorId('')}`
-  const pointStep = `#${stepAnchorId('')}`
-  if (fragment.startsWith(layerStep)) {
-    return `#${layerAnchorId(fragment.slice(layerStep.length))}`
-  }
-  return fragment.startsWith(pointStep) ? `#${pointAnchorId(fragment.slice(pointStep.length))}` : ''
-}
-
 /**
  * Keeps one section on screen at a time while the view is `one` or `points`, and gets out of the
- * way while it is `all`. Made once for the app element; `redraw` runs after every render, before the deep
- * links follow the URL, so a link into a layer lands on a layer that is showing. The URL names
- * the section on the first draw; after that the section last shown is the reader's place.
- *
- * It is the one owner of the view the page shows, and of the layer view the settings choose, which
- * the rail's switch goes to from the one-point view.
+ * way while it is `all`. Made once for the app element; `redraw` runs after every render, before
+ * the deep links follow the URL, so a link into a layer lands on a layer that is showing. The URL
+ * names the section on the first draw; after that the section last shown is the reader's place.
+ * It owns the view on screen, and the layer view the settings choose, which the rail's switch
+ * goes to from the one-point view; `onView` hears of every change of view.
  * @param {HTMLElement} root
- * @param {{ view: PageView, layersView?: LayerView, win?: Window }} opts `layersView` defaults to
- *   `view` when that is a layer view
- * @returns {{ stop: () => void, setView: (view: PageView) => void, setLayersView: (view: LayerView) => void, redraw: () => void, place: () => string, returnCards: () => void, readonly view: PageView, readonly layersView: LayerView }}
+ * @param {{ view: PageView, layersView?: LayerView, win?: Window, onView?: (view: PageView) => void }} opts
+ *   `layersView` defaults to `view` when that is a layer view
  */
 export function initOneLayer(root, opts) {
   const win = opts.win ?? window
@@ -211,27 +99,50 @@ export function initOneLayer(root, opts) {
   /** @type {LayerView} */
   let layersView = opts.layersView ?? (view === 'points' ? 'all' : view)
   /**
-   * The fragment of the section on screen while one shows at a time, empty before the first draw.
-   * A fragment and not the element, since a render replaces the sections.
+   * The fragment of the section or stop on screen while one shows at a time, empty before the
+   * first draw. A fragment and not the element, since a render replaces the sections.
    */
   let shownHash = ''
   const listeners = new AbortController()
 
+  /** The stops of the canvas on the page, none before the first render. */
+  const stops = () => {
+    const ctx = getRenderContext()
+    return ctx === null ? [] : stopsOf(ctx.artifact)
+  }
+
+  /** @param {ReadonlyArray<Stop>} all @param {string} fragment */
+  const stopNamed = (all, fragment) => all.find(stop => stop.id === decodeHash(fragment.replace(/^#/, '')))
+
   /** @param {HTMLElement} section */
   const showSection = section => {
-    // Cards a stop holds go home first, so a section shown next has its own.
-    returnStopCards(root)
     showOnly(root, section)
-    if (section.matches('section.point-step')) placeStopCards(root, section)
     if (section.matches('section.layer')) setCardCollapsed(section, false)
     const details = section.querySelector(':scope > details')
     if (details instanceof HTMLDetailsElement) details.open = true
     shownHash = `#${section.id}`
   }
 
+  /**
+   * Shows a stop of the one-point view, or the overview for none.
+   * @param {Stop | undefined} stop
+   */
+  const showPointStop = stop => {
+    const ctx = getRenderContext()
+    const section =
+      stop === undefined ? elementForHash(root, '#overview') : sectionOf(root, stopTarget(root, stop))
+    if (ctx === null || section === null) {
+      return
+    }
+    showSection(section)
+    shownHash = stop === undefined ? '#overview' : `#${stop.id}`
+    showStop(root, section, stops(), stop, ctx.files, ctx.artifact)
+    markRailCurrent(root, shownHash.slice(1))
+  }
+
   /** @param {HTMLElement | null} section */
   const show = section => {
-    if (view !== 'all' && section !== null && section.hidden) {
+    if (view === 'one' && section !== null && section.hidden) {
       showSection(section)
     }
   }
@@ -240,100 +151,121 @@ export function initOneLayer(root, opts) {
   const sectionFor = fragment => sectionOf(root, elementForHash(root, fragment))
 
   /**
-   * What stands for a stop's fragment out of the one-point view (`stopOutside`); a point of the
-   * Other layer, which has no card, by its row in the diff.
-   * @param {string} fragment
+   * In the one-point view, the stop that shows `target`, the overview for a target in it, or the
+   * layers for a target of a layer no stop shows.
+   * @param {Element} target
    */
-  const standIn = fragment => {
-    const target = stopOutside(fragment)
-    const el = elementForHash(root, target)
-    const pointPrefix = `#${pointAnchorId('')}`
-    if (el !== null || !target.startsWith(pointPrefix)) {
-      return el
+  const revealInPoints = target => {
+    const section = sectionOf(root, target)
+    const ctx = getRenderContext()
+    if (section === null || ctx === null) {
+      return
     }
-    const row = root.querySelector(`[data-point="${cssEscape(target.slice(pointPrefix.length))}"]`)
-    return row instanceof HTMLElement ? row : null
+    const all = stops()
+    const current = stopNamed(all, shownHash)
+    const stop = section.id === 'overview' ? undefined : stopShowing(all, target, ctx.files, current)
+    if (section.id !== 'overview' && stop === undefined) {
+      setView(layersView, `#${section.id}`)
+    } else if (stop !== current) {
+      showPointStop(stop)
+    }
   }
 
   /**
-   * The section the URL names, as this view shows it: in the one-point view a layer's section, which
-   * a reload can bring back after the reader moved to the layers, opens on the layer's opening stop,
-   * or on the view's first stop for a layer with none.
-   * @param {HTMLElement | null} section
+   * In the one-point view, puts on screen what `fragment` names, under a page at its top. False
+   * when it names nothing, or something that took the page to its layers.
+   * @param {string} fragment
    */
-  const inThisView = section => {
-    const layerPrefix = layerAnchorId('')
-    if (view !== 'points' || section === null || !section.matches('pr-layer > section')) {
-      return section
+  const followInPoints = fragment => {
+    const stop = stopNamed(stops(), fragment)
+    const el = stop === undefined ? elementForHash(root, fragment) : stopTarget(root, stop)
+    if (el !== null) {
+      revealInPoints(el)
     }
-    const opening = root.querySelector(
-      `#${cssEscape(layerStepAnchorId(section.id.slice(layerPrefix.length)))}`
-    )
-    return opening instanceof HTMLElement ? opening : null
+    if (el === null || view !== 'points') {
+      return false
+    }
+    win.scrollTo({ top: 0 })
+    return true
   }
 
   const redraw = () => {
     if (view === 'all') {
-      returnStopCards(root)
+      clearStop(root)
       for (const section of pageSections(root)) {
         section.hidden = false
       }
       return
     }
-    // The one-point view opens on its first stop, and on the overview of a canvas with none.
-    const firstStop = view === 'points' ? root.querySelector('section.point-step') : null
-    const section =
-      sectionFor(shownHash) ??
-      inThisView(sectionFor(win.location.hash)) ??
-      sectionOf(root, standIn(win.location.hash)) ??
-      (firstStop instanceof HTMLElement ? firstStop : null) ??
-      pageSections(root)[0] ??
-      null
+    const all = view === 'points' ? stops() : []
+    if (all.length > 0) {
+      // The one-point view opens where the URL points, else on its first stop.
+      const fragment = shownHash || win.location.hash
+      const el = elementForHash(root, fragment)
+      const ctx = getRenderContext()
+      const stop =
+        stopNamed(all, fragment) ??
+        (el === null || ctx === null ? undefined : stopShowing(all, el, ctx.files))
+      showPointStop(el?.id === 'overview' ? undefined : (stop ?? all[0]))
+      return
+    }
+    clearStop(root)
+    const section = sectionFor(shownHash) ?? sectionFor(win.location.hash) ?? pageSections(root)[0] ?? null
     if (section !== null) {
       showSection(section)
     }
   }
 
-  // Everything that scrolls to a target raises `reveal-code` on it first; a target inside a
-  // hidden layer brings that layer on screen the same way it opens a code fold around it.
-  root.addEventListener(RETURN_STOP_CARDS, () => returnStopCards(root), { signal: listeners.signal })
-  root.addEventListener('reveal-code', event => show(sectionOf(root, event.target)), {
-    signal: listeners.signal,
-  })
-
   /**
-   * In the one-point view, a link to a whole section puts it in place of the one before, under a
-   * page that stays at the top: the header and the rail do not scroll away, whatever the section's
-   * height or where the reader was. True when it moved to the section `fragment` names, which the
-   * URL then records.
-   * @param {string} fragment
+   * @param {PageView} next
+   * @param {string} [place] where to open, as `#id`; by default where the reader is: the section
+   *   the rail marks while all show, else the one on screen
    */
-  const swapInPlace = fragment => {
-    const target = elementForHash(root, fragment)
-    if (view !== 'points' || target === null || !isPageSection(target)) {
-      return false
+  const setView = (next, place) => {
+    if (next === view) {
+      return
     }
-    show(target)
-    win.scrollTo({ top: 0 })
-    return true
+    const here =
+      view === 'all' ? root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') : shownHash
+    // The points open on their first stop from the top of the page, not on the overview.
+    shownHash = place ?? (next === 'points' && here === '#overview' ? '' : (here ?? ''))
+    view = next
+    redraw()
+    opts.onView?.(view)
   }
 
+  // Everything that scrolls to a target raises `reveal-code` on it first; a target inside a
+  // hidden layer brings that layer on screen the same way it opens a code fold around it.
+  root.addEventListener(
+    'reveal-code',
+    event => {
+      if (view === 'points' && event.target instanceof Element) {
+        revealInPoints(event.target)
+      } else {
+        show(sectionOf(root, event.target))
+      }
+    },
+    { signal: listeners.signal }
+  )
+
   // A rail link or a "more chunks in layer 4" link is a plain fragment the browser scrolls to on
-  // its own; its section is shown here, before that default scroll runs.
+  // its own; its section is shown here, before that default scroll runs. In the one-point view a
+  // stop takes the place of the one before, under a page that stays at the top.
   root.addEventListener(
     'click',
     event => {
-      const link = event.target instanceof Element ? event.target.closest('a[href^="#"]') : null
+      const link =
+        event.target instanceof Element ? event.target.closest('a[href^="#"]:not([data-act])') : null
       // A modified click opens the link in a new tab and leaves this page where it is.
       if (link === null || !plainClick(/** @type {MouseEvent} */ (event))) {
         return
       }
       const href = link.getAttribute('href') ?? ''
-      if (swapInPlace(href)) {
+      if (view !== 'points') {
+        show(sectionOf(root, elementForHash(root, href)))
+      } else if (followInPoints(href)) {
         event.preventDefault()
         win.history.pushState(null, '', href)
-      } else {
-        show(sectionOf(root, elementForHash(root, href)))
       }
     },
     { signal: listeners.signal }
@@ -345,14 +277,12 @@ export function initOneLayer(root, opts) {
     'hashchange',
     () => {
       const fragment = win.location.hash || '#overview'
-      if (swapInPlace(fragment)) {
+      const wasPoints = view === 'points'
+      if (wasPoints && followInPoints(fragment)) {
         return
       }
-      // A stop's fragment, out of the one-point view, lands on what stands for the stop here.
-      const direct = elementForHash(root, fragment)
-      const el = direct ?? standIn(fragment)
-      const section = sectionOf(root, el)
-      if (el !== null && (direct === null || section?.hidden === true)) {
+      const el = elementForHash(root, fragment)
+      if (el !== null && (wasPoints || sectionOf(root, el)?.hidden === true)) {
         scrollIntoViewSafe(el, 'start')
       }
     },
@@ -363,36 +293,74 @@ export function initOneLayer(root, opts) {
 
   return {
     stop: () => listeners.abort(),
-    setView(next) {
-      if (next !== view) {
-        // Coming from `all`, the reader is on the section the rail marks as being read. The
-        // one-point view, and a view left from it, start where the URL points, else from the
-        // first section.
-        shownHash =
-          view === 'points' || next === 'points'
-            ? ''
-            : (root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') ?? '')
-        view = next
-        redraw()
+    setView,
+    /**
+     * The rail's switch: `next` opens where the reader is, or on `place`, and the URL says so. A
+     * view of one section at a time opens at its top; all the layers at once, on that place.
+     * @param {PageView} next
+     * @param {string} [place]
+     */
+    switchView(next, place) {
+      const from = place ?? (view === 'all' ? undefined : shownHash)
+      setView(next, from)
+      const here = view === 'all' ? from : shownHash
+      if (here !== undefined && here !== '') {
+        win.history.replaceState(null, '', `${win.location.pathname}${win.location.search}${here}`)
       }
+      const stop = here === undefined ? undefined : stopNamed(stops(), here)
+      const target =
+        view !== 'all' || here === undefined
+          ? null
+          : stop === undefined
+            ? elementForHash(root, here)
+            : stopTarget(root, stop)
+      if (target === null) {
+        win.scrollTo({ top: 0 })
+      } else {
+        scrollIntoViewSafe(target, 'start')
+      }
+    },
+    /**
+     * In the one-point view, shows the next or previous stop that `fits`, and returns what it shows
+     * to take the focus: null at either end, undefined in the other views, whose keys walk the
+     * layers. With `here`, the stop on screen comes first when it fits, for a reader not on it yet.
+     * @param {1 | -1} direction
+     * @param {(stop: Stop) => boolean} fits
+     * @param {boolean} [here]
+     * @returns {HTMLElement | null | undefined}
+     */
+    step(direction, fits, here = false) {
+      const all = view === 'points' ? stops() : []
+      if (all.length === 0) {
+        return undefined
+      }
+      const at = all.findIndex(stop => `#${stop.id}` === shownHash)
+      const shown = all[at]
+      const next =
+        here && shown !== undefined && fits(shown)
+          ? shown
+          : direction === 1
+            ? all.find((stop, index) => index > at && fits(stop))
+            : all.findLast((stop, index) => at >= 0 && index < at && fits(stop))
+      if (next === undefined) {
+        return null
+      }
+      if (next !== shown) {
+        showPointStop(next)
+        win.history.pushState(null, '', `#${next.id}`)
+      }
+      return stopTarget(root, next)
     },
     redraw,
     /** The layer view the settings now choose, which the rail's switch goes to. */
-    setLayersView(next) {
+    setLayersView(/** @type {LayerView} */ next) {
       layersView = next
     },
-    /** Puts the cards the stop on screen holds back in their layers, before the stops go away. */
-    returnCards: () => returnStopCards(root),
     get view() {
       return view
     },
     get layersView() {
       return layersView
     },
-    /**
-     * The section on screen, as `#id`, while one shows at a time; empty while all show. The URL
-     * does not always name it: opening a view on its first section writes nothing there.
-     */
-    place: () => (view === 'all' ? '' : shownHash),
   }
 }
