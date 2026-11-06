@@ -56,6 +56,22 @@ export function getFoldLevel() {
   return foldLevel
 }
 
+/**
+ * Whether the page opens with only its first layer open and every file closed, from the
+ * `startCollapsed` setting. Off, every layer and file opens but those marked reviewed or hidden
+ * whole by the reading level.
+ */
+let startCollapsed = false
+
+/** @param {boolean} value */
+export function setStartCollapsed(value) {
+  startCollapsed = value
+}
+
+export function getStartCollapsed() {
+  return startCollapsed
+}
+
 /** @type {RenderContext | null} */
 let renderContext = null
 
@@ -463,13 +479,14 @@ export function wireCardReveal(root) {
  * @param {LayerFile} lf
  * @param {FileEntry | undefined} entry
  * @param {Layer} layer
- * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState }} ctx
+ * @param {{ hunkIndex: Map<string, { layer: Layer, index: number }>, paths: ReadonlySet<string>, firstCardFor: Set<string>, state?: PrState, keepOpen?: boolean }} ctx
  * @returns {string}
  */
 export function renderFileCard(lf, entry, layer, ctx) {
   const key = entry?.key ?? sanitizeKey(lf.path)
   const cardReviewedId = reviewedId(layer.key, lf.path)
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
+  const collapsed = startCollapsed || cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
   const isFirst = !ctx.firstCardFor.has(key)
   ctx.firstCardFor.add(key)
   const id = isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`
@@ -489,10 +506,10 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const elsewhere = elsewhereHtml(lf, entry, layer, ctx.hunkIndex)
   return (
     `<pr-file><article class="file${lf.isTest ? ' test' : ''}${cardReviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-key="${esc(key)}" data-path="${esc(lf.path)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
-    `<div class="file-h">${chevronHtml('Collapse file', false, { act: 'toggle-card' })}<h3 id="${esc(id)}-h" class="path" data-act="toggle-card">${path}${testTag}</h3>${status}${pills}` +
+    `<div class="file-h">${chevronHtml('Collapse file', !collapsed, { act: 'toggle-card' })}<h3 id="${esc(id)}-h" class="path" data-act="toggle-card">${path}${testTag}</h3>${status}${pills}` +
     `<label class="chk"><input type="checkbox" data-reviewed-id="${esc(cardReviewedId)}"${cardReviewed ? ' checked' : ''}> reviewed</label>` +
     `<span class="tbtns">${askButtonHtml({ kind: 'file', path: lf.path }, { title: 'Ask AI Chat about this file' })}</span></div>` +
-    `<div class="file-body" hidden>${note}<div class="diff-host" data-key="${esc(key)}" data-hunks="${esc(lf.hunks.join(','))}"><div class="loading">Loading diff…</div></div>${elsewhere}</div></article></pr-file>`
+    `<div class="file-body"${collapsed ? ' hidden' : ''}>${note}<div class="diff-host" data-key="${esc(key)}" data-hunks="${esc(lf.hunks.join(','))}"><div class="loading">Loading diff…</div></div>${elsewhere}</div></article></pr-file>`
   )
 }
 
@@ -542,7 +559,15 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
  */
 export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const byPath = new Map(files.map(f => [f.path, f]))
-  const cards = layer.files.map(lf => renderFileCard(lf, byPath.get(lf.path), layer, ctx)).join('')
+  const commentPaths = new Set(ctx.comments.map(comment => comment.path))
+  const cards = layer.files
+    .map(lf =>
+      renderFileCard(lf, byPath.get(lf.path), layer, {
+        ...ctx,
+        keepOpen: cardKeepsOpen(lf, layer.id, artifact, commentPaths),
+      })
+    )
+    .join('')
   const id = layerAnchorId(layer.key)
   if (layer.kind === 'other') {
     return (
@@ -562,8 +587,8 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
           .join('')}</span>`
       : ''
   const reviewed = layerProgress(layer, state) === 'done'
-  // Only the first layer starts open, so the page reads from the top; a reviewed one stays closed.
-  const collapsed = reviewed || semanticIndex > 0
+  // A reviewed layer starts closed; with startCollapsed, so does every layer after the first.
+  const collapsed = reviewed || (startCollapsed && semanticIndex > 0)
   const layerReviewedId = reviewedId(layer.key)
   return (
     `<pr-layer><section class="layer${reviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
@@ -880,8 +905,9 @@ export function hydrateAll(root, ctx) {
 }
 
 /**
- * Switches how much code the page hides. Every card starts closed and the reader opens what they
- * read, so the level only closes the cards it hides whole, opened by hand or not, and opens none.
+ * Switches how much code the page hides. A card the reader opened or closed by hand follows the
+ * new level too: changing the level is a request to change exactly that. With startCollapsed the
+ * reader opens what they read, so the level only closes the cards it hides whole and opens none.
  * The folds and counters then follow as refreshFolds says.
  * @param {ParentNode} root
  * @param {import('./contract-types.js').FoldLevel} level
@@ -900,11 +926,11 @@ export function setFoldLevel(root, level) {
         ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
         : undefined
     if (card instanceof HTMLElement && lf !== undefined) {
-      if (
+      const hidden =
         collapsesAt(lf, level) &&
         !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths)
-      ) {
-        setCardCollapsed(card, true)
+      if (hidden || !startCollapsed) {
+        setCardCollapsed(card, hidden || card.classList.contains('is-reviewed'))
       }
     }
   }

@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import { expect, openFiles, test } from './fixtures.js'
+import { expect, test } from './fixtures.js'
 import { syntheticArtifact } from '../src/testing/synthetic.js'
 
 // Release 0.6 browser regressions retained from the adversarial audit.
@@ -71,7 +71,6 @@ for (const receipt of ['available', 'unavailable']) {
     await expect(card).toContainText('in your review')
     await expect(page.locator('.pending-bar')).toContainText('1 pending comment')
     await closeChat()
-    await openFiles(page)
     await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
     await page.locator('tr.pending-row [data-act="pending-delete"]').click()
     await openChat()
@@ -242,14 +241,13 @@ test('file name single/double/triple clicks preserve the intended collapsed stat
   const file = page.locator('article.file').first()
   const name = file.locator('[data-act="toggle-card"]').filter({ hasText: 'src/app.ts' })
   const body = file.locator('.file-body')
-  await expect(body).toBeHidden()
   await name.click()
-  await expect(body).toBeVisible()
+  await expect(body).toBeHidden()
   await name.dblclick()
-  await expect(body).toBeVisible()
+  await expect(body).toBeHidden()
   await page.evaluate(() => window.getSelection()?.removeAllRanges())
   await name.click({ clickCount: 3 })
-  await expect(body).toBeVisible()
+  await expect(body).toBeHidden()
 })
 
 test('a failed settlement preserves the reason for retry', async ({ page, selfReviewUrl }) => {

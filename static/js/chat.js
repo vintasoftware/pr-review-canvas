@@ -149,13 +149,14 @@ export function writeChatWidth(storage, width) {
 }
 
 /**
- * Only a wide screen stores this: a floating chat always starts minimized. The chat also starts
- * minimized until the reader opens it once, so it takes no width from a canvas nobody chats on.
+ * Only a wide screen stores this: a floating chat always starts minimized. The reader's
+ * `chatStartMinimized` starts a docked one minimized too, whatever the last page left.
  * @param {Storage | null} storage
+ * @param {boolean} [startMinimized] the reader's `chatStartMinimized`
  * @returns {boolean}
  */
-export function readChatMinimized(storage) {
-  return (storage === null ? null : storage.getItem(CHAT_MINIMIZED_KEY)) !== '0'
+export function readChatMinimized(storage, startMinimized = false) {
+  return startMinimized || (storage === null ? null : storage.getItem(CHAT_MINIMIZED_KEY)) === '1'
 }
 
 /**
@@ -181,6 +182,7 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
  *   api?: Partial<ChatApi>,
  *   reducedMotion?: boolean,
  *   threadPerPlace?: boolean,
+ *   startMinimized?: boolean,
  *   onProposed?: (what: ProposedAct, comment: ProposedComment, el: HTMLElement) => void,
  *   onResolution?: (what: 'save' | 'edit', resolution: ProposedResolution, el: HTMLElement) => void,
  * }} ChatOptions
@@ -1802,7 +1804,7 @@ export function wireChat(options) {
 
   const stopResize = wireResize(pane, root, storage, applyWidth)
   const panel = wireChatPanel(root, pane, {
-    minimized: readChatMinimized(storage),
+    minimized: readChatMinimized(storage, options.startMinimized),
     onMinimizedChange: minimized => writeChatMinimized(storage, minimized),
     onShownChange: shown => {
       paneShown = shown

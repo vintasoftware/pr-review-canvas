@@ -555,11 +555,13 @@ The data directory's `settings.yml` accepts these keys and values:
 | `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
 | `layerView`            | `all`     | `all`, `one`                                                                     |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
+| `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
 | `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |
 | `maxTurns`             | `null`    | Integer 1–100, or `null` for the agent's default                                 |
 | `chatThreadPerPlace`   | `true`    | `true` opens the thread of the place asked about; `false` uses the open one      |
+| `chatStartMinimized`   | `false`   | `true` starts AI Chat minimized on a wide screen; `false` opens it as last left  |
 | `checkoutEnabled`      | `true`    | `true` reads a [review checkout](#review-checkouts); `false` reads your checkout |
 | `checkoutIdleDays`     | `7`       | Integer 1–365, or `-1` to never remove an idle checkout                          |
 | `checkoutSweepMinutes` | `60`      | Integer minutes, 5–1440, between `serve`'s idle sweeps                           |
@@ -640,13 +642,14 @@ server and the corresponding canvas to use a localhost link.
 
 ### Collapsed diffs
 
-The page opens with the first layer open and the others closed; a layer marked reviewed stays
-closed. Every file starts closed under its name, its counts, and its **reviewed** box: click the
-name or the chevron, or press `o` on it, to read its diff. The rail, the keys that step through
-layers and files (`j`, `k`, `n`, `p`), and any link into a layer or a file open what they land on.
-A click that opens or closes a file or a point keeps its title where you clicked it, so the file
-reads from its start; only closing one at the very end of the page moves it, as the page gets
-shorter than the scroll.
+The page opens with every layer and file open, except a layer or file marked reviewed and a file
+the reading level hides whole. With `startCollapsed: true` in `settings.yml` (**Start collapsed**
+in the settings dialog), it opens with the first layer open and the others closed, and every file
+closed under its name, its counts, and its **reviewed** box: click the name or the chevron, or
+press `o` on it, to read its diff. The rail, the keys that step through layers and files (`j`,
+`k`, `n`, `p`), and any link into a layer or a file open what they land on. A click that opens or
+closes a file or a point keeps its title where you clicked it, so the file reads from its start;
+only closing one at the very end of the page moves it, as the page gets shorter than the scroll.
 
 Import-only changes, whitespace changes, moved code, and ranges selected by the generator may
 start collapsed. Click the summary to expand them. Moves are detected within a file; moves
@@ -670,9 +673,9 @@ in its Files heading, and the sign-off dialog records the total.
 
 The page opens at `foldLevel` from `settings.yml` (`light` by default), which the **Hide code by
 default** field in the settings dialog sets. The control and the `f` key change the level for the
-current page only. Changing the level redraws the visible diffs and closes the files it hides
-whole, including cards opened by hand. It never opens a file: lowering the level leaves closed
-files closed.
+current page only. Changing the level redraws the visible diffs and re-applies file collapse,
+including cards opened by hand. With `startCollapsed`, it only closes the files it hides whole and
+never opens one: lowering the level leaves closed files closed.
 
 These always stay visible:
 
@@ -1102,6 +1105,11 @@ Install and sign in to Claude Code or Codex on the same machine. Start or restar
 `pr-review serve`, then open **settings** and choose a **Chat agent** under **AI Chat**.
 The chat uses that agent's account. Click **Test agent** to check the connection, then **save**.
 Chat is optional; reviewing canvases does not require `acpx`.
+
+On a wide screen the chat docks beside the canvas. **Minimize AI Chat** gives the canvas the full
+width and leaves a launcher at the bottom right; the browser remembers which way you left it. With
+`chatStartMinimized: true` (**Start minimized** under **AI Chat** in the settings dialog), every
+review opens with the chat minimized.
 
 Leave **Chat model** blank to use the agent's default, or enter a model ID. See
 [model families](#model-families) for version selection. Switching agents starts a new thread

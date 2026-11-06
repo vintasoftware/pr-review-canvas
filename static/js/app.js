@@ -45,6 +45,7 @@ import {
   renderRail,
   setFoldLevel,
   setRenderContext,
+  setStartCollapsed,
 } from './layers.js'
 import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
@@ -222,6 +223,7 @@ export class PrAppElement extends HTMLElement {
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
+    setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
     this.layerView?.stop()
     this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
@@ -314,7 +316,7 @@ export class PrAppElement extends HTMLElement {
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
-    const chatMinimized = chatEnabled && readChatMinimized(storage)
+    const chatMinimized = chatEnabled && readChatMinimized(storage, bundle.chat.startMinimized)
     setPointsDensity(document.documentElement, readPointsDensity(storage))
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
@@ -399,6 +401,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
+          ...(bundle.chat.startMinimized === undefined ? {} : { startMinimized: bundle.chat.startMinimized }),
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })

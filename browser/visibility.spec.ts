@@ -1,4 +1,4 @@
-import { expect, openFiles, test } from './fixtures.js'
+import { expect, test } from './fixtures.js'
 
 test('keeps a dismissed point expanded when its save completes', async ({ page, reviewUrl }) => {
   let releaseSave = () => {}
@@ -37,7 +37,6 @@ test('dismisses a point everywhere, keeps it dismissed after reload, and restore
   reviewUrl,
 }) => {
   await page.goto(reviewUrl)
-  await openFiles(page)
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   const inline = page.locator('tr.ifind[data-fingerprint="fp-1"]')
   await expect(card).toBeVisible()
@@ -54,7 +53,6 @@ test('dismisses a point everywhere, keeps it dismissed after reload, and restore
   await expect(page.locator('.toast')).toBeHidden({ timeout: 7000 })
 
   await page.reload()
-  await openFiles(page)
   await expect(page.locator('.point-statuses')).toContainText('1 dismissed')
   await expect(card).toHaveAttribute('data-status', 'dismissed')
   await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
@@ -77,18 +75,14 @@ test('dismisses a point everywhere, keeps it dismissed after reload, and restore
   await expect(page.locator('[data-act="toggle-handled"]')).toHaveCount(0)
 })
 
-test('opens and closes file and layer bodies', async ({ page, reviewUrl }) => {
+test('collapses and reopens file and layer bodies', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
   const layer = page.locator('section.layer[data-layer="run-path"]')
   const file = layer.locator('article.file[data-path="src/app.ts"]')
   const fileBody = file.locator(':scope > .file-body')
   const fileToggle = file.locator(':scope > .file-h > .chev')
-  // The first layer starts open, with every file closed under its name.
-  await expect(layer.locator(':scope > .layer-body')).toBeVisible()
-  await expect(fileBody).toBeHidden()
-  await file.scrollIntoViewIfNeeded()
-  await fileToggle.click()
   await expect(fileBody).toBeVisible()
+  await file.scrollIntoViewIfNeeded()
   await expect(file.locator('tr.ifind[data-fingerprint="fp-1"]')).toBeVisible()
   await fileToggle.click()
   await expect(fileBody).toBeHidden()
@@ -100,31 +94,14 @@ test('opens and closes file and layer bodies', async ({ page, reviewUrl }) => {
   await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
   await fileTitle.click()
   await expect(fileBody).toBeVisible()
-  // At the end of this short page the browser's scroll anchoring would push the name up as the
-  // card opens, so the reader would land on the end of the file; the name stays under the pointer.
-  // Closing it there shrinks the page below the scroll, which the browser has to give back.
-  await fileTitle.click()
-  await expect(fileBody).toBeHidden()
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-  const nameTop = () => fileTitle.evaluate(el => Math.round(el.getBoundingClientRect().top))
-  const top = await nameTop()
-  await fileTitle.click()
-  await expect(fileBody).toBeVisible()
-  expect(await nameTop()).toBe(top)
-  // Double and triple clicks select the name to copy it, and leave the card as it was.
-  await fileTitle.click()
-  await expect(fileBody).toBeHidden()
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  // Double and triple clicks select the name to copy it, and leave the card open.
   const onName = { position: { x: 4, y: 4 } }
   await fileTitle.dblclick(onName)
   expect(await page.evaluate(() => window.getSelection()?.toString())).not.toBe('')
-  await expect(fileBody).toBeHidden()
-  await fileTitle.click({ ...onName, clickCount: 3 })
-  await expect(fileBody).toBeHidden()
-  await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
-  await page.evaluate(() => window.getSelection()?.removeAllRanges())
-  await fileTitle.click()
   await expect(fileBody).toBeVisible()
+  await fileTitle.click({ ...onName, clickCount: 3 })
+  await expect(fileBody).toBeVisible()
+  await expect(fileToggle).toHaveAttribute('aria-expanded', 'true')
 
   const layerBody = layer.locator(':scope > .layer-body')
   const layerToggle = layer.locator(':scope > .layer-h > .chev')
@@ -133,6 +110,68 @@ test('opens and closes file and layer bodies', async ({ page, reviewUrl }) => {
   await layerToggle.click()
   await expect(layerBody).toBeVisible()
   await expect(fileBody).toBeVisible()
+})
+
+test.describe('with startCollapsed', () => {
+  test.use({ settings: { startCollapsed: true } })
+
+  test('opens and closes file and layer bodies that start closed', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl)
+    const layer = page.locator('section.layer[data-layer="run-path"]')
+    const file = layer.locator('article.file[data-path="src/app.ts"]')
+    const fileBody = file.locator(':scope > .file-body')
+    const fileToggle = file.locator(':scope > .file-h > .chev')
+    // The first layer starts open, with every file closed under its name.
+    await expect(layer.locator(':scope > .layer-body')).toBeVisible()
+    await expect(fileBody).toBeHidden()
+    await file.scrollIntoViewIfNeeded()
+    await fileToggle.click()
+    await expect(fileBody).toBeVisible()
+    await expect(file.locator('tr.ifind[data-fingerprint="fp-1"]')).toBeVisible()
+    await fileToggle.click()
+    await expect(fileBody).toBeHidden()
+    await fileToggle.click()
+    await expect(fileBody).toBeVisible()
+    const fileTitle = file.locator(':scope > .file-h > .path')
+    await fileTitle.click()
+    await expect(fileBody).toBeHidden()
+    await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
+    await fileTitle.click()
+    await expect(fileBody).toBeVisible()
+    // At the end of this short page the browser's scroll anchoring would push the name up as the
+    // card opens, so the reader would land on the end of the file; the name stays under the pointer.
+    // Closing it there shrinks the page below the scroll, which the browser has to give back.
+    await fileTitle.click()
+    await expect(fileBody).toBeHidden()
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    const nameTop = () => fileTitle.evaluate(el => Math.round(el.getBoundingClientRect().top))
+    const top = await nameTop()
+    await fileTitle.click()
+    await expect(fileBody).toBeVisible()
+    expect(await nameTop()).toBe(top)
+    // Double and triple clicks select the name to copy it, and leave the card as it was.
+    await fileTitle.click()
+    await expect(fileBody).toBeHidden()
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    const onName = { position: { x: 4, y: 4 } }
+    await fileTitle.dblclick(onName)
+    expect(await page.evaluate(() => window.getSelection()?.toString())).not.toBe('')
+    await expect(fileBody).toBeHidden()
+    await fileTitle.click({ ...onName, clickCount: 3 })
+    await expect(fileBody).toBeHidden()
+    await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
+    await page.evaluate(() => window.getSelection()?.removeAllRanges())
+    await fileTitle.click()
+    await expect(fileBody).toBeVisible()
+
+    const layerBody = layer.locator(':scope > .layer-body')
+    const layerToggle = layer.locator(':scope > .layer-h > .chev')
+    await layerToggle.click()
+    await expect(layerBody).toBeHidden()
+    await layerToggle.click()
+    await expect(layerBody).toBeVisible()
+    await expect(fileBody).toBeVisible()
+  })
 })
 
 test('hidden takes priority over component display rules', async ({ page, reviewUrl }) => {
@@ -170,7 +209,6 @@ test.describe('a first visit', () => {
     reviewUrl,
   }) => {
     await page.goto(reviewUrl)
-    await openFiles(page)
     const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
     await expect(card.locator('.f-title .p-title')).toBeVisible()
     await expect(card.locator('.prose')).toBeHidden()

@@ -201,16 +201,11 @@ describe('minimizing a docked chat', () => {
     setViewportWidth(previousWidth)
   })
 
-  it('starts minimized, and drops the chat column again while keeping the draft', () => {
+  it('drops the chat column, offers the launcher, and keeps the draft', () => {
     const { root } = mount()
     const pane = el(root, '.chat')
     const launcher = el(root, '#chat-launcher')
     const box = /** @type {HTMLTextAreaElement} */ (el(root, '#msg'))
-    expect(pane.hidden).toBe(true)
-    expect(el(root, '.layout').classList.contains('no-chat')).toBe(true)
-    expect(launcher.hidden).toBe(false)
-
-    launcher.click()
     box.value = 'draft'
     expect(pane.hidden).toBe(false)
     expect(launcher.hidden).toBe(true)
@@ -228,7 +223,7 @@ describe('minimizing a docked chat', () => {
     expect(box.value).toBe('draft')
   })
 
-  it('is remembered per browser', () => {
+  it('is remembered per browser, unless the reader starts it minimized every time', () => {
     /** @type {Record<string, string>} */
     const store = {}
     const storage = /** @type {Storage} */ (
@@ -239,25 +234,27 @@ describe('minimizing a docked chat', () => {
         },
       })
     )
-    // Nothing stored yet, or no storage at all: the chat waits behind its launcher.
-    expect(readChatMinimized(storage)).toBe(true)
-    expect(readChatMinimized(null)).toBe(true)
+    expect(readChatMinimized(storage)).toBe(false)
+    expect(readChatMinimized(null)).toBe(false)
 
     const { root } = mount({}, { storage })
-    el(root, '#chat-launcher').click()
-    expect(store[CHAT_MINIMIZED_KEY]).toBe('0')
-    expect(readChatMinimized(storage)).toBe(false)
-
-    // A reload after opening it starts docked.
-    const opened = mount({}, { storage })
-    expect(el(opened.root, '.chat').hidden).toBe(false)
-    el(opened.root, '#chat-minimize').click()
+    el(root, '#chat-minimize').click()
     expect(store[CHAT_MINIMIZED_KEY]).toBe('1')
+    expect(readChatMinimized(storage)).toBe(true)
 
-    // A reload after minimizing it starts minimized, out of the grid.
+    // A reload with that memory starts minimized, out of the grid.
     const again = mount({}, { storage })
     expect(el(again.root, '.chat').hidden).toBe(true)
     expect(el(again.root, '#chat-launcher').hidden).toBe(false)
+    again.root.querySelector('#chat-launcher')?.dispatchEvent(new MouseEvent('click'))
+    expect(store[CHAT_MINIMIZED_KEY]).toBe('0')
+
+    // chatStartMinimized starts it minimized even though the reader left it open.
+    expect(readChatMinimized(storage, true)).toBe(true)
+    expect(readChatMinimized(null, true)).toBe(true)
+    const minimized = mount({}, { storage, startMinimized: true })
+    expect(el(minimized.root, '.chat').hidden).toBe(true)
+    expect(el(minimized.root, '#chat-launcher').hidden).toBe(false)
 
     writeChatMinimized(null, true)
   })

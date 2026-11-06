@@ -39,6 +39,7 @@ import {
   cardOf,
   getFoldLevel,
   getRenderContext,
+  getStartCollapsed,
   pathSet,
   refreshCardDecorations,
   refreshFolds,
@@ -368,13 +369,13 @@ export function wireReview(root, session, opts = {}) {
       }
       const reviewed = isCardReviewed(id, state)
       input.checked = reviewed
-      // A card marked reviewed closes. One the server reopened (unmarking a layer reopens its
-      // files) stays as it is, closed like every file at first; markReviewed opens the card whose
-      // box the reader unticked.
+      // A card marked reviewed closes, and one the server reopened (unmarking a layer reopens its
+      // files) opens. With startCollapsed it stays closed like every file at first; markReviewed
+      // opens the card whose box the reader unticked.
       const parts = cardOf(input)
       if (parts !== null && parts.card.classList.contains('is-reviewed') !== reviewed) {
         parts.card.classList.toggle('is-reviewed', reviewed)
-        if (reviewed) setCardCollapsed(parts.card, true)
+        if (reviewed || !getStartCollapsed()) setCardCollapsed(parts.card, reviewed)
       }
     }
     refreshPendingBar(root, state, session)

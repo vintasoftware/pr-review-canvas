@@ -1,12 +1,11 @@
 import type { Page } from '@playwright/test'
-import { expect, openFiles, test } from './fixtures.js'
+import { expect, test } from './fixtures.js'
 
 /**
  * What the page looks like right now: the two attributes that pick the look, plus one resolved
  * value per layer the skin repaints (page, card, card header, diff row, command, stripe).
  */
 async function readLook(page: Page) {
-  await openFiles(page)
   await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
   // The folded noise rows carry the same class, so the probe reads a row that is on screen.
   await expect(page.locator('tr.add:not(.folded)').first()).toBeVisible()
@@ -217,8 +216,6 @@ for (const skin of ['terminal', 'github', 'olive'] as const) {
     const fileBody = file.locator(':scope > .file-body')
     const fileToggle = file.locator(':scope > .file-h > .chev')
     await file.scrollIntoViewIfNeeded()
-    await expect(fileBody).toBeHidden()
-    await fileToggle.click()
     await expect(fileBody).toBeVisible()
     await fileToggle.click()
     await expect(fileBody).toBeHidden()

@@ -19,7 +19,7 @@ export function wireChatPanel(root, pane, opts = {}) {
   const layout = root.querySelector('.layout')
   const narrow = window.matchMedia('(max-width: 1360px)')
   const mobile = window.matchMedia('(max-width: 600px)')
-  /** Floating panels start minimized; a docked one starts the way the reader last left it, minimized at first. */
+  /** Floating panels start minimized; a docked one starts as `opts.minimized` says. */
   let floating = false
   let docked = !opts.minimized
 

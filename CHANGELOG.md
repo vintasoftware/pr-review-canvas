@@ -17,15 +17,17 @@
 - Every attention point names its level beside its shape, as in `◆ decide`, in its layer and on
   its line in the diff. The GitHub skin drops the colored squares before the Tests and Attention
   points headings, which named nothing the heading did not.
-- The page opens with only the first layer open, and every file closed under its name. The rail,
-  `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a file or
-  a point keeps its title where you clicked it, also at the end of the page. Raising **Hide code**
-  closes the files it hides whole; lowering it no longer reopens them.
+- **Start collapsed** in the settings dialog, saved as `startCollapsed` in `settings.yml`, opens a
+  review with only the first layer open and every file closed under its name. It is off by
+  default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.
+- The rail, `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a
+  file or a point keeps its title where you clicked it, also at the end of the page.
 
 ### AI Chat
 
-- On a wide screen AI Chat starts minimized until you open it once, so a canvas you do not chat
-  on keeps its full width. After that it opens the way you last left it.
+- **Start minimized** under **AI Chat** in the settings dialog, saved as `chatStartMinimized` in
+  `settings.yml`, starts the docked chat minimized every time a review opens, so the canvas keeps
+  its full width. It is off by default: the chat opens the way you last left it.
 
 ## 0.10.0
 

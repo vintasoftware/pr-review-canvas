@@ -95,7 +95,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
       )
     }
     // One read serves the appearance, the reading level the canvas opens at, how it shows its
-    // layers, and the colors of its points.
+    // layers, whether they start closed, and the colors of its points.
     const settings = await ctx.settings.read()
     return c.html(
       reviewPage(
@@ -111,6 +111,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           foldLevel: settings.foldLevel,
           layerView: settings.layerView,
           pointColors: settings.pointColors,
+          startCollapsed: settings.startCollapsed,
         },
         c.get('cspNonce'),
         appearanceForRequest(settings, appearanceQuery(c))

@@ -28,6 +28,7 @@ import {
   renderRail,
   setCardCollapsed,
   setRenderContext,
+  setStartCollapsed,
 } from './layers.js'
 import { initOneLayer } from './one-layer.js'
 import { renderOverview } from './overview.js'
@@ -390,23 +391,24 @@ afterEach(() => {
     wiring.stop()
   }
   setRenderContext(null)
+  setStartCollapsed(false)
   // A test that picks the points' density leaves the page at the default, compact.
   delete document.documentElement.dataset['points']
 })
 
 describe('card toggles', () => {
-  it('opens and collapses a file card without touching anything else', () => {
+  it('collapses and opens a file card without touching anything else', () => {
     const { root } = setup()
     const card = root.querySelector('article.file#file-src_app_ts')
     const checkbox = card?.querySelector('input[data-reviewed-id]')
     const otherCard = root.querySelector('article.file#file-src_new_name_ts')
     click(root, 'article.file#file-src_app_ts .file-h .chev')
-    expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
-    expect(card?.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('true')
-    expect(checkbox instanceof HTMLInputElement ? checkbox.checked : true).toBe(false)
-    expect(otherCard?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
-    click(root, 'article.file#file-src_app_ts .file-h .chev')
     expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
+    expect(card?.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('false')
+    expect(checkbox instanceof HTMLInputElement ? checkbox.checked : true).toBe(false)
+    expect(otherCard?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
+    click(root, 'article.file#file-src_app_ts .file-h .chev')
+    expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(false)
   })
 
   it('toggles a file card from its name, but not when the click ends a selection in it', () => {
@@ -414,9 +416,9 @@ describe('card toggles', () => {
     const body = root.querySelector('article.file#file-src_app_ts > .file-body')
     const title = root.querySelector('article.file#file-src_app_ts .file-h .path')
     click(root, 'article.file#file-src_app_ts .file-h .path')
-    expect(body?.hasAttribute('hidden')).toBe(false)
-    click(root, 'article.file#file-src_app_ts .file-h .path')
     expect(body?.hasAttribute('hidden')).toBe(true)
+    click(root, 'article.file#file-src_app_ts .file-h .path')
+    expect(body?.hasAttribute('hidden')).toBe(false)
 
     const text = title?.firstChild
     if (text === null || text === undefined) {
@@ -424,10 +426,10 @@ describe('card toggles', () => {
     }
     window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
     click(root, 'article.file#file-src_app_ts .file-h .path')
-    expect(body?.hasAttribute('hidden')).toBe(true)
+    expect(body?.hasAttribute('hidden')).toBe(false)
     // A selection in the title does not stop the chevron.
     click(root, 'article.file#file-src_app_ts .file-h .chev')
-    expect(body?.hasAttribute('hidden')).toBe(false)
+    expect(body?.hasAttribute('hidden')).toBe(true)
     window.getSelection()?.removeAllRanges()
   })
 
@@ -450,20 +452,20 @@ describe('card toggles', () => {
       window.getSelection()?.removeAllRanges()
     }
     clicks(2)
-    expect(body?.hasAttribute('hidden')).toBe(true)
+    expect(body?.hasAttribute('hidden')).toBe(false)
     clicks(3)
-    expect(body?.hasAttribute('hidden')).toBe(true)
+    expect(body?.hasAttribute('hidden')).toBe(false)
     clicks(1)
-    expect(body?.hasAttribute('hidden')).toBe(false)
+    expect(body?.hasAttribute('hidden')).toBe(true)
     clicks(2)
-    expect(body?.hasAttribute('hidden')).toBe(false)
+    expect(body?.hasAttribute('hidden')).toBe(true)
 
     // A click that ended a drag flipped nothing, so a second click right after it undoes nothing.
     window.getSelection()?.setBaseAndExtent(text, 0, text, 3)
     title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
     title.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }))
     window.getSelection()?.removeAllRanges()
-    expect(body?.hasAttribute('hidden')).toBe(false)
+    expect(body?.hasAttribute('hidden')).toBe(true)
   })
 
   it('collapses a layer section from its own chevron', () => {
@@ -523,30 +525,35 @@ describe('reviewed state', () => {
     expect(root.querySelector('.cmd-err')?.textContent).toBe('offline')
   })
 
-  it('opens the layer the reader unmarks, and leaves the files the server reopened with it closed', async () => {
-    const reviewed = {
-      ...BASE,
-      reviewedCanvasSha: artifact.pr.headSha,
-      reviewed: {
-        'layer:run-path': /** @type {const} */ (true),
-        'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
-      },
+  it.each([false, true])(
+    'opens the layer the reader unmarks and, with startCollapsed %s, its files',
+    async startCollapsed => {
+      setStartCollapsed(startCollapsed)
+      const reviewed = {
+        ...BASE,
+        reviewedCanvasSha: artifact.pr.headSha,
+        reviewed: {
+          'layer:run-path': /** @type {const} */ (true),
+          'layer:run-path/file:src_app_ts': /** @type {const} */ (true),
+        },
+      }
+      const { root } = setup({
+        state: reviewed,
+        // Reopening a layer reopens its files, which is what the real store does.
+        api: {
+          putReviewed: async () => ({ prNumber: 42, state: { ...reviewed, reviewed: {} } }),
+        },
+      })
+      const card = root.querySelector('article.file#file-src_app_ts')
+      expect(card?.classList.contains('is-reviewed')).toBe(true)
+      click(root, '.layer-end [data-act="mark-layer"]')
+      await flush()
+      expect(root.querySelector('#layer-run-path > .layer-body')?.hasAttribute('hidden')).toBe(false)
+      expect(card?.classList.contains('is-reviewed')).toBe(false)
+      // The files reopen with the layer, unless the page starts its files closed.
+      expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(startCollapsed)
     }
-    const { root } = setup({
-      state: reviewed,
-      // Reopening a layer reopens its files, which is what the real store does.
-      api: {
-        putReviewed: async () => ({ prNumber: 42, state: { ...reviewed, reviewed: {} } }),
-      },
-    })
-    const card = root.querySelector('article.file#file-src_app_ts')
-    expect(card?.classList.contains('is-reviewed')).toBe(true)
-    click(root, '.layer-end [data-act="mark-layer"]')
-    await flush()
-    expect(root.querySelector('#layer-run-path > .layer-body')?.hasAttribute('hidden')).toBe(false)
-    expect(card?.classList.contains('is-reviewed')).toBe(false)
-    expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
-  })
+  )
 
   it('leaves a layer that is reviewed through its files alone when something else changes', async () => {
     const byFiles = {
@@ -1471,6 +1478,7 @@ describe('keyboard', () => {
   })
 
   it('steps with n into a layer not opened yet and opens it, but past a layer marked reviewed', () => {
+    setStartCollapsed(true)
     const { root } = setup({ artifact: withSecondLayer() })
     const second = root.querySelector('#layer-second > .layer-body')
     expect(second?.hasAttribute('hidden')).toBe(true)
@@ -1497,7 +1505,7 @@ describe('keyboard', () => {
     key('o')
     expect(card?.hasAttribute('data-expanded')).toBe(true)
     // The point's file card stays as it was.
-    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
+    expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(false)
     key('o')
     expect(card?.hasAttribute('data-expanded')).toBe(false)
   })
