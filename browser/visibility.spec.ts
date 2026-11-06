@@ -201,6 +201,22 @@ test('hidden takes priority over component display rules', async ({ page, review
   })
 })
 
+test('draws every point whole, with no density switch, without compactPoints', async ({
+  page,
+  reviewUrl,
+}) => {
+  // A browser that chose a density before still gets whole points while the setting is off.
+  await page.addInitScript(() => localStorage.setItem('pr-review.points-density', 'compact'))
+  await page.goto(`${reviewUrl}?skin=github`)
+  const layer = page.locator('section.layer[data-layer="run-path"]')
+  const card = layer.locator('li.finding[data-fingerprint="fp-1"]')
+  await expect(card.locator('.prose')).toBeVisible()
+  await expect(card.locator('.tbtns')).toBeVisible()
+  // The switch and the toggle are in the page; only the CSS keeps them off it.
+  await expect(card.locator('.p-toggle')).toHaveCSS('display', 'none')
+  await expect(layer.locator('[data-act="points-density"]')).toHaveCSS('display', 'none')
+})
+
 test.describe('with compactPoints', () => {
   test.use({ settings: { compactPoints: true } })
 
