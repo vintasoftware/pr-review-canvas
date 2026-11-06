@@ -225,6 +225,7 @@ export class PrAppElement extends HTMLElement {
     setFoldLevel(this, this.bootstrap.foldLevel)
     setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
+    document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
     this.layerView?.stop()
     this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
@@ -393,6 +394,7 @@ export class PrAppElement extends HTMLElement {
               this.layerView?.setView(data.settings.layerView)
               this.chat?.followSettings(data.settings)
               applyPointColors(data.settings.pointColors, document.documentElement)
+              document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
             },
           }),
       })

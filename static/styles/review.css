@@ -74,14 +74,14 @@
   color: var(--fg-muted);
   font-weight: 400;
 }
-/* Prose in cards and comments keeps a readable line length. The summary, a layer's rationale and
-   the PR description span the whole panel, diagrams included, so they fill it. */
+.summary,
+.rationale,
 .prose {
   max-width: 100ch;
 }
-.summary,
-.rationale,
-.pr-desc .prose {
+/* With the fullWidthText setting the summary, a layer's rationale and the PR description fill
+   their panel, diagrams included. Prose in cards and comments keeps a readable line length. */
+:root[data-full-width-text] :is(.summary, .rationale, .pr-desc .prose) {
   max-width: none;
 }
 .summary {

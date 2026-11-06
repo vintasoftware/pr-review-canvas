@@ -557,6 +557,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
 | `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
 | `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
+| `fullWidthText`        | `false`   | `true` lets the summary, rationale and PR description fill their panel           |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
 | `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |

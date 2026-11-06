@@ -282,4 +282,6 @@ export interface ReviewBootstrap {
   startCollapsed: boolean
   /** Whether a layer's list draws each attention point as one line until the reader opens it. */
   compactPoints: boolean
+  /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
+  fullWidthText: boolean
 }

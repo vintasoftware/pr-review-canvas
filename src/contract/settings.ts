@@ -61,6 +61,8 @@ export const SettingsSchema = z.object({
   startCollapsed: z.boolean(),
   /** Whether a layer's list draws each attention point as one line until the reader opens it. */
   compactPoints: z.boolean(),
+  /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
+  fullWidthText: z.boolean(),
   /** The agent that answers in AI Chat. Canvas generation does not read it. */
   chatAgent: z.enum(CHAT_AGENTS),
   /** The model AI Chat runs, or null for the agent's default. Canvas generation does not read it. */
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pointColors: DEFAULT_POINT_COLORS,
   startCollapsed: false,
   compactPoints: false,
+  fullWidthText: false,
   chatAgent: 'claude',
   chatModel: null,
   chatTimeoutSec: 600,
@@ -129,6 +132,7 @@ export const SettingsInputSchema = z.strictObject({
   pointColors: z.enum(POINT_COLORS).optional(),
   startCollapsed: z.boolean().optional(),
   compactPoints: z.boolean().optional(),
+  fullWidthText: z.boolean().optional(),
   chatAgent: z.enum(CHAT_AGENTS).optional(),
   chatModel: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),

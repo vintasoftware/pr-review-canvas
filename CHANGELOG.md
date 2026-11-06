@@ -4,8 +4,9 @@
 
 ### Reading
 
-- The overview summary, a layer's rationale and the PR description fill the width of their panel,
-  diagrams included, instead of stopping at 100 characters.
+- **Full-width text** in the settings dialog, saved as `fullWidthText` in `settings.yml`, lets the
+  overview summary, a layer's rationale and the PR description fill the width of their panel,
+  diagrams included, instead of stopping at 100 characters. It is off by default.
 - The overview's Conversation starts closed, like the PR description and the review history, with
   its comment count in the title.
 - A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,

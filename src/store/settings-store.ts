@@ -37,6 +37,10 @@ startCollapsed: false
 # to show every point whole. false draws every point whole.
 compactPoints: false
 
+# Whether the overview summary, a layer's rationale and the PR description fill the width of their
+# panel. false stops their lines at 100 characters, like the rest of the page's text.
+fullWidthText: false
+
 # Which agent answers in the AI Chat pane: claude or codex. Canvas generation does not read
 # this; generation.models in pr-review.config.yml sets the canvas generation models.
 chatAgent: claude
@@ -260,6 +264,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.compactPoints !== undefined) {
     out.compactPoints = input.compactPoints
+  }
+  if (input.fullWidthText !== undefined) {
+    out.fullWidthText = input.fullWidthText
   }
   if (input.chatAgent !== undefined) {
     out.chatAgent = input.chatAgent

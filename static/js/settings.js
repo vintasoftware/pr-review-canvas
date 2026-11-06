@@ -196,6 +196,9 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field field-check"><label for="set-compact-points">Compact attention points</label>' +
       `<input id="set-compact-points" type="checkbox"${settings.compactPoints ? ' checked' : ''}></div>` +
       '<p class="muted small">A layer lists each attention point as one line until you open it, and <b>show details</b> shows them all whole. A point on its line in the diff is always whole.</p>' +
+      '<div class="field field-check"><label for="set-full-width-text">Full-width text</label>' +
+      `<input id="set-full-width-text" type="checkbox"${settings.fullWidthText ? ' checked' : ''}></div>` +
+      '<p class="muted small">The overview summary, each layer\'s rationale, and the PR description fill the width of their panel, diagrams included. Off, their lines stop at 100 characters.</p>' +
       '<div class="field"><label for="set-point-colors">Point colors</label>' +
       `<select id="set-point-colors">${optionsHtml(POINT_COLORS, settings.pointColors, POINT_COLORS_LABELS)}</select></div>` +
       '<p class="muted small">The colors of the attention point icons. The shapes say the level in both: a diamond to decide, a checked box to check, an i for context.</p>',
@@ -325,6 +328,7 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const chatStartMinimized = qs('#set-chat-start-minimized', dialog)
   const startCollapsed = qs('#set-start-collapsed', dialog)
   const compactPoints = qs('#set-compact-points', dialog)
+  const fullWidthText = qs('#set-full-width-text', dialog)
   const checkoutEnabled = qs('#set-checkout-enabled', dialog)
   const checkoutIdle = qs('#set-checkout-idle', dialog)
   const checkoutSweep = qs('#set-checkout-sweep', dialog)
@@ -344,6 +348,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   }
   if (compactPoints instanceof HTMLInputElement) {
     input.compactPoints = compactPoints.checked
+  }
+  if (fullWidthText instanceof HTMLInputElement) {
+    input.fullWidthText = fullWidthText.checked
   }
   if (agent instanceof HTMLSelectElement && agent.value !== '') {
     input.chatAgent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)

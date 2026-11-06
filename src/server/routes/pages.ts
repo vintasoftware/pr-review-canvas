@@ -113,6 +113,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           pointColors: settings.pointColors,
           startCollapsed: settings.startCollapsed,
           compactPoints: settings.compactPoints,
+          fullWidthText: settings.fullWidthText,
         },
         c.get('cspNonce'),
         appearanceForRequest(settings, appearanceQuery(c))
