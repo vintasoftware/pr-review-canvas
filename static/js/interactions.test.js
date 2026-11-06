@@ -30,7 +30,6 @@ import {
   setRenderContext,
   setStartCollapsed,
 } from './layers.js'
-import { setCompactPoints } from './points.js'
 import { initOneLayer } from './one-layer.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
@@ -393,8 +392,7 @@ afterEach(() => {
   }
   setRenderContext(null)
   setStartCollapsed(false)
-  setCompactPoints(false)
-  // A test that picks the points' density leaves the page at the default, compact.
+  // A test that picks the points' density leaves the page without one, as compactPoints off does.
   delete document.documentElement.dataset['points']
 })
 
@@ -687,7 +685,7 @@ describe('attention points', () => {
   })
 
   it('opens an open point of a compact list from its title, and closes every one with the switch', () => {
-    setCompactPoints(true)
+    document.documentElement.dataset['points'] = 'compact'
     const { root } = setup()
     const card = layerCard(root, 'fp-1')
     click(root, 'section.layer li.finding[data-fingerprint="fp-1"] .p-title')
@@ -1497,6 +1495,16 @@ describe('keyboard', () => {
     expect(again.root.querySelector('.is-focused')?.id).toBe('file-src_app_test_ts')
   })
 
+  it('opens and collapses an open point of a compact list with o', () => {
+    document.documentElement.dataset['points'] = 'compact'
+    const { root } = setup()
+    key(']')
+    key('o')
+    expect(root.querySelector('#point-p-1')?.hasAttribute('data-expanded')).toBe(true)
+    key('o')
+    expect(root.querySelector('#point-p-1')?.hasAttribute('data-expanded')).toBe(false)
+  })
+
   it('dismisses the point in focus with d, then opens and collapses it with o', async () => {
     const { root, calls } = setup()
     key(']')
@@ -1672,12 +1680,7 @@ describe('keyboard', () => {
     const box = root.querySelector('.composer-box')
     expect(box?.closest('tr')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
     key('Escape')
-    // In a compact list o opens the point in focus.
-    key('o')
-    expect(root.querySelector('#point-p-1')?.hasAttribute('data-expanded')).toBe(true)
-    // In a detailed list the point is whole, so o collapses the file card of the point's line and
-    // leaves the layer it is listed in open.
-    document.documentElement.dataset['points'] = 'detailed'
+    // o collapses the file card of the point's line, and leaves the layer it is listed in open.
     key('o')
     expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(true)
     expect(root.querySelector('#layer-run-path .layer-body')?.hasAttribute('hidden')).toBe(false)
@@ -2273,6 +2276,7 @@ describe('the AI Chat commands', () => {
       prNumber: 42,
       session: page.session,
       storage: null,
+      minimized: false,
       reducedMotion: true,
       api: {
         fetchThreads: async () => ({ threads: [], activeThread: null, agent: 'claude' }),

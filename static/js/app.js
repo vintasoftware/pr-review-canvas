@@ -14,7 +14,7 @@ import {
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { readPointsDensity, setCompactPoints, setMentionCanvas, setPointsDensity } from './points.js'
+import { readPointsDensity, setMentionCanvas, setPointsDensity } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -317,10 +317,11 @@ export class PrAppElement extends HTMLElement {
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
-    const chatMinimized = chatEnabled && readChatMinimized(storage, bundle.chat.startMinimized)
-    // Without compactPoints every list is detailed, whatever this browser chose before.
-    setCompactPoints(boot.compactPoints)
-    setPointsDensity(document.documentElement, boot.compactPoints ? readPointsDensity(storage) : 'detailed')
+    // A docked chat starts the way the reader last left it, or minimized with chatStartMinimized.
+    const chatMinimized = chatEnabled && (bundle.chat.startMinimized === true || readChatMinimized(storage))
+    if (boot.compactPoints) {
+      setPointsDensity(document.documentElement, readPointsDensity(storage))
+    }
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
@@ -405,7 +406,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
-          ...(bundle.chat.startMinimized === undefined ? {} : { startMinimized: bundle.chat.startMinimized }),
+          minimized: chatMinimized,
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })

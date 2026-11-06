@@ -242,7 +242,7 @@ describe('layer sections', () => {
     ).toEqual(['body', 'lbl sub', 'testmap', 'lbl sub', 'findings', 'lbl sub', 'files'])
     expect([...(section?.querySelectorAll('.lbl.sub') ?? [])].map(h => h.textContent)).toEqual([
       'Tests1 of 2 covered',
-      'Attention points · 1',
+      'Attention points · 1show detailscompact',
       'Files · 3',
     ])
     expect(

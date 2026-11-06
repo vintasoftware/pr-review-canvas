@@ -120,17 +120,6 @@ export function pointLocation(p) {
 }
 
 /**
- * Whether the layers' lists may be compact, from the `compactPoints` setting. Off, every list
- * draws its points whole and offers no switch; `app.js` sets it once per render.
- */
-let compactPoints = false
-
-/** @param {boolean} on */
-export function setCompactPoints(on) {
-  compactPoints = on
-}
-
-/**
  * Whether a point's comment names the canvas it came from. Off when `sharing.mentionCanvas` is
  * off; `app.js` sets it once per render, before the cards that read it are built.
  */
@@ -637,19 +626,20 @@ export function sevsumHtml(points, layers = []) {
 }
 
 /**
- * How the layers' lists of points are drawn: `compact`, a title line per point, unless the reader
- * chose `detailed` in this browser. The page carries it as `data-points` on the document element.
+ * How the layers' lists of points are drawn with the `compactPoints` setting on: `compact`, a
+ * title line per point, unless the reader chose `detailed` in this browser. The page carries it as
+ * `data-points` on the document element; without the setting the page has no `data-points`, and
+ * every list draws its points whole, with no switch.
  */
 export const POINTS_DENSITY_KEY = 'pr-review.points-density'
 
 /**
- * The density the page shows now; the CSS reads the same attribute, and anything but `detailed`
- * is compact.
+ * The density the page shows now; the CSS reads the same attribute. Only `compact` collapses.
  * @param {HTMLElement} page the document element
  * @returns {'compact' | 'detailed'}
  */
 export function readPageDensity(page) {
-  return page.dataset['points'] === 'detailed' ? 'detailed' : 'compact'
+  return page.dataset['points'] === 'compact' ? 'compact' : 'detailed'
 }
 
 /**
@@ -674,13 +664,10 @@ export function setPointsDensity(page, density, storage) {
 }
 
 /**
- * The switch in each list's heading, with `compactPoints` on; the CSS shows the label for the
- * density the page is in.
+ * The switch in each list's heading. The CSS shows it only while the page has a density, and the
+ * label for that density.
  */
 export function pointsDensityToggleHtml() {
-  if (!compactPoints) {
-    return ''
-  }
   return (
     '<button class="cmd points-density" type="button" data-act="points-density">' +
     '<span class="when-compact">show details</span><span class="when-detailed">compact</span></button>'

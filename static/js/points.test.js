@@ -18,8 +18,6 @@ import {
   pointToMarkdown,
   readPageDensity,
   readPointsDensity,
-  pointsDensityToggleHtml,
-  setCompactPoints,
   setMentionCanvas,
   setPointExpanded,
   setPointsDensity,
@@ -126,7 +124,7 @@ describe('pointCountText', () => {
 })
 
 describe('where a point stands', () => {
-  // A test that picks the points' density leaves the page at the default, compact.
+  // A test that picks the points' density leaves the page without one, as compactPoints off does.
   afterEach(() => {
     delete document.documentElement.dataset['points']
   })
@@ -310,6 +308,9 @@ describe('where a point stands', () => {
     const open = document.querySelector('li.finding')
     if (open === null) throw new Error('no point')
     setPointExpanded(open, true)
+    expect(open.hasAttribute('data-expanded')).toBe(false)
+    document.documentElement.dataset['points'] = 'compact'
+    setPointExpanded(open, true)
     expect(open.hasAttribute('data-expanded')).toBe(true)
     setPointExpanded(open, false)
     document.documentElement.dataset['points'] = 'detailed'
@@ -322,7 +323,7 @@ describe('where a point stands', () => {
     expect(row.hasAttribute('data-expanded')).toBe(false)
   })
 
-  it('reads the compact density unless the reader chose detailed, and remembers the choice', () => {
+  it('draws points whole without a density, and remembers the density the reader chose', () => {
     /** @type {Record<string, string>} */
     const store = {}
     const storage = /** @type {Storage} */ (
@@ -336,7 +337,7 @@ describe('where a point stands', () => {
     const page = document.documentElement
     expect(readPointsDensity(storage)).toBe('compact')
     expect(readPointsDensity(null)).toBe('compact')
-    expect(readPageDensity(page)).toBe('compact')
+    expect(readPageDensity(page)).toBe('detailed')
     setPointsDensity(page, 'detailed', storage)
     expect(store[POINTS_DENSITY_KEY]).toBe('detailed')
     expect(readPointsDensity(storage)).toBe('detailed')
@@ -345,16 +346,6 @@ describe('where a point stands', () => {
     expect(readPageDensity(page)).toBe('compact')
     expect(store[POINTS_DENSITY_KEY]).toBe('detailed')
     delete page.dataset['points']
-  })
-
-  it('offers the density switch only with compactPoints on', () => {
-    expect(pointsDensityToggleHtml()).toBe('')
-    setCompactPoints(true)
-    try {
-      expect(pointsDensityToggleHtml()).toContain('data-act="points-density"')
-    } finally {
-      setCompactPoints(false)
-    }
   })
 
   it('leaves a page that holds none of its parts alone', () => {
@@ -512,9 +503,7 @@ describe('where a point stands', () => {
     refreshPoint(el, first, { ...ctx, state: dismissed })
     expect(document.activeElement?.classList.contains('p-toggle')).toBe(true)
 
-    // Restored in a detailed list, the point is whole and its toggle hidden: the focus goes to its
-    // first command.
-    document.documentElement.dataset['points'] = 'detailed'
+    // Restored, the point is whole and its toggle hidden: the focus goes to its first command.
     setPointExpanded(el, true)
     const restore = el.querySelector('[data-act="point-restore"]')
     if (!(restore instanceof HTMLElement)) throw new Error('no restore')

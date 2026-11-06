@@ -1034,7 +1034,7 @@ export function wireReview(root, session, opts = {}) {
     'points-density': () => {
       const page = doc.documentElement
       const storage = typeof localStorage === 'undefined' ? null : localStorage
-      setPointsDensity(page, readPageDensity(page) === 'detailed' ? 'compact' : 'detailed', storage)
+      setPointsDensity(page, readPageDensity(page) === 'compact' ? 'detailed' : 'compact', storage)
       // A point opened by hand closes with the switch, so the list reads as the switch says.
       for (const point of Array.from(root.querySelectorAll('.findings > li[data-expanded]'))) {
         setPointExpanded(point, false)
