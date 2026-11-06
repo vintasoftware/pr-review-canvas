@@ -56,8 +56,7 @@ tr.composer .x {
   --tone: var(--ok);
   --i-tone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Cpath d='M4.6 8.3l2.2 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
   position: fixed;
-  /* The window's top right corner, over whatever is there, side pane included. Clicks pass
-     through to what it covers, except on its link. */
+  /* The window's top right corner, over whatever is there, side pane included. A click clears it. */
   top: 8px;
   right: 16px;
   z-index: 30;
@@ -71,7 +70,7 @@ tr.composer .x {
   font-size: var(--fs);
   font-weight: 600;
   line-height: 1.4;
-  pointer-events: none;
+  cursor: pointer;
 }
 .toast::before {
   content: '';
@@ -82,9 +81,6 @@ tr.composer .x {
   height: 18px;
   background: var(--tone);
   mask: var(--i-tone) center / contain no-repeat;
-}
-.toast a {
-  pointer-events: auto;
 }
 .toast[data-tone='note'] {
   /* Not the accent: on the olive skin that is green, which reads as done. */

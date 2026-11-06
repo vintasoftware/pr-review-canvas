@@ -259,6 +259,27 @@ describe('toast', () => {
     expect(toast(root, 'the AI Chat pane is off', { tone: 'note' }).getAttribute('data-tone')).toBe('note')
   })
 
+  it('stays up while the pointer is on it, and counts five seconds again once it leaves', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point added to your review')
+    vi.advanceTimersByTime(4000)
+    box.dispatchEvent(new Event('pointerenter'))
+    vi.advanceTimersByTime(20000)
+    expect(box.textContent).toBe('attention point added to your review')
+    box.dispatchEvent(new Event('pointerleave'))
+    vi.advanceTimersByTime(4999)
+    expect(box.textContent).toBe('attention point added to your review')
+    vi.advanceTimersByTime(1)
+    expect(box.textContent).toBe('')
+  })
+
+  it('clears on a click', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point added to your review')
+    box.dispatchEvent(new MouseEvent('click'))
+    expect(box.textContent).toBe('')
+  })
+
   it('keeps the page region apart from the region of a dialog inside the page', () => {
     const root = document.createElement('div')
     root.innerHTML = '<dialog open></dialog>'
