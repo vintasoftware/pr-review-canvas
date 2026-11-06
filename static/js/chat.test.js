@@ -8,6 +8,7 @@ import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
 import { cssEscape } from './anchors.js'
+import { applyCapabilityGating } from './composer.js'
 import { setChatEnabled } from './ask.js'
 import {
   answerHtml,
@@ -19,7 +20,6 @@ import {
   checkoutActivityText,
   checkoutWarningHtml,
   clampWidth,
-  proposedCommentHtml,
   readChatMinimized,
   readChatWidth,
   renderChatShell,
@@ -27,6 +27,7 @@ import {
   writeChatMinimized,
   writeChatWidth,
 } from './chat.js'
+import { proposedCommentHtml } from './proposed-card.js'
 import { proposalFingerprint, SETTLEMENT_REASON_MAX, targetsFromFiles } from './proposed-comment.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createReviewSession } from './review-session.js'
@@ -1871,7 +1872,7 @@ describe('answerHtml', () => {
       const sink = new Map()
       answerHtml(
         text,
-        { hasPath: path => present.includes(path), hasLine: () => true },
+        { hasPath: path => present.includes(path), hasLine: () => true, anchorError: () => null },
         sink,
         new Set(present),
         { turnKey: 'turn' }
@@ -2075,6 +2076,190 @@ describe('the proposed-comment commands', () => {
     // Untied before it went out: the agent's text links it again on a redraw, the draft does not.
     document.body.innerHTML = answerHtml(text, withPoints, new Map(), paths, { pending: [queued(undefined)] })
     expect(document.querySelector('.proposed-point')).toBeNull()
+  })
+})
+
+describe('a proposed comment whose range crosses two chunks', () => {
+  // src/app.ts shows new-side lines 1-5 and 11-14, in two chunks.
+  /** @param {string} json */
+  const card = json => {
+    document.body.innerHTML = answerHtml('```comment\n' + json + '\n```', targets, new Map(), paths)
+    return /** @type {HTMLElement} */ (document.querySelector('.proposed'))
+  }
+  /** @param {string} selector */
+  const button = selector => /** @type {HTMLButtonElement} */ (document.querySelector(selector))
+
+  it('offers both ways of sending for a range inside one chunk', () => {
+    card('{"path":"src/app.ts","startLine":2,"line":4,"body":"Rename."}')
+    expect(document.querySelector('.proposed-anchor')).toBeNull()
+    expect(button('[data-act="proposed-post"]').disabled).toBe(false)
+    expect(button('[data-act="proposed-queue"]').disabled).toBe(false)
+  })
+
+  it('says why a range across two chunks cannot be sent, and keeps edit and copy', () => {
+    const message = 'src/app.ts:3-12 (new) is not inside one chunk of the diff (new-side lines 1-5, 11-14)'
+    const drawn = card('{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}')
+    // The agent's lines stay as it wrote them until the reader chooses a chunk.
+    expect(drawn.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:3–12')
+    expect(drawn.querySelector('.proposed-anchor .bad')?.textContent).toBe(message)
+    expect([...drawn.querySelectorAll('[data-act="proposed-range"]')].map(b => b.textContent)).toEqual([
+      'lines 3–5',
+      'lines 11–12',
+    ])
+    for (const act of ['proposed-post', 'proposed-queue']) {
+      expect(button(`[data-act="${act}"]`).disabled).toBe(true)
+      expect(button(`[data-act="${act}"]`).title).toBe(message)
+    }
+    expect(button('[data-act="proposed-edit"]').disabled).toBe(false)
+    expect(button('[data-copy]').disabled).toBe(false)
+    // Posting rights coming back do not enable a command the anchor blocks.
+    applyCapabilityGating(document, { ...UNKNOWN_CAPABILITIES, canComment: true })
+    expect(button('[data-act="proposed-post"]').disabled).toBe(true)
+    expect(button('[data-act="proposed-edit"]').disabled).toBe(false)
+  })
+
+  it('keeps a line outside the diff as a code block with the reason, not a card', () => {
+    expect(card('{"path":"src/app.ts","line":8,"body":"x"}')).toBeNull()
+    expect(document.querySelector('.proposed-invalid + p')?.textContent).toBe(
+      'src/app.ts:8 is not a line the diff shows'
+    )
+  })
+
+  it('keeps sending blocked when the pane draws the card again', async () => {
+    const { root, chat } = mount({
+      streamChat: async (_pr, _input, opts) => {
+        opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+        opts.onEvent({
+          event: 'chunk',
+          data: { text: '```comment\n{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}\n```\n' },
+        })
+      },
+    })
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    // A stale key makes the refresh draw the commands again.
+    el(root, '.proposed').setAttribute('data-key', 'stale')
+    chat.refreshProposed()
+    expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-post"]')).disabled).toBe(true)
+    expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-queue"]')).disabled).toBe(true)
+    expect(/** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-edit"]')).disabled).toBe(false)
+  })
+
+  it('sends the part of the range the reader chose, under the proposal it came from', async () => {
+    /** @type {Array<[string, import('./proposed-comment.js').ProposedComment]>} */
+    const seen = []
+    const { root, chat } = mount(
+      {
+        streamChat: async (_pr, _input, opts) => {
+          opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+          opts.onEvent({
+            event: 'chunk',
+            data: {
+              text: '```comment\n{"path":"src/app.ts","startLine":3,"line":12,"body":"Rename."}\n```\n',
+            },
+          })
+        },
+      },
+      { onProposed: (what, comment) => seen.push([what, comment]) }
+    )
+    const box = el(root, '#msg')
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box')
+    box.value = 'x'
+    el(root, '#chat-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flush()
+    el(root, '[data-act="proposed-range"][data-start-line="11"]').click()
+    expect(el(root, '.proposed-h .mono').textContent).toBe('src/app.ts:11–12')
+    expect(el(root, '.proposed-anchor').textContent).toBe(
+      'AI Chat proposed lines 3–12, across more than one chunk. Or: lines 3–5'
+    )
+    const queue = /** @type {HTMLButtonElement} */ (el(root, '[data-act="proposed-queue"]'))
+    expect(queue.disabled).toBe(false)
+    expect(document.activeElement).toBe(queue)
+    // A redraw keeps the choice.
+    el(root, '.proposed').setAttribute('data-key', 'stale')
+    chat.refreshProposed()
+    el(root, '[data-act="proposed-queue"]').click()
+    el(root, '[data-act="proposed-edit"]').click()
+    const fingerprint = proposalFingerprint({
+      path: 'src/app.ts',
+      startLine: 3,
+      line: 12,
+      side: 'new',
+      body: 'Rename.',
+    })
+    const sent = {
+      path: 'src/app.ts',
+      startLine: 11,
+      line: 12,
+      side: 'new',
+      body: 'Rename.',
+      proposalFingerprint: fingerprint,
+    }
+    expect(seen).toEqual([
+      ['queue', sent],
+      ['edit', sent],
+    ])
+  })
+
+  it('shows the lines a sent comment went out on, after the choice itself is gone', () => {
+    const proposal = {
+      path: 'src/app.ts',
+      startLine: 3,
+      line: 12,
+      side: /** @type {const} */ ('new'),
+      body: 'Rename.',
+    }
+    const fingerprint = proposalFingerprint(proposal)
+    const draft = {
+      id: 'd1',
+      ...proposal,
+      startLine: 11,
+      proposalFingerprint: fingerprint,
+      headSha: 'h',
+      createdAt: 'x',
+      updatedAt: 'x',
+    }
+    const answer = '```comment\n' + JSON.stringify(proposal) + '\n```'
+    // A reload forgets the choice; the draft still has the lines.
+    document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { pending: [draft] })
+    expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
+    expect(document.querySelector('.proposed-anchor')).toBeNull()
+    expect(document.querySelector('.proposed .tbtns')?.textContent).toBe('in your revieweditcopy')
+    // Once posted, the comment's original range, which later commits do not move.
+    const comment = {
+      id: 7,
+      author: 'me',
+      body: 'Rename.',
+      path: 'src/app.ts',
+      line: 14,
+      originalLine: 12,
+      originalStartLine: 11,
+      side: /** @type {const} */ ('new'),
+      startLine: 13,
+      outdated: false,
+      commitId: 'c',
+      createdAt: 'x',
+      updatedAt: 'x',
+      url: 'https://example.test/c/7',
+      resolved: false,
+      proposalFingerprint: fingerprint,
+    }
+    document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { posted: [comment] })
+    expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
+    expect(document.querySelector('.proposed .tbtns a')?.textContent).toBe('view comment')
+    // GitLab gives no original range start, and its original line is the old side's on a context
+    // line: the current lines hold.
+    const { originalStartLine: _github, ...gitlab } = {
+      ...comment,
+      line: 12,
+      startLine: 11,
+      originalLine: 10,
+    }
+    document.body.innerHTML = answerHtml(answer, targets, new Map(), paths, { posted: [gitlab] })
+    expect(document.querySelector('.proposed-h .mono')?.textContent).toBe('src/app.ts:11–12')
   })
 })
 

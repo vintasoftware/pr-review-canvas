@@ -100,10 +100,19 @@ describe('the seed sections', () => {
     expect(prMetaMarkdown(pre)).toContain('(not opened yet)')
   })
 
-  it('lists every layer with its files, and marks the mechanical one', () => {
-    const text = layersMarkdown(artifact)
-    expect(text).toContain('- **Run path**\n  - `src/app.ts`')
-    expect(text).toContain('(mechanical)')
+  it('lists every layer with its files and the line ranges of their chunks, and marks the mechanical one', () => {
+    expect(layersMarkdown(artifact).split('\n')).toEqual([
+      '- **Run path**',
+      '  - `src/app.ts`: new-side lines 1-5; old-side lines 1-4',
+      '  - `src/new-name.ts`: new-side lines 1-2; old-side lines 1-2',
+      '  - `src/app.test.ts`: new-side lines 1-4; old-side lines 1-3',
+      '- **Other changes** (mechanical)',
+      // A file split across layers lists, in each, only the chunks that layer holds.
+      '  - `src/app.ts`: new-side lines 11-14; old-side lines 10-12',
+      // An added file shows no old side, a deleted one no new side: no comment can anchor there.
+      '  - `src/new.ts`: new-side lines 1-2',
+      '  - `src/gone.ts`: old-side lines 1-2',
+    ])
   })
 
   it('lists the attention points with their level, kind, audience, anchor, and the author’s answer', () => {

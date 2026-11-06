@@ -33,7 +33,9 @@ recommending a change**, a proposed comment: a fenced block tagged `comment` who
 ````
 
 `path` must be a file in this pull request and `line` a line of the diff on that side. `side` is
-`"new"` or `"old"` and defaults to `"new"`; add `"startLine"` for a range. Propose a comment only
+`"new"` or `"old"` and defaults to `"new"`; add `"startLine"` for a range. The layers below list
+the line ranges of each file's chunks on each side: `startLine` and `line` must both fall in one
+of those ranges on the comment's side, or the comment cannot be posted. Propose a comment only
 when a human should post it.
 
 Add `"point": "<id>"` only when the comment acts on one of the attention points below, using the

@@ -24,17 +24,27 @@ export function sameAnchoredComment(a, b) {
 }
 
 /**
- * GitHub's original range names the submitted text even after its current range moves.
- * Callers must scope comments to known posts or one review receipt.
+ * The lines a posted comment was written on: its original range when the host gives the range's
+ * start, as GitHub does, because that range stays on the submitted text when later commits move
+ * the current one. Otherwise its current lines: GitLab gives no start, and its original line can
+ * be on the other side.
+ * @param {{ line: number | null, startLine?: number | undefined, originalLine?: number | null | undefined, originalStartLine?: number | null | undefined }} posted
+ * @returns {{ line: number | null, startLine: number | undefined }}
+ */
+export function postedAnchor(posted) {
+  return typeof posted.originalLine === 'number' && posted.originalStartLine !== undefined
+    ? { line: posted.originalLine, startLine: posted.originalStartLine ?? undefined }
+    : { line: posted.line, startLine: posted.startLine }
+}
+
+/**
+ * Whether a posted comment is this draft, on the lines it was written on. Callers must scope
+ * comments to known posts or one review receipt.
  * @param {{ path: string, line: number | null, side: string, startLine?: number | undefined, body: string, originalLine?: number | null | undefined, originalStartLine?: number | null | undefined }} posted
  * @param {{ path: string, line: number, side: string, startLine?: number | undefined, body: string }} draft
  */
 export function samePostedComment(posted, draft) {
-  const anchor =
-    typeof posted.originalLine === 'number' && posted.originalStartLine !== undefined
-      ? { ...posted, line: posted.originalLine, startLine: posted.originalStartLine ?? undefined }
-      : posted
-  return sameAnchoredComment(anchor, draft)
+  return sameAnchoredComment({ ...posted, ...postedAnchor(posted) }, draft)
 }
 
 /**
@@ -74,7 +84,9 @@ export function isQueuedComment(proposed, pending) {
  *   queued?: boolean | undefined,
  *   submitted?: boolean | undefined,
  *   leadWithQueue?: boolean,
- * }} opts `kind` names the commands (`point-post`) and the attribute that carries `id`
+ *   blocked?: string | null,
+ * }} opts `kind` names the commands (`point-post`) and the attribute that carries `id`; `blocked`
+ *   disables both ways of sending and is their title
  */
 export function sendCommandsHtml(opts) {
   if (opts.postedUrl !== undefined) {
@@ -89,7 +101,13 @@ export function sendCommandsHtml(opts) {
   const target = `data-${opts.kind}="${esc(opts.id)}"`
   // The tooltip is cased like its neighbours' (Edit, Copy); the word stays the command's.
   const tip = esc(`Post to ${hostLabel()}`)
-  const post = `<button class="cmd" type="button" data-act="${opts.kind}-post" ${target} data-needs-post data-tooltip="${tip}" title="${tip}">${postToLabel()}</button>`
-  const queue = `<button class="cmd${opts.leadWithQueue === true ? ' fill' : ''}" type="button" data-act="${opts.kind}-queue" ${target}>add to review</button>`
+  // `data-disabled-reason` keeps the capability gate from enabling it again.
+  const blocked =
+    opts.blocked === undefined || opts.blocked === null
+      ? ''
+      : ` disabled data-disabled-reason="${esc(opts.blocked)}" title="${esc(opts.blocked)}"`
+  const postTitle = blocked === '' ? ` title="${tip}"` : blocked
+  const post = `<button class="cmd" type="button" data-act="${opts.kind}-post" ${target} data-needs-post data-tooltip="${tip}"${postTitle}>${postToLabel()}</button>`
+  const queue = `<button class="cmd${opts.leadWithQueue === true ? ' fill' : ''}" type="button" data-act="${opts.kind}-queue" ${target}${blocked}>add to review</button>`
   return opts.leadWithQueue === true ? queue + post : post + queue
 }

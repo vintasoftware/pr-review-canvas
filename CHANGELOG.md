@@ -27,6 +27,19 @@
 - **Start minimized** under **AI Chat** in the settings dialog, saved as `chatStartMinimized` in
   `settings.yml`, starts the docked chat minimized every time a review opens, so the canvas keeps
   its full width. It is off by default: the chat opens the way you last left it.
+- A proposed comment whose range crosses two chunks says so on its card, in the words of the
+  `#line:` link check, with the chunk ranges of that side. Its **post to github** and **add to
+  review** stay disabled until you choose the part of the range inside one chunk, from a button
+  for each chunk on the card; **edit** and **copy** work. The card never moves the lines on its
+  own. Before, the card offered both commands and the server then refused the comment as spanning
+  more than one chunk.
+- AI Chat gets the line ranges of each file's chunks on each side, listed by layer in its opening
+  instructions, and is told to keep a proposed comment's `startLine` and `line` inside one of
+  them. Before, it saw only file paths and the code, where lines across two chunks look like one
+  block. A side with no lines in a chunk, such as the old side of an added file, is not listed.
+  This applies to threads started after the upgrade. A project's own `chat-seed.md` gets the ranges
+  through `{{LAYERS}}`; copy the new sentence about `startLine` from the bundled template to tell
+  AI Chat to use them.
 
 ## 0.10.0
 
