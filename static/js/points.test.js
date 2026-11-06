@@ -70,6 +70,7 @@ describe('points', () => {
       'copy',
       'post to github',
       'add to review',
+      'edit',
       'dismiss',
     ])
     // Only "ask" waits for the chat pane; the other three work.
@@ -388,6 +389,7 @@ describe('where a point stands', () => {
       'copy',
       'post to github',
       'add to review',
+      'edit',
       'dismiss',
     ])
 
@@ -489,6 +491,7 @@ describe('where a point stands', () => {
       null,
       'point-post',
       'point-queue',
+      'point-edit',
       'point-dismiss',
     ])
   })

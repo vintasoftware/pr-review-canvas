@@ -23,6 +23,7 @@ import { hostLabel, noPostingTitle, postToLabel } from './host.js'
  *   body?: string,
  *   pendingActive?: boolean,
  *   pendingId?: string,
+ *   prefilled?: boolean,
  * }} ComposerOptions
  */
 
@@ -39,6 +40,7 @@ function dataAttributes(opts) {
     ['data-proposal-fingerprint', opts.proposalFingerprint],
     ['data-pending-id', opts.pendingId],
     ['data-pending-active', opts.pendingActive === true ? '1' : '0'],
+    ['data-prefilled', opts.prefilled === true ? '1' : undefined],
   ]
   return pairs
     .filter(([, value]) => value !== undefined)
@@ -52,7 +54,10 @@ function dataAttributes(opts) {
  * With no review open, a comment on a diff line can go either way: into a review it starts, or
  * straight out on its own. Once a review is open it can only join it. Posting one comment on its
  * own would publish it while the rest of the review is still held back, so that way is closed for
- * as long as something is waiting, and the drafts are submitted together.
+ * as long as something is waiting, and the drafts are submitted together. A box filled with text
+ * written in advance (an attention point, a comment the AI Chat proposes) keeps both ways, as that
+ * text's own commands do: sending it on its own is a use of its own, not a comment jumping the
+ * queue.
  *
  * A draft being edited has neither: it is already in the review, so it is only saved.
  * @param {ComposerOptions} opts
@@ -68,7 +73,9 @@ function commandsHtml(opts) {
     return `${post(true)}${cancel}`
   }
   if (opts.pendingActive === true) {
-    return `<button class="cmd fill" type="button" data-act="composer-queue">add review comment</button>${cancel}`
+    const queue =
+      '<button class="cmd fill" type="button" data-act="composer-queue">add review comment</button>'
+    return `${queue}${opts.prefilled === true ? post() : ''}${cancel}`
   }
   return (
     `<button class="cmd fill" type="button" data-act="composer-queue">start a review</button>` +
@@ -91,7 +98,13 @@ export function refreshComposerCommands(root, active) {
       continue
     const actions = box.querySelector('.composer-actions')
     if (actions !== null)
-      actions.innerHTML = commandsHtml({ id: box.id, label: '', kind: 'inline', pendingActive: active })
+      actions.innerHTML = commandsHtml({
+        id: box.id,
+        label: '',
+        kind: 'inline',
+        pendingActive: active,
+        prefilled: box.getAttribute('data-prefilled') === '1',
+      })
     box.setAttribute('data-pending-active', active ? '1' : '0')
   }
 }
