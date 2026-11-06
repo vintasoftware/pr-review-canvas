@@ -1948,7 +1948,7 @@ export function wireChat(options) {
             live?.shown === true
               ? 'An answer is coming in here. Ask this once it ends.'
               : `A question already waits for the answer in “${answeringName()}”. Ask this once it is sent.`,
-            { tone: 'note' }
+            { tone: 'failed' }
           )
           return
         }
