@@ -708,7 +708,7 @@ holds for every review until changed.
 
 With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
 a review opens on its attention points, one stop at a time. A stop is its layer's section seen
-through a lens:
+through a lens, always open, with no chevron to fold it:
 
 - Each layer with points or tests opens with a stop of its own: its heading with the **reviewed**
   mark and **ask about this layer**, its description, and its tests table.

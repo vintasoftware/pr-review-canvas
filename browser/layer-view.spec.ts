@@ -224,6 +224,43 @@ test.describe('reading by attention points', () => {
     await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
   })
 
+  test('a stop keeps its layer open, with no chevron to fold it', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl)
+    const layer = page.locator('#layer-run-path')
+    await expect(layer).toHaveAttribute('data-lens', 'layer')
+    await expect(layer.locator(':scope > .layer-h > .chev')).toBeHidden()
+    // A fold from a key or a script leaves the stop as it was.
+    await layer.evaluate(section => section.querySelector(':scope > .layer-body')?.setAttribute('hidden', ''))
+    await expect(layer.locator('table.testmap')).toBeVisible()
+    await page.locator('nav.rail a[href="#point-p-2"]').click()
+    const other = page.locator('#layer-other')
+    await expect(other).toHaveAttribute('data-lens', 'point')
+    await expect(other.locator('summary .chev')).toBeHidden()
+    await other.evaluate(section => {
+      const details = section.querySelector(':scope > details')
+      if (details instanceof HTMLDetailsElement) details.open = false
+    })
+    await expect(other.locator('tr.ifind[data-fingerprint="fp-2"]')).toBeVisible()
+  })
+
+  test('a point’s stop spaces its card from the layer heading and from its file', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#point-p-1')
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+    const gaps = await page.evaluate(() => {
+      const top = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().top ?? 0
+      const bottom = (selector: string) =>
+        document.querySelector(selector)?.getBoundingClientRect().bottom ?? 0
+      return [
+        top('#point-p-1') - bottom('#layer-run-path > .layer-h'),
+        top('#layer-run-path article.file[data-path="src/app.ts"]') - bottom('#point-p-1'),
+      ]
+    })
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(8)
+  })
+
   test('the settings turn reading by attention points off and on, on the open page', async ({
     page,
     reviewUrl,

@@ -611,6 +611,32 @@ img.av {
   /* Over every skin's own layout, as the hidden attribute is. */
   display: none !important;
 }
+/* A stop hides the closing row that pads a layer's foot, so it pads its own; Other's too. */
+[data-lens] > :is(.layer-body, details) {
+  padding-bottom: 12px;
+}
+/* The sub-headings the lens hides spaced the point's card from the heading and from its file;
+   the stop spaces them, with padding, which no skin's margins undo. */
+[data-lens='point'] > .layer-body {
+  padding-top: 12px;
+}
+[data-lens='point'] .files {
+  margin-top: 12px;
+}
+/* A stop shows its layer open, with no chevron to fold it, and a fold from a key changes nothing. */
+[data-lens] > .layer-h > .chev,
+[data-lens] > details > summary .chev {
+  display: none;
+}
+[data-lens] > .layer-body[hidden] {
+  display: block !important;
+}
+[data-lens] > details::details-content {
+  content-visibility: visible;
+}
+[data-lens] > details > summary {
+  pointer-events: none;
+}
 /* The point's code stays in sight whatever its card's reviewed mark or the reading level say. */
 [data-lens='point'] article.file > .file-body[hidden] {
   display: block !important;
