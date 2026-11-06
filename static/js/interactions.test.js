@@ -1864,10 +1864,11 @@ describe('capability gating and sign-off', () => {
     await flush()
     click(root, '[data-act="signoff-post"]')
     await flush()
-    expect(root.querySelector('.toast')?.textContent).toBe('review posted with 1 comment · see it on GitHub')
-    // A warning is still to read, so the dialog stays open with it.
+    // A warning is still to read, so the dialog stays open with it, and its result line, a status
+    // region of its own, carries the receipt instead of a toast.
     expect(root.querySelector('#signoff-dialog')?.hasAttribute('open')).toBe(true)
-    expect(root.querySelector('.signoff-result')?.textContent).toContain(warning)
+    expect(root.querySelector('.signoff-result')?.textContent).toBe(`Posted · see it on GitHub ${warning}`)
+    expect(root.querySelector('.toast')).toBeNull()
   })
 
   it('sends no body when the reader emptied the box, and says that changes were asked for', async () => {

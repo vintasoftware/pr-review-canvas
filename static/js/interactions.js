@@ -816,26 +816,23 @@ export function wireReview(root, session, opts = {}) {
             : review.state === 'CHANGES_REQUESTED'
               ? 'changes requested'
               : 'review posted'
-        // The page behind already shows what the review changed, so the dialog gets out of the way,
-        // and so does a pane floating over the page, which would cover the receipt. A warning is the
-        // one thing still to read there. The receipt comes after, so it goes to what stays open.
-        const done = warnings.length === 0
-        if (done) {
-          dialog.close()
-          opts.uncover?.()
+        // A warning is the one thing still to read in the dialog, which shows the receipt with it.
+        if (warnings.length > 0) {
+          showSignoffResult(dialog, review)
+          for (const warning of warnings) {
+            dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
+          }
+          return
         }
+        // The page behind already shows what the review changed, so the dialog gets out of the way,
+        // and so does a pane floating over the page, which would cover the receipt.
+        dialog.close()
+        opts.uncover?.()
         toast(
           root,
           `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
           { link: { url: review.url, text: `see it on ${hostLabel()}` } }
         )
-        if (done) {
-          return
-        }
-        showSignoffResult(dialog, review)
-        for (const warning of warnings) {
-          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
-        }
       },
       { pendingLabel: 'posting…' }
     )
@@ -997,7 +994,7 @@ export function wireReview(root, session, opts = {}) {
     },
     'toggle-handled': el => flipSwitch(el, 'hiding'),
     'toggle-resolved': el => flipSwitch(el, 'showingResolved'),
-    ...selfReviewActions(session, (message, tone) => toast(root, message, { tone })),
+    ...selfReviewActions(session, message => toast(root, message)),
     'point-post': el => {
       const point = pointById(el.getAttribute('data-point') ?? '')
       if (point !== undefined) {
@@ -1420,13 +1417,8 @@ export function wireReview(root, session, opts = {}) {
     onProposedResolution(what, resolution, el) {
       const { fingerprint } = resolution.point
       if (what === 'save') {
-        void resolvePoint(
-          session,
-          el,
-          fingerprint,
-          { reason: resolution.reason, comment: false },
-          (message, tone) => toast(root, message, { tone })
-        )
+        const notify = /** @param {string} message */ message => toast(root, message)
+        void resolvePoint(session, el, fingerprint, { reason: resolution.reason, comment: false }, notify)
         return
       }
       const fp = cssEscape(fingerprint)

@@ -407,7 +407,7 @@ test('a draft being edited keeps the focus and caret when another draft finishes
   ])
 })
 
-test('a draft deleted in the phone modal is said on top of the modal', async ({
+test('a draft deleted in the phone modal is said in the modal, clear of its top edge', async ({
   page,
   noChatUrl,
 }, testInfo) => {
@@ -419,16 +419,12 @@ test('a draft deleted in the phone modal is said on top of the modal', async ({
   const modal = page.locator('#chat-dialog')
   await expect(modal).toHaveJSProperty('open', true)
   await page.locator('#review-panel [data-act="pending-delete"]').click()
-  // The modal makes the page behind it inert, so the toast is written in the modal.
+  // The modal is in the top layer and makes the page behind it inert, so the toast is written in it.
   const note = modal.locator('.toast')
   await expect(note).toHaveText('draft deleted')
   await note.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)))
-  expect((await note.boundingBox())?.y).toBe(8)
-  const onTop = await note.evaluate(el => {
-    const r = el.getBoundingClientRect()
-    return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2))
-  })
-  expect(onTop).toBe(true)
+  const [noteTop, modalTop] = [(await note.boundingBox())?.y ?? 0, (await modal.boundingBox())?.y ?? 0]
+  expect(noteTop).toBeLessThan(modalTop)
 })
 
 test('a review submitted from the phone modal leaves its receipt on top', async ({

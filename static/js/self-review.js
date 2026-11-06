@@ -121,16 +121,6 @@ export function selfReviewNoteHtml(points) {
 }
 
 /**
- * How the note about a written settlement is drawn: as a failure when the shared canvas did not
- * follow, though the settlement itself is saved.
- * @param {import('./contract-types.js').SettleResponse['sharing']} sharing
- * @returns {import('./commands.js').ToastTone}
- */
-function sharingTone(sharing) {
-  return sharing.status === 'failed' ? 'failed' : 'done'
-}
-
-/**
  * What the reader is told once a settlement is written: whether the shared canvas followed.
  * @param {import('./contract-types.js').SettleResponse['sharing']} sharing
  * @param {string} done what happened to the point
@@ -155,7 +145,7 @@ export function sharingNote(sharing, done) {
  * @param {HTMLElement} el the command, which shows the request and its error
  * @param {string} fingerprint
  * @param {{ reason: string, comment: boolean }} input `comment` also posts the reason on the line
- * @param {(message: string, tone: import('./commands.js').ToastTone) => void} notify
+ * @param {(message: string) => void} notify
  * @returns {Promise<true | undefined>} true once the point is resolved
  */
 export function resolvePoint(session, el, fingerprint, input, notify) {
@@ -168,7 +158,7 @@ export function resolvePoint(session, el, fingerprint, input, notify) {
     el,
     async () => {
       const answer = await session.settle(fingerprint, { settled: true, ...input })
-      notify(sharingNote(answer.sharing, 'point resolved'), sharingTone(answer.sharing))
+      notify(sharingNote(answer.sharing, 'point resolved'))
       return /** @type {const} */ (true)
     },
     { pendingLabel: 'resolving…' }
@@ -209,7 +199,7 @@ export function openSettleBox(command, point, session, reason) {
  * The commands of self-review, for the page's one click handler: open the reason box, write the
  * settlement, close the box, and reopen a settled point.
  * @param {import('./review-session.js').ReviewSession} session
- * @param {(message: string, tone: import('./commands.js').ToastTone) => void} notify
+ * @param {(message: string) => void} notify
  * @returns {Record<string, (el: HTMLElement) => void>}
  */
 export function selfReviewActions(session, notify) {
@@ -251,7 +241,7 @@ export function selfReviewActions(session, notify) {
         el,
         async () => {
           const answer = await session.settle(point.fingerprint, { settled: false })
-          notify(sharingNote(answer.sharing, 'point reopened'), sharingTone(answer.sharing))
+          notify(sharingNote(answer.sharing, 'point reopened'))
         },
         { pendingLabel: 'reopening…' }
       )

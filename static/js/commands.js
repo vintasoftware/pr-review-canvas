@@ -86,69 +86,12 @@ export function clearCommandError(el) {
 
 /** @type {WeakMap<Element, ReturnType<typeof setTimeout>>} */
 const toastTimers = new WeakMap()
-/** How long a toast stays up once the pointer or focus is away from it, by tone. */
-const TOAST_MS = { done: 5000, note: 5000, failed: 8000 }
 
 /**
  * What a toast says about what happened: `done` for something the reader did that worked, `note`
  * for news or a hint, `failed` for something that did not happen.
- * @typedef {keyof typeof TOAST_MS} ToastTone
+ * @typedef {'done' | 'note' | 'failed'} ToastTone
  */
-
-/**
- * Starts the countdown that clears a toast.
- * @param {HTMLElement} box
- * @param {number} ms
- */
-function scheduleToastClear(box, ms) {
-  clearTimeout(toastTimers.get(box))
-  toastTimers.set(
-    box,
-    setTimeout(() => {
-      box.textContent = ''
-      toastTimers.delete(box)
-    }, ms)
-  )
-}
-
-/**
- * The live region a toast is written to: it holds its message while the pointer or focus is on
- * it, and counts down again once both leave.
- * @param {HTMLElement} root
- * @returns {HTMLElement}
- */
-function createToastRegion(root) {
-  const region = document.createElement('div')
-  region.className = 'toast'
-  region.setAttribute('role', 'status')
-  region.setAttribute('aria-live', 'polite')
-  let hovered = false
-  let focused = false
-  const hold = () => clearTimeout(toastTimers.get(region))
-  const release = () => {
-    if (!hovered && !focused && region.textContent !== '') {
-      scheduleToastClear(region, TOAST_MS[/** @type {ToastTone} */ (region.dataset['tone'])])
-    }
-  }
-  region.addEventListener('pointerenter', () => {
-    hovered = true
-    hold()
-  })
-  region.addEventListener('pointerleave', () => {
-    hovered = false
-    release()
-  })
-  region.addEventListener('focusin', () => {
-    focused = true
-    hold()
-  })
-  region.addEventListener('focusout', event => {
-    focused = event.relatedTarget instanceof Node && region.contains(event.relatedTarget)
-    release()
-  })
-  root.appendChild(region)
-  return region
-}
 
 /**
  * The one place the page says what just happened. Screen readers get it through `aria-live`.
@@ -162,25 +105,34 @@ function createToastRegion(root) {
  *   and color, `done` by default; `link` follows the message, to what just happened on the forge
  */
 export function toast(root, message, opts = {}) {
-  const tone = opts.tone ?? 'done'
   const modal = [...root.querySelectorAll('dialog:modal')].at(-1)
   const host = modal instanceof HTMLElement ? modal : root
-  const found = host.querySelector(':scope > .toast')
-  const box = found instanceof HTMLElement ? found : createToastRegion(host)
+  let box = host.querySelector(':scope > .toast')
+  if (!(box instanceof HTMLElement)) {
+    box = document.createElement('div')
+    box.className = 'toast'
+    box.setAttribute('role', 'status')
+    box.setAttribute('aria-live', 'polite')
+    host.appendChild(box)
+  }
+  clearTimeout(toastTimers.get(box))
   box.textContent = message
   if (opts.link !== undefined) {
     box.append(' · ', externalLink(opts.link.url, opts.link.text))
   }
-  box.dataset['tone'] = tone
+  box.setAttribute('data-tone', opts.tone ?? 'done')
   // Plays the entrance again, so a message that replaces another is seen to change.
   box.classList.remove('enter')
-  void box.offsetWidth
+  void box.clientWidth
   box.classList.add('enter')
-  if (box.matches(':hover') || box.contains(document.activeElement)) {
-    clearTimeout(toastTimers.get(box))
-  } else {
-    scheduleToastClear(box, TOAST_MS[tone])
-  }
+  const region = box
+  toastTimers.set(
+    region,
+    setTimeout(() => {
+      region.textContent = ''
+      toastTimers.delete(region)
+    }, 5000)
+  )
   return box
 }
 

@@ -52,18 +52,15 @@ tr.composer .x {
   outline-offset: 2px;
 }
 .toast {
-  /* Each tone's glyph, a disc with its mark cut out: a check, an i, an exclamation mark. */
-  --i-toast-done: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Cpath d='M4.6 8.3l2.2 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
-  --i-toast-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Ccircle cx='8' cy='4.7' r='1.15'/%3E%3Crect x='7.05' y='6.9' width='1.9' height='5.3' rx='.95'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
-  --i-toast-failed: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Crect x='7.05' y='3.6' width='1.9' height='5.6' rx='.95'/%3E%3Ccircle cx='8' cy='11.5' r='1.15'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
+  /* Each tone's glyph is a disc with its mark cut out: a check, an i, an exclamation mark. */
   --tone: var(--ok);
-  --i-tone: var(--i-toast-done);
+  --i-tone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Cpath d='M4.6 8.3l2.2 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
   position: fixed;
-  /* The window's top right corner, over whatever is there, side pane included. */
+  /* The window's top right corner, over whatever is there, side pane included. Clicks pass
+     through to what it covers, except on its link. */
   top: 8px;
   right: 16px;
   z-index: 30;
-  width: max-content;
   max-width: min(420px, calc(100vw - 32px));
   padding: 11px 16px 11px 44px;
   background: color-mix(in srgb, var(--tone) 10%, var(--panel));
@@ -74,6 +71,7 @@ tr.composer .x {
   font-size: var(--fs);
   font-weight: 600;
   line-height: 1.4;
+  pointer-events: none;
 }
 .toast::before {
   content: '';
@@ -86,16 +84,16 @@ tr.composer .x {
   mask: var(--i-tone) center / contain no-repeat;
 }
 .toast a {
-  font-weight: 600;
+  pointer-events: auto;
 }
 .toast[data-tone='note'] {
   /* Not the accent: on the olive skin that is green, which reads as done. */
   --tone: var(--point-blue);
-  --i-tone: var(--i-toast-note);
+  --i-tone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Ccircle cx='8' cy='4.7' r='1.15'/%3E%3Crect x='7.05' y='6.9' width='1.9' height='5.3' rx='.95'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
 }
 .toast[data-tone='failed'] {
   --tone: var(--bad);
-  --i-tone: var(--i-toast-failed);
+  --i-tone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff'/%3E%3Crect x='7.05' y='3.6' width='1.9' height='5.6' rx='.95'/%3E%3Ccircle cx='8' cy='11.5' r='1.15'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E");
 }
 .toast.enter {
   animation: toast-enter 220ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
