@@ -831,23 +831,20 @@ export function wireReview(root, session, opts = {}) {
             : review.state === 'CHANGES_REQUESTED'
               ? 'changes requested'
               : 'review posted'
-        toast(
-          root,
-          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
-          { link: { url: review.url, text: `see it on ${hostLabel()}` } }
-        )
-        // The page behind already shows what the review changed, so the dialog gets out of the way,
-        // and so does a pane floating over the page, which would cover the receipt. A warning is the
-        // one thing still to read there.
-        if (warnings.length === 0) {
-          dialog.close()
-          opts.uncover?.()
+        const receipt = `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
+        // A warning is the one thing still to read in the dialog, which shows the receipt with it.
+        if (warnings.length > 0) {
+          showSignoffResult(dialog, review, receipt)
+          for (const warning of warnings) {
+            dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
+          }
           return
         }
-        showSignoffResult(dialog, review)
-        for (const warning of warnings) {
-          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
-        }
+        // The page behind already shows what the review changed, so the dialog gets out of the way,
+        // and so does a pane floating over the page, which would cover the receipt.
+        dialog.close()
+        opts.uncover?.()
+        toast(root, receipt, { link: { url: review.url, text: `see it on ${hostLabel()}` } })
       },
       { pendingLabel: 'posting…' }
     )
@@ -864,7 +861,7 @@ export function wireReview(root, session, opts = {}) {
     }
     setFoldLevel(root, value)
     refreshFoldLevel(root, value, hiddenAt(value))
-    toast(root, `hiding code: ${value}`)
+    toast(root, `hiding code: ${value}`, { tone: 'note' })
   }
 
   /**
@@ -1214,7 +1211,7 @@ export function wireReview(root, session, opts = {}) {
     ask: el => {
       const chat = opts.chat?.() ?? null
       if (chat === null) {
-        toast(root, NO_CHAT_NOTE)
+        toast(root, NO_CHAT_NOTE, { tone: 'note' })
         return
       }
       chat.ask(chatContextFromElement(el))
@@ -1425,7 +1422,7 @@ export function wireReview(root, session, opts = {}) {
         const chat = opts.chat?.() ?? null
         const target = askTargetFor(focused(), selection)
         if (chat === null) {
-          toast(root, NO_CHAT_NOTE)
+          toast(root, NO_CHAT_NOTE, { tone: 'note' })
           break
         }
         chat.ask(target)

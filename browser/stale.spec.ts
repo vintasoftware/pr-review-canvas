@@ -69,6 +69,8 @@ test('warns above an outdated canvas and clears the warning after refresh', asyn
   await expect(page.locator('#regenerate-dialog code')).toHaveText('/pr-review-canvas 42')
   await page.locator('#regenerate-dialog button[value="close"]').click()
   outdated = false
+  // The note that code is hidden sits over the page actions; a click clears it.
+  await page.locator('.toast').click()
   await page.locator('#refresh').click()
   await expect(page.locator('section.layer').first()).toBeVisible()
   await expect(warning).toHaveCount(0)

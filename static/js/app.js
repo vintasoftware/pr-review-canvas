@@ -438,7 +438,9 @@ export class PrAppElement extends HTMLElement {
             // A newer generation for this commit was imported; its resolutions belong to it.
             this.settledPoller?.stop()
             this.settledPoller = null
-            toast(this, 'the author shared a newer canvas for this commit; refresh to load it')
+            toast(this, 'the author shared a newer canvas for this commit; refresh to load it', {
+              tone: 'note',
+            })
             return
           }
           const added = session.takeSettled(answer)
@@ -450,7 +452,8 @@ export class PrAppElement extends HTMLElement {
             const kept = drafted === 0 ? '' : `; your review keeps your ${about}`
             toast(
               this,
-              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`
+              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`,
+              { tone: 'note' }
             )
           }
         })
@@ -482,7 +485,7 @@ export class PrAppElement extends HTMLElement {
    */
   wireAppearance() {
     wireAppearanceCommands(this, (what, saved) => {
-      if (!saved) toast(this, `could not save the ${what} to settings.yml`)
+      if (!saved) toast(this, `could not save the ${what} to settings.yml`, { tone: 'failed' })
     })
   }
 
@@ -505,7 +508,7 @@ export class PrAppElement extends HTMLElement {
       this.generation ??= createGeneration(this, {
         prNumber: boot.prNumber,
         onEnded: job => this.generationEnded(job),
-        onError: message => toast(this, message),
+        onError: message => toast(this, message, { tone: 'failed' }),
       })
       this.generation.attach(bundle)
     }
@@ -579,7 +582,8 @@ export class PrAppElement extends HTMLElement {
           this,
           job.phase === 'cancelled'
             ? 'canvas generation stopped'
-            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`,
+          { tone: job.phase === 'cancelled' ? 'note' : 'failed' }
         )
       }
       return

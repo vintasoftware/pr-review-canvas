@@ -1451,7 +1451,9 @@ export function wireChat(options) {
         // is marked as having a new answer below.
         if (!current.shown && !agentTookTurn) {
           refused.push(current)
-          toast(root, `Your question in “${threadLabel(current)}” was not sent: ${reason}`, { failed: true })
+          toast(root, `Your question in “${threadLabel(current)}” was not sent: ${reason}`, {
+            tone: 'failed',
+          })
         }
       }
     } finally {
@@ -1946,7 +1948,8 @@ export function wireChat(options) {
             root,
             live?.shown === true
               ? 'An answer is coming in here. Ask this once it ends.'
-              : `A question already waits for the answer in “${answeringName()}”. Ask this once it is sent.`
+              : `A question already waits for the answer in “${answeringName()}”. Ask this once it is sent.`,
+            { tone: 'failed' }
           )
           return
         }

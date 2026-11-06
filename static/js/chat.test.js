@@ -1613,6 +1613,7 @@ describe('a place’s thread, in its corners', () => {
     expect(root.querySelector('.toast')?.textContent).toBe(
       'A question already waits for the answer in “overall”. Ask this once it is sent.'
     )
+    expect(root.querySelector('.toast')?.getAttribute('data-tone')).toBe('failed')
   })
 
   it('records the thread a draft on screen gets as the one a reload opens, and only that one', async () => {

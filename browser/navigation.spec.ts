@@ -270,6 +270,8 @@ test('refresh stops regeneration polling before waiting for patches', async ({ p
   release()
   await expect(page.locator('#refresh')).toBeEnabled()
   expect(polls).toBe(0)
+  // The note that a newer canvas is out sits over the page actions; a click clears it.
+  await page.locator('.toast').click()
   await page.locator('#refresh').click()
   await expect(page.locator('#overview .summary')).toHaveText(newer.summary)
 })

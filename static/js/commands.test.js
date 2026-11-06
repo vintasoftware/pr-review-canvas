@@ -152,7 +152,7 @@ describe('wireCopyCommands', () => {
       expect(button.getAttribute('data-copied')).toBe('failed')
       const box = root.querySelector('.toast')
       expect(box?.textContent).toBe('could not copy')
-      expect(box?.classList.contains('failed')).toBe(true)
+      expect(box?.getAttribute('data-tone')).toBe('failed')
       expect(root.querySelector('.cmd-err')?.textContent).toBe('Write permission denied.')
       vi.advanceTimersByTime(COPY_RESULT_MS)
       expect(button.textContent).toBe('copy')
@@ -252,10 +252,32 @@ describe('toast', () => {
     expect(box.textContent).toBe('')
   })
 
-  it('draws a failure as one, and the next message as ordinary again', () => {
+  it('draws each message in its own tone, done by default', () => {
     const root = document.createElement('div')
-    expect(toast(root, 'could not copy', { failed: true }).classList.contains('failed')).toBe(true)
-    expect(toast(root, 'copied to clipboard').classList.contains('failed')).toBe(false)
+    expect(toast(root, 'could not copy', { tone: 'failed' }).getAttribute('data-tone')).toBe('failed')
+    expect(toast(root, 'copied to clipboard').getAttribute('data-tone')).toBe('done')
+    expect(toast(root, 'the AI Chat pane is off', { tone: 'note' }).getAttribute('data-tone')).toBe('note')
+  })
+
+  it('stays up while the pointer is on it, and counts five seconds again once it leaves', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point added to your review')
+    vi.advanceTimersByTime(4000)
+    box.dispatchEvent(new Event('pointerenter'))
+    vi.advanceTimersByTime(20000)
+    expect(box.textContent).toBe('attention point added to your review')
+    box.dispatchEvent(new Event('pointerleave'))
+    vi.advanceTimersByTime(4999)
+    expect(box.textContent).toBe('attention point added to your review')
+    vi.advanceTimersByTime(1)
+    expect(box.textContent).toBe('')
+  })
+
+  it('clears on a click', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point added to your review')
+    box.dispatchEvent(new MouseEvent('click'))
+    expect(box.textContent).toBe('')
   })
 
   it('keeps the page region apart from the region of a dialog inside the page', () => {
