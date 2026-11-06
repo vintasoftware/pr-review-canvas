@@ -152,7 +152,7 @@ describe('wireCopyCommands', () => {
       expect(button.getAttribute('data-copied')).toBe('failed')
       const box = root.querySelector('.toast')
       expect(box?.textContent).toBe('could not copy')
-      expect(box?.classList.contains('failed')).toBe(true)
+      expect(box?.getAttribute('data-tone')).toBe('failed')
       expect(root.querySelector('.cmd-err')?.textContent).toBe('Write permission denied.')
       vi.advanceTimersByTime(COPY_RESULT_MS)
       expect(button.textContent).toBe('copy')
@@ -252,10 +252,48 @@ describe('toast', () => {
     expect(box.textContent).toBe('')
   })
 
-  it('draws a failure as one, and the next message as ordinary again', () => {
+  it('draws each message in its own tone, done by default', () => {
     const root = document.createElement('div')
-    expect(toast(root, 'could not copy', { failed: true }).classList.contains('failed')).toBe(true)
-    expect(toast(root, 'copied to clipboard').classList.contains('failed')).toBe(false)
+    expect(toast(root, 'could not copy', { tone: 'failed' }).getAttribute('data-tone')).toBe('failed')
+    expect(toast(root, 'copied to clipboard').getAttribute('data-tone')).toBe('done')
+    expect(toast(root, 'the AI Chat pane is off', { tone: 'note' }).getAttribute('data-tone')).toBe('note')
+  })
+
+  it('keeps a failure up longer than an ordinary message', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'could not copy', { tone: 'failed' })
+    vi.advanceTimersByTime(7999)
+    expect(box.textContent).toBe('could not copy')
+    vi.advanceTimersByTime(1)
+    expect(box.textContent).toBe('')
+  })
+
+  it('stays up while the pointer is on it and counts down again after', () => {
+    const root = document.createElement('div')
+    const box = toast(root, 'attention point added to your review')
+    vi.advanceTimersByTime(4000)
+    box.dispatchEvent(new Event('pointerenter'))
+    vi.advanceTimersByTime(20000)
+    expect(box.textContent).toBe('attention point added to your review')
+    box.dispatchEvent(new Event('pointerleave'))
+    vi.advanceTimersByTime(4999)
+    expect(box.textContent).toBe('attention point added to your review')
+    vi.advanceTimersByTime(1)
+    expect(box.textContent).toBe('')
+  })
+
+  it('stays up while focus is inside it', () => {
+    document.body.innerHTML = '<div id="root"></div><button id="away">away</button>'
+    const root = /** @type {HTMLElement} */ (document.querySelector('#root'))
+    const box = toast(root, 'approved', { link: { url: 'https://example.com/r', text: 'see it' } })
+    const link = /** @type {HTMLElement} */ (box.querySelector('a'))
+    link.focus()
+    vi.advanceTimersByTime(20000)
+    expect(box.textContent).toBe('approved · see it')
+    const away = /** @type {HTMLElement} */ (document.querySelector('#away'))
+    away.focus()
+    vi.advanceTimersByTime(5000)
+    expect(box.textContent).toBe('')
   })
 
   it('keeps the page region apart from the region of a dialog inside the page', () => {

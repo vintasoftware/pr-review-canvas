@@ -85,7 +85,8 @@ for (const receipt of ['available', 'unavailable']) {
     await closeChat()
     await page.locator('.pending-bar [data-act="pending-finish"]').click()
     await page.locator('[data-act="signoff-post"]').click()
-    await expect(page.locator('.toast')).toContainText('review posted with 2 comments')
+    // With a warning the dialog stays open over the page, so the receipt is written in the dialog.
+    await expect(page.locator('.toast').filter({ hasText: 'review posted with 2 comments' })).toBeVisible()
     if (receipt === 'available') {
       await expect(page.locator('#signoff-dialog')).toBeHidden()
     } else {

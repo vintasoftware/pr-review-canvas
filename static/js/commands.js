@@ -86,39 +86,101 @@ export function clearCommandError(el) {
 
 /** @type {WeakMap<Element, ReturnType<typeof setTimeout>>} */
 const toastTimers = new WeakMap()
+/** How long a toast stays up once the pointer or focus is away from it, by tone. */
+const TOAST_MS = { done: 5000, note: 5000, failed: 8000 }
+
+/**
+ * What a toast says about what happened: `done` for something the reader did that worked, `note`
+ * for news or a hint, `failed` for something that did not happen.
+ * @typedef {keyof typeof TOAST_MS} ToastTone
+ */
+
+/**
+ * Starts the countdown that clears a toast.
+ * @param {HTMLElement} box
+ * @param {number} ms
+ */
+function scheduleToastClear(box, ms) {
+  clearTimeout(toastTimers.get(box))
+  toastTimers.set(
+    box,
+    setTimeout(() => {
+      box.textContent = ''
+      toastTimers.delete(box)
+    }, ms)
+  )
+}
+
+/**
+ * The live region a toast is written to: it holds its message while the pointer or focus is on
+ * it, and counts down again once both leave.
+ * @param {HTMLElement} root
+ * @returns {HTMLElement}
+ */
+function createToastRegion(root) {
+  const region = document.createElement('div')
+  region.className = 'toast'
+  region.setAttribute('role', 'status')
+  region.setAttribute('aria-live', 'polite')
+  let hovered = false
+  let focused = false
+  const hold = () => clearTimeout(toastTimers.get(region))
+  const release = () => {
+    if (!hovered && !focused && region.textContent !== '') {
+      scheduleToastClear(region, TOAST_MS[/** @type {ToastTone} */ (region.dataset['tone'])])
+    }
+  }
+  region.addEventListener('pointerenter', () => {
+    hovered = true
+    hold()
+  })
+  region.addEventListener('pointerleave', () => {
+    hovered = false
+    release()
+  })
+  region.addEventListener('focusin', () => {
+    focused = true
+    hold()
+  })
+  region.addEventListener('focusout', event => {
+    focused = event.relatedTarget instanceof Node && region.contains(event.relatedTarget)
+    release()
+  })
+  root.appendChild(region)
+  return region
+}
 
 /**
  * The one place the page says what just happened. Screen readers get it through `aria-live`.
  * The region is a direct child of `root`, so a page toast never lands in the region of a dialog
- * inside the page.
+ * inside the page. While a modal dialog in `root` is open, the toast goes in that dialog instead:
+ * the dialog is in the top layer and makes the page behind it inert, so the page's toast would be
+ * hidden under it and unannounced.
  * @param {HTMLElement} root
  * @param {string} message
- * @param {{ failed?: boolean, link?: { url: string, text: string } }} [opts] `failed` draws it as a
- *   failure; `link` follows the message, to what just happened on the forge
+ * @param {{ tone?: ToastTone, link?: { url: string, text: string } }} [opts] `tone` sets its icon
+ *   and color, `done` by default; `link` follows the message, to what just happened on the forge
  */
 export function toast(root, message, opts = {}) {
-  let box = root.querySelector(':scope > .toast')
-  if (!(box instanceof HTMLElement)) {
-    box = document.createElement('div')
-    box.className = 'toast'
-    box.setAttribute('role', 'status')
-    box.setAttribute('aria-live', 'polite')
-    root.appendChild(box)
-  }
-  clearTimeout(toastTimers.get(box))
+  const tone = opts.tone ?? 'done'
+  const modal = [...root.querySelectorAll('dialog:modal')].at(-1)
+  const host = modal instanceof HTMLElement ? modal : root
+  const found = host.querySelector(':scope > .toast')
+  const box = found instanceof HTMLElement ? found : createToastRegion(host)
   box.textContent = message
   if (opts.link !== undefined) {
     box.append(' · ', externalLink(opts.link.url, opts.link.text))
   }
-  box.classList.toggle('failed', opts.failed === true)
-  const region = box
-  toastTimers.set(
-    region,
-    setTimeout(() => {
-      region.textContent = ''
-      toastTimers.delete(region)
-    }, 5000)
-  )
+  box.dataset['tone'] = tone
+  // Plays the entrance again, so a message that replaces another is seen to change.
+  box.classList.remove('enter')
+  void box.offsetWidth
+  box.classList.add('enter')
+  if (box.matches(':hover') || box.contains(document.activeElement)) {
+    clearTimeout(toastTimers.get(box))
+  } else {
+    scheduleToastClear(box, TOAST_MS[tone])
+  }
   return box
 }
 
@@ -195,10 +257,5 @@ async function copyFrom(root, el, copy) {
     { pendingLabel: 'copying…' }
   )
   showCopyResult(el, copied ? 'copied' : 'failed')
-  // A modal dialog is in the top layer and makes the page behind it inert, so the page's toast
-  // would be hidden and unannounced there. The dialog gets its own.
-  const where = el.closest('dialog:modal')
-  toast(where instanceof HTMLElement ? where : root, copied ? 'copied to clipboard' : 'could not copy', {
-    failed: !copied,
-  })
+  toast(root, copied ? 'copied to clipboard' : 'could not copy', { tone: copied ? 'done' : 'failed' })
 }
