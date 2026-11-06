@@ -60,8 +60,7 @@ describe('points', () => {
     document.body.innerHTML = `<ol>${pointCardHtml(p, ctx)}</ol>`
     const li = document.querySelector('li.finding')
     expect(li?.id).toBe('point-p-1')
-    expect(li?.querySelector(':scope > .lvl')?.textContent).toBe('decide')
-    expect(li?.querySelector('.lvl .lv.decide')?.getAttribute('aria-hidden')).toBe('true')
+    expect(li?.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('decide')
     expect(li?.querySelector('.pill.impact.high')?.textContent).toBe('high')
     expect(li?.querySelector('.pill.kind')?.textContent).toBe('design choice')
     expect(li?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
@@ -99,7 +98,7 @@ describe('points', () => {
     expect(tr?.classList.contains('check')).toBe(true)
     expect(tr?.getAttribute('data-point')).toBe('p-2')
     expect(tr?.querySelector('.f-title .p-title')?.textContent).toBe(p.title)
-    expect(tr?.querySelector('.f-title > .lvl')?.textContent).toBe('check')
+    expect(tr?.querySelector('.f-title > .lv.check')?.getAttribute('aria-label')).toBe('check')
     document.body.innerHTML = sevsumHtml(points)
     expect(document.querySelector('.sevsum')?.textContent).toBe('111decidecheckfyi')
     expect(document.querySelector('.sevsum a')).toBeNull()

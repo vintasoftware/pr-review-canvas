@@ -598,6 +598,20 @@
   .pr-conversation > .conversation {
     margin-bottom: var(--inset);
   }
+  /* A square before the title says what the section holds: green for tests, purple for points. */
+  .lbl.sub:is(:has(+ .testmap), :has(+ .findings))::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--sect);
+  }
+  .lbl.sub:has(+ .testmap) {
+    --sect: var(--progress);
+  }
+  .lbl.sub:has(+ .findings) {
+    --sect: var(--purple);
+  }
   .lbl.sub:has(+ .files) {
     margin-top: 20px;
   }

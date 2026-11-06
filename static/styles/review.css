@@ -280,15 +280,6 @@
 .sevsum > a:hover {
   text-decoration: underline;
 }
-.lvl {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-muted);
-  white-space: nowrap;
-}
 .lv {
   display: inline-flex;
   width: 14px;
@@ -348,11 +339,8 @@
 .findings li:first-child {
   border-top: 0;
 }
-/* The level label is the card's first column; a width for the longest level keeps the titles of
-   a list in line. */
-.findings > li > .lvl {
-  min-width: 5.5em;
-  margin-top: 2px;
+.findings > li > .lv {
+  margin-top: 5px;
 }
 .findings p {
   max-width: 100ch;

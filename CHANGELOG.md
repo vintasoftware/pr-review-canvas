@@ -14,9 +14,6 @@
 - A layer's attention points start as one line each, with their level, kind, audience, and location.
   Click the title, **show**, or press `o` to read one. **show details** in the list's heading opens
   every open point, and the browser remembers it.
-- Every attention point names its level beside its shape, as in `◆ decide`, in its layer and on
-  its line in the diff. The GitHub skin drops the colored squares before the Tests and Attention
-  points headings, which named nothing the heading did not.
 - **Start collapsed** in the settings dialog, saved as `startCollapsed` in `settings.yml`, opens a
   review with only the first layer open and every file closed under its name. It is off by
   default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.

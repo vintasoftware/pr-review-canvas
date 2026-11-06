@@ -120,15 +120,6 @@ export function pointLocation(p) {
 }
 
 /**
- * A point's level written out beside its icon, as the overview header counts them, so neither
- * the shape nor the color is the only way to tell the levels apart.
- * @param {Point} p
- */
-export function levelHtml(p) {
-  return `<span class="lvl">${levelIconHtml(p.level, null)}${p.level}</span>`
-}
-
-/**
  * Whether a point's comment names the canvas it came from. Off when `sharing.mentionCanvas` is
  * off; `app.js` sets it once per render, before the cards that read it are built.
  */
@@ -415,7 +406,7 @@ function pointPartsHtml(p, ctx, opts) {
 export function pointCardHtml(p, ctx) {
   const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: true })
   return (
-    `<li class="finding${handled}" id="${esc(pointAnchorId(p.id))}" ${attrs}>${levelHtml(p)}<div>` +
+    `<li class="finding${handled}" id="${esc(pointAnchorId(p.id))}" ${attrs}>${levelIconHtml(p.level)}<div>` +
     `<div class="f-title">${title}</div>${rest}</div></li>`
   )
 }
@@ -429,7 +420,7 @@ export function pointRowHtml(p, ctx) {
   const { attrs, handled, title, rest } = pointPartsHtml(p, ctx, { card: false })
   return (
     `<tr class="ifind ${p.level}${handled}" ${attrs}>` +
-    wideCellHtml(`<div class="f-title">${levelHtml(p)}${title}</div>${rest}`) +
+    wideCellHtml(`<div class="f-title">${levelIconHtml(p.level)}${title}</div>${rest}`) +
     '</tr>'
   )
 }

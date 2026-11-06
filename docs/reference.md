@@ -736,8 +736,7 @@ zone or `pr-review import <zip> --pr <n>`.
 ### Attention point levels and impact
 
 Each attention point has a level, which says what it asks of you rather than how bad it is. Its
-icon shows the level by shape, and the level's name stands beside it on its card and on its line
-in the diff. The overview's counts show the icons alone; hover them for the names:
+icon shows the level by shape:
 
 - **decide** (a diamond): a choice only a person can make, or a structural problem that holds the
   merge until the author justifies it.
