@@ -6,8 +6,6 @@
 
 - The overview summary, a layer's rationale and the PR description fill the width of their panel,
   diagrams included, instead of stopping at 100 characters.
-- The overview header names each level next to its count, as in `3 decide · 1 check · 2 fyi`, in
-  place of the legend that opened on hover.
 - The overview's Conversation starts closed, like the PR description and the review history, with
   its comment count in the title.
 - A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,

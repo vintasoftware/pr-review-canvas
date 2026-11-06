@@ -259,6 +259,7 @@
 }
 
 .sevsum {
+  position: relative;
   display: inline-flex;
   gap: 14px;
   align-items: center;
@@ -306,6 +307,36 @@
 .lv.check {
   fill: var(--level-check);
 }
+.sevsum > .legend {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  display: none;
+  z-index: 4;
+  background: var(--panel);
+  border: 1px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--shadow);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 12px;
+}
+.legend span:last-child {
+  margin-right: 0;
+}
+.sevsum:hover > .legend,
+.sevsum:focus > .legend,
+.sevsum:focus-within > .legend {
+  display: block;
+}
+
 .findings li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

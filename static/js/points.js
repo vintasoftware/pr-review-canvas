@@ -615,20 +615,23 @@ export function setPointExpanded(el, expanded = !el.hasAttribute('data-expanded'
 }
 
 /**
- * The count of each level in the overview header, written out as "3 decide" beside its icon.
- * Each count links to the first layer that has a point of that level, so the overview only counts
- * and the layers hold the cards.
+ * The three level icons with counts in the overview header. Each count links to the first layer that
+ * has a point of that level, so the overview only counts and the layers hold the cards.
  * @param {ReadonlyArray<Point>} points
  * @param {ReadonlyArray<Layer>} [layers] artifact order; omitted when there is nothing to link to
  */
 export function sevsumHtml(points, layers = []) {
   const by = pointsByLevel(points)
   const cell = /** @param {'decide' | 'check' | 'fyi'} level */ level => {
-    const count = `${levelIconHtml(level, null)}${by[level].length} ${level}`
+    const n = by[level].length
+    const icon = `${levelIconHtml(level, `${n} ${level}`)}${n}`
     const target = layers.find(l => by[level].some(p => p.layerId === l.id))
-    return target ? `<a href="#${esc(layerAnchorId(target.key))}">${count}</a>` : `<span>${count}</span>`
+    return target ? `<a href="#${esc(layerAnchorId(target.key))}">${icon}</a>` : `<span>${icon}</span>`
   }
-  return `<span class="sevsum" role="group" aria-label="Attention points by level">${LEVELS.map(cell).join('')}</span>`
+  return (
+    `<span class="sevsum" tabindex="0" role="group" aria-label="Attention points by level">${cell('decide')}${cell('check')}${cell('fyi')}` +
+    `<span class="legend" aria-hidden="true">${LEVELS.map(l => `<span>${levelIconHtml(l, null)}${l}</span>`).join('')}</span></span>`
+  )
 }
 
 /**
