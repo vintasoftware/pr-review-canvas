@@ -623,9 +623,11 @@ img.av {
 [data-lens='point'] .files {
   margin-top: 12px;
 }
-/* A stop shows its layer open, with no chevron to fold it, and a fold from a key changes nothing. */
+/* A stop shows its layer, and a point's file, open, with no chevron to fold them, and a fold from
+   a key changes nothing. */
 [data-lens] > .layer-h > .chev,
-[data-lens] > details > summary .chev {
+[data-lens] > details > summary .chev,
+[data-lens='point'] article.file > .file-h > .chev {
   display: none;
 }
 [data-lens] > .layer-body[hidden] {
@@ -641,8 +643,11 @@ img.av {
 [data-lens='point'] article.file > .file-body[hidden] {
   display: block !important;
 }
-/* The card above shows the point whole; its line in the diff keeps the title. */
-section.layer[data-lens='point'] tr.ifind :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
+/* The card above shows the point whole; its line in the diff keeps the title, until a handled
+   point's own show opens it. */
+section.layer[data-lens='point']
+  tr.ifind:not([data-expanded])
+  :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
   display: none;
 }
 .step-nav {
@@ -655,6 +660,17 @@ section.layer[data-lens='point'] tr.ifind :is(.prose, .p-outcome, .tbtns, .settl
 }
 .step-n {
   font-weight: 600;
+  white-space: nowrap;
+}
+/* On a phone the place goes over the two ways, so neither long label squeezes it. */
+@media (width <= 600px) {
+  .step-nav {
+    flex-wrap: wrap;
+  }
+  .step-n {
+    order: -1;
+    flex-basis: 100%;
+  }
 }
 .step-nav > :last-child {
   margin-left: auto;

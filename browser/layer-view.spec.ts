@@ -261,6 +261,22 @@ test.describe('reading by attention points', () => {
     for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(8)
   })
 
+  test('a point’s stop keeps its file open with no chevron, and a handled point’s line still opens', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#point-p-1')
+    const layer = page.locator('#layer-run-path')
+    await expect(layer).toHaveAttribute('data-lens', 'point')
+    await expect(layer.locator('article.file > .file-h > .chev').first()).toBeHidden()
+    await page.locator('#point-p-1 [data-act="point-dismiss"]').click()
+    await expect(page.locator('.toast')).toHaveText('attention point dismissed')
+    const row = layer.locator('tr.ifind[data-fingerprint="fp-1"]')
+    await expect(row.locator('.prose')).toBeHidden()
+    await row.locator('[data-act="point-expand"]').click()
+    await expect(row.locator('.prose')).toBeVisible()
+  })
+
   test('the settings turn reading by attention points off and on, on the open page', async ({
     page,
     reviewUrl,
