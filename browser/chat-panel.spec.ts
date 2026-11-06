@@ -102,6 +102,31 @@ test('minimizes the docked chat on a wide screen and remembers it', async ({ pag
   await expect(page.locator('#msg')).toBeFocused()
 })
 
+test.describe('with chatStartMinimized', () => {
+  test.use({ settings: { chatStartMinimized: true } })
+
+  test('starts the docked chat minimized on every load, even after the reader opened it', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.setViewportSize({ width: 1600, height: 900 })
+    await page.goto(reviewUrl)
+    const launcher = page.getByRole('button', { name: 'AI Chat', exact: true })
+    const pane = page.locator('.layout > .chat')
+    const layout = page.locator('.layout')
+    await expect(pane).toBeHidden()
+    await expect(layout).toHaveClass(/no-chat/)
+    await launcher.click()
+    await expect(pane).toBeVisible()
+    await expect(layout).not.toHaveClass(/no-chat/)
+
+    await page.reload()
+    await expect(pane).toBeHidden()
+    await expect(layout).toHaveClass(/no-chat/)
+    await expect(launcher).toBeVisible()
+  })
+})
+
 test('leaves the canvas scrolled where it was across minimize and restore', async ({ page, reviewUrl }) => {
   await page.setViewportSize({ width: 1600, height: 900 })
   await page.goto(reviewUrl)

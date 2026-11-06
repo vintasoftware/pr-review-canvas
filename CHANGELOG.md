@@ -2,8 +2,31 @@
 
 ## Unreleased
 
+### Reading
+
+- **Full-width text** in the settings dialog, saved as `fullWidthText` in `settings.yml`, lets the
+  overview summary, a layer's rationale and the PR description fill the width of their panel,
+  diagrams included, instead of stopping at 100 characters. It is off by default.
+- The overview's Conversation starts closed, like the PR description and the review history, with
+  its comment count in the title.
+- A layer's Tests table starts closed under a label that sums up its coverage: `fully covered`,
+  `2 of 3 covered`, `not covered`, or `no tests needed`. A behavior that needs no test counts
+  toward neither side.
+- **Compact attention points** in the settings dialog, saved as `compactPoints` in `settings.yml`,
+  lists a layer's attention points as one line each, with their level, kind, audience, and
+  location. Click the title, **show**, or press `o` to read one. **show details** in the list's
+  heading opens every open point, and the browser remembers it. It is off by default.
+- **Start collapsed** in the settings dialog, saved as `startCollapsed` in `settings.yml`, opens a
+  review with only the first layer open and every file closed under its name. It is off by
+  default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.
+- The rail, `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a
+  file or a point keeps its title where you clicked it, also at the end of the page.
+
 ### AI Chat
 
+- **Start minimized** under **AI Chat** in the settings dialog, saved as `chatStartMinimized` in
+  `settings.yml`, starts the docked chat minimized every time a review opens, so the canvas keeps
+  its full width. It is off by default: the chat opens the way you last left it.
 - A proposed comment whose range crosses two chunks says so on its card, in the words of the
   `#line:` link check, with the chunk ranges of that side. Its **post to github** and **add to
   review** stay disabled until you choose the part of the range inside one chunk, from a button

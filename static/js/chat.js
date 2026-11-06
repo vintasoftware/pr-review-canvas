@@ -190,6 +190,7 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
  *   api?: Partial<ChatApi>,
  *   reducedMotion?: boolean,
  *   threadPerPlace?: boolean,
+ *   minimized: boolean,
  *   onProposed?: (what: ProposedAct, comment: ProposedComment, el: HTMLElement) => void,
  *   onResolution?: (what: 'save' | 'edit', resolution: ProposedResolution, el: HTMLElement) => void,
  * }} ChatOptions
@@ -1657,7 +1658,7 @@ export function wireChat(options) {
 
   const stopResize = wireResize(pane, root, storage, applyWidth)
   const panel = wireChatPanel(root, pane, {
-    minimized: readChatMinimized(storage),
+    minimized: options.minimized,
     onMinimizedChange: minimized => writeChatMinimized(storage, minimized),
     onShownChange: shown => {
       paneShown = shown
