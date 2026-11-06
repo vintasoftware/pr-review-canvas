@@ -23,6 +23,7 @@
   .tree {
     display: flex;
     overflow-x: auto;
+    align-items: center;
     gap: 4px;
     padding: 0 8px;
   }
@@ -42,20 +43,33 @@
   .grp-lbl {
     display: none;
   }
+  /* A chip holds only what its item has: no room kept for a dot or a number it lacks, and no
+     indent from the rail's tree. */
   .tree a,
   .tree a:not(:has(.dot)) {
-    grid-template-areas: 'd n t';
-    grid-template-columns: auto auto minmax(0, 1fr);
+    display: flex;
     align-items: center;
+    gap: 8px;
     border: 1px solid var(--ink);
     padding: 5px 10px;
     box-shadow: 1px 1px 0 var(--shadow);
   }
-  .tree .layers a {
+  .tree .layers a,
+  .tree .rail-points li:not(.pt-layer) a {
     padding-left: 10px;
   }
-  .tree .dot {
+  .tree .dot,
+  .tree .rail-points .lv {
     margin-top: 0;
+  }
+  /* Every chip in the strip reads at one size, the points' and the layers' titles too. */
+  .tree .rail-points li:not(.pt-layer) a,
+  .tree .pt-layer .t {
+    font-size: 13px;
+  }
+  /* The switch sits level with the chips beside it. */
+  .rail-view {
+    padding: 0 6px;
   }
   .tree a[aria-current] {
     box-shadow: inset 0 -3px 0 var(--ink);

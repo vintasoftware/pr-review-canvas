@@ -289,6 +289,22 @@ test.describe('reading by attention points', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
     )
     expect(overflow).toBeLessThanOrEqual(0)
+    // Every chip starts its first part at one inset, and all of them, the switch too, share a middle.
+    const chips = await page.evaluate(() =>
+      [...document.querySelectorAll('nav.rail .tree a, nav.rail .rail-view')]
+        .filter(el => el.getClientRects().length > 0)
+        .map(el => {
+          const box = el.getBoundingClientRect()
+          const first = [...el.children].find(child => child.getClientRects().length > 0)
+          return {
+            link: el.matches('a'),
+            inset: Math.round((first?.getBoundingClientRect().left ?? box.left) - box.left),
+            middle: Math.round(box.top + box.height / 2),
+          }
+        })
+    )
+    expect(new Set(chips.filter(chip => chip.link).map(chip => chip.inset)).size).toBe(1)
+    expect(new Set(chips.map(chip => chip.middle)).size).toBe(1)
   })
 
   test('the settings turn reading by attention points off and on, on the open page', async ({
