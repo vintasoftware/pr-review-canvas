@@ -124,6 +124,16 @@ export function initOneLayer(root, opts) {
   /** @param {ReadonlyArray<Stop>} all @param {string} fragment */
   const stopNamed = (all, fragment) => all.find(stop => stop.id === decodeHash(fragment.replace(/^#/, '')))
 
+  /**
+   * What a fragment names in every view: the element with that id, or what a stop shows, so a
+   * point of the Other layer, which has no card, names its row in the diff.
+   * @param {string} fragment
+   */
+  const targetFor = fragment => {
+    const stop = stopNamed(stops(), fragment)
+    return stop === undefined ? elementForHash(root, fragment) : stopTarget(root, stop)
+  }
+
   /** @param {HTMLElement} section */
   const showSection = section => {
     showOnly(root, section)
@@ -158,7 +168,7 @@ export function initOneLayer(root, opts) {
   }
 
   /** @param {string} fragment */
-  const sectionFor = fragment => sectionOf(root, elementForHash(root, fragment))
+  const sectionFor = fragment => sectionOf(root, targetFor(fragment))
 
   /**
    * In the one-point view, the stop that shows `target`, the overview for a target in it, or the
@@ -187,8 +197,7 @@ export function initOneLayer(root, opts) {
    * @param {string} fragment
    */
   const followInPoints = fragment => {
-    const stop = stopNamed(stops(), fragment)
-    const el = stop === undefined ? elementForHash(root, fragment) : stopTarget(root, stop)
+    const el = targetFor(fragment)
     if (el !== null) {
       revealInPoints(el)
     }
@@ -206,7 +215,7 @@ export function initOneLayer(root, opts) {
    * @param {string} fragment
    */
   const revealFragment = fragment => {
-    elementForHash(root, fragment)?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    targetFor(fragment)?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
   }
 
   const redraw = () => {
@@ -214,11 +223,9 @@ export function initOneLayer(root, opts) {
     if (all.length > 0) {
       // The one-point view opens where the URL points, else on its first stop.
       const fragment = shownHash || win.location.hash
-      const el = elementForHash(root, fragment)
+      const el = targetFor(fragment)
       const ctx = getRenderContext()
-      const stop =
-        stopNamed(all, fragment) ??
-        (el === null || ctx === null ? undefined : stopShowing(all, el, ctx.files))
+      const stop = el === null || ctx === null ? undefined : stopShowing(all, el, ctx.files)
       showPointStop(el?.id === 'overview' ? undefined : (stop ?? all[0]))
       return
     }
@@ -316,7 +323,7 @@ export function initOneLayer(root, opts) {
       if (wasPoints && followInPoints(fragment)) {
         return
       }
-      const el = elementForHash(root, fragment)
+      const el = targetFor(fragment)
       if (el === null) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
         scrollIntoViewSafe(el, 'start')
@@ -347,13 +354,7 @@ export function initOneLayer(root, opts) {
       if (here !== undefined && here !== '') {
         win.history.replaceState(null, '', `${win.location.pathname}${win.location.search}${here}`)
       }
-      const stop = here === undefined ? undefined : stopNamed(stops(), here)
-      const target =
-        view !== 'all' || here === undefined
-          ? null
-          : stop === undefined
-            ? elementForHash(root, here)
-            : stopTarget(root, stop)
+      const target = view !== 'all' || here === undefined ? null : targetFor(here)
       if (target === null) {
         win.scrollTo({ top: 0 })
       } else {

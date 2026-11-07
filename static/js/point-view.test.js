@@ -188,6 +188,15 @@ describe('the one-point view on a rendered page', () => {
     expect(view?.step(1, any)).toBeUndefined()
   })
 
+  it('switches from a point of the Other layer, which has no card, to its layer', () => {
+    window.location.hash = '#point-p-2'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(lensed()?.id).toBe('layer-other')
+    view?.switchView('one')
+    expect(shown()).toEqual(['layer-other'])
+    expect(window.location.hash).toBe('#point-p-2')
+  })
+
   it('comes back from the layers to the stop the URL still names in the layer being read', () => {
     view?.step(1, () => true)
     view?.switchView('one')
