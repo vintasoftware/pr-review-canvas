@@ -64,6 +64,7 @@ describe('the layer views', () => {
     expect(LAYER_VIEWS).toEqual(['all', 'one'])
     expect(DEFAULT_LAYER_VIEW).toBe('all')
     expect(isLayerView('one')).toBe(true)
+    expect(isLayerView('points')).toBe(false)
     expect(isLayerView('some')).toBe(false)
     expect(isLayerView(1)).toBe(false)
     expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one'])

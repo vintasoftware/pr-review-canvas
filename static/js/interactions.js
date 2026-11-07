@@ -189,7 +189,8 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     const id = item.kind === 'file' ? reviewedId(item.layerKey, item.path) : reviewedId(item.layerKey)
     if (!session.isReviewed(id)) {
       const card = root.querySelector(`#${cssEscape(item.id)}`)
-      return card !== null && inHiddenSection(card) ? null : card
+      // The one-point view's lens shows no other card than the one marked.
+      return card !== null && (inHiddenSection(card) || card.closest('[data-lens]') !== null) ? null : card
     }
   }
   return null
@@ -252,6 +253,8 @@ export function padUnderStickyBar(doc, bar) {
  *   fetchReviewBody?: typeof fetchReviewBody,
  *   chat?: () => ChatHandle | null,
  *   openSettings?: (el: HTMLElement) => void,
+ *   setLayerView?: (view: string, place?: string) => void,
+ *   stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -1239,6 +1242,12 @@ export function wireReview(root, session, opts = {}) {
     settings: el => {
       opts.openSettings?.(el)
     },
+    'layer-view': el => {
+      // A link names the place to open on; the rail's switch keeps the reader's.
+      if (el.getAttribute('aria-pressed') !== 'true') {
+        opts.setLayerView?.(el.getAttribute('data-view') ?? '', el.getAttribute('href') ?? undefined)
+      }
+    },
     help: () => {
       openHelpDialog(root)
     },
@@ -1331,6 +1340,12 @@ export function wireReview(root, session, opts = {}) {
       case 'next-file':
       case 'prev-file': {
         const [kind, direction] = STEPS[decided.action]
+        // The one-point view walks its stops: j and k the layers' openings, n and p every stop.
+        const stop = opts.stepStop?.(direction, s => kind !== 'layer' || s.kind === 'layer')
+        if (stop !== undefined) {
+          if (stop !== null) focusItem(stop, 'center')
+          break
+        }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
           if (kind === 'layer') window.history.pushState(null, '', `#${item.id}`)
@@ -1339,9 +1354,20 @@ export function wireReview(root, session, opts = {}) {
         break
       }
       case 'next-point':
-      case 'prev-point':
-        stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
+      case 'prev-point': {
+        const direction = decided.action === 'next-point' ? 1 : -1
+        // The open points' stops, the one on screen first while nothing shown in it has the focus.
+        const open = new Set(points.map(p => p.id))
+        const at = focused()
+        const onStop = at !== null && at.closest('[data-lens]') !== null && at.getClientRects().length > 0
+        const stop = opts.stepStop?.(direction, s => s.kind === 'point' && open.has(s.point.id), !onStop)
+        if (stop === undefined) {
+          stepPoint(order, points, direction)
+        } else if (stop !== null) {
+          focusItem(stop, 'center')
+        }
         break
+      }
       case 'toggle': {
         // A point drawn as its title line opens or collapses itself.
         const collapsible = focused()?.closest('[data-point]')
@@ -1359,8 +1385,12 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        // A point in focus stands for the card that holds it.
-        const itemId = itemAround(order, focused())
+        // A point in focus stands for the file card that holds its line, as with `o`.
+        const point = focusedPoint(points)
+        const itemId = itemAround(
+          order,
+          point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
+        )
         const item = order.find(i => i.id === itemId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =
@@ -1530,6 +1560,8 @@ export function wireReview(root, session, opts = {}) {
           return
         }
         opts.uncover?.()
+        // Brings the line on screen: its layer, or the stop that shows it.
+        scrollIntoViewSafe(row)
         openComposer(row, options, 'row')
         return
       }

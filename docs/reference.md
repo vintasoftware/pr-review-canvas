@@ -554,6 +554,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `theme`                | `auto`    | `auto`, `light`, `dark`                                                          |
 | `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
 | `layerView`            | `all`     | `all`, `one`                                                                     |
+| `readByPoints`         | `false`   | `true`, `false`                                                                  |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
 | `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
 | `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
@@ -716,6 +717,37 @@ first. Navigation writes the layer hash so a reload keeps your place. `k` on the
 returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
+
+### One point at a time
+
+With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
+a review opens on its attention points, one stop at a time. A stop is its layer's section seen
+through a lens, always open, with no chevron to fold it:
+
+- Each layer with points or tests opens with a stop of its own: its heading with the **reviewed**
+  mark and **ask about this layer**, its description, and its tests table.
+- Each point's stop shows the layer's heading, the point's card, and its file with only the chunk
+  that holds its lines. The file stays open there even when marked reviewed.
+- A layer's points come from the most severe: decide, then check, then fyi, a decide point's impact
+  worst first. A point you acted on keeps its stop, and dims in the rail.
+- A bar over and under each stop leads back and on; after the last point, **the rest of the diff,
+  by layer** switches to **Layers**, on the first layer. On the overview it leads to the first stop.
+- The step keys walk the stops: `j` and `k` the layers' opening stops, `n` and `p` every stop, and
+  `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
+  `]` puts the focus on it, so `c`, `d` and `o` act on it.
+
+The view opens on its first stop. The rail lists the stops and marks the one that shows. A stop takes
+the place of the one before under a page that stays at the top, and the URL names it with the same
+fragment the layers use (`#layer-…`, `#point-…`), so a reload, back and forward, and a switch of view
+keep your place. Since a stop shows the layer's own cards, whatever you do there is what the layer
+has. Whatever leads to a line, a chunk, a file or a point (a link, **go to code**, `c`, a proposed
+comment) opens the stop that shows it; when none does, the page moves to your layers and goes there.
+On a canvas with no point the view shows the overview and the layers, one at a time.
+
+On a canvas with points, a switch at the head of the rail moves between **Attention points** and
+**Layers**. **Layers** shows the layer view **Show layers** chooses, all at once or one at a time. The
+switch changes the open page only; a reload opens on what the settings say. With **Read by attention
+points** off, a review shows its layers alone, with no switch.
 
 ### Finding shared canvases
 

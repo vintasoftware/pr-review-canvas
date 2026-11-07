@@ -25,6 +25,11 @@ foldLevel: light
 # them.
 layerView: all
 
+# Whether a review opens on its attention points, one at a time, each layer opening with its
+# description and tests, with the rail's switch to move between them and the layers. Off by
+# default: true opens a review on its points.
+readByPoints: ${DEFAULT_SETTINGS.readByPoints}
+
 # The colors of the attention point level icons: classic (red, amber, gray) or action (purple,
 # blue, gray). The shapes say the level either way.
 pointColors: ${DEFAULT_SETTINGS.pointColors}
@@ -255,6 +260,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.layerView !== undefined) {
     out.layerView = input.layerView
+  }
+  if (input.readByPoints !== undefined) {
+    out.readByPoints = input.readByPoints
   }
   if (input.pointColors !== undefined) {
     out.pointColors = input.pointColors

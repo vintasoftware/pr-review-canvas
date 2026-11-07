@@ -28,6 +28,20 @@
   `settings.yml`, starts the docked chat minimized every time a review opens, so the canvas keeps
   its full width. It is off by default: the chat opens the way you last left it.
 
+### One point at a time
+
+- **Read by attention points** in **settings** (`readByPoints`, off by default) opens a review on its
+  attention points, one at a time: each layer opens with its description and tests, then shows its
+  points from the most severe, each with only the chunk of code that holds it. The rail lists the
+  points under their layers, and a bar over and under each stop leads back and on.
+- A switch at the head of the rail moves between **Attention points** and **Layers**, keeping your
+  place. **Layers** shows the layer view **Show layers** chooses. The switch changes the open page
+  only; a reload opens on what the settings say.
+- A stop is its layer's own section seen through a lens, so commenting, marking and links work as
+  in the layers. A target no stop shows moves the page to the layers.
+- The rail's **Overview** counts the **open** attention points, in either view, so the count no longer
+  reads as points the overview holds.
+
 ## 0.10.0
 
 Changes since 0.9.0.

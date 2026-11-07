@@ -1,5 +1,5 @@
 // @ts-check
-// The rail, the layer sections, and the file cards. A layer section holds the judgment text
+// The layer sections and the file cards. A layer section holds the judgment text
 // (rationale, decisions, check by hand), its test map, its attention point cards, and its files.
 // A file card shows only the hunks of its layer; the diff is rendered lazily by <pr-file> from
 // the shared render context.
@@ -17,7 +17,6 @@ import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
-import { diffstatHtml, layerChanges } from './diffstat.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
@@ -26,7 +25,7 @@ import { renderMarkdown } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
 import { openPoints, pointCardHtml, pointCountText, pointsDensityToggleHtml, postedUrls } from './points.js'
-import { filesReviewed, layerProgress } from './progress.js'
+import { layerProgress } from './progress.js'
 import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
 
@@ -151,83 +150,6 @@ export function hunkLayerIndex(artifact) {
 }
 
 /**
- * Stripe color for a layer position (cycles through the six bands).
- * @param {number} index
- */
-export function dotColor(index) {
-  return `var(--s${(index % 6) + 1})`
-}
-
-/**
- * With a render context, each layer shows the lines it adds and removes.
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
- * @returns {string}
- */
-export function railInnerHtml(artifact, state, opts = {}) {
-  const active = opts.activeId ?? 'overview'
-  const ctx = renderContext
-  const current = /** @param {string} id */ id => (id === active ? ' aria-current="location"' : '')
-  const semantic = artifact.layers.filter(l => l.kind !== 'other')
-  const other = artifact.layers.find(l => l.kind === 'other')
-  const items = semantic
-    .map((layer, i) => {
-      const progress = layerProgress(layer, state)
-      const dotClass = progress === 'done' ? 'dot on' : progress === 'partial' ? 'dot half' : 'dot'
-      const dotLabel =
-        progress === 'done' ? 'reviewed' : progress === 'partial' ? 'in progress' : 'not started'
-      const reviewed = filesReviewed(layer, state)
-      const files = layer.files.length
-      const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
-      const changes = ctx === null ? null : layerChanges(layer, ctx.files, ctx.patches)
-      const stat = changes === null ? '' : ` · ${diffstatHtml(changes.total, changes.tests)}`
-      const risk = layer.risk.length > 0 ? ` · ${layer.risk.map(r => esc(r.label)).join(' · ')}` : ''
-      const id = layerAnchorId(layer.key)
-      return (
-        `<li><a href="#${esc(id)}"${current(id)}><span class="${dotClass}" style="--dc:${dotColor(i)}" role="img" aria-label="${dotLabel}"></span>` +
-        `<span class="n">${i + 1}</span><span class="t">${esc(layer.title)}</span><span class="m">${meta}${stat}${risk}</span></a></li>`
-      )
-    })
-    .join('')
-  const points = openPoints(artifact.points, state).length
-  const otherItem = other
-    ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
-    : ''
-  return (
-    '<ul class="tree">' +
-    `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} attention ${points === 1 ? 'point' : 'points'}</span></a></li>` +
-    `<li class="grp"><span class="lbl grp-lbl">Layers</span><ul class="layers">${items}</ul></li>${otherItem}</ul>`
-  )
-}
-
-/**
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
- * @returns {string}
- */
-export function renderRail(artifact, state, opts = {}) {
-  return `<nav class="rail" aria-label="Review layers">${railInnerHtml(artifact, state, opts)}</nav>`
-}
-
-/**
- * Draws the rail again from the current state, keeping the item the scrollspy marked.
- * @param {ParentNode} root
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- */
-export function refreshRail(root, artifact, state) {
-  const rail = root.querySelector('nav.rail')
-  if (!(rail instanceof HTMLElement)) {
-    return false
-  }
-  const active = rail.querySelector('a[aria-current]')?.getAttribute('href')?.slice(1)
-  rail.innerHTML = railInnerHtml(artifact, state, active === undefined ? {} : { activeId: active })
-  return true
-}
-
-/**
  * "1 file" / "3 files".
  * @param {number} n
  */
@@ -245,7 +167,10 @@ export function testMapHtml(layer, paths) {
   }
   const rows = layer.tests
     .map(t => {
-      const where = t.testPath ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath)}</a>` : ''
+      // A path breaks only after a slash, so the table fits a phone without splitting names.
+      const where = t.testPath
+        ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath).replaceAll('/', '/<wbr>')}</a>`
+        : ''
       const note = t.note ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>` : ''
       return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })

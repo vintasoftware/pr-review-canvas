@@ -256,7 +256,8 @@ describe('initDeepLinks', () => {
 
 describe('a rendered review screen', () => {
   it('lands on the line of the URL fragment, drawing the card it is in', async () => {
-    const { defineLayerElements, renderLayers, renderRail, setRenderContext } = await import('./layers.js')
+    const { defineLayerElements, renderLayers, setRenderContext } = await import('./layers.js')
+    const { renderRail } = await import('./rail.js')
     const artifact = syntheticArtifact()
     const state = emptyState(NOW.toISOString())
     setRenderContext({

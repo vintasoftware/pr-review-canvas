@@ -21,7 +21,6 @@ import {
 import {
   DEFERRED_DIFF_LINES,
   defineLayerElements,
-  dotColor,
   elsewhereHtml,
   fileCount,
   getFoldLevel,
@@ -40,8 +39,6 @@ import {
   renderLayerSection,
   renderLayers,
   refreshFolds,
-  refreshRail,
-  renderRail,
   setCardCollapsed,
   setCardRenderedHook,
   setFoldLevel,
@@ -52,6 +49,7 @@ import {
   threadsForHunks,
 } from './layers.js'
 import { hiddenLabel } from './reading-level.js'
+import { renderRail } from './rail.js'
 import { progressSummary } from './progress.js'
 import { buildThreads } from './threads.js'
 
@@ -101,60 +99,6 @@ describe('pending draft placement', () => {
     document.body.innerHTML = renderLayers(artifact, files, withDraft)
     hydrateAll(document, { ...ctx(), state: withDraft, headSha: 'f'.repeat(40) })
     expect(document.querySelectorAll('tr.pending-row')).toHaveLength(0)
-  })
-})
-
-describe('rail', () => {
-  it('lists overview, layers with dots, and Other muted', () => {
-    document.body.innerHTML = renderRail(artifact, state)
-    const items = [...document.querySelectorAll('.tree a')]
-    expect(items.map(a => a.getAttribute('href'))).toEqual(['#overview', '#layer-run-path', '#layer-other'])
-    expect(items[0]?.getAttribute('aria-current')).toBe('location')
-    expect(items[0]?.querySelector('.m')?.textContent).toBe('3 attention points')
-    expect(items[1]?.querySelector('.dot')?.getAttribute('aria-label')).toBe('not started')
-    expect(items[1]?.querySelector('.dot')?.getAttribute('style')).toBe('--dc:var(--s1)')
-    expect(items[1]?.querySelector('.m')?.textContent).toBe('3 files · schema')
-    expect(document.querySelector('li.other .m')?.textContent).toBe('3 files, ignored')
-    expect(dotColor(7)).toBe('var(--s2)')
-  })
-
-  it('shows partial and done dots and the active item', () => {
-    const partial = { ...state, reviewed: { 'layer:run-path/file:src_app_ts': /** @type {const} */ (true) } }
-    document.body.innerHTML = renderRail(artifact, partial, { activeId: 'layer-run-path' })
-    const a = document.querySelector('a[href="#layer-run-path"]')
-    expect(a?.getAttribute('aria-current')).toBe('location')
-    expect(a?.querySelector('.dot')?.className).toBe('dot half')
-    expect(a?.querySelector('.m')?.textContent).toBe('1 of 3 files · schema')
-    const done = { ...state, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
-    document.body.innerHTML = renderRail(artifact, done)
-    expect(document.querySelector('a[href="#layer-run-path"] .dot')?.className).toBe('dot on')
-    document.body.innerHTML = renderRail(
-      {
-        ...artifact,
-        layers: artifact.layers.filter(l => l.kind !== 'other'),
-        points: artifact.points.slice(0, 1),
-      },
-      state
-    )
-    expect(document.querySelector('li.other')).toBeNull()
-    expect(document.querySelector('a[href="#overview"] .m')?.textContent).toBe('1 attention point')
-  })
-
-  it('shows the lines each layer adds and removes next to its file count, after a state change too', () => {
-    setRenderContext(ctx())
-    document.body.innerHTML = renderRail(artifact, state)
-    const stat = document.querySelector('a[href="#layer-run-path"] .diffstat')
-    expect(stat?.getAttribute('title')).toBe('code +3 −2 · tests +2 −1')
-    expect(document.querySelector('a[href="#layer-run-path"] .m')?.textContent).toBe(
-      '3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema'
-    )
-    expect(document.querySelector('li.other .m')?.textContent).toBe('3 files, ignored')
-    const partial = { ...state, reviewed: { 'layer:run-path/file:src_app_ts': /** @type {const} */ (true) } }
-    expect(refreshRail(document, artifact, partial)).toBe(true)
-    expect(document.querySelector('a[href="#layer-run-path"] .m')?.textContent).toBe(
-      '1 of 3 files · +5 −3 (code +3 −2 · tests +2 −1) · schema'
-    )
-    setRenderContext(null)
   })
 })
 

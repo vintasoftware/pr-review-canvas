@@ -55,6 +55,11 @@ export const SettingsSchema = z.object({
   foldLevel: z.enum(FOLD_LEVELS),
   /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
   layerView: z.enum(LAYER_VIEWS),
+  /**
+   * Whether a review opens on its attention points, one at a time, with the rail's switch to its
+   * layers; false reads the layers alone, as `layerView` shows them.
+   */
+  readByPoints: z.boolean(),
   /** The palette of the attention point level icons; their shapes are the same in each. */
   pointColors: z.enum(POINT_COLORS),
   /** Whether a review opens with only its first layer open and every file closed. */
@@ -95,6 +100,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   foldLevel: DEFAULT_FOLD_LEVEL,
   layerView: DEFAULT_LAYER_VIEW,
+  readByPoints: false,
   pointColors: DEFAULT_POINT_COLORS,
   startCollapsed: false,
   compactPoints: false,
@@ -129,6 +135,7 @@ export const SettingsInputSchema = z.strictObject({
   theme: z.enum(THEMES).optional(),
   foldLevel: z.enum(FOLD_LEVELS).optional(),
   layerView: z.enum(LAYER_VIEWS).optional(),
+  readByPoints: z.boolean().optional(),
   pointColors: z.enum(POINT_COLORS).optional(),
   startCollapsed: z.boolean().optional(),
   compactPoints: z.boolean().optional(),

@@ -25,12 +25,12 @@ import {
   getRenderContext,
   hydrateFileCard,
   renderLayers,
-  renderRail,
   setCardCollapsed,
   setRenderContext,
   setStartCollapsed,
 } from './layers.js'
 import { initOneLayer } from './one-layer.js'
+import { renderRail } from './rail.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
 import { setSelfReview } from './self-review.js'
