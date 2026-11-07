@@ -28,3 +28,32 @@ test('aligns the overview with the layers in both skins', async ({ page, reviewU
     await page.locator('#skin-toggle').click()
   }
 })
+
+test('stops the summary at 100 characters, short of a wide panel', async ({ page, reviewUrl }) => {
+  await page.setViewportSize({ width: 1800, height: 900 })
+  await page.goto(reviewUrl)
+  const body = await page.locator('#overview > .body').first().boundingBox()
+  const summary = await page.locator('#overview .summary').boundingBox()
+  if (!body || !summary) throw new Error('missing overview body or summary')
+  expect(await page.locator('#overview .summary').evaluate(el => getComputedStyle(el).maxWidth)).not.toBe(
+    'none'
+  )
+  expect(summary.width).toBeLessThan(body.width - 100)
+})
+
+test.describe('with fullWidthText', () => {
+  test.use({ settings: { fullWidthText: true } })
+
+  test('lets the summary and its diagram fill the overview panel', async ({ page, reviewUrl }) => {
+    await page.setViewportSize({ width: 1800, height: 900 })
+    await page.goto(reviewUrl)
+    const body = await page.locator('#overview > .body').first().boundingBox()
+    const summary = await page.locator('#overview .summary').boundingBox()
+    if (!body || !summary) throw new Error('missing overview body or summary')
+    const padding = await page
+      .locator('#overview > .body')
+      .first()
+      .evaluate(element => Number.parseFloat(getComputedStyle(element).paddingLeft) * 2)
+    expect(Math.abs(summary.width - (body.width - padding))).toBeLessThan(2)
+  })
+})

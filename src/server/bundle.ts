@@ -394,6 +394,7 @@ async function bundleBase(
             agent: settings.chatAgent,
             model: settings.chatModel,
             threadPerPlace: settings.chatThreadPerPlace,
+            startMinimized: settings.chatStartMinimized,
           }),
     },
     largePr: largePrOf(input.diff.files),

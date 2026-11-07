@@ -91,9 +91,19 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await expect(other).toBeVisible()
 })
 
+test.describe('reading by attention points with compact points', () => {
+  test.use({ settings: { readByPoints: true, compactPoints: true } })
+
+  test('a point’s stop shows its open point whole', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl + '#point-p-1')
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+    await expect(page.locator('#point-p-1 .prose')).toBeVisible()
+  })
+})
+
 // From here on a review reads by attention points, as `readByPoints` turns on in the settings.
 test.describe('reading by attention points', () => {
-  test.use({ readByPoints: true })
+  test.use({ settings: { readByPoints: true } })
 
   test('reads the canvas one attention point at a time, on this page and after a reload', async ({
     page,

@@ -35,12 +35,21 @@ export function pageSections(root) {
 }
 
 /**
- * True for an element that a section the page is not showing hides. It hides nothing for good:
- * `reveal-code` on anything inside it shows the section.
+ * True for an element in a section the page is not showing, whatever else hides it inside that
+ * section, such as its closed layer. It hides nothing for good: `reveal-code` on anything inside
+ * it shows the section.
  * @param {Element} el
  */
 export function inHiddenSection(el) {
-  return el.closest('[hidden]')?.matches(SECTION_SELECTOR) === true
+  return el.closest(SECTION_SELECTOR)?.hasAttribute('hidden') === true
+}
+
+/**
+ * True for the overview or a layer section, the elements one layer at a time shows and hides.
+ * @param {Element} el
+ */
+export function isPageSection(el) {
+  return el.matches(SECTION_SELECTOR)
 }
 
 /**
@@ -143,7 +152,7 @@ export function initOneLayer(root, opts) {
 
   /** @param {HTMLElement | null} section */
   const show = section => {
-    if (view === 'one' && section !== null && section.hidden) {
+    if (view !== 'all' && section !== null && section.hidden) {
       showSection(section)
     }
   }
@@ -190,14 +199,17 @@ export function initOneLayer(root, opts) {
     return true
   }
 
+  /**
+   * A plain fragment, such as a rail link or the `#layer-…` that `j` and `k` leave in the URL, is
+   * one the browser scrolls to on its own, so nothing raises `reveal-code` on its target: it is
+   * raised here, which shows the target's section and opens the layer or file it names.
+   * @param {string} fragment
+   */
+  const revealFragment = fragment => {
+    elementForHash(root, fragment)?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+  }
+
   const redraw = () => {
-    if (view === 'all') {
-      clearStop(root)
-      for (const section of pageSections(root)) {
-        section.hidden = false
-      }
-      return
-    }
     const all = view === 'points' ? stops() : []
     if (all.length > 0) {
       // The one-point view opens where the URL points, else on its first stop.
@@ -211,6 +223,13 @@ export function initOneLayer(root, opts) {
       return
     }
     clearStop(root)
+    revealFragment(win.location.hash)
+    if (view === 'all') {
+      for (const section of pageSections(root)) {
+        section.hidden = false
+      }
+      return
+    }
     const section = sectionFor(shownHash) ?? sectionFor(win.location.hash) ?? pageSections(root)[0] ?? null
     if (section !== null) {
       showSection(section)
@@ -252,7 +271,8 @@ export function initOneLayer(root, opts) {
   root.addEventListener(
     'reveal-code',
     event => {
-      if (view === 'points' && event.target instanceof Element) {
+      // A canvas with no stops shows its sections one at a time, as `one` does.
+      if (view === 'points' && event.target instanceof Element && stops().length > 0) {
         revealInPoints(event.target)
       } else {
         show(sectionOf(root, event.target))
@@ -261,9 +281,9 @@ export function initOneLayer(root, opts) {
     { signal: listeners.signal }
   )
 
-  // A rail link or a "more chunks in layer 4" link is a plain fragment the browser scrolls to on
-  // its own; its section is shown here, before that default scroll runs. In the one-point view a
-  // stop takes the place of the one before, under a page that stays at the top.
+  // A rail link or a "more chunks in layer 4" link is a plain fragment: what it names opens here,
+  // before the browser's own scroll runs. In the one-point view a stop takes the place of the one
+  // before, under a page that stays at the top.
   root.addEventListener(
     'click',
     event => {
@@ -275,7 +295,7 @@ export function initOneLayer(root, opts) {
       }
       const href = link.getAttribute('href') ?? ''
       if (view !== 'points') {
-        show(sectionOf(root, elementForHash(root, href)))
+        revealFragment(href)
       } else if (followInPoints(href)) {
         event.preventDefault()
         win.history.pushState(null, '', href)
@@ -284,8 +304,8 @@ export function initOneLayer(root, opts) {
     { signal: listeners.signal }
   )
 
-  // Back and forward between plain fragments: the browser has already tried to scroll to the
-  // target, and could not while its section was hidden, so the scroll is repeated here.
+  // Back and forward between plain fragments: what the fragment names opens, and when its section
+  // was hidden the browser could not scroll to it, so the scroll is repeated here.
   win.addEventListener(
     'hashchange',
     () => {
@@ -295,8 +315,11 @@ export function initOneLayer(root, opts) {
         return
       }
       const el = elementForHash(root, fragment)
-      if (el !== null && (wasPoints || sectionOf(root, el)?.hidden === true)) {
+      if (el === null) return
+      if (wasPoints || sectionOf(root, el)?.hidden === true) {
         scrollIntoViewSafe(el, 'start')
+      } else {
+        revealFragment(win.location.hash)
       }
     },
     { signal: listeners.signal }

@@ -276,19 +276,17 @@ test('refresh stops regeneration polling before waiting for patches', async ({ p
   release()
   await expect(page.locator('#refresh')).toBeEnabled()
   expect(polls).toBe(0)
+  // The note that a newer canvas is out sits over the page actions; a click clears it.
+  await page.locator('.toast').click()
   await page.locator('#refresh').click()
   await expect(page.locator('#overview .summary')).toHaveText(newer.summary)
 })
 
 test.describe('in the one-point view', () => {
-  const asPoints = async (t: {
-    ctx: { settings: { write: (input: { readByPoints: true }) => Promise<unknown> } }
-  }) => {
-    await t.ctx.settings.write({ readByPoints: true })
-  }
+  test.use({ settings: { readByPoints: true } })
 
   test('c with a point in focus opens the comment in its stop', async ({ page, chatServer }) => {
-    const { url } = await chatServer({ setup: asPoints })
+    const { url } = await chatServer()
     await page.goto(url)
     await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'layer')
     await page.keyboard.press('n')
@@ -300,7 +298,7 @@ test.describe('in the one-point view', () => {
 
   test('go to code from a point’s thread opens the point’s stop', async ({ page, chatServer }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop')
-    const { url } = await chatServer({ setup: asPoints })
+    const { url } = await chatServer()
     await page.goto(`${url}#point-p-1`)
     await page.locator('#point-p-1 [data-act="ask"]').first().click()
     await page.getByText('ask something else…', { exact: true }).first().click()
@@ -319,7 +317,6 @@ test.describe('in the one-point view', () => {
   }) => {
     const narrow = (page.viewportSize()?.width ?? 1440) < 1200
     const { url } = await chatServer({
-      setup: asPoints,
       runner: {
         script: [
           {

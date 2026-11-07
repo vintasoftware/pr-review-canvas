@@ -62,6 +62,12 @@ export const SettingsSchema = z.object({
   readByPoints: z.boolean(),
   /** The palette of the attention point level icons; their shapes are the same in each. */
   pointColors: z.enum(POINT_COLORS),
+  /** Whether a review opens with only its first layer open and every file closed. */
+  startCollapsed: z.boolean(),
+  /** Whether a layer's list draws each attention point as one line until the reader opens it. */
+  compactPoints: z.boolean(),
+  /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
+  fullWidthText: z.boolean(),
   /** The agent that answers in AI Chat. Canvas generation does not read it. */
   chatAgent: z.enum(CHAT_AGENTS),
   /** The model AI Chat runs, or null for the agent's default. Canvas generation does not read it. */
@@ -73,6 +79,8 @@ export const SettingsSchema = z.object({
    * or goes to the open thread.
    */
   chatThreadPerPlace: z.boolean(),
+  /** Whether AI Chat starts minimized behind its launcher on a wide screen, on every load. */
+  chatStartMinimized: z.boolean(),
   /** Whether AI Chat reads a review checkout at the reviewed commit, or the reader's own checkout. */
   checkoutEnabled: z.boolean(),
   /** Days without a chat turn before a review checkout is removed; -1 never removes one for that. */
@@ -94,11 +102,15 @@ export const DEFAULT_SETTINGS: Settings = {
   layerView: DEFAULT_LAYER_VIEW,
   readByPoints: false,
   pointColors: DEFAULT_POINT_COLORS,
+  startCollapsed: false,
+  compactPoints: false,
+  fullWidthText: false,
   chatAgent: 'claude',
   chatModel: null,
   chatTimeoutSec: 600,
   maxTurns: null,
   chatThreadPerPlace: true,
+  chatStartMinimized: false,
   checkoutEnabled: true,
   checkoutIdleDays: 7,
   checkoutSweepMinutes: 60,
@@ -125,11 +137,15 @@ export const SettingsInputSchema = z.strictObject({
   layerView: z.enum(LAYER_VIEWS).optional(),
   readByPoints: z.boolean().optional(),
   pointColors: z.enum(POINT_COLORS).optional(),
+  startCollapsed: z.boolean().optional(),
+  compactPoints: z.boolean().optional(),
+  fullWidthText: z.boolean().optional(),
   chatAgent: z.enum(CHAT_AGENTS).optional(),
   chatModel: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),
   maxTurns: z.number().int().positive().max(100).nullable().optional(),
   chatThreadPerPlace: z.boolean().optional(),
+  chatStartMinimized: z.boolean().optional(),
   checkoutEnabled: z.boolean().optional(),
   checkoutIdleDays: CheckoutIdleDaysSchema.optional(),
   checkoutSweepMinutes: CheckoutSweepMinutesSchema.optional(),

@@ -39,9 +39,12 @@ import {
   renderLayerSection,
   renderLayers,
   refreshFolds,
+  setCardCollapsed,
   setCardRenderedHook,
   setFoldLevel,
   setRenderContext,
+  setStartCollapsed,
+  testCoverage,
   testMapHtml,
   threadsForHunks,
 } from './layers.js'
@@ -108,11 +111,26 @@ describe('layer sections', () => {
       throw new Error('no layer')
     }
     document.body.innerHTML = testMapHtml(layer, paths)
+    // Closed, under a label that says how much of what needs a test has one.
+    expect(document.querySelector('details.test-map')?.hasAttribute('open')).toBe(false)
+    expect(document.querySelector('.test-map > summary.lbl.sub h3')?.textContent).toBe('Tests')
+    expect(document.querySelector('.test-map > summary .test-cov.partial')?.textContent).toBe(
+      '1 of 2 covered'
+    )
     const rows = [...document.querySelectorAll('tbody tr')]
     expect(rows.map(r => r.querySelector('.st')?.textContent)).toEqual(['covered', 'missing', 'not-needed'])
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#file:src/app.test.ts')
     expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('y is unused')
     expect(testMapHtml({ ...layer, tests: [] }, paths)).toBe('')
+  })
+
+  it('labels the coverage from the behaviors that need a test', () => {
+    /** @param {Array<'covered' | 'missing' | 'not-needed'>} statuses */
+    const coverage = statuses => testCoverage(statuses.map(status => ({ status })))
+    expect(coverage(['covered', 'covered', 'not-needed'])).toEqual({ level: 'full', label: 'fully covered' })
+    expect(coverage(['covered', 'missing', 'missing'])).toEqual({ level: 'partial', label: '1 of 3 covered' })
+    expect(coverage(['missing', 'not-needed'])).toEqual({ level: 'none', label: 'not covered' })
+    expect(coverage(['not-needed'])).toEqual({ level: 'not-needed', label: 'no tests needed' })
   })
 
   it('renders a file card that was already reviewed as checked and folded away', () => {
@@ -167,8 +185,8 @@ describe('layer sections', () => {
       )
     ).toEqual(['body', 'lbl sub', 'testmap', 'lbl sub', 'findings', 'lbl sub', 'files'])
     expect([...(section?.querySelectorAll('.lbl.sub') ?? [])].map(h => h.textContent)).toEqual([
-      'Tests',
-      'Attention points · 1',
+      'Tests1 of 2 covered',
+      'Attention points · 1show detailscompact',
       'Files · 3',
     ])
     expect(
@@ -357,6 +375,46 @@ describe('layer sections', () => {
       expect(document.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
     } finally {
       setFoldLevel(document.body, 'light')
+    }
+  })
+
+  it('starts every layer open but a reviewed one, or only the first with startCollapsed', () => {
+    const [first, other] = artifact.layers
+    if (first === undefined || other === undefined) throw new Error('missing layer')
+    const second = { ...first, id: 'second', key: 'second', title: 'Second', files: [] }
+    const two = { ...artifact, layers: [first, second, other] }
+    /** @param {import('./contract-types.js').PrState} at */
+    const openLayers = at => {
+      document.body.innerHTML = renderLayers(two, files, at)
+      return [...document.querySelectorAll('section.layer')].map(section => ({
+        id: section.id,
+        open: !section.querySelector(':scope > .layer-body')?.hasAttribute('hidden'),
+        expanded: section.querySelector(':scope > .layer-h > .chev')?.getAttribute('aria-expanded'),
+      }))
+    }
+    const openFiles = () =>
+      [...document.querySelectorAll('article.file > .file-body')].filter(b => !b.hasAttribute('hidden'))
+        .length
+    const done = { ...state, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
+    expect(openLayers(state)).toEqual([
+      { id: 'layer-run-path', open: true, expanded: 'true' },
+      { id: 'layer-second', open: true, expanded: 'true' },
+    ])
+    expect(openFiles()).toBeGreaterThan(0)
+    expect(openLayers(done)[0]).toEqual({ id: 'layer-run-path', open: false, expanded: 'false' })
+
+    setStartCollapsed(true)
+    try {
+      expect(openLayers(state)).toEqual([
+        { id: 'layer-run-path', open: true, expanded: 'true' },
+        { id: 'layer-second', open: false, expanded: 'false' },
+      ])
+      // Every file starts closed; the reader opens the ones they read.
+      expect(openFiles()).toBe(0)
+      expect(document.querySelector('article.file .chev')?.getAttribute('aria-expanded')).toBe('false')
+      expect(openLayers(done)[0]).toEqual({ id: 'layer-run-path', open: false, expanded: 'false' })
+    } finally {
+      setStartCollapsed(false)
     }
   })
 
@@ -1040,6 +1098,48 @@ it('reopens routine files when the reading level drops and leaves reviewed files
   } finally {
     setRenderContext(null)
     setFoldLevel(document.body, 'light')
+  }
+})
+
+it('with startCollapsed, closes the files a reading level hides whole, and opens none when it drops', () => {
+  setStartCollapsed(true)
+  const copy = {
+    ...artifact,
+    layers: artifact.layers.map(l => ({
+      ...l,
+      files: l.files.map(f => ({ ...f, collapsed: /** @type {const} */ ('moderate') })),
+    })),
+  }
+  const context = { ...ctx(), artifact: copy, comments: [] }
+  setRenderContext(context)
+  document.body.innerHTML = renderLayers(copy, files, state)
+  try {
+    const card = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.querySelector(id))
+    const isOpen = (/** @type {string} */ id) => !card(id).querySelector('.file-body')?.hasAttribute('hidden')
+    // The reader opens the test file and the file that holds an attention point.
+    setCardCollapsed(card('#file-src_app_test_ts'), false)
+    setCardCollapsed(card('#file-src_app_ts'), false)
+    setFoldLevel(document.body, 'light')
+    expect(isOpen('#file-src_app_test_ts')).toBe(true)
+    setFoldLevel(document.body, 'moderate')
+    expect(isOpen('#file-src_app_test_ts')).toBe(false)
+    // A file with an attention point never closes whole.
+    expect(isOpen('#file-src_app_ts')).toBe(true)
+    // Lowering the level opens nothing.
+    setFoldLevel(document.body, 'light')
+    expect(isOpen('#file-src_app_test_ts')).toBe(false)
+    expect(isOpen('#file-src_new_name_ts')).toBe(false)
+    // A card that names no file of the canvas is left as the reader had it.
+    setCardCollapsed(card('#file-src_new_name_ts'), false)
+    card('#file-src_new_name_ts').removeAttribute('data-layer')
+    setFoldLevel(document.body, 'moderate')
+    expect(isOpen('#file-src_new_name_ts')).toBe(true)
+    document.querySelector('[data-layer="run-path"]')?.removeAttribute('data-layer')
+    refreshFolds(document.body)
+  } finally {
+    setRenderContext(null)
+    setFoldLevel(document.body, 'light')
+    setStartCollapsed(false)
   }
 })
 

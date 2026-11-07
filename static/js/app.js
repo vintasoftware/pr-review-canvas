@@ -14,7 +14,7 @@ import {
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { setMentionCanvas } from './points.js'
+import { readPointsDensity, setMentionCanvas, setPointsDensity } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -45,6 +45,7 @@ import {
   renderLayers,
   setFoldLevel,
   setRenderContext,
+  setStartCollapsed,
 } from './layers.js'
 import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
@@ -234,7 +235,9 @@ export class PrAppElement extends HTMLElement {
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
+    setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
+    document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
     this.layerView?.stop()
     this.readByPoints = this.bootstrap.readByPoints
     this.layerView = initOneLayer(this, {
@@ -332,7 +335,11 @@ export class PrAppElement extends HTMLElement {
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
-    const chatMinimized = chatEnabled && readChatMinimized(storage)
+    // A docked chat starts the way the reader last left it, or minimized with chatStartMinimized.
+    const chatMinimized = chatEnabled && (bundle.chat.startMinimized === true || readChatMinimized(storage))
+    if (boot.compactPoints) {
+      setPointsDensity(document.documentElement, readPointsDensity(storage))
+    }
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
@@ -412,6 +419,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
+          minimized: chatMinimized,
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })
@@ -443,7 +451,9 @@ export class PrAppElement extends HTMLElement {
             // A newer generation for this commit was imported; its resolutions belong to it.
             this.settledPoller?.stop()
             this.settledPoller = null
-            toast(this, 'the author shared a newer canvas for this commit; refresh to load it')
+            toast(this, 'the author shared a newer canvas for this commit; refresh to load it', {
+              tone: 'note',
+            })
             return
           }
           const added = session.takeSettled(answer)
@@ -455,7 +465,8 @@ export class PrAppElement extends HTMLElement {
             const kept = drafted === 0 ? '' : `; your review keeps your ${about}`
             toast(
               this,
-              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`
+              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`,
+              { tone: 'note' }
             )
           }
         })
@@ -488,7 +499,7 @@ export class PrAppElement extends HTMLElement {
    */
   wireAppearance() {
     wireAppearanceCommands(this, (what, saved) => {
-      if (!saved) toast(this, `could not save the ${what} to settings.yml`)
+      if (!saved) toast(this, `could not save the ${what} to settings.yml`, { tone: 'failed' })
     })
   }
 
@@ -514,7 +525,7 @@ export class PrAppElement extends HTMLElement {
       this.generation ??= createGeneration(this, {
         prNumber: boot.prNumber,
         onEnded: job => this.generationEnded(job),
-        onError: message => toast(this, message),
+        onError: message => toast(this, message, { tone: 'failed' }),
       })
       this.generation.attach(bundle)
     }
@@ -617,6 +628,7 @@ export class PrAppElement extends HTMLElement {
     this.layerView?.setView(points ? 'points' : layerView)
     this.chat?.followSettings(data.settings)
     applyPointColors(data.settings.pointColors, document.documentElement)
+    document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
   }
 
   /**
@@ -632,7 +644,8 @@ export class PrAppElement extends HTMLElement {
           this,
           job.phase === 'cancelled'
             ? 'canvas generation stopped'
-            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`,
+          { tone: job.phase === 'cancelled' ? 'note' : 'failed' }
         )
       }
       return

@@ -34,6 +34,18 @@ readByPoints: ${DEFAULT_SETTINGS.readByPoints}
 # blue, gray). The shapes say the level either way.
 pointColors: ${DEFAULT_SETTINGS.pointColors}
 
+# Whether a review opens with only its first layer open and every file closed under its name.
+# false opens every layer and file, except those marked reviewed or hidden by foldLevel.
+startCollapsed: false
+
+# Whether a layer's list draws each attention point as one line until you open it, with a switch
+# to show every point whole. false draws every point whole.
+compactPoints: false
+
+# Whether the overview summary, a layer's rationale and the PR description fill the width of their
+# panel. false stops their lines at 100 characters, like the rest of the page's text.
+fullWidthText: false
+
 # Which agent answers in the AI Chat pane: claude or codex. Canvas generation does not read
 # this; generation.models in pr-review.config.yml sets the canvas generation models.
 chatAgent: claude
@@ -51,6 +63,10 @@ maxTurns: null
 # Whether ask opens the thread of the place it was asked from (an attention point, lines, a file,
 # a layer), starting one the first time. false sends every ask to the open thread.
 chatThreadPerPlace: true
+
+# Whether AI Chat starts minimized behind its launcher on a wide screen, every time a review opens.
+# false opens it the way you last left it.
+chatStartMinimized: false
 
 # Whether AI Chat reads a review checkout: a copy of the repository at the reviewed commit, kept
 # apart from your own checkout. false reads your checkout instead, whatever branch it is on.
@@ -251,6 +267,15 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   if (input.pointColors !== undefined) {
     out.pointColors = input.pointColors
   }
+  if (input.startCollapsed !== undefined) {
+    out.startCollapsed = input.startCollapsed
+  }
+  if (input.compactPoints !== undefined) {
+    out.compactPoints = input.compactPoints
+  }
+  if (input.fullWidthText !== undefined) {
+    out.fullWidthText = input.fullWidthText
+  }
   if (input.chatAgent !== undefined) {
     out.chatAgent = input.chatAgent
   }
@@ -265,6 +290,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.chatThreadPerPlace !== undefined) {
     out.chatThreadPerPlace = input.chatThreadPerPlace
+  }
+  if (input.chatStartMinimized !== undefined) {
+    out.chatStartMinimized = input.chatStartMinimized
   }
   if (input.checkoutEnabled !== undefined) {
     out.checkoutEnabled = input.checkoutEnabled
