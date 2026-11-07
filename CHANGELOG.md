@@ -13,6 +13,8 @@
   only; a reload opens on what the settings say.
 - A stop is its layer's own section seen through a lens, so commenting, marking and links work as
   in the layers. A target no stop shows moves the page to the layers.
+- The rail's **Overview** counts the **open** attention points, in either view, so the count no longer
+  reads as points the overview holds.
 
 ## 0.10.0
 

@@ -35,7 +35,7 @@ describe('rail', () => {
     const items = [...document.querySelectorAll('.tree a')]
     expect(items.map(a => a.getAttribute('href'))).toEqual(['#overview', '#layer-run-path', '#layer-other'])
     expect(items[0]?.getAttribute('aria-current')).toBe('location')
-    expect(items[0]?.querySelector('.m')?.textContent).toBe('3 attention points')
+    expect(items[0]?.querySelector('.m')?.textContent).toBe('3 open attention points')
     expect(items[1]?.querySelector('.dot')?.getAttribute('aria-label')).toBe('not started')
     expect(items[1]?.querySelector('.dot')?.getAttribute('style')).toBe('--dc:var(--s1)')
     expect(items[1]?.querySelector('.m')?.textContent).toBe('3 files · schema')
@@ -62,7 +62,7 @@ describe('rail', () => {
       state
     )
     expect(document.querySelector('li.other')).toBeNull()
-    expect(document.querySelector('a[href="#overview"] .m')?.textContent).toBe('1 attention point')
+    expect(document.querySelector('a[href="#overview"] .m')?.textContent).toBe('1 open attention point')
   })
 
   it('shows the lines each layer adds and removes next to its file count, after a state change too', () => {

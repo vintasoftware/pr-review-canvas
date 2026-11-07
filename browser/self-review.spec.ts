@@ -12,7 +12,7 @@ test('the author settles a reviewer point with a reason, reads it after a reload
   await page.goto(selfReviewUrl)
   await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
   const railCount = page.locator('nav.rail a[href="#overview"] .m')
-  await expect(railCount).toHaveText('3 attention points')
+  await expect(railCount).toHaveText('3 open attention points')
   const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
   await expect(card.locator('.pill.audience')).toHaveText('reviewer')
   await card.locator('[data-act="point-settle"]').click()
@@ -27,7 +27,7 @@ test('the author settles a reviewer point with a reason, reads it after a reload
     'Resolved by the author: The spec says sum; see the linked issue.'
   )
   await expect(page.locator('.toast')).toContainText('canvas comment is updated')
-  await expect(railCount).toHaveText('2 attention points')
+  await expect(railCount).toHaveText('2 open attention points')
   await expect(page.locator('.conversation')).toContainText('For the reviewer: no open attention points')
 
   await page.reload()
@@ -46,7 +46,7 @@ test('the author settles a reviewer point with a reason, reads it after a reload
   await expect(card.locator('a[href$="#discussion_r5001"]')).toHaveCount(1)
   await card.locator('[data-act="point-unsettle"]').click()
   await expect(card).toHaveAttribute('data-status', 'open')
-  await expect(railCount).toHaveText('3 attention points')
+  await expect(railCount).toHaveText('3 open attention points')
   await expect(card.locator('[data-act="point-settle"]')).toBeVisible()
   await expect(page.locator('.point-statuses')).not.toContainText('resolved')
   await expect(page.locator('.conversation')).toContainText('For the reviewer: 1 attention point to judge')

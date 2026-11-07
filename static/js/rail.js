@@ -94,7 +94,7 @@ export function railInnerHtml(artifact, state, opts = {}) {
   const otherItem = other
     ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
     : ''
-  const overview = `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} attention ${points === 1 ? 'point' : 'points'}</span></a></li>`
+  const overview = `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} open attention ${points === 1 ? 'point' : 'points'}</span></a></li>`
   const hasPoints = artifact.points.length > 0
   if (opts.points === true && hasPoints) {
     return `<ul class="tree">${overview}${railPointsHtml(artifact, state, current)}</ul>`
