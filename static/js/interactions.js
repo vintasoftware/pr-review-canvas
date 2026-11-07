@@ -1385,8 +1385,12 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        // A point in focus stands for the card that holds it.
-        const itemId = itemAround(order, focused())
+        // A point in focus stands for the file card that holds its line, as with `o`.
+        const point = focusedPoint(points)
+        const itemId = itemAround(
+          order,
+          point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
+        )
         const item = order.find(i => i.id === itemId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =

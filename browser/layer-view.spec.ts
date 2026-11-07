@@ -170,6 +170,9 @@ test.describe('reading by attention points', () => {
     await expect(page.locator('#layer-other')).toBeVisible()
     await expect(page.locator('#point-p-1')).toBeInViewport()
     await page.locator('nav.rail .rail-view [data-view="points"]').click()
+    // Back on the point's stop, which the rail marks.
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+    await expect(page.locator('nav.rail a[aria-current]')).toHaveAttribute('href', '#point-p-1')
     await page.locator('#settings').click()
     await page.locator('#set-layer-view').selectOption('one')
     await page.locator('[data-act="settings-save"]').click()
@@ -208,6 +211,18 @@ test.describe('reading by attention points', () => {
     await page.keyboard.press('d')
     await lands(']', 'point-p-3')
     await lands('[', 'point-p-1')
+  })
+
+  test('r marks the file of the point in focus in its stop', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl + '#point-p-1')
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+    await page.keyboard.press(']')
+    await expect(page.locator('#point-p-1')).toHaveClass(/is-focused/)
+    await page.keyboard.press('r')
+    await expect(page.locator('.toast')).toHaveText('file marked reviewed')
+    await expect(
+      page.locator('#layer-run-path article.file[data-path="src/app.ts"] .file-h input[type="checkbox"]')
+    ).toBeChecked()
   })
 
   test('a target no stop shows takes the page to its layers', async ({ page, reviewUrl }) => {
@@ -323,6 +338,8 @@ test.describe('reading by attention points', () => {
   }) => {
     await page.goto(reviewUrl)
     const readByPoints = page.locator('#set-read-by-points')
+    // Turned off from the layers, where the view on screen stays: the switch still goes.
+    await page.locator('nav.rail .rail-view [data-view="layers"]').click()
     await page.locator('#settings').click()
     await readByPoints.uncheck()
     await page.locator('[data-act="settings-save"]').click()

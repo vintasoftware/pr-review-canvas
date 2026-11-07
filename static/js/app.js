@@ -591,13 +591,18 @@ export class PrAppElement extends HTMLElement {
    * @param {import('./layer-views.js').PageView} view
    */
   viewShown(view) {
-    const ctx = getRenderContext()
     qs('nav.rail', this)?.toggleAttribute('data-points', view === 'points')
+    this.redrawRail()
+    this.scrollSpy?.stop()
+    this.scrollSpy = view === 'points' ? null : initScrollSpy(this)
+  }
+
+  /** Draws the rail again from the review session's marks and settled points. */
+  redrawRail() {
+    const ctx = getRenderContext()
     if (ctx !== null && this.session !== null) {
       refreshRail(this, { ...ctx.artifact, settled: this.session.settled }, this.session.state)
     }
-    this.scrollSpy?.stop()
-    this.scrollSpy = view === 'points' ? null : initScrollSpy(this)
   }
 
   /**
@@ -621,11 +626,14 @@ export class PrAppElement extends HTMLElement {
    */
   settingsSaved(data) {
     const { readByPoints, layerView } = data.settings
-    const points = readByPoints !== this.readByPoints ? readByPoints : this.layerView?.view === 'points'
+    const turned = readByPoints !== this.readByPoints
+    const points = turned ? readByPoints : this.layerView?.view === 'points'
     this.readByPoints = readByPoints
     this.layerView?.setLayersView(layerView)
     qs('nav.rail', this)?.toggleAttribute('data-switchable', readByPoints)
     this.layerView?.setView(points ? 'points' : layerView)
+    // The switch comes and goes with the setting, also when the view on screen stays.
+    if (turned) this.redrawRail()
     this.chat?.followSettings(data.settings)
     applyPointColors(data.settings.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)

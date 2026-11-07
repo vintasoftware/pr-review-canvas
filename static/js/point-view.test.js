@@ -33,10 +33,17 @@ describe('stopsOf', () => {
     expect(stopsOf(artifact).flatMap(stop => (stop.kind === 'point' ? [stop.number] : []))).toEqual([1, 2, 3])
   })
 
-  it('opens a layer with tests and no points, and skips one with neither', () => {
-    expect(stopsOf({ ...artifact, points: [] }).map(stop => stop.id)).toEqual(['layer-run-path'])
-    const bare = { ...artifact, points: [], layers: artifact.layers.map(layer => ({ ...layer, tests: [] })) }
-    expect(stopsOf(bare)).toEqual([])
+  it('opens a layer with tests and no points, skips one with neither, and has none without points', () => {
+    const otherOnly = { ...artifact, points: artifact.points.filter(p => p.layerId === 'other') }
+    expect(stopsOf(otherOnly).map(stop => stop.id)).toEqual([
+      'layer-run-path',
+      'layer-other',
+      'point-p-2',
+      'point-p-3',
+    ])
+    const bare = { ...otherOnly, layers: artifact.layers.map(layer => ({ ...layer, tests: [] })) }
+    expect(stopsOf(bare).map(stop => stop.id)).not.toContain('layer-run-path')
+    expect(stopsOf({ ...artifact, points: [] })).toEqual([])
   })
 })
 

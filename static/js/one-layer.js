@@ -260,10 +260,12 @@ export function initOneLayer(root, opts) {
     }
     const here = placeNow()
     // The points open on their first stop from the top of the page, not on the overview.
-    shownHash = place ?? (next === 'points' && here === '#overview' ? '' : here)
+    shownHash =
+      place ?? (next === 'points' && here === '#overview' ? `#${stops()[0]?.id ?? 'overview'}` : here)
     view = next
-    redraw()
+    // The rail is drawn for the new view first, so the stop the redraw shows is the one it marks.
     opts.onView?.(view)
+    redraw()
   }
 
   // Everything that scrolls to a target raises `reveal-code` on it first; a target inside a

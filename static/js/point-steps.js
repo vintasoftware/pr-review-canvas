@@ -23,6 +23,10 @@ import { layerAnchorId, pointAnchorId } from './keys.js'
 export function stopsOf(artifact) {
   /** @type {Stop[]} */
   const stops = []
+  // A canvas with no points has nothing to read point by point; its layers show as they are.
+  if (artifact.points.length === 0) {
+    return stops
+  }
   let number = 0
   for (const layer of artifact.layers) {
     const points = artifact.points.filter(p => p.layerId === layer.id)
