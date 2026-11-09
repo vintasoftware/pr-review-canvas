@@ -47,7 +47,8 @@
 - The generation prompt no longer asks for "one or two short sentences". A new **Writing** section
   asks for complete sentences a reviewer understands on the first read, names as the reader sees
   them, and no compression or padding. When a field runs over its cap, the generator now leaves
-  out a detail instead of the words a sentence needs. The caps are unchanged.
+  out a detail instead of the words a sentence needs, and writes a file note only when it says
+  something the diff doesn't show at a glance. The caps are unchanged.
 - A project with its own copy of `generation-format.md` keeps the old wording until it takes the
   **Writing** section from the bundled template.
 - A missing-test attention point reads as the generator's note on the gap, without the line

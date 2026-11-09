@@ -262,7 +262,9 @@ of each chunk. They are not the manifest's additions plus deletions.
 
 - `rationale`: why these hunks belong together, how this layer fits into the change, and what to read first.
 - File `note` and annotations: explain a non-obvious flow or rule and link it to the implementation.
-  Short pseudocode is useful when it makes a long algorithm easier to follow.
+  Short pseudocode is useful when it makes a long algorithm easier to follow. Write a file note
+  only when it says something the diff doesn't show at a glance. An import, a fixture, a new type
+  field, or a moved export gets none.
 - Put every decision, trade-off, and manual check in `points`, using the rules below.
   The schema accepts optional `decisions` and `checkByHand` for compatibility. Omit them in new canvases; the reviewer tracks these items
   through attention points. Keep the layer rationale and file notes focused on the reading path
