@@ -165,6 +165,9 @@ describe('createApp', () => {
       const redirect = await app.request('/tour?n=42', { headers: LOCAL })
       expect(redirect.status).toBe(303)
       expect(redirect.headers.get('location')).toBe('/r/acme/widgets/tour/42')
+      // An empty form lands on /tour/ , as the canvases tab's lands on /review/ .
+      const empty = await app.request('/tour', { headers: LOCAL })
+      expect(empty.headers.get('location')).toBe('/r/acme/widgets/tour/')
     })
 
     it('offers to generate a tour on the tours tab, and carries the flag to the tour page', async () => {
@@ -313,6 +316,8 @@ describe('createApp', () => {
       const res = await app.request('/start', { headers: LOCAL })
       expect(res.status).toBe(302)
       expect(res.headers.get('location')).toBe('/r/acme/widgets/')
+      const tourHome = await app.request('/start?page=tour', { headers: LOCAL })
+      expect(tourHome.headers.get('location')).toBe('/r/acme/widgets/?tab=tours')
       await t.cleanup()
       t = await makeTestContext({
         gh: createFakeGh({ routes: { 'repos/acme/widgets/pulls': ghJson([{ number: 42 }]) } }),
@@ -321,7 +326,12 @@ describe('createApp', () => {
       t.ctx.log = line => logs.push(line)
       const found = await createApp(t.ctx).request('/start', { headers: LOCAL })
       expect(found.headers.get('location')).toBe('/r/acme/widgets/review/42')
-      expect(logs).toEqual(['opening PR #42, the open review of this branch'])
+      const tour = await createApp(t.ctx).request('/start?page=tour', { headers: LOCAL })
+      expect(tour.headers.get('location')).toBe('/r/acme/widgets/tour/42')
+      expect(logs).toEqual([
+        'opening PR #42, the open review of this branch',
+        'opening PR #42, the open review of this branch',
+      ])
     })
 
     it('draws the same header bar the review page draws in the browser', async () => {

@@ -25,7 +25,7 @@ import { runTour } from './commands.js'
 import { guideHasRunRecipe, prepareTour } from './prepare.js'
 import { previewTour } from './preview.js'
 import { renderTourPrompt } from './prompt.js'
-import { carriedRecord, publishTour, TourInvalidError } from './publish.js'
+import { carriedRecord, publishTour, readTourContext, readTourModel, TourInvalidError } from './publish.js'
 import { exportTour, zipStoredTour } from './share.js'
 import { buildZipName, parseZipName } from '../canvas/name.js'
 import { readZip } from '../canvas/zip.js'
@@ -177,6 +177,34 @@ describe('tour publish', () => {
     expect(zip.artifact).toEqual(stored)
     expect(zip.manifest.tool.name).toBe('pr-review-tour')
     expect(zip.manifest.prNumber).toBe(42)
+  })
+
+  it('says the model is missing, and fills only the scenes a well-named landmark left out', async () => {
+    const result = await prepared()
+    await expect(publishTour(t.ctx, result.tourDir, OPTS)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: expect.stringContaining('tour-model.json does not exist'),
+    })
+    const context = await readTourContext(result.tourDir)
+    const file = path.join(result.tourDir, 'tour-model.json')
+    await mkdir(result.scenesDir, { recursive: true })
+    for (const id of ['inline', 'from-file']) {
+      await writeFile(path.join(result.scenesDir, `${id}.scene.html`), '<p>file</p>')
+    }
+    const landmarks = [{ id: 'inline', scene: '<p>model</p>' }, { id: 'Not An Id' }, { id: 'from-file' }]
+    await writeFile(file, JSON.stringify({ landmarks }))
+    expect(await readTourModel(context)).toEqual({
+      raw: {
+        landmarks: [
+          { id: 'inline', scene: '<p>model</p>' },
+          { id: 'Not An Id' },
+          { id: 'from-file', scene: '<p>file</p>' },
+        ],
+      },
+    })
+    // A model with no landmarks list is read as written, for the validator to refuse.
+    await writeFile(file, JSON.stringify({ title: 'no landmarks' }))
+    expect(await readTourModel(context)).toEqual({ raw: { title: 'no landmarks' } })
   })
 
   it('refuses an invalid model with one line per problem and exits 5 through the CLI', async () => {

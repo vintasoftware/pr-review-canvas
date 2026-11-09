@@ -176,6 +176,54 @@ describe('sseStream with the request signal', () => {
     left.abort()
     expect(cancelled).toBe(0)
   })
+
+  it('stops the turn once when the body is cancelled after the request was aborted', async () => {
+    const log: string[] = []
+    const left = new AbortController()
+    const reader = sseStream(waiting(log), {
+      onCancel: () => log.push('cancel'),
+      signal: left.signal,
+    }).getReader()
+    left.abort()
+    await reader.cancel()
+    expect(log).toEqual(['cancel', 'return'])
+  })
+
+  it('writes nothing that arrives after the reader left, an event or a failure', async () => {
+    for (const late of ['event', 'failure'] as const) {
+      let settle: { resolve: (r: IteratorResult<ChatEvent>) => void; reject: (e: unknown) => void } | null =
+        null
+      let asked = (): void => undefined
+      const nextAsked = new Promise<void>(resolve => {
+        asked = resolve
+      })
+      const turn: AsyncIterable<ChatEvent> = {
+        [Symbol.asyncIterator]: () => ({
+          next: () =>
+            new Promise<IteratorResult<ChatEvent>>((resolve, reject) => {
+              settle = { resolve, reject }
+              asked()
+            }),
+        }),
+      }
+      const errors: unknown[] = []
+      const left = new AbortController()
+      const reader = sseStream(turn, { onError: err => errors.push(err), signal: left.signal }).getReader()
+      const read = reader.read()
+      await nextAsked
+      left.abort()
+      if (late === 'event') {
+        settle!.resolve({ done: false, value: { event: 'chunk', text: 'late' } })
+      } else {
+        settle!.reject(new Error('late'))
+      }
+      // Let the late step land, then let go: a frame written for it would be what the read gets.
+      await new Promise(resolve => setTimeout(resolve, 0))
+      await reader.cancel()
+      expect(await read).toEqual({ done: true, value: undefined })
+      expect(errors).toHaveLength(late === 'failure' ? 1 : 0)
+    }
+  })
 })
 
 function toIterable(events: ChatEvent[]): AsyncIterable<ChatEvent> {
