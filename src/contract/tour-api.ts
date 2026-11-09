@@ -120,10 +120,13 @@ export interface TourImportResult {
 
 /** The answer of `POST /api/tours/:n/shared-tour/fetch`. */
 export interface SharedTourFetchResponse {
-  /** A tour comment was on the pull request. */
-  found: boolean
-  /** Its tour was stored; false when the stored one was as new, or no comment's zip would import. */
-  imported: boolean
+  /**
+   * `imported`: a shared tour was stored. `exists`: the shared tour is no newer than the stored one.
+   * `unreadable`: tours are shared, but none would import; the warnings say why. `none`: no tour is
+   * shared on the pull request.
+   */
+  outcome: 'imported' | 'exists' | 'unreadable' | 'none'
+  /** Why a shared tour could not be used, one line each. */
   warnings: string[]
 }
 

@@ -45,6 +45,18 @@ import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
 
 export const POLL_MS = 5000
 
+/**
+ * What the page says after looking for a shared tour, ahead of the warnings that explain it. A tour
+ * it imported speaks for itself.
+ * @type {Record<import('../contract-types.js').SharedTourFetchResponse['outcome'], string | null>}
+ */
+const SHARED_TOUR_SAYS = {
+  imported: null,
+  exists: 'the tour shared on the pull request is no newer than this one',
+  unreadable: 'the tour shared on the pull request would not import',
+  none: 'no tour is shared on the pull request',
+}
+
 /** @returns {TourBootstrap | null} */
 function readBootstrap() {
   const el = document.getElementById('bootstrap')
@@ -188,19 +200,11 @@ export class PrTourElement extends HTMLElement {
         void runCommand(
           fetchShared,
           async () => {
-            const result = await fetchSharedTour(bundle.key)
-            for (const warning of result.warnings) toast(this, warning, { tone: 'note' })
-            if (result.imported) {
+            const { outcome, warnings } = await fetchSharedTour(bundle.key)
+            if (outcome === 'imported') {
               await this.boot()
-            } else {
-              toast(
-                this,
-                result.found
-                  ? 'the tour shared on the pull request is no newer than this one'
-                  : 'no tour is shared on the pull request',
-                { tone: 'note' }
-              )
             }
+            this.tellImport([SHARED_TOUR_SAYS[outcome], ...warnings], outcome === 'unreadable')
           },
           { pendingLabel: 'looking…' }
         )
@@ -212,10 +216,22 @@ export class PrTourElement extends HTMLElement {
         importImpl: importTour,
         validate: validateTourFilename,
         onImported: result => {
-          for (const warning of result.warnings) toast(this, warning, { tone: 'note' })
-          void this.boot()
+          void this.boot().then(() => this.tellImport(result.warnings, false))
         },
       })
+    }
+  }
+
+  /**
+   * Says how an import went, once the page it may have redrawn is up: a redraw takes a toast down
+   * with the page. One toast holds every line, since each toast replaces the one before.
+   * @param {(string | null)[]} lines
+   * @param {boolean} failed
+   */
+  tellImport(lines, failed) {
+    const said = lines.filter(line => line !== null)
+    if (said.length > 0) {
+      toast(this, said.join(' · '), { tone: failed ? 'failed' : 'note' })
     }
   }
 

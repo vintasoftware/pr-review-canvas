@@ -78,7 +78,7 @@ function fakeServer(bundle, opts = {}) {
         return json({ error: { code: 'PR_NOT_FOUND', message: 'no such pull request', hint: 'check' } }, 404)
       }
       if (url.endsWith('/shared-tour/fetch') && method === 'POST') {
-        return json(opts.shared?.() ?? { found: false, imported: false, warnings: [] })
+        return json(opts.shared?.() ?? { outcome: 'none', warnings: [] })
       }
       if (url.includes('/export')) {
         return new Response(new Uint8Array([80, 75]), {
@@ -685,23 +685,38 @@ describe('the tour page', () => {
 
   it('looks for a shared tour on demand, draws one it imports, and exports the tour on screen', async () => {
     /** @type {unknown} */
-    let shared = { found: false, imported: false, warnings: ['pr-42-x-tour.zip: broken'] }
+    let shared = { outcome: 'none', warnings: [] }
     let imported = false
     const server = fakeServer(() => (imported ? syntheticTourBundle() : missingTourBundle()), {
       shared: () => shared,
     })
     vi.stubGlobal('fetch', server.impl)
     mount()
+    const toastSays = () => document.querySelector('.toast')?.textContent
+    const tone = () => document.querySelector('.toast')?.getAttribute('data-tone')
     click(`#${(await drawn('#fetch-shared')).id}`)
-    await vi.waitFor(() => expect(text()).toContain('no tour is shared on the pull request'))
-    shared = { found: true, imported: false, warnings: [] }
+    await vi.waitFor(() => expect(toastSays()).toBe('no tour is shared on the pull request'))
+    // A shared tour that will not import says why, in the same toast.
+    shared = { outcome: 'unreadable', warnings: ['pr-42-x-tour.zip is not a zip file'] }
     click('#fetch-shared')
-    await vi.waitFor(() => expect(text()).toContain('is no newer than this one'))
-    // A newer one is imported, and the page draws it.
-    shared = { found: true, imported: true, warnings: [] }
+    await vi.waitFor(() =>
+      expect(toastSays()).toBe(
+        'the tour shared on the pull request would not import · pr-42-x-tour.zip is not a zip file'
+      )
+    )
+    expect(tone()).toBe('failed')
+    shared = { outcome: 'exists', warnings: [] }
+    click('#fetch-shared')
+    await vi.waitFor(() =>
+      expect(toastSays()).toBe('the tour shared on the pull request is no newer than this one')
+    )
+    expect(tone()).toBe('note')
+    // A newer one is imported and drawn, and what went wrong on the way is still up once it is.
+    shared = { outcome: 'imported', warnings: ['pr-42-y-tour.zip could not be downloaded'] }
     imported = true
     click('#fetch-shared')
     await drawn('.tour-cover-actions')
+    await vi.waitFor(() => expect(toastSays()).toBe('pr-42-y-tour.zip could not be downloaded'))
 
     URL.createObjectURL = vi.fn(() => 'blob:x')
     URL.revokeObjectURL = vi.fn()
@@ -726,7 +741,11 @@ describe('the tour page', () => {
         setRequestHeader: () => undefined,
         send: () => {
           imported = true
-          xhr.responseText = JSON.stringify({ status: 'imported', headSha: HEAD, warnings: [] })
+          xhr.responseText = JSON.stringify({
+            status: 'imported',
+            headSha: HEAD,
+            warnings: ['imported a tour exported from other/repo'],
+          })
           queueMicrotask(() => xhr.onload?.())
         },
       }
@@ -739,6 +758,10 @@ describe('the tour page', () => {
     input.dispatchEvent(new Event('change'))
     await drawn('.tour-cover-actions')
     expect(uploads).toEqual(['POST /r/acme/widgets/api/tours/42/import'])
+    // Its warning is still up once the tour is drawn.
+    await vi.waitFor(() =>
+      expect(document.querySelector('.toast')?.textContent).toBe('imported a tour exported from other/repo')
+    )
   })
 
   it('shows the error card with a retry when the bundle cannot be read, and the stale bar', async () => {

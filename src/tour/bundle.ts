@@ -104,8 +104,8 @@ async function discoverSharedTour(
   const fingerprint = discoveryFingerprint(pr.body, comments, pr.headSha)
   if (!refresh && lookedAt.get(memo) === fingerprint) return { imported: false, warnings: [] }
   lookedAt.set(memo, fingerprint)
-  const { imported, warnings } = await fetchSharedTour(ctx, pr, comments)
-  return { imported, warnings }
+  const { outcome, warnings } = await fetchSharedTour(ctx, pr, comments)
+  return { imported: outcome === 'imported', warnings }
 }
 
 export async function resolveTourBundle(

@@ -5,12 +5,13 @@
 import { readZipOrThrow, sameRepo } from '../canvas/import.js'
 import type { CommentsPayload } from '../contract/comments.js'
 import type { Pr } from '../contract/review-artifact.js'
-import type { TourImportResult } from '../contract/tour-api.js'
+import type { SharedTourFetchResponse, TourImportResult } from '../contract/tour-api.js'
 import type { TourArtifact, TouredBy, TourRecord } from '../contract/tour.js'
 import {
   collectCandidates,
   type DiscoverySources,
   downloadAttachment,
+  type DownloadFailure,
   MAX_CANDIDATES_TRIED,
   namesAnotherPr,
   rankCandidates,
@@ -108,19 +109,28 @@ export async function importTour(ctx: AppContext, opts: TourImportOptions): Prom
   return { status: 'imported', headSha, warnings }
 }
 
+/** What the reader is told about an attachment the import could not use, after its name. */
+const DOWNLOAD_FAILURES: Record<DownloadFailure, string> = {
+  'auth-required': 'was refused by the host; check that you are logged in',
+  'not-zip': 'is not a zip file',
+  'too-large': 'is too large to import',
+  network: 'could not be downloaded',
+  'name-mismatch': 'was exported from another repository',
+  'pr-mismatch': 'was exported for another pull request',
+}
+
 /**
  * Looks on the pull request for a tour someone shared, in a comment's hidden block or attached as
  * a zip the comment did not fit, and imports the best one: of the head first, then this pull
- * request's, then the newest, as the canvas's discovery ranks them. Answers whether one was found,
- * and whether an import stored anything.
+ * request's, then the newest, as the canvas's discovery ranks them.
  */
 export async function fetchSharedTour(
   ctx: AppContext,
   pr: Pr,
   comments: CommentsPayload
-): Promise<{ found: boolean; imported: boolean; warnings: string[] }> {
+): Promise<SharedTourFetchResponse> {
   const number = pr.number
-  if (number === null) return { found: false, imported: false, warnings: [] }
+  if (number === null) return { outcome: 'none', warnings: [] }
   const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
   const ranked = rankCandidates(
     collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour'),
@@ -134,19 +144,15 @@ export async function fetchSharedTour(
         ? await downloadAttachment(ctx, candidate.url)
         : { ok: true as const, bytes: candidate.bytes }
     if (!download.ok) {
-      warnings.push(`${candidate.name}: ${download.reason}`)
+      warnings.push(`${candidate.name} ${DOWNLOAD_FAILURES[download.reason]}`)
       continue
     }
     try {
       const result = await importTour(ctx, { bytes: download.bytes, prNumber: number })
-      return {
-        found: true,
-        imported: result.status === 'imported',
-        warnings: [...warnings, ...result.warnings],
-      }
+      return { outcome: result.status, warnings: [...warnings, ...result.warnings] }
     } catch (err) {
       warnings.push(`${candidate.name}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
-  return { found: ranked.length > 0, imported: false, warnings }
+  return { outcome: ranked.length > 0 ? 'unreadable' : 'none', warnings }
 }

@@ -1060,15 +1060,15 @@ describe('looking for a shared tour', () => {
       { artifact: syntheticTour({ headSha: OTHER_SHA }), prNumber: 42 },
       { artifact: syntheticTour(), prNumber: 42 }
     )
-    expect(await json(await look())).toEqual({ found: true, imported: true, warnings: [] })
+    expect(await json(await look())).toEqual({ outcome: 'imported', warnings: [] })
     expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
     expect(await t.ctx.tours.read(OTHER_SHA)).toBeNull()
-    expect(await json(await look())).toEqual({ found: true, imported: false, warnings: [] })
+    expect(await json(await look())).toEqual({ outcome: 'exists', warnings: [] })
   })
 
   it("passes over another pull request's tour, finds none on a quiet one, and refuses local work", async () => {
     await sharing({ artifact: syntheticTour(), prNumber: 7 })
-    expect(await json(await look())).toEqual({ found: false, imported: false, warnings: [] })
+    expect(await json(await look())).toEqual({ outcome: 'none', warnings: [] })
     const local = await createApp(t.ctx).request('/api/tours/branch/shared-tour/fetch', {
       method: 'POST',
       headers: WRITE,
@@ -1090,7 +1090,7 @@ describe('looking for a shared tour', () => {
       }),
       fetch: async () => new Response(zip.bytes.slice().buffer as ArrayBuffer, { status: 200 }),
     })
-    expect(await json(await look())).toEqual({ found: true, imported: true, warnings: [] })
+    expect(await json(await look())).toEqual({ outcome: 'imported', warnings: [] })
     expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
   })
 
@@ -1102,7 +1102,7 @@ describe('looking for a shared tour', () => {
       routes: { 'repos/acme/widgets/issues/42/comments': ghHandler(() => [...GH_ISSUE_COMMENTS, broken]) },
     })
     const body = await json<SharedTourFetchResponse>(await look())
-    expect(body).toMatchObject({ found: true, imported: false })
+    expect(body.outcome).toBe('unreadable')
     expect(body.warnings[0]).toMatch(/^pr-42-.+-tour\.zip: this file is not a zip$/)
   })
 })
@@ -1208,7 +1208,9 @@ describe('the tour page keeps up with the pull request', () => {
       json<TourBundle>(await app.request(`/api/tours/42${query}`, { headers: LOCAL }))
     const first = await open()
     expect(first.status).toBe('missing')
-    expect(first.warnings).toEqual([expect.stringMatching(/^pr-42-.+-tour\.zip: /)])
+    expect(first.warnings).toEqual([
+      'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip is not a zip file',
+    ])
     // Polls and reloads of the same pull request do not fetch the attachment again.
     expect((await open('?poll=1')).warnings).toEqual([])
     expect((await open()).warnings).toEqual([])

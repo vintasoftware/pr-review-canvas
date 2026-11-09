@@ -131,14 +131,12 @@ describe('fetchSharedTour', () => {
     // The link posted last is tried first, and it fails.
     const body = [1, 2].map(n => `https://github.com/user-attachments/files/${n}/${name}`).join('\n')
     expect(await fetchSharedTour(t.ctx, { ...pr, body, number: null }, NO_COMMENTS)).toEqual({
-      found: false,
-      imported: false,
+      outcome: 'none',
       warnings: [],
     })
     expect(await fetchSharedTour(t.ctx, { ...pr, body }, NO_COMMENTS)).toEqual({
-      found: true,
-      imported: true,
-      warnings: [`${name}: network`],
+      outcome: 'imported',
+      warnings: [`${name} could not be downloaded`],
     })
     expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
   })
