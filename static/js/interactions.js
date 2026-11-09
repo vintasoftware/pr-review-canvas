@@ -8,8 +8,8 @@ import { toggleMarkdownPreview } from './composer.js'
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 /** @typedef {import('./selection.js').Selection} Selection */
-import { cssEscape, drawCardOf, drawCardsOf, fileCardOf, findRow } from './anchors.js'
-import { fetchReviewBody } from './api.js'
+import { cssEscape, drawCardOf, drawCardsOf, fileCardOf, findRow, parseLineId } from './anchors.js'
+import { fetchReviewBody, saveSettings } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
 import { runCommand, runControl, showCommandError, toast } from './commands.js'
@@ -23,6 +23,7 @@ import {
   composerRowHtml,
   concealForComposer,
   focusComposer,
+  liftComposer,
   revealConcealed,
   setDisabledReason,
   refreshComposerCommands,
@@ -31,6 +32,7 @@ import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decoratio
 import { conversationHtml } from './overview.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
 import { hostLabel } from './host.js'
+import { drawnDiffLayout, isDiffLayout, setChosenDiffLayout, setDrawnDiffLayout } from './diff-layouts.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
@@ -47,6 +49,7 @@ import {
   refreshFolds,
   setCardCollapsed,
   setCardRenderedHook,
+  redrawDiffs,
   setFoldLevel,
   wireCardReveal,
   setRenderContext,
@@ -72,6 +75,7 @@ import {
 import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
+import { initLayoutSwitch, TOO_NARROW } from './layout-switch.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
   fillSignoffDialog,
@@ -887,6 +891,68 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /**
+   * Draws every diff again in `layout`, keeping the line at the top of the screen where it was,
+   * and the open composer and the selection on their lines.
+   * @param {import('./diff-layouts.js').DiffLayout} layout
+   */
+  const relayout = layout => {
+    const keepPlace = holdReadingPlace()
+    const restoreComposer = liftComposer(root)
+    setDrawnDiffLayout(layout)
+    redrawDiffs(root)
+    restoreComposer()
+    markSelection(root, selection)
+    keepPlace()
+  }
+
+  /**
+   * The line row, or else the element, at the top of the canvas column, and what scrolls it back to
+   * the same height once the diffs are drawn again.
+   */
+  const holdReadingPlace = () => {
+    const main = root.querySelector('main')
+    const box = main?.getBoundingClientRect()
+    const hit =
+      box === undefined
+        ? null
+        : doc.elementFromPoint(box.left + box.width / 2, Math.max(box.top, stickyTop()) + FOCUS_GAP)
+    let row = hit?.closest('table.diff tr') ?? null
+    while (row !== null && row.id === '') row = row.previousElementSibling
+    const line = row === null ? null : parseLineId(row.id)
+    const held = line === null ? (hit?.closest('table.diff')?.closest('article.file') ?? hit) : row
+    if (held === null || held === undefined) {
+      return () => {}
+    }
+    const top = held.getBoundingClientRect().top
+    return () => {
+      const now = line === null ? held : findRow(root, line.key, line.side, line.line)
+      if (now?.isConnected === true) doc.defaultView?.scrollBy(0, now.getBoundingClientRect().top - top)
+    }
+  }
+
+  const layoutSwitch = initLayoutSwitch(root, relayout)
+
+  /**
+   * Switches the diffs to `layout` from the switch or the `s` key, and saves it as the reader's
+   * choice. Split waits for a column wide enough to hold it.
+   * @param {import('./diff-layouts.js').DiffLayout} layout
+   */
+  const chooseDiffLayout = layout => {
+    if (layout === drawnDiffLayout()) {
+      return
+    }
+    if (layout === 'split' && !layoutSwitch.fits()) {
+      toast(root, TOO_NARROW, { tone: 'note' })
+      return
+    }
+    setChosenDiffLayout(layout)
+    layoutSwitch.apply()
+    void saveSettings({ diffLayout: layout }).catch(() =>
+      toast(root, 'could not save the diff layout to settings.yml', { tone: 'failed' })
+    )
+  }
+
+  /**
    * Adds what a composer holds to the pending review instead of posting it.
    * @param {HTMLElement} button
    * @param {Element} box
@@ -1037,6 +1103,10 @@ export function wireReview(root, session, opts = {}) {
 
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
+    'diff-layout': el => {
+      const layout = el.getAttribute('data-layout')
+      if (isDiffLayout(layout)) chooseDiffLayout(layout)
+    },
     'toggle-card': (el, event) => toggleFromTitle(el, event, () => setCardCollapsed(el)),
     'mark-layer': el => {
       const id = el.getAttribute('data-reviewed-id') ?? ''
@@ -1462,6 +1532,9 @@ export function wireReview(root, session, opts = {}) {
         // The key steps through the levels, so the reader can open the code up without the mouse.
         applyFoldLevel(nextFoldLevel(getFoldLevel()))
         break
+      case 'diff-layout':
+        chooseDiffLayout(drawnDiffLayout() === 'split' ? 'unified' : 'split')
+        break
       case 'overview':
         focusItem(byId('overview'))
         break
@@ -1621,6 +1694,10 @@ export function wireReview(root, session, opts = {}) {
         { pendingLabel: 'posting…' }
       )
     },
+    /** Draws the diffs in the layout the settings chose, as far as the column allows. */
+    applyDiffLayout() {
+      layoutSwitch.apply()
+    },
     /** Lets the caller re-apply the gating after the probe answers. */
     refreshCapabilities() {
       applyCapabilityGating(root, session.capabilities)
@@ -1637,6 +1714,7 @@ export function wireReview(root, session, opts = {}) {
       doc.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
       stopCardReveal()
       stopPaddingUnderBar()
+      layoutSwitch.stop()
     },
   }
 }

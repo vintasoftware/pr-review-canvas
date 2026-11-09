@@ -5,6 +5,7 @@ import { findRow } from './anchors.js'
 import { applyCodeFolds, setCodeFoldLevel, setFoldShown, wireFoldReveal } from './code-folds.js'
 import { followLink } from './deep-link.js'
 import { insertNoteRow } from './diff-decorations.js'
+import { setDrawnDiffLayout } from './diff-layouts.js'
 import { renderDiff } from './diff-renderer.js'
 import { scrollIntoViewSafe } from './dom.js'
 
@@ -61,6 +62,19 @@ function shownTitles(card) {
 afterEach(() => document.body.replaceChildren())
 
 describe('applyCodeFolds', () => {
+  it('folds the split layout the same way, across both sides', () => {
+    setDrawnDiffLayout('split')
+    try {
+      const card = mount()
+      applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)
+      expect(toggle(card).textContent).toBe('run() · 5 lines')
+      expect(card.querySelector('tr.code-fold td')?.getAttribute('colspan')).toBe('6')
+      expect(card.querySelectorAll('tr[data-code-fold][hidden]').length).toBe(4)
+    } finally {
+      setDrawnDiffLayout('unified')
+    }
+  })
+
   it('shows the title and line count, and expands all rows between the anchors, including deletions', () => {
     const card = mount()
     applyCodeFolds(card, 'src_app_ts', [FOLD], 'light', false)

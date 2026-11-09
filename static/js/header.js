@@ -11,6 +11,8 @@ import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { refreshRail } from './rail.js'
 import { foldLevelControlHtml } from './reading-level.js'
+import { diffLayoutControlHtml } from './layout-switch.js'
+import { drawnDiffLayout } from './diff-layouts.js'
 import { approveBlockedReason } from './signoff.js'
 import { headerBarHtml } from './header-bar.js'
 
@@ -150,7 +152,8 @@ export function renderHeader(bundle, opts) {
               mergeBaseSha: drawn.on.mergeBaseSha,
             },
             level
-          )
+          ),
+          diffLayoutControlHtml(drawnDiffLayout())
         )
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (

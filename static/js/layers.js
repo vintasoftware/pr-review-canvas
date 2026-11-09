@@ -815,6 +815,23 @@ export class PrFileElement extends HTMLElement {
   }
 }
 
+/**
+ * Draws every drawn diff again, as when the layout changes. A card still waiting to be drawn
+ * draws in the new layout when it is seen.
+ * @param {ParentNode} root
+ */
+export function redrawDiffs(root) {
+  const ctx = renderContext
+  if (ctx === null) {
+    return
+  }
+  for (const card of root.querySelectorAll('article.file')) {
+    if (card instanceof HTMLElement && card.querySelector('.diff-host table.diff') !== null) {
+      hydrateFileCard(card, ctx, { force: true })
+    }
+  }
+}
+
 export class PrLayerElement extends HTMLElement {}
 
 /** Registers the custom elements once. */

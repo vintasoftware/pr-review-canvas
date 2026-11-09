@@ -706,11 +706,13 @@
   .diff .ln {
     border-right-color: var(--ln-rule);
   }
-  tr.add .ln {
+  tr.add .ln,
+  .diff.split td.ln.add {
     background: var(--add-ln-bg);
     color: var(--ln-fg-changed);
   }
-  tr.del .ln {
+  tr.del .ln,
+  .diff.split td.ln.del {
     background: var(--del-ln-bg);
     color: var(--ln-fg-changed);
   }

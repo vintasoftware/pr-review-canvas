@@ -62,6 +62,35 @@
   padding: 2px 6px;
   font-size: 13px;
 }
+/* Unified | Split: the pressed one is the layout on screen. */
+.diff-layout {
+  display: inline-flex;
+  gap: 10px;
+  margin-right: 8px;
+}
+.diff-layout button {
+  padding: 0 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.diff-layout button[aria-pressed='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--fg);
+  cursor: default;
+}
+.diff-layout button[aria-pressed='false']:not(:disabled):hover {
+  color: var(--fg);
+}
+.diff-layout button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .fold-hint {
   font-size: 12px;
   color: var(--fg-muted);

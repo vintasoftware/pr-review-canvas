@@ -18,6 +18,7 @@
 
 import { findRow } from './anchors.js'
 import { askButtonHtml } from './ask.js'
+import { drawnDiffLayout } from './diff-layouts.js'
 import { esc } from './dom.js'
 
 /**
@@ -107,7 +108,7 @@ export function selectionLabel(selection) {
 export function selectionToolbarHtml(selection) {
   const label = selectionLabel(selection)
   return (
-    `<tr class="sel-bar" data-decoration="selection"><td class="ln" colspan="3"></td><td class="code x">` +
+    `<tr class="sel-bar" data-decoration="selection">${drawnDiffLayout() === 'split' ? '<td class="ln" colspan="2"></td><td class="code x" colspan="4">' : '<td class="ln" colspan="3"></td><td class="code x">'}` +
     `<span class="lbl">${esc(label)}</span>` +
     '<span class="tbtns"><button class="cmd" type="button" data-act="comment-selection" data-needs-post>comment</button>' +
     askButtonHtml({
@@ -129,8 +130,8 @@ export function selectionToolbarHtml(selection) {
  * @returns {HTMLTableRowElement | null} the row the toolbar was added after
  */
 export function markSelection(root, selection) {
-  for (const row of Array.from(root.querySelectorAll('tr.is-selected'))) {
-    row.classList.remove('is-selected')
+  for (const marked of Array.from(root.querySelectorAll('.is-selected'))) {
+    marked.classList.remove('is-selected')
   }
   for (const bar of Array.from(root.querySelectorAll('tr.sel-bar'))) {
     bar.remove()
@@ -143,7 +144,13 @@ export function markSelection(root, selection) {
   for (let line = selection.start; line <= selection.end; line++) {
     const row = findRow(root, selection.key, selection.side, line)
     if (row) {
-      row.classList.add('is-selected')
+      // A split row holds both sides; only the selected side's cells are marked.
+      const marked = row.closest('table.split')
+        ? row.querySelectorAll(`td[data-side="${selection.side}"]`)
+        : [row]
+      for (const el of marked) {
+        el.classList.add('is-selected')
+      }
       last = row
     }
   }
@@ -183,7 +190,10 @@ export function lineRefFromEvent(event, pathForKey) {
   const oldText = cells[0]?.textContent?.trim() ?? ''
   const newText = cells[1]?.textContent?.trim() ?? ''
   const clickedOld = cells.indexOf(target) === 0 && oldText !== ''
-  const side = row.classList.contains('del') || clickedOld ? 'old' : 'new'
+  // A split row's cells name their side, and a blank one has no line to select.
+  const named = target.getAttribute('data-side')
+  const side =
+    named === 'old' || named === 'new' ? named : row.classList.contains('del') || clickedOld ? 'old' : 'new'
   const line = Number(side === 'old' ? oldText : newText)
   const path = pathForKey(key)
   if (!Number.isInteger(line) || line <= 0 || path === undefined) {

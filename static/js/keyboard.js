@@ -6,7 +6,7 @@ import { esc } from './dom.js'
 /**
  * @typedef {'next-layer' | 'prev-layer' | 'next-file' | 'prev-file' | 'next-point' | 'prev-point'
  *   | 'toggle' | 'reviewed-file' | 'reviewed-layer' | 'comment' | 'dismiss' | 'overview'
- *   | 'help' | 'escape' | 'ask' | 'focus-chat' | 'fold-level'} KeyAction
+ *   | 'help' | 'escape' | 'ask' | 'focus-chat' | 'fold-level' | 'diff-layout'} KeyAction
  */
 
 export const KEY_HELP = [
@@ -22,6 +22,7 @@ export const KEY_HELP = [
   { keys: 'c', what: 'comment on the line in focus or on the selection' },
   { keys: 'd', what: 'dismiss the attention point in focus' },
   { keys: 'f', what: 'step through how much code is hidden: light, moderate, aggressive' },
+  { keys: 's', what: 'switch the diff between unified and split, and save the choice' },
   { keys: 'g o', what: 'go to the overview' },
   { keys: '?', what: 'this help' },
   { keys: 'Esc', what: 'clear the selection, close a composer or a dialog' },
@@ -92,6 +93,8 @@ export function keyAction(event, opts = {}) {
       return { action: 'dismiss', pendingG: false }
     case 'f':
       return { action: 'fold-level', pendingG: false }
+    case 's':
+      return { action: 'diff-layout', pendingG: false }
     case 'g':
       return { action: null, pendingG: true }
     case '?':

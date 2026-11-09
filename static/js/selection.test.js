@@ -2,6 +2,7 @@
 // @vitest-environment happy-dom
 import { toPatchMap } from '../../src/git/diff-collector.js'
 import { SYNTHETIC_FILES } from '../../src/testing/synthetic.js'
+import { setDrawnDiffLayout } from './diff-layouts.js'
 import { renderDiff } from './diff-renderer.js'
 import {
   lineRefFromEvent,
@@ -197,5 +198,43 @@ describe('lineRefFromEvent', () => {
     expect(lineRefFromEvent(/** @type {Event} */ (eventOn(null)), pathForKey)).toBeNull()
     const cell = document.querySelector('#L-src_app_ts-new-4 td.ln:nth-child(2)')
     expect(lineRefFromEvent(/** @type {Event} */ (eventOn(cell)), () => undefined)).toBeNull()
+  })
+})
+
+describe('in the split layout', () => {
+  const entry = SYNTHETIC_FILES.find(f => f.path === PATH)
+  const pathForKey = (/** @type {string} */ key) => (key === KEY ? PATH : undefined)
+
+  beforeEach(() => {
+    setDrawnDiffLayout('split')
+    const patch = toPatchMap(SYNTHETIC_FILES)[KEY] ?? ''
+    document.body.innerHTML = renderDiff({ key: KEY, path: PATH, lang: entry?.lang }, patch)
+  })
+  afterEach(() => setDrawnDiffLayout('unified'))
+
+  it('reads the side from the cell, and nothing from a blank one', () => {
+    const row = document.querySelector('#L-src_app_ts-new-4')
+    const old = row?.querySelector('td.ln[data-side="old"]') ?? null
+    expect(lineRefFromEvent(/** @type {Event} */ ({ target: old }), pathForKey)).toEqual({
+      key: KEY,
+      path: PATH,
+      side: 'old',
+      line: 3,
+    })
+    const blank = document.querySelector('td.ln.blank')
+    expect(blank).not.toBeNull()
+    expect(lineRefFromEvent(/** @type {Event} */ ({ target: blank }), pathForKey)).toBeNull()
+  })
+
+  it('marks only the selected side of a row, with the toolbar across both', () => {
+    markSelection(document.body, { ...single(3), side: 'old' })
+    expect([...document.querySelectorAll('.is-selected')].map(c => c.getAttribute('data-side'))).toEqual([
+      'old',
+      'old',
+      'old',
+    ])
+    expect(document.querySelector('tr.sel-bar td.code')?.getAttribute('colspan')).toBe('4')
+    markSelection(document.body, null)
+    expect(document.querySelectorAll('.is-selected').length).toBe(0)
   })
 })

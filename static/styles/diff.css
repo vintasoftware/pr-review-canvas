@@ -90,6 +90,45 @@ tr.del td {
 .wd {
   background: var(--del-w);
 }
+/* Split: the old file on the left, the new on the right, in two equal halves. Long lines wrap
+   rather than scroll, so a row's two sides stay side by side. */
+.diff-wrap.split {
+  grid-template-columns: minmax(0, 1fr);
+}
+.diff.split {
+  table-layout: fixed;
+  width: 100%;
+}
+.diff.split col.ln {
+  width: calc(5ch + 20px);
+}
+.diff.split col.gut {
+  width: 22px;
+}
+.diff.split td.code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff.split td.ln[data-side='new'] {
+  border-left: 1px solid var(--line);
+}
+.diff.split td.add {
+  background: var(--add-bg);
+}
+.diff.split td.del {
+  background: var(--del-bg);
+}
+.diff.split td.blank {
+  background: var(--panel-2);
+}
+.diff.split tr:hover .plus {
+  opacity: 0;
+}
+.diff.split tr:has(> [data-side='old']:hover) [data-side='old'] .plus,
+.diff.split tr:has(> [data-side='new']:hover) [data-side='new'] .plus,
+.diff.split .plus:focus-visible {
+  opacity: 1;
+}
 tr.hunk td {
   background: var(--hunk-bg);
   color: var(--accent);

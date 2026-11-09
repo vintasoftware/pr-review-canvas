@@ -13,6 +13,7 @@ import {
 } from '../../src/testing/synthetic.js'
 import { setChatEnabled } from './ask.js'
 import { wireFoldReveal } from './code-folds.js'
+import { chosenDiffLayout, setChosenDiffLayout, setDrawnDiffLayout } from './diff-layouts.js'
 import { renderDiff } from './diff-renderer.js'
 import { renderHeader } from './header.js'
 import { carriedOverBarHtml } from './empty-state.js'
@@ -1441,6 +1442,111 @@ describe('line selection', () => {
     expect(root.querySelectorAll('tr.is-selected').length).toBe(1)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(root.querySelectorAll('tr.is-selected').length).toBe(0)
+  })
+})
+
+describe('diff layout', () => {
+  /** @param {string} name */
+  const key = name => document.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }))
+
+  /** A page whose diff column is `width` pixels wide, with saves answered by `fetch`. */
+  function wide(
+    width = 1200,
+    fetch = vi.fn(async (/** @type {string} */ _url, /** @type {RequestInit} */ _init) =>
+      Response.json({ settings: {} })
+    )
+  ) {
+    vi.stubGlobal('fetch', fetch)
+    const page = setup()
+    const main = page.root.querySelector('main')
+    if (main !== null) Object.defineProperty(main, 'clientWidth', { configurable: true, value: width })
+    return { ...page, fetch }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setChosenDiffLayout('unified')
+    setDrawnDiffLayout('unified')
+  })
+
+  it('s draws the diffs side by side and back, saving each choice, with the line on screen kept', async () => {
+    const { root, fetch } = wide()
+    click(root, '#L-src_app_ts-new-4 .plus')
+    const area = root.querySelector('tr.composer textarea')
+    if (area instanceof HTMLTextAreaElement) area.value = 'half written'
+    key('s')
+    expect(root.querySelectorAll('table.diff.split').length).toBeGreaterThan(0)
+    expect(root.querySelector('table.diff:not(.split)')).toBeNull()
+    expect(root.querySelector('[data-layout="split"]')?.getAttribute('aria-pressed')).toBe('true')
+    // The open box moved to the new row of its line, text and all.
+    expect(root.querySelector('tr.composer')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
+    expect(root.querySelector('tr.composer textarea')).toBe(area)
+    // The layout on screen is pressed: a click on it changes nothing.
+    click(root, '[data-layout="split"]')
+    await flush()
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({ diffLayout: 'split' })
+    click(root, '[data-layout="unified"]')
+    expect(root.querySelector('table.diff.split')).toBeNull()
+    expect(chosenDiffLayout()).toBe('unified')
+  })
+
+  it('keeps the line at the top of the screen, or else the element there, at the same height', () => {
+    const { root } = wide()
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
+    // A line sits lower in the unified layout, where deleted lines take rows of their own.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      /** @this {Element} */
+      function () {
+        const top = this.closest('table.diff') === null ? 0 : this.closest('table.split') === null ? 300 : 120
+        return /** @type {DOMRect} */ ({ top, left: 0, width: 800, height: 20, bottom: top + 20, right: 800 })
+      }
+    )
+    const at = vi.spyOn(document, 'elementFromPoint')
+    at.mockImplementation(() => root.querySelector('#L-src_app_ts-new-4 td.code'))
+    key('s')
+    expect(scrollBy).toHaveBeenLastCalledWith(0, 120 - 300)
+    // On a row without a line of its own above any line, the card holds the place.
+    at.mockImplementation(() => root.querySelector('table.diff tr.hunk td'))
+    key('s')
+    expect(scrollBy).toHaveBeenLastCalledWith(0, 0)
+    at.mockImplementation(() => null)
+    key('s')
+    expect(scrollBy).toHaveBeenCalledTimes(2)
+    expect(root.querySelector('table.diff.split')).not.toBeNull()
+    vi.restoreAllMocks()
+  })
+
+  it('keeps a selection on its side across a switch', () => {
+    const { root } = wide()
+    const old = root.querySelector('#L-src_app_ts-old-3 td.ln')
+    old?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    key('s')
+    expect([...root.querySelectorAll('.is-selected')].map(c => c.getAttribute('data-side'))).toEqual([
+      'old',
+      'old',
+      'old',
+    ])
+  })
+
+  it('says why split waits in a narrow column, and says when the choice was not saved', async () => {
+    const narrow = wide(600)
+    key('s')
+    expect(narrow.root.querySelector('table.diff.split')).toBeNull()
+    expect(narrow.root.querySelector('.toast')?.textContent).toContain('split needs a diff column at least')
+    expect(narrow.fetch).not.toHaveBeenCalled()
+    wirings.splice(0).forEach(w => w.stop())
+
+    const failing = wide(
+      1200,
+      vi.fn(async () => Promise.reject(new Error('offline')))
+    )
+    key('s')
+    await flush()
+    expect(failing.root.querySelector('.toast')?.textContent).toBe(
+      'could not save the diff layout to settings.yml'
+    )
   })
 })
 

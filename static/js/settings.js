@@ -11,6 +11,7 @@ import { esc, optionsHtml, qs } from './dom.js'
 import { FOLD_LEVELS, isFoldLevel } from './fold-levels.js'
 import { isLayerView, LAYER_VIEW_LABELS, LAYER_VIEWS } from './layer-views.js'
 import { isPointColors, POINT_COLORS, POINT_COLORS_LABELS } from './point-colors.js'
+import { DIFF_LAYOUT_LABELS, DIFF_LAYOUTS, isDiffLayout, SPLIT_MIN_WIDTH } from './diff-layouts.js'
 
 export const SETTINGS_DIALOG_ID = 'settings-dialog'
 /** The AI Chat fields, named once so the markup, the form reader, and the probe agree. */
@@ -187,6 +188,9 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
       `<select id="set-fold-level">${optionsHtml(FOLD_LEVELS, settings.foldLevel)}</select></div>` +
       '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
+      '<div class="field"><label for="set-diff-layout">Diff layout</label>' +
+      `<select id="set-diff-layout">${optionsHtml(DIFF_LAYOUTS, settings.diffLayout, DIFF_LAYOUT_LABELS)}</select></div>` +
+      `<p class="muted small">Split puts the old code beside the new, and draws unified while the diff column is under ${SPLIT_MIN_WIDTH}px wide. The Unified | Split switch and the <span class="mono">s</span> key change it here too.</p>` +
       '<div class="field"><label for="set-layer-view">Show layers</label>' +
       `<select id="set-layer-view">${optionsHtml(LAYER_VIEWS, settings.layerView, LAYER_VIEW_LABELS)}</select></div>` +
       '<p class="muted small">One at a time shows the overview or a single layer. The rail and the <span class="mono">j</span> and <span class="mono">k</span> keys move between them.</p>' +
@@ -321,6 +325,7 @@ export async function openSettingsDialog(root, opener, opts = {}) {
 /** The values the dialog holds right now, as the PUT body. */
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const foldLevel = qs('#set-fold-level', dialog)
+  const diffLayout = qs('#set-diff-layout', dialog)
   const layerView = qs('#set-layer-view', dialog)
   const pointColors = qs('#set-point-colors', dialog)
   const agent = qs(`#${CHAT_AGENT_ID}`, dialog)
@@ -340,6 +345,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const input = {}
   if (foldLevel instanceof HTMLSelectElement && isFoldLevel(foldLevel.value)) {
     input.foldLevel = foldLevel.value
+  }
+  if (diffLayout instanceof HTMLSelectElement && isDiffLayout(diffLayout.value)) {
+    input.diffLayout = diffLayout.value
   }
   if (layerView instanceof HTMLSelectElement && isLayerView(layerView.value)) {
     input.layerView = layerView.value

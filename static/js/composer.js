@@ -3,7 +3,8 @@
 // thread as a reply, and in the overview for a PR-level comment.
 /** @typedef {import('./contract-types.js').Side} Side */
 /** @typedef {import('./contract-types.js').PostCommentInput} PostCommentInput */
-import { cssEscape } from './anchors.js'
+import { cssEscape, findRow } from './anchors.js'
+import { diffColumns } from './diff-layouts.js'
 import { renderMarkdown } from './markdown.js'
 import { esc, wideCellHtml } from './dom.js'
 import { hostLabel, noPostingTitle, postToLabel } from './host.js'
@@ -234,6 +235,45 @@ export function revealConcealed(root) {
     for (const part of Array.from(host.querySelectorAll(CONCEALED_PARTS))) {
       part.removeAttribute('hidden')
     }
+  }
+}
+
+/**
+ * Takes the open composer out of the diffs before they are drawn again, and returns what puts it
+ * back, text and focus kept, under the same line, in the same thread, or over the same draft. It
+ * goes when its place is gone from the new diff.
+ * @param {ParentNode} root
+ * @returns {() => void}
+ */
+export function liftComposer(root) {
+  const box = root.querySelector('table.diff .composer-box')
+  const key = box?.closest('table.diff')?.getAttribute('data-key')
+  if (!(box instanceof HTMLElement) || key === null || key === undefined) {
+    return () => {}
+  }
+  const row = box.closest('tr.composer')
+  const thread = box.closest('tr.thread')?.getAttribute('data-thread')
+  const draft = box.closest('.pending-cmt')?.getAttribute('data-pending-id')
+  const focused = box.contains(document.activeElement)
+  ;(row ?? box).remove()
+  return () => {
+    if (row instanceof HTMLTableRowElement) {
+      const side = box.getAttribute('data-side') === 'old' ? 'old' : 'new'
+      const anchor = findRow(root, key, side, Number(box.getAttribute('data-line')))
+      const cell = row.cells[0]
+      if (anchor === null || cell === undefined) return
+      cell.colSpan = diffColumns()
+      anchor.after(row)
+    } else {
+      const host =
+        draft !== null && draft !== undefined
+          ? root.querySelector(`.pending-cmt[data-pending-id="${cssEscape(draft)}"]`)
+          : root.querySelector(`tr.thread[data-thread="${cssEscape(thread ?? '')}"] .thread-full`)
+      if (host === null) return
+      host.append(box)
+      if (draft !== null && draft !== undefined) concealForComposer(host)
+    }
+    if (focused) box.querySelector('textarea')?.focus()
   }
 }
 

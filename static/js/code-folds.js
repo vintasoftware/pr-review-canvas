@@ -5,6 +5,7 @@
 // reader's level only decides which of them are active, so changing it never rebuilds the table
 // and an open composer or an expanded fold survives. The renderer's own folds hide in every mode.
 import { findRow } from './anchors.js'
+import { diffColumns } from './diff-layouts.js'
 import { CHEVRON_ICON, esc } from './dom.js'
 import { foldsForLevel } from './fold-levels.js'
 
@@ -137,6 +138,18 @@ function foldLabel(rows, fold) {
 }
 
 /**
+ * The code lines a row shows: none for a row of another kind, and two for a split row with a line
+ * changed on each side.
+ * @param {HTMLTableRowElement} row
+ */
+function linesOf(row) {
+  if (row.id === '') {
+    return 0
+  }
+  return row.querySelector('td.del') !== null && row.querySelector('td.add') !== null ? 2 : 1
+}
+
+/**
  * Inserts the fold's toggle above its first row: a chevron, the title, and how many code lines it
  * hides, so a folded range reads as hidden code rather than as a stray heading.
  * @param {HTMLTableRowElement} first
@@ -148,7 +161,7 @@ function createToggle(first, title, lines) {
   header.className = 'more code-fold'
 
   const cell = document.createElement('td')
-  cell.colSpan = 4
+  cell.colSpan = diffColumns()
 
   const toggle = document.createElement('button')
   toggle.className = 'fold-toggle'
@@ -245,7 +258,11 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
       continue
     }
     const ids = rows.map(row => row.id).filter(Boolean)
-    const { header, toggle } = createToggle(first, foldLabel(rows, fold), ids.length)
+    const { header, toggle } = createToggle(
+      first,
+      foldLabel(rows, fold),
+      rows.reduce((n, row) => n + linesOf(row), 0)
+    )
     toggle.setAttribute('aria-controls', ids.join(' '))
     const w = {
       fold,
@@ -314,11 +331,18 @@ export function setFoldShown(summary, shown) {
   }
 }
 
+/** Cards whose fold reveal is wired; a card keeps it across redraws of its diff. */
+const revealWired = /** @type {WeakSet<HTMLElement>} */ (new WeakSet())
+
 /**
  * Opens the folded rows around a deep-link target, so a line inside a fold can be reached.
  * @param {HTMLElement} card
  */
 export function wireFoldReveal(card) {
+  if (revealWired.has(card)) {
+    return
+  }
+  revealWired.add(card)
   card.addEventListener('reveal-code', event => {
     const target = event.target
     const row = target instanceof Element ? target.closest('tr') : null
