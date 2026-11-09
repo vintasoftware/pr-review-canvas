@@ -407,6 +407,26 @@ test('a draft being edited keeps the focus and caret when another draft finishes
   ])
 })
 
+test('a draft deleted in the phone modal is said in the modal, clear of its top edge', async ({
+  page,
+  noChatUrl,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(noChatUrl)
+  await page.locator('section.layer li.finding[data-fingerprint="fp-1"] [data-act="point-queue"]').click()
+  await page.locator('.pending-bar [data-act="show-review"]').click()
+  const modal = page.locator('#chat-dialog')
+  await expect(modal).toHaveJSProperty('open', true)
+  await page.locator('#review-panel [data-act="pending-delete"]').click()
+  // The modal is in the top layer and makes the page behind it inert, so the toast is written in it.
+  const note = modal.locator('.toast')
+  await expect(note).toHaveText('draft deleted')
+  await note.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)))
+  const [noteTop, modalTop] = [(await note.boundingBox())?.y ?? 0, (await modal.boundingBox())?.y ?? 0]
+  expect(noteTop).toBeLessThan(modalTop)
+})
+
 test('a review submitted from the phone modal leaves its receipt on top', async ({
   page,
   noChatUrl,

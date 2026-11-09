@@ -5,6 +5,7 @@ import { serve } from '@hono/node-server'
 import { test as base, expect, type Page } from '@playwright/test'
 import { createHubApp } from '../src/hub/hub-app.js'
 import { createHub } from '../src/hub/hub.js'
+import type { SettingsInput } from '../src/contract/settings.js'
 import { resolveVendorRoots } from '../src/server/context.js'
 import { DEFAULT_PROJECT_CONFIG } from '../src/project-config.js'
 import { createFakeRunner, type FakeRunnerOptions } from '../src/testing/fake-runner.js'
@@ -70,25 +71,32 @@ async function fixtureTour() {
 }
 
 export const test = base.extend<{
+  /** Personal settings the server saves before the page opens, as the settings dialog would. */
+  settings: SettingsInput
   reviewUrl: string
   selfReviewUrl: string
   tourUrl: string
   noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
-  chatServer: async ({ page }, use) => {
+  settings: [{}, { option: true }],
+  chatServer: async ({ page, settings }, use) => {
     const stops: Array<() => Promise<void>> = []
     await use(async (options = {}) => {
-      const server = await startServer(page, {
-        projectConfig: {
-          config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: true } },
-          warnings: [],
-          source: null,
+      const server = await startServer(
+        page,
+        {
+          projectConfig: {
+            config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: true } },
+            warnings: [],
+            source: null,
+          },
+          runner: createFakeRunner(options.runner),
+          checkoutGit: createFakeCheckoutGit(options.checkout),
+          ...(options.noCanvas ? { fixtureArtifact: null } : {}),
         },
-        runner: createFakeRunner(options.runner),
-        checkoutGit: createFakeCheckoutGit(options.checkout),
-        ...(options.noCanvas ? { fixtureArtifact: null } : {}),
-      })
+        settings
+      )
       stops.push(server.stop)
       await options.setup?.(server.t)
       return { url: server.url, ctx: server.t.ctx }
@@ -98,22 +106,26 @@ export const test = base.extend<{
     }
   },
   /** PR #42 with AI Chat turned off, so the side pane holds the review alone. */
-  noChatUrl: async ({ page }, use) => {
-    const server = await startServer(page, {
-      projectConfig: {
-        config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
-        warnings: [],
-        source: null,
+  noChatUrl: async ({ page, settings }, use) => {
+    const server = await startServer(
+      page,
+      {
+        projectConfig: {
+          config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
+          warnings: [],
+          source: null,
+        },
       },
-    })
+      settings
+    )
     try {
       await use(server.url)
     } finally {
       await server.stop()
     }
   },
-  reviewUrl: async ({ page }, use) => {
-    const server = await startServer(page)
+  reviewUrl: async ({ page, settings }, use) => {
+    const server = await startServer(page, {}, settings)
     try {
       await use(server.url)
     } finally {
@@ -159,7 +171,7 @@ export const test = base.extend<{
     }
   },
   /** PR #42 with a published canvas, served to its author, who may settle its points. */
-  selfReviewUrl: async ({ page }, use) => {
+  selfReviewUrl: async ({ page, settings }, use) => {
     let shared: Record<string, unknown> | null = null
     const share = ghPost(body => {
       shared = {
@@ -170,21 +182,25 @@ export const test = base.extend<{
       }
       return shared
     })
-    const server = await startServer(page, {
-      gh: ghFor42({
-        routes: {
-          'repos/acme/widgets/issues/42/comments': ghHandler(() =>
-            shared === null ? GH_ISSUE_COMMENTS : [...GH_ISSUE_COMMENTS, shared]
-          ),
-        },
-        postRoutes: {
-          'repos/acme/widgets/pulls/42/comments': POSTED_INLINE,
-          'repos/acme/widgets/issues/42/comments': share,
-          'repos/acme/widgets/issues/comments/6001': share,
-        },
-      }),
-      fixtureArtifact: null,
-    })
+    const server = await startServer(
+      page,
+      {
+        gh: ghFor42({
+          routes: {
+            'repos/acme/widgets/issues/42/comments': ghHandler(() =>
+              shared === null ? GH_ISSUE_COMMENTS : [...GH_ISSUE_COMMENTS, shared]
+            ),
+          },
+          postRoutes: {
+            'repos/acme/widgets/pulls/42/comments': POSTED_INLINE,
+            'repos/acme/widgets/issues/42/comments': share,
+            'repos/acme/widgets/issues/comments/6001': share,
+          },
+        }),
+        fixtureArtifact: null,
+      },
+      settings
+    )
     try {
       const artifact = syntheticArtifact()
       await server.t.ctx.canvases.write(artifact.pr.headSha, artifact, {
@@ -206,10 +222,14 @@ export const test = base.extend<{
   },
 })
 
-/** Serves PR 42 on a free port; `stop` fails the test if the page threw or a request 500ed. */
+/**
+ * Serves PR 42 on a free port, with `settings` saved first; `stop` fails the test if the page
+ * threw or a request 500ed.
+ */
 async function startServer(
   page: Page,
-  extra: Partial<TestContextOptions> = {}
+  extra: Partial<TestContextOptions> = {},
+  settings: SettingsInput = {}
 ): Promise<{ url: string; t: TestContext; stop: () => Promise<void> }> {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
@@ -265,6 +285,7 @@ async function startServer(
     vendorRoots: resolveVendorRoots(),
     ...extra,
   })
+  await t.ctx.settings.write(settings)
   // Closing the server drops the sockets, not the handlers: a request the page fired and the test
   // never waited for (a rebuild of `derived/` behind a reload or refresh) keeps writing into the
   // data dir. `stop` waits for every handler to return before that dir is removed, or `rm` races

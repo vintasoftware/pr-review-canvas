@@ -254,7 +254,7 @@ describe('createApp', () => {
       const html = await res.text()
       expect(html).toContain('<pr-app class="page" data-pr="42">')
       expect(html).toContain(
-        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","projectName":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all","pointColors":"classic"}</script>'
+        '{"prNumber":42,"owner":"acme","repo":"widgets","base":"/r/acme/widgets/","project":"acme/widgets","projectName":"acme/widgets","version":"0.0.0-test","host":{"kind":"github","label":"GitHub","webBase":"https://github.com"},"foldLevel":"light","layerView":"all","readByPoints":false,"pointColors":"classic","startCollapsed":false,"compactPoints":false,"fullWidthText":false}</script>'
       )
       expect(html).toContain('<script type="importmap" nonce="')
       expect(html).toContain('/vendor/diff/index.js')
@@ -270,10 +270,18 @@ describe('createApp', () => {
       expect(html).not.toContain('@@ -')
     })
 
-    it('carries the reading level and point colors the settings file holds in the bootstrap', async () => {
-      await t.ctx.settings.write({ foldLevel: 'moderate', pointColors: 'action' })
+    it('carries the reading settings the settings file holds in the bootstrap', async () => {
+      await t.ctx.settings.write({
+        foldLevel: 'moderate',
+        pointColors: 'action',
+        startCollapsed: true,
+        compactPoints: true,
+        fullWidthText: true,
+      })
       const html = await (await createApp(t.ctx).request('/review/42', { headers: LOCAL })).text()
-      expect(html).toContain('"foldLevel":"moderate","layerView":"all","pointColors":"action"}</script>')
+      expect(html).toContain(
+        '"foldLevel":"moderate","layerView":"all","readByPoints":false,"pointColors":"action","startCollapsed":true,"compactPoints":true,"fullWidthText":true}</script>'
+      )
     })
 
     it('renders the appearance the settings file holds, and lets the query pick one for a load', async () => {
@@ -517,6 +525,7 @@ describe('createApp', () => {
         agent: 'claude',
         model: null,
         threadPerPlace: true,
+        startMinimized: false,
       })
       expect(bundle.warnings).toEqual([])
       // Second call: served from the cache once the head has not moved; one read of the pull, no

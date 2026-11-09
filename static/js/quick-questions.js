@@ -254,13 +254,6 @@ export function wireQuickQuestions(root, options) {
   doc.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
 
   return {
-    /** Opens the menu on a target without waiting, which is what a tap and the `a` key do. */
-    openFor(/** @type {HTMLElement} */ el) {
-      clearTimer()
-      open(el)
-      items()[0]?.focus()
-    },
-    isOpen: () => !menu.hidden,
     stop() {
       clearTimer()
       root.removeEventListener('pointerover', onTriggerOver)

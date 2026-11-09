@@ -13,7 +13,7 @@ import {
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { setMentionCanvas } from './points.js'
+import { readPointsDensity, setMentionCanvas, setPointsDensity } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -39,14 +39,16 @@ import { wireReview } from './interactions.js'
 import {
   defineLayerElements,
   drawnCanvas,
+  getRenderContext,
   pathSet,
   renderLayers,
-  renderRail,
   setFoldLevel,
   setRenderContext,
+  setStartCollapsed,
 } from './layers.js'
 import { renderOverview } from './overview.js'
 import { initOneLayer } from './one-layer.js'
+import { refreshRail, renderRail } from './rail.js'
 import { wireQuickQuestions } from './quick-questions.js'
 import { createGeneration } from './generate.js'
 import { canvasChanged, openRegenerateDialog } from './regenerate.js'
@@ -136,13 +138,24 @@ export class PrAppElement extends HTMLElement {
   /** @type {{ stop: () => void } | null} */
   scrollSpy = null
   /**
-   * Whether the canvas shows every layer or one at a time. Made once per boot, from the setting
-   * the page came with, and kept across renders: it redraws with each one, and a save in the
-   * settings dialog changes its view without a reload.
+   * Whether the canvas shows every layer, one at a time, or one attention point at a time: the one
+   * owner of the view on screen. Made once per boot, from the setting the page came with, and kept
+   * across renders: it redraws with each one, and a switch of view changes the page in place.
    * @type {ReturnType<typeof initOneLayer> | null}
    */
   layerView = null
-  /** @type {{ stop: () => void } | null} */
+  /**
+   * The reader's `readByPoints`: the page opens on the attention points, one at a time, and the
+   * rail's switch moves between them and the layers. Off, the page reads the layers alone.
+   */
+  readByPoints = false
+  /**
+   * The review session of the canvas on screen: the reader's marks and the settled points as they
+   * are now, which the rail is drawn again from when the view changes.
+   * @type {ReturnType<typeof createReviewSession> | null}
+   */
+  session = null
+  /** @type {ReturnType<typeof wireReview> | null} */
   interactions = null
   /** @type {ReturnType<typeof wireChat>} */
   chat = null
@@ -206,9 +219,16 @@ export class PrAppElement extends HTMLElement {
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
+    setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
+    document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
     this.layerView?.stop()
-    this.layerView = initOneLayer(this, { view: this.bootstrap.layerView })
+    this.readByPoints = this.bootstrap.readByPoints
+    this.layerView = initOneLayer(this, {
+      view: this.readByPoints ? 'points' : this.bootstrap.layerView,
+      layersView: this.bootstrap.layerView,
+      onView: view => this.viewShown(view),
+    })
     const patchesPromise = fetchPatches(this.bootstrap.prNumber).then(
       r => r.patches,
       () => null
@@ -278,6 +298,7 @@ export class PrAppElement extends HTMLElement {
     if (hasUnfinishedText && !window.confirm('Discard unfinished text and update the review?')) {
       return
     }
+    this.session = null
     this.diagrams?.stop()
     this.diagrams = null
     this.deepLinks?.stop()
@@ -298,7 +319,11 @@ export class PrAppElement extends HTMLElement {
     })
     const chatEnabled = bundle.chat.enabled
     const storage = typeof localStorage === 'undefined' ? null : localStorage
-    const chatMinimized = chatEnabled && readChatMinimized(storage)
+    // A docked chat starts the way the reader last left it, or minimized with chatStartMinimized.
+    const chatMinimized = chatEnabled && (bundle.chat.startMinimized === true || readChatMinimized(storage))
+    if (boot.compactPoints) {
+      setPointsDensity(document.documentElement, readPointsDensity(storage))
+    }
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
@@ -332,7 +357,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state)}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { switchable: this.readByPoints, points: this.layerView?.view === 'points' })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
         footerHtml(boot.version, bundle)
       // A bar the reader dismissed goes before the review wiring measures the outdated bar.
       wireBarDismissal(this, storage)
@@ -362,18 +387,14 @@ export class PrAppElement extends HTMLElement {
         ...(bundle.canvas === undefined ? {} : { canvasSha: bundle.canvas.headSha }),
         ...(canvasManifest === null ? {} : { canvasMergeBaseSha: canvasManifest.mergeBaseSha }),
       })
+      this.session = session
       const interactions = wireReview(this, session, {
         chat: () => this.chat,
         openReview: () => (this.chat ?? this.reviewPane)?.openReview(),
         uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
-        openSettings: el =>
-          void openSettingsDialog(this, el, {
-            onSaved: data => {
-              this.layerView?.setView(data.settings.layerView)
-              this.chat?.followSettings(data.settings)
-              applyPointColors(data.settings.pointColors, document.documentElement)
-            },
-          }),
+        openSettings: el => void openSettingsDialog(this, el, { onSaved: data => this.settingsSaved(data) }),
+        setLayerView: (view, place) => this.switchLayerView(view, place),
+        stepStop: (direction, fits, here) => this.layerView?.step(direction, fits, here),
       })
       this.interactions = interactions
       if (chatEnabled) {
@@ -382,6 +403,7 @@ export class PrAppElement extends HTMLElement {
           prNumber: boot.prNumber,
           session,
           ...(bundle.chat.threadPerPlace === undefined ? {} : { threadPerPlace: bundle.chat.threadPerPlace }),
+          minimized: chatMinimized,
           onProposed: (what, comment, el) => interactions.onProposedComment(what, comment, el),
           onResolution: (what, resolution, el) => interactions.onProposedResolution(what, resolution, el),
         })
@@ -413,7 +435,9 @@ export class PrAppElement extends HTMLElement {
             // A newer generation for this commit was imported; its resolutions belong to it.
             this.settledPoller?.stop()
             this.settledPoller = null
-            toast(this, 'the author shared a newer canvas for this commit; refresh to load it')
+            toast(this, 'the author shared a newer canvas for this commit; refresh to load it', {
+              tone: 'note',
+            })
             return
           }
           const added = session.takeSettled(answer)
@@ -425,7 +449,8 @@ export class PrAppElement extends HTMLElement {
             const kept = drafted === 0 ? '' : `; your review keeps your ${about}`
             toast(
               this,
-              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`
+              `the author resolved ${added.length === 1 ? 'a point' : `${added.length} points`}${kept}; show the resolved ones from the overview`,
+              { tone: 'note' }
             )
           }
         })
@@ -442,12 +467,13 @@ export class PrAppElement extends HTMLElement {
     }
     // Mermaid is fetched only when this screen holds a diagram, and again on a theme flip.
     this.diagrams = initDiagrams(this)
-    // One layer at a time hides the rest before the URL is followed, so a link into a layer lands
-    // on a layer that is showing.
+    // One layer or one point at a time hides the rest before the URL is followed, so a link into a
+    // layer lands on a layer that is showing.
     this.layerView?.redraw()
     // The cards are in the page now, so a link in the URL has something to land on.
     this.deepLinks = initDeepLinks(this)
-    this.scrollSpy = initScrollSpy(this)
+    // The one-point view marks its stop in the rail itself.
+    this.scrollSpy = this.layerView?.view === 'points' ? null : initScrollSpy(this)
     this.wireCommands(bundle)
   }
 
@@ -457,7 +483,7 @@ export class PrAppElement extends HTMLElement {
    */
   wireAppearance() {
     wireAppearanceCommands(this, (what, saved) => {
-      if (!saved) toast(this, `could not save the ${what} to settings.yml`)
+      if (!saved) toast(this, `could not save the ${what} to settings.yml`, { tone: 'failed' })
     })
   }
 
@@ -467,7 +493,10 @@ export class PrAppElement extends HTMLElement {
     // have no such handler, so the command is wired here for every screen.
     const settings = qs('#settings', this)
     if (settings instanceof HTMLElement && this.interactions === null) {
-      settings.addEventListener('click', () => void openSettingsDialog(this, settings))
+      settings.addEventListener(
+        'click',
+        () => void openSettingsDialog(this, settings, { onSaved: data => this.settingsSaved(data) })
+      )
     }
     this.wireAppearance()
     const boot = this.bootstrap
@@ -480,7 +509,7 @@ export class PrAppElement extends HTMLElement {
       this.generation ??= createGeneration(this, {
         prNumber: boot.prNumber,
         onEnded: job => this.generationEnded(job),
-        onError: message => toast(this, message),
+        onError: message => toast(this, message, { tone: 'failed' }),
       })
       this.generation.attach(bundle)
     }
@@ -542,6 +571,59 @@ export class PrAppElement extends HTMLElement {
   }
 
   /**
+   * The rail lists the one-point view's stops, or the layers, and the scrollspy follows the layers.
+   * @param {import('./layer-views.js').PageView} view
+   */
+  viewShown(view) {
+    qs('nav.rail', this)?.toggleAttribute('data-points', view === 'points')
+    this.redrawRail()
+    this.scrollSpy?.stop()
+    this.scrollSpy = view === 'points' ? null : initScrollSpy(this)
+  }
+
+  /** Draws the rail again from the review session's marks and settled points. */
+  redrawRail() {
+    const ctx = getRenderContext()
+    if (ctx !== null && this.session !== null) {
+      refreshRail(this, { ...ctx.artifact, settled: this.session.settled }, this.session.state)
+    }
+  }
+
+  /**
+   * The rail's switch between the one-point view and the layers, which open in the layer view the
+   * settings choose. It changes this page only: a reload opens on what the settings say.
+   * @param {string} choice `points` or `layers`
+   * @param {string} [place] where to open, as `#id`; by default where the reader is
+   */
+  switchLayerView(choice, place) {
+    const lv = this.layerView
+    if (lv !== null && (choice === 'points' || choice === 'layers')) {
+      lv.switchView(choice === 'points' ? 'points' : lv.layersView, place)
+    }
+  }
+
+  /**
+   * The settings the dialog saved, applied to the open page without a reload. Turning
+   * `readByPoints` on opens the attention points, turning it off the layers, and a new `layerView`
+   * shows in place of the layers on screen, and is where the rail's switch leads from the points.
+   * @param {import('./contract-types.js').SettingsResponse} data
+   */
+  settingsSaved(data) {
+    const { readByPoints, layerView } = data.settings
+    const turned = readByPoints !== this.readByPoints
+    const points = turned ? readByPoints : this.layerView?.view === 'points'
+    this.readByPoints = readByPoints
+    this.layerView?.setLayersView(layerView)
+    qs('nav.rail', this)?.toggleAttribute('data-switchable', readByPoints)
+    this.layerView?.setView(points ? 'points' : layerView)
+    // The switch comes and goes with the setting, also when the view on screen stays.
+    if (turned) this.redrawRail()
+    this.chat?.followSettings(data.settings)
+    applyPointColors(data.settings.pointColors, document.documentElement)
+    document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
+  }
+
+  /**
    * A job this page watched has ended. A published canvas is loaded; the dialog comes back over
    * it when the reader had it open, or when sharing failed and the reader has an upload to do.
    * @param {import('./contract-types.js').GenerationJob} job
@@ -554,7 +636,8 @@ export class PrAppElement extends HTMLElement {
           this,
           job.phase === 'cancelled'
             ? 'canvas generation stopped'
-            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+            : `canvas generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`,
+          { tone: job.phase === 'cancelled' ? 'note' : 'failed' }
         )
       }
       return

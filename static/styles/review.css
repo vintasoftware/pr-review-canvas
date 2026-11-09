@@ -79,6 +79,11 @@
 .prose {
   max-width: 100ch;
 }
+/* With the fullWidthText setting the summary, a layer's rationale and the PR description fill
+   their panel, diagrams included. Prose in cards and comments keeps a readable line length. */
+:root[data-full-width-text] :is(.summary, .rationale, .pr-desc .prose) {
+  max-width: none;
+}
 .summary {
   font-size: 15px;
   line-height: 1.55;
@@ -374,6 +379,41 @@
 .is-handled:not([data-expanded]) .p-title {
   color: var(--fg-muted);
 }
+/* With the compactPoints setting the page has a `data-points` density. In a compact list each
+   open point shows its title line until the reader opens it; a point acted on keeps the rules
+   above, with its one-line summary. Otherwise open points are whole, with no toggle, and without
+   the setting the list has no density switch. */
+:root[data-points='compact']
+  .findings
+  > li[data-point]:not(.is-handled, [data-expanded])
+  :is(.prose, .tbtns, .settle-box) {
+  display: none;
+}
+:root[data-points='compact'] .findings > li:not(.is-handled, [data-expanded]) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+:root[data-points='compact'] .findings > li:not(.is-handled, [data-expanded]) .f-title {
+  margin-bottom: 0;
+}
+:root:not([data-points='compact']) .findings > li:not(.is-handled) .p-toggle,
+:root:not([data-points]) .points-density,
+:root:not([data-points='detailed']) .points-density .when-detailed,
+:root:not([data-points='compact']) .points-density .when-compact {
+  display: none;
+}
+/* A title opens its point only where the point collapses. */
+.findings > li.is-handled .p-title[data-act],
+:root[data-points='compact'] .findings .p-title[data-act] {
+  cursor: pointer;
+}
+.points-density {
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
 .f-title .p-toggle {
   margin-left: auto;
   font-size: 12px;
@@ -430,6 +470,7 @@ body:not(:has(.point-statuses [data-act='toggle-resolved'][aria-pressed='true'])
 .pr-desc {
   border-top: 1px solid var(--ink);
 }
+.pr-conversation,
 .review-history {
   border-top: 1px solid var(--line);
 }
@@ -475,7 +516,28 @@ details[open] > summary .chev,
   overflow-wrap: anywhere;
 }
 
-/* test map */
+/* test map: closed under a header whose label says how well the tests cover the layer */
+.test-map > summary.lbl.sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.test-map > summary h3 {
+  margin: 0;
+  font: inherit;
+}
+.test-cov.full {
+  color: var(--ok);
+}
+.test-cov.partial {
+  color: var(--warn);
+}
+.test-cov.none {
+  color: var(--bad);
+}
+.test-cov.not-needed {
+  color: var(--fg-muted);
+}
 .testmap {
   width: 100%;
   border-collapse: collapse;
@@ -494,6 +556,8 @@ details[open] > summary .chev,
   padding: 5px 16px;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+  /* A word too long for a phone breaks rather than widen the page. */
+  overflow-wrap: break-word;
 }
 .testmap tr:last-child td {
   border-bottom: 0;
@@ -601,4 +665,77 @@ pr-file + pr-file > .file {
 img.av {
   object-fit: cover;
   border-radius: 50%;
+}
+
+/* ---- The one-point view: a layer section through a lens (point-view.js) ---- */
+/* A layer's stop: its heading, description and tests. */
+[data-lens='layer'] :is(.layer-points, .layer-body > h3:has(.fold-count), .files, .layer-end, details > pr-file),
+/* A point's stop: the layer's heading, the point's card, and its chunk (the lens style sheet). */
+[data-lens='point'] :is(.layer-body > .body, .layer-body > h3, .test-map, .layer-points > h3, .layer-end, details > .body) {
+  /* Over every skin's own layout, as the hidden attribute is. */
+  display: none !important;
+}
+/* A stop hides the closing row that pads a layer's foot, so it pads its own; Other's too. */
+[data-lens] > :is(.layer-body, details) {
+  padding-bottom: 12px;
+}
+/* The sub-headings the lens hides spaced the point's card from the heading and from its file;
+   the stop spaces them, with padding, which no skin's margins undo. */
+[data-lens='point'] > .layer-body {
+  padding-top: 12px;
+}
+[data-lens='point'] .files {
+  margin-top: 12px;
+}
+/* A stop shows its layer, and a point's file, open, with no chevron to fold them, and a fold from
+   a key changes nothing. */
+[data-lens] > .layer-h > .chev,
+[data-lens] > details > summary .chev,
+[data-lens='point'] article.file > .file-h > .chev {
+  display: none;
+}
+[data-lens] > .layer-body[hidden] {
+  display: block !important;
+}
+[data-lens] > details::details-content {
+  content-visibility: visible;
+}
+[data-lens] > details > summary {
+  pointer-events: none;
+}
+/* The point's code stays in sight whatever its card's reviewed mark or the reading level say. */
+[data-lens='point'] article.file > .file-body[hidden] {
+  display: block !important;
+}
+/* The card above shows the point whole; its line in the diff keeps the title, until a handled
+   point's own show opens it. */
+section.layer[data-lens='point']
+  tr.ifind:not([data-expanded])
+  :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
+  display: none;
+}
+.step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block: 12px;
+  font-size: 13px;
+}
+.step-n {
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* On a phone the place goes over the two ways, so neither long label squeezes it. */
+@media (width <= 600px) {
+  .step-nav {
+    flex-wrap: wrap;
+  }
+  .step-n {
+    order: -1;
+    flex-basis: 100%;
+  }
+}
+.step-nav > :last-child {
+  margin-left: auto;
 }

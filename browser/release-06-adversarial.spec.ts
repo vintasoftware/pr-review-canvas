@@ -85,8 +85,8 @@ for (const receipt of ['available', 'unavailable']) {
     await closeChat()
     await page.locator('.pending-bar [data-act="pending-finish"]').click()
     await page.locator('[data-act="signoff-post"]').click()
-    await expect(page.locator('.toast')).toContainText('review posted with 2 comments')
     if (receipt === 'available') {
+      await expect(page.locator('.toast')).toContainText('review posted with 2 comments')
       await expect(page.locator('#signoff-dialog')).toBeHidden()
     } else {
       // The receipt could not be read: the dialog stays open with the warning.
@@ -287,7 +287,7 @@ test('self-review offers dismiss as a personal hide that leaves every point unre
   await expect(card).toHaveAttribute('data-status', 'dismissed')
   await expect(page.locator('.self-review-note')).toContainText('2 points are marked yours')
   await expect(page.locator('.self-review-note')).toContainText('1 point goes to the reviewer')
-  await card.locator('[data-act="point-expand"]').click()
+  await card.locator('.p-toggle').click()
   await expect(card.getByRole('button', { name: 'resolve', exact: true })).toHaveCount(0)
   await card.locator('[data-act="point-restore"]').click()
   await expect(card).toHaveAttribute('data-status', 'open')

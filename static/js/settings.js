@@ -63,6 +63,9 @@ function chatFieldsHtml(settings, agents) {
     '<div class="field field-check"><label for="set-thread-per-place">A thread per place</label>' +
     `<input id="set-thread-per-place" type="checkbox"${settings.chatThreadPerPlace ? ' checked' : ''}></div>` +
     '<p class="muted small">Ask opens the thread of the attention point, lines, file or layer it was asked from, and starts one the first time. Off, every ask goes to the open thread.</p>' +
+    '<div class="field field-check"><label for="set-chat-start-minimized">Start minimized</label>' +
+    `<input id="set-chat-start-minimized" type="checkbox"${settings.chatStartMinimized ? ' checked' : ''}></div>` +
+    '<p class="muted small">On a wide screen, AI Chat waits behind its launcher each time a review opens, and the canvas keeps the full width. Off, it opens the way you last left it.</p>' +
     '<p class="muted small">Changing the chat agent starts a new chat thread; the old ones stay in the list.</p>' +
     '<button class="cmd" type="button" data-act="settings-probe">test agent</button>'
   )
@@ -187,6 +190,18 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field"><label for="set-layer-view">Show layers</label>' +
       `<select id="set-layer-view">${optionsHtml(LAYER_VIEWS, settings.layerView, LAYER_VIEW_LABELS)}</select></div>` +
       '<p class="muted small">One at a time shows the overview or a single layer. The rail and the <span class="mono">j</span> and <span class="mono">k</span> keys move between them.</p>' +
+      '<div class="field field-check"><label for="set-read-by-points">Read by attention points</label>' +
+      `<input id="set-read-by-points" type="checkbox"${settings.readByPoints ? ' checked' : ''}></div>` +
+      '<p class="muted small">A review opens on its attention points, one at a time: each layer opens with its description and tests, then shows its points with their code. The switch at the head of the rail moves to the layers, shown as above. Off, a review shows its layers alone.</p>' +
+      '<div class="field field-check"><label for="set-start-collapsed">Start collapsed</label>' +
+      `<input id="set-start-collapsed" type="checkbox"${settings.startCollapsed ? ' checked' : ''}></div>` +
+      '<p class="muted small">A review opens with only its first layer open and every file closed under its name. The rail, the keys, and links open what they land on.</p>' +
+      '<div class="field field-check"><label for="set-compact-points">Compact attention points</label>' +
+      `<input id="set-compact-points" type="checkbox"${settings.compactPoints ? ' checked' : ''}></div>` +
+      '<p class="muted small">A layer lists each attention point as one line until you open it, and <b>show details</b> shows them all whole. A point on its line in the diff is always whole.</p>' +
+      '<div class="field field-check"><label for="set-full-width-text">Full-width text</label>' +
+      `<input id="set-full-width-text" type="checkbox"${settings.fullWidthText ? ' checked' : ''}></div>` +
+      '<p class="muted small">The overview summary, each layer\'s rationale, and the PR description fill the width of their panel, diagrams included. Off, their lines stop at 100 characters.</p>' +
       '<div class="field"><label for="set-point-colors">Point colors</label>' +
       `<select id="set-point-colors">${optionsHtml(POINT_COLORS, settings.pointColors, POINT_COLORS_LABELS)}</select></div>` +
       '<p class="muted small">The colors of the attention point icons. The shapes say the level in both: a diamond to decide, a checked box to check, an i for context.</p>',
@@ -313,6 +328,11 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const timeout = qs('#set-timeout', dialog)
   const turns = qs('#set-turns', dialog)
   const threadPerPlace = qs('#set-thread-per-place', dialog)
+  const readByPoints = qs('#set-read-by-points', dialog)
+  const chatStartMinimized = qs('#set-chat-start-minimized', dialog)
+  const startCollapsed = qs('#set-start-collapsed', dialog)
+  const compactPoints = qs('#set-compact-points', dialog)
+  const fullWidthText = qs('#set-full-width-text', dialog)
   const checkoutEnabled = qs('#set-checkout-enabled', dialog)
   const checkoutIdle = qs('#set-checkout-idle', dialog)
   const checkoutSweep = qs('#set-checkout-sweep', dialog)
@@ -324,8 +344,20 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   if (layerView instanceof HTMLSelectElement && isLayerView(layerView.value)) {
     input.layerView = layerView.value
   }
+  if (readByPoints instanceof HTMLInputElement) {
+    input.readByPoints = readByPoints.checked
+  }
   if (pointColors instanceof HTMLSelectElement && isPointColors(pointColors.value)) {
     input.pointColors = pointColors.value
+  }
+  if (startCollapsed instanceof HTMLInputElement) {
+    input.startCollapsed = startCollapsed.checked
+  }
+  if (compactPoints instanceof HTMLInputElement) {
+    input.compactPoints = compactPoints.checked
+  }
+  if (fullWidthText instanceof HTMLInputElement) {
+    input.fullWidthText = fullWidthText.checked
   }
   if (agent instanceof HTMLSelectElement && agent.value !== '') {
     input.chatAgent = /** @type {import('./contract-types.js').ChatAgent} */ (agent.value)
@@ -341,6 +373,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   }
   if (threadPerPlace instanceof HTMLInputElement) {
     input.chatThreadPerPlace = threadPerPlace.checked
+  }
+  if (chatStartMinimized instanceof HTMLInputElement) {
+    input.chatStartMinimized = chatStartMinimized.checked
   }
   if (checkoutEnabled instanceof HTMLInputElement) {
     input.checkoutEnabled = checkoutEnabled.checked

@@ -252,6 +252,8 @@ export interface ChatStatus {
   model?: string | null
   /** The reader's `chatThreadPerPlace`: an ask opens its place's thread, or goes to the open one. */
   threadPerPlace?: boolean
+  /** The reader's `chatStartMinimized`: a wide screen starts the chat behind its launcher. */
+  startMinimized?: boolean
 }
 
 export interface HomeData {
@@ -283,6 +285,14 @@ export interface ReviewBootstrap {
   foldLevel: FoldLevel
   /** Whether the canvas shows every layer, or one at a time, from the settings file. */
   layerView: LayerView
+  /** Whether the canvas opens on its attention points, one at a time, from the settings file. */
+  readByPoints: boolean
   /** The palette of the point level icons, from the settings file. */
   pointColors: PointColors
+  /** Whether the canvas opens with only its first layer open and every file closed. */
+  startCollapsed: boolean
+  /** Whether a layer's list draws each attention point as one line until the reader opens it. */
+  compactPoints: boolean
+  /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
+  fullWidthText: boolean
 }

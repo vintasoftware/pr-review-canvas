@@ -15,7 +15,7 @@ test('keeps a dismissed point expanded when its save completes', async ({ page, 
     await card.locator('[data-act="point-dismiss"]').click()
     // The page shows the dismissal before the server answers.
     await expect(card).toHaveAttribute('data-status', 'dismissed')
-    const toggle = card.locator('[data-act="point-expand"]')
+    const toggle = card.locator('.p-toggle')
     await toggle.click()
     await expect(card.locator('.prose')).toBeVisible()
 
@@ -66,7 +66,7 @@ test('dismisses a point everywhere, keeps it dismissed after reload, and restore
   await hide.click()
   await expect(card).toBeVisible()
 
-  await card.locator('[data-act="point-expand"]').click()
+  await card.locator('.p-toggle').click()
   await card.locator('[data-act="point-restore"]').click()
   await expect(card).toHaveAttribute('data-status', 'open')
   await expect(card.locator('.prose')).toBeVisible()
@@ -112,6 +112,68 @@ test('collapses and reopens file and layer bodies', async ({ page, reviewUrl }) 
   await expect(fileBody).toBeVisible()
 })
 
+test.describe('with startCollapsed', () => {
+  test.use({ settings: { startCollapsed: true } })
+
+  test('opens and closes file and layer bodies that start closed', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl)
+    const layer = page.locator('section.layer[data-layer="run-path"]')
+    const file = layer.locator('article.file[data-path="src/app.ts"]')
+    const fileBody = file.locator(':scope > .file-body')
+    const fileToggle = file.locator(':scope > .file-h > .chev')
+    // The first layer starts open, with every file closed under its name.
+    await expect(layer.locator(':scope > .layer-body')).toBeVisible()
+    await expect(fileBody).toBeHidden()
+    await file.scrollIntoViewIfNeeded()
+    await fileToggle.click()
+    await expect(fileBody).toBeVisible()
+    await expect(file.locator('tr.ifind[data-fingerprint="fp-1"]')).toBeVisible()
+    await fileToggle.click()
+    await expect(fileBody).toBeHidden()
+    await fileToggle.click()
+    await expect(fileBody).toBeVisible()
+    const fileTitle = file.locator(':scope > .file-h > .path')
+    await fileTitle.click()
+    await expect(fileBody).toBeHidden()
+    await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
+    await fileTitle.click()
+    await expect(fileBody).toBeVisible()
+    // At the end of this short page the browser's scroll anchoring would push the name up as the
+    // card opens, so the reader would land on the end of the file; the name stays under the pointer.
+    // Closing it there shrinks the page below the scroll, which the browser has to give back.
+    await fileTitle.click()
+    await expect(fileBody).toBeHidden()
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    const nameTop = () => fileTitle.evaluate(el => Math.round(el.getBoundingClientRect().top))
+    const top = await nameTop()
+    await fileTitle.click()
+    await expect(fileBody).toBeVisible()
+    expect(await nameTop()).toBe(top)
+    // Double and triple clicks select the name to copy it, and leave the card as it was.
+    await fileTitle.click()
+    await expect(fileBody).toBeHidden()
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    const onName = { position: { x: 4, y: 4 } }
+    await fileTitle.dblclick(onName)
+    expect(await page.evaluate(() => window.getSelection()?.toString())).not.toBe('')
+    await expect(fileBody).toBeHidden()
+    await fileTitle.click({ ...onName, clickCount: 3 })
+    await expect(fileBody).toBeHidden()
+    await expect(fileToggle).toHaveAttribute('aria-expanded', 'false')
+    await page.evaluate(() => window.getSelection()?.removeAllRanges())
+    await fileTitle.click()
+    await expect(fileBody).toBeVisible()
+
+    const layerBody = layer.locator(':scope > .layer-body')
+    const layerToggle = layer.locator(':scope > .layer-h > .chev')
+    await layerToggle.click()
+    await expect(layerBody).toBeHidden()
+    await layerToggle.click()
+    await expect(layerBody).toBeVisible()
+    await expect(fileBody).toBeVisible()
+  })
+})
+
 test('hidden takes priority over component display rules', async ({ page, reviewUrl }) => {
   await page.goto(reviewUrl)
   await expect(page.locator('section.layer').first()).toBeVisible()
@@ -136,5 +198,94 @@ test('hidden takes priority over component display rules', async ({ page, review
   expect(displays).toEqual({
     hidden: ['none', 'none', 'none', 'none', 'none'],
     shown: ['grid', 'flex', 'inline-flex', 'grid', 'table-row'],
+  })
+})
+
+test('a toast stays up while the pointer rests on it, also for a message that arrives there', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.clock.install()
+  await page.goto(reviewUrl)
+  await page.locator('#fold-level').selectOption('moderate')
+  const box = page.locator('.toast')
+  await expect(box).toHaveText('hiding code: moderate')
+  await box.hover()
+  // The next message replaces this one under the resting pointer, which fires no new pointerenter.
+  await page.locator('body').press('f')
+  await expect(box).toHaveText('hiding code: aggressive')
+  await page.clock.runFor(6000)
+  await expect(box).toHaveText('hiding code: aggressive')
+  // Once the pointer leaves, it has five seconds.
+  await page.mouse.move(0, 400)
+  await page.clock.runFor(5001)
+  await expect(box).toBeHidden()
+  // A click clears it at once.
+  await page.locator('body').press('f')
+  await expect(box).toHaveText('hiding code: light')
+  await box.click()
+  await expect(box).toBeHidden()
+})
+
+test('draws every point whole, with no density switch, without compactPoints', async ({
+  page,
+  reviewUrl,
+}) => {
+  // A browser that chose a density before still gets whole points while the setting is off.
+  await page.addInitScript(() => localStorage.setItem('pr-review.points-density', 'compact'))
+  await page.goto(`${reviewUrl}?skin=github`)
+  const layer = page.locator('section.layer[data-layer="run-path"]')
+  const card = layer.locator('li.finding[data-fingerprint="fp-1"]')
+  await expect(card.locator('.prose')).toBeVisible()
+  await expect(card.locator('.tbtns')).toBeVisible()
+  // The switch and the toggle are in the page; only the CSS keeps them off it.
+  await expect(card.locator('.p-toggle')).toHaveCSS('display', 'none')
+  await expect(layer.locator('[data-act="points-density"]')).toHaveCSS('display', 'none')
+})
+
+test.describe('with compactPoints', () => {
+  test.use({ settings: { compactPoints: true } })
+
+  test('lists each point as one line, opens one from its title, and remembers show details', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl)
+    const card = page.locator('section.layer li.finding[data-fingerprint="fp-1"]')
+    await expect(card.locator('.f-title .p-title')).toBeVisible()
+    await expect(card.locator('.prose')).toBeHidden()
+    await expect(card.locator('.tbtns')).toBeHidden()
+    // The point stays whole on its line in the diff.
+    await page.locator('#file-src_app_ts').scrollIntoViewIfNeeded()
+    await expect(page.locator('tr.ifind[data-fingerprint="fp-1"] .prose')).toBeVisible()
+    await card.locator('.p-title').click()
+    await expect(card.locator('.prose')).toBeVisible()
+    await expect(card.locator('[data-act="point-dismiss"]')).toBeVisible()
+    await card.locator('.p-title').click()
+    await expect(card.locator('.prose')).toBeHidden()
+    // Selecting the title to copy it leaves the point as it was.
+    await card.locator('.p-title').dblclick()
+    await expect(card.locator('.prose')).toBeHidden()
+    await page.evaluate(() => window.getSelection()?.removeAllRanges())
+    // A point acted on keeps its one-line summary in the compact list.
+    await card.locator('.p-title').click()
+    await card.locator('[data-act="point-dismiss"]').click()
+    await expect(card).toHaveAttribute('data-status', 'dismissed')
+    await expect(card.locator('.p-summary')).toBeVisible()
+    await expect(card.locator('.prose')).toBeHidden()
+    await card.locator('.p-toggle').click()
+    await card.locator('[data-act="point-restore"]').click()
+    await expect(card).toHaveAttribute('data-status', 'open')
+    await expect(card.locator('.prose')).toBeHidden()
+
+    const density = page.locator('section.layer[data-layer="run-path"] [data-act="points-density"]')
+    await expect(density).toHaveText('show details', { useInnerText: true })
+    await density.click()
+    await expect(card.locator('.prose')).toBeVisible()
+    await expect(card.locator('.p-toggle')).toBeHidden()
+    await expect(density).toHaveText('compact', { useInnerText: true })
+    await page.reload()
+    await expect(card.locator('.prose')).toBeVisible()
+    await expect(density).toHaveText('compact', { useInnerText: true })
   })
 })

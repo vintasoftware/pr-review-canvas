@@ -1,5 +1,5 @@
 // @ts-check
-// The rail, the layer sections, and the file cards. A layer section holds the judgment text
+// The layer sections and the file cards. A layer section holds the judgment text
 // (rationale, decisions, check by hand), its test map, its attention point cards, and its files.
 // A file card shows only the hunks of its layer; the diff is rendered lazily by <pr-file> from
 // the shared render context.
@@ -17,7 +17,6 @@ import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
-import { diffstatHtml, layerChanges } from './diffstat.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
@@ -25,8 +24,8 @@ import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
-import { openPoints, pointCardHtml, postedUrls } from './points.js'
-import { filesReviewed, layerProgress } from './progress.js'
+import { openPoints, pointCardHtml, pointCountText, pointsDensityToggleHtml, postedUrls } from './points.js'
+import { layerProgress } from './progress.js'
 import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
 
@@ -54,6 +53,22 @@ let foldLevel = DEFAULT_FOLD_LEVEL
 
 export function getFoldLevel() {
   return foldLevel
+}
+
+/**
+ * Whether the page opens with only its first layer open and every file closed, from the
+ * `startCollapsed` setting. Off, every layer and file opens but those marked reviewed or hidden
+ * whole by the reading level.
+ */
+let startCollapsed = false
+
+/** @param {boolean} value */
+export function setStartCollapsed(value) {
+  startCollapsed = value
+}
+
+export function getStartCollapsed() {
+  return startCollapsed
 }
 
 /** @type {RenderContext | null} */
@@ -135,83 +150,6 @@ export function hunkLayerIndex(artifact) {
 }
 
 /**
- * Stripe color for a layer position (cycles through the six bands).
- * @param {number} index
- */
-export function dotColor(index) {
-  return `var(--s${(index % 6) + 1})`
-}
-
-/**
- * With a render context, each layer shows the lines it adds and removes.
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
- * @returns {string}
- */
-export function railInnerHtml(artifact, state, opts = {}) {
-  const active = opts.activeId ?? 'overview'
-  const ctx = renderContext
-  const current = /** @param {string} id */ id => (id === active ? ' aria-current="location"' : '')
-  const semantic = artifact.layers.filter(l => l.kind !== 'other')
-  const other = artifact.layers.find(l => l.kind === 'other')
-  const items = semantic
-    .map((layer, i) => {
-      const progress = layerProgress(layer, state)
-      const dotClass = progress === 'done' ? 'dot on' : progress === 'partial' ? 'dot half' : 'dot'
-      const dotLabel =
-        progress === 'done' ? 'reviewed' : progress === 'partial' ? 'in progress' : 'not started'
-      const reviewed = filesReviewed(layer, state)
-      const files = layer.files.length
-      const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
-      const changes = ctx === null ? null : layerChanges(layer, ctx.files, ctx.patches)
-      const stat = changes === null ? '' : ` · ${diffstatHtml(changes.total, changes.tests)}`
-      const risk = layer.risk.length > 0 ? ` · ${layer.risk.map(r => esc(r.label)).join(' · ')}` : ''
-      const id = layerAnchorId(layer.key)
-      return (
-        `<li><a href="#${esc(id)}"${current(id)}><span class="${dotClass}" style="--dc:${dotColor(i)}" role="img" aria-label="${dotLabel}"></span>` +
-        `<span class="n">${i + 1}</span><span class="t">${esc(layer.title)}</span><span class="m">${meta}${stat}${risk}</span></a></li>`
-      )
-    })
-    .join('')
-  const points = openPoints(artifact.points, state).length
-  const otherItem = other
-    ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
-    : ''
-  return (
-    '<ul class="tree">' +
-    `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} attention ${points === 1 ? 'point' : 'points'}</span></a></li>` +
-    `<li class="grp"><span class="lbl grp-lbl">Layers</span><ul class="layers">${items}</ul></li>${otherItem}</ul>`
-  )
-}
-
-/**
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
- * @returns {string}
- */
-export function renderRail(artifact, state, opts = {}) {
-  return `<nav class="rail" aria-label="Review layers">${railInnerHtml(artifact, state, opts)}</nav>`
-}
-
-/**
- * Draws the rail again from the current state, keeping the item the scrollspy marked.
- * @param {ParentNode} root
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- */
-export function refreshRail(root, artifact, state) {
-  const rail = root.querySelector('nav.rail')
-  if (!(rail instanceof HTMLElement)) {
-    return false
-  }
-  const active = rail.querySelector('a[aria-current]')?.getAttribute('href')?.slice(1)
-  rail.innerHTML = railInnerHtml(artifact, state, active === undefined ? {} : { activeId: active })
-  return true
-}
-
-/**
  * "1 file" / "3 files".
  * @param {number} n
  */
@@ -229,12 +167,34 @@ export function testMapHtml(layer, paths) {
   }
   const rows = layer.tests
     .map(t => {
-      const where = t.testPath ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath)}</a>` : ''
+      // A path breaks only after a slash, so the table fits a phone without splitting names.
+      const where = t.testPath
+        ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath).replaceAll('/', '/<wbr>')}</a>`
+        : ''
       const note = t.note ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>` : ''
       return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })
     .join('')
-  return `<h3 class="lbl sub">Tests</h3><table class="testmap"><thead><tr><th scope="col">Behavior</th><th scope="col">Status</th><th scope="col">Test</th></tr></thead><tbody>${rows}</tbody></table>`
+  const coverage = testCoverage(layer.tests)
+  return (
+    `<details class="test-map">${detailsSummaryHtml(`<h3>Tests</h3><span class="pill test-cov ${coverage.level}">${coverage.label}</span>`, 'Toggle tests', 'lbl sub')}` +
+    `<table class="testmap"><thead><tr><th scope="col">Behavior</th><th scope="col">Status</th><th scope="col">Test</th></tr></thead><tbody>${rows}</tbody></table></details>`
+  )
+}
+
+/**
+ * How well the layer's tests cover its behaviors, for the label on the closed Tests table. A
+ * behavior that needs no test counts toward neither side.
+ * @param {ReadonlyArray<{ status: 'covered' | 'missing' | 'not-needed' }>} tests
+ * @returns {{ level: 'full' | 'partial' | 'none' | 'not-needed', label: string }}
+ */
+export function testCoverage(tests) {
+  const covered = tests.filter(t => t.status === 'covered').length
+  const needed = covered + tests.filter(t => t.status === 'missing').length
+  if (needed === 0) return { level: 'not-needed', label: 'no tests needed' }
+  if (covered === needed) return { level: 'full', label: 'fully covered' }
+  if (covered === 0) return { level: 'none', label: 'not covered' }
+  return { level: 'partial', label: `${covered} of ${needed} covered` }
 }
 
 /**
@@ -283,7 +243,7 @@ export function layerPointsHtml(layer, points, paths, state, posted) {
   const cards = own.map(p =>
     pointCardHtml(p, posted === undefined ? { paths, state } : { paths, state, posted })
   )
-  return `<div class="layer-points"><h3 class="lbl sub">Attention points · <span class="point-count">${active}</span></h3><ol class="findings">${cards.join('')}</ol></div>`
+  return `<div class="layer-points"><h3 class="lbl sub">Attention points · <span class="point-count">${pointCountText(active)}</span>${pointsDensityToggleHtml()}</h3><ol class="findings">${cards.join('')}</ol></div>`
 }
 
 /**
@@ -420,6 +380,10 @@ export function wireCardReveal(root) {
     if (target instanceof Element) {
       target.closest('[data-point].is-resolved')?.setAttribute('data-revealed', '')
     }
+    // Layers and files start closed, so a key or a link that lands on one opens it as well.
+    if (target instanceof HTMLElement && target.matches('section.layer, article.file')) {
+      setCardCollapsed(target, false)
+    }
     for (
       let node = target instanceof Element ? target.parentElement : null;
       node !== null;
@@ -447,7 +411,7 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const key = entry?.key ?? sanitizeKey(lf.path)
   const cardReviewedId = reviewedId(layer.key, lf.path)
   const cardReviewed = ctx.state?.reviewed[cardReviewedId] === true
-  const collapsed = cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
+  const collapsed = startCollapsed || cardReviewed || (collapsesAt(lf, foldLevel) && ctx.keepOpen !== true)
   const isFirst = !ctx.firstCardFor.has(key)
   ctx.firstCardFor.add(key)
   const id = isFirst ? fileAnchorId(key) : `${fileAnchorId(key)}-${layer.key}`
@@ -548,13 +512,15 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
           .join('')}</span>`
       : ''
   const reviewed = layerProgress(layer, state) === 'done'
+  // A reviewed layer starts closed; with startCollapsed, so does every layer after the first.
+  const collapsed = reviewed || (startCollapsed && semanticIndex > 0)
   const layerReviewedId = reviewedId(layer.key)
   return (
     `<pr-layer><section class="layer${reviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
-    `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !reviewed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${esc(layer.title)}${risks}</h2>` +
+    `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !collapsed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${esc(layer.title)}${risks}</h2>` +
     `<div class="layer-ctl"><label class="chk"><input type="checkbox" data-reviewed-id="${esc(layerReviewedId)}"${reviewed ? ' checked' : ''}> reviewed</label>` +
     `${askButtonHtml({ kind: 'layer', layerId: layer.id }, { label: 'ask about this layer', title: 'Ask AI Chat about this layer' })}</div></div>` +
-    `<div class="layer-body"${reviewed ? ' hidden' : ''}>` +
+    `<div class="layer-body"${collapsed ? ' hidden' : ''}>` +
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
     testMapHtml(layer, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
@@ -865,8 +831,9 @@ export function hydrateAll(root, ctx) {
 
 /**
  * Switches how much code the page hides. A card the reader opened or closed by hand follows the
- * new level too: changing the level is a request to change exactly that. The folds and counters
- * then follow as refreshFolds says.
+ * new level too: changing the level is a request to change exactly that. With startCollapsed the
+ * reader opens what they read, so the level only closes the cards it hides whole and opens none.
+ * The folds and counters then follow as refreshFolds says.
  * @param {ParentNode} root
  * @param {import('./contract-types.js').FoldLevel} level
  */
@@ -884,12 +851,12 @@ export function setFoldLevel(root, level) {
         ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
         : undefined
     if (card instanceof HTMLElement && lf !== undefined) {
-      setCardCollapsed(
-        card,
-        card.classList.contains('is-reviewed') ||
-          (collapsesAt(lf, level) &&
-            !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths))
-      )
+      const hidden =
+        collapsesAt(lf, level) &&
+        !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths)
+      if (hidden || !startCollapsed) {
+        setCardCollapsed(card, hidden || card.classList.contains('is-reviewed'))
+      }
     }
   }
   refreshFolds(root)

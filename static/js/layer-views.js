@@ -4,6 +4,11 @@
 
 export const LAYER_VIEWS = /** @type {const} */ (['all', 'one'])
 /** @typedef {(typeof LAYER_VIEWS)[number]} LayerView */
+/**
+ * What the page shows: a layer view, or the attention points one at a time, which
+ * `readByPoints` opens the page on and the rail's switch moves to and from.
+ * @typedef {LayerView | 'points'} PageView
+ */
 
 /** How the page shows layers when the settings file says nothing: the canvas as one page. */
 export const DEFAULT_LAYER_VIEW = /** @type {LayerView} */ ('all')

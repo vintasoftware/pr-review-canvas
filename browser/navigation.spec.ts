@@ -6,7 +6,7 @@ import { expect, test } from './fixtures.js'
 const summary =
   '[File start](#file:src/app.ts) · [Later line](#line:src/app.ts:13) · [Later hunk](#hunk:src/app.ts#2)'
 
-for (const layerView of ['all', 'one'] as const) {
+for (const layerView of ['all', 'one', 'points'] as const) {
   for (const target of ['line', 'hunk'] as const) {
     test(`${target} links reveal the later part of a file with ${layerView} layers`, async ({
       page,
@@ -18,12 +18,15 @@ for (const layerView of ['all', 'one'] as const) {
         },
       })
       await page.goto(server.url)
-      if (layerView === 'one') {
+      if (layerView !== 'all') {
         await page.locator('#settings').click()
-        await page.locator('#set-layer-view').selectOption('one')
+        if (layerView === 'points') await page.locator('#set-read-by-points').check()
+        else await page.locator('#set-layer-view').selectOption('one')
         await page.locator('[data-act="settings-save"]').click()
         await expect(page.locator('#settings-dialog')).toBeHidden()
       }
+      // The one-point view opens on its first stop; the links are in the overview.
+      if (layerView === 'points') await page.goto(`${server.url}#overview`)
       // Other starts collapsed, with its diff undrawn.
       await expect(page.locator('#L-src_app_ts-new-13')).toHaveCount(0)
       await page
@@ -35,9 +38,12 @@ for (const layerView of ['all', 'one'] as const) {
       await expect(destination).not.toHaveClass(/is-approx/)
       await expect(destination).toBeInViewport()
       await expect(page.locator('#layer-other')).toBeVisible()
-      if (layerView === 'one') await expect(page.locator('#layer-run-path')).toBeHidden()
+      if (layerView !== 'all') await expect(page.locator('#layer-run-path')).toBeHidden()
+      // In the one-point view the stop that shows the target: the point on that chunk.
+      if (layerView === 'points')
+        await expect(page.locator('#layer-other')).toHaveAttribute('data-lens', 'point')
       await page.goBack()
-      await expect(page).toHaveURL(server.url)
+      await expect(page).toHaveURL(layerView === 'points' ? `${server.url}#overview` : server.url)
       await expect(page.locator('#overview')).toBeVisible()
       await page.goForward()
       await expect(destination).toBeInViewport()
@@ -270,6 +276,66 @@ test('refresh stops regeneration polling before waiting for patches', async ({ p
   release()
   await expect(page.locator('#refresh')).toBeEnabled()
   expect(polls).toBe(0)
+  // The note that a newer canvas is out sits over the page actions; a click clears it.
+  await page.locator('.toast').click()
   await page.locator('#refresh').click()
   await expect(page.locator('#overview .summary')).toHaveText(newer.summary)
+})
+
+test.describe('in the one-point view', () => {
+  test.use({ settings: { readByPoints: true } })
+
+  test('c with a point in focus opens the comment in its stop', async ({ page, chatServer }) => {
+    const { url } = await chatServer()
+    await page.goto(url)
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'layer')
+    await page.keyboard.press('n')
+    await expect(page.locator('#point-p-1')).toHaveClass(/is-focused/)
+    await page.keyboard.press('c')
+    await expect(page.locator('#layer-run-path .composer-box')).toBeVisible()
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+  })
+
+  test('go to code from a point’s thread opens the point’s stop', async ({ page, chatServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop')
+    const { url } = await chatServer()
+    await page.goto(`${url}#point-p-1`)
+    await page.locator('#point-p-1 [data-act="ask"]').first().click()
+    await page.getByText('ask something else…', { exact: true }).first().click()
+    await expect(page.locator('#thread-title')).toHaveText('Sum instead of product')
+    // Elsewhere in the sequence, then back by the thread.
+    await page.locator('#stop-nav a', { hasText: 'next layer' }).click()
+    await expect(page.locator('#point-p-1')).toBeHidden()
+    await page.locator('#thread-goto').click()
+    await expect(page.locator('#point-p-1')).toBeVisible()
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+  })
+
+  test('a comment the chat proposes about a point opens in the point’s stop', async ({
+    page,
+    chatServer,
+  }) => {
+    const narrow = (page.viewportSize()?.width ?? 1440) < 1200
+    const { url } = await chatServer({
+      runner: {
+        script: [
+          {
+            type: 'chunk',
+            text:
+              '```comment\n' +
+              JSON.stringify({ path: 'src/app.ts', line: 13, body: 'Name it.', point: 'fp-2' }) +
+              '\n```',
+          },
+          { type: 'done', stopReason: 'end_turn' },
+        ],
+      },
+    })
+    await page.goto(`${url}#point-p-1`)
+    if (narrow) await page.getByRole('button', { name: 'AI Chat', exact: true }).click()
+    await page.locator('#msg').fill('Propose a comment')
+    await page.locator('#chat-send').click()
+    await page.locator('.proposed [data-act="proposed-edit"]').click()
+    await expect(page.locator('#layer-other')).toHaveAttribute('data-lens', 'point')
+    await expect(page.locator('#layer-other .composer-box textarea')).toHaveValue('Name it.')
+  })
 })

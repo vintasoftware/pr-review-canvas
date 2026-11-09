@@ -559,12 +559,17 @@ The data directory's `settings.yml` accepts these keys and values:
 | `theme`                | `auto`    | `auto`, `light`, `dark`                                                          |
 | `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
 | `layerView`            | `all`     | `all`, `one`                                                                     |
+| `readByPoints`         | `false`   | `true`, `false`                                                                  |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
+| `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
+| `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
+| `fullWidthText`        | `false`   | `true` lets the summary, rationale and PR description fill their panel           |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
 | `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |
 | `maxTurns`             | `null`    | Integer 1–100, or `null` for the agent's default                                 |
 | `chatThreadPerPlace`   | `true`    | `true` opens the thread of the place asked about; `false` uses the open one      |
+| `chatStartMinimized`   | `false`   | `true` starts AI Chat minimized on a wide screen; `false` opens it as last left  |
 | `checkoutEnabled`      | `true`    | `true` reads a [review checkout](#review-checkouts); `false` reads your checkout |
 | `checkoutIdleDays`     | `7`       | Integer 1–365, or `-1` to never remove an idle checkout                          |
 | `checkoutSweepMinutes` | `60`      | Integer minutes, 5–1440, between `serve`'s idle sweeps                           |
@@ -646,6 +651,15 @@ server and the corresponding canvas to use a localhost link.
 
 ### Collapsed diffs
 
+The page opens with every layer and file open, except a layer or file marked reviewed and a file
+the reading level hides whole. With `startCollapsed: true` in `settings.yml` (**Start collapsed**
+in the settings dialog), it opens with the first layer open and the others closed, and every file
+closed under its name, its counts, and its **reviewed** box: click the name or the chevron, or
+press `o` on it, to read its diff. The rail, the keys that step through layers and files (`j`,
+`k`, `n`, `p`), and any link into a layer or a file open what they land on. A click that opens or
+closes a file or a point keeps its title where you clicked it, so the file reads from its start;
+only closing one at the very end of the page moves it, as the page gets shorter than the scroll.
+
 Import-only changes, whitespace changes, moved code, and ranges selected by the generator may
 start collapsed. Click the summary to expand them. Moves are detected within a file; moves
 between files appear as deletions and additions. Edited moves keep their changed text visible.
@@ -669,13 +683,14 @@ in its Files heading, and the sign-off dialog records the total.
 The page opens at `foldLevel` from `settings.yml` (`light` by default), which the **Hide code by
 default** field in the settings dialog sets. The control and the `f` key change the level for the
 current page only. Changing the level redraws the visible diffs and re-applies file collapse,
-including cards opened by hand.
+including cards opened by hand. With `startCollapsed`, it only closes the files it hides whole and
+never opens one: lowering the level leaves closed files closed.
 
 These always stay visible:
 
 - Attention points, comment threads, and pending review drafts. A file with a thread or a draft
   folds nothing.
-- Files with an annotation or an attention point. They never collapse whole.
+- Files with an annotation or an attention point. No level closes them whole.
 - Annotations, except under an `aggressive` fold that covers the whole annotation and no other. That
   fold shows the annotation's text instead of its title.
 - Test files at `light`, except snapshots and fixtures. From `moderate`, each test body folds under
@@ -708,6 +723,37 @@ first. Navigation writes the layer hash so a reload keeps your place. `k` on the
 returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
+
+### One point at a time
+
+With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
+a review opens on its attention points, one stop at a time. A stop is its layer's section seen
+through a lens, always open, with no chevron to fold it:
+
+- Each layer with points or tests opens with a stop of its own: its heading with the **reviewed**
+  mark and **ask about this layer**, its description, and its tests table.
+- Each point's stop shows the layer's heading, the point's card, and its file with only the chunk
+  that holds its lines. The file stays open there even when marked reviewed.
+- A layer's points come from the most severe: decide, then check, then fyi, a decide point's impact
+  worst first. A point you acted on keeps its stop, and dims in the rail.
+- A bar over and under each stop leads back and on; after the last point, **the rest of the diff,
+  by layer** switches to **Layers**, on the first layer. On the overview it leads to the first stop.
+- The step keys walk the stops: `j` and `k` the layers' opening stops, `n` and `p` every stop, and
+  `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
+  `]` puts the focus on it, so `c`, `d` and `o` act on it.
+
+The view opens on its first stop. The rail lists the stops and marks the one that shows. A stop takes
+the place of the one before under a page that stays at the top, and the URL names it with the same
+fragment the layers use (`#layer-…`, `#point-…`), so a reload, back and forward, and a switch of view
+keep your place. Since a stop shows the layer's own cards, whatever you do there is what the layer
+has. Whatever leads to a line, a chunk, a file or a point (a link, **go to code**, `c`, a proposed
+comment) opens the stop that shows it; when none does, the page moves to your layers and goes there.
+On a canvas with no point the view shows the overview and the layers, one at a time.
+
+On a canvas with points, a switch at the head of the rail moves between **Attention points** and
+**Layers**. **Layers** shows the layer view **Show layers** chooses, all at once or one at a time. The
+switch changes the open page only; a reload opens on what the settings say. With **Read by attention
+points** off, a review shows its layers alone, with no switch.
 
 ### Finding shared canvases
 
@@ -776,17 +822,24 @@ in the layer, your draft with **edit** and **delete**; in the diff the draft has
 under the point), and the commands that undo it: **reopen**, **restore**, or
 deleting the draft. The point collapses again when its status changes. A reload also collapses it.
 
-The counts in the rail, the layer headings, and the overview squares include only open points. The
-overview line **Attention points: 2 open · 1 in your review · 1 resolved by the author · …** counts
-each status, and adds **(N with your draft in the review)** after the resolved ones that still hold
-a draft. Resolved points start off the page for every reader, the author too: **show the N
-resolved** brings them back, collapsed in place, until you click it again. A layer whose points are
-all resolved drops its **Attention points** heading while they are hidden. A link to a resolved
-point shows that one point, and a point you just resolved stays shown until the next load. The
-line's **hide the N acted on** command removes your other collapsed points from the page until you
-click it again; **edit** on an AI Chat proposed resolution brings its point back while the reason
-box is open. `]` and `[` step only through open points. `o` on a collapsed point expands it or collapses
-it again.
+A layer's list draws each open point whole. With `compactPoints: true` in `settings.yml`
+(**Compact attention points** in the settings dialog), every point in the list starts as one line:
+its level, title, a `decide` point's impact, kind, audience, and location. Click the title or
+**show** to read it and use its commands. **show details** in the heading of a list shows every
+open point whole, in every layer, and **compact** goes back; the browser remembers the choice. A
+point on its line in the diff is always drawn whole while it is open.
+
+The counts in the rail, the layer headings, and the overview's level counts include only open
+points. The overview line **Attention points: 2 open · 1 in your review · 1 resolved by the author ·
+…** counts each status, and adds **(N with your draft in the review)** after the resolved ones that
+still hold a draft. Resolved points start off the page for every reader, the author too: **show
+the N resolved** brings them back, collapsed in place, until you click it again. A layer whose
+points are all resolved drops its **Attention points** heading while they are hidden. A link to a
+resolved point shows that one point, and a point you just resolved stays shown until the next load.
+The line's **hide the N acted on** command removes your other collapsed points from the page until
+you click it again; **edit** on an AI Chat proposed resolution brings its point back while the
+reason box is open. `]` and `[` step only through open points. `o` on a point drawn as one line
+expands it or collapses it again.
 
 ### Self-review
 
@@ -1324,6 +1377,11 @@ Install and sign in to Claude Code or Codex on the same machine. Start or restar
 `pr-review serve`, then open **settings** and choose a **Chat agent** under **AI Chat**.
 The chat uses that agent's account. Click **Test agent** to check the connection, then **save**.
 Chat is optional; reviewing canvases does not require `acpx`.
+
+On a wide screen the chat docks beside the canvas. **Minimize AI Chat** gives the canvas the full
+width and leaves a launcher at the bottom right; the browser remembers which way you left it. With
+`chatStartMinimized: true` (**Start minimized** under **AI Chat** in the settings dialog), every
+review opens with the chat minimized.
 
 Leave **Chat model** blank to use the agent's default, or enter a model ID. See
 [model families](#model-families) for version selection. Switching agents starts a new thread

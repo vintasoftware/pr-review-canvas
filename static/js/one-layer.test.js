@@ -64,6 +64,7 @@ describe('the layer views', () => {
     expect(LAYER_VIEWS).toEqual(['all', 'one'])
     expect(DEFAULT_LAYER_VIEW).toBe('all')
     expect(isLayerView('one')).toBe(true)
+    expect(isLayerView('points')).toBe(false)
     expect(isLayerView('some')).toBe(false)
     expect(isLayerView(1)).toBe(false)
     expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one'])
@@ -172,6 +173,27 @@ describe('initOneLayer', () => {
     window.location.hash = ''
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['overview'])
+  })
+
+  it('raises reveal-code on what a plain fragment names in the all view, at first draw, on a click, and on back or forward', () => {
+    /** @type {string[]} */
+    const revealed = []
+    root.addEventListener('reveal-code', event => {
+      if (event.target instanceof Element) revealed.push(event.target.id)
+    })
+    window.location.hash = '#layer-storage'
+    oneLayer = initOneLayer(root, { view: 'all' })
+    expect(revealed).toEqual(['layer-storage'])
+    click(root.querySelector('.more-hunks a'))
+    expect(revealed).toEqual(['layer-storage', 'layer-auth'])
+    window.location.hash = '#layer-other'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(revealed).toEqual(['layer-storage', 'layer-auth', 'layer-other'])
+    // A fragment that names nothing on the page reveals nothing.
+    window.location.hash = '#nowhere'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(revealed).toHaveLength(3)
+    expect(shownIds()).toHaveLength(4)
   })
 
   it('switches views on the open page, keeping the section the rail marks as being read', () => {
