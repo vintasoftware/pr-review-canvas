@@ -6,8 +6,9 @@
 // reader is sent to stays hidden. A review mark is the exception: it moves on to the next card
 // only inside the layer on screen. With `points` the page shows one stop of the one-point view
 // (`point-view.js`) the same way, under a page at its top, and a target no stop shows takes the
-// page to its layers. With `all` this module does nothing.
+// page to its layers, with a note that says so. With `all` this module does nothing.
 import { cssEscape } from './anchors.js'
+import { toast } from './commands.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
@@ -186,6 +187,8 @@ export function initOneLayer(root, opts) {
     const stop = section.id === 'overview' ? undefined : stopShowing(all, target, ctx.files, current)
     if (section.id !== 'overview' && stop === undefined) {
       setView(layersView, `#${section.id}`)
+      // The view changed under the reader, so the page says why.
+      toast(root, 'no stop shows this, so it opens in the layers', { tone: 'note' })
     } else if (stop !== current) {
       showPointStop(stop)
     }
@@ -327,8 +330,14 @@ export function initOneLayer(root, opts) {
       if (el === null) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
         scrollIntoViewSafe(el, 'start')
-      } else {
-        revealFragment(win.location.hash)
+        return
+      }
+      revealFragment(win.location.hash)
+      // A place the reader first saw as a stop comes back with that stop's scroll, the top of the
+      // page, which in the layers is somewhere else: the page goes to what the fragment names.
+      const box = el.getBoundingClientRect()
+      if (box.bottom <= 0 || box.top >= win.innerHeight) {
+        el.scrollIntoView({ block: 'start' })
       }
     },
     { signal: listeners.signal }

@@ -38,6 +38,7 @@ import { pointAnchorId, reviewedId } from './keys.js'
 import {
   canvasHiddenLines,
   cardOf,
+  drawCardsOnScreen,
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
@@ -88,6 +89,8 @@ const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
 /** Pixels left above a card the keys scroll to, so its focus ring shows. */
 const FOCUS_GAP = 8
+/** How many times a key's scroll repeats while it brings undrawn cards on screen. */
+const MAX_DRAW_ROUNDS = 10
 /** The card kind and direction each step key moves by. */
 /** @type {Record<'next-layer' | 'prev-layer' | 'next-file' | 'prev-file', ['layer' | 'file', 1 | -1]>} */
 const STEPS = {
@@ -425,7 +428,9 @@ export function wireReview(root, session, opts = {}) {
 
   /**
    * @param {Element | null} el
-   * @param {ScrollLogicalPosition} [block] `start` for a card, `center` for a point
+   * @param {ScrollLogicalPosition | 'stop'} [block] `start` for a card, `center` for a point, and
+   *   `stop` for what a stop of the one-point view shows, under a page at its top as the stop's own
+   *   links leave it
    */
   const focusItem = (el, block = 'start') => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
@@ -437,9 +442,23 @@ export function wireReview(root, session, opts = {}) {
       el.classList.add('is-focused')
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
-      // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around the
-      // element: a hidden element cannot take the focus.
-      scrollIntoViewSafe(el, block)
+      if (block === 'stop') {
+        window.scrollTo({ top: 0 })
+      }
+      // A stop's card or section sits under its heading; only a point's row further down, which
+      // stands for a point of the Other layer, is scrolled to from the top.
+      const to =
+        block !== 'stop' ? block : el.getBoundingClientRect().top >= window.innerHeight ? 'center' : null
+      if (to !== null) {
+        // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
+        // the element: a hidden element cannot take the focus.
+        scrollIntoViewSafe(el, to)
+        // A card this scroll brought on screen draws its diff and grows, which would push the
+        // element away again: the cards draw now and the scroll repeats until none is left.
+        for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
+          el.scrollIntoView({ block: to })
+        }
+      }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
       el.tabIndex = -1
@@ -1352,7 +1371,7 @@ export function wireReview(root, session, opts = {}) {
         // The one-point view walks its stops: j and k the layers' openings, n and p every stop.
         const stop = opts.stepStop?.(direction, s => kind !== 'layer' || s.kind === 'layer')
         if (stop !== undefined) {
-          if (stop !== null) focusItem(stop, 'center')
+          if (stop !== null) focusItem(stop, 'stop')
           break
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
@@ -1373,7 +1392,7 @@ export function wireReview(root, session, opts = {}) {
         if (stop === undefined) {
           stepPoint(order, points, direction)
         } else if (stop !== null) {
-          focusItem(stop, 'center')
+          focusItem(stop, 'stop')
         }
         break
       }
@@ -1394,8 +1413,9 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        // A point in focus stands for the file card that holds its line, as with `o`.
-        const point = focusedPoint(points)
+        // A point in focus stands for the file card that holds its line, as with `o`, also once it
+        // was acted on and left the open points.
+        const point = focusedPoint(session.artifact.points)
         const itemId = itemAround(
           order,
           point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
@@ -1420,8 +1440,8 @@ export function wireReview(root, session, opts = {}) {
           openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
           break
         }
-        // With nothing selected, c comments on the line of the attention point in focus.
-        const point = focusedPoint(points)
+        // With nothing selected, c comments on the line of the attention point in focus, open or not.
+        const point = focusedPoint(session.artifact.points)
         const key = point === undefined ? null : keyForPath(point.path)
         if (point !== undefined && key !== null) {
           const target = { key, path: point.path, side: point.side ?? 'new', line: point.line }

@@ -24,6 +24,7 @@ import {
   hydrateAll,
   getRenderContext,
   hydrateFileCard,
+  PrFileElement,
   renderLayers,
   setCardCollapsed,
   setRenderContext,
@@ -92,7 +93,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -300,6 +301,7 @@ function setup(opts = {}) {
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
     ...(opts.uncover ? { uncover: opts.uncover } : {}),
+    ...(opts.stepStop ? { stepStop: opts.stepStop } : {}),
   })
   wirings.push(wiring)
   return { root, session, calls, wiring }
@@ -1523,6 +1525,41 @@ describe('keyboard', () => {
     expect(card?.hasAttribute('data-expanded')).toBe(false)
   })
 
+  it('marks the file of a point it dismissed with r, though the point left the open ones', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key('d')
+    await flush()
+    expect(root.querySelector('#point-p-1')?.classList.contains('is-focused')).toBe(true)
+    key('r')
+    await flush()
+    expect(calls.at(-1)).toEqual(['reviewed', { id: 'layer:run-path/file:src_app_ts', reviewed: true }])
+  })
+
+  it('leaves the page at its top on a stop of the one-point view, as the stop’s own links do', () => {
+    const scrolled = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    /** @type {HTMLElement | null} */
+    let target = null
+    const { root } = setup({ stepStop: () => target })
+    const card = root.querySelector('#point-p-1')
+    if (!(card instanceof HTMLElement)) throw new Error('no point')
+    const moved = vi.fn()
+    card.scrollIntoView = moved
+    target = card
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 300, 100, 100))
+    key('n')
+    expect(scrolled).toHaveBeenCalledWith({ top: 0 })
+    expect(moved).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(card)
+    // A point's row further down, as a point of the Other layer has for its stop, is scrolled to.
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, window.innerHeight + 400, 100, 100)
+    )
+    key(']')
+    expect(moved).toHaveBeenCalledWith({ block: 'center' })
+    scrolled.mockRestore()
+  })
+
   it('moves the keyboard focus with the ring', () => {
     setup()
     key('j')
@@ -1838,6 +1875,25 @@ describe('keyboard', () => {
       expect(reason instanceof HTMLTextAreaElement && reason.value).toBe('Unused.')
       expect(root.querySelector('.cmd-err')).toBeNull()
       expect(uncover).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('draws the cards a key’s scroll brings on screen, then scrolls to its target again', () => {
+    const { root } = setup({ drawn: false })
+    const cards = Array.from(root.querySelectorAll('pr-file'))
+    for (const card of cards) {
+      vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 20, 100, 100))
+    }
+    const layer = root.querySelector('#layer-run-path')
+    if (!(layer instanceof HTMLElement)) throw new Error('no layer')
+    const moved = vi.fn()
+    layer.scrollIntoView = moved
+    try {
+      key('j')
+      expect(moved).toHaveBeenCalledTimes(2)
+      expect(cards.every(card => card instanceof PrFileElement && card.rendered)).toBe(true)
     } finally {
       vi.unstubAllGlobals()
     }

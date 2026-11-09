@@ -74,6 +74,15 @@ describe('stopNavHtml', () => {
     expect(links(4)).toEqual([['#point-p-2', '← previous point'], expect.anything()])
   })
 
+  it('names a way back to another layer’s opening as the previous layer, and to its own by its title', () => {
+    const otherOnly = { ...artifact, points: artifact.points.filter(p => p.layerId === 'other') }
+    const ids = stopsOf(otherOnly)
+    const back = (/** @type {number} */ index) =>
+      draw(stopNavHtml(ids, index, otherOnly)).querySelector('a')?.textContent
+    expect(back(1)).toBe('← previous layer: Run path')
+    expect(back(2)).toBe('← Other changes')
+  })
+
   it('leads from the last stop to the layers, as the rail’s switch does', () => {
     draw(stopNavHtml(stops, 4, artifact))
     const on = document.querySelector('a[data-act="layer-view"]')
@@ -168,9 +177,29 @@ describe('the one-point view on a rendered page', () => {
     reveal('article.file[data-layer="run-path"][data-path="src/new-name.ts"]')
     expect(view?.view).toBe('one')
     expect(seen).toEqual(['one'])
+    // The page says why the view changed under the reader.
+    expect(document.querySelector('.toast')?.textContent).toBe(
+      'no stop shows this, so it opens in the layers'
+    )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
     expect(lensed()).toBeNull()
     expect(document.querySelector('nav.step-nav')).toBeNull()
     expect(shown()).toEqual(['layer-run-path'])
+  })
+
+  it('opens a layer’s tests in its stop, and closes them when it goes, as the layers had them', () => {
+    const tests = () => document.querySelector('#layer-run-path details.test-map')
+    expect(tests()).toHaveProperty('open', true)
+    view?.step(1, () => true)
+    expect(tests()).toHaveProperty('open', false)
+    // Tests the reader opened in the layers stay open after the stop.
+    view?.step(-1, () => true)
+    view?.switchView('all')
+    const opened = tests()
+    if (opened instanceof HTMLDetailsElement) opened.open = true
+    view?.switchView('points', '#layer-run-path')
+    view?.step(1, () => true)
+    expect(tests()).toHaveProperty('open', true)
   })
 
   it('steps through the stops that fit, the one on screen first when asked, and stops at either end', () => {

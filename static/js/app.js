@@ -14,7 +14,7 @@ import {
   setApiBase,
 } from './api.js'
 import { setChatEnabled } from './ask.js'
-import { readPointsDensity, setMentionCanvas, setPointsDensity } from './points.js'
+import { applyPointsDensity, setMentionCanvas } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
@@ -337,9 +337,7 @@ export class PrAppElement extends HTMLElement {
     const storage = typeof localStorage === 'undefined' ? null : localStorage
     // A docked chat starts the way the reader last left it, or minimized with chatStartMinimized.
     const chatMinimized = chatEnabled && (bundle.chat.startMinimized === true || readChatMinimized(storage))
-    if (boot.compactPoints) {
-      setPointsDensity(document.documentElement, readPointsDensity(storage))
-    }
+    applyPointsDensity(document.documentElement, boot.compactPoints, storage)
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
@@ -628,16 +626,29 @@ export class PrAppElement extends HTMLElement {
     const { readByPoints, layerView } = data.settings
     const turned = readByPoints !== this.readByPoints
     const points = turned ? readByPoints : this.layerView?.view === 'points'
+    const next = points ? 'points' : layerView
     this.readByPoints = readByPoints
     this.layerView?.setLayersView(layerView)
     qs('nav.rail', this)?.toggleAttribute('data-switchable', readByPoints)
-    const next = points ? 'points' : layerView
+    // A change of view moves the page as the rail's switch does, so the URL names where it opens.
     if (this.layerView?.view !== next) this.layerView?.switchView(next)
     // The switch comes and goes with the setting, also when the view on screen stays.
     if (turned) this.redrawRail()
     this.chat?.followSettings(data.settings)
     applyPointColors(data.settings.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
+    // A later render reads the setting from the bootstrap, so it keeps what was saved.
+    if (this.bootstrap !== null) this.bootstrap.compactPoints = data.settings.compactPoints
+    const density = document.documentElement.dataset['points']
+    applyPointsDensity(
+      document.documentElement,
+      data.settings.compactPoints,
+      typeof localStorage === 'undefined' ? null : localStorage
+    )
+    // A stop shows its open point whole, so it is drawn again under the new density.
+    if (document.documentElement.dataset['points'] !== density && this.layerView?.view === 'points') {
+      this.layerView.redraw()
+    }
   }
 
   /**

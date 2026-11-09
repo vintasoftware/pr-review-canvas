@@ -18,6 +18,7 @@ import {
   pointToMarkdown,
   readPageDensity,
   readPointsDensity,
+  applyPointsDensity,
   setMentionCanvas,
   setPointExpanded,
   setPointsDensity,
@@ -345,6 +346,13 @@ describe('where a point stands', () => {
     setPointsDensity(page, 'compact')
     expect(readPageDensity(page)).toBe('compact')
     expect(store[POINTS_DENSITY_KEY]).toBe('detailed')
+    // The setting turned on gives the page the density this browser remembers; off, none at all.
+    applyPointsDensity(page, true, storage)
+    expect(page.dataset['points']).toBe('detailed')
+    applyPointsDensity(page, false, storage)
+    expect(page.hasAttribute('data-points')).toBe(false)
+    applyPointsDensity(page, true, null)
+    expect(page.dataset['points']).toBe('compact')
     delete page.dataset['points']
   })
 
@@ -500,8 +508,12 @@ describe('where a point stands', () => {
     const dismiss = el?.querySelector('[data-act="point-dismiss"]')
     if (el === null || !(dismiss instanceof HTMLElement)) throw new Error('no point')
     dismiss.focus()
+    // The keys' ring on the point stays through the new classes of where it stands.
+    el.classList.add('is-focused')
     refreshPoint(el, first, { ...ctx, state: dismissed })
     expect(document.activeElement?.classList.contains('p-toggle')).toBe(true)
+    expect(el.classList.contains('is-focused')).toBe(true)
+    expect(el.classList.contains('is-handled')).toBe(true)
 
     // Restored, the point is whole and its toggle hidden: the focus goes to its first command.
     setPointExpanded(el, true)
