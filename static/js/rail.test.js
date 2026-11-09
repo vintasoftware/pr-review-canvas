@@ -150,6 +150,27 @@ describe('rail', () => {
     expect(pressed()).toEqual([])
   })
 
+  it('keeps the keyboard on the switch or link it was on when the rail is drawn again', () => {
+    pointsRail(artifact)
+    const button = (/** @type {string} */ view) => document.querySelector(`.rail-view [data-view="${view}"]`)
+    const layers = button('layers')
+    if (layers instanceof HTMLElement) layers.focus()
+    document.querySelector('nav.rail')?.removeAttribute('data-points')
+    refreshRail(document, artifact, state)
+    expect(document.activeElement).toBe(button('layers'))
+    expect(document.activeElement).not.toBe(layers)
+    const link = document.querySelector('nav.rail a[href="#layer-run-path"]')
+    if (link instanceof HTMLElement) link.focus()
+    refreshRail(document, artifact, state)
+    expect(document.activeElement?.getAttribute('href')).toBe('#layer-run-path')
+    // Focus elsewhere on the page stays there.
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    outside.focus()
+    refreshRail(document, artifact, state)
+    expect(document.activeElement).toBe(outside)
+  })
+
   it('names the layers with no switch, and in either view, for a canvas without points', () => {
     const pointless = { ...artifact, points: [] }
     for (const points of [false, true]) {

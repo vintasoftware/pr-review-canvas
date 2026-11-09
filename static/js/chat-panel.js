@@ -28,6 +28,11 @@ export function wireChatPanel(root, pane, opts = {}) {
   function sync() {
     if (dialog.open) dialog.close()
     if (narrow.matches) {
+      // Resizing must keep a settings or sign-off dialog above the chat it was opened over.
+      if (floating && root.querySelector('dialog:modal') !== null) {
+        floating = false
+        docked = false
+      }
       dialog.append(pane)
       pane.hidden = false
       if (floating) {

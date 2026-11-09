@@ -24,6 +24,7 @@ import {
   hydrateAll,
   getRenderContext,
   hydrateFileCard,
+  PrFileElement,
   renderLayers,
   setCardCollapsed,
   setRenderContext,
@@ -92,7 +93,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -300,6 +301,7 @@ function setup(opts = {}) {
     ...(opts.chat ? { chat: opts.chat } : {}),
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
     ...(opts.uncover ? { uncover: opts.uncover } : {}),
+    ...(opts.stepStop ? { stepStop: opts.stepStop } : {}),
   })
   wirings.push(wiring)
   return { root, session, calls, wiring }
@@ -1281,6 +1283,7 @@ describe('comment composers', () => {
 
   it('comments on the pull request itself', async () => {
     const { root, calls } = setup()
+    expect(root.querySelector('.pr-conversation > summary')?.textContent).toBe('Conversation · 2')
     click(root, '[data-act="pr-comment"]')
     const area = root.querySelector('.pr-composer-host textarea')
     if (!(area instanceof HTMLTextAreaElement)) {
@@ -1296,6 +1299,7 @@ describe('comment composers', () => {
       'looks fine'
     )
     expect(root.querySelector('.pr-composer-host .composer-box')).toBeNull()
+    expect(root.querySelector('.pr-conversation > summary')?.textContent).toBe('Conversation · 3')
   })
 })
 
@@ -1519,6 +1523,37 @@ describe('keyboard', () => {
     expect(root.querySelector('#file-src_app_ts .file-body')?.hasAttribute('hidden')).toBe(false)
     key('o')
     expect(card?.hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('marks the file of a point it dismissed with r, though the point left the open ones', async () => {
+    const { root, calls } = setup()
+    key(']')
+    key('d')
+    await flush()
+    expect(root.querySelector('#point-p-1')?.classList.contains('is-focused')).toBe(true)
+    key('r')
+    await flush()
+    expect(calls.at(-1)).toEqual(['reviewed', { id: 'layer:run-path/file:src_app_ts', reviewed: true }])
+  })
+
+  it('leaves the scroll to a stop of the one-point view, which puts itself on screen', () => {
+    const scrolled = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    /** @type {HTMLElement | null} */
+    let target = null
+    const { root } = setup({ stepStop: () => target })
+    const card = root.querySelector('#point-p-1')
+    if (!(card instanceof HTMLElement)) throw new Error('no point')
+    const moved = vi.fn()
+    card.scrollIntoView = moved
+    target = card
+    for (const press of ['n', ']']) {
+      key(press)
+      expect(document.activeElement).toBe(card)
+      expect(card.classList.contains('is-focused')).toBe(true)
+    }
+    expect(scrolled).not.toHaveBeenCalled()
+    expect(moved).not.toHaveBeenCalled()
+    scrolled.mockRestore()
   })
 
   it('moves the keyboard focus with the ring', () => {
@@ -1841,6 +1876,25 @@ describe('keyboard', () => {
     }
   })
 
+  it('draws the cards a key’s scroll brings on screen, then scrolls to its target again', () => {
+    const { root } = setup({ drawn: false })
+    const cards = Array.from(root.querySelectorAll('pr-file'))
+    for (const card of cards) {
+      vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 20, 100, 100))
+    }
+    const layer = root.querySelector('#layer-run-path')
+    if (!(layer instanceof HTMLElement)) throw new Error('no layer')
+    const moved = vi.fn()
+    layer.scrollIntoView = moved
+    try {
+      key('j')
+      expect(moved).toHaveBeenCalledTimes(2)
+      expect(cards.every(card => card instanceof PrFileElement && card.rendered)).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('stops listening once the screen is torn down', () => {
     const { root, wiring } = setup()
     wiring.stop()
@@ -1895,11 +1949,13 @@ describe('capability gating and sign-off', () => {
 
   it('announces the returned outcome when comments publish but approval fails', async () => {
     const warning = 'Comments published, but approval failed. Approve the merge request in GitLab.'
-    const { root } = setup({
+    let submissions = 0
+    const { root, session } = setup({
       state: { ...BASE, reviewed: { 'layer:run-path': true } },
       fetchReviewBody: async () => ({ headSha: HEAD, body: 'ship it', unreviewed: [], pending: 1 }),
       api: {
         postReview: async (_pr, input) => {
+          submissions++
           expect(input.event).toBe('APPROVE')
           return {
             review: {
@@ -1927,6 +1983,14 @@ describe('capability gating and sign-off', () => {
       `review posted with 1 comment · see it on GitHub ${warning}`
     )
     expect(root.querySelector('.toast')).toBeNull()
+    const post = root.querySelector('[data-act="signoff-post"]')
+    expect(post?.hasAttribute('disabled')).toBe(true)
+    expect(post?.textContent).toBe('posted')
+    await session.setDismissed('fp-1', true)
+    expect(post?.hasAttribute('disabled')).toBe(true)
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(submissions).toBe(1)
   })
 
   it('sends no body when the reader emptied the box, and says that changes were asked for', async () => {
