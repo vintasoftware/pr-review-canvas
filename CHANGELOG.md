@@ -21,6 +21,20 @@
   default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.
 - The rail, `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a
   file or a point keeps its title where you clicked it, also at the end of the page.
+- The Conversation count updates when you post a PR-level comment.
+- Keyboard shortcuts that focus a comment or chat field leave its text intact, without inserting
+  the shortcut character.
+
+### Notifications
+
+- Notifications appear at the top right of the window, with distinct icons and colors for
+  success, information, and failure. Hovering keeps one visible; clicking dismisses it. A
+  notification inside a modal appears above that modal.
+- A review posted with a warning keeps its verdict and comment count beside the warning in the
+  sign-off dialog. A review posted without warnings closes the dialog and links to the review
+  from its notification.
+- A posted review cannot be submitted again from its warning dialog. Resizing to a phone layout
+  keeps an open settings or sign-off dialog in front of AI Chat.
 
 ### AI Chat
 
@@ -41,6 +55,8 @@
   in the layers. A target no stop shows moves the page to the layers.
 - The rail's **Overview** counts the **open** attention points, in either view, so the count no longer
   reads as points the overview holds.
+- Changing reading modes in settings updates the URL to match the stop on screen, so a reload
+  returns to that stop.
 
 ## 0.10.0
 

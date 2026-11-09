@@ -631,7 +631,8 @@ export class PrAppElement extends HTMLElement {
     this.readByPoints = readByPoints
     this.layerView?.setLayersView(layerView)
     qs('nav.rail', this)?.toggleAttribute('data-switchable', readByPoints)
-    this.layerView?.setView(points ? 'points' : layerView)
+    const next = points ? 'points' : layerView
+    if (this.layerView?.view !== next) this.layerView?.switchView(next)
     // The switch comes and goes with the setting, also when the view on screen stays.
     if (turned) this.redrawRail()
     this.chat?.followSettings(data.settings)

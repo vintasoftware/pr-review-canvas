@@ -293,6 +293,7 @@ test.describe('in the one-point view', () => {
     await expect(page.locator('#point-p-1')).toHaveClass(/is-focused/)
     await page.keyboard.press('c')
     await expect(page.locator('#layer-run-path .composer-box')).toBeVisible()
+    await expect(page.locator('#layer-run-path .composer-box textarea')).toHaveValue('')
     await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
   })
 

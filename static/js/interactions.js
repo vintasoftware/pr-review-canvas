@@ -24,6 +24,7 @@ import {
   concealForComposer,
   focusComposer,
   revealConcealed,
+  setDisabledReason,
   refreshComposerCommands,
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
@@ -669,6 +670,8 @@ export function wireReview(root, session, opts = {}) {
           const node = nodeFrom(doc, issueCommentHtml(answer.comment, renderNow()))
           if (node !== null) {
             root.querySelector('.conversation .pr-composer-host')?.before(node)
+            const count = root.querySelector('.pr-conversation .conversation-count')
+            if (count !== null) count.textContent = String(Number(count.textContent) + 1)
           }
           // Only the box that posted goes away; a draft the reader started meanwhile stays.
           box.remove()
@@ -811,7 +814,7 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /** @param {HTMLElement} button */
-  const postSignoff = button => {
+  const postSignoff = async button => {
     const dialog = button.closest('dialog')
     if (!(dialog instanceof HTMLDialogElement)) {
       return
@@ -820,7 +823,7 @@ export function wireReview(root, session, opts = {}) {
     const body = signoffBody(dialog)
     const editor = dialog.querySelector('textarea')
     const submittedText = editor?.value ?? ''
-    void runCommand(
+    const posted = await runCommand(
       button,
       async () => {
         const { review, submitted, warnings } = await session.postReview(
@@ -841,16 +844,21 @@ export function wireReview(root, session, opts = {}) {
           for (const warning of warnings) {
             dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
           }
-          return
+          return true
         }
         // The page behind already shows what the review changed, so the dialog gets out of the way,
         // and so does a pane floating over the page, which would cover the receipt.
         dialog.close()
         opts.uncover?.()
         toast(root, receipt, { link: { url: review.url, text: `see it on ${hostLabel()}` } })
+        return true
       },
       { pendingLabel: 'posting…' }
     )
+    if (posted === true) {
+      setDisabledReason(button, 'This review has already been posted')
+      button.textContent = 'posted'
+    }
   }
 
   /**
@@ -1332,6 +1340,7 @@ export function wireReview(root, session, opts = {}) {
     if (doc.querySelector('dialog[open]') !== null) {
       return
     }
+    event.preventDefault()
     const order = buildNavOrder(session.artifact)
     const points = openPoints(session.artifact.points, session.state)
     switch (decided.action) {

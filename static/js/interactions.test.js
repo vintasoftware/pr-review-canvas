@@ -1281,6 +1281,7 @@ describe('comment composers', () => {
 
   it('comments on the pull request itself', async () => {
     const { root, calls } = setup()
+    expect(root.querySelector('.pr-conversation > summary')?.textContent).toBe('Conversation · 2')
     click(root, '[data-act="pr-comment"]')
     const area = root.querySelector('.pr-composer-host textarea')
     if (!(area instanceof HTMLTextAreaElement)) {
@@ -1296,6 +1297,7 @@ describe('comment composers', () => {
       'looks fine'
     )
     expect(root.querySelector('.pr-composer-host .composer-box')).toBeNull()
+    expect(root.querySelector('.pr-conversation > summary')?.textContent).toBe('Conversation · 3')
   })
 })
 
@@ -1895,11 +1897,13 @@ describe('capability gating and sign-off', () => {
 
   it('announces the returned outcome when comments publish but approval fails', async () => {
     const warning = 'Comments published, but approval failed. Approve the merge request in GitLab.'
-    const { root } = setup({
+    let submissions = 0
+    const { root, session } = setup({
       state: { ...BASE, reviewed: { 'layer:run-path': true } },
       fetchReviewBody: async () => ({ headSha: HEAD, body: 'ship it', unreviewed: [], pending: 1 }),
       api: {
         postReview: async (_pr, input) => {
+          submissions++
           expect(input.event).toBe('APPROVE')
           return {
             review: {
@@ -1927,6 +1931,14 @@ describe('capability gating and sign-off', () => {
       `review posted with 1 comment · see it on GitHub ${warning}`
     )
     expect(root.querySelector('.toast')).toBeNull()
+    const post = root.querySelector('[data-act="signoff-post"]')
+    expect(post?.hasAttribute('disabled')).toBe(true)
+    expect(post?.textContent).toBe('posted')
+    await session.setDismissed('fp-1', true)
+    expect(post?.hasAttribute('disabled')).toBe(true)
+    click(root, '[data-act="signoff-post"]')
+    await flush()
+    expect(submissions).toBe(1)
   })
 
   it('sends no body when the reader emptied the box, and says that changes were asked for', async () => {
