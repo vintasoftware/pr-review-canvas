@@ -50,6 +50,9 @@
   out a detail instead of the words a sentence needs. The caps are unchanged.
 - A project with its own copy of `generation-format.md` keeps the old wording until it takes the
   **Writing** section from the bundled template.
+- A missing-test attention point reads as the generator's note on the gap, without the line
+  `The layer "…" lists this behavior without a test.` in front of it. A gap with no note reads
+  `No test covers this behavior.`
 
 ## 0.10.0
 

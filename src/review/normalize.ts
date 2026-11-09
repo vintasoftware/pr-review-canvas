@@ -148,13 +148,13 @@ function testPoints(
     const title =
       t.title ??
       shortTitle(t.behavior, titleCap, titleCap >= 13 ? 'Missing test' : titleCap >= 5 ? 'Test' : '')
-    const note = t.note === undefined ? '' : ` ${t.note}`
+    // The writer's note is the explanation; the point sits in its layer, so it need not say so.
     const point: Unassigned = {
       kind: 'tests',
       level: 'check',
       title,
       ...anchor,
-      body: `The layer "${layer.title}" lists this behavior without a test.${note}`,
+      body: t.note?.trim() ? t.note : 'No test covers this behavior.',
       audience: t.audience ?? 'reviewer',
       fingerprint: fingerprint({ kind: 'tests', path: anchor.path, title }),
       origin: 'tests',
