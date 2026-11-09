@@ -747,12 +747,11 @@ screen, where the rail is a strip of chips, the strip scrolls to that chip. A st
 of the one before under a page that stays at the top, from its links and its keys alike, and the URL
 names it with the same fragment the layers use (`#layer-…`, `#point-…`), so a reload, back and
 forward, and a switch of view keep your place. Back or forward to a place you read as a stop, while
-**Layers** shows, goes to its layer or card there; every other Back or forward keeps the place you
-left. Since a stop shows the layer's own cards, whatever you do there is what the layer has.
-Whatever leads to a line, a chunk, a file or a point (a link, **go to code**, `c`, a proposed
-comment) opens the stop that shows it; when none does, the page moves to your layers, goes there,
-and a note says so. On a canvas with no point the view shows the overview and the layers, one at a
-time.
+**Layers** shows, goes to its layer or card there. Since a stop shows the layer's own cards,
+whatever you do there is what the layer has. Whatever leads to a line, a chunk, a file or a point (a
+link, **go to code**, `c`, a proposed comment) opens the stop that shows it; when none does, the
+page moves to your layers, goes there, and a note says so. On a canvas with no point the view shows
+the overview and the layers, one at a time.
 
 On a canvas with points, a switch at the head of the rail moves between **Attention points** and
 **Layers**, and keeps the keyboard on the button you pressed. **Layers** shows the layer view **Show

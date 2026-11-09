@@ -60,7 +60,7 @@
   in the layers. A target no stop shows moves the page to the layers, with a note that says so.
 - A stop takes the place of the one before under a page at its top, from the keys as from its links.
   Back and forward to a place you read as a stop, while **Layers** shows, go to its layer or card
-  there; elsewhere they keep the place you left. A layer's stop opens its tests, and closes them
+  there; other Back and forward work as before. A layer's stop opens its tests, and closes them
   again on leaving when the layers had them closed.
 - A point the author resolved keeps its stop, folded under the author's reason, though the layers
   hide it until **show the N resolved**.
