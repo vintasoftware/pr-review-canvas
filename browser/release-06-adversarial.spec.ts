@@ -91,6 +91,7 @@ for (const receipt of ['available', 'unavailable']) {
     } else {
       // The receipt could not be read: the dialog stays open with the warning.
       await expect(page.locator('.signoff-result')).toContainText('could not be loaded')
+      await expect(page.locator('.signoff-result')).toContainText('review posted with 2 comments')
       await page.locator('[data-act="signoff-close"]').click()
     }
     await openChat()

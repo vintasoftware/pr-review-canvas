@@ -91,6 +91,26 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await expect(other).toBeVisible()
 })
 
+test.describe('compact attention points saved in the settings', () => {
+  test('draws the open page’s lists compact at once, and whole again', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl)
+    const prose = page.locator('#point-p-1 .prose')
+    await expect(prose).toBeVisible()
+    const save = async (on: boolean) => {
+      await page.locator('#settings').click()
+      await page.locator('#set-compact-points').setChecked(on)
+      await page.locator('[data-act="settings-save"]').click()
+      await expect(page.locator('#settings-dialog')).toBeHidden()
+    }
+    await save(true)
+    await expect(prose).toBeHidden()
+    await expect(page.locator('#point-p-1 .p-toggle')).toBeVisible()
+    await save(false)
+    await expect(prose).toBeVisible()
+    await expect(page.locator('.points-density').first()).toBeHidden()
+  })
+})
+
 test.describe('reading by attention points with compact points', () => {
   test.use({ settings: { readByPoints: true, compactPoints: true } })
 
@@ -238,6 +258,24 @@ test.describe('reading by attention points', () => {
       'true'
     )
     await expect(page.locator('article.file[data-path="src/new-name.ts"]')).toBeInViewport()
+    await expect(page.locator('.toast')).toHaveText('no stop shows this, so it opens in the layers')
+  })
+
+  test('back to a stop while the layers show goes to its layer there, from the top the stop left', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#point-p-1')
+    await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
+    await page.keyboard.press('n')
+    await expect(page).toHaveURL(/#layer-other$/)
+    await page.keyboard.press('n')
+    await expect(page).toHaveURL(/#point-p-2$/)
+    await page.locator('nav.rail .rail-view [data-view="layers"]').click()
+    await expect(page.locator('[data-lens]')).toHaveCount(0)
+    await page.goBack()
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(page.locator('#layer-other')).toBeInViewport()
   })
 
   test('a stop keeps its code in sight when its file is marked reviewed', async ({ page, reviewUrl }) => {
@@ -330,6 +368,18 @@ test.describe('reading by attention points', () => {
     )
     expect(new Set(chips.filter(chip => chip.link).map(chip => chip.inset)).size).toBe(1)
     expect(new Set(chips.map(chip => chip.middle)).size).toBe(1)
+    // The strip follows the stop: the last point's chip comes into view, cut to fit.
+    await page.locator('#stop-nav a', { hasText: 'go to its 1 attention point' }).click()
+    for (const key of ['n', 'n', 'n']) await page.keyboard.press(key)
+    await expect(page).toHaveURL(/#point-p-3$/)
+    const chip = page.locator('nav.rail a[href="#point-p-3"]')
+    await expect(chip).toHaveAttribute('aria-current', 'location')
+    const inStrip = await chip.evaluate(el => {
+      const strip = el.closest('.tree')?.getBoundingClientRect()
+      const box = el.getBoundingClientRect()
+      return strip !== undefined && box.left >= strip.left && box.right <= strip.right
+    })
+    expect(inStrip).toBe(true)
   })
 
   test('the settings turn reading by attention points off and on, on the open page', async ({
@@ -358,5 +408,38 @@ test.describe('reading by attention points', () => {
       'aria-pressed',
       'true'
     )
+    // The URL names the stop that opened, so a reload or a copied link opens on it.
+    const lensed = await page.locator('[data-lens]').getAttribute('id')
+    await expect(page).toHaveURL(new RegExp(`#${lensed}$`))
+  })
+
+  test('the rail’s switch keeps the keyboard on the button it pressed', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl)
+    await page.locator('nav.rail .rail-view [data-view="layers"]').focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('nav.rail .rail-view [data-view="layers"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await expect(page.locator('nav.rail .rail-view [data-view="layers"]')).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('nav.rail .rail-view [data-view="points"]')).toBeFocused()
+  })
+
+  test('the step keys leave the page at its top, and a layer’s stop gives its tests back closed', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl)
+    const tests = page.locator('#layer-run-path details.test-map')
+    await expect(tests).toHaveAttribute('open', '')
+    for (const key of ['n', 'n', ']']) {
+      await page.keyboard.press(key)
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    }
+    await expect(page).toHaveURL(/#point-p-2$/)
+    await page.locator('nav.rail .rail-view [data-view="layers"]').click()
+    await expect(tests).not.toHaveAttribute('open', '')
   })
 })

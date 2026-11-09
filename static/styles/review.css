@@ -350,9 +350,17 @@
   font-weight: 600;
   margin-bottom: 2px;
   display: flex;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+/* The title, its pills and its place wrap inside their own box, beside the toggle. */
+.f-head {
+  display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: baseline;
+  min-width: 0;
 }
 .f-title .loc {
   font-weight: 400;
@@ -415,9 +423,11 @@
   letter-spacing: normal;
 }
 .f-title .p-toggle {
+  flex: none;
   margin-left: auto;
   font-size: 12px;
   font-weight: 400;
+  white-space: nowrap;
 }
 .p-summary {
   margin: 0;

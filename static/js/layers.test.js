@@ -21,6 +21,7 @@ import {
 import {
   DEFERRED_DIFF_LINES,
   defineLayerElements,
+  drawCardsOnScreen,
   elsewhereHtml,
   fileCount,
   getFoldLevel,
@@ -143,6 +144,14 @@ describe('layer sections', () => {
     expect(card?.classList.contains('is-reviewed')).toBe(true)
     expect(card?.querySelector('.file-body')?.hasAttribute('hidden')).toBe(true)
     expect(card?.querySelector('.chev')?.getAttribute('aria-expanded')).toBe('false')
+    expect(card?.querySelector('.chev')?.getAttribute('aria-label')).toBe('Expand file')
+    // The label says what a press does, so it turns with the card.
+    if (card instanceof HTMLElement) setCardCollapsed(card, false)
+    expect(card?.querySelector('.chev')?.getAttribute('aria-label')).toBe('Collapse file')
+    const layer = document.querySelector('section.layer')
+    if (layer instanceof HTMLElement) setCardCollapsed(layer, true)
+    expect(layer?.querySelector('.layer-h > .chev')?.getAttribute('aria-label')).toBe('Expand layer')
+    if (card instanceof HTMLElement) setCardCollapsed(card, true)
     const box = card?.querySelector('input[data-reviewed-id]')
     expect(box?.hasAttribute('checked')).toBe(true)
     expect(box?.getAttribute('data-reviewed-id')).toBe('layer:run-path/file:src_app_ts')
@@ -713,6 +722,31 @@ describe('hydration', () => {
     cb([{ isIntersecting: true }])
     expect(el.querySelectorAll('table.diff').length).toBe(1)
     expect(disconnect).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+    setRenderContext(null)
+  })
+
+  it('draws the cards on screen that wait to be seen, and only those, so a scroll can land again', () => {
+    setRenderContext(ctx())
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const seen = upgradedCard()
+    const below = upgradedCard()
+    for (const el of [seen, below]) el.connectedCallback()
+    vi.spyOn(seen, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -20, 100, 140))
+    vi.spyOn(below, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, window.innerHeight + 10, 100, 140)
+    )
+    expect(drawCardsOnScreen(document)).toBe(1)
+    expect(seen.rendered).toBe(true)
+    expect(below.rendered).toBe(false)
+    // A card already drawn is not drawn again.
+    expect(drawCardsOnScreen(document)).toBe(0)
     vi.unstubAllGlobals()
     setRenderContext(null)
   })

@@ -103,7 +103,7 @@ test('generated missing-test points use reviewer routing, changed code, and a wo
   await page.goto(server.url)
   const card = page.locator(`section.layer li.finding[data-fingerprint="${point.fingerprint}"]`)
   await expect(card.locator('.pill.audience')).toHaveText('reviewer')
-  await expect(card.locator('.f-title > span').first()).toHaveText(point.title)
+  await expect(card.locator('.f-title .p-title')).toHaveText(point.title)
   await expect(card.locator('[data-act="point-settle"]')).toHaveCount(0)
   expect(point.title).toMatch(/(?:A|missing|behavior)…$/)
   expect(point.title.length).toBeLessThanOrEqual(90)

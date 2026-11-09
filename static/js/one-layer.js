@@ -6,8 +6,9 @@
 // reader is sent to stays hidden. A review mark is the exception: it moves on to the next card
 // only inside the layer on screen. With `points` the page shows one stop of the one-point view
 // (`point-view.js`) the same way, under a page at its top, and a target no stop shows takes the
-// page to its layers. With `all` this module does nothing.
+// page to its layers, with a note that says so. With `all` this module does nothing.
 import { cssEscape } from './anchors.js'
+import { toast } from './commands.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
@@ -22,6 +23,13 @@ import { markRailCurrent } from './scroll-spy.js'
 
 /** The overview and every layer section: the parts of the page the rail links to. */
 const SECTION_SELECTOR = '#overview, pr-layer > section'
+
+/**
+ * The state of a history entry the one-point view shows. Its scroll is a stop's, the top of the
+ * page, so back or forward to it while the layers show goes to what its fragment names; every
+ * other entry keeps the scroll the browser brings back.
+ */
+const STOP_ENTRY = { stop: true }
 
 /**
  * The sections of the page, in page order.
@@ -158,6 +166,7 @@ export function initOneLayer(root, opts) {
     shownHash = stop === undefined ? '#overview' : `#${stop.id}`
     showStop(root, section, stops(), stop, ctx.files, ctx.artifact)
     markRailCurrent(root, shownHash.slice(1))
+    win.history.replaceState(STOP_ENTRY, '', win.location.href)
   }
 
   /** @param {HTMLElement | null} section */
@@ -186,8 +195,23 @@ export function initOneLayer(root, opts) {
     const stop = section.id === 'overview' ? undefined : stopShowing(all, target, ctx.files, current)
     if (section.id !== 'overview' && stop === undefined) {
       setView(layersView, `#${section.id}`)
+      // The view changed under the reader, so the page says why.
+      toast(root, 'no stop shows this, so it opens in the layers', { tone: 'note' })
     } else if (stop !== current) {
       showPointStop(stop)
+    }
+  }
+
+  /**
+   * A stop takes the place of the one before under a page at its top, whether a link, a key or
+   * back and forward brought it. Only a point's row further down, which stands for a point of the
+   * Other layer, is scrolled to from there.
+   * @param {HTMLElement | null} target what the stop's fragment names
+   */
+  const showFromTop = target => {
+    win.scrollTo({ top: 0 })
+    if (target !== null && target.getBoundingClientRect().top >= win.innerHeight) {
+      target.scrollIntoView({ block: 'center' })
     }
   }
 
@@ -204,7 +228,7 @@ export function initOneLayer(root, opts) {
     if (el === null || view !== 'points') {
       return false
     }
-    win.scrollTo({ top: 0 })
+    showFromTop(el)
     return true
   }
 
@@ -307,14 +331,15 @@ export function initOneLayer(root, opts) {
         revealFragment(href)
       } else if (followInPoints(href)) {
         event.preventDefault()
-        win.history.pushState(null, '', href)
+        win.history.pushState(STOP_ENTRY, '', href)
       }
     },
     { signal: listeners.signal }
   )
 
-  // Back and forward between plain fragments: what the fragment names opens, and when its section
-  // was hidden the browser could not scroll to it, so the scroll is repeated here.
+  // Back and forward between plain fragments: what the fragment names opens. The scroll is
+  // repeated here when the browser could not scroll to it, its section hidden, or when it brought
+  // back a stop's scroll, which means nothing in the layers.
   win.addEventListener(
     'hashchange',
     () => {
@@ -327,8 +352,11 @@ export function initOneLayer(root, opts) {
       if (el === null) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
         scrollIntoViewSafe(el, 'start')
-      } else {
-        revealFragment(win.location.hash)
+        return
+      }
+      revealFragment(win.location.hash)
+      if (win.history.state?.stop === true) {
+        el.scrollIntoView({ block: 'start' })
       }
     },
     { signal: listeners.signal }
@@ -352,7 +380,11 @@ export function initOneLayer(root, opts) {
       // Out of the stops the URL keeps the stop, which the layers show as its card or layer.
       const here = view === 'points' ? shownHash : from
       if (here !== undefined && here !== '') {
-        win.history.replaceState(null, '', `${win.location.pathname}${win.location.search}${here}`)
+        win.history.replaceState(
+          view === 'points' ? STOP_ENTRY : null,
+          '',
+          `${win.location.pathname}${win.location.search}${here}`
+        )
       }
       const target = view !== 'all' || here === undefined ? null : targetFor(here)
       if (target === null) {
@@ -362,9 +394,10 @@ export function initOneLayer(root, opts) {
       }
     },
     /**
-     * In the one-point view, shows the next or previous stop that `fits`, and returns what it shows
-     * to take the focus: null at either end, undefined in the other views, whose keys walk the
-     * layers. With `here`, the stop on screen comes first when it fits, for a reader not on it yet.
+     * In the one-point view, shows the next or previous stop that `fits`, as its links do, and
+     * returns what it shows to take the focus: null at either end, undefined in the other views,
+     * whose keys walk the layers. With `here`, the stop on screen comes first when it fits, for a
+     * reader not on it yet.
      * @param {1 | -1} direction
      * @param {(stop: Stop) => boolean} fits
      * @param {boolean} [here]
@@ -388,9 +421,11 @@ export function initOneLayer(root, opts) {
       }
       if (next !== shown) {
         showPointStop(next)
-        win.history.pushState(null, '', `#${next.id}`)
+        win.history.pushState(STOP_ENTRY, '', `#${next.id}`)
       }
-      return stopTarget(root, next)
+      const target = stopTarget(root, next)
+      showFromTop(target)
+      return target
     },
     redraw,
     /** The layer view the settings now choose, which the rail's switch goes to. */

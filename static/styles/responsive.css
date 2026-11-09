@@ -50,9 +50,17 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    max-width: min(20rem, 75vw);
     border: 1px solid var(--ink);
     padding: 5px 10px;
     box-shadow: 1px 1px 0 var(--shadow);
+  }
+  /* A long title is cut to its chip, so the strip shows the chips around the current one. */
+  .tree .t {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .tree .layers a,
   .tree .rail-points li:not(.pt-layer) a {
