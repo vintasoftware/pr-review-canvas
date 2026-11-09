@@ -159,7 +159,7 @@ export class PrTourElement extends HTMLElement {
       prNumber: bundle.key,
       startHtml: tourGenerationStartHtml,
       onEnded: job => this.generationEnded(job),
-      onError: message => toast(this, message),
+      onError: message => toast(this, message, { tone: 'failed' }),
     }))
     generation.attach(bundle)
     for (const id of ['#regenerate', '#generate-start', '#stale-generate']) {
@@ -189,7 +189,7 @@ export class PrTourElement extends HTMLElement {
           fetchShared,
           async () => {
             const result = await fetchSharedTour(bundle.key)
-            for (const warning of result.warnings) toast(this, warning)
+            for (const warning of result.warnings) toast(this, warning, { tone: 'note' })
             if (result.imported) {
               await this.boot()
             } else {
@@ -197,7 +197,8 @@ export class PrTourElement extends HTMLElement {
                 this,
                 result.found
                   ? 'the tour shared on the pull request is no newer than this one'
-                  : 'no tour is shared on the pull request'
+                  : 'no tour is shared on the pull request',
+                { tone: 'note' }
               )
             }
           },
@@ -211,7 +212,7 @@ export class PrTourElement extends HTMLElement {
         importImpl: importTour,
         validate: validateTourFilename,
         onImported: result => {
-          for (const warning of result.warnings) toast(this, warning)
+          for (const warning of result.warnings) toast(this, warning, { tone: 'note' })
           void this.boot()
         },
       })
@@ -231,7 +232,8 @@ export class PrTourElement extends HTMLElement {
           this,
           job.phase === 'cancelled'
             ? 'tour generation stopped'
-            : `tour generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`
+            : `tour generation failed: ${job.error?.message ?? 'open the generation dialog for details'}`,
+          { tone: job.phase === 'cancelled' ? 'note' : 'failed' }
         )
       }
       return
@@ -288,7 +290,8 @@ export class PrTourElement extends HTMLElement {
     this.saver = bundle.preview
       ? null
       : createSaver(reader => saveReader(this.key, headSha, reader), {
-          onError: err => toast(this, `could not save your progress: ${toEnvelopeError(err).message}`),
+          onError: err =>
+            toast(this, `could not save your progress: ${toEnvelopeError(err).message}`, { tone: 'failed' }),
         })
     this.innerHTML =
       header +
@@ -622,11 +625,14 @@ export class PrTourElement extends HTMLElement {
           ? 'prompt written · record shared on the pull request'
           : sharing.status === 'failed'
             ? `prompt written · ${sharing.warning}`
-            : 'prompt written'
+            : 'prompt written',
+        { tone: sharing.status === 'failed' ? 'note' : 'done' }
       )
     } catch (err) {
       const error = toEnvelopeError(err)
-      toast(this, error.hint === undefined ? error.message : `${error.message} · ${error.hint}`)
+      toast(this, error.hint === undefined ? error.message : `${error.message} · ${error.hint}`, {
+        tone: 'failed',
+      })
       this.renderStep()
     }
   }

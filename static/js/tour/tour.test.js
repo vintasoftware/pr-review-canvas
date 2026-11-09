@@ -296,6 +296,7 @@ describe('the tour page', () => {
     expect(document.querySelector('.toast')?.textContent).toBe(
       'prompt written · record shared on the pull request'
     )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('done')
     expect(server.calls.filter(c => c.startsWith('POST'))).toEqual([
       'POST /r/acme/widgets/api/tours/42/finish',
     ])
@@ -567,8 +568,10 @@ describe('the tour page', () => {
       error: { code: 'GENERATION_FAILED', message: 'no' },
     })
     expect(document.querySelector('.toast')?.textContent).toBe('tour generation failed: no')
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('failed')
     await el.generationEnded({ ...TOUR_JOB, phase: 'cancelled' })
     expect(text()).toContain('tour generation stopped')
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
     published = true
     await el.generationEnded(TOUR_JOB)
     await drawn('.tour-cover-actions')
@@ -696,6 +699,7 @@ describe('the tour page', () => {
     await vi.waitFor(() =>
       expect(document.querySelector('.toast')?.textContent).toBe('prompt written · boom')
     )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
     // The clipboard may be missing.
     vi.stubGlobal('navigator', {})
     click('[data-act="copy"]')
