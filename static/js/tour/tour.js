@@ -646,7 +646,7 @@ export class PrTourElement extends HTMLElement {
       await copyToClipboard(text)
       button.textContent = 'copied'
     } catch {
-      toast(this, 'clipboard is not available; select the prompt and copy it')
+      toast(this, 'clipboard is not available; select the prompt and copy it', { tone: 'failed' })
     }
   }
 
@@ -671,7 +671,7 @@ export class PrTourElement extends HTMLElement {
           this.go(Number(target.dataset['step']))
         } else {
           const title = stepTitle(/** @type {Step} */ (this.steps[Number(target.dataset['step'])]))
-          toast(this, `${title.replaceAll('`', '')} ${locked}`)
+          toast(this, `${title.replaceAll('`', '')} ${locked}`, { tone: 'note' })
         }
         return
       }
@@ -838,7 +838,7 @@ export class PrTourElement extends HTMLElement {
       tellFramesTheme(this, this.theme)
       // Written to `.pr-review/settings.yml`; the tour has no skin of its own to save.
       void saveAppearance({ theme: this.theme }).catch(() =>
-        toast(this, 'could not save the theme to settings.yml')
+        toast(this, 'could not save the theme to settings.yml', { tone: 'failed' })
       )
     })
   }

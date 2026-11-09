@@ -249,6 +249,7 @@ describe('the tour page', () => {
     expect(document.querySelector('.tour-rail-seg[data-step="6"]')?.getAttribute('data-state')).toBe('ahead')
     click('.tour-rail-seg[data-step="6"]')
     expect(location.hash).toBe('#decision-sum-over-product')
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
 
     // Nothing is chosen at first. `k` keeps and `a` takes the alternative, each settling it; undo
     // takes the pick back, and a click on the decision's text leaves it alone.
@@ -706,6 +707,7 @@ describe('the tour page', () => {
     await vi.waitFor(() =>
       expect(document.querySelector('.toast')?.textContent).toContain('clipboard is not available')
     )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('failed')
   })
 
   it('offers the agent on the plan when chat is on, and shows its plan card', async () => {
