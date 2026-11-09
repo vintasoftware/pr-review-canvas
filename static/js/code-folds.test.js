@@ -362,6 +362,57 @@ describe('holdFolds', () => {
   })
 })
 
+describe('holdFolds across runs that regroup', () => {
+  // Unified folds each import alone, deleted then added; split pairs the two into one fold.
+  const patch = [
+    '@@ -1,3 +1,3 @@',
+    ' keep()',
+    "-import { a } from './a'",
+    '-foo()',
+    "+import { a2 } from './a'",
+    '+bar()',
+  ].join('\n')
+  /**
+   * @param {HTMLElement} card
+   * @param {import('./diff-layouts.js').DiffLayout} layout
+   */
+  const draw = (card, layout) => {
+    setDrawnDiffLayout(layout)
+    const body = card.querySelector('.file-body')
+    if (body) body.innerHTML = renderDiff({ key: 'src_app_ts', path: 'src/app.ts' }, patch)
+  }
+  const shown = (/** @type {ParentNode} */ card) =>
+    Array.from(card.querySelectorAll('tr.more.fold [data-act="show-fold"]'), b =>
+      b.getAttribute('aria-expanded')
+    )
+  afterEach(() => setDrawnDiffLayout('unified'))
+
+  it('opens every unified run of a split fold the reader opened', () => {
+    const card = mount()
+    draw(card, 'split')
+    const summary = card.querySelector('tr.more.fold')
+    if (!(summary instanceof HTMLTableRowElement)) throw new Error('no summary')
+    setFoldShown(summary, true)
+    const restore = holdFolds(card, 'src_app_ts')
+    draw(card, 'unified')
+    restore()
+    expect(shown(card)).toEqual(['true', 'true'])
+  })
+
+  it('opens the split fold when the reader opened either unified run', () => {
+    const card = mount()
+    draw(card, 'unified')
+    const summary = card.querySelector('tr.more.fold')
+    if (!(summary instanceof HTMLTableRowElement)) throw new Error('no summary')
+    setFoldShown(summary, true)
+    const restore = holdFolds(card, 'src_app_ts')
+    draw(card, 'split')
+    expect(shown(card)).toEqual(['false'])
+    restore()
+    expect(shown(card)).toEqual(['true'])
+  })
+})
+
 describe('setFoldShown', () => {
   it('starts hidden, then shows the folded rows and relabels the button', () => {
     const card = mountFolded()

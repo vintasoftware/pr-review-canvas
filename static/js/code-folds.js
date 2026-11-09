@@ -313,21 +313,28 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
  * @returns {() => void}
  */
 export function holdFolds(card, key) {
-  const runs = Array.from(card.querySelectorAll('tr.more.fold + tr.folded'), row => ({
-    line: parseLineId(row.id),
-    shown: row.classList.contains('shown'),
-  }))
+  // Every line each folded row shows, both sides of a split row, since a run of one layout can be
+  // several runs of the other.
+  const lines = Array.from(card.querySelectorAll('tr.folded')).flatMap(row => {
+    const shown = row.classList.contains('shown')
+    const old = row.getAttribute('data-old')
+    const oldLine = old === null ? null : { side: /** @type {const} */ ('old'), line: Number(old) }
+    return [parseLineId(row.id), oldLine].map(line => ({ line, shown }))
+  })
   const expanded = new Set(
     foldsOf(card)
       .filter(w => w.expanded)
       .map(w => w.fold)
   )
   return () => {
-    for (const { line, shown } of runs) {
+    /** @type {Map<HTMLTableRowElement, boolean>} */
+    const summaries = new Map()
+    for (const { line, shown } of lines) {
       const row = line && findRow(card, key, line.side, line.line)
       const summary = row && foldSummaryFor(row)
-      if (summary) setFoldShown(summary, shown)
+      if (summary) summaries.set(summary, summaries.get(summary) === true || shown)
     }
+    for (const [summary, shown] of summaries) setFoldShown(summary, shown)
     for (const w of foldsOf(card).filter(f => expanded.has(f.fold))) {
       w.expanded = true
       paintFold(w)
