@@ -204,7 +204,12 @@ export class PrTourElement extends HTMLElement {
             if (outcome === 'imported') {
               await this.boot()
             }
-            this.tellImport([SHARED_TOUR_SAYS[outcome], ...warnings], outcome === 'unreadable')
+            // Said once the page is redrawn, since a redraw takes a toast down with the page, and in
+            // one toast, since each toast replaces the one before.
+            const said = [SHARED_TOUR_SAYS[outcome], ...warnings].filter(line => line !== null)
+            if (said.length > 0) {
+              toast(this, said.join(' · '), { tone: outcome === 'unreadable' ? 'failed' : 'note' })
+            }
           },
           { pendingLabel: 'looking…' }
         )
@@ -215,23 +220,8 @@ export class PrTourElement extends HTMLElement {
         prNumber: bundle.key,
         importImpl: importTour,
         validate: validateTourFilename,
-        onImported: result => {
-          void this.boot().then(() => this.tellImport(result.warnings, false))
-        },
+        onImported: () => void this.boot(),
       })
-    }
-  }
-
-  /**
-   * Says how an import went, once the page it may have redrawn is up: a redraw takes a toast down
-   * with the page. One toast holds every line, since each toast replaces the one before.
-   * @param {(string | null)[]} lines
-   * @param {boolean} failed
-   */
-  tellImport(lines, failed) {
-    const said = lines.filter(line => line !== null)
-    if (said.length > 0) {
-      toast(this, said.join(' · '), { tone: failed ? 'failed' : 'note' })
     }
   }
 

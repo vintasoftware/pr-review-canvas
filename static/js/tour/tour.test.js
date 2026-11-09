@@ -741,11 +741,7 @@ describe('the tour page', () => {
         setRequestHeader: () => undefined,
         send: () => {
           imported = true
-          xhr.responseText = JSON.stringify({
-            status: 'imported',
-            headSha: HEAD,
-            warnings: ['imported a tour exported from other/repo'],
-          })
+          xhr.responseText = JSON.stringify({ status: 'imported', headSha: HEAD, warnings: [] })
           queueMicrotask(() => xhr.onload?.())
         },
       }
@@ -758,10 +754,6 @@ describe('the tour page', () => {
     input.dispatchEvent(new Event('change'))
     await drawn('.tour-cover-actions')
     expect(uploads).toEqual(['POST /r/acme/widgets/api/tours/42/import'])
-    // Its warning is still up once the tour is drawn.
-    await vi.waitFor(() =>
-      expect(document.querySelector('.toast')?.textContent).toBe('imported a tour exported from other/repo')
-    )
   })
 
   it('shows the error card with a retry when the bundle cannot be read, and the stale bar', async () => {

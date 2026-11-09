@@ -149,7 +149,7 @@ export async function fetchSharedTour(
     }
     try {
       const result = await importTour(ctx, { bytes: download.bytes, prNumber: number })
-      return { outcome: result.status, warnings: [...warnings, ...result.warnings] }
+      return { outcome: result.status, warnings }
     } catch (err) {
       warnings.push(`${candidate.name}: ${err instanceof Error ? err.message : String(err)}`)
     }
