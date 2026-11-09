@@ -308,6 +308,39 @@ describe('the grilling with an agent', () => {
     grill.stop()
   })
 
+  it('keeps an earlier restatement without its commands when the reader edits the newest and cancels', async () => {
+    const dialog = mountDialog()
+    /** @param {string} what */
+    const block = what =>
+      `\`\`\`restatement\n{ "what": "${what}", "where": ["src/app.ts:4"], "unchanged": "Callers." }\n\`\`\``
+    const server = fakeApi({
+      history: [
+        { role: 'user', text: 'restate it', at: 'x', context: { kind: 'tour-decision', key: decision.key } },
+        {
+          role: 'assistant',
+          text: `First:\n${block('Add.')}\n\nNo, rather:\n${block('Multiply.')}`,
+          at: 'x',
+        },
+      ],
+    })
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove: () => {},
+      onReader: () => {},
+      api: server.api,
+    })
+    await grill.open(decision, undefined)
+    const approvals = () => dialog.querySelectorAll('[data-act="approve"]').length
+    expect(approvals()).toBe(1)
+    click('[data-act="edit"]')
+    click('[data-act="redraw"]')
+    expect(approvals()).toBe(1)
+    expect(dialog.querySelector('.tour-restate.earlier h4')?.textContent).toBe('An earlier restatement')
+    grill.stop()
+  })
+
   it('offers to stop an answer that runs elsewhere and send again, dropping nothing the reader said', async () => {
     const dialog = mountDialog()
     const server = fakeApi({ answers: ['BUSY', 'What should happen to the callers?', 'BUSY', 'Noted.'] })

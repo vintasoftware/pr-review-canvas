@@ -602,6 +602,7 @@ export function createGrill(options) {
       const body = turnEl?.querySelector('.prose')
       if (turn !== undefined && body instanceof HTMLElement) {
         body.innerHTML = answerHtml(turn.text, bundle, restatements, `t${i}`)
+        markEarlierCards()
       } else {
         render()
       }
