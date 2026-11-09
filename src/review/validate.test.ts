@@ -42,15 +42,38 @@ function errorsOf(output: unknown, over: Partial<ValidationInput> = {}): Validat
 }
 
 describe('validateModelOutput', () => {
-  it('caps file notes by visible text while allowing long link targets', () => {
-    const output = clean()
-    const file = output.layers[0]!.files[0]!
-    file.note = 'x'.repeat(TEXT_CAPS.annotation + 1)
-    expect(errorsOf(output)).toEqual([
-      expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'layers.0.files.0.note' }),
-    ])
-    file.note = `[short](https://example.com/${'x'.repeat(TEXT_CAPS.annotation)})`
-    expect(errorsOf(output)).toEqual([])
+  it('holds prose only to its raw ceiling, never to a visible cap', () => {
+    const prose: Array<[keyof typeof TEXT_CAPS, string, (o: ModelOutput, v: string) => void]> = [
+      ['summary', 'summary', (o, v) => void Object.assign(o, { summary: v })],
+      ['rationale', 'layers.0.rationale', (o, v) => void Object.assign(layer(o, 0), { rationale: v })],
+      ['decisions', 'layers.0.decisions', (o, v) => void Object.assign(layer(o, 0), { decisions: v })],
+      ['checkByHand', 'layers.0.checkByHand', (o, v) => void Object.assign(layer(o, 0), { checkByHand: v })],
+      [
+        'annotation',
+        'layers.0.files.0.note',
+        (o, v) => void Object.assign(layer(o, 0).files[0]!, { note: v }),
+      ],
+      [
+        'annotation',
+        'layers.0.files.0.annotations.0.text',
+        (o, v) => void Object.assign(layer(o, 0).files[0]!.annotations[0]!, { text: v }),
+      ],
+      ['pointBody', 'points.0.body', (o, v) => void Object.assign(o.points[0]!, { body: v })],
+    ]
+    for (const [key, where, set] of prose) {
+      const long = clean()
+      set(long, 'x'.repeat(TEXT_CAPS[key] * 2))
+      expect(errorsOf(long), where).toEqual([])
+      const runaway = clean()
+      set(runaway, 'x'.repeat(TEXT_CAPS[key] * 4 + 1))
+      expect(errorsOf(runaway), where).toEqual([
+        {
+          code: 'TEXT_TOO_LONG',
+          where,
+          message: `${where}: ${TEXT_CAPS[key] * 4 + 1} raw chars, hard limit ${TEXT_CAPS[key] * 4}`,
+        },
+      ])
+    }
   })
 
   it('keeps descriptive fold fields in the validated JSON', () => {
@@ -140,25 +163,29 @@ describe('validateModelOutput', () => {
 
   it('TEXT_TOO_LONG: measures the visible text, names the cap in force, and still runs the layering rules', () => {
     const output = clean()
-    layer(output, 0).rationale = 'r'.repeat(301)
-    expect(errorsOf(output).map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'layers.0.rationale']])
+    layer(output, 0).title = 't'.repeat(61)
+    expect(errorsOf(output).map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'layers.0.title']])
     // The message names the overage and where the cap falls in the author's own words.
-    expect(errorsOf(output)[0]?.message).toContain('layers.0.rationale: 301 visible chars, cap 300;')
-    expect(errorsOf(output)[0]?.message).toContain('what fits ends at "...rrrr')
+    expect(errorsOf(output)[0]?.message).toContain('layers.0.title: 61 visible chars, cap 60;')
+    expect(errorsOf(output)[0]?.message).toContain('what fits ends at "...tttt')
     layer(output, 1).files.pop()
     expect(errorsOf(output).map(e => e.code)).toEqual(['TEXT_TOO_LONG', 'HUNK_UNASSIGNED'])
     expect(validateModelOutput(output, input()).output).toBeNull()
-    const capped = errorsOf(clean(), { caps: { ...TEXT_CAPS, summary: 50 } })
-    expect(capped.map(e => [e.code, e.where])).toEqual([['TEXT_TOO_LONG', 'summary']])
-    expect(capped[0]?.message).toContain(`summary: ${visibleLength(clean().summary)} visible chars, cap 50;`)
-    // A long link target and backticks do not count; only the text a reader sees does.
-    const linked = clean()
-    layer(linked, 0).rationale = `${'r'.repeat(280)} [see](#hunk:${'p'.repeat(200)}/x.ts#1) \`code\``
-    // 484 raw characters, 291 visible: only the unknown link target is reported.
-    expect(errorsOf(linked).map(e => e.code)).toEqual(['LINK_UNRESOLVED'])
-    layer(linked, 0).rationale = `${'r'.repeat(297)} [see](#hunk:src/app.ts#1)`
-    expect(errorsOf(linked).map(formatValidationError)[0]).toContain(
-      'TEXT_TOO_LONG layers.0.rationale: 301 visible chars, cap 300;'
+    const capped = errorsOf(clean(), { caps: { ...TEXT_CAPS, layerTitle: 5 } })
+    expect(capped.map(e => [e.code, e.where])).toEqual([
+      ['TEXT_TOO_LONG', 'layers.0.title'],
+      ['TEXT_TOO_LONG', 'layers.1.title'],
+    ])
+    expect(capped[0]?.message).toContain(
+      `layers.0.title: ${visibleLength(layer(clean(), 0).title)} visible chars, cap 5;`
+    )
+    // Backticks do not count; only the text a reader sees does.
+    const ticked = clean()
+    ticked.points[0]!.title = `${'t'.repeat(TEXT_CAPS.pointTitle - 4)} \`abc\``
+    expect(errorsOf(ticked)).toEqual([])
+    ticked.points[0]!.title = `${'t'.repeat(TEXT_CAPS.pointTitle - 3)} \`abc\``
+    expect(errorsOf(ticked).map(formatValidationError)[0]).toContain(
+      `TEXT_TOO_LONG points.0.title: ${TEXT_CAPS.pointTitle + 1} visible chars, cap ${TEXT_CAPS.pointTitle};`
     )
     // Raw text past four times the cap is refused by the schema before anything else runs.
     const raw = clean()
@@ -173,51 +200,13 @@ describe('validateModelOutput', () => {
     ])
   })
 
-  it('TEXT_TOO_LONG: one per capped field, each naming its path and cap', () => {
+  it('TEXT_TOO_LONG: one per capped label, each naming its path and cap', () => {
     const cases: Array<[keyof typeof TEXT_CAPS, string, (o: ModelOutput, v: string) => void]> = [
-      [
-        'summary',
-        'summary',
-        (o, v) => {
-          o.summary = v
-        },
-      ],
       [
         'layerTitle',
         'layers.0.title',
         (o, v) => {
           layer(o, 0).title = v
-        },
-      ],
-      [
-        'rationale',
-        'layers.0.rationale',
-        (o, v) => {
-          layer(o, 0).rationale = v
-        },
-      ],
-      [
-        'decisions',
-        'layers.0.decisions',
-        (o, v) => {
-          layer(o, 0).decisions = v
-        },
-      ],
-      [
-        'checkByHand',
-        'layers.0.checkByHand',
-        (o, v) => {
-          layer(o, 0).checkByHand = v
-        },
-      ],
-      [
-        'annotation',
-        'layers.0.files.0.annotations.0.text',
-        (o, v) => {
-          const a = layer(o, 0).files[0]?.annotations[0]
-          if (a) {
-            a.text = v
-          }
         },
       ],
       [
@@ -227,16 +216,6 @@ describe('validateModelOutput', () => {
           const p = o.points[0]
           if (p) {
             p.title = v
-          }
-        },
-      ],
-      [
-        'pointBody',
-        'points.0.body',
-        (o, v) => {
-          const p = o.points[0]
-          if (p) {
-            p.body = v
           }
         },
       ],
@@ -294,9 +273,9 @@ describe('validateModelOutput', () => {
     expect(errorsOf(clean(), { limits: { ...LIMITS, maxDiagramsPerLayer: 2 } })).toEqual([])
   })
 
-  it('a fence in a field the page does not draw is prose: it counts against that field, not the layer', () => {
+  it('a fence in a field the page does not draw is a code block, not a diagram', () => {
     // Only the summary and a layer rationale render a diagram, so a fence elsewhere stays a code
-    // block and answers to its own cap like the rest of the text.
+    // block: it counts toward neither the diagram limit nor the diagram cap.
     const output = clean()
     const l = layer(output, 0)
     l.diagram = { mermaid: 'flowchart LR\n  A --> B', links: {} }
@@ -308,8 +287,8 @@ describe('validateModelOutput', () => {
     point.body = 'Look at it.\n\n```mermaid\nflowchart LR\n  E --> F\n```'
     expect(errorsOf(output)).toEqual([])
     const long = clean()
-    layer(long, 0).decisions = `\`\`\`mermaid\n${'X'.repeat(TEXT_CAPS.decisions)}\n\`\`\``
-    expect(errorsOf(long).map(e => e.code)).toEqual(['TEXT_TOO_LONG'])
+    layer(long, 0).decisions = `\`\`\`mermaid\n${'X'.repeat(TEXT_CAPS.diagram + 1)}\n\`\`\``
+    expect(errorsOf(long)).toEqual([])
   })
 
   it('TEXT_TOO_LONG: the diagram source is measured raw, and never against its field cap', () => {

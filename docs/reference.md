@@ -497,21 +497,24 @@ Compare the rest of your templates with the new bundled ones when upgrading.
 
 ### Text limits
 
-Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
-link targets do not count. `diagram` counts raw Mermaid source characters.
+Set any of these keys under `generation.caps`. A title or label must fit its cap, counted in
+visible characters, so Markdown link targets do not count. `diagram` counts raw Mermaid source
+characters. Prose has no visible cap, so the generator can write complete sentences: the validator
+refuses a prose field only when its raw Markdown runs past four times the value, as a guard against
+runaway output.
 
-| Key            | Default |
-| -------------- | ------- |
-| `summary`      | 1200    |
-| `layerTitle`   | 60      |
-| `rationale`    | 300     |
-| `decisions`    | 600     |
-| `checkByHand`  | 400     |
-| `annotation`   | 240     |
-| `pointTitle`   | 90      |
-| `pointBody`    | 600     |
-| `testBehavior` | 120     |
-| `diagram`      | 1500    |
+| Key            | Default | Checked as                   |
+| -------------- | ------- | ---------------------------- |
+| `summary`      | 1200    | prose: raw ceiling at 4×     |
+| `layerTitle`   | 60      | visible cap                  |
+| `rationale`    | 300     | prose: raw ceiling at 4×     |
+| `decisions`    | 600     | prose: raw ceiling at 4×     |
+| `checkByHand`  | 400     | prose: raw ceiling at 4×     |
+| `annotation`   | 240     | prose: raw ceiling at 4×     |
+| `pointTitle`   | 90      | visible cap, fold titles too |
+| `pointBody`    | 600     | prose: raw ceiling at 4×     |
+| `testBehavior` | 120     | visible cap                  |
+| `diagram`      | 1500    | raw Mermaid source           |
 
 The canvas has a separate limit of 12 attention points, including entries generated from missing
 tests. Increasing text caps does not increase that limit. `decisions` and `checkByHand` remain

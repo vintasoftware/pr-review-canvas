@@ -38,9 +38,10 @@ generation:
   #   claude: opus         # the default; any other agent with no entry keeps the session's model
   #   codex: gpt-6-sol     # AI Chat ignores this map
   # caps:                  # override the text caps (characters)
-  #   summary: 1800
-  #   rationale: 300
-  #   diagram: 1500       # mermaid source, counted raw
+  #   layerTitle: 60       # titles and labels must fit their cap
+  #   pointTitle: 90
+  #   rationale: 300       # prose has no cap; only past 4x this value is refused
+  #   diagram: 1500        # mermaid source, counted raw
 
 # Which paths count as tests, for the layering rules, the `test` pill on a file card, and the
 # light reading level, which keeps test titles on screen. The defaults below match test

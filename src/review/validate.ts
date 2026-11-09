@@ -3,10 +3,11 @@
 import { missingTestAnchor } from './missing-tests.js'
 import type { z } from 'zod'
 import { extractLinks, type LinkTargets, parseLink, resolveLink } from '../contract/links.js'
-import { diagramKind, mermaidBlocks, withoutMermaid } from '../contract/mermaid-fences.js'
+import { diagramKind, mermaidBlocks } from '../contract/mermaid-fences.js'
 import {
   type FileEntry,
   type Hunk,
+  type LabelCapKey,
   type Limits,
   type ModelLayer,
   type ModelOutput,
@@ -125,20 +126,20 @@ function layerLabel(layer: ModelLayer): string {
 }
 
 /**
- * Every capped field, measured as the reader sees it: link targets and code markers do not count.
- * The two fields that draw diagrams are measured without their mermaid source, since the reader
- * sees a drawing there; the source answers to the diagram cap instead.
+ * Every title and label, measured as the reader sees it: link targets and code markers do not
+ * count. Prose (the summary, rationales, notes, annotations, and point bodies) has no visible cap:
+ * squeezing it under one made the writing terse and hard to read, so only the schema's raw
+ * ceiling bounds it.
  */
 function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void {
-  const check = (where: string, key: keyof TextCaps, text: string | undefined, drawn = false): void => {
+  const check = (where: string, key: LabelCapKey, text: string | undefined): void => {
     if (text === undefined) {
       return
     }
-    const measured = drawn ? withoutMermaid(text) : text
-    const length = visibleLength(measured)
+    const length = visibleLength(text)
     if (length > caps[key]) {
       // Name where the cap falls in their own words, so the rewrite is not guessed at twice.
-      const fits = visiblePrefix(measured, caps[key])
+      const fits = visiblePrefix(text, caps[key])
       report.add(
         'TEXT_TOO_LONG',
         where,
@@ -146,19 +147,14 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
       )
     }
   }
-  check('summary', 'summary', output.summary, true)
   output.layers.forEach((layer, i) => {
     const at = `layers.${i}`
     check(`${at}.title`, 'layerTitle', layer.title)
-    check(`${at}.rationale`, 'rationale', layer.rationale, true)
-    check(`${at}.decisions`, 'decisions', layer.decisions)
-    check(`${at}.checkByHand`, 'checkByHand', layer.checkByHand)
     layer.tests.forEach((t, j) => {
       check(`${at}.tests.${j}.behavior`, 'testBehavior', t.behavior)
       check(`${at}.tests.${j}.title`, 'pointTitle', t.title)
     })
     layer.files.forEach((f, j) => {
-      check(`${at}.files.${j}.note`, 'annotation', f.note)
       f.folds?.forEach((fold, k) => {
         const where = `${at}.files.${j}.folds.${k}.title`
         if (fold.title.length > caps.pointTitle) {
@@ -169,14 +165,10 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
           )
         }
       })
-      f.annotations.forEach((a, k) => {
-        check(`${at}.files.${j}.annotations.${k}.text`, 'annotation', a.text)
-      })
     })
   })
   output.points.forEach((p, i) => {
     check(`points.${i}.title`, 'pointTitle', p.title)
-    check(`points.${i}.body`, 'pointBody', p.body)
   })
 }
 

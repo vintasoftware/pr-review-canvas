@@ -136,9 +136,9 @@ line per problem in the same form publish uses. Fix what it names and run it aga
 `--fix` first shortens the titles that are over their cap, by dropping the explainer after the
 first `:` or `—`, and writes the file back. Each one is reported as
 `fixed <where>: "<before>" -> "<after>"`; read them, since the shortened title is what publishes.
-A title with nothing to drop is left alone for you to rewrite. Prose is never cut for you: an
-over-cap rationale, note, or body reports where the cap falls in your own words
-(`what fits ends at "..."`), and the rewrite is yours.
+A title with nothing to drop is left alone for you to rewrite; the report says where the cap
+falls in your own words (`what fits ends at "..."`). Prose has no length cap, so `--fix` never
+touches a summary, rationale, note, annotation, or point body.
 
 `--fix` also repairs three fold errors that have one right answer, and reports each as
 `fixed <where>: fold "<title>" <before> -> <after>, <why>` or
@@ -156,8 +156,8 @@ coverage errors (`FOLD_MISSING`) that follow are yours to answer. Folds that par
 reversed range, and every rule about how much to hide are left for you to fix.
 
 Run this before every publish, including after a repair. A publish round-trip costs more than this
-command, and length caps are the usual reason a publish is rejected: they are measured on the text
-a reader sees, which you cannot count reliably while writing.
+command, and it catches the usual reasons a publish is rejected: an unassigned hunk, a fold rule,
+or a title over its cap.
 
 ### 5. Publish
 
@@ -188,13 +188,13 @@ On failure the command prints one line per problem, then an error line, and exit
 
 ```
 HUNK_UNASSIGNED packages_x_ts#3 in packages/x.ts (@@ -40,7 +41,9 @@) is in no layer
-TEXT_TOO_LONG layers.0.rationale: 412 visible chars, cap 300
+TEXT_TOO_LONG layers.0.title: 72 visible chars, cap 60
 {"error":{"code":"MODEL_INVALID","message":"model.json has 2 problems","hint":"fix model.json and run publish again"}}
 ```
 
 Fix exactly the named problems in `model.json` and run publish again. Give up after the number of
 failed rounds the prompt states (`maxRepairRounds`, 3 by default) and report the last output
-verbatim. Do not weaken the content to pass: shorten text, move hunks, fix links.
+verbatim. Do not weaken the content to pass: shorten a title, move hunks, fix links.
 
 If publish prints `CANVAS_STALE`, the PR head, branch, or working tree moved while you worked. Tell the user and offer to run
 prepare again; pass `--allow-stale` only when the user asks for the canvas of the old commit.
@@ -257,8 +257,9 @@ author: the reason is theirs to give.
 - Test files come after the files they cover, inside the same layer, never in a layer of their own.
   The prompt's layering rules name the path patterns this project counts as tests; they are the
   ones the validator uses.
-- Every text is within its cap, measured on the text a reader sees (link targets and backticks do
-  not count). Rationales, notes, and annotations are one or two short sentences.
+- Every title and label is within its cap, measured on the text a reader sees (link targets and
+  backticks do not count). Prose has no cap: write it in complete sentences a reviewer can read
+  in one pass, as the prompt's Writing section describes.
 - At most 12 attention points, counting one per `missing` test entry.
 - Every attention point names its `audience`: `author` when the author can answer it alone,
   `reviewer` when it needs someone else's judgment. When in doubt, `reviewer`.

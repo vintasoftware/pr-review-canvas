@@ -202,25 +202,62 @@ hides too, behind the annotation's text.
   code. Omit `collapsed` where no level should hide the file whole, and `folds` where no level
   should hide any of its code.
 
-## Length rules
+## Length
 
-Caps, in characters of the text a reader sees: link targets, backticks, and code-fence lines do not
-count, so `[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects
-anything longer. Each prose field's schema description states its visible-character cap;
-`maxLength` only bounds raw Markdown, including link targets. Passing JSON Schema alone does not
-check visible length. Draft below the visible caps, then run `validate --human --fix` before publish.
+Titles and labels have caps because the page shows them on one line or in a list. A cap counts
+the characters a reader sees, so link targets and backticks are free:
+`[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects a title over
+its cap, and `validate --human --fix` shortens the ones it safely can.
 
 {{CAPS}}
 
-In the two fields that draw a diagram, the summary and a layer rationale, the lines inside a
-```mermaid fence are not prose: they count toward the diagram cap alone, measured raw, and not
-toward the field's own cap. A fence in any other field is an ordinary code block and counts like
-the rest of that field's text.
+Prose has no character cap. That covers the summary, layer rationales, file notes, annotations,
+and attention point bodies. Make each one as long as the reader needs to follow it on a first
+read. As a rough guide, an annotation or a file note takes one to three sentences, a rationale
+two to four, a point body three to six, and the summary one or two paragraphs. Write fewer when
+fewer say it all. The schema's `maxLength` on a prose field is a ceiling against runaway output,
+not a target.
 
-One or two short sentences for rationales, notes, and annotations. Don't write mannered prose:
-plain words, no flourishes, no throat-clearing. Markdown is fine; headings are not. Keep the summary
-self-contained: explain the behavior change and the main relationship or decision that helps the
-reviewer understand it. Links are welcome there too.
+The lines inside a ```mermaid fence in the summary or a layer rationale are diagram source, not
+prose. They count toward the diagram cap, measured raw. A fence in any other field is an ordinary
+code block.
+
+## Writing
+
+Write for a reviewer who knows the codebase but has not read this change yet. Every sentence
+should make sense to them the first time they read it, without decoding.
+
+- Write the way an experienced engineer explains a change to a colleague. Use complete sentences
+  with a subject, a verb, and the articles English needs. Give each sentence one idea. If a
+  sentence would need a second read, split it.
+- Call each thing by the name the reader will see. A control in the UI goes by its label and its
+  place on the page, such as "the **Retry** button in the job's header". Code goes by its
+  identifier in backticks, such as `retryPolicy()`. Don't use an identifier, or a name the PR
+  invents, as if it were an ordinary English word. If the code calls retry policies "lanes",
+  write "the job's retry policy (its `lane`)", never "the job's lane runs out".
+- When the change introduces a concept, say what it is in plain words the first time it appears,
+  and use the same name for it after that.
+- Be concrete. Say what calls what, what a user sees before and after, and which value changes.
+  An example or a line of pseudocode helps when a rule is abstract.
+- Don't compress. Avoid noun stacks, chains of possessives ("the stop's card's file"), runs of
+  "it" and "its" that leave the reader guessing what they refer to, and clauses wedged into the
+  middle of a sentence. A longer sentence that reads in one pass beats a short one the reader has
+  to unpack.
+- Don't pad either. Skip throat-clearing ("It's worth noting that"), filler words ("seamlessly",
+  "robust", "crucially"), a sentence that repeats the one before it, and a closing line that sums
+  up what you just said.
+- Markdown is fine; headings are not.
+
+Here is the difference on an unrelated change. The first version is the failure to avoid:
+
+- "A job's retry and give-up sit at its tail and, as flags, its head."
+- "Each job stores its retry count and its give-up deadline at the end of the record. The worker
+  also copies both into the job's header as flags, so the scheduler can read them without
+  parsing the whole record."
+
+The summary stands on its own. Say what changes for a user or a caller, then explain the main
+mechanism or decision a reviewer needs to make sense of the layers. Link the layers and files it
+names.
 
 Folds on a file with `collapsed` are allowed: they take effect when the reader opens the file.
 Folding thresholds count diff rows in assigned chunks, including context, using the longer side
@@ -228,7 +265,8 @@ of each chunk. They are not the manifest's additions plus deletions.
 
 ## What each layer carries
 
-- `rationale`: why these hunks belong together, how this layer fits into the change, and what to read first.
+- `rationale`: what this layer does, why its chunks belong together, how it fits the rest of the
+  change, and which file to read first.
 - File `note` and annotations: explain a non-obvious flow or rule and link it to the implementation.
   Short pseudocode is useful when it makes a long algorithm easier to follow.
 - Put every decision, trade-off, and manual check in `points`, using the rules below.
@@ -255,8 +293,9 @@ At most {{MAX_POINTS}} per canvas, counting the ones missing tests will add. Eac
 (`decision`, `risk`, `drift`, `tests`, `debt`, `question`) and a `level` (`decide`, `check`, `fyi`).
 The page shows `decision` as **design choice**: a choice the change makes, whatever its level. A
 `question` point asks the reader something, so its level is `decide` or `check`; something only to
-note is another kind. State the observation, why it matters, and any decision or check the reviewer
-should make.
+note is another kind. The title states the concern in plain words that make sense without the
+body. The body is a short paragraph: what the code does, why it matters, and what the reader
+should decide or check.
 An `fyi` point can simply explain useful context. Anchor each on `path` and `line` inside a
 hunk of the diff, on the head side unless you set `side: "old"`; any line inside the hunk works,
 changed or not. Do not nitpick.

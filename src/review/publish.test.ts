@@ -274,7 +274,8 @@ describe('publish', () => {
     const canvasDir = await prepared()
     const output = artifactToModelOutput(syntheticArtifact())
     output.layers[1]?.files.pop()
-    output.summary = 's'.repeat(1201)
+    const title = output.layers[0]!.title
+    output.layers[0]!.title = 't'.repeat(61)
     await writeModel(canvasDir, output)
     const err = await publish(t.ctx, canvasDir, OPTS).catch(e => e)
     expect(err).toBeInstanceOf(ModelInvalidError)
@@ -286,13 +287,13 @@ describe('publish', () => {
         errors: [
           {
             code: 'TEXT_TOO_LONG',
-            message: expect.stringContaining('summary: 1201 visible chars, cap 1200;'),
+            message: expect.stringContaining('layers.0.title: 61 visible chars, cap 60;'),
           },
           { code: 'HUNK_UNASSIGNED' },
         ],
       },
     })
-    output.summary = 'fine'
+    output.layers[0]!.title = title
     await writeModel(canvasDir, output)
     const second = await publish(t.ctx, canvasDir, OPTS).catch(e => e)
     expect(second).toMatchObject({
