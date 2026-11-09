@@ -46,6 +46,8 @@ describe('validateTourModel', () => {
     expect(result.output).toBeNull()
     expect(result.errors[0]?.code).toBe('SCHEMA')
     expect(result.errors[0]?.where).toBe('landmarks')
+    // A model that is no object at all is wrong at its root.
+    expect(validateTourModel([], input()).errors.map(e => e.where)).toEqual(['(root)'])
   })
 
   it('holds the landmarks to the background, world, whys, respect order', () => {
@@ -153,6 +155,9 @@ describe('validateTourModel', () => {
     expect(
       codes(withLandmark(model, 1, { literate: [{ path: 'src/nope.ts', diff: '@@ -1 +1 @@\n+x' }] }))
     ).toEqual(['PATH_UNKNOWN'])
+    expect(
+      codes(withLandmark(model, 1, { literate: [{ path: 'src/app.ts', diff: '@@ -1 +1 @@\n+x' }] }))
+    ).toEqual([])
     const decision = model.decisions[0]!
     expect(
       codes({ ...model, decisions: [{ ...decision, anchor: { path: 'src/app.ts', line: 40 } }] })

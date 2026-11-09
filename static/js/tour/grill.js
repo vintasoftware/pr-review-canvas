@@ -396,7 +396,7 @@ export function createGrill(options) {
    * its commands, so the reader cannot approve what they already said was wrong.
    */
   const markEarlierCards = () => {
-    const cards = [...(log()?.querySelectorAll('.tour-restate[data-restatement]') ?? [])]
+    const cards = [...dialog.querySelectorAll('#grill-log .tour-restate[data-restatement]')]
     for (const card of cards.slice(0, -1)) {
       card.classList.add('earlier')
       card.querySelector('h4')?.replaceChildren('An earlier restatement')
@@ -447,21 +447,17 @@ export function createGrill(options) {
       log()?.insertAdjacentHTML('beforeend', approvedCardHtml(approved))
     }
     for (const slot of dialog.querySelectorAll('[data-keep]')) {
-      const kept = drawn.get(/** @type {ChatTurn} */ (history[Number(slot.getAttribute('data-keep'))]))
-      if (kept !== undefined) {
-        slot.replaceWith(kept)
-      }
+      const turn = /** @type {ChatTurn} */ (history[Number(slot.getAttribute('data-keep'))])
+      slot.replaceWith(/** @type {HTMLElement} */ (drawn.get(turn)))
     }
     markEarlierCards()
     scrollToEnd()
-    const next = composer()
-    if (next !== null) {
-      next.value = typed
-      // On a touch screen focus would open the keyboard over the conversation the reader came to read.
-      const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
-      if (!streaming && !listening && !touch) {
-        next.focus()
-      }
+    const next = /** @type {HTMLTextAreaElement} */ (composer())
+    next.value = typed
+    // On a touch screen focus would open the keyboard over the conversation the reader came to read.
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+    if (!streaming && !listening && !touch) {
+      next.focus()
     }
   }
 
@@ -483,11 +479,12 @@ export function createGrill(options) {
     turn.className = 'turn a'
     turn.dataset['turn'] = String(history.length - 1)
     turn.innerHTML = '<span class="role">AI Chat</span><div class="prose"></div>'
+    const body = /** @type {HTMLElement} */ (turn.querySelector('.prose'))
     drawn.set(answer, turn)
     render()
     const live = liveAnswer({
       turn,
-      body: /** @type {HTMLElement} */ (turn.querySelector('.prose')),
+      body,
       render: (written, done) => liveHtml(written, done, turnKey),
       onDraw: scrollToEnd,
       onError: (failure, code) => {
@@ -521,10 +518,7 @@ export function createGrill(options) {
       answer.text = live.text()
       live.finish()
       if (stoppedEarly(answer)) {
-        const body = turn.querySelector('.prose')
-        if (body !== null) {
-          body.innerHTML = NOT_ANSWERED
-        }
+        body.innerHTML = NOT_ANSWERED
       } else {
         turn.insertAdjacentHTML('beforeend', stoppedHtml(answer.incomplete))
       }
@@ -559,7 +553,7 @@ export function createGrill(options) {
       return
     }
     const recognizer = new Speech()
-    recognizer.lang = typeof navigator === 'undefined' ? 'en' : navigator.language
+    recognizer.lang = navigator.language
     recognizer.interimResults = false
     recognizer.onresult = event => {
       const heard = [...Array.from(event.results)].map(r => r[0]?.transcript ?? '').join(' ')

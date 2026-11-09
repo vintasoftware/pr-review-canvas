@@ -8,6 +8,7 @@ import {
   minutesOf,
   nextLabel,
   pickSettled,
+  planBasis,
   plural,
   blockedBy,
   reachable,
@@ -118,5 +119,31 @@ describe('labels', () => {
     expect(plural(1, 'landmark')).toBe('1 landmark')
     expect(plural(2, 'landmark')).toBe('2 landmarks')
     expect(minutesOf(tour)).toBe(6)
+  })
+})
+
+describe('planBasis', () => {
+  it('sums up the settled picks with their restatements and the notes, so a later change shows', () => {
+    const reader = freshReaderState()
+    reader.notes = { world: '  rename b ', sum: '   ' }
+    reader.picks['sum-over-product'] = { pick: 'other', approved: false }
+    // A pick still being talked through and a blank note are not part of the plan.
+    expect(JSON.parse(planBasis(tour, reader))).toEqual({ picks: [], notes: [['world', 'rename b']] })
+    reader.picks['sum-over-product'] = {
+      pick: 'other',
+      approved: true,
+      restatement: { what: 'Multiply.', where: ['src/run.ts'], unchanged: 'The callers.' },
+    }
+    const basis = planBasis(tour, reader)
+    expect(JSON.parse(basis).picks).toEqual([
+      ['sum-over-product', 'other', ['Multiply.', ['src/run.ts'], 'The callers.']],
+    ])
+    // Another restatement of the same pick is another plan.
+    reader.picks['sum-over-product'] = {
+      pick: 'other',
+      approved: true,
+      restatement: { what: 'Multiply.', where: ['src/run.ts'], unchanged: 'Nothing else.' },
+    }
+    expect(planBasis(tour, reader)).not.toBe(basis)
   })
 })

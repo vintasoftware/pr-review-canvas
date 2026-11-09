@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { freshReaderState, TourReaderInputSchema } from '../../../src/contract/tour-api.js'
 import { missingTourBundle, syntheticTourBundle } from '../../../src/testing/tour-page.js'
+import { GENERATION_POLL_MS } from '../generate.js'
 import { POLL_MS, PrTourElement } from './tour.js'
 
 const HEAD = 'a'.repeat(40)
@@ -33,8 +34,18 @@ const TOUR_JOB = {
 /**
  * A fake server: the bundle it answers with, the reader states it was sent, and the finishes.
  * @param {TourBundle | (() => TourBundle)} bundle
- * @param {{ finish?: () => Response, save?: () => Response | undefined, fail?: boolean, shared?: () => unknown }} [opts]
- *   a `save` that answers undefined lets the fake accept the state as usual
+ * @param {{
+ *   finish?: () => Response,
+ *   save?: () => Response | undefined,
+ *   fail?: boolean,
+ *   shared?: () => unknown,
+ *   sharing?: () => unknown,
+ *   job?: () => import('../contract-types.js').GenerationJob | null,
+ *   threads?: unknown[],
+ * }} [opts]
+ *   a `save` that answers undefined lets the fake accept the state as usual; `sharing` is how a
+ *   finish says the record was shared, `job` the generation the server has, and `threads` the
+ *   tour's AI Chat threads
  */
 function fakeServer(bundle, opts = {}) {
   /** @type {TourReaderState[]} */
@@ -52,11 +63,15 @@ function fakeServer(bundle, opts = {}) {
       // With an agent on, the page asks once whether a tour generation runs; none does here. The
       // generation's own calls are generate.test.js's to check, so they stay out of `calls`.
       if (url.endsWith('/generate') && method === 'GET') {
-        return json({ job: null })
+        return json({ job: opts.job?.() ?? null })
       }
-      // With chat on, the tour's AI Chat reads its threads once; there are none here.
+      // With chat on, the tour's AI Chat reads its threads once, and a thread's questions when it
+      // opens; they have none here.
       if (url.endsWith('/chat/threads') && method === 'GET') {
-        return json({ threads: [], agent: 'claude' })
+        return json({ threads: opts.threads ?? [], agent: 'claude' })
+      }
+      if (url.includes('/chat/threads/') && url.endsWith('/history')) {
+        return json({ name: 'thread', turns: [] })
       }
       calls.push(`${method} ${url}`)
       if (opts.fail) {
@@ -72,6 +87,9 @@ function fakeServer(bundle, opts = {}) {
       }
       if (url.endsWith('/generate') && method === 'POST') {
         return json({ job: { ...TOUR_JOB, phase: 'preparing' } }, 202)
+      }
+      if (url.endsWith('/generate') && method === 'DELETE') {
+        return json({ error: { code: 'INTERNAL', message: 'the agent did not stop' } }, 500)
       }
       if (url.endsWith('/grill/history')) {
         return json({ name: 't0', turns: [] })
@@ -95,7 +113,10 @@ function fakeServer(bundle, opts = {}) {
           at: '2026-09-10T12:00:00.000Z',
           promptPath: '/data/tours/x/plan-prompt.md',
           prompt: '# Keep PR #42 as the tour settled it',
-          sharing: { status: 'shared', url: 'https://github.com/acme/widgets/pull/42#issuecomment-1' },
+          sharing: opts.sharing?.() ?? {
+            status: 'shared',
+            url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',
+          },
           basis: JSON.parse(String(init?.body)).basis,
         }
         return json({ finished, record: { touredBy: [] }, reader: { ...reader, finished } })
@@ -188,7 +209,10 @@ afterEach(async () => {
 
 describe('the tour page', () => {
   it('walks from the cover through the landmarks, a keep, the quiz, and the plan, saving as it goes', async () => {
-    const server = fakeServer(syntheticTourBundle())
+    let sharingOff = false
+    const server = fakeServer(syntheticTourBundle(), {
+      sharing: () => (sharingOff ? { status: 'off' } : undefined),
+    })
     vi.stubGlobal('fetch', server.impl)
     const el = mount()
     await drawn('.tour-cover-actions')
@@ -222,6 +246,9 @@ describe('the tour page', () => {
     expect(document.querySelector('.tour-code-tab[aria-selected="true"]')?.textContent).toBe('raw diff')
     expect(document.querySelector('.tour-code-body .tour-literate')).toBeNull()
     expect(document.querySelector('iframe.tour-frame')).toBe(frame)
+    click('.tour-code-tab[data-view="literate"]')
+    expect(document.querySelector('.tour-code-tab[aria-selected="true"]')?.textContent).toBe('literate diff')
+    expect(document.querySelector('.tour-code-body .tour-literate')).not.toBeNull()
     click('[data-act="code"]')
     expect(document.querySelector('.tour-code')?.hasAttribute('hidden')).toBe(true)
 
@@ -322,13 +349,18 @@ describe('the tour page', () => {
     )
     click('.tour-rail-seg[data-step="5"]')
     click('[data-act="unsettle"]')
-    press('a')
+    click('.tour-option[data-pick="change"]')
+    expect(chosen()).toBe('change')
     click('.tour-rail-seg[data-step="7"]')
     expect(document.querySelector('.tour-plan-changed')?.textContent).toContain('You changed the plan')
     expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('confirm again')
     expect(text()).toContain('Confirmed before')
+    // With sharing off, the prompt is all there is to say.
+    sharingOff = true
     click('[data-act="confirm"]')
     await vi.waitFor(() => expect(server.finishes).toHaveLength(2))
+    await vi.waitFor(() => expect(document.querySelector('.toast')?.textContent).toBe('prompt written'))
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('done')
     expect(JSON.parse(server.finishes[1]?.basis ?? '{}').picks).toEqual([
       ['sum-over-product', 'change', null],
     ])
@@ -494,6 +526,28 @@ describe('the tour page', () => {
     const other = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true })
     document.body.dispatchEvent(other)
     expect(other.defaultPrevented).toBe(false)
+    // Home and End reach the rail's ends, the arrows stop there, and the rail stays one tab stop.
+    const railKey = (/** @type {string} */ key) =>
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      )
+    const focused = () => document.activeElement?.getAttribute('data-step')
+    ;/** @type {HTMLElement} */ (document.querySelector('.tour-rail-seg[aria-current="step"]')).focus()
+    railKey('End')
+    expect(focused()).toBe('7')
+    railKey('ArrowRight')
+    expect(focused()).toBe('7')
+    railKey('Home')
+    expect(focused()).toBe('0')
+    railKey('ArrowRight')
+    expect(focused()).toBe('1')
+    const inTabOrder = [...document.querySelectorAll('.tour-rail-seg')].filter(
+      seg => seg instanceof HTMLElement && seg.tabIndex === 0
+    )
+    expect(inTabOrder.map(seg => seg.getAttribute('data-step'))).toEqual(['1'])
+    // A key the rail does not use is the page's: `?` opens the help from a stop too.
+    railKey('?')
+    expect(document.querySelector('#help-dialog')?.hasAttribute('open')).toBe(true)
   })
 
   it('opens on the landmark the preview names, saves nothing, and cannot finish', async () => {
@@ -516,10 +570,10 @@ describe('the tour page', () => {
     await drawn('.tour-cover-actions')
   })
 
-  it('switches the theme, telling the frames and the settings file, and offers no skin', async () => {
+  it('switches the theme, telling the frames and the settings file, says when that file refuses it, and offers no skin', async () => {
     const server = fakeServer(syntheticTourBundle({ reader: { ...freshReaderState(), step: 1 } }))
     vi.stubGlobal('fetch', server.impl)
-    mount()
+    const el = mount()
     const frame = await drawn('iframe.tour-frame')
     const postMessage = vi.fn()
     Object.defineProperty(frame, 'contentWindow', { value: { postMessage }, configurable: true })
@@ -530,6 +584,15 @@ describe('the tour page', () => {
     await vi.waitFor(() =>
       expect(server.calls.filter(c => c === 'PUT /r/acme/widgets/api/appearance')).toHaveLength(1)
     )
+    // A settings file that cannot be written says so; the page still wears the theme.
+    await el.saver?.settle()
+    vi.stubGlobal('fetch', fakeServer(syntheticTourBundle(), { fail: true }).impl)
+    click('#theme-toggle')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    await vi.waitFor(() =>
+      expect(document.querySelector('.toast')?.textContent).toBe('could not save the theme to settings.yml')
+    )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('failed')
   })
 
   it('shows the missing screen and polls until the tour is published', async () => {
@@ -561,6 +624,9 @@ describe('the tour page', () => {
     expect(dialog.querySelector('h2')?.textContent).toBe('Generate the tour')
     click('#generate-dialog [data-gen="start"]')
     await vi.waitFor(() => expect(server.calls).toContain('POST /r/acme/widgets/api/tours/42/generate'))
+    // A job that ended badly while the dialog was open shows there, not as a toast.
+    await el.generationEnded({ ...TOUR_JOB, phase: 'failed' })
+    expect(document.querySelector('.toast')).toBeNull()
     // A job that ended badly while the dialog was closed is a toast.
     dialog.removeAttribute('open')
     await el.generationEnded({
@@ -573,6 +639,10 @@ describe('the tour page', () => {
     await el.generationEnded({ ...TOUR_JOB, phase: 'cancelled' })
     expect(text()).toContain('tour generation stopped')
     expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
+    await el.generationEnded({ ...TOUR_JOB, phase: 'failed' })
+    expect(document.querySelector('.toast')?.textContent).toBe(
+      'tour generation failed: open the generation dialog for details'
+    )
     published = true
     await el.generationEnded(TOUR_JOB)
     await drawn('.tour-cover-actions')
@@ -580,25 +650,95 @@ describe('the tour page', () => {
     el.remove()
   })
 
-  it('looks for a shared tour on demand, and exports the tour on screen', async () => {
+  it('opens the dialog a generate link asks for, says when a stop fails, and shows the end in the open dialog', async () => {
+    vi.useFakeTimers()
+    const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
+    /** @type {import('../contract-types.js').GenerationJob | null} */
+    let job = null
+    const server = fakeServer(
+      () => (job?.phase === 'done' ? syntheticTourBundle({ chat }) : missingTourBundle({ chat })),
+      { job: () => job }
+    )
+    vi.stubGlobal('fetch', server.impl)
+    // The home page's generate links land with `?generate=1`, which opens the dialog once.
+    history.replaceState(null, '', '/tour/42?generate=1')
+    mount()
+    const dialog = await drawn('#generate-dialog')
+    expect(dialog.hasAttribute('open')).toBe(true)
+    expect(location.search).toBe('')
+    job = { ...TOUR_JOB, phase: 'preparing' }
+    click('#generate-dialog [data-gen="start"]')
+    ;(await drawn('#generate-dialog [data-gen="stop"]')).click()
+    await vi.waitFor(() =>
+      expect(document.querySelector('.toast')?.textContent).toBe('the agent did not stop')
+    )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('failed')
+    // The job ends while the reader watches it: the tour loads, and the dialog says how it went.
+    job = TOUR_JOB
+    await vi.advanceTimersByTimeAsync(GENERATION_POLL_MS)
+    await drawn('.tour-cover-actions')
+    const shown = /** @type {HTMLElement} */ (document.querySelector('#generate-dialog'))
+    expect(shown.hasAttribute('open')).toBe(true)
+    expect(shown.querySelector('h2')?.textContent).toBe('Done')
+    expect(text()).not.toContain('tour published')
+  })
+
+  it('looks for a shared tour on demand, draws one it imports, and exports the tour on screen', async () => {
     /** @type {unknown} */
     let shared = { found: false, imported: false, warnings: ['pr-42-x-tour.zip: broken'] }
-    const server = fakeServer(missingTourBundle(), { shared: () => shared })
+    let imported = false
+    const server = fakeServer(() => (imported ? syntheticTourBundle() : missingTourBundle()), {
+      shared: () => shared,
+    })
     vi.stubGlobal('fetch', server.impl)
-    const el = mount()
+    mount()
     click(`#${(await drawn('#fetch-shared')).id}`)
     await vi.waitFor(() => expect(text()).toContain('no tour is shared on the pull request'))
     shared = { found: true, imported: false, warnings: [] }
     click('#fetch-shared')
     await vi.waitFor(() => expect(text()).toContain('is no newer than this one'))
-    el.remove()
+    // A newer one is imported, and the page draws it.
+    shared = { found: true, imported: true, warnings: [] }
+    imported = true
+    click('#fetch-shared')
+    await drawn('.tour-cover-actions')
 
     URL.createObjectURL = vi.fn(() => 'blob:x')
     URL.revokeObjectURL = vi.fn()
-    vi.stubGlobal('fetch', fakeServer(syntheticTourBundle()).impl)
-    mount()
-    click(`#${(await drawn('#export-zip')).id}`)
+    click('#export-zip')
     await vi.waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+  })
+
+  it('uploads a tour zip dropped on the missing screen and draws the tour it brought', async () => {
+    let imported = false
+    vi.stubGlobal('fetch', fakeServer(() => (imported ? syntheticTourBundle() : missingTourBundle())).impl)
+    /** @type {string[]} */
+    const uploads = []
+    // The browser's upload: the server takes the zip and answers once it is sent.
+    vi.stubGlobal('XMLHttpRequest', function () {
+      const xhr = {
+        status: 200,
+        responseText: '',
+        upload: {},
+        /** @type {(() => void) | null} */
+        onload: null,
+        open: (/** @type {string} */ method, /** @type {string} */ url) => uploads.push(`${method} ${url}`),
+        setRequestHeader: () => undefined,
+        send: () => {
+          imported = true
+          xhr.responseText = JSON.stringify({ status: 'imported', headSha: HEAD, warnings: [] })
+          queueMicrotask(() => xhr.onload?.())
+        },
+      }
+      return xhr
+    })
+    mount()
+    const input = await drawn('#zip')
+    const zip = new File(['zip'], 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip')
+    Object.defineProperty(input, 'files', { value: [zip] })
+    input.dispatchEvent(new Event('change'))
+    await drawn('.tour-cover-actions')
+    expect(uploads).toEqual(['POST /r/acme/widgets/api/tours/42/import'])
   })
 
   it('shows the error card with a retry when the bundle cannot be read, and the stale bar', async () => {
@@ -625,6 +765,11 @@ describe('the tour page', () => {
     await drawn('.tour-stale')
     expect(document.querySelector('.tour-stale')?.textContent).toContain('1 commit behind')
     document.body.innerHTML = '<pr-tour></pr-tour>'
+    await drawn('.error-card')
+    expect(document.querySelector('.error-card')?.textContent).toContain('missing bootstrap data')
+    // A bootstrap that is not JSON is as good as none.
+    document.body.innerHTML =
+      '<script id="bootstrap" type="application/json">{"key":</script><pr-tour></pr-tour>'
     await drawn('.error-card')
     expect(document.querySelector('.error-card')?.textContent).toContain('missing bootstrap data')
   })
@@ -760,6 +905,90 @@ describe('the tour page', () => {
     press('/')
     expect(pane.hidden).toBe(false)
     expect(document.activeElement).toBe(pane.querySelector('#tour-ask-box'))
+  })
+
+  it('takes the reader from an AI Chat thread to its stop, once that stop is open', async () => {
+    const chat = { enabled: true, acpx: true, agent: 'claude', model: null }
+    const thread = (/** @type {string} */ name, /** @type {unknown} */ place) => ({
+      name,
+      agent: 'claude',
+      title: name,
+      createdAt: '2026-10-16T12:00:00.000Z',
+      turns: 1,
+      place,
+    })
+    const threads = [
+      thread('t-before', { kind: 'tour-landmark', id: 'before' }),
+      thread('t-plan', { kind: 'tour-plan' }),
+    ]
+    vi.stubGlobal('fetch', fakeServer(syntheticTourBundle({ chat }), { threads }).impl)
+    mount()
+    await drawn('[data-act="ask"]')
+    // `/` opens the pane whether or not an earlier visit left it open.
+    press('/')
+    const goto = /** @type {HTMLElement} */ (document.querySelector('[data-act="ask-goto"]'))
+    click('[data-act="ask-switch"]')
+    click(`[data-act="ask-open"][data-thread="${(await drawn('[data-thread="t-plan"]')).dataset['thread']}"]`)
+    // The plan opens after the decision, so its thread does not offer to go there yet.
+    expect(goto.hidden).toBe(true)
+    click('[data-act="ask-switch"]')
+    click('[data-act="ask-open"][data-thread="t-before"]')
+    expect(goto.hidden).toBe(false)
+    click('[data-act="ask-goto"]')
+    expect(location.hash).toBe('#landmark-before')
+    // On its own stop, the thread has nowhere to go.
+    expect(goto.hidden).toBe(true)
+  })
+
+  it('saves the reader turning audio off in the drawer', async () => {
+    // A browser with speech recognition, so the drawer offers the microphone.
+    vi.stubGlobal('SpeechRecognition', function () {})
+    const server = fakeServer(
+      syntheticTourBundle({
+        chat: { enabled: true, acpx: true, agent: 'claude', model: null },
+        reader: { ...freshReaderState(), step: 5 },
+      })
+    )
+    vi.stubGlobal('fetch', server.impl)
+    mount()
+    await drawn('.tour-options')
+    press('c')
+    ;(await drawn('#tour-grill [data-act="mic"]')).click()
+    click('[data-act="notice-off"]')
+    expect(document.querySelector('#tour-grill [data-act="mic"]')).toBeNull()
+    await vi.waitFor(() => expect(server.saved.at(-1)?.audioOff).toBe(true))
+    expect(server.saved.at(-1)?.audioNoticeSeen).toBe(true)
+  })
+
+  it('fades the ends of the rail with more stops past the window, as it scrolls and as the window resizes', async () => {
+    /** @type {Array<() => void>} */
+    const resized = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        /** @param {() => void} callback */
+        constructor(callback) {
+          resized.push(callback)
+        }
+        observe() {}
+        disconnect() {}
+      }
+    )
+    vi.stubGlobal('fetch', fakeServer(syntheticTourBundle()).impl)
+    mount()
+    const road = await drawn('.tour-rail')
+    expect(road.dataset['more']).toBe('')
+    // The window narrows to a third of the rail.
+    Object.defineProperty(road, 'clientWidth', { value: 100, configurable: true })
+    Object.defineProperty(road, 'scrollWidth', { value: 300, configurable: true })
+    for (const callback of resized) callback()
+    expect(road.dataset['more']).toBe('right')
+    road.scrollLeft = 100
+    road.dispatchEvent(new Event('scroll'))
+    expect(road.dataset['more']).toBe('left right')
+    road.scrollLeft = 200
+    road.dispatchEvent(new Event('scroll'))
+    expect(road.dataset['more']).toBe('left')
   })
 
   it('has no AI Chat with chat off', async () => {

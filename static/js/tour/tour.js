@@ -441,14 +441,12 @@ export class PrTourElement extends HTMLElement {
     this.chat?.follow(placeOfStep(step))
     this.drawNav()
     const road = /** @type {HTMLElement} */ (qs('.tour-rail', rail))
-    const here = qs('[aria-current="step"]', rail)
-    if (here instanceof HTMLElement) {
-      // On a narrow window the rail scrolls: it centres the stop the reader is at.
-      const gap = here.getBoundingClientRect().left - road.getBoundingClientRect().left
-      road.scrollLeft += gap - (road.clientWidth - here.offsetWidth) / 2
-      if (railFocused) {
-        here.focus()
-      }
+    const here = /** @type {HTMLElement} */ (qs('[aria-current="step"]', rail))
+    // On a narrow window the rail scrolls: it centres the stop the reader is at.
+    const gap = here.getBoundingClientRect().left - road.getBoundingClientRect().left
+    road.scrollLeft += gap - (road.clientWidth - here.offsetWidth) / 2
+    if (railFocused) {
+      here.focus()
     }
     road.addEventListener('scroll', () => markRailEdges(road), { passive: true })
     markRailEdges(road)
@@ -689,12 +687,12 @@ export class PrTourElement extends HTMLElement {
         this.showCodeView(step.landmark, target.dataset['view'] === 'raw' ? 'raw' : 'literate')
       } else if (act === 'landmark') {
         e.preventDefault()
-        this.jumpTo(stepIndexOf(this.steps, 'landmark', target.dataset['landmark'] ?? ''))
+        this.jumpTo(stepIndexOf(this.steps, 'landmark', /** @type {string} */ (target.dataset['landmark'])))
       } else if (act === 'reopen' && step?.kind === 'quiz') {
         delete bundle.reader.quiz[step.q.id]
-        this.jumpTo(stepIndexOf(this.steps, 'landmark', target.dataset['landmark'] ?? ''))
+        this.jumpTo(stepIndexOf(this.steps, 'landmark', /** @type {string} */ (target.dataset['landmark'])))
       } else if (act === 'jump') {
-        this.jumpTo(stepIndexOf(this.steps, 'decision', target.dataset['decision'] ?? ''))
+        this.jumpTo(stepIndexOf(this.steps, 'decision', /** @type {string} */ (target.dataset['decision'])))
       } else if (act === 'return') {
         this.returnBack()
       } else if (act === 'pick' && decision !== null) {
@@ -717,7 +715,7 @@ export class PrTourElement extends HTMLElement {
       } else if (act === 'ask') {
         this.chat?.toggle()
       } else if (act === 'copy') {
-        void this.copyPrompt(target, /** @type {HTMLElement} */ (qs('#prompt', this)).textContent ?? '')
+        void this.copyPrompt(target, /** @type {HTMLElement} */ (qs('#prompt', this)).textContent)
       }
     }
     /** @param {Event} e */
@@ -802,12 +800,7 @@ export class PrTourElement extends HTMLElement {
     }
     // A resized window may make the rail scroll, or stop scrolling: its faded ends follow.
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))
-    const onRailSize = () => {
-      const road = qs('.tour-rail', rail)
-      if (road instanceof HTMLElement) {
-        markRailEdges(road)
-      }
-    }
+    const onRailSize = () => markRailEdges(/** @type {HTMLElement} */ (qs('.tour-rail', rail)))
     const railSize = typeof ResizeObserver === 'function' ? new ResizeObserver(onRailSize) : null
     railSize?.observe(rail)
     this.addEventListener('click', onClick)
@@ -826,10 +819,9 @@ export class PrTourElement extends HTMLElement {
   }
 
   wireCommands() {
-    if (this.bundle !== null) {
-      this.wireGeneration(this.bundle)
-      this.wireZips(this.bundle)
-    }
+    const bundle = /** @type {TourBundle} */ (this.bundle)
+    this.wireGeneration(bundle)
+    this.wireZips(bundle)
     const toggle = qs('#theme-toggle', this)
     toggle?.addEventListener('click', () => {
       this.theme = nextTheme(this.theme)
@@ -895,7 +887,8 @@ function markRailEdges(road) {
  * @returns {boolean} whether the key moved the focus
  */
 function moveRailFocus(seg, key) {
-  const segs = [...(seg.closest('.tour-rail')?.querySelectorAll('.tour-rail-seg') ?? [])]
+  const rail = /** @type {Element} */ (seg.closest('.tour-rail'))
+  const segs = /** @type {HTMLElement[]} */ ([...rail.querySelectorAll('.tour-rail-seg')])
   const at = segs.indexOf(seg)
   const to =
     key === 'ArrowRight'
@@ -910,12 +903,10 @@ function moveRailFocus(seg, key) {
   if (to === null) {
     return false
   }
-  const next = segs[Math.max(0, Math.min(segs.length - 1, to))]
-  if (next instanceof HTMLElement) {
-    seg.tabIndex = -1
-    next.tabIndex = 0
-    next.focus()
-  }
+  const next = /** @type {HTMLElement} */ (segs[Math.max(0, Math.min(segs.length - 1, to))])
+  seg.tabIndex = -1
+  next.tabIndex = 0
+  next.focus()
   return true
 }
 

@@ -2,7 +2,17 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { freshReaderState } from '../../../src/contract/tour-api.js'
-import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
+import {
+  cancelGrill,
+  cancelTourChat,
+  createSaver,
+  fetchTour,
+  fetchTourThreadHistory,
+  finishTour,
+  markTourThreadUnseen,
+  saveReader,
+  streamTourChat,
+} from './tour-api.js'
 
 /** @param {unknown} body */
 function fakeFetch(body) {
@@ -22,6 +32,7 @@ function fakeFetch(body) {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 describe('the tour requests', () => {
@@ -43,6 +54,44 @@ describe('the tour requests', () => {
       headSha: 'a'.repeat(40),
       basis: '{"picks":[]}',
     })
+  })
+
+  it('reach the grilling and AI Chat routes the way the page calls them', async () => {
+    const f = fakeFetch({ ok: true })
+    vi.stubGlobal('fetch', f.impl)
+    await cancelGrill('42')
+    await fetchTourThreadHistory('42', 'why b?')
+    await markTourThreadUnseen('42', 'why b?', 2)
+    await cancelTourChat('branch')
+    expect(f.calls.map(c => [c.url, c.init?.method ?? 'GET', c.init?.body ?? null])).toEqual([
+      ['/api/tours/42/grill/cancel', 'POST', '{}'],
+      ['/api/tours/42/chat/threads/why%20b%3F/history', 'GET', null],
+      ['/api/tours/42/chat/threads/why%20b%3F/unseen', 'PUT', '{"unseen":2}'],
+      ['/api/tours/branch/chat/cancel', 'POST', '{}'],
+    ])
+    // A question streams its answer back frame by frame.
+    /** @type {Array<{ url: string, body: unknown }>} */
+    const asked = []
+    vi.stubGlobal(
+      'fetch',
+      /** @type {typeof fetch} */ (
+        async (url, init) => {
+          asked.push({ url: String(url), body: JSON.parse(String(init?.body)) })
+          return new Response('event: chunk\ndata: {"text":"Because."}\n\nevent: done\ndata: {}\n\n', {
+            headers: { 'content-type': 'text/event-stream' },
+          })
+        }
+      )
+    )
+    /** @type {Array<{ event: string, data: unknown }>} */
+    const events = []
+    const input = { message: 'why?', context: /** @type {const} */ ({ kind: 'tour' }), thread: 't1' }
+    await streamTourChat('42', input, { onEvent: e => events.push(e) })
+    expect(asked).toEqual([{ url: '/api/tours/42/chat', body: input }])
+    expect(events).toEqual([
+      { event: 'chunk', data: { text: 'Because.' } },
+      { event: 'done', data: {} },
+    ])
   })
 })
 

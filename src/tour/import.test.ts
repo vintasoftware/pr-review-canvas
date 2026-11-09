@@ -1,10 +1,12 @@
 // @vitest-environment node
+import type { CommentsPayload } from '../contract/comments.js'
 import type { TourArtifact } from '../contract/tour.js'
 import { makeTestContext, type TestContext } from '../testing/fakes.js'
 import { HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { syntheticTour } from '../testing/synthetic-tour.js'
-import { importTour, mergedRecord } from './import.js'
+import { fetchSharedTour, importTour, mergedRecord } from './import.js'
 import { tourManifest } from './share.js'
+import { buildZipName } from '../canvas/name.js'
 import { buildZip } from '../canvas/zip.js'
 import { TOUR_ZIP } from './comment.js'
 
@@ -98,5 +100,46 @@ describe('importTour', () => {
       record: { touredBy: [] },
       changed: false,
     })
+  })
+})
+
+describe('fetchSharedTour', () => {
+  const NO_COMMENTS: CommentsPayload = {
+    fetchedAt: '2026-09-10T12:00:00.000Z',
+    headSha: HEAD_SHA,
+    reviewComments: [],
+    issueComments: [],
+  }
+
+  it('looks for nothing on local work, and passes over a zip that will not download to the next', async () => {
+    const tour = syntheticTour()
+    const name = buildZipName('tour', {
+      repo: tour.repo,
+      headSha: HEAD_SHA,
+      prNumber: 42,
+      generatedAt: tour.generatedAt,
+    })
+    const bytes = zipOf(tour)
+    t = await makeTestContext({
+      fetch: async url =>
+        String(url).includes('/files/2/')
+          ? new Response('', { status: 502 })
+          : new Response(bytes.slice().buffer as ArrayBuffer, { status: 200 }),
+    })
+    // A pull request with no edit time: its body is read all the same.
+    const { updatedAt: _updatedAt, ...pr } = syntheticArtifact().pr
+    // The link posted last is tried first, and it fails.
+    const body = [1, 2].map(n => `https://github.com/user-attachments/files/${n}/${name}`).join('\n')
+    expect(await fetchSharedTour(t.ctx, { ...pr, body, number: null }, NO_COMMENTS)).toEqual({
+      found: false,
+      imported: false,
+      warnings: [],
+    })
+    expect(await fetchSharedTour(t.ctx, { ...pr, body }, NO_COMMENTS)).toEqual({
+      found: true,
+      imported: true,
+      warnings: [`${name}: network`],
+    })
+    expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
   })
 })

@@ -28,8 +28,9 @@ function chatBundle() {
 }
 
 /**
- * The grilling server as the drawer sees it: the thread it holds and the answers it streams.
- * @param {{ history?: import('../contract-types.js').ChatTurn[], answers?: string[], fail?: boolean }} [opts]
+ * The grilling server as the drawer sees it: the thread it holds and the answers it streams. Set
+ * `failReads` or `failCancels` and, from then on, reading the thread or a stop fails.
+ * @param {{ history?: import('../contract-types.js').ChatTurn[], answers?: string[] }} [opts]
  */
 function fakeApi(opts = {}) {
   /** @type {Array<{ message: string, context: unknown }>} */
@@ -44,13 +45,14 @@ function fakeApi(opts = {}) {
     thread.push({ role: 'user', text: message, at: 'x', context: /** @type {any} */ (context) })
     thread.push({ role: 'assistant', text, at: 'x', ...(incomplete === undefined ? {} : { incomplete }) })
   }
-  return {
+  const server = {
     sent,
     cancels,
-    cancelled: 0,
+    failReads: false,
+    failCancels: false,
     api: {
       fetchGrillHistory: async () => {
-        if (opts.fail) {
+        if (server.failReads) {
           throw new Error('no thread')
         }
         return { name: 't0', turns: thread.map(t => ({ ...t })) }
@@ -72,6 +74,9 @@ function fakeApi(opts = {}) {
         if (answer === 'THROW') {
           throw new Error('offline')
         }
+        if (answer === 'REJECT') {
+          throw 'refused'
+        }
         if (answer === 'BUSY') {
           throw new ApiError({ code: 'CHAT_BUSY', message: 'a chat turn is already running' }, 409)
         }
@@ -84,10 +89,14 @@ function fakeApi(opts = {}) {
       },
       cancelGrill: async () => {
         cancels.push(true)
+        if (server.failCancels) {
+          throw new Error('offline')
+        }
         return { cancelled: true }
       },
     },
   }
+  return server
 }
 
 function mountDialog() {
@@ -120,6 +129,21 @@ describe('grillsWithChat', () => {
     const off = chatBundle()
     expect(grillsWithChat({ ...off, options: { ...off.options, grill: 'off' } })).toBe(false)
     expect(speechRecognizer()).toBeNull()
+  })
+})
+
+describe('speechRecognizer', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("is the browser's recognizer, under its prefixed name or its own", () => {
+    const prefixed = vi.fn()
+    vi.stubGlobal('webkitSpeechRecognition', prefixed)
+    expect(speechRecognizer()).toBe(prefixed)
+    const standard = vi.fn()
+    vi.stubGlobal('SpeechRecognition', standard)
+    expect(speechRecognizer()).toBe(standard)
   })
 })
 
@@ -286,7 +310,7 @@ describe('the grilling with an agent', () => {
 
   it('offers to stop an answer that runs elsewhere and send again, dropping nothing the reader said', async () => {
     const dialog = mountDialog()
-    const server = fakeApi({ answers: ['BUSY', 'What should happen to the callers?'] })
+    const server = fakeApi({ answers: ['BUSY', 'What should happen to the callers?', 'BUSY', 'Noted.'] })
     const grill = createGrill({
       dialog,
       key: '42',
@@ -306,6 +330,16 @@ describe('the grilling with an agent', () => {
     expect(server.cancels).toHaveLength(1)
     expect(server.sent.map(s => s.message)).toEqual([openingMessage(decision), openingMessage(decision)])
     expect(dialog.querySelector('[data-act="busy-retry"]')).toBeNull()
+    // A stop that cannot reach the server still lets the message go.
+    server.failCancels = true
+    const composer = /** @type {HTMLTextAreaElement} */ (dialog.querySelector('#composer'))
+    composer.value = 'They stay.'
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await vi.waitFor(() => expect(dialog.querySelector('[data-act="busy-retry"]')).not.toBeNull())
+    click('[data-act="busy-retry"]')
+    await vi.waitFor(() => expect(dialog.querySelector('#grill-log')?.textContent).toContain('Noted.'))
+    expect(server.cancels).toHaveLength(2)
+    expect(server.sent.map(s => s.message).slice(2)).toEqual(['They stay.', 'They stay.'])
     grill.stop()
   })
 
@@ -329,6 +363,7 @@ describe('the grilling with an agent', () => {
         'ERROR',
         'CANCEL',
         'THROW',
+        'REJECT',
       ],
     })
     const bundle = chatBundle()
@@ -377,26 +412,34 @@ describe('the grilling with an agent', () => {
       expect(dialog.querySelector('#grill-log')?.textContent).toContain('stopped early (offline)')
     )
     expect(server.sent[4]?.message).toBe('y')
+    // A failure that is not an error is still named.
+    click('[data-act="resend"]')
+    await vi.waitFor(() =>
+      expect(dialog.querySelector('#grill-log')?.textContent).toContain('stopped early (refused)')
+    )
+    expect(server.sent[5]?.message).toBe('y')
     // An empty message goes nowhere.
     composer().value = '  '
     form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    expect(server.sent).toHaveLength(5)
+    expect(server.sent).toHaveLength(6)
     grill.stop()
   })
 
-  it('stops a turn in flight when the drawer closes, and survives a thread it cannot read', async () => {
+  it('stops a turn in flight on stop or when the drawer closes, and survives a thread it cannot read', async () => {
     const dialog = mountDialog()
-    const pending = { release: /** @type {(() => void) | null} */ (null) }
-    const cancelGrill = vi.fn(async () => ({ cancelled: true }))
+    // The stop reaches no server here: the answer stops on this page all the same.
+    const cancelGrill = vi.fn(async () => {
+      throw new Error('offline')
+    })
     const api = {
       fetchGrillHistory: async () => {
         throw new Error('no thread')
       },
       /** @type {typeof import('./tour-api.js').streamGrill} */
       streamGrill: (_key, _input, opts) =>
-        new Promise(resolve => {
+        new Promise((_resolve, reject) => {
           opts.onEvent({ event: 'chunk', data: { text: 'thinking' } })
-          pending.release = () => resolve(undefined)
+          opts.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
         }),
       cancelGrill,
     }
@@ -412,11 +455,20 @@ describe('the grilling with an agent', () => {
     await vi.waitFor(() => expect(dialog.querySelector('[data-act="stop"]')).not.toBeNull())
     expect(dialog.querySelector('#composer')?.hasAttribute('disabled')).toBe(true)
     click('[data-act="stop"]')
-    expect(cancelGrill).toHaveBeenCalled()
-    pending.release?.()
+    expect(cancelGrill).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => expect(dialog.querySelector('[data-act="stop"]')).toBeNull())
+    const log = () => dialog.querySelector('#grill-log')?.textContent ?? ''
+    expect(log()).toContain('thinking')
+    expect(log()).toContain('the answer stopped early (stopped)')
+    // Closing the drawer while an answer comes in stops it too.
+    const composer = /** @type {HTMLTextAreaElement} */ (dialog.querySelector('#composer'))
+    composer.value = 'And the callers?'
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await vi.waitFor(() => expect(dialog.querySelector('[data-act="stop"]')).not.toBeNull())
     grill.close()
     expect(dialog.open).toBe(false)
+    expect(cancelGrill).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(log().match(/stopped early \(stopped\)/g)).toHaveLength(2))
     grill.stop()
   })
 
@@ -462,6 +514,154 @@ describe('the grilling with an agent', () => {
     expect(dialog.querySelector('.turn.a .chat-activity')?.textContent).toMatch(/^Elapsed: \d+s$/)
     expect(dialog.querySelector('.turn.a .chat-tool-calls summary')?.textContent).toBe('1 tool calls')
     expect(dialog.querySelector('.tour-grill-steps [aria-current="step"]')?.textContent).toBe('3approve')
+    grill.stop()
+  })
+
+  it('says the plan is being written while it streams, then lists each change under its decision', async () => {
+    const dialog = mountDialog()
+    /** @type {string[]} */
+    const seen = []
+    const api = {
+      fetchGrillHistory: async () => ({ name: 't0', turns: [] }),
+      /** @type {typeof import('./tour-api.js').streamGrill} */
+      streamGrill: async (_key, _input, opts) => {
+        const log = () => dialog.querySelector('#grill-log .turn.a')?.innerHTML ?? ''
+        opts.onEvent({ event: 'chunk', data: { text: 'The plan:\n```plan\n{ "changes": [' } })
+        await vi.waitFor(() => expect(log()).toContain('The plan:'))
+        seen.push(log())
+        opts.onEvent({
+          event: 'chunk',
+          data: {
+            text: '{ "key": "sum-over-product", "what": "Multiply.", "where": ["src/app.ts:4"], "unchanged": "Callers." }], "kept": [] }\n```',
+          },
+        })
+      },
+      cancelGrill: async () => ({ cancelled: true }),
+    }
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove: () => {},
+      onReader: () => {},
+      api,
+    })
+    await grill.openPlan()
+    expect(seen[0]).toContain('writing the plan…')
+    expect(seen[0]).not.toContain('changes')
+    const change = dialog.querySelector('.tour-plan-card ol li')
+    expect(change?.querySelector('b')?.textContent).toBe('Sum over product?')
+    expect(change?.textContent).toContain('Multiply.')
+    expect(change?.querySelector('.where')?.textContent).toBe('src/app.ts:4')
+    expect(change?.querySelector('em')?.textContent).toBe('stays: Callers.')
+    // Nothing kept says so.
+    expect(dialog.querySelector('.tour-plan-card ul')).toBeNull()
+    expect(dialog.querySelector('.tour-plan-card p')?.textContent).toBe('none')
+    grill.stop()
+  })
+
+  it('shows a block that does not check out as its code and why, and offers to ask for the card', async () => {
+    const dialog = mountDialog()
+    const server = fakeApi({
+      answers: ['What should happen to the callers?', 'Here.\n```restatement\n{ "what": "Multiply." }\n```'],
+    })
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove: () => {},
+      onReader: () => {},
+      api: server.api,
+    })
+    await grill.open(decision, undefined)
+    click('[data-act="done"]')
+    await vi.waitFor(() => expect(dialog.querySelector('[data-act="ask-card"]')).not.toBeNull())
+    expect(dialog.querySelector('.tour-invalid code')?.textContent).toBe('{ "what": "Multiply." }')
+    expect(dialog.querySelector('.tour-invalid + .tour-hint')?.textContent).toBe(
+      'the block has no "unchanged"'
+    )
+    expect(dialog.querySelector('[data-act="approve"]')).toBeNull()
+    grill.stop()
+  })
+
+  it('shows the restatement the reader wrote themselves when they open the decision again', async () => {
+    const dialog = mountDialog()
+    const server = fakeApi({ answers: ['What should happen to the callers?', 'In prose.'] })
+    const onApprove = vi.fn()
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove,
+      onReader: () => {},
+      api: server.api,
+    })
+    await grill.open(decision, undefined)
+    click('[data-act="done"]')
+    await vi.waitFor(() => expect(dialog.querySelector('[data-act="write-own"]')).not.toBeNull())
+    click('[data-act="write-own"]')
+    const form = dialog.querySelector('#grill-log form[data-act="restate"]')
+    const what = form?.querySelector('textarea[name="what"]')
+    const unchanged = form?.querySelector('textarea[name="unchanged"]')
+    if (
+      !(
+        form instanceof HTMLFormElement &&
+        what instanceof HTMLTextAreaElement &&
+        unchanged instanceof HTMLTextAreaElement
+      )
+    ) {
+      throw new Error('no form')
+    }
+    what.value = 'Multiply.'
+    unchanged.value = 'Callers.'
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    expect(onApprove).toHaveBeenCalledWith(decision, RESTATEMENT)
+    expect(dialog.open).toBe(false)
+    // No card of the agent's says it, so the one the reader wrote is shown, theirs to edit.
+    await grill.open(decision, RESTATEMENT)
+    expect(dialog.querySelector('.tour-approved')?.textContent).toContain('Multiply.')
+    expect(dialog.querySelector('.tour-approved [data-act="edit"]')).not.toBeNull()
+    expect(server.sent).toHaveLength(2)
+    grill.stop()
+  })
+
+  it('leaves the drawer as it is on a click off its commands, and starts a new line on Shift+Enter', async () => {
+    const dialog = mountDialog()
+    const server = fakeApi({ answers: ['What should happen to the callers?'] })
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: chatBundle(),
+      onApprove: () => {},
+      onReader: () => {},
+      api: server.api,
+    })
+    await grill.open(decision, undefined)
+    const composer = /** @type {HTMLTextAreaElement} */ (dialog.querySelector('#composer'))
+    composer.value = 'They stay,'
+    click('.ctx-line')
+    click('#composer')
+    composer.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })
+    )
+    expect(dialog.open).toBe(true)
+    expect(composer.value).toBe('They stay,')
+    expect(server.sent).toHaveLength(1)
+    grill.stop()
+  })
+
+  it('names no agent or model when the bundle has none', async () => {
+    const dialog = mountDialog()
+    const grill = createGrill({
+      dialog,
+      key: '42',
+      bundle: syntheticTourBundle({ chat: { enabled: true, acpx: true } }),
+      onApprove: () => {},
+      onReader: () => {},
+      api: fakeApi().api,
+    })
+    await grill.open(decision, undefined)
+    expect(dialog.querySelector('.ctx-line')?.textContent).toBe('agent · read-only · one thread per tour')
     grill.stop()
   })
 
@@ -621,9 +821,7 @@ describe('the grilling with an agent', () => {
     await tabB.open(decision, undefined)
     expect(b.querySelector('#grill-log')?.textContent).toContain('Noted, they stay.')
     // A tab whose thread cannot be read now keeps what it had.
-    server.api.fetchGrillHistory = async () => {
-      throw new Error('offline')
-    }
+    server.failReads = true
     tabB.close()
     await tabB.open(decision, undefined)
     expect(b.querySelector('#grill-log')?.textContent).toContain('Noted, they stay.')
@@ -731,10 +929,16 @@ describe('the grilling with an agent', () => {
       'keep the callers'
     )
     expect(dialog.querySelector('.tour-mic')?.getAttribute('data-state')).toBe('')
+    // What the reader says next goes after what the box holds.
+    click('[data-act="mic"]')
+    recognizers[1]?.fire('and the tests')
+    expect(/** @type {HTMLTextAreaElement} */ (dialog.querySelector('#composer')).value).toBe(
+      'keep the callers and the tests'
+    )
     // Closing while listening stops the recognizer.
     click('[data-act="mic"]')
     grill.close()
-    expect(recognizers[1]?.stopped).toBe(true)
+    expect(recognizers[2]?.stopped).toBe(true)
     // The other way out of the notice: audio off for this reader, and no mic after.
     const fresh = chatBundle()
     const other = createGrill({

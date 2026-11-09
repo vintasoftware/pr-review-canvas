@@ -82,4 +82,17 @@ describe('createTourStore', () => {
     expect(await main.findFor(42, OTHER_SHA)).toEqual({ status: 'ready', headSha: OTHER_SHA })
     expect(await main.findFor('branch', HEAD_SHA)).toEqual({ status: 'ready', headSha: HEAD_SHA })
   })
+
+  it('keeps an older tour of uncommitted work to the uncommitted review, which sits on no branch', async () => {
+    const store = createTourStore(dir, createFakeGit(), null)
+    await store.write(HEAD_SHA, syntheticTour({ pr: { ...syntheticTour().pr, number: null } }), {
+      worktree: true,
+    })
+    expect((await store.readIndex()).tours[HEAD_SHA]).toMatchObject({ worktree: true })
+    expect(await store.findFor('uncommitted', OTHER_SHA)).toMatchObject({
+      status: 'stale',
+      headSha: HEAD_SHA,
+    })
+    expect(await store.findFor('branch', OTHER_SHA)).toEqual({ status: 'missing' })
+  })
 })

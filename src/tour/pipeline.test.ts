@@ -26,9 +26,9 @@ import { guideHasRunRecipe, prepareTour } from './prepare.js'
 import { previewTour } from './preview.js'
 import { renderTourPrompt } from './prompt.js'
 import { carriedRecord, publishTour, readTourContext, readTourModel, TourInvalidError } from './publish.js'
-import { exportTour, zipStoredTour } from './share.js'
+import { exportTour, tourManifest, zipStoredTour } from './share.js'
 import { buildZipName, parseZipName } from '../canvas/name.js'
-import { readZip } from '../canvas/zip.js'
+import { buildZip, readZip } from '../canvas/zip.js'
 
 let t: TestContext
 afterEach(() => t?.cleanup())
@@ -109,6 +109,16 @@ describe('tour prepare', () => {
     expect(forced.status).toBe('prepared')
     expect(await t.ctx.tours.exists(HEAD_SHA)).toBe(true)
     await expect(readFile(path.join(first.tourDir, 'tour-model.json'))).rejects.toThrow()
+    // A project that turns try-it off keeps it off, whatever recipe the guide has.
+    t.ctx.projectConfig = {
+      config: { ...DEFAULT_PROJECT_CONFIG, tour: { ...DEFAULT_PROJECT_CONFIG.tour, tryIt: 'off' } },
+      warnings: [],
+      source: null,
+    }
+    const off = await prepareTour(t.ctx, { kind: 'pr', number: 42 }, { force: true, log: () => undefined })
+    expect(TourContextSchema.parse(JSON.parse(await readFile(off.contextPath, 'utf8'))).options.tryIt).toBe(
+      false
+    )
   })
 
   it('names the local review it prepared', async () => {
@@ -219,6 +229,13 @@ describe('tour publish', () => {
     expect(out.at(-1)).toContain('MODEL_INVALID')
     expect(await t.ctx.tours.exists(HEAD_SHA)).toBe(false)
     expect(await readFile(path.join(result.tourDir, 'tour.log'), 'utf8')).toMatch(/invalid attempts=1/)
+    // A model that does not parse is refused the same way, as one schema problem.
+    await writeFile(path.join(result.tourDir, 'tour-model.json'), '{')
+    const unparsed = await publishTour(t.ctx, result.tourDir, OPTS).catch(e => e)
+    expect(unparsed).toBeInstanceOf(TourInvalidError)
+    expect(unparsed.report.errors.map((e: { code: string }) => e.code)).toEqual(['SCHEMA'])
+    expect(unparsed.attempts).toBe(2)
+    expect(await t.ctx.tours.exists(HEAD_SHA)).toBe(false)
   })
 
   it('keeps the tour local when sharing or the run turns it off, and exports a zip when the post fails', async () => {
@@ -275,6 +292,37 @@ describe('tour publish', () => {
     t.ctx.config.dataDir = '/other'
     t.ctx.tours = { ...t.ctx.tours, tourDir: () => '/other/tours/x' }
     await expect(publishTour(t.ctx, result.tourDir, OPTS)).rejects.toThrow('is not the tour dir')
+    // The head of a ref comparison moved: refused, unless told to publish for the old commit.
+    await t.cleanup()
+    const git = gitFor42()
+    t = await makeTestContext({ git, gh: ghFor42() })
+    const refs = await prepareTour(
+      t.ctx,
+      { kind: 'refs', base: 'main', head: 'feat/b' },
+      { force: false, log: () => undefined }
+    )
+    await writeTourFiles(refs.tourDir, refs.scenesDir)
+    git.options.refs!['feat/b'] = 'c'.repeat(40)
+    await expect(publishTour(t.ctx, refs.tourDir, OPTS)).rejects.toMatchObject({
+      code: 'CANVAS_STALE',
+      message: expect.stringContaining('the target moved to ccccccc'),
+    })
+    expect(await t.ctx.tours.exists(HEAD_SHA)).toBe(false)
+    const stale = await publishTour(t.ctx, refs.tourDir, { ...OPTS, allowStale: true })
+    // A ref comparison has no page to link to and no pull request to share on.
+    expect(stale).toMatchObject({ headSha: HEAD_SHA, sharing: { status: 'local' } })
+    expect(stale.tourUrl).toBeUndefined()
+  })
+
+  it('replaces a stored tour of the head it cannot read, carrying nothing from it', async () => {
+    const result = await prepared()
+    await writeTourFiles(result.tourDir, result.scenesDir)
+    // A tour.json an older version wrote, in a shape this one no longer reads.
+    await writeFile(path.join(result.tourDir, 'tour.json'), '{"version": 0, "record": {"touredBy": "ana"}}')
+    await publishTour(t.ctx, result.tourDir, { ...OPTS, share: false })
+    const stored = await t.ctx.tours.read(HEAD_SHA)
+    expect(stored?.landmarks).toHaveLength(syntheticTourModel().landmarks.length)
+    expect(stored?.record).toEqual({ touredBy: [] })
   })
 })
 
@@ -432,10 +480,41 @@ describe('the tour CLI', () => {
     await writeFile(model, '{')
     expect(await runTour(t.ctx, ['validate', model, '--tour', result.tourDir], invalid.io)).toBe(5)
     expect(JSON.parse(invalid.out[0]!).errors[0].code).toBe('SCHEMA')
+    const invalidHuman = capture()
+    expect(
+      await runTour(t.ctx, ['validate', model, '--tour', result.tourDir, '--human'], invalidHuman.io)
+    ).toBe(5)
+    expect(invalidHuman.out).toEqual([expect.stringMatching(/^SCHEMA /)])
     await writeTourFiles(result.tourDir, result.scenesDir)
+    const valid = capture()
+    expect(await runTour(t.ctx, ['validate', model, '--tour', result.tourDir], valid.io)).toBe(0)
+    expect(JSON.parse(valid.out[0]!)).toEqual({ ok: true, errors: [] })
     const human = capture()
     expect(await runTour(t.ctx, ['validate', model, '--tour', result.tourDir, '--human'], human.io)).toBe(0)
-    expect(human.out[0]).toMatch(/^ok: tour-model\.json passes/)
+    expect(human.out[0]).toMatch(/^ok: tour-model\.json passes: 1 why landmarks \(budget 1, ceiling 4\), /)
+    // A state landmark is named apart from the why landmarks the budget counts.
+    const synthetic = syntheticTourModel()
+    const shape = {
+      id: 'shape',
+      stage: 'why',
+      state: true,
+      title: 'Stored runs keep their shape',
+      lead: 'Nothing stored changes; only the value run() computes.',
+      body: ['No migration runs.'],
+      scene: '<div class="scene" data-technique="timeline"><div class="box good">same shape</div></div>',
+      code: [],
+      literate: [],
+    }
+    const withState = path.join(result.tourDir, 'with-state.json')
+    const landmarks = [...synthetic.landmarks.slice(0, 3), shape, ...synthetic.landmarks.slice(3)]
+    await writeFile(withState, JSON.stringify({ ...synthetic, landmarks }))
+    const state = capture()
+    expect(await runTour(t.ctx, ['validate', withState, '--tour', result.tourDir, '--human'], state.io)).toBe(
+      0
+    )
+    expect(state.out[0]).toMatch(
+      /^ok: with-state\.json passes: 1 why landmarks \(budget 1, ceiling 4\) and the state landmark, /
+    )
     const published = capture()
     expect(
       await runTour(
@@ -466,6 +545,10 @@ describe('the tour CLI', () => {
 
   it('exports the tour a review shows and imports it back, as export and import do a canvas', async () => {
     await prepared()
+    await expect(runTour(t.ctx, ['export', '--pr', '42'], capture().io)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'no tour of 42',
+    })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     const out = path.join(t.dataDir, 'shared')
     await mkdir(out)
@@ -477,6 +560,15 @@ describe('the tour CLI', () => {
     const byHead = capture()
     expect(await runTour(t.ctx, ['export', '--head', HEAD_SHA, '--pr', '42'], byHead.io)).toBe(0)
     expect(JSON.parse(byHead.out[0]!).path).toMatch(/exports\/pr-42-.+-tour\.zip$/)
+    // A head alone keeps the number its tour was published for.
+    const bare = capture()
+    bare.io.json = false
+    expect(await runTour(t.ctx, ['export', '--head', HEAD_SHA], bare.io)).toBe(0)
+    expect(bare.out).toEqual([
+      expect.stringMatching(
+        new RegExp(`^Exported the tour for ${HEAD_SHA.slice(0, 7)} to .+/exports/pr-42-.+-tour\\.zip$`)
+      ),
+    ])
     await expect(runTour(t.ctx, ['export', '--head', HEAD_SHA, '--branch'], byHead.io)).rejects.toThrow(
       'tour export takes --head alone'
     )
@@ -492,6 +584,17 @@ describe('the tour CLI', () => {
     await rm(t.ctx.tours.tourDir(HEAD_SHA), { recursive: true })
     expect(await runTour(t.ctx, ['import', zipPath, '--pr', '42'], human.io)).toBe(0)
     expect(human.out).toEqual([`Imported the tour for ${HEAD_SHA.slice(0, 7)}.`])
+    // A copy from another repository goes in only with --force, and says so; this one is no newer.
+    const foreign = path.join(out, 'foreign.zip')
+    const manifest = { ...tourManifest(syntheticTour(), '9.9.9'), repo: { owner: 'other', name: 'repo' } }
+    await writeFile(foreign, buildZip(TOUR_ZIP, manifest, syntheticTour()))
+    const forced = capture()
+    forced.io.json = false
+    expect(await runTour(t.ctx, ['import', foreign, '--force'], forced.io)).toBe(0)
+    expect(forced.err).toEqual(['warning: imported a tour exported from other/repo'])
+    expect(forced.out).toEqual([
+      `A tour for ${HEAD_SHA.slice(0, 7)} is already stored and is at least as new; kept it.`,
+    ])
     await expect(runTour(t.ctx, ['import'], human.io)).rejects.toThrow('tour import takes one zip')
   })
 
@@ -538,6 +641,13 @@ describe('the tour CLI', () => {
     await expect(runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)).rejects.toThrow(
       'a tour generation is using the review checkout of 42'
     )
+    // Nor is a side taken away while it is held.
+    await expect(
+      runTour(t.ctx, ['checkout', result.tourDir, 'base', '--remove'], capture().io)
+    ).rejects.toMatchObject({
+      code: 'CHECKOUT_BUSY',
+      message: 'a tour generation is using the review checkout of 42',
+    })
     await held.release()
     // Done with them, the generator takes both away; the scratch folder goes with each.
     const removed = capture()
@@ -555,7 +665,7 @@ describe('the tour CLI', () => {
     )
   })
 
-  it('has no checkout for a ref comparison', async () => {
+  it('has no checkout and no page to preview for a ref comparison', async () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const result = await prepareTour(
       t.ctx,
@@ -565,6 +675,102 @@ describe('the tour CLI', () => {
     await expect(runTour(t.ctx, ['checkout', result.tourDir, 'base'], capture().io)).rejects.toThrow(
       'a ref comparison has no checkout'
     )
+    await writeTourFiles(result.tourDir, result.scenesDir)
+    const preview = capture()
+    expect(await runTour(t.ctx, ['preview', result.tourDir, '--landmark', 'world'], preview.io)).toBe(0)
+    expect(JSON.parse(preview.out[0]!)).toMatchObject({
+      status: 'no-page',
+      headSha: HEAD_SHA,
+      landmarks: 1,
+      screenshots: [],
+    })
+  })
+
+  it('runs the steps for local work under its review key, with no pull request to share on or name', async () => {
+    const git = gitForLocal()
+    t = await makeTestContext({ git, gh: ghFor42() })
+    const result = await prepareTour(
+      t.ctx,
+      { kind: 'local', source: 'uncommitted' },
+      { force: false, log: () => undefined }
+    )
+    await writeTourFiles(result.tourDir, result.scenesDir)
+    const published = capture()
+    expect(
+      await runTour(
+        t.ctx,
+        ['publish', result.tourDir, '--agent', 'claude', '--harness', 'claude-code'],
+        published.io
+      )
+    ).toBe(0)
+    expect(JSON.parse(published.out[0]!)).toMatchObject({
+      headSha: HEAD_SHA,
+      tourUrl: 'http://localhost:3010/r/acme/widgets/tour/uncommitted',
+      sharing: { status: 'local' },
+    })
+    // The snapshot of uncommitted work gets a ref of its own, so git keeps the commit the tour shows.
+    expect(git.calls).toContainEqual(['update-ref', HEAD_SHA])
+    expect((await t.ctx.tours.readIndex()).tours[HEAD_SHA]).toMatchObject({ worktree: true })
+    const exported = capture()
+    expect(await runTour(t.ctx, ['export', '--uncommitted'], exported.io)).toBe(0)
+    const { path: zipPath, name } = JSON.parse(exported.out[0]!) as { path: string; name: string }
+    expect(name).toMatch(/^ref-.+-tour\.zip$/)
+    expect(readZip(new Uint8Array(await readFile(zipPath)), TOUR_ZIP).manifest.prNumber).toBeUndefined()
+    const checkout = capture()
+    expect(await runTour(t.ctx, ['checkout', result.tourDir, 'head'], checkout.io)).toBe(0)
+    expect(JSON.parse(checkout.out[0]!)).toMatchObject({
+      side: 'head',
+      dir: path.join(t.ctx.checkouts.root, 'tour', 'head', 'uncommitted'),
+      sha: HEAD_SHA,
+    })
+  })
+
+  it('stores the tour and warns with its zip when the comment fails to post', async () => {
+    const result = await prepared()
+    await writeTourFiles(result.tourDir, result.scenesDir)
+    const { io, out, err } = capture()
+    expect(
+      await runTour(t.ctx, ['publish', result.tourDir, '--agent', 'claude', '--harness', 'claude-code'], io)
+    ).toBe(0)
+    expect(JSON.parse(out[0]!).sharing.status).toBe('failed')
+    expect(err).toEqual([expect.stringMatching(/^Automatic tour sharing failed: .+ ZIP: .+-tour\.zip$/)])
+    expect(await t.ctx.tours.exists(HEAD_SHA)).toBe(true)
+  })
+
+  it('lists the scene gallery, draws the entries named into the data dir or --out, and refuses one it lacks', async () => {
+    t = await makeTestContext()
+    // A stand-in browser that writes the picture it is asked for.
+    const browser = path.join(t.dataDir, 'browser')
+    await writeFile(
+      browser,
+      '#!/bin/sh\nfor a; do case "$a" in --screenshot=*) printf png > "$(echo "$a" | cut -d= -f2-)";; esac; done\n',
+      { mode: 0o755 }
+    )
+    vi.stubEnv('PR_REVIEW_BROWSER', browser)
+    try {
+      const listed = capture()
+      expect(await runTour(t.ctx, ['gallery'], listed.io)).toBe(0)
+      const list = JSON.parse(listed.out[0]!) as { status: string; entries: unknown[] }
+      expect(list.status).toBe('listed')
+      expect(list.entries).toContainEqual({ slug: 'data-flow', kind: 'scene' })
+      const drawn = capture()
+      expect(await runTour(t.ctx, ['gallery', 'data-flow'], drawn.io)).toBe(0)
+      const png = path.join(t.dataDir, 'gallery', 'data-flow.png')
+      expect(JSON.parse(drawn.out[0]!).entries).toEqual([{ slug: 'data-flow', kind: 'scene', png }])
+      expect(await readFile(png, 'utf8')).toBe('png')
+      const out = path.join(t.dataDir, 'pictures')
+      const elsewhere = capture()
+      expect(await runTour(t.ctx, ['gallery', 'data-flow', '--out', out], elsewhere.io)).toBe(0)
+      expect(await readdir(out)).toContain('data-flow.png')
+      const unknown = capture()
+      expect(await runTour(t.ctx, ['gallery', 'nope'], unknown.io)).toBe(5)
+      expect(JSON.parse(unknown.out[0]!)).toMatchObject({
+        status: 'unknown',
+        hint: 'no gallery entry nope; pick from the entries listed',
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('names its usage errors', async () => {
@@ -577,6 +783,7 @@ describe('the tour CLI', () => {
     await expect(runTour(t.ctx, ['publish', 'dir'], io)).rejects.toThrow('needs --agent')
     await expect(runTour(t.ctx, ['publish', 'dir', '--agent', 'x'], io)).rejects.toThrow('needs --harness')
     await expect(runTour(t.ctx, ['preview'], io)).rejects.toThrow('takes one directory')
+    await expect(runTour(t.ctx, ['preview', 'a', 'b'], io)).rejects.toThrow('takes one directory')
     await expect(runTour(t.ctx, ['hunk', 'dir'], io)).rejects.toThrow('takes a tour directory and a hunk id')
     await expect(runTour(t.ctx, ['hunk', 'dir', 'a#1', '--from', 'x', '--to', '2'], io)).rejects.toThrow(
       '--from takes a line number'
@@ -661,6 +868,15 @@ describe('a tour that updates an earlier one', () => {
 
   it('copies the earlier tour and its pictures, says how the files relate, and tells the agent what carries', async () => {
     await withOldTour()
+    // The respect landmark was drawn as a micro-world alone.
+    const micro = '<div class="scene" data-technique="checks">try it</div>'
+    const old = await t.ctx.tours.read(OLD)
+    await t.ctx.tours.write(OLD, {
+      ...old!,
+      landmarks: old!.landmarks.map(({ scene, ...l }) =>
+        l.id === 'respect' ? { ...l, micro } : { ...l, scene }
+      ),
+    })
     const result = await prepare()
     const basisDir = path.join(result.tourDir, 'basis')
     expect(result.basis).toEqual({
@@ -672,12 +888,14 @@ describe('a tour that updates an earlier one', () => {
     expect(model.landmarks.map((l: { id: string }) => l.id)).toEqual(
       syntheticTourModel().landmarks.map(l => l.id)
     )
-    expect(model.landmarks.every((l: object) => !('scene' in l))).toBe(true)
-    expect((await readdir(result.basis!.scenesDir)).sort()).toEqual(
-      syntheticTourModel()
-        .landmarks.map(l => `${l.id}.scene.html`)
-        .sort()
-    )
+    expect(model.landmarks.every((l: object) => !('scene' in l) && !('micro' in l))).toBe(true)
+    expect((await readdir(result.basis!.scenesDir)).sort()).toEqual([
+      'before.scene.html',
+      'respect.micro.html',
+      'sum.scene.html',
+      'world.scene.html',
+    ])
+    expect(await readFile(path.join(result.basis!.scenesDir, 'respect.micro.html'), 'utf8')).toBe(micro)
     const context = TourContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
     // The head's diff is the old commit's, so every file carries.
     expect(context.basis?.files).toMatchObject({ changed: [], added: [], removed: [] })
@@ -710,5 +928,14 @@ describe('a tour that updates an earlier one', () => {
     const unrelated = await prepare()
     expect(unrelated.basis).toBeUndefined()
     expect(await readFile(unrelated.promptPath, 'utf8')).not.toContain('## The earlier tour')
+    // Nor from one the index names but whose file is gone, or whose commit this clone no longer has.
+    await t.cleanup()
+    await withOldTour()
+    await rm(path.join(t.ctx.tours.tourDir(OLD), 'tour.json'))
+    expect((await prepare()).basis).toBeUndefined()
+    await t.cleanup()
+    await withOldTour()
+    delete oldGit.options.refs?.['old']
+    expect((await prepare()).basis).toBeUndefined()
   })
 })

@@ -29,8 +29,12 @@ function diffsMarkdown(ctx: TourContext, patches: Record<string, string>): strin
   const lines = patchLineCount(patches)
   if (lines <= INLINE_DIFF_MAX_LINES) {
     const inline = ctx.files
-      .filter(f => (patches[f.key] ?? '') !== '')
-      .map(f => `#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patches[f.key] ?? '')}\n\`\`\`\``)
+      .flatMap(f => {
+        const patch = patches[f.key] ?? ''
+        return patch === ''
+          ? []
+          : [`#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patch)}\n\`\`\`\``]
+      })
       .join('\n\n')
     return `The whole diff follows (${lines} lines). Every hunk is labeled with its id.\n\n${inline}`
   }

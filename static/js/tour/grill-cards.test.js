@@ -106,6 +106,9 @@ describe('splitGrillAnswer', () => {
     expect(splitGrillAnswer('```plan\n[]\n```', KEYS)).toEqual([
       { type: 'invalid', text: '[]', reason: 'the block is not a JSON object' },
     ])
+    expect(splitGrillAnswer('```plan\nnot json\n```', KEYS)).toEqual([
+      { type: 'invalid', text: 'not json', reason: 'the block is not JSON' },
+    ])
     expect(splitGrillAnswer('```restatement\n{}\n```', KEYS)).toEqual([
       { type: 'invalid', text: '{}', reason: 'the block has no "what"' },
     ])

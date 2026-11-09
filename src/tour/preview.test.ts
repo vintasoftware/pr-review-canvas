@@ -2,8 +2,15 @@
 import { chmod, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { makeTempDir } from '../testing/fakes.js'
-import { findBrowser, headlessScreenshot, PHONE_VIEWPORT } from './preview.js'
+import { ghFor42, gitForLocal } from '../testing/synthetic.js'
+import { writeTourFiles } from '../testing/synthetic-tour.js'
+import { makeTempDir, makeTestContext, type TestContext } from '../testing/fakes.js'
+import { prepareTour } from './prepare.js'
+import { findBrowser, headlessScreenshot, PHONE_VIEWPORT, previewTour } from './preview.js'
+import { TourInvalidError } from './publish.js'
+
+let t: TestContext | undefined
+afterEach(() => t?.cleanup())
 
 /** An executable file named `name` in `dir`, running `body` as a shell script. */
 async function executable(dir: string, name: string, body = 'exit 0'): Promise<string> {
@@ -80,5 +87,49 @@ for arg in "$@"; do case "$arg" in --screenshot=*) printf png > "\${arg#--screen
       headlessScreenshot(browser, 'http://127.0.0.1:9/', path.join(dir, 'x.png'))
     ).rejects.toThrow()
     expect(await profiles()).toEqual(before)
+  })
+})
+
+describe('previewTour', () => {
+  /** A tour of the uncommitted work, prepared, and a preview with no browser on the machine. */
+  async function preparedLocal() {
+    t = await makeTestContext({ git: gitForLocal(), gh: ghFor42() })
+    const prepared = await prepareTour(
+      t.ctx,
+      { kind: 'local', source: 'uncommitted' },
+      { force: false, log: () => undefined }
+    )
+    const deps = {
+      env: { PATH: '' },
+      platform: 'linux' as const,
+      startServer: async () => ({ origin: '', close: async () => undefined }),
+      screenshot: async () => undefined,
+    }
+    return { ctx: t.ctx, prepared, deps }
+  }
+
+  it('points a local tour, without a browser, at its page by the review it belongs to', async () => {
+    const { ctx, prepared, deps } = await preparedLocal()
+    await writeTourFiles(prepared.tourDir, prepared.scenesDir)
+    expect(await previewTour(ctx, prepared.tourDir, deps)).toMatchObject({
+      status: 'no-browser',
+      landmarks: 4,
+      screenshots: [],
+      previewUrl: 'http://localhost:3010/r/acme/widgets/tour/uncommitted?preview',
+    })
+  })
+
+  it('refuses a model that is not JSON, naming the problem as publish would', async () => {
+    const { ctx, prepared, deps } = await preparedLocal()
+    await writeFile(path.join(prepared.tourDir, 'tour-model.json'), '{ not json')
+    const err = await previewTour(ctx, prepared.tourDir, deps).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TourInvalidError)
+    expect((err as TourInvalidError).report.errors).toEqual([
+      {
+        code: 'SCHEMA',
+        where: '(root)',
+        message: expect.stringMatching(/^tour-model\.json is not valid JSON/),
+      },
+    ])
   })
 })

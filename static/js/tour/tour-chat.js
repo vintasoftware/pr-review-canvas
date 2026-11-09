@@ -462,8 +462,7 @@ export function createTourChat(options) {
     /** @type {ChatTurn} */
     const reply = { role: 'assistant', text: '', at: new Date().toISOString() }
     const request = new AbortController()
-    /** @type {Live} */
-    const current = { ...asked, message, user, answer, request, stop: () => {} }
+    // `current` is defined below; the stream names the thread only once it runs.
     const stream = liveAnswer({
       turn: answer,
       body: /** @type {HTMLElement} */ (answer.querySelector('.prose')),
@@ -491,7 +490,8 @@ export function createTourChat(options) {
         answer.insertAdjacentHTML('beforeend', '<p class="muted small">stopped</p>')
       },
     })
-    current.stop = stream.stop
+    /** @type {Live} */
+    const current = { ...asked, message, user, answer, request, stop: stream.stop }
     live = current
     drawLog()
     drawComposer()

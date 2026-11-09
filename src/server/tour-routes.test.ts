@@ -18,6 +18,7 @@ import { freshReaderState } from '../contract/tour-api.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
 import { buildTourComment, TOUR_COMMENT_MARKER } from '../tour/comment.js'
 import { readZipEnvelope } from '../canvas/comment.js'
+import { CANVAS_ZIP_MAX_BYTES } from '../canvas/zip.js'
 import { zipStoredTour } from '../tour/share.js'
 import { prepareTour } from '../tour/prepare.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
@@ -191,7 +192,7 @@ describe('GET /api/tours/:n', () => {
     expect(reviewer.reader.picks).toEqual({})
   })
 
-  it('falls back to the newest older tour when the head moved, and says how far', async () => {
+  it('falls back to the newest older tour when the head moved, and says how far, or that it is unrelated', async () => {
     const git = gitFor42()
     t = await context({ git })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
@@ -212,6 +213,18 @@ describe('GET /api/tours/:n', () => {
       commitsBehind: 2,
     })
     expect(bundle.tour?.headSha).toBe(HEAD_SHA)
+    // After a force-push the tour's commit is no ancestor of the head, so there is no count.
+    const rewritten = 'd'.repeat(40)
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: rewritten,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF,
+    })
+    const forced = await json<TourBundle>(await get('/api/tours/42?refresh=1'))
+    expect(forced.status).toBe('stale')
+    expect(forced.stale).toEqual({ tourHeadSha: HEAD_SHA, currentHeadSha: rewritten, relation: 'unrelated' })
   })
 
   it('serves a local review with no login, as its own author, and never shares', async () => {
@@ -369,7 +382,8 @@ describe('POST /api/tours/:n/finish', () => {
     t = await context({ gh: sharing.gh })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
-    const res = await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    // The page sends what the plan was made of, so it can tell when the picks change after.
+    const res = await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA, basis: 'the picks' })
     expect(res.status).toBe(200)
     const body = await json<TourFinishResponse>(res)
     const promptPath = path.join(t.ctx.tours.tourDir(HEAD_SHA), 'plan-prompt.md')
@@ -378,6 +392,7 @@ describe('POST /api/tours/:n/finish', () => {
       promptPath,
       prompt: expect.stringContaining('- sum-over-product: Sum'),
       sharing: { status: 'shared', url: 'https://github.com/acme/widgets/pull/42#issuecomment-6001' },
+      basis: 'the picks',
     })
     expect(await readFile(promptPath, 'utf8')).toBe(`${body.finished.prompt}\n`)
     expect(body.record).toEqual({
@@ -446,8 +461,11 @@ describe('POST /api/tours/:n/finish', () => {
     expect(local.finished.prompt).toContain('# Keep the branch change')
   })
 
-  it('refuses while a decision is open, or while the quiz is required and unanswered', async () => {
+  it('refuses without a tour, while a decision is open, or while the quiz is required and unanswered', async () => {
     t = await context()
+    const none = await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    expect(none.status).toBe(404)
+    expect((await json<ErrorEnvelope>(none)).error.code).toBe('CANVAS_NOT_FOUND')
     await t.ctx.tours.write(HEAD_SHA, syntheticTour())
     const open = await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
     expect(open.status).toBe(409)
@@ -530,6 +548,9 @@ describe('GET /tour/:n and the home page', () => {
     expect(local).toContain('"preview":false}')
     expect(local).toContain('Loading the tour of Branch review')
     expect((await get('/tour/nope')).status).toBe(400)
+    // A project running under the server's environment names the folder to run `pr-review open` in.
+    const restored = await createApp(t.ctx, { shellEnv: false }).request('/tour/42', { headers: LOCAL })
+    expect(await restored.text()).toContain(`"reopenIn":${JSON.stringify(t.ctx.config.repoRoot)}`)
   })
 
   it('wears the tour look whatever the skin, which the canvas keeps', async () => {
@@ -672,7 +693,7 @@ describe('the grilling routes', () => {
     }
   })
 
-  it('refuses without chat, without a tour, with a canvas context, and answers an unknown decision as a refusal', async () => {
+  it('refuses without chat, without a tour or its diff, with a canvas context, and answers an unknown decision as a refusal', async () => {
     t = await context({
       projectConfig: {
         config: { ...DEFAULT_PROJECT_CONFIG, chat: { ...DEFAULT_PROJECT_CONFIG.chat, enabled: false } },
@@ -680,6 +701,8 @@ describe('the grilling routes', () => {
         source: null,
       },
     })
+    // The page hides the grilling when the bundle says chat is off.
+    expect((await json<TourBundle>(await get('/api/tours/42'))).chat).toEqual({ enabled: false, acpx: false })
     expect((await grill({ message: 'x', context: { kind: 'tour-plan' } })).status).toBe(404)
     expect((await get('/api/tours/42/grill/history')).status).toBe(404)
     expect((await send('/api/tours/42/grill/cancel', 'POST', {})).status).toBe(404)
@@ -697,6 +720,13 @@ describe('the grilling routes', () => {
       name: 'pr-review-acme-widgets-42-claude-t0',
       turns: [],
     })
+    // A tour of a merge base this clone has not fetched has no diff for the agent to quote.
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour({ mergeBaseSha: 'd'.repeat(40) }))
+    const unfetched = await grill({ message: 'x', context: { kind: 'tour-plan' } })
+    expect(unfetched.status).toBe(404)
+    expect((await json<ErrorEnvelope>(unfetched)).error.message).toBe(
+      'the diff of this tour is not available locally, so the agent cannot quote it'
+    )
   })
 })
 
@@ -988,6 +1018,12 @@ describe('the tour zip routes', () => {
       body: new FormData(),
     })
     expect((await json<ErrorEnvelope>(noFile)).error.code).toBe('BAD_REQUEST')
+    const big = await upload('/api/tours/42/import', {
+      bytes: new Uint8Array(CANVAS_ZIP_MAX_BYTES + 1),
+      name: zip.name,
+    })
+    expect(big.status).toBe(413)
+    expect((await json<ErrorEnvelope>(big)).error.code).toBe('CANVAS_TOO_LARGE')
   })
 })
 
@@ -1152,5 +1188,32 @@ describe('the tour page keeps up with the pull request', () => {
     const bundle = await json<TourBundle>(await get('/api/tours/42'))
     expect(bundle.status).toBe('ready')
     expect(bundle.tour?.source).toBe('import')
+  })
+
+  it('downloads a shared tour that will not import once, until the reader refreshes', async () => {
+    const url =
+      'https://github.com/user-attachments/files/12345/pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-tour.zip'
+    let downloads = 0
+    t = await context({
+      gh: ghFor42({
+        routes: { 'repos/acme/widgets/pulls/42': ghJson({ ...GH_PULL, body: `the tour: ${url}` }) },
+      }),
+      fetch: async () => {
+        downloads += 1
+        return new Response(new Uint8Array([1, 2, 3]), { status: 200 })
+      },
+    })
+    const app = createApp(t.ctx)
+    const open = async (query = '') =>
+      json<TourBundle>(await app.request(`/api/tours/42${query}`, { headers: LOCAL }))
+    const first = await open()
+    expect(first.status).toBe('missing')
+    expect(first.warnings).toEqual([expect.stringMatching(/^pr-42-.+-tour\.zip: /)])
+    // Polls and reloads of the same pull request do not fetch the attachment again.
+    expect((await open('?poll=1')).warnings).toEqual([])
+    expect((await open()).warnings).toEqual([])
+    expect(downloads).toBe(1)
+    expect((await open('?refresh=1')).warnings).toHaveLength(1)
+    expect(downloads).toBe(2)
   })
 })

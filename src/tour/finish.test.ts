@@ -82,7 +82,7 @@ describe('changeRequestBody', () => {
 })
 
 describe('finishTour', () => {
-  it('counts the open decisions and the questions left in its refusals', async () => {
+  it('counts the open decisions and the questions left in its refusals, and finishes once none is left', async () => {
     t = await makeTestContext({
       git: gitFor42(),
       gh: ghFor42(),
@@ -118,5 +118,13 @@ describe('finishTour', () => {
     await expect(
       finishTour(t.ctx, { key: 42, headSha: HEAD_SHA, artifact, reader: settled, reviewer })
     ).rejects.toThrow('2 quiz questions still to answer right')
+    // Answering every question right is what the required quiz waits for.
+    const answered = {
+      ...settled,
+      quiz: { 'q-run': { answered: 1, right: true }, 'q-two': { answered: 1, right: true } },
+    }
+    const done = await finishTour(t.ctx, { key: 42, headSha: HEAD_SHA, artifact, reader: answered, reviewer })
+    expect(done.finished.prompt).toContain('# Keep PR #42 as the tour settled it')
+    expect(done.reader.finished).toEqual(done.finished)
   })
 })

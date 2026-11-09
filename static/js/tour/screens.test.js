@@ -207,6 +207,10 @@ describe('railHtml and navHtml', () => {
     expect(launcher.querySelector('.tour-ask-new')?.textContent).toBe('9')
     expect(launcher.querySelector('.tour-ask-new')?.getAttribute('aria-label')).toBe('12 new answers')
     document.body.innerHTML = navHtml(steps, 1, bundle.reader, {
+      ask: { open: false, thread: false, unseen: 1 },
+    })
+    expect(document.querySelector('.tour-ask-new')?.getAttribute('aria-label')).toBe('1 new answer')
+    document.body.innerHTML = navHtml(steps, 1, bundle.reader, {
       ask: { open: true, thread: false, unseen: 0 },
     })
     const open = /** @type {HTMLElement} */ (document.querySelector('.tour-ask-launcher'))
@@ -313,6 +317,11 @@ describe('landmarkHtml', () => {
     expect(document.querySelector('[data-act="code"]')).toBeNull()
     expect(document.querySelector('.tour-frame-host[data-kind="micro"]')).not.toBeNull()
     expect(document.querySelector('.tour-state-tag')?.textContent).toBe('state landmark')
+    // Code with no literate diff opens on the raw one, with no tabs to switch.
+    document.body.innerHTML = landmarkHtml(bundle, steps, { ...world, literate: [] })
+    expect(document.querySelector('.tour-code-tabs')).toBeNull()
+    expect(document.querySelector('.tour-literate')).toBeNull()
+    expect(document.querySelector('.tour-code-body .tour-diff')).not.toBeNull()
   })
 
   it('embeds chunks by index or inline, and skips an index that names nothing', () => {
@@ -350,6 +359,8 @@ describe('landmarkHtml', () => {
     expect(link({ path: 'src/old.ts', diff: '@@ -1,3 +0,0 @@\n-a' })).toBe(
       `${at}/${mergeBaseSha}/src/old.ts#L1`
     )
+    // A chunk with no lines to point at, such as a binary file, opens the file at the head.
+    expect(link({ path: 'img/logo.png', diff: 'Binary files differ' })).toBe(`${at}/${headSha}/img/logo.png`)
     document.body.innerHTML = chunkHtml({ path: 'src/b.ts', diff: '@@ -1 +1 @@\n+x' }, link)
     expect(document.querySelector('.tour-file-link')?.getAttribute('aria-label')).toBe(
       'Open src/b.ts on GitHub'
@@ -620,6 +631,10 @@ describe('the corners of the screens', () => {
     }
     document.body.innerHTML = landmarkHtml(bundle, stepsOf(bundle), { ...before, scene: false })
     expect(document.querySelector('.tour-frame-host')).toBeNull()
+    document.body.innerHTML = landmarkHtml(bundle, stepsOf(bundle), { ...before, scene: false, micro: true })
+    expect([...document.querySelectorAll('.tour-frame-host')].map(h => h.getAttribute('data-kind'))).toEqual([
+      'micro',
+    ])
     const [decision] = tour.decisions
     if (decision === undefined) {
       throw new Error('no decision')

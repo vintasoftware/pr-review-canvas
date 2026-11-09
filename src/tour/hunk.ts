@@ -72,11 +72,13 @@ export async function tourChunk(
   id: string,
   range?: ChunkRange
 ): Promise<{ path: string; diff: string }> {
-  const file = context.files.find(f => f.hunks.some(h => h.id === id))
-  if (file === undefined) {
+  const found = context.files
+    .flatMap(file => file.hunks.map((meta, n) => ({ file, meta, n })))
+    .find(({ meta }) => meta.id === id)
+  if (found === undefined) {
     throw new HunkNotFound(`no hunk ${id} in this change; the manifest in the prompt lists every hunk id`)
   }
-  const n = file.hunks.findIndex(h => h.id === id)
+  const { file, meta, n } = found
   const labeled = await readFile(path.join(context.paths.patches, `${file.key}.diff`), 'utf8')
   const patch = labeled
     .split('\n')
@@ -86,7 +88,7 @@ export async function tourChunk(
   const diff = hunk === undefined ? null : excerptHunk(hunk, range)
   if (diff === null) {
     throw new HunkNotFound(
-      `hunk ${id} has no new-side line in ${range?.from}–${range?.to}; it covers ${file.hunks[n]?.newStart}–${(file.hunks[n]?.newStart ?? 0) + (file.hunks[n]?.newLines ?? 0) - 1}`
+      `hunk ${id} has no new-side line in ${range?.from}–${range?.to}; it covers ${meta.newStart}–${meta.newStart + meta.newLines - 1}`
     )
   }
   return { path: file.path, diff }

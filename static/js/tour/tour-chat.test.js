@@ -28,6 +28,7 @@ function chatBundle() {
 /**
  * The tour chat server as the pane sees it: its threads, their turns, and the answers it streams.
  * An answer of `HOLD` waits for `release()`. `marked` logs what the pane says the reader has not seen.
+ * Set `failCancels` or `failMarks` and, from then on, a stop or a mark reaches no server.
  * @param {{ threads?: Array<{ name: string, place: TourPlace, turns: ChatTurn[], unseen?: number }>, answers?: string[], failHistory?: boolean }} [opts]
  */
 function fakeServer(opts = {}) {
@@ -40,9 +41,11 @@ function fakeServer(opts = {}) {
   let cancels = 0
   let release = () => {}
   let made = threads.length
-  return {
+  const server = {
     sent,
     marked,
+    failCancels: false,
+    failMarks: false,
     cancels: () => cancels,
     release: () => release(),
     api: {
@@ -57,11 +60,13 @@ function fakeServer(opts = {}) {
       },
       cancelTourChat: async () => {
         cancels += 1
+        if (server.failCancels) throw new Error('offline')
         return { cancelled: true }
       },
       /** @param {string} _key @param {string} name @param {number} unseen */
       markTourThreadUnseen: async (_key, name, unseen) => {
         marked.push([name, unseen])
+        if (server.failMarks) throw new Error('offline')
         return { name, unseen }
       },
       /** @type {typeof import('./tour-api.js').streamTourChat} */
@@ -116,6 +121,7 @@ function fakeServer(opts = {}) {
       },
     },
   }
+  return server
 }
 
 /** @param {{ storage?: Pick<Storage, 'getItem' | 'setItem'> | null, reachable?: (i: number) => boolean, server?: ReturnType<typeof fakeServer> }} [opts] */
@@ -172,6 +178,8 @@ async function settle() {
 
 afterEach(() => {
   document.body.innerHTML = ''
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('the places of a tour', () => {
@@ -273,6 +281,31 @@ describe('createTourChat', () => {
     expect(box().value).toBe('half a question')
   })
 
+  it('draws nothing from a thread read that comes back after the reader moved on', async () => {
+    const server = fakeServer({
+      threads: [
+        {
+          name: 't1',
+          place: LANDMARK,
+          turns: [
+            { role: 'user', text: 'Why?', at: 'x' },
+            { role: 'assistant', text: 'Because.', at: 'x' },
+          ],
+        },
+      ],
+    })
+    const { chat } = mount({ server })
+    await settle()
+    chat.follow(LANDMARK)
+    chat.toggle()
+    // The reader moves on before the landmark's thread is read.
+    chat.follow(WHOLE)
+    await settle()
+    expect(title()).toBe('the whole tour')
+    expect(el('#tour-ask-log').textContent).toContain('Ask about the tour')
+    expect(el('#tour-ask-log').textContent).not.toContain('Because.')
+  })
+
   it('opens a thread empty when it cannot be read', async () => {
     const server = fakeServer({ failHistory: true, threads: [{ name: 't1', place: LANDMARK, turns: [] }] })
     const { chat } = mount({ server })
@@ -322,6 +355,22 @@ describe('createTourChat', () => {
     ])
     expect(note.hidden).toBe(true)
     expect(box().disabled).toBe(false)
+  })
+
+  it('marks an answer the reader has not seen on this page when the server cannot keep the mark', async () => {
+    const server = fakeServer({ answers: ['HOLD'] })
+    server.failMarks = true
+    const { chat } = mount({ server })
+    chat.follow(LANDMARK)
+    chat.toggle()
+    await ask('Why a sum?')
+    chat.follow(WHOLE)
+    server.release()
+    await settle()
+    expect(chat.marks().unseen).toBe(1)
+    expect(el('#tour-ask-switch .threads-new').textContent).toBe('1 new')
+    chat.follow(LANDMARK)
+    expect(chat.marks().unseen).toBe(0)
   })
 
   it('marks what the reader had not seen before a reload, until they open it', async () => {
@@ -379,7 +428,7 @@ describe('createTourChat', () => {
   })
 
   it('stops the answer coming in', async () => {
-    const server = fakeServer({ answers: ['ABORT'] })
+    const server = fakeServer({ answers: ['ABORT', 'ABORT'] })
     const { chat } = mount({ server })
     chat.follow(LANDMARK)
     chat.toggle()
@@ -391,6 +440,14 @@ describe('createTourChat', () => {
     // Stopping with nothing coming in does nothing.
     el('[data-act="ask-stop"]').click()
     expect(server.cancels()).toBe(1)
+    // A stop that cannot reach the server still stops the answer here.
+    server.failCancels = true
+    await ask('And now?')
+    el('[data-act="ask-stop"]').click()
+    await settle()
+    expect(server.cancels()).toBe(2)
+    expect(el('[data-act="ask-stop"]').hidden).toBe(true)
+    expect(box().disabled).toBe(false)
   })
 
   it('lists the threads by kind, starts one about the whole tour, and goes to a thread’s stop', async () => {
@@ -516,6 +573,29 @@ describe('createTourChat', () => {
     expect(blocked.pane.hidden).toBe(false)
   })
 
+  it('opens closed, and still opens, when the browser blocks its storage', () => {
+    vi.spyOn(globalThis, 'localStorage', 'get').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const bundle = chatBundle()
+    document.body.innerHTML = '<aside id="tour-ask" hidden></aside>'
+    const pane = /** @type {HTMLElement} */ (document.querySelector('#tour-ask'))
+    const chat = createTourChat({
+      pane,
+      key: '42',
+      bundle,
+      steps: buildSteps(bundle.tour, bundle.options),
+      reachable: () => true,
+      onGoto: () => {},
+      onChange: () => {},
+      api: fakeServer().api,
+    })
+    chat.follow(WHOLE)
+    expect(pane.hidden).toBe(true)
+    chat.toggle()
+    expect(pane.hidden).toBe(false)
+  })
+
   it('opens the step’s thread on focus, closes on Escape, and gives the focus back', async () => {
     const server = fakeServer({ threads: [{ name: 't1', place: LANDMARK, turns: [] }] })
     const { chat, pane } = mount({ server })
@@ -524,6 +604,11 @@ describe('createTourChat', () => {
     chat.focus()
     expect(document.activeElement).toBe(box())
     chat.follow(LANDMARK)
+    chat.focus()
+    expect(title()).toBe('landmark · Sum, not product')
+    // With another thread on screen, focus brings the step's thread back.
+    el('.chat-h [data-act="ask-new"]').click()
+    expect(title()).toBe('the whole tour')
     chat.focus()
     expect(title()).toBe('landmark · Sum, not product')
     // Escape in the list closes the list, not the pane.
@@ -550,6 +635,17 @@ describe('createTourChat', () => {
     el('[data-act="ask-close"]').click()
     expect(pane.hidden).toBe(true)
     expect(document.activeElement).toBe(document.body)
+  })
+
+  it('leaves the keyboard closed on a touch screen until the reader asks for the box', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }))
+    const { chat, pane } = mount()
+    chat.follow(WHOLE)
+    chat.toggle()
+    expect(pane.hidden).toBe(false)
+    expect(document.activeElement).not.toBe(box())
+    chat.focus()
+    expect(document.activeElement).toBe(box())
   })
 
   it('names no agent when the bundle has none', () => {

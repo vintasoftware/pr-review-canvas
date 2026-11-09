@@ -87,9 +87,8 @@ export function listenToFrames(root, opts) {
  * @param {string} theme
  */
 export function tellFramesTheme(root, theme) {
-  for (const frame of root.querySelectorAll('iframe.tour-frame')) {
-    if (frame instanceof HTMLIFrameElement) {
-      frame.contentWindow?.postMessage({ scene: 'theme', theme }, '*')
-    }
+  const frames = /** @type {NodeListOf<HTMLIFrameElement>} */ (root.querySelectorAll('iframe.tour-frame'))
+  for (const frame of frames) {
+    frame.contentWindow?.postMessage({ scene: 'theme', theme }, '*')
   }
 }

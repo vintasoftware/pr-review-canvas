@@ -433,7 +433,7 @@ export function codeButtonHtml(open) {
  * @param {'literate' | 'raw'} view
  * @param {FileLink} [link]
  */
-export function codeViewHtml(landmark, view, link = () => null) {
+export function codeViewHtml(landmark, view, link) {
   return view === 'literate'
     ? literateHtml(landmark, link)
     : landmark.code.map(chunk => chunkHtml(chunk, link)).join('')

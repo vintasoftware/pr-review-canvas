@@ -73,7 +73,11 @@ const NO_CHECKOUTS: ReviewCheckouts = {
 
 function manager(
   pipeline: GenerationPipeline,
-  opts: { lane?: GenerationLane; runner?: ReturnType<typeof createFakeRunner> } = {}
+  opts: {
+    lane?: GenerationLane
+    runner?: ReturnType<typeof createFakeRunner>
+    models?: Record<string, string>
+  } = {}
 ): GenerationManager {
   return createGenerationManager({
     runner: opts.runner ?? createFakeRunner({ script: [{ type: 'done', stopReason: 'end_turn' }] }),
@@ -81,7 +85,7 @@ function manager(
     pipeline,
     settings: async () => ({ ...DEFAULT_SETTINGS, checkoutEnabled: false }),
     skill: async () => TOUR_SKILL,
-    generation: { models: { claude: 'opus' }, maxRepairRounds: 2 },
+    generation: { models: opts.models ?? { claude: 'opus' }, maxRepairRounds: 2 },
     repo: { owner: 'acme', name: 'widgets' },
     repoRoot: '/repo',
     currentBranch: async () => 'feat/b',
@@ -166,6 +170,20 @@ describe('the tour generation', () => {
     expect(runner.runs).toHaveLength(1)
     expect(runner.runs[0]).toMatchObject({ cwd: '/repo', access: 'write', model: 'opus' })
     expect(runner.ensured[0]).toMatch(/^pr-review-acme-widgets-7-claude-tour\d+$/)
+  })
+
+  it('runs the agent on its own default when the project picks no model, and publishes none', async () => {
+    const s = steps()
+    const m = manager(tourPipeline(s), { models: {} })
+    expect(await m.start(7, { force: false, share: false })).toMatchObject({ model: null })
+    expect((await settled(m, 7)).phase).toBe('done')
+    expect(s.publish).toHaveBeenCalledWith('/data/tours/aaa', {
+      agent: 'claude',
+      model: undefined,
+      harness: 'other',
+      allowStale: false,
+      share: false,
+    })
   })
 
   it('writes a head that already has a tour again from a blank page', async () => {

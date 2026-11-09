@@ -30,6 +30,14 @@ describe('the shipped gallery', () => {
       if (entry.kind === 'scene') expect(sceneTechnique(html)).toBe(entry.slug)
       expect(readme).toContain(`\`${entry.slug}\``)
     }
+    // `tour gallery` with no slugs lists this gallery.
+    const listed = await renderGallery(
+      [],
+      { env: {}, platform: 'linux', screenshot: async () => undefined },
+      { outDir: path.join(tmpdir(), 'pr-review-gallery-unused') }
+    )
+    expect(listed.readme).toBe(path.join(GALLERY_DIR, 'README.md'))
+    expect(listed.entries).toEqual(entries.map(({ slug, kind }) => ({ slug, kind })))
   })
 })
 
@@ -86,6 +94,16 @@ describe('renderGallery', () => {
     const nested = path.join(dir, 'drawn', 'gallery')
     const drawn = await renderGallery(['sequence'], deps, { dir, outDir: nested })
     expect(drawn.entries[0]?.png).toBe(path.join(nested, 'sequence.png'))
+  })
+
+  it('lists no entries from a gallery folder that is missing', async () => {
+    const dir = path.join(await tempGallery(), 'absent')
+    const deps = { env: {}, platform: 'linux' as const, screenshot: async () => undefined }
+    expect(await renderGallery([], deps, { dir, outDir: path.join(dir, 'out') })).toEqual({
+      status: 'listed',
+      entries: [],
+      readme: path.join(dir, 'README.md'),
+    })
   })
 
   it('names an unknown entry, and says where to look without a browser', async () => {
