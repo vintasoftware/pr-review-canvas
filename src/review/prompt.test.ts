@@ -93,21 +93,17 @@ describe('renderPrompt', () => {
     expect(prompt).not.toContain('working tree around you is fine')
   })
 
-  it('exposes visible caps on labels only, raw ceilings on prose, and the exact fold cap', () => {
+  it('exposes effective visible caps beside raw ceilings and uses the exact fold cap', () => {
     const caps = { ...TEXT_CAPS, pointTitle: 75, annotation: 200 }
     const schema = JSON.parse(schemaMarkdown(context({ caps })).slice(8, -4))
     const layer = schema.properties.layers.items.properties
     const file = layer.files.items.properties
-    const point = schema.properties.points.items.properties
+    expect(schema.properties.summary['x-visibleMaxLength']).toBe(caps.summary)
     expect(layer.title['x-visibleMaxLength']).toBe(caps.layerTitle)
-    expect(point.title['x-visibleMaxLength']).toBe(caps.pointTitle)
+    expect(file.note['x-visibleMaxLength']).toBe(caps.annotation)
+    expect(file.annotations.items.properties.text['x-visibleMaxLength']).toBe(caps.annotation)
     expect(file.folds.items.properties.title.maxLength).toBe(caps.pointTitle)
-    // Prose carries no visible cap, only the raw ceiling against runaway output.
-    for (const prose of [schema.properties.summary, layer.rationale, file.note, point.body]) {
-      expect(prose['x-visibleMaxLength']).toBeUndefined()
-      expect(prose.description).toContain('no visible-length cap')
-    }
-    expect(file.annotations.items.properties.text.maxLength).toBe(caps.annotation * 4)
+    expect(schema.properties.points.items.properties.title['x-visibleMaxLength']).toBe(caps.pointTitle)
   })
 
   it('uses the strict review guidance and quality standards by default', () => {
@@ -147,8 +143,7 @@ describe('renderPrompt', () => {
     expect(prompt).toContain(
       '- `src/new-name.ts` (from `src/old-name.ts`) — renamed, +1 −1\n  - `src_new_name_ts#1` `@@ -1,2 +1,2 @@`'
     )
-    expect(prompt).toContain('- layer title: 60 characters\n- attention point title: 90')
-    expect(prompt).not.toContain('- layer rationale:')
+    expect(prompt).toContain('- summary: 1200 characters\n- layer title: 60\n- layer rationale: 300')
     expect(prompt).toContain('At most 12 per canvas')
     expect(prompt).toContain('- `**/*auth*` → **auth**')
     expect(prompt).toContain('- Pull request: #42 — feat: add b')
@@ -209,20 +204,22 @@ describe('renderPrompt', () => {
     ).toContain('At most\n4 links per diagram')
   })
 
-  it('states where each cap applies, diagram source included, and leaves prose uncapped', () => {
+  it('states where each cap applies, diagram source included', () => {
     const prompt = renderPrompt(context(), PATCHES, sources)
-    // Where each cap applies, in full: a reworded prompt that capped prose again, or sent diagram
-    // source anywhere but the diagram cap, would disagree with the validator and must fail here.
+    // Where each cap applies, in full: a reworded prompt that sent diagram source to the field's
+    // own cap would disagree with the validator and must fail here.
     expect(prompt).toContain(
-      'Prose has no character cap. That covers the summary, layer rationales, file notes, annotations,\n' +
-        'and attention point bodies.'
+      'In the two fields that draw a diagram, the summary and a layer rationale, the lines inside a\n' +
+        '```mermaid fence are not prose: they count toward the diagram cap alone, measured raw, and not\n' +
+        "toward the field's own cap. A fence in any other field is an ordinary code block and counts like\n" +
+        "the rest of that field's text."
     )
+    // Over a cap, the writer cuts content rather than grammar; squeezing words out made canvases
+    // read as clipped shorthand.
     expect(prompt).toContain(
-      'The lines inside a ```mermaid fence in the summary or a layer rationale are diagram source, not\n' +
-        'prose. They count toward the diagram cap, measured raw. A fence in any other field is an ordinary\n' +
-        'code block.'
+      "When the text doesn't fit its cap, leave out a detail, not the words a sentence needs."
     )
-    expect(prompt).toContain('## Writing')
+    expect(prompt).not.toContain('One or two short sentences')
     expect(prompt.indexOf('## Diagrams')).toBeLessThan(prompt.indexOf('## Links'))
   })
 

@@ -229,7 +229,7 @@ describe('prepare', () => {
             maxRepairRounds: 5,
             inlineDiffMaxLines: 10,
             smallPrHunks: 3,
-            caps: { layerTitle: 50 },
+            caps: { summary: 50 },
             models: { claude: 'opus', codex: 'gpt-6-sol' },
           },
         },
@@ -242,7 +242,7 @@ describe('prepare', () => {
     expect(result.models).toEqual({ claude: 'opus', codex: 'gpt-6-sol' })
     const context = GenerationContextSchema.parse(JSON.parse(await readFile(result.contextPath, 'utf8')))
     expect(context.rulebook).toEqual({ path: 'RULES.md', text: '---\nname: x\n---\n# Rules\n\n## Be kind\n' })
-    expect(context.caps).toEqual({ ...TEXT_CAPS, layerTitle: 50 })
+    expect(context.caps).toEqual({ ...TEXT_CAPS, summary: 50 })
     expect(context.highRisk).toEqual([{ pattern: 'src/gone.ts', label: 'legacy' }])
     expect(context.generation).toEqual({
       mode: 'surfacing',
@@ -252,7 +252,7 @@ describe('prepare', () => {
     })
     expect(context.smallPr).toBe(false)
     const prompt = await readFile(result.promptPath, 'utf8')
-    expect(prompt).toContain('- layer title: 50 characters')
+    expect(prompt).toContain('- summary: 50 characters')
     expect(prompt).toContain('Build a visual walkthrough')
     expect(prompt).toContain('### Bundled standards')
     expect(prompt).toContain('### Rules\n\n#### Be kind')

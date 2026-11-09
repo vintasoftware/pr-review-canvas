@@ -119,9 +119,15 @@ function configuredLayersMarkdown(ctx: GenerationContext): string {
 function capsMarkdown(ctx: GenerationContext): string {
   const c = ctx.caps
   return [
-    `- layer title: ${c.layerTitle} characters`,
+    `- summary: ${c.summary} characters`,
+    `- layer title: ${c.layerTitle}`,
+    `- layer rationale: ${c.rationale}`,
+    `- layer decisions (accepted for compatibility; use points in new canvases): ${c.decisions}`,
+    `- layer checkByHand (accepted for compatibility; use points in new canvases): ${c.checkByHand}`,
+    `- file note and annotation text: ${c.annotation}`,
     `- attention point title: ${c.pointTitle}`,
     `- fold title: ${c.pointTitle}, plain text counted in full`,
+    `- attention point body: ${c.pointBody}`,
     `- test behavior: ${c.testBehavior}`,
     `- diagram source: ${c.diagram} characters of mermaid, counted raw`,
   ].join('\n')

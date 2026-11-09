@@ -21,17 +21,6 @@ export type TextCaps = { -readonly [K in keyof typeof TEXT_CAPS]: number }
 export const LIMITS = { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12 } as const
 export type Limits = { -readonly [K in keyof typeof LIMITS]: number }
 
-/**
- * The caps the validator enforces on visible text: titles and labels the page lays out in a line
- * or a list, and mermaid source. Every other cap is prose, bounded only by its raw ceiling
- * (`HARD_CAP_FACTOR` times the cap), so the writer explains as much as the reader needs.
- */
-export const LABEL_CAP_KEYS = ['layerTitle', 'pointTitle', 'testBehavior', 'diagram'] as const
-export type LabelCapKey = (typeof LABEL_CAP_KEYS)[number]
-function isLabelCap(key: keyof TextCaps): key is LabelCapKey {
-  return (LABEL_CAP_KEYS as readonly string[]).includes(key)
-}
-
 export const TEXT_CAP_KEYS = [
   'summary',
   'layerTitle',
@@ -213,22 +202,16 @@ function text(caps: Caps, key: keyof TextCaps): z.ZodString {
 }
 
 function textOrEmpty(caps: Caps, key: keyof TextCaps): z.ZodString {
-  if (!isLabelCap(key)) {
-    const diagrams =
-      key === 'summary' || key === 'rationale' ? ' A mermaid fence here answers to the diagram cap.' : ''
-    return z
-      .string()
-      .max(caps[key])
-      .meta({
-        description: `Prose with no visible-length cap: write what the reader needs to follow it on a first read. maxLength is a ceiling on the raw Markdown against runaway output, not a target.${diagrams}`,
-      })
-  }
   const visibleCap = caps[key] / HARD_CAP_FACTOR
+  const diagrams =
+    key === 'summary' || key === 'rationale'
+      ? ' Mermaid fences count toward the separate diagram cap, not this prose cap.'
+      : ''
   return z
     .string()
     .max(caps[key])
     .meta({
-      description: `At most ${visibleCap} visible characters. Link targets and backticks do not count. maxLength is only the raw Markdown ceiling.`,
+      description: `At most ${visibleCap} visible characters. Link targets, backticks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
       'x-visibleMaxLength': visibleCap,
     })
 }

@@ -202,25 +202,20 @@ hides too, behind the annotation's text.
   code. Omit `collapsed` where no level should hide the file whole, and `folds` where no level
   should hide any of its code.
 
-## Length
+## Length rules
 
-Titles and labels have caps because the page shows them on one line or in a list. A cap counts
-the characters a reader sees, so link targets and backticks are free:
-`[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects a title over
-its cap, and `validate --human --fix` shortens the ones it safely can.
+Caps, in characters of the text a reader sees: link targets, backticks, and code-fence lines do not
+count, so `[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects
+anything longer. Each prose field's schema description states its visible-character cap;
+`maxLength` only bounds raw Markdown, including link targets. Passing JSON Schema alone does not
+check visible length. Draft below the visible caps, then run `validate --human --fix` before publish.
 
 {{CAPS}}
 
-Prose has no character cap. That covers the summary, layer rationales, file notes, annotations,
-and attention point bodies. Make each one as long as the reader needs to follow it on a first
-read. As a rough guide, an annotation or a file note takes one to three sentences, a rationale
-two to four, a point body three to six, and the summary one or two paragraphs. Write fewer when
-fewer say it all. The schema's `maxLength` on a prose field is a ceiling against runaway output,
-not a target.
-
-The lines inside a ```mermaid fence in the summary or a layer rationale are diagram source, not
-prose. They count toward the diagram cap, measured raw. A fence in any other field is an ordinary
-code block.
+In the two fields that draw a diagram, the summary and a layer rationale, the lines inside a
+```mermaid fence are not prose: they count toward the diagram cap alone, measured raw, and not
+toward the field's own cap. A fence in any other field is an ordinary code block and counts like
+the rest of that field's text.
 
 ## Writing
 
@@ -238,11 +233,11 @@ should make sense to them the first time they read it, without decoding.
 - When the change introduces a concept, say what it is in plain words the first time it appears,
   and use the same name for it after that.
 - Be concrete. Say what calls what, what a user sees before and after, and which value changes.
-  An example or a line of pseudocode helps when a rule is abstract.
 - Don't compress. Avoid noun stacks, chains of possessives ("the stop's card's file"), runs of
   "it" and "its" that leave the reader guessing what they refer to, and clauses wedged into the
-  middle of a sentence. A longer sentence that reads in one pass beats a short one the reader has
-  to unpack.
+  middle of a sentence.
+- When the text doesn't fit its cap, leave out a detail, not the words a sentence needs. A field
+  that says less and reads in one pass beats one that says everything and has to be unpacked.
 - Don't pad either. Skip throat-clearing ("It's worth noting that"), filler words ("seamlessly",
   "robust", "crucially"), a sentence that repeats the one before it, and a closing line that sums
   up what you just said.
@@ -265,8 +260,7 @@ of each chunk. They are not the manifest's additions plus deletions.
 
 ## What each layer carries
 
-- `rationale`: what this layer does, why its chunks belong together, how it fits the rest of the
-  change, and which file to read first.
+- `rationale`: why these hunks belong together, how this layer fits into the change, and what to read first.
 - File `note` and annotations: explain a non-obvious flow or rule and link it to the implementation.
   Short pseudocode is useful when it makes a long algorithm easier to follow.
 - Put every decision, trade-off, and manual check in `points`, using the rules below.

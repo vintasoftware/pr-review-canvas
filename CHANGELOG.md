@@ -44,13 +44,12 @@
 
 ### Canvas writing
 
-- The summary, layer rationales, file notes, annotations, and attention point bodies no longer have
-  a character cap. Squeezing them under one made the generator write clipped sentences a reviewer
-  had to decode. The prompt now asks for complete sentences that read on the first pass, and the
-  validator refuses only prose past four times the configured value. Titles, test behaviors, and
-  diagram source keep their caps.
-- A project with its own copy of `generation-format.md` keeps the old length rules until it takes
-  the new **Length** and **Writing** sections from the bundled template.
+- The generation prompt no longer asks for "one or two short sentences". A new **Writing** section
+  asks for complete sentences a reviewer understands on the first read, names as the reader sees
+  them, and no compression or padding. When a field runs over its cap, the generator now leaves
+  out a detail instead of the words a sentence needs. The caps are unchanged.
+- A project with its own copy of `generation-format.md` keeps the old wording until it takes the
+  **Writing** section from the bundled template.
 
 ## 0.10.0
 
