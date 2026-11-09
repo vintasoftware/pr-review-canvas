@@ -14,13 +14,32 @@
   toward neither side.
 - **Compact attention points** in the settings dialog, saved as `compactPoints` in `settings.yml`,
   lists a layer's attention points as one line each, with their level, kind, audience, and
-  location. Click the title, **show**, or press `o` to read one. **show details** in the list's
-  heading opens every open point, and the browser remembers it. It is off by default.
+  location, and **show** at the end of the line however far the rest wraps. Click the title,
+  **show**, or press `o` to read one. **show details** in the list's heading opens every open point,
+  and the browser remembers it. It is off by default, and saving it applies to the open page at once.
 - **Start collapsed** in the settings dialog, saved as `startCollapsed` in `settings.yml`, opens a
   review with only the first layer open and every file closed under its name. It is off by
   default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.
 - The rail, `j`, `k`, `n`, `p`, and links open the layer or file they land on. A click that opens a
   file or a point keeps its title where you clicked it, also at the end of the page.
+- The Conversation count updates when you post a PR-level comment.
+- Keyboard shortcuts that focus a comment or chat field leave its text intact, without inserting
+  the shortcut character.
+
+### Notifications
+
+- A notification sits at the window's top right at every width, over the header and the side pane,
+  instead of at the bottom right beside the pane. It names its tone with an icon and a color:
+  **done** (a check), **note** (an i), or **failed** (an !). Failures that read as ordinary messages,
+  such as a busy chat refusing a question, now read as failures.
+- A notification stays up while the pointer is on it, and for five seconds after it leaves. A click
+  on it clears it, so the next click reaches what it covered; a click on its link opens the link
+  and clears it.
+- While a dialog is open, a notification shows inside it, so the phone's chat modal no longer hides
+  one. A sign-off closes its dialog and links to the review from its notification. One the forge
+  answered with a warning keeps the dialog open and names what was posted there, such as **review
+  posted with 1 comment**, instead of **Posted**, and the posted review cannot be submitted again
+  from it.
 
 ### AI Chat
 
@@ -35,12 +54,31 @@
   points from the most severe, each with only the chunk of code that holds it. The rail lists the
   points under their layers, and a bar over and under each stop leads back and on.
 - A switch at the head of the rail moves between **Attention points** and **Layers**, keeping your
-  place. **Layers** shows the layer view **Show layers** chooses. The switch changes the open page
-  only; a reload opens on what the settings say.
+  place, and the keyboard on the button you pressed. **Layers** shows the layer view **Show layers**
+  chooses. The switch changes the open page only; a reload opens on what the settings say.
 - A stop is its layer's own section seen through a lens, so commenting, marking and links work as
-  in the layers. A target no stop shows moves the page to the layers.
+  in the layers. A target no stop shows moves the page to the layers, with a note that says so.
+- A stop takes the place of the one before under a page at its top, from the keys as from its links.
+  Back and forward to a place you read as a stop, while **Layers** shows, go to its layer or card
+  there; other Back and forward work as before. A layer's stop opens its tests, and closes them
+  again on leaving when the layers had them closed.
+- A point the author resolved keeps its stop, folded under the author's reason, though the layers
+  hide it until **show the N resolved**.
 - The rail's **Overview** counts the **open** attention points, in either view, so the count no longer
   reads as points the overview holds.
+- Changing reading modes in settings updates the URL to match the stop on screen, so a reload
+  returns to that stop.
+
+### Fixes
+
+- On a narrow screen, where the rail is a strip of chips, the strip scrolls to the layer or stop you
+  are on, and a long title is cut to fit its chip.
+- `]` and `[` in the layers land on the point. Before, a diff drawn above it as the page scrolled
+  could push it off the screen.
+- After `d` dismisses the point in focus, `r`, `R` and `c` still act on its file and line.
+- The chevron of a closed layer or file is named **Expand layer** or **Expand file** for screen
+  readers, instead of **Collapse**.
+- Resizing to a phone layout keeps an open settings or sign-off dialog in front of AI Chat.
 
 ## 0.10.0
 

@@ -104,6 +104,27 @@ for (const skin of ['terminal', 'github']) {
   })
 }
 
+test('Back brings back the scroll the reader left, with the overview scrolled away', async ({
+  page,
+  reviewUrl,
+}) => {
+  await page.goto(reviewUrl)
+  await page.locator('#layer-run-path').waitFor()
+  // The reader scrolls past the overview, then j adds a history entry for the layer it lands on.
+  await page.evaluate(() => {
+    const overview = document.querySelector('#overview')
+    if (overview !== null) window.scrollTo(0, overview.getBoundingClientRect().bottom + window.scrollY + 40)
+  })
+  await expect(page.locator('#overview')).not.toBeInViewport()
+  const before = await page.evaluate(() => window.scrollY)
+  await page.keyboard.press('j')
+  await expect(page).toHaveURL(/#layer-/)
+  await page.goBack()
+  await expect(page).toHaveURL(reviewUrl)
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(before, 0)
+  await expect(page.locator('#overview')).not.toBeInViewport()
+})
+
 test('settings returns keyboard focus to its opener after Escape, close, and save', async ({
   page,
   reviewUrl,
@@ -293,6 +314,7 @@ test.describe('in the one-point view', () => {
     await expect(page.locator('#point-p-1')).toHaveClass(/is-focused/)
     await page.keyboard.press('c')
     await expect(page.locator('#layer-run-path .composer-box')).toBeVisible()
+    await expect(page.locator('#layer-run-path .composer-box textarea')).toHaveValue('')
     await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
   })
 

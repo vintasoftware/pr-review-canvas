@@ -392,7 +392,8 @@ function pointPartsHtml(p, ctx, opts) {
       `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +
       `data-sig="${esc(pointSignature(p, status, ctx))}"`,
     handled: status === 'open' ? '' : status === 'resolved' ? ' is-handled is-resolved' : ' is-handled',
-    title: `<span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
+    // The title, its pills and its place wrap together, so the toggle keeps to the end of the first line.
+    title: `<span class="f-head"><span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}</span>${toggle}`,
     rest:
       parts.summary +
       `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +
@@ -566,9 +567,12 @@ export function refreshPoint(el, p, ctx) {
   const expanded =
     next.getAttribute('data-status') === el.getAttribute('data-status') && el.hasAttribute('data-expanded')
   const focused = el !== el.ownerDocument.activeElement && el.contains(el.ownerDocument.activeElement)
+  const ringed = el.classList.contains('is-focused')
   for (const name of ['class', 'data-status', 'data-sig']) {
     el.setAttribute(name, next.getAttribute(name) ?? '')
   }
+  // The new classes say where the point stands; the keys' ring stays where the keys left it.
+  el.classList.toggle('is-focused', ringed)
   el.replaceChildren(...Array.from(next.childNodes))
   setPointExpanded(el, expanded)
   // The command the reader used is gone; the focus goes to what now stands for the point.
@@ -664,6 +668,21 @@ export function readPointsDensity(storage) {
 export function setPointsDensity(page, density, storage) {
   page.dataset['points'] = density
   storage?.setItem(POINTS_DENSITY_KEY, density)
+}
+
+/**
+ * Gives the page the density the `compactPoints` setting asks for: the one this browser remembers
+ * while the setting is on, and none while it is off, so every list draws its points whole.
+ * @param {HTMLElement} page the document element
+ * @param {boolean} compact
+ * @param {Storage | null} storage
+ */
+export function applyPointsDensity(page, compact, storage) {
+  if (compact) {
+    setPointsDensity(page, readPointsDensity(storage))
+  } else {
+    delete page.dataset['points']
+  }
 }
 
 /**
