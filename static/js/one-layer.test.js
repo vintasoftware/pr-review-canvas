@@ -177,8 +177,7 @@ describe('initOneLayer', () => {
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['layer-other'])
     expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
-    // A hash change to the section already showing, and on screen, does nothing more.
-    onScreen(section('layer-other'), true)
+    // A hash change to the section already showing does nothing more.
     window.dispatchEvent(new Event('hashchange'))
     expect(scrolled).toHaveBeenCalledTimes(1)
     window.location.hash = ''
@@ -207,19 +206,19 @@ describe('initOneLayer', () => {
     expect(shownIds()).toHaveLength(4)
   })
 
-  it('goes to what back or forward names in the all view when it is off screen, as a place first seen as a stop is', () => {
+  it('goes to what back or forward names in the all view only for an entry a stop showed, whose scroll was the stop’s', () => {
     oneLayer = initOneLayer(root, { view: 'all' })
     const scrolled = vi.fn()
     section('layer-other').scrollIntoView = scrolled
-    // The entry brought back the stop's scroll, the top of the page, far from the layer.
+    // An entry of the layers, the section far off screen: the browser's own scroll stays.
     onScreen(section('layer-other'), false)
-    window.location.hash = '#layer-other'
+    window.history.replaceState(null, '', '#layer-other')
+    window.dispatchEvent(new Event('hashchange'))
+    expect(scrolled).not.toHaveBeenCalled()
+    // The entry of a stop brought back the top of the page, far from the layer.
+    window.history.replaceState({ stop: true }, '', '#layer-other')
     window.dispatchEvent(new Event('hashchange'))
     expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
-    // On screen, the browser's own scroll stays.
-    onScreen(section('layer-other'), true)
-    window.dispatchEvent(new Event('hashchange'))
-    expect(scrolled).toHaveBeenCalledTimes(1)
   })
 
   it('switches views on the open page, keeping the section the rail marks as being read', () => {

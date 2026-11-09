@@ -202,6 +202,29 @@ describe('the one-point view on a rendered page', () => {
     expect(tests()).toHaveProperty('open', true)
   })
 
+  it('shows a stop from the top of the page, and scrolls to a point’s row only when it is further down', () => {
+    const scrolled = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    // The rail's link, as the bar's: a point of the Other layer stands for its row in the diff.
+    document
+      .querySelector('nav.rail a[href="#point-p-2"]')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(lensed()?.id).toBe('layer-other')
+    expect(scrolled).toHaveBeenLastCalledWith({ top: 0 })
+    const row = document.querySelector('tr.ifind[data-fingerprint="fp-2"]')
+    if (!(row instanceof HTMLElement)) throw new Error('no row')
+    const centered = vi.fn()
+    row.scrollIntoView = centered
+    // A key on the same stop, with the row on screen and then below the fold.
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 120, 100, 30))
+    expect(view?.step(1, () => true, true)).toBe(row)
+    expect(centered).not.toHaveBeenCalled()
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, window.innerHeight + 200, 100, 30))
+    expect(view?.step(1, () => true, true)).toBe(row)
+    expect(scrolled).toHaveBeenLastCalledWith({ top: 0 })
+    expect(centered).toHaveBeenCalledWith({ block: 'center' })
+    scrolled.mockRestore()
+  })
+
   it('steps through the stops that fit, the one on screen first when asked, and stops at either end', () => {
     const any = () => true
     const layers = (/** @type {import('./point-steps.js').Stop} */ s) => s.kind === 'layer'
@@ -224,6 +247,17 @@ describe('the one-point view on a rendered page', () => {
     view?.switchView('one')
     expect(shown()).toEqual(['layer-other'])
     expect(window.location.hash).toBe('#point-p-2')
+  })
+
+  it('marks every history entry a stop shows, and none the layers show, so back in the layers knows a stop’s scroll', () => {
+    expect(window.history.state).toEqual({ stop: true })
+    view?.step(1, () => true)
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(window.history.state).toEqual({ stop: true })
+    view?.switchView('all')
+    expect(window.history.state).toBeNull()
+    view?.switchView('points')
+    expect(window.history.state).toEqual({ stop: true })
   })
 
   it('comes back from the layers to the stop the URL still names in the layer being read', () => {

@@ -428,9 +428,8 @@ export function wireReview(root, session, opts = {}) {
 
   /**
    * @param {Element | null} el
-   * @param {ScrollLogicalPosition | 'stop'} [block] `start` for a card, `center` for a point, and
-   *   `stop` for what a stop of the one-point view shows, under a page at its top as the stop's own
-   *   links leave it
+   * @param {ScrollLogicalPosition | null} [block] `start` for a card, `center` for a point, and
+   *   null for what a stop of the one-point view shows, which the stop already put on screen
    */
   const focusItem = (el, block = 'start') => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
@@ -442,21 +441,14 @@ export function wireReview(root, session, opts = {}) {
       el.classList.add('is-focused')
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
-      if (block === 'stop') {
-        window.scrollTo({ top: 0 })
-      }
-      // A stop's card or section sits under its heading; only a point's row further down, which
-      // stands for a point of the Other layer, is scrolled to from the top.
-      const to =
-        block !== 'stop' ? block : el.getBoundingClientRect().top >= window.innerHeight ? 'center' : null
-      if (to !== null) {
+      if (block !== null) {
         // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
         // the element: a hidden element cannot take the focus.
-        scrollIntoViewSafe(el, to)
+        scrollIntoViewSafe(el, block)
         // A card this scroll brought on screen draws its diff and grows, which would push the
         // element away again: the cards draw now and the scroll repeats until none is left.
         for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
-          el.scrollIntoView({ block: to })
+          el.scrollIntoView({ block })
         }
       }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
@@ -1371,7 +1363,7 @@ export function wireReview(root, session, opts = {}) {
         // The one-point view walks its stops: j and k the layers' openings, n and p every stop.
         const stop = opts.stepStop?.(direction, s => kind !== 'layer' || s.kind === 'layer')
         if (stop !== undefined) {
-          if (stop !== null) focusItem(stop, 'stop')
+          if (stop !== null) focusItem(stop, null)
           break
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
@@ -1392,7 +1384,7 @@ export function wireReview(root, session, opts = {}) {
         if (stop === undefined) {
           stepPoint(order, points, direction)
         } else if (stop !== null) {
-          focusItem(stop, 'stop')
+          focusItem(stop, null)
         }
         break
       }

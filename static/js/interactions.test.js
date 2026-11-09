@@ -1536,7 +1536,7 @@ describe('keyboard', () => {
     expect(calls.at(-1)).toEqual(['reviewed', { id: 'layer:run-path/file:src_app_ts', reviewed: true }])
   })
 
-  it('leaves the page at its top on a stop of the one-point view, as the stop’s own links do', () => {
+  it('leaves the scroll to a stop of the one-point view, which puts itself on screen', () => {
     const scrolled = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
     /** @type {HTMLElement | null} */
     let target = null
@@ -1546,17 +1546,13 @@ describe('keyboard', () => {
     const moved = vi.fn()
     card.scrollIntoView = moved
     target = card
-    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 300, 100, 100))
-    key('n')
-    expect(scrolled).toHaveBeenCalledWith({ top: 0 })
+    for (const press of ['n', ']']) {
+      key(press)
+      expect(document.activeElement).toBe(card)
+      expect(card.classList.contains('is-focused')).toBe(true)
+    }
+    expect(scrolled).not.toHaveBeenCalled()
     expect(moved).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(card)
-    // A point's row further down, as a point of the Other layer has for its stop, is scrolled to.
-    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(
-      new DOMRect(0, window.innerHeight + 400, 100, 100)
-    )
-    key(']')
-    expect(moved).toHaveBeenCalledWith({ block: 'center' })
     scrolled.mockRestore()
   })
 

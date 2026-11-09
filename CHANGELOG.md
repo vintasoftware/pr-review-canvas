@@ -16,7 +16,7 @@
   lists a layer's attention points as one line each, with their level, kind, audience, and
   location, and **show** at the end of the line however far the rest wraps. Click the title,
   **show**, or press `o` to read one. **show details** in the list's heading opens every open point,
-  and the browser remembers it. It is off by default, and saving it redraws the open page.
+  and the browser remembers it. It is off by default, and saving it applies to the open page at once.
 - **Start collapsed** in the settings dialog, saved as `startCollapsed` in `settings.yml`, opens a
   review with only the first layer open and every file closed under its name. It is off by
   default. Raising **Hide code** then closes the files it hides whole, and lowering it opens none.
@@ -58,9 +58,10 @@
   chooses. The switch changes the open page only; a reload opens on what the settings say.
 - A stop is its layer's own section seen through a lens, so commenting, marking and links work as
   in the layers. A target no stop shows moves the page to the layers, with a note that says so.
-- A stop takes the place of the one before under a page at its top, from the keys as from its
-  links. Back and forward to a stop's fragment while **Layers** shows go to its layer or card there.
-  A layer's stop opens its tests, and closes them again on leaving when the layers had them closed.
+- A stop takes the place of the one before under a page at its top, from the keys as from its links.
+  Back and forward to a place you read as a stop, while **Layers** shows, go to its layer or card
+  there; elsewhere they keep the place you left. A layer's stop opens its tests, and closes them
+  again on leaving when the layers had them closed.
 - A point the author resolved keeps its stop, folded under the author's reason, though the layers
   hide it until **show the N resolved**.
 - The rail's **Overview** counts the **open** attention points, in either view, so the count no longer

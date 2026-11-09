@@ -238,6 +238,11 @@ export class PrAppElement extends HTMLElement {
     setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
+    applyPointsDensity(
+      document.documentElement,
+      this.bootstrap.compactPoints,
+      typeof localStorage === 'undefined' ? null : localStorage
+    )
     this.layerView?.stop()
     this.readByPoints = this.bootstrap.readByPoints
     this.layerView = initOneLayer(this, {
@@ -337,7 +342,6 @@ export class PrAppElement extends HTMLElement {
     const storage = typeof localStorage === 'undefined' ? null : localStorage
     // A docked chat starts the way the reader last left it, or minimized with chatStartMinimized.
     const chatMinimized = chatEnabled && (bundle.chat.startMinimized === true || readChatMinimized(storage))
-    applyPointsDensity(document.documentElement, boot.compactPoints, storage)
     // The renderers read this while they build the cards, so it is set before the first one.
     setChatEnabled(chatEnabled)
     setMentionCanvas(bundle.mentionCanvas)
@@ -637,8 +641,6 @@ export class PrAppElement extends HTMLElement {
     this.chat?.followSettings(data.settings)
     applyPointColors(data.settings.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
-    // A later render reads the setting from the bootstrap, so it keeps what was saved.
-    if (this.bootstrap !== null) this.bootstrap.compactPoints = data.settings.compactPoints
     const density = document.documentElement.dataset['points']
     applyPointsDensity(
       document.documentElement,

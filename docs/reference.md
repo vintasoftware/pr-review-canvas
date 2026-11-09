@@ -742,16 +742,17 @@ through a lens, always open, with no chevron to fold it:
   `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
   `]` puts the focus on it, so `c`, `d` and `o` act on it.
 
-The view opens on its first stop. The rail lists the stops and marks the one that shows; on a
-narrow screen, where the rail is a strip of chips, the strip scrolls to that chip. A stop takes the
-place of the one before under a page that stays at the top, from its links and its keys alike, and
-the URL names it with the same fragment the layers use (`#layer-…`, `#point-…`), so a reload, back
-and forward, and a switch of view keep your place. Back or forward to a stop's fragment while
-**Layers** shows goes to its layer or card there. Since a stop shows the layer's own cards, whatever
-you do there is what the layer has. Whatever leads to a line, a chunk, a file or a point (a link,
-**go to code**, `c`, a proposed comment) opens the stop that shows it; when none does, the page
-moves to your layers, goes there, and a note says so. On a canvas with no point the view shows the
-overview and the layers, one at a time.
+The view opens on its first stop. The rail lists the stops and marks the one that shows; on a narrow
+screen, where the rail is a strip of chips, the strip scrolls to that chip. A stop takes the place
+of the one before under a page that stays at the top, from its links and its keys alike, and the URL
+names it with the same fragment the layers use (`#layer-…`, `#point-…`), so a reload, back and
+forward, and a switch of view keep your place. Back or forward to a place you read as a stop, while
+**Layers** shows, goes to its layer or card there; every other Back or forward keeps the place you
+left. Since a stop shows the layer's own cards, whatever you do there is what the layer has.
+Whatever leads to a line, a chunk, a file or a point (a link, **go to code**, `c`, a proposed
+comment) opens the stop that shows it; when none does, the page moves to your layers, goes there,
+and a note says so. On a canvas with no point the view shows the overview and the layers, one at a
+time.
 
 On a canvas with points, a switch at the head of the rail moves between **Attention points** and
 **Layers**, and keeps the keyboard on the button you pressed. **Layers** shows the layer view **Show
@@ -840,7 +841,7 @@ deleting the draft. The point collapses again when its status changes. A reload 
 A layer's list draws each open point whole. With `compactPoints: true` in `settings.yml`
 (**Compact attention points** in the settings dialog), every point in the list starts as one line:
 its level, title, a `decide` point's impact, kind, audience, and location, with **show** at the end
-of the line however far the rest wraps. Saving the setting redraws the open page's lists. Click the
+of the line however far the rest wraps. Saving the setting applies to the open page at once. Click the
 title or **show** to read it and use its commands. **show details** in the heading of a list shows every
 open point whole, in every layer, and **compact** goes back; the browser remembers the choice. A
 point on its line in the diff is always drawn whole while it is open.
