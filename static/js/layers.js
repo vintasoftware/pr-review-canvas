@@ -21,6 +21,7 @@ import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
+import { lineLink } from './links.js'
 import { renderMarkdown } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
@@ -171,7 +172,14 @@ export function testMapHtml(layer, paths) {
       const where = t.testPath
         ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath).replaceAll('/', '/<wbr>')}</a>`
         : ''
-      const note = t.note ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>` : ''
+      // A missing behavior with an anchor has an attention point there that carries its note, so
+      // the row links to the point instead of repeating it.
+      const point = t.status === 'missing' ? t.anchor : undefined
+      const note = point
+        ? `<div class="muted small"><a href="${esc(lineLink({ ...point, start: point.line, end: point.line }))}">See its attention point</a></div>`
+        : t.note
+          ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>`
+          : ''
       return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })
     .join('')

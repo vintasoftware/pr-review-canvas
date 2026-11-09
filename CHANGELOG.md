@@ -52,7 +52,8 @@
   **Writing** section from the bundled template.
 - A missing-test attention point reads as the generator's note on the gap, without the line
   `The layer "…" lists this behavior without a test.` in front of it. A gap with no note reads
-  `No test covers this behavior.`
+  `No test covers this behavior.` The layer's Tests table no longer repeats that note: the row
+  links to the point with **See its attention point**.
 
 ## 0.10.0
 

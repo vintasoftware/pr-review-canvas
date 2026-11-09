@@ -120,7 +120,15 @@ describe('layer sections', () => {
     const rows = [...document.querySelectorAll('tbody tr')]
     expect(rows.map(r => r.querySelector('.st')?.textContent)).toEqual(['covered', 'missing', 'not-needed'])
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#file:src/app.test.ts')
-    expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('y is unused')
+    // A missing behavior's note lives on its attention point; the row links there instead.
+    expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('See its attention point')
+    expect(rows[1]?.querySelector('.muted.small a')?.getAttribute('href')).toBe('#line:src/app.ts:1')
+    // A canvas written before tests stored their anchor keeps the note in the row.
+    const legacy = layer.tests.map(t => (t.status === 'missing' ? { ...t, anchor: undefined } : t))
+    document.body.innerHTML = testMapHtml({ ...layer, tests: legacy }, paths)
+    expect(document.querySelectorAll('tbody tr')[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe(
+      'y is unused'
+    )
     expect(testMapHtml({ ...layer, tests: [] }, paths)).toBe('')
   })
 
