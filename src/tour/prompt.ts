@@ -44,11 +44,11 @@ function diffsMarkdown(ctx: TourContext, patches: Record<string, string>): strin
   )
 }
 
-function guideMarkdown(ctx: TourContext): string {
+function guideMarkdown(ctx: TourContext, guidePath: string): string {
   if (ctx.guide.text === null) {
-    return `_The project has no guide at \`${ctx.guide.path ?? 'docs/pr-tour.md'}\`, so write no try-it recipes and name non-functional requirements only where the code makes them plain._`
+    return `_The project has no guide at \`${guidePath}\`, so write no try-it recipes and name non-functional requirements only where the code makes them plain._`
   }
-  return `The guide (\`${ctx.guide.path ?? ''}\`) is the project's committed notes for tours: how to run the app, how to make synthetic data, which non-functional requirements matter, where specs live, and what you may run. It is an allowlist: run nothing it does not name without asking.\n\n${embedMarkdown(ctx.guide.text)}\n\nEnd of the guide.`
+  return `The guide (\`${guidePath}\`) is the project's committed notes for tours: how to run the app, how to make synthetic data, which non-functional requirements matter, where specs live, and what you may run. It is an allowlist: run nothing it does not name without asking.\n\n${embedMarkdown(ctx.guide.text)}\n\nEnd of the guide.`
 }
 
 function budgetMarkdown(ctx: TourContext): string {
@@ -127,6 +127,8 @@ export function tourSchemaMarkdown(ctx: TourContext): string {
 export interface TourPromptExtras {
   /** The scene guide the generator reads before drawing, absolute. */
   sceneGuidePath: string
+  /** Where the project keeps its tour guide, relative to the repository, whether or not it is there. */
+  guidePath: string
 }
 
 /** Fills the template's tokens. Throws on a token the template names that this module does not. */
@@ -147,7 +149,7 @@ export function renderTourPrompt(
     SCENES_DIR: ctx.scenesDir,
     MANIFEST: manifestMarkdown(ctx.files),
     DIFFS: diffsMarkdown(ctx, patches),
-    GUIDE: guideMarkdown(ctx),
+    GUIDE: guideMarkdown(ctx, extras.guidePath),
     BUDGET: budgetMarkdown(ctx),
     CAPS: capsMarkdown(ctx),
     CATEGORIES: categoriesMarkdown(ctx),

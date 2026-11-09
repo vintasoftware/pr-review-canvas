@@ -814,16 +814,20 @@ describe('the tour prompt', () => {
       context,
       patches,
       '{{META}}|{{GUIDE}}|{{MICRO_WORLD}}|{{TRY_IT}}|{{CATEGORIES}}',
-      { sceneGuidePath: '/g.md' }
+      { sceneGuidePath: '/g.md', guidePath: 'docs/pr-tour.md' }
     )
     expect(text).toContain('Pull request: #42')
     expect(text).toContain('Try-it recipes are off')
     expect(text).toContain('`pokayoke`')
-    expect(() => renderTourPrompt(context, patches, '{{NOPE}}', { sceneGuidePath: '/g.md' })).toThrow(
-      'unknown token {{NOPE}}'
-    )
+    expect(() =>
+      renderTourPrompt(context, patches, '{{NOPE}}', {
+        sceneGuidePath: '/g.md',
+        guidePath: 'docs/pr-tour.md',
+      })
+    ).toThrow('unknown token {{NOPE}}')
     const long = renderTourPrompt(context, { ...patches, big: 'x\n'.repeat(2000) }, '{{DIFFS}}', {
       sceneGuidePath: '/g.md',
+      guidePath: 'docs/pr-tour.md',
     })
     expect(long).toContain('not inlined')
   })
