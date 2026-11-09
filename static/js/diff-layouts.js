@@ -62,3 +62,15 @@ export function setDrawnDiffLayout(layout) {
 export function diffColumns() {
   return drawn === 'split' ? 6 : 4
 }
+
+/**
+ * The cells of a row whose content spans the code columns, after the line numbers and the comment
+ * column: a hunk header, a fold summary, the selection's bar.
+ * @param {string} html
+ * @param {string} [cls] the spanning cell's classes
+ */
+export function codeSpanCellsHtml(html, cls = 'code') {
+  return drawn === 'split'
+    ? `<td class="ln"></td><td class="gut"></td><td class="${cls}" colspan="4">${html}</td>`
+    : `<td class="ln" colspan="2"></td><td class="gut"></td><td class="${cls}">${html}</td>`
+}

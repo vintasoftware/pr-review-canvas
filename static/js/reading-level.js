@@ -58,13 +58,12 @@ export function foldLevelHint(level, counts) {
  * here holds for this page only.
  * @param {FoldLevel} level
  * @param {HiddenCounts} counts what the level hides across the canvas
- * @param {string} [lead] HTML of the controls before it on the line, such as the layout switch
  * @returns {string}
  */
-export function foldLevelControlHtml(level, counts, lead = '') {
+export function foldLevelControlHtml(level, counts) {
   const options = optionsHtml(FOLD_LEVELS, level)
   return (
-    `<div class="reading">${lead}<label for="${FOLD_LEVEL_SELECT_ID}">Hide code</label>` +
+    `<div class="reading"><label for="${FOLD_LEVEL_SELECT_ID}">Hide code</label>` +
     `<select id="${FOLD_LEVEL_SELECT_ID}" title="How much of the diff this page hides. Press f to step through the levels; the settings dialog sets the default.">${options}</select>` +
     `<span class="fold-hint" role="status">${esc(foldLevelHint(level, counts))}</span></div>`
   )

@@ -18,7 +18,7 @@
 
 import { findRow } from './anchors.js'
 import { askButtonHtml } from './ask.js'
-import { drawnDiffLayout } from './diff-layouts.js'
+import { codeSpanCellsHtml } from './diff-layouts.js'
 import { esc } from './dom.js'
 
 /**
@@ -107,8 +107,7 @@ export function selectionLabel(selection) {
  */
 export function selectionToolbarHtml(selection) {
   const label = selectionLabel(selection)
-  return (
-    `<tr class="sel-bar" data-decoration="selection">${drawnDiffLayout() === 'split' ? '<td class="ln" colspan="2"></td><td class="code x" colspan="4">' : '<td class="ln" colspan="3"></td><td class="code x">'}` +
+  const html =
     `<span class="lbl">${esc(label)}</span>` +
     '<span class="tbtns"><button class="cmd" type="button" data-act="comment-selection" data-needs-post>comment</button>' +
     askButtonHtml({
@@ -118,8 +117,8 @@ export function selectionToolbarHtml(selection) {
       start: selection.start,
       end: selection.end,
     }) +
-    '</span></td></tr>'
-  )
+    '</span>'
+  return `<tr class="sel-bar" data-decoration="selection">${codeSpanCellsHtml(html, 'code x')}</tr>`
 }
 
 /**

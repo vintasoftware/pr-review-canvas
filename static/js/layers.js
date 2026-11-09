@@ -12,10 +12,10 @@
 /** @typedef {import('./contract-types.js').ReviewComment} ReviewComment */
 /** @typedef {import('./threads.js').Thread} Thread */
 import { askButtonHtml } from './ask.js'
-import { applyCodeFolds, setCodeFoldLevel, wireFoldReveal } from './code-folds.js'
+import { applyCodeFolds, holdFolds, setCodeFoldLevel, wireFoldReveal } from './code-folds.js'
 import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
-import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
+import { applyDecorations, holdDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
@@ -636,7 +636,9 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   const { placed, missed } = decorateCard(card, ctx, { key, layerId, entry, hunkIds })
   const discussed = lf !== undefined && cardDiscussion(lf, layerId, ctx, commentPathsOf(ctx)).discussed
   applyCodeFolds(card, key, lf?.folds ?? [], foldLevel, discussed)
-  wireFoldReveal(card)
+  // On the diff, which each draw replaces, so a redraw adds no second listener.
+  const diff = host.querySelector('.diff-wrap')
+  if (diff instanceof HTMLElement) wireFoldReveal(diff)
   cardRenderedHook?.(card)
   return { rendered: true, deferred: false, placed, missed }
 }
@@ -816,8 +818,8 @@ export class PrFileElement extends HTMLElement {
 }
 
 /**
- * Draws every drawn diff again, as when the layout changes. A card still waiting to be drawn
- * draws in the new layout when it is seen.
+ * Draws every drawn diff again, as when the layout changes, with the folds, threads and points
+ * as the reader left them. A card still waiting to be drawn draws in the new layout when it is seen.
  * @param {ParentNode} root
  */
 export function redrawDiffs(root) {
@@ -826,8 +828,11 @@ export function redrawDiffs(root) {
     return
   }
   for (const card of root.querySelectorAll('article.file')) {
-    if (card instanceof HTMLElement && card.querySelector('.diff-host table.diff') !== null) {
+    const key = card.getAttribute('data-key')
+    if (card instanceof HTMLElement && key !== null && card.querySelector('.diff-host table.diff') !== null) {
+      const restore = [holdFolds(card, key), holdDecorations(card)]
       hydrateFileCard(card, ctx, { force: true })
+      for (const put of restore) put()
     }
   }
 }

@@ -47,12 +47,19 @@
 }
 /* How much code is hidden: a setting on the reading, so it sits with the progress line and not
    among the commands, and says what it hides rather than leaving the reader to find out. */
+/* The diff's layout, then how much of it is hidden, on one line under the PR's title. */
+.reading-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  align-items: baseline;
+  margin-top: 14px;
+}
 .reading {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: baseline;
-  margin-top: 14px;
 }
 .reading label {
   font-size: 12px;
@@ -66,7 +73,6 @@
 .diff-layout {
   display: inline-flex;
   gap: 10px;
-  margin-right: 8px;
 }
 .diff-layout button {
   padding: 0 0 2px;

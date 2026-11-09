@@ -2,7 +2,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
 import { findRow } from './anchors.js'
-import { applyCodeFolds, setCodeFoldLevel, setFoldShown, wireFoldReveal } from './code-folds.js'
+import { applyCodeFolds, holdFolds, setCodeFoldLevel, setFoldShown, wireFoldReveal } from './code-folds.js'
 import { followLink } from './deep-link.js'
 import { insertNoteRow } from './diff-decorations.js'
 import { setDrawnDiffLayout } from './diff-layouts.js'
@@ -329,6 +329,38 @@ function foldSummary(card) {
 
   return row
 }
+
+describe('holdFolds', () => {
+  it('opens again, in the other layout, the folds the reader opened', () => {
+    const patch = ['@@ -1,3 +1,3 @@', ' keep()', '-a( 1 )', '+a(1)', ' end()'].join('\n')
+    const fold = { ...FOLD, endLine: 3 }
+    const card = mount()
+    const body = card.querySelector('.file-body')
+    if (!(body instanceof HTMLElement)) throw new Error('no body')
+    body.innerHTML = renderDiff({ key: 'src_app_ts', path: 'src/app.ts' }, patch)
+    applyCodeFolds(card, 'src_app_ts', [fold], 'light', false)
+    toggle(card).click()
+    const summary = card.querySelector('tr.more.fold')
+    if (!(summary instanceof HTMLTableRowElement)) throw new Error('no summary')
+    setFoldShown(summary, true)
+
+    const restore = holdFolds(card, 'src_app_ts')
+    setDrawnDiffLayout('split')
+    try {
+      body.innerHTML = renderDiff({ key: 'src_app_ts', path: 'src/app.ts' }, patch)
+      applyCodeFolds(card, 'src_app_ts', [fold], 'light', false)
+      expect(toggle(card).getAttribute('aria-expanded')).toBe('false')
+      restore()
+    } finally {
+      setDrawnDiffLayout('unified')
+    }
+    expect(toggle(card).getAttribute('aria-expanded')).toBe('true')
+    expect(card.querySelector('tr.more.fold [data-act="show-fold"]')?.getAttribute('aria-expanded')).toBe(
+      'true'
+    )
+    expect(card.querySelector('#L-src_app_ts-new-2')?.classList.contains('shown')).toBe(true)
+  })
+})
 
 describe('setFoldShown', () => {
   it('starts hidden, then shows the folded rows and relabels the button', () => {

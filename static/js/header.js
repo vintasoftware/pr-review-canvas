@@ -135,12 +135,13 @@ export function renderHeader(bundle, opts) {
     : `Fetch the latest PR, comments, and shared canvas from ${esc(hostLabel())}`
   const progress = ready ? progressHtml(artifact, bundle.state, pr) : ''
   const level = getFoldLevel()
-  // How much of the diff to hide is the reader's choice for any canvas on screen, an outdated one
-  // they opened too, counted over the diff the page draws.
+  // The diff's layout and how much of it to hide are the reader's choice for any canvas on screen,
+  // an outdated one they opened too, counted over the diff the page draws.
   const reading =
     drawn === null
       ? ''
-      : foldLevelControlHtml(
+      : `<div class="reading-bar">${diffLayoutControlHtml(drawnDiffLayout())}` +
+        foldLevelControlHtml(
           level,
           canvasHiddenLines(
             {
@@ -152,9 +153,9 @@ export function renderHeader(bundle, opts) {
               mergeBaseSha: drawn.on.mergeBaseSha,
             },
             level
-          ),
-          diffLayoutControlHtml(drawnDiffLayout())
-        )
+          )
+        ) +
+        '</div>'
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (
     '<header class="hdr">' +

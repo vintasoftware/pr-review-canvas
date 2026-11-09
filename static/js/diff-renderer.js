@@ -5,7 +5,7 @@
 // never shifted by filtering: filtered lines are folded (hidden rows), not dropped.
 import { diffWordsWithSpace } from 'diff'
 import hljs from 'hljs'
-import { drawnDiffLayout } from './diff-layouts.js'
+import { codeSpanCellsHtml, drawnDiffLayout } from './diff-layouts.js'
 import { esc } from './dom.js'
 import { parseHunkHeader } from './hunks.js'
 import { buildLineId, hunkAnchorId, hunkId } from './keys.js'
@@ -33,11 +33,10 @@ import { buildLineId, hunkAnchorId, hunkId } from './keys.js'
  * @typedef {{ header: string, oldStart: number, oldLines: number, newStart: number, newLines: number, entries: Entry[] }} HunkBlock
  */
 /**
- * One row of the split layout: the old file's line on the left, the new file's on the right. A
- * context line is both; a side with no line is blank.
- * @typedef {{ old: Entry | null, new: Entry | null }} SplitRow
+ * One row of a diff: the old file's line and the new file's. A context line is both; a changed
+ * line has no line on the other side in the unified layout, and may have one in the split layout.
+ * @typedef {{ old: Entry, new: Entry | null } | { old: null, new: Entry }} LineRow
  */
-/** @typedef {import('./diff-layouts.js').DiffLayout} DiffLayout */
 /**
  * One matched move, as the changed lines of each side paired by position. Context lines the block
  * bridged are compared but not paired: neither side changed them.
@@ -708,13 +707,25 @@ export function codeHtml(e) {
 }
 
 /**
- * @param {Entry} e
+ * The line a row's classes and fold come from: its old line, or its new one when it has none.
+ * @param {LineRow} row
+ */
+function entryOf(row) {
+  return row.old === null ? row.new : row.old
+}
+
+/**
+ * One row of the drawn layout. It carries the new side's id when it has a new line, else the old
+ * side's, and the old line as data when it has both, so `findRow` finds either side.
+ * @param {LineRow} row
  * @param {string} key
  * @returns {string}
  */
-export function rowHtml(e, key) {
+export function rowHtml(row, key) {
+  const split = drawnDiffLayout() === 'split'
+  const e = entryOf(row)
   /** @type {string[]} */
-  const classes = [e.type]
+  const classes = split ? [] : [e.type]
   if (foldKey(e) !== null) {
     // `folded` is what the stylesheet hides and what the summary row's toggle walks over. An
     // edited move starts open, so it also carries `shown`.
@@ -729,19 +740,18 @@ export function rowHtml(e, key) {
   if (e.noise) {
     classes.push('noise')
   }
-  const idSide = e.type === 'del' ? 'old' : 'new'
-  const idLine = e.type === 'del' ? e.oldLine : e.newLine
-  const id = idLine === null ? '' : ` id="${esc(buildLineId(key, idSide, idLine))}"`
-  const dataOld = e.type === 'ctx' && e.oldLine !== null ? ` data-old="${e.oldLine}"` : ''
-  // A deleted line is commented on the old side; every other row on the new side.
-  const commentSide = e.type === 'del' ? 'old' : 'new'
-  return (
-    `<tr class="${classes.join(' ')}"${id}${dataOld}>` +
-    `<td class="ln">${e.oldLine ?? ''}</td>` +
-    `<td class="ln">${e.newLine ?? ''}</td>` +
-    `<td class="gut">${plusHtml(key, commentSide, commentSide === 'old' ? e.oldLine : e.newLine)}</td>` +
-    `<td class="code">${markerOf(e)}${codeHtml(e)}</td></tr>`
-  )
+  /** @type {'old' | 'new'} */
+  const side = row.new === null ? 'old' : 'new'
+  const line = row.new === null ? e.oldLine : row.new.newLine
+  const id = line === null ? '' : ` id="${esc(buildLineId(key, side, line))}"`
+  const dataOld = row.new !== null && row.old !== null ? ` data-old="${row.old.oldLine}"` : ''
+  const cells = split
+    ? splitCellsHtml(row.old, 'old', key) + splitCellsHtml(row.new, 'new', key)
+    : `<td class="ln">${row.old?.oldLine ?? ''}</td>` +
+      `<td class="ln">${row.new?.newLine ?? ''}</td>` +
+      `<td class="gut">${plusHtml(key, side, line)}</td>` +
+      `<td class="code">${markerOf(e)}${codeHtml(e)}</td>`
+  return `<tr${classes.length === 0 ? '' : ` class="${classes.join(' ')}"`}${id}${dataOld}>${cells}</tr>`
 }
 
 /** @param {Entry} e */
@@ -765,10 +775,10 @@ function plusHtml(key, side, line) {
  * added line, as GitHub lines them up. A line the renderer folds pairs only with a line of the
  * same fold, so every row folds whole.
  * @param {Entry[]} entries
- * @returns {SplitRow[]}
+ * @returns {LineRow[]}
  */
 export function splitRows(entries) {
-  /** @type {SplitRow[]} */
+  /** @type {LineRow[]} */
   const rows = []
   /** @type {Entry[]} */
   let dels = []
@@ -777,14 +787,17 @@ export function splitRows(entries) {
   const pairUp = () => {
     let d = 0
     let a = 0
-    while (d < dels.length || a < adds.length) {
-      const del = dels[d] ?? null
-      const add = adds[a] ?? null
-      if (del !== null && add !== null && foldKey(del) === foldKey(add)) {
+    for (;;) {
+      const del = dels[d]
+      const add = adds[a]
+      if (del === undefined || add === undefined) {
+        break
+      }
+      if (foldKey(del) === foldKey(add)) {
         rows.push({ old: del, new: add })
         d++
         a++
-      } else if (del !== null && (add === null || foldKey(del) !== null)) {
+      } else if (foldKey(del) !== null) {
         rows.push({ old: del, new: null })
         d++
       } else {
@@ -792,6 +805,8 @@ export function splitRows(entries) {
         a++
       }
     }
+    rows.push(...dels.slice(d).map(del => ({ old: del, new: null })))
+    rows.push(...adds.slice(a).map(add => ({ old: null, new: add })))
     dels = []
     adds = []
   }
@@ -820,45 +835,23 @@ function splitCellsHtml(e, side, key) {
   const line = side === 'old' ? e.oldLine : e.newLine
   const cls = e.type === 'ctx' ? '' : ` ${e.type}`
   return (
-    `<td class="ln${cls}" data-side="${side}">${line ?? ''}</td>` +
+    `<td class="ln${cls}" data-side="${side}">${line}</td>` +
     `<td class="gut${cls}" data-side="${side}">${plusHtml(key, side, line)}</td>` +
     `<td class="code${cls}" data-side="${side}">${markerOf(e)}${codeHtml(e)}</td>`
   )
 }
 
 /**
- * One row of the split layout. It carries the new side's id when it has a new line, and the old
- * line as data, as a context row does in the unified layout, so `findRow` finds either side.
- * @param {SplitRow} row
- * @param {string} key
- * @returns {string}
+ * The rows of a hunk's lines in the drawn layout.
+ * @param {Entry[]} entries
+ * @returns {LineRow[]}
  */
-export function splitRowHtml(row, key) {
-  // Every row shows a line on at least one side.
-  const e = /** @type {Entry} */ (row.new ?? row.old)
-  /** @type {string[]} */
-  const classes = []
-  if (foldKey(e) !== null) {
-    classes.push('folded')
-    if (e.move !== null && e.move.kind === 'edited') {
-      classes.push('shown')
-    }
-  }
-  if (e.move !== null) {
-    classes.push(`move-${e.move.side}`)
-  }
-  if (e.noise) {
-    classes.push('noise')
-  }
-  const id =
-    row.new === null
-      ? buildLineId(key, 'old', Number(row.old?.oldLine))
-      : buildLineId(key, 'new', Number(row.new.newLine))
-  const dataOld = row.new !== null && row.old !== null ? ` data-old="${row.old.oldLine}"` : ''
-  return (
-    `<tr${classes.length === 0 ? '' : ` class="${classes.join(' ')}"`} id="${esc(id)}"${dataOld}>` +
-    `${splitCellsHtml(row.old, 'old', key)}${splitCellsHtml(row.new, 'new', key)}</tr>`
-  )
+export function lineRows(entries) {
+  return drawnDiffLayout() === 'split'
+    ? splitRows(entries)
+    : entries.map(e =>
+        e.type === 'add' ? { old: null, new: e } : { old: e, new: e.type === 'ctx' ? e : null }
+      )
 }
 
 /**
@@ -880,10 +873,9 @@ export function foldKey(e) {
  * @param {Entry} first the first line of the run
  * @param {number} n how many lines the run holds
  * @param {string} key
- * @param {DiffLayout} [layout]
  * @returns {string}
  */
-export function foldSummaryHtml(first, n, key, layout = 'unified') {
+export function foldSummaryHtml(first, n, key) {
   const lines = `${n} ${n === 1 ? 'line' : 'lines'}`
   const move = first.move
   let label = `&#8943; ${lines} hidden (imports, whitespace)`
@@ -902,60 +894,40 @@ export function foldSummaryHtml(first, n, key, layout = 'unified') {
   const toggle =
     `<button class="cmd" type="button" data-act="show-fold" aria-expanded="${shown}">` +
     `${shown ? 'hide' : 'show'}</button>`
-  return `<tr class="more fold${move === null ? '' : ' move'}">${spanCellsHtml(`${label} &middot; ${toggle}`, layout)}</tr>`
-}
-
-/**
- * The cells of a row whose text spans the code: a hunk header or a fold summary.
- * @param {string} html
- * @param {DiffLayout} layout
- */
-function spanCellsHtml(html, layout) {
-  return layout === 'split'
-    ? `<td class="ln"></td><td class="gut"></td><td class="code" colspan="4">${html}</td>`
-    : `<td class="ln" colspan="2"></td><td class="gut"></td><td class="code">${html}</td>`
+  return `<tr class="more fold${move === null ? '' : ' move'}">${codeSpanCellsHtml(`${label} &middot; ${toggle}`)}</tr>`
 }
 
 /**
  * Rows for one hunk: the header row, then the lines, each run of folded lines behind its summary.
  * @param {HunkBlock} hunk
  * @param {string} key
- * @param {DiffLayout} [layout]
  * @returns {string}
  */
-export function buildRows(hunk, key, layout = 'unified') {
-  /** @type {Array<{ first: Entry, count: number, html: string }>} */
-  const lines =
-    layout === 'split'
-      ? splitRows(hunk.entries).map(row => ({
-          first: /** @type {Entry} */ (row.old ?? row.new),
-          count: row.old !== null && row.new !== null && row.old !== row.new ? 2 : 1,
-          html: splitRowHtml(row, key),
-        }))
-      : hunk.entries.map(e => ({ first: e, count: 1, html: rowHtml(e, key) }))
+export function buildRows(hunk, key) {
   /** @type {string[]} */
-  const rows = [`<tr class="hunk">${spanCellsHtml(esc(hunk.header), layout)}</tr>`]
+  const rows = [`<tr class="hunk">${codeSpanCellsHtml(esc(hunk.header))}</tr>`]
   /** The open run of folded lines: its fold, where its summary goes, its first line and count. */
   let run = /** @type {{ fold: string, at: number, first: Entry, count: number } | null} */ (null)
   const closeRun = () => {
     if (run !== null) {
-      rows[run.at] = foldSummaryHtml(run.first, run.count, key, layout)
+      rows[run.at] = foldSummaryHtml(run.first, run.count, key)
       run = null
     }
   }
-  for (const line of lines) {
-    const fold = foldKey(line.first)
+  for (const row of lineRows(hunk.entries)) {
+    const first = entryOf(row)
+    const fold = foldKey(first)
     if (fold !== (run?.fold ?? null)) {
       closeRun()
       if (fold !== null) {
-        run = { fold, at: rows.length, first: line.first, count: 0 }
+        run = { fold, at: rows.length, first, count: 0 }
         rows.push('')
       }
     }
     if (run !== null) {
-      run.count += line.count
+      run.count += row.old !== null && row.new !== null && row.old !== row.new ? 2 : 1
     }
-    rows.push(line.html)
+    rows.push(rowHtml(row, key))
   }
   closeRun()
   return rows.join('')
@@ -976,8 +948,7 @@ const SPLIT_HEAD =
  * @returns {string} HTML: one table per hunk inside .diff-wrap, in the page's drawn layout
  */
 export function renderDiff(file, patch, opts = {}) {
-  const layout = drawnDiffLayout()
-  const split = layout === 'split'
+  const split = drawnDiffLayout() === 'split'
   const hunks = prepareHunks(patch)
   /** @type {string[]} */
   const tables = []
@@ -990,7 +961,7 @@ export function renderDiff(file, patch, opts = {}) {
     highlightHunk(h, file.lang)
     tables.push(
       `<table class="diff${split ? ' split' : ''}" id="${esc(hunkAnchorId(file.key, n))}" data-hunk="${esc(id)}" data-key="${esc(file.key)}">` +
-        `<caption class="sr">Chunk ${n} of ${esc(file.path)}</caption>${split ? SPLIT_HEAD : THEAD}<tbody>${buildRows(h, file.key, layout)}</tbody></table>`
+        `<caption class="sr">Chunk ${n} of ${esc(file.path)}</caption>${split ? SPLIT_HEAD : THEAD}<tbody>${buildRows(h, file.key)}</tbody></table>`
     )
   })
   if (tables.length === 0) {

@@ -32,7 +32,13 @@ import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decoratio
 import { conversationHtml } from './overview.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
 import { hostLabel } from './host.js'
-import { drawnDiffLayout, isDiffLayout, setChosenDiffLayout, setDrawnDiffLayout } from './diff-layouts.js'
+import {
+  chosenDiffLayout,
+  drawnDiffLayout,
+  isDiffLayout,
+  setChosenDiffLayout,
+  setDrawnDiffLayout,
+} from './diff-layouts.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
@@ -891,17 +897,20 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /**
-   * Draws every diff again in `layout`, keeping the line at the top of the screen where it was,
-   * and the open composer and the selection on their lines.
+   * Draws every diff again in `layout`, keeping the line at the top of the screen where it was, and
+   * the open composer, the selection, and the keys' ring on their lines.
    * @param {import('./diff-layouts.js').DiffLayout} layout
    */
   const relayout = layout => {
     const keepPlace = holdReadingPlace()
     const restoreComposer = liftComposer(root)
+    const ringed = focused()?.closest('tr.ifind')?.getAttribute('data-fingerprint') ?? null
     setDrawnDiffLayout(layout)
     redrawDiffs(root)
     restoreComposer()
     markSelection(root, selection)
+    if (ringed !== null)
+      focusItem(root.querySelector(`tr.ifind[data-fingerprint="${cssEscape(ringed)}"]`), null)
     keepPlace()
   }
 
@@ -938,7 +947,7 @@ export function wireReview(root, session, opts = {}) {
    * @param {import('./diff-layouts.js').DiffLayout} layout
    */
   const chooseDiffLayout = layout => {
-    if (layout === drawnDiffLayout()) {
+    if (layout === drawnDiffLayout() && layout === chosenDiffLayout()) {
       return
     }
     if (layout === 'split' && !layoutSwitch.fits()) {

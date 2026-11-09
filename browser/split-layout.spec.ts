@@ -3,6 +3,33 @@ import { expect, test } from './fixtures.js'
 /** Wide enough for split with the AI Chat pane docked beside the diff. */
 const WIDE = { width: 1920, height: 1000 }
 
+for (const skin of ['github', 'olive', 'terminal']) {
+  test(`the settings dialog saves the diff layout and the page follows it in the ${skin} skin`, async ({
+    page,
+    reviewUrl,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one wide window is enough')
+    await page.setViewportSize(WIDE)
+    await page.goto(`${reviewUrl}?skin=${skin}`)
+    const file = page.locator('article.file[data-path="src/app.ts"]').first()
+    await file.scrollIntoViewIfNeeded()
+    await expect(file.locator('tr.del#L-src_app_ts-old-3')).toBeVisible()
+
+    await page.locator('#settings').click()
+    await expect(page.locator('#set-diff-layout')).toHaveValue('unified')
+    await page.locator('#set-diff-layout').selectOption('split')
+    await page.locator('[data-act="settings-save"]').click()
+    await expect(page.locator('#settings-dialog')).toBeHidden()
+    await expect(file.locator('#L-src_app_ts-new-4 td.code.del')).toBeVisible()
+    await expect(page.locator('.diff-layout [data-layout="split"]')).toHaveAttribute('aria-pressed', 'true')
+    await file.screenshot({ path: testInfo.outputPath(`split-${skin}.png`) })
+
+    await page.reload()
+    await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
+    await expect(page.locator('#L-src_app_ts-new-4 td.code.del')).toBeVisible()
+  })
+}
+
 test.describe('split layout', () => {
   test.use({ settings: { diffLayout: 'split' } })
 
@@ -76,6 +103,29 @@ test.describe('split layout', () => {
     await editor.locator('[data-act="composer-queue"]').click()
     expect((await added).postDataJSON()).toMatchObject({ path: 'src/app.ts', side: 'old', line: 3 })
     await expect(file.locator('tr.pending-row .pending-cmt')).toHaveCount(1)
+  })
+
+  test('keeps a shown resolved thread, the reply in it, and an opened fold across a switch', async ({
+    page,
+    reviewUrl,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one wide window is enough')
+    await page.setViewportSize(WIDE)
+    await page.goto(reviewUrl)
+    const file = page.locator('article.file[data-path="src/app.ts"]').first()
+    await file.scrollIntoViewIfNeeded()
+    const thread = file.locator('tr.thread.resolved')
+    await thread.locator('[data-act="thread-show"]').click()
+    await thread.locator('[data-act="thread-reply"]').click()
+    await thread.locator('textarea').fill('agreed, sum it is')
+    await file.locator('tr.more.fold [data-act="show-fold"]').click()
+
+    await page.keyboard.press('s')
+    await expect(file.locator('table.diff.split')).toHaveCount(0)
+    await expect(thread.locator('textarea')).toBeVisible()
+    await expect(thread.locator('textarea')).toHaveValue('agreed, sum it is')
+    await expect(file.locator('tr.more.fold [data-act="show-fold"]')).toHaveAttribute('aria-expanded', 'true')
+    await expect(file.locator('#L-src_app_ts-new-2')).toBeVisible()
   })
 
   test('draws unified where the diff column is too narrow, and says why split waits', async ({

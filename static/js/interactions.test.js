@@ -1517,6 +1517,49 @@ describe('diff layout', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps the threads and folds the reader opened, and a reply written in one, across a switch', () => {
+    const { root } = wide()
+    click(root, 'tr.thread.resolved [data-act="thread-show"]')
+    click(root, 'tr.thread.resolved [data-act="thread-reply"]')
+    const area = root.querySelector('tr.thread.resolved textarea')
+    if (area instanceof HTMLTextAreaElement) area.value = 'still here'
+    click(root, '#file-src_app_ts tr.more.fold [data-act="show-fold"]')
+    key('s')
+    const thread = root.querySelector('tr.thread.resolved')
+    expect(root.querySelector('table.diff.split')).not.toBeNull()
+    expect(thread?.querySelector('.thread-full')?.hasAttribute('hidden')).toBe(false)
+    expect(thread?.querySelector('textarea')).toBe(area)
+    expect(
+      root
+        .querySelector('#file-src_app_ts tr.more.fold [data-act="show-fold"]')
+        ?.getAttribute('aria-expanded')
+    ).toBe('true')
+  })
+
+  it('keeps the ring on the point row it was on', () => {
+    const { root } = wide()
+    let ringed = null
+    for (let i = 0; i < 6 && ringed === null; i++) {
+      key(']')
+      ringed = root.querySelector('tr.ifind.is-focused')?.getAttribute('data-fingerprint') ?? null
+    }
+    expect(ringed).not.toBeNull()
+    key('s')
+    const now = root.querySelector('.is-focused')
+    expect(now?.closest('table.diff.split')).not.toBeNull()
+    expect(now?.getAttribute('data-fingerprint')).toBe(ringed)
+  })
+
+  it('saves unified from its button while split waits for a wider column', async () => {
+    setChosenDiffLayout('split')
+    const { root, fetch } = wide(600)
+    expect(root.querySelector('table.diff.split')).toBeNull()
+    click(root, '[data-layout="unified"]')
+    await flush()
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({ diffLayout: 'unified' })
+    expect(chosenDiffLayout()).toBe('unified')
+  })
+
   it('keeps a selection on its side across a switch', () => {
     const { root } = wide()
     const old = root.querySelector('#L-src_app_ts-old-3 td.ln')
