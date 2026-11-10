@@ -544,7 +544,11 @@ export function createGrill(options) {
   }
 
   const stop = () => {
-    inFlight?.abort()
+    if (inFlight === null) {
+      return
+    }
+    inFlight.abort()
+    inFlight = null
     void api.cancelGrill(key).catch(() => undefined)
   }
 
@@ -695,11 +699,16 @@ export function createGrill(options) {
     }
   }
 
-  const close = () => {
+  /** What ends with the drawer: the answer in flight, and the microphone. */
+  const teardown = () => {
     if (streaming) {
       stop()
     }
     listening?.stop()
+  }
+
+  const close = () => {
+    teardown()
     if (dialog.open) {
       dialog.close()
     }
@@ -708,6 +717,8 @@ export function createGrill(options) {
   dialog.addEventListener('click', onClick)
   dialog.addEventListener('submit', onSubmit)
   dialog.addEventListener('keydown', onKeydown)
+  // Escape closes the dialog on its own, with no click on close: the same things end.
+  dialog.addEventListener('close', teardown)
 
   /**
    * The thread, read again each time the drawer opens: another tab, or the canvas's AI Chat, may
@@ -791,6 +802,7 @@ export function createGrill(options) {
       dialog.removeEventListener('click', onClick)
       dialog.removeEventListener('submit', onSubmit)
       dialog.removeEventListener('keydown', onKeydown)
+      dialog.removeEventListener('close', teardown)
     },
   }
 }

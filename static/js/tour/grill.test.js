@@ -502,6 +502,16 @@ describe('the grilling with an agent', () => {
     expect(dialog.open).toBe(false)
     expect(cancelGrill).toHaveBeenCalledTimes(2)
     await vi.waitFor(() => expect(log().match(/stopped early \(stopped\)/g)).toHaveLength(2))
+    // Escape closes the dialog by itself, with no click on close: the answer stops all the same.
+    await grill.open(decision, undefined)
+    const box = /** @type {HTMLTextAreaElement} */ (dialog.querySelector('#composer'))
+    box.value = 'Once more'
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await vi.waitFor(() => expect(dialog.querySelector('[data-act="stop"]')).not.toBeNull())
+    dialog.close()
+    dialog.dispatchEvent(new Event('close'))
+    expect(cancelGrill).toHaveBeenCalledTimes(3)
+    await vi.waitFor(() => expect(log().match(/stopped early \(stopped\)/g)).toHaveLength(3))
     grill.stop()
   })
 

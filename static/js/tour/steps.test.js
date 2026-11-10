@@ -91,11 +91,15 @@ describe('reachability', () => {
       restatement: { what: 'w', where: ['x'], unchanged: 'u' },
     }
     expect(reachable(steps, 6, reader)).toBe(true)
-    expect(reachable(steps, 7, reader)).toBe(false)
-    reader.quiz['q-run'] = { answered: 0, right: false }
-    expect(reachable(steps, 7, reader)).toBe(false)
-    reader.quiz['q-run'] = { answered: 1, right: true }
+    // A quiz the project does not require leaves the plan open; a required one closes it until
+    // every question is answered right.
     expect(reachable(steps, 7, reader)).toBe(true)
+    const required = buildSteps(tour, { finalQuiz: 'required' })
+    expect(reachable(required, 7, reader)).toBe(false)
+    reader.quiz['q-run'] = { answered: 0, right: false }
+    expect(reachable(required, 7, reader)).toBe(false)
+    reader.quiz['q-run'] = { answered: 1, right: true }
+    expect(reachable(required, 7, reader)).toBe(true)
     expect(pickSettled({ pick: 'keep', approved: true })).toBe(true)
     expect(pickSettled(undefined)).toBe(false)
   })

@@ -1,7 +1,8 @@
 // @ts-check
 // The steps of a tour and what may be reached: the cover, one step per landmark, one per decision,
-// one per quiz question, and the plan. A decision has to be settled and a question answered right
-// before the step after it opens, so the plan is never reached with a decision still open.
+// one per quiz question, and the plan. A decision has to be settled before the step after it opens,
+// so the plan is never reached with a decision still open; a question has to be answered right
+// only when the project requires the quiz (`tour.finalQuiz: required`).
 /** @typedef {import('../contract-types.js').TourPageTour} TourPageTour */
 /** @typedef {import('../contract-types.js').TourPageLandmark} TourPageLandmark */
 /** @typedef {import('../contract-types.js').Decision} Decision */
@@ -11,7 +12,8 @@
 
 /**
  * @typedef {{ kind: 'cover' } | { kind: 'landmark', landmark: TourPageLandmark }
- *   | { kind: 'decision', decision: Decision } | { kind: 'quiz', q: QuizQuestion } | { kind: 'plan' }} Step
+ *   | { kind: 'decision', decision: Decision } | { kind: 'quiz', q: QuizQuestion, required: boolean }
+ *   | { kind: 'plan' }} Step
  */
 
 /**
@@ -24,7 +26,13 @@ export function buildSteps(tour, options) {
     { kind: 'cover' },
     ...tour.landmarks.map(landmark => /** @type {Step} */ ({ kind: 'landmark', landmark })),
     ...tour.decisions.map(decision => /** @type {Step} */ ({ kind: 'decision', decision })),
-    ...(options.finalQuiz === 'off' ? [] : tour.quiz.map(q => /** @type {Step} */ ({ kind: 'quiz', q }))),
+    ...(options.finalQuiz === 'off'
+      ? []
+      : tour.quiz.map(q => /** @type {Step} */ ({
+          kind: 'quiz',
+          q,
+          required: options.finalQuiz === 'required',
+        }))),
     { kind: 'plan' },
   ]
 }
@@ -97,7 +105,7 @@ export function settled(step, reader) {
     return pickSettled(reader.picks[step.decision.key])
   }
   if (step.kind === 'quiz') {
-    return reader.quiz[step.q.id]?.right === true
+    return !step.required || reader.quiz[step.q.id]?.right === true
   }
   return true
 }

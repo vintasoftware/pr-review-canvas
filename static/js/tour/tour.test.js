@@ -281,7 +281,7 @@ describe('the tour page', () => {
     // Nothing is chosen at first. `k` keeps and `a` takes the alternative, each settling it; undo
     // takes the pick back, and a click on the decision's text leaves it alone.
     const chosen = () =>
-      document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')
+      document.querySelector('.tour-option[aria-pressed="true"]')?.getAttribute('data-pick')
     expect(chosen()).toBeUndefined()
     press('k')
     expect(document.querySelector('.tour-state')?.textContent).toBe('✓ kept')
@@ -401,7 +401,7 @@ describe('the tour page', () => {
     expect(dialog.open).toBe(false)
     // An approved restatement settles the decision; the reader moves on when ready.
     expect(location.hash).toBe('#decision-sum-over-product')
-    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')?.getAttribute('data-pick')).toBe(
       'other'
     )
     expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ change approved · in the plan')
@@ -445,6 +445,11 @@ describe('the tour page', () => {
     click('.tour-eyebrow a[data-act="landmark"]')
     expect(location.hash).toBe('#landmark-sum')
     expect(document.querySelector('.tour-return')?.textContent).toContain('Jumped from a decision')
+    // An ordinary move drops the way back: the banner does not follow the reader on.
+    press('ArrowRight')
+    expect(document.querySelector('.tour-return')).toBeNull()
+    press('ArrowLeft')
+    expect(document.querySelector('.tour-return')).toBeNull()
     press('?')
     const help = document.querySelector('#help-dialog')
     if (!(help instanceof HTMLDialogElement)) {
@@ -471,6 +476,28 @@ describe('the tour page', () => {
     )
     window.dispatchEvent(new PopStateEvent('popstate', { state: null }))
     expect(document.querySelector('.tour-title')?.textContent).toBe('Sum, not product')
+    // The focus follows a move to the step, so the keyboard reads on from there.
+    press('ArrowRight')
+    expect(document.activeElement?.id).toBe('stage')
+    expect(document.title).toBe('Keep run() total · Tour · #42 feat: add b')
+    // A hash typed into the address bar past the open decision lands on that decision, and says so.
+    history.replaceState(null, '', '/tour/42#plan')
+    window.dispatchEvent(new PopStateEvent('popstate', { state: null }))
+    expect(location.hash).toBe('#decision-sum-over-product')
+    expect(document.querySelector('.toast')?.textContent).toBe('The plan opens after decision 1')
+    // Forward to a step an undo has since closed lands there too.
+    press('k')
+    press('ArrowRight')
+    expect(location.hash).toBe('#quiz-q-run')
+    history.back()
+    await vi.waitFor(() => expect(location.hash).toBe('#decision-sum-over-product'))
+    click('[data-act="unsettle"]')
+    window.dispatchEvent(new PopStateEvent('popstate', { state: { step: 6 } }))
+    expect(location.hash).toBe('#decision-sum-over-product')
+    // Going where the page already is adds no history entry.
+    const entries = history.length
+    el.go(5)
+    expect(history.length).toBe(entries)
     // The moves saved above go out before the page goes, not through a later test's server.
     await el.saver?.settle()
     document.body.innerHTML = ''
@@ -800,14 +827,24 @@ describe('the tour page', () => {
     vi.stubGlobal('fetch', server.impl)
     const el = mount({ key: 'branch' })
     await drawn('.tour-options')
-    expect(document.title).toBe('Tour · feat/b feat: add b')
+    expect(document.title).toBe('Sum over product? · Tour · feat/b feat: add b')
     expect(server.calls[0]).toBe('GET /r/acme/widgets/api/tours/branch')
     press('Escape')
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
     const note = document.createElement('textarea')
     el.append(note)
     note.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }))
-    expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')).toBeNull()
+    // A key pressed on an AI Chat pane control belongs to the pane.
+    const pane = document.createElement('aside')
+    pane.id = 'tour-ask'
+    pane.innerHTML = '<button type="button" id="pane-send">send</button>'
+    el.append(pane)
+    document
+      .querySelector('#pane-send')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }))
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')).toBeNull()
+    pane.remove()
     // Other fields' input and change events, and a click on text, are not the page's business.
     note.dispatchEvent(new Event('input', { bubbles: true }))
     note.dispatchEvent(new Event('change', { bubbles: true }))

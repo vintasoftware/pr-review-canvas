@@ -261,6 +261,10 @@ function stepDone(step, i, current, reader, tour) {
   if (step.kind === 'plan') {
     return reader.finished !== undefined && !planChanged(tour, reader)
   }
+  // A question is done once answered right, whether or not the project requires the quiz.
+  if (step.kind === 'quiz') {
+    return reader.quiz[step.q.id]?.right === true
+  }
   return settled(step, reader)
 }
 
@@ -552,7 +556,7 @@ export function decisionHtml(bundle, steps, d) {
     <p class="tour-lead">${inline(d.context)}</p>
     <p class="tour-anchor"><span class="mono">${esc(d.anchor.path)}:${d.anchor.line}</span></p>
     ${note === '' ? '' : `<div class="tour-landmark-note"><b>Your note on landmark ${landmarkIndex}</b>${esc(note)}</div>`}
-    <div class="tour-options" role="radiogroup" aria-label="Keep, the alternative, or something else">
+    <div class="tour-options" role="group" aria-label="Keep, the alternative, or something else">
       ${optionHtml('keep', d.keep, chosen === 'keep', { isNow: true, recommended: d.recommended === 'keep' })}
       ${optionHtml('change', d.change, chosen === 'change', { isNow: false, recommended: d.recommended === 'change' })}
       ${optionHtml('other', other, chosen === 'other', { isNow: false, recommended: false })}
@@ -578,9 +582,10 @@ const OPTION_LABEL = { keep: 'keep', change: 'alternative', other: 'something el
  * @param {{ label: string, consequence: string }} side
  * @param {boolean} checked
  * @param {{ isNow: boolean, recommended: boolean }} marks what the code does, and what the tour advises
+ * A pressed button, not a radio: the arrows move through the tour, not between the options.
  */
 function optionHtml(kind, side, checked, marks) {
-  return `<button class="tour-option" type="button" role="radio" aria-checked="${checked}" data-act="pick" data-pick="${kind}"${marks.recommended ? ' data-recommended' : ''}>
+  return `<button class="tour-option" type="button" aria-pressed="${checked}" data-act="pick" data-pick="${kind}"${marks.recommended ? ' data-recommended' : ''}>
     <span class="tour-option-k"><span>${OPTION_LABEL[kind]}</span>${marks.isNow ? '<span class="now">· what the code does</span>' : ''}${marks.recommended ? '<span class="rec">the tour recommends</span>' : ''}</span>
     <span class="tour-option-l">${plain(side.label)}</span>
     <span class="tour-option-c">${inline(side.consequence)}</span></button>`
@@ -608,7 +613,7 @@ export function quizHtml(bundle, q) {
     ? a.right
       ? `<div class="tour-quiz-why right">${inline(q.why)}</div>`
       : `<div class="tour-quiz-why wrong">Not quite. ${inline(q.why)}<div class="tour-actions">${reopen}</div></div>`
-    : '<p class="tour-hint tour-quiz-hint"><span class="tour-keys">press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to answer · </span>a wrong answer reopens the landmark it came from</p>'
+    : `<p class="tour-hint tour-quiz-hint"><span class="tour-keys">press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to answer · </span>a wrong answer reopens the landmark it came from${bundle.options.finalQuiz === 'required' ? ' · this project asks for the quiz before the plan' : ''}</p>`
   return `
     <h2 class="tour-quiz-q">${inline(q.question)}</h2>
     <div class="tour-quiz-opts">${q.options

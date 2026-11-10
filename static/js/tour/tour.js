@@ -39,7 +39,17 @@ import {
   stripHtml,
   tourHeaderHtml,
 } from './screens.js'
-import { buildSteps, planBasis, reachable, stepFromHash, stepHash, stepIndexOf, stepTitle } from './steps.js'
+import {
+  blockedBy,
+  buildSteps,
+  planBasis,
+  reachable,
+  stepFromHash,
+  stepHash,
+  stepIndexOf,
+  stepName,
+  stepTitle,
+} from './steps.js'
 import { createTourChat, placeOfStep, TOUR_CHAT_ID, tourChats } from './tour-chat.js'
 import { createSaver, fetchTour, finishTour, saveReader } from './tour-api.js'
 
@@ -83,6 +93,8 @@ export class PrTourElement extends HTMLElement {
   /** @type {Step[]} */
   steps = []
   current = 0
+  /** The tab's title for the tour; a step's name goes in front of it. */
+  titleBase = ''
   /** @type {import('../theme.js').Theme} */
   theme = 'auto'
   /** @type {ReturnType<typeof createSaver> | null} */
@@ -280,7 +292,8 @@ export class PrTourElement extends HTMLElement {
       project,
     })
     const what = bundle.pr.number === null ? bundle.pr.headRef : `#${bundle.pr.number}`
-    document.title = `Tour · ${what} ${bundle.pr.title}`
+    this.titleBase = `Tour · ${what} ${bundle.pr.title}`
+    document.title = this.titleBase
     if (bundle.tour === undefined) {
       this.innerHTML =
         header +
@@ -306,7 +319,8 @@ export class PrTourElement extends HTMLElement {
       '<div class="tour-rail-wrap" id="rail"></div>' +
       // Each screen is a ticket: a strip that says which stop it is, then the stop itself.
       '<main id="main" class="tour-main"><div class="tour-ticket"><div class="tour-strip" id="strip"></div>' +
-      '<section class="tour-stage" id="stage"></section></div></main>' +
+      // The stage takes the focus on each move, so the keyboard reads on from the new step.
+      '<section class="tour-stage" id="stage" tabindex="-1"></section></div></main>' +
       '<nav class="tour-nav" id="nav" aria-label="Tour navigation"></nav>' +
       `<dialog class="tour-chat" id="${GRILL_DIALOG_ID}" aria-label="Something else"></dialog>` +
       (tourChats(bundle)
@@ -383,26 +397,46 @@ export class PrTourElement extends HTMLElement {
 
   /**
    * Moves to a step. Steps past an unsettled decision or an unanswered question stay closed,
-   * unless the move is forced: a jump the page offered, or the browser's own history.
+   * unless the move is forced: a jump the page offered. The browser's own history goes through
+   * the gate too: forward to a step an undo has since closed, or a hash typed into the address
+   * bar, lands on what keeps that step closed. A jump names the step to return to; any other move
+   * drops the way back.
    * @param {number} i
-   * @param {{ force?: boolean, fromHistory?: boolean }} [opts]
+   * @param {{ force?: boolean, fromHistory?: boolean, returnTo?: number }} [opts]
+   * @returns {boolean} whether the page is on step `i` now
    */
   go(i, opts = {}) {
     const bundle = /** @type {TourBundle} */ (this.bundle)
     if (i < 0 || i >= this.steps.length) {
-      return
+      return false
     }
     if (!opts.force && !bundle.preview && !reachable(this.steps, i, bundle.reader)) {
-      return
+      if (opts.fromHistory) {
+        const at = blockedBy(this.steps, i, bundle.reader)
+        this.go(at, { fromHistory: true })
+        history.replaceState({ step: at }, '', stepHash(/** @type {Step} */ (this.steps[at])))
+        const title = stepTitle(/** @type {Step} */ (this.steps[i])).replaceAll('`', '')
+        toast(this, `${title} opens after ${stepName(this.steps, at)}`, { tone: 'note' })
+      }
+      return false
+    }
+    if (i === this.current) {
+      return true
     }
     this.current = i
     bundle.reader.step = i
+    bundle.reader.returnTo = opts.returnTo ?? null
     this.save()
     this.renderStep()
     window.scrollTo({ top: 0 })
     if (!opts.fromHistory) {
       history.pushState({ step: i }, '', stepHash(/** @type {Step} */ (this.steps[i])))
     }
+    // The focus follows the move unless the rail holds it, so the next key reads on from here.
+    if (!(/** @type {HTMLElement} */ (qs('#rail', this)).contains(document.activeElement))) {
+      ;/** @type {HTMLElement} */ (qs('#stage', this)).focus({ preventScroll: true })
+    }
+    return true
   }
 
   /** Draws the current step into the shell `render` put up, with the rail and the nav. */
@@ -416,6 +450,9 @@ export class PrTourElement extends HTMLElement {
     const step = /** @type {Step} */ (this.steps[this.current])
     // The kind of step on screen, for the layout: the cover drops the header's title.
     this.dataset['at'] = step.kind
+    const name =
+      step.kind === 'quiz' ? stepName(this.steps, this.current) : stepTitle(step).replaceAll('`', '')
+    document.title = step.kind === 'cover' ? this.titleBase : `${name} · ${this.titleBase}`
     if (step.kind === 'landmark' && bundle.reader.seen[step.landmark.id] !== true) {
       bundle.reader.seen[step.landmark.id] = true
       this.save()
@@ -577,12 +614,7 @@ export class PrTourElement extends HTMLElement {
    * @param {number} i
    */
   jumpTo(i) {
-    const bundle = /** @type {TourBundle} */ (this.bundle)
-    if (i < 0) {
-      return
-    }
-    bundle.reader.returnTo = this.current
-    this.go(i, { force: true })
+    this.go(i, { force: true, returnTo: this.current })
   }
 
   returnBack() {
@@ -758,6 +790,10 @@ export class PrTourElement extends HTMLElement {
         return
       }
       const target = e.target instanceof Element ? e.target : null
+      // The AI Chat pane's buttons and lists keep their keys: an arrow there is not a move.
+      if (target?.closest(`#${TOUR_CHAT_ID}`)) {
+        return
+      }
       // On a focused button or link, Enter and space press it, as they do anywhere.
       if ((e.key === 'Enter' || e.key === ' ') && target?.closest('button, a[href]')) {
         return
@@ -800,9 +836,7 @@ export class PrTourElement extends HTMLElement {
     const onPopstate = e => {
       const state = /** @type {{ step?: unknown } | null} */ (e.state)
       const i = typeof state?.step === 'number' ? state.step : stepFromHash(this.steps, location.hash)
-      if (i >= 0 && i < this.steps.length) {
-        this.go(i, { force: true, fromHistory: true })
-      }
+      this.go(i, { fromHistory: true })
     }
     // A resized window may make the rail scroll, or stop scrolling: its faded ends follow.
     const rail = /** @type {HTMLElement} */ (qs('#rail', this))

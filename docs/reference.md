@@ -1297,7 +1297,12 @@ Where the reader is and what they answered is saved to `tours/<headSha>/reader.j
 is `GET /api/tours/<n>`. A decision offers three options and none is chosen at first: keep what
 the code does, take the tour's alternative, or something else. Clicking keep or the alternative
 settles the decision; a click elsewhere on the page takes that pick back. A decision must be
-settled, and a question answered right, before the step after it opens.
+settled before the step after it opens, and so must a question be answered right when the project
+requires the quiz (`tour.finalQuiz: required`); with the quiz merely on, a wrong answer reopens
+the landmark and the plan stays open. The browser's back and forward go through the same gate: a
+step an undo has since closed, or a hash typed into the address bar past an open decision, lands
+on the decision that keeps it closed. The focus follows each move to the step, and the tab's
+title names it.
 
 Something else opens the **grilling**: with AI Chat on (`chat.enabled`, acpx installed, and
 `tour.grill` not `off`), the drawer talks to the chat agent in the tour's own thread (`t0`, which

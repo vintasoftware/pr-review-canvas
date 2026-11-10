@@ -57,7 +57,7 @@ test('walks the tour of PR 67: scenes size themselves, decisions settle, the qui
 
   // The reader keeps every decision; the second one through the keyboard.
   await page.goto(`${tourUrl}#decision-pipe-means-json`)
-  await expect(page.locator('.tour-option[aria-checked="true"]')).toHaveCount(0)
+  await expect(page.locator('.tour-option[aria-pressed="true"]')).toHaveCount(0)
   await page.locator('.tour-option[data-pick="keep"]').click()
   await expect(page.locator('.tour-state')).toHaveText('✓ kept')
   await page.locator('[data-nav="next"]').click()

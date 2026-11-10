@@ -97,7 +97,11 @@ describe('tourHeaderHtml', () => {
 
 describe('railHtml and navHtml', () => {
   it('marks the steps done, current, open, and ahead, and labels the groups', () => {
-    const bundle = bundleWith({ picks: { 'sum-over-product': { pick: 'keep', approved: true } } })
+    // The project requires the quiz, so the plan stays ahead until the question is answered right.
+    const bundle = {
+      ...bundleWith({ picks: { 'sum-over-product': { pick: 'keep', approved: true } } }),
+      options: { ...syntheticTourBundle().options, finalQuiz: /** @type {const} */ ('required') },
+    }
     const states = () =>
       [...document.querySelectorAll('.tour-rail-seg')].map(s => s.getAttribute('data-state'))
     // A landmark passed without being on screen stays open: only a seen one is done.
@@ -180,7 +184,14 @@ describe('railHtml and navHtml', () => {
     expect(document.querySelector('[data-nav="next"]')?.hasAttribute('disabled')).toBe(true)
     expect(document.querySelector('.tour-nav-why')?.textContent).toBe('pick one to continue')
     expect(document.querySelector('[data-nav="next"]')?.getAttribute('aria-describedby')).toBe('nav-why')
+    // A question closes next only when the project requires the quiz.
     document.body.innerHTML = navHtml(stepsOf(bundle), 6, bundle.reader)
+    expect(document.querySelector('.tour-nav-why')?.textContent).toBe('')
+    const required = {
+      ...bundle,
+      options: { ...bundle.options, finalQuiz: /** @type {const} */ ('required') },
+    }
+    document.body.innerHTML = navHtml(stepsOf(required), 6, required.reader)
     expect(document.querySelector('.tour-nav-why')?.textContent).toBe('answer to continue')
     document.body.innerHTML = navHtml(stepsOf(bundle), 7, bundle.reader)
     expect(document.querySelector('[data-nav="next"]')?.textContent).toBe('done →')
@@ -413,7 +424,7 @@ describe('decisionHtml', () => {
     expect(
       [...document.querySelectorAll('.tour-option-k > span:first-child')].map(s => s.textContent)
     ).toEqual(['keep', 'alternative', 'something else'])
-    expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')).toBeNull()
     expect(document.querySelector('.tour-option .now')?.textContent).toBe('· what the code does')
     expect(document.querySelector('[data-pick="other"] .tour-option-l')?.textContent).toBe(
       'Say what you want instead'
@@ -434,17 +445,17 @@ describe('decisionHtml', () => {
       throw new Error('no decision')
     }
     document.body.innerHTML = decisionHtml(bundle, steps, decision)
-    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')?.getAttribute('data-pick')).toBe(
       'other'
     )
     expect(document.querySelector('[data-act="grill"]')?.textContent).toContain('continue the conversation')
     // A side picked and taken back is not chosen.
     bundle.reader.picks['sum-over-product'] = { pick: 'change', approved: false }
     document.body.innerHTML = decisionHtml(bundle, steps, decision)
-    expect(document.querySelector('.tour-option[aria-checked="true"]')).toBeNull()
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')).toBeNull()
     bundle.reader.picks['sum-over-product'] = { pick: 'change', approved: true }
     document.body.innerHTML = decisionHtml(bundle, steps, decision)
-    expect(document.querySelector('.tour-option[aria-checked="true"]')?.getAttribute('data-pick')).toBe(
+    expect(document.querySelector('.tour-option[aria-pressed="true"]')?.getAttribute('data-pick')).toBe(
       'change'
     )
     expect(document.querySelector('.tour-state.change')?.textContent).toBe('✓ alternative · in the plan')

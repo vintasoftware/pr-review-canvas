@@ -1082,7 +1082,7 @@ pr-tour[data-at='plan'] {
   gap: 10px;
   margin-bottom: 22px;
 }
-/* A radio card: the ring on the left fills with purple once chosen. */
+/* An option card: the ring on the left fills with purple once chosen. */
 .tour-option {
   position: relative;
   display: grid;
@@ -1127,12 +1127,12 @@ pr-tour[data-at='plan'] {
   border-color: var(--lilac);
   background: color-mix(in srgb, var(--lilac) 4%, var(--tour-card));
 }
-.tour-option[aria-checked='true'] {
+.tour-option[aria-pressed='true'] {
   padding: 15px 17px 15px 53px;
   border: 2px solid var(--lilac);
   background: color-mix(in srgb, var(--lilac) 7%, var(--tour-card));
 }
-.tour-option[aria-checked='true']::before {
+.tour-option[aria-pressed='true']::before {
   left: 17px;
   top: 18px;
   border-color: var(--lilac);

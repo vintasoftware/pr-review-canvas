@@ -95,7 +95,7 @@ test('grills something else through AI Chat, in the tour thread, and approves th
   await expect(dialog).toBeHidden()
   // Approving settles the decision and stays on it: something else is chosen, the restatement shown.
   await expect(page).toHaveURL(/#decision-pipe-means-json$/)
-  await expect(page.locator('.tour-option[aria-checked="true"]')).toHaveAttribute('data-pick', 'other')
+  await expect(page.locator('.tour-option[aria-pressed="true"]')).toHaveAttribute('data-pick', 'other')
   await expect(page.locator('.tour-state.change')).toContainText('change approved')
   await expect(page.locator('.tour-restated')).toContainText('a pipe prints text')
   await expect(page.locator('.toast')).toContainText('change approved')
