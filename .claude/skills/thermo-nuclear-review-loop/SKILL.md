@@ -32,7 +32,7 @@ If the ref cannot be resolved or the scope is ambiguous, stop and ask.
 - **Same-host reviewer**: a subagent with a stable name (`tnr-reviewer`), kept for the whole loop so later passes reuse its context.
 - **Cross-host reviewer**: an `acpx` command that you run yourself from your own shell tool. The named acpx session keeps the reviewer alive across passes: create it once with `sessions ensure --name tnr-reviewer`, then send every pass to it with `-s tnr-reviewer --ttl 0`. The full commands, and how each host waits for the verdict, are in Host notes.
 
-A helper agent between you and acpx costs a model and a context window and puts the model choice in its hands; if you start one anyway, give it the cheapest tier (Claude: Haiku or Sonnet), never the Opus-like tier, at the same `high` effort.
+A helper agent between you and acpx costs a model and a context window and puts the model choice in its hands; if you start one anyway, give it the cheapest tier (Claude: Haiku or Sonnet), never the Opus-like tier.
 
 **Brief**: before spawning, check for a project-root `REVIEW.md`. If it exists, the reviewer reads only that file as its standard. Otherwise the reviewer reads the Review Standard section of this skill: point at this file's path, or paste the section when the reviewer is a different agent that cannot see this skill.
 
@@ -171,7 +171,7 @@ Approve when the scope has: no verified correctness or security defect, no rule 
 ## Host notes
 
 - **Claude Code host, same-host reviewer**: `Agent` tool with `model` set to the Opus-like tier, `effort: high`, `name: tnr-reviewer`, `run_in_background: false`; continue it with `SendMessage` on later passes. Ask gate questions with `AskUserQuestion`.
-- **Codex host, same-host reviewer**: Codex has built-in subagents; spawn one at `high` reasoning effort, keep its handle, and message it on later passes. Its structured question tool works only in Plan mode, so ask gate questions by ending the turn in plain text. Under the default workspace-write sandbox a commit may trigger an approval prompt because `.git` can be protected; accept it, the commit is part of the loop.
+- **Codex host, same-host reviewer**: Codex has built-in subagents; spawn one with `reasoning_effort: high` and `fork_turns: "none"`, since a full-history fork inherits the host's effort and takes no override; keep its handle, and message it on later passes. Its structured question tool works only in Plan mode, so ask gate questions by ending the turn in plain text. Under the default workspace-write sandbox a commit may trigger an approval prompt because `.git` can be protected; accept it, the commit is part of the loop.
 - **Cross-host reviewer via acpx**: run these yourself from your shell tool. Create one named session and send every pass to it so context persists; deny ACP writes while keeping reads and terminal:
 
     ```bash
