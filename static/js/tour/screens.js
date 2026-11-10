@@ -29,6 +29,7 @@ import {
   settled,
   stepName,
   stepTitle,
+  readerMode,
 } from './steps.js'
 
 export const STAGE_LABEL = {
@@ -335,10 +336,21 @@ export function coverHtml(bundle) {
     tour.blastRadius.length === 0
       ? ''
       : `<p class="tour-cover-meta">touches: ${tour.blastRadius.map(esc).join(', ')}</p>`
+  // Who is taking it: the author settles the change, a reviewer judges it. Ticked by itself for
+  // the change's author, and the reader may say otherwise.
+  const author = readerMode(bundle) === 'author'
+  const mode = bundle.preview
+    ? ''
+    : `<div class="tour-mode"><label><input type="checkbox" data-act="mode"${author ? ' checked' : ''}> I am the author of this change</label><span class="tour-hint">${
+        author
+          ? 'author mode: at the end, the plan writes the re-implementation prompt and your picks are shared'
+          : "reviewer mode: at the end, the plan writes a review suggestion from your picks and notes, and your change requests go to your pending review; the author's picks show on each decision"
+      }</span></div>`
   return `
     <h1 class="tour-title">${esc(pr.title)}</h1>
     ${blast}
     ${agenda}
+    ${mode}
     ${bundle.reader.finished ? '<p class="tour-hint">You finished this tour. Read it again, or open the plan.</p>' : ''}
     <div class="tour-cover-actions">
       <button class="cmd fill big" type="button" data-nav="next">${bundle.reader.step > 0 ? 'continue the tour' : 'start the tour'}</button>
@@ -549,12 +561,16 @@ export function decisionHtml(bundle, steps, d) {
     label: 'Say what you want instead',
     consequence: 'Neither side: describe the change you want, then approve it as restated.',
   }
+  // A reviewer sees what the author answered, and picks for themselves all the same.
+  const authorPick =
+    readerMode(bundle) === 'reviewer' ? authorPickLine(tour.record.author?.picks[d.key]) : null
   return `
     ${returnBannerHtml(steps, tour, reader.returnTo)}
     ${from === '' ? '' : `<p class="tour-eyebrow">${from}</p>`}
     <h2 class="tour-title">${plain(d.title)}</h2>
     <p class="tour-lead">${inline(d.context)}</p>
     <p class="tour-anchor"><span class="mono">${esc(d.anchor.path)}:${d.anchor.line}</span></p>
+    ${authorPick === null ? '' : `<p class="tour-author-pick">${esc(authorPick)}</p>`}
     ${note === '' ? '' : `<div class="tour-landmark-note"><b>Your note on landmark ${landmarkIndex}</b>${esc(note)}</div>`}
     <div class="tour-options" role="group" aria-label="Keep, the alternative, or something else">
       ${optionHtml('keep', d.keep, chosen === 'keep', { isNow: true, recommended: d.recommended === 'keep' })}
@@ -573,6 +589,25 @@ export function decisionHtml(bundle, steps, d) {
  */
 export function tryItStepHtml(step) {
   return step.includes('`') ? `<li>${inline(step)}</li>` : `<li><code>${esc(step)}</code></li>`
+}
+
+/**
+ * What the author answered on a decision, in a few words, as the server words it too.
+ * @param {NonNullable<import('../contract-types.js').TourRecord['author']>['picks'][string]} [pick]
+ */
+export function authorPickLine(pick) {
+  if (pick === undefined) {
+    return null
+  }
+  if (pick.pick === 'keep') {
+    return 'The author kept this.'
+  }
+  if (pick.pick === 'change') {
+    return "The author asked for the tour's alternative."
+  }
+  return pick.restatement === undefined
+    ? 'The author asked for something else.'
+    : `The author asked for something else: ${pick.restatement.what}`
 }
 
 const OPTION_LABEL = { keep: 'keep', change: 'alternative', other: 'something else' }
@@ -657,27 +692,35 @@ export function planHtml(bundle) {
     .filter(n => n.text !== '')
   const right = tour.quiz.filter(q => reader.quiz[q.id]?.right).length
   const finished = reader.finished
+  // The author's plan is the re-implementation prompt; a reviewer's is their review suggestion.
+  const reviewing = readerMode(bundle) === 'reviewer'
+  const written = reviewing ? 'the review suggestion' : 'the prompt'
   const title = changes.length
-    ? `${plural(changes.length, 'change')} to make, ${kept.length} kept`
+    ? `${plural(changes.length, 'change')} to ${reviewing ? 'ask for' : 'make'}, ${kept.length} kept`
     : `Nothing to change. ${plural(kept.length, 'decision')} kept.`
-  const lead = changes.length
-    ? `Read it once. When you confirm, the prompt is written${bundle.shares ? ' and the record is shared' : ''}. No further plan review.`
-    : `When you confirm, ${bundle.shares ? 'the record is shared and ' : ''}the prompt carries the intent and the kept decisions for whoever touches this next.`
+  const lead = reviewing
+    ? `When you confirm, a review suggestion is written from your picks and notes${bundle.shares ? ', the record is shared,' : ''} and your change requests go to your pending review, to leave with your verdict.`
+    : changes.length
+      ? `Read it once. When you confirm, the prompt is written${bundle.shares ? ' and the record is shared' : ''}. No further plan review.`
+      : `When you confirm, ${bundle.shares ? 'the record is shared and ' : ''}the prompt carries the intent and the kept decisions for whoever touches this next.`
   const changed = finished !== undefined && planChanged(tour, reader)
-  const confirm = `<div class="tour-actions"><button class="cmd fill" type="button" data-act="confirm">${changed ? 'confirm again' : 'confirm the plan'}</button><span class="tour-hint">writes the prompt${bundle.shares ? ', shares the record' : ''}</span>${
+  const confirm = `<div class="tour-actions"><button class="cmd fill" type="button" data-act="confirm">${changed ? 'confirm again' : reviewing ? 'confirm the review' : 'confirm the plan'}</button><span class="tour-hint">writes ${written}${bundle.shares ? ', shares the record' : ''}</span>${
     bundle.chat.enabled && bundle.options.grill !== 'off'
       ? '<button class="cmd" type="button" data-act="grill-plan">restate the plan with the agent</button>'
       : ''
   }</div>`
+  const next = reviewing
+    ? `Review suggestion written to <span class="mono">${esc(finished?.promptPath ?? '')}</span>. Paste it into your review, with your verdict.`
+    : `Prompt written to <span class="mono">${esc(finished?.promptPath ?? '')}</span>. Run <code>/pr-tour-apply ${esc(bundle.local ?? String(tour.pr.number))}</code> to implement it.`
   const done = finished
-    ? `${changed ? `<p class="tour-plan-changed" role="status">You changed the plan after you confirmed it. Confirm again to write the prompt from it; the one below is from before.</p>${confirm}` : ''}
+    ? `${changed ? `<p class="tour-plan-changed" role="status">You changed the plan after you confirmed it. Confirm again to write ${written} from it; the one below is from before.</p>${confirm}` : ''}
        <h3 class="tour-section-h">${changed ? 'Confirmed before' : 'Done'}</h3><ul class="tour-sharing">
          ${sharingLine(finished.sharing)}
          ${finished.queued === undefined ? '' : `<li>${finished.queued === 0 ? 'Nothing new for your pending review.' : `${plural(finished.queued, 'change request')} added to your pending review; it goes out with your verdict.`}</li>`}
          ${bundle.options.finalQuiz === 'off' ? '' : `<li class="private">Quiz ${right} of ${tour.quiz.length}, kept on this machine.</li>`}
-         <li>Prompt written to <span class="mono">${esc(finished.promptPath)}</span>. Run <code>/pr-tour-apply ${esc(bundle.local ?? String(tour.pr.number))}</code> to implement it.</li>
+         <li>${next}</li>
        </ul>
-       <h3 class="tour-section-h">Re-implementation prompt</h3>
+       <h3 class="tour-section-h">${finished.mode === 'reviewer' ? 'Review suggestion' : 'Re-implementation prompt'}</h3>
        <div class="tour-prompt"><div class="tour-actions"><button class="cmd" type="button" data-act="copy">copy</button></div><pre id="prompt">${esc(finished.prompt)}</pre></div>`
     : bundle.preview
       ? ''

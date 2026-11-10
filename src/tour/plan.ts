@@ -2,7 +2,7 @@
 // changes approved in the grilling, and the reader's notes, written as the prompt whoever touches the change next
 // runs from.
 import type { ReaderPick, Restatement, TourReaderState } from '../contract/tour-api.js'
-import type { Decision, Landmark, TourArtifact } from '../contract/tour.js'
+import type { AuthorPick, Decision, Landmark, TourArtifact } from '../contract/tour.js'
 
 export interface PlanEntry {
   decision: Decision
@@ -140,6 +140,60 @@ export function buildTourPrompt(tour: TourArtifact, reader: TourReaderState, key
       ? '- Run the project checks.'
       : `- Run the project checks, as the guide (${tour.guide}, "The agent may run") names them.`,
     `- Run /pr-tour ${key} again; the author's picks carry onto the decisions that still stand.`
+  )
+  return lines.join('\n')
+}
+
+/** What the author answered on a decision, in a few words, for a reviewer to weigh their own against. */
+export function authorPickLine(pick: AuthorPick | undefined): string | null {
+  if (pick === undefined) return null
+  if (pick.pick === 'keep') return 'the author kept it'
+  if (pick.pick === 'change') return "the author asked for the tour's alternative"
+  return pick.restatement === undefined
+    ? 'the author asked for something else'
+    : `the author asked for something else: ${pick.restatement.what}`
+}
+
+/**
+ * The review suggestion a reviewer's finish writes: each decision with the reviewer's answer
+ * against the author's, the notes left while reading, and the change requests, in a shape to
+ * paste into the pull request review. Nothing of the quiz.
+ */
+export function buildReviewSuggestion(tour: TourArtifact, reader: TourReaderState, key: string): string {
+  const plan = planOf(tour, reader)
+  const what = tour.pr.number === null ? `the ${key} change` : `PR #${tour.pr.number}`
+  const authorPicks = tour.record.author?.picks ?? {}
+  const lines = [
+    `# Review of ${what} from its tour`,
+    '',
+    `Change: ${tour.pr.title} (${tour.repo.owner}/${tour.repo.name}, head ${tour.headSha.slice(0, 7)}).`,
+    `Toured ${tour.landmarks.length} landmarks and ${tour.decisions.length} decisions.`,
+    '',
+    '## Decisions',
+  ]
+  const against = (d: Decision): string => {
+    const author = authorPickLine(authorPicks[d.key])
+    return author === null ? '' : ` (${author})`
+  }
+  for (const { decision: d } of plan.kept) lines.push(`- ${d.title} Keep: ${d.keep.label}${against(d)}.`)
+  for (const { decision: d, pick, restatement: r } of plan.changes) {
+    lines.push(
+      `- ${d.title} ${pick.pick === 'change' ? "Change to the tour's alternative" : 'Change'}${against(d)}.`,
+      `  What: ${r.what}`,
+      `  Where: ${r.where.join(', ')}`,
+      ...(r.unchanged === undefined ? [] : [`  Stays the same: ${r.unchanged}`])
+    )
+  }
+  if (plan.notes.length > 0) {
+    lines.push('', '## Notes while reading')
+    for (const note of plan.notes) lines.push(`- On "${note.landmark.title}": ${note.text}`)
+  }
+  lines.push(
+    '',
+    '## Verdict',
+    plan.changes.length === 0
+      ? '- Nothing to change from the tour; the verdict is yours.'
+      : `- ${plan.changes.length} change${plan.changes.length === 1 ? '' : 's'} requested above, each on its line in the pending review.`
   )
   return lines.join('\n')
 }

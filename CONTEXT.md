@@ -175,3 +175,15 @@ _Avoid_: Risk score, Severity
 **Not toured**:
 What a tour's budget left out, listed at the end with a link to the code.
 _Avoid_: Excluded, Skipped, Fold
+
+**Author mode**:
+Taking the tour as the one who settles the change: the picks are shared, and the plan writes the re-implementation prompt. The cover ticks it by itself for the change's author.
+_Avoid_: Self-review, Owner mode
+
+**Reviewer mode**:
+Taking the tour as one who judges the change: each decision shows the author's answer, the reader picks for themselves, the plan writes a review suggestion from their picks and notes, and their change requests go to their pending review.
+_Avoid_: Read-only mode, Guest mode
+
+**Review suggestion**:
+What a reviewer's finished tour writes: each decision with the reviewer's answer against the author's, the notes left while reading, and the change requests, in a shape to paste into the pull request review.
+_Avoid_: Verdict, Prompt, Report

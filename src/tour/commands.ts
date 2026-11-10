@@ -196,12 +196,16 @@ async function runTourPlan(ctx: AppContext, argv: string[], io: CliIo): Promise<
   const reader = await readReaderState(ctx, found.headSha, found.artifact, reviewer.author)
   const tourDir = ctx.tours.tourDir(found.headSha)
   const finished = reader.finished
-  if (finished === undefined) {
+  // A tour finished as a reviewer wrote a review suggestion, not the author's plan.
+  if (finished === undefined || finished.mode === 'reviewer') {
     printJson(io, {
       status: 'unfinished',
       headSha: found.headSha,
       tourDir,
       tourUrl: `http://localhost:${ctx.config.port}${ctx.config.basePath}tour/${keyToString(key)}`,
+      ...(finished === undefined
+        ? {}
+        : { hint: 'the tour was finished as a reviewer; the plan is confirmed as the author, on the cover' }),
     })
     return EXIT.ok
   }

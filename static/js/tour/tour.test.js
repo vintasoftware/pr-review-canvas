@@ -1074,6 +1074,39 @@ describe('the tour page', () => {
     expect(document.querySelector('.error-card')?.textContent).toContain('bare')
   })
 
+  it('saves the mode the cover chooses, and finishes as a reviewer with a review', async () => {
+    const bundle = syntheticTourBundle({
+      reader: {
+        ...freshReaderState(),
+        step: 7,
+        picks: { 'sum-over-product': { pick: 'keep', approved: true } },
+      },
+    })
+    const server = fakeServer(bundle)
+    vi.stubGlobal('fetch', server.impl)
+    mount()
+    await drawn('.tour-kept')
+    expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('confirm the plan')
+    click('[data-nav="prev"]')
+    click('.tour-rail-seg[data-step="0"]')
+    const box = await drawn('input[data-act="mode"]')
+    if (!(box instanceof HTMLInputElement)) {
+      throw new Error('no checkbox')
+    }
+    expect(box.checked).toBe(true)
+    box.checked = false
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(document.querySelector('.tour-mode .tour-hint')?.textContent).toContain('reviewer mode')
+    await vi.waitFor(() => expect(server.saved.at(-1)?.mode).toBe('reviewer'))
+    click('.tour-rail-seg[data-step="7"]')
+    expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('confirm the review')
+    click('[data-act="confirm"]')
+    await drawn('#prompt')
+    expect(document.querySelector('.toast')?.textContent).toBe(
+      'review written · record shared on the pull request'
+    )
+  })
+
   it('says when a save or a finish fails, and keeps a tried recipe', async () => {
     const bundle = syntheticTourBundle({ reader: { ...freshReaderState(), step: 5 } })
     const decision = bundle.tour?.decisions[0]

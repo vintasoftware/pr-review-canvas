@@ -38,6 +38,17 @@ export function buildSteps(tour, options) {
 }
 
 /**
+ * How the reader takes the tour: the mode chosen on the cover, else the one their part in the
+ * change gives them. The author settles the change and the plan writes the re-implementation
+ * prompt; a reviewer judges it and the plan writes a review suggestion.
+ * @param {Pick<import('../contract-types.js').TourBundle, 'reader' | 'reviewer'>} bundle
+ * @returns {'author' | 'reviewer'}
+ */
+export function readerMode(bundle) {
+  return bundle.reader.mode ?? (bundle.reviewer.author ? 'author' : 'reviewer')
+}
+
+/**
  * A keep or the tour's alternative is settled once approved; something else once its restatement
  * was approved.
  * @param {ReaderPick | undefined} pick

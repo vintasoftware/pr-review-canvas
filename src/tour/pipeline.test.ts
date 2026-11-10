@@ -307,6 +307,7 @@ describe('tour publish', () => {
     await writeReaderState(t.ctx, HEAD_SHA, {
       ...freshReaderState(),
       step: 3,
+      mode: 'reviewer',
       picks: {
         'sum-over-product': { pick: 'keep', approved: true },
         gone: { pick: 'change', approved: true },
@@ -340,6 +341,7 @@ describe('tour publish', () => {
     await publishTour(t.ctx, forced.tourDir, OPTS)
     expect(await savedReaderState(t.ctx, HEAD_SHA)).toEqual({
       ...freshReaderState(),
+      mode: 'reviewer',
       picks: {},
       quiz: { 'q-run': { answered: 1, right: true } },
       notes: { world: 'Rename b later.' },

@@ -16,9 +16,14 @@ export function readerFile(ctx: AppContext, headSha: string): string {
   return path.join(ctx.tours.tourDir(headSha), 'reader.json')
 }
 
-/** Where finishing writes the re-implementation prompt, beside the tour. */
+/** Where finishing as the author writes the re-implementation prompt, beside the tour. */
 export function planPromptFile(ctx: AppContext, headSha: string): string {
   return path.join(ctx.tours.tourDir(headSha), 'plan-prompt.md')
+}
+
+/** Where finishing as a reviewer writes the review suggestion, beside the tour. */
+export function reviewSuggestionFile(ctx: AppContext, headSha: string): string {
+  return path.join(ctx.tours.tourDir(headSha), 'review-suggestion.md')
 }
 
 /** The state as saved, or null before the first save. */
@@ -79,6 +84,7 @@ export function readerStateCarriedTo(
     Object.fromEntries(Object.entries(entries).filter(([id]) => landmarks.has(id)))
   return {
     ...freshReaderState(),
+    ...(saved.mode === undefined ? {} : { mode: saved.mode }),
     picks: Object.fromEntries(Object.entries(saved.picks).filter(([key]) => standing.has(key))),
     quiz: Object.fromEntries(Object.entries(saved.quiz).filter(([id]) => questions.has(id))),
     notes: byLandmark(saved.notes),
@@ -98,6 +104,7 @@ export async function carryReaderState(
   next: TourArtifact
 ): Promise<void> {
   await rm(planPromptFile(ctx, headSha), { force: true })
+  await rm(reviewSuggestionFile(ctx, headSha), { force: true })
   const saved = await savedReaderState(ctx, headSha)
   if (saved === null) return
   if (previous === null) {

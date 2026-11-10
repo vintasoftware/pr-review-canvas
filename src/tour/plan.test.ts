@@ -2,6 +2,8 @@
 import { freshReaderState, type TourReaderState } from '../contract/tour-api.js'
 import { syntheticTour } from '../testing/synthetic-tour.js'
 import {
+  authorPickLine,
+  buildReviewSuggestion,
   buildTourPrompt,
   pickSettled,
   planOf,
@@ -175,5 +177,73 @@ describe('buildTourPrompt', () => {
       '42'
     )
     expect(prompt).toContain('## Decisions kept by the author (do not reopen)\n- none')
+  })
+})
+
+describe('buildReviewSuggestion', () => {
+  it("lists each decision against the author's answer, the notes, and the verdict line", () => {
+    const base = syntheticTour()
+    const [decision] = base.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    const tour = syntheticTour({
+      decisions: [
+        decision,
+        { ...decision, key: 'second', title: 'Second?' },
+        { ...decision, key: 'third', title: 'Third?' },
+      ],
+      record: {
+        touredBy: [],
+        author: {
+          finishedAt: 'x',
+          prompt: 'p',
+          picks: {
+            'sum-over-product': { pick: 'keep' },
+            second: {
+              pick: 'other',
+              restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
+            },
+          },
+        },
+      },
+    })
+    const text = buildReviewSuggestion(
+      tour,
+      reader({
+        picks: {
+          'sum-over-product': { pick: 'change', approved: true },
+          second: { pick: 'keep', approved: true },
+          third: {
+            pick: 'other',
+            approved: true,
+            restatement: { what: 'Divide.', where: ['src/app.ts:4'], unchanged: 'The tests.' },
+          },
+        },
+        notes: { world: 'Rename b later.' },
+      }),
+      '42'
+    )
+    expect(text).toContain(
+      '# Review of PR #42 from its tour\n\nChange: feat: add b (acme/widgets, head aaaaaaa).\nToured 4 landmarks and 3 decisions.'
+    )
+    expect(text).toContain(
+      "- Second? Keep: Sum (the author asked for something else: Multiply.).\n- Sum over product? Change to the tour's alternative (the author kept it).\n  What: Product. Grows faster; the spec would have to change.\n  Where: src/app.ts:4\n- Third? Change.\n  What: Divide.\n  Where: src/app.ts:4\n  Stays the same: The tests."
+    )
+    expect(text).toContain('## Notes while reading\n- On "run() now adds b()": Rename b later.')
+    expect(text).toContain('## Verdict\n- 2 changes requested above, each on its line in the pending review.')
+    const nothing = buildReviewSuggestion(
+      syntheticTour({ pr: { ...base.pr, number: null } }),
+      reader({ picks: { 'sum-over-product': { pick: 'keep', approved: true } } }),
+      'branch'
+    )
+    expect(nothing).toContain('# Review of the branch change from its tour')
+    expect(nothing).toContain('- Sum over product? Keep: Sum.')
+    expect(nothing).toContain('- Nothing to change from the tour; the verdict is yours.')
+  })
+
+  it("words the author's answer, or nothing when the author has not finished", () => {
+    expect(authorPickLine(undefined)).toBeNull()
+    expect(authorPickLine({ pick: 'keep' })).toBe('the author kept it')
+    expect(authorPickLine({ pick: 'change' })).toBe("the author asked for the tour's alternative")
+    expect(authorPickLine({ pick: 'other' })).toBe('the author asked for something else')
   })
 })

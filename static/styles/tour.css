@@ -786,6 +786,32 @@ pr-tour[data-at='plan'] {
   gap: 12px 16px;
   align-items: center;
 }
+/* Who is taking the tour: the author settles the change, a reviewer judges it. */
+.tour-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 18px;
+}
+.tour-mode label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+.tour-mode input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--lilac);
+}
+.tour-author-pick {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--lilac);
+  font-size: 15px;
+  color: var(--tour-ink-2);
+}
 .tour-cover-actions .cmd.big {
   height: 40px;
   padding: 0 20px;

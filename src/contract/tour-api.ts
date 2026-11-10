@@ -46,11 +46,29 @@ export const TourSharingSchema = z.discriminatedUnion('status', [
 ])
 export type TourSharing = z.infer<typeof TourSharingSchema>
 
+/**
+ * How the reader takes the tour. The author settles the change: their picks are shared and the
+ * plan writes the re-implementation prompt. A reviewer judges it: the plan writes a review
+ * suggestion from their picks and notes, and their change requests go to their pending review.
+ */
+export const READER_MODES = ['author', 'reviewer'] as const
+export type ReaderMode = (typeof READER_MODES)[number]
+
+/** The mode the reader chose on the cover, else the one their part in the change gives them. */
+export function readerMode(
+  reader: { mode?: ReaderMode | undefined },
+  reviewer: { author: boolean }
+): ReaderMode {
+  return reader.mode ?? (reviewer.author ? 'author' : 'reviewer')
+}
+
 export const TourFinishedSchema = z.object({
   at: z.string(),
-  /** Where the re-implementation prompt was written, in the tour's directory. */
+  /** Where the re-implementation prompt, or the review suggestion, was written, in the tour's directory. */
   promptPath: z.string(),
   prompt: z.string(),
+  /** The mode the tour was finished in; absent on a tour finished before modes, as the author. */
+  mode: z.enum(READER_MODES).optional(),
   sharing: TourSharingSchema,
   /** A reviewer's approved changes added to their pending review, this time. */
   queued: z.number().int().nonnegative().optional(),
@@ -66,6 +84,8 @@ export type TourFinished = z.infer<typeof TourFinishedSchema>
  */
 export const TourReaderStateSchema = z.object({
   step: z.number().int().nonnegative().default(0),
+  /** The mode chosen on the cover; absent, it follows whether the reader wrote the change. */
+  mode: z.enum(READER_MODES).optional(),
   picks: z.record(z.string(), ReaderPickSchema).default({}),
   quiz: z
     .record(z.string(), z.object({ answered: z.number().int().nonnegative(), right: z.boolean() }))

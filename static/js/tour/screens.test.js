@@ -260,6 +260,27 @@ describe('coverHtml', () => {
     document.body.innerHTML = coverHtml({ ...finished, pr: { ...finished.pr, url: '' } })
     expect(document.body.textContent).toContain('You finished this tour')
   })
+
+  it("asks who is taking the tour, ticked for the change's author unless the reader said otherwise", () => {
+    const author = bundleWith()
+    document.body.innerHTML = coverHtml(author)
+    const box = () =>
+      /** @type {HTMLInputElement | null} */ (document.querySelector('input[data-act="mode"]'))
+    expect(box()?.checked).toBe(true)
+    expect(document.querySelector('.tour-mode .tour-hint')?.textContent).toContain('author mode')
+    document.body.innerHTML = coverHtml({ ...author, reviewer: { login: 'reviewer', author: false } })
+    expect(box()?.checked).toBe(false)
+    expect(document.querySelector('.tour-mode .tour-hint')?.textContent).toContain('reviewer mode')
+    document.body.innerHTML = coverHtml(bundleWith({ mode: 'reviewer' }))
+    expect(box()?.checked).toBe(false)
+    document.body.innerHTML = coverHtml({
+      ...bundleWith({ mode: 'author' }),
+      reviewer: { login: 'r', author: false },
+    })
+    expect(box()?.checked).toBe(true)
+    document.body.innerHTML = coverHtml({ ...author, preview: true })
+    expect(box()).toBeNull()
+  })
 })
 
 describe('returnBannerHtml', () => {
@@ -405,6 +426,34 @@ describe('decisionHtml', () => {
     expect(tryItStepHtml('Open `/review/68` and pick layer 1')).toBe(
       '<li>Open <code class="nw">/review/68</code> and pick layer 1</li>'
     )
+  })
+
+  it('shows a reviewer what the author answered, and the author nothing', () => {
+    const base = bundleWith()
+    const decision = tourOf(base).decisions[0]
+    if (decision === undefined) {
+      throw new Error('no decision')
+    }
+    const tour = {
+      ...tourOf(base),
+      record: {
+        touredBy: [],
+        author: {
+          finishedAt: 'x',
+          prompt: 'p',
+          picks: { 'sum-over-product': { pick: /** @type {const} */ ('keep') } },
+        },
+      },
+    }
+    const reviewer = { ...base, tour, reviewer: { login: 'reviewer', author: false } }
+    document.body.innerHTML = decisionHtml(reviewer, stepsOf(reviewer), decision)
+    expect(document.querySelector('.tour-author-pick')?.textContent).toBe('The author kept this.')
+    const author = { ...base, tour }
+    document.body.innerHTML = decisionHtml(author, stepsOf(author), decision)
+    expect(document.querySelector('.tour-author-pick')).toBeNull()
+    // Nothing to show while the author has not finished.
+    document.body.innerHTML = decisionHtml({ ...reviewer, tour: tourOf(base) }, stepsOf(reviewer), decision)
+    expect(document.querySelector('.tour-author-pick')).toBeNull()
   })
 
   it('offers three options with nothing chosen', () => {
@@ -560,6 +609,42 @@ describe('planHtml', () => {
     document.body.innerHTML = planHtml({ ...bundle, preview: true })
     expect(document.querySelector('[data-act="confirm"]')).toBeNull()
     expect(document.querySelector('.tour-actions')).toBeNull()
+  })
+
+  it('offers a reviewer the review suggestion instead of the prompt', () => {
+    const bundle = {
+      ...bundleWith({ picks: { 'sum-over-product': { pick: 'change', approved: true } } }),
+      reviewer: { login: 'r', author: false },
+    }
+    document.body.innerHTML = planHtml(bundle)
+    expect(document.querySelector('.tour-title')?.textContent).toBe('1 change to ask for, 0 kept')
+    expect(document.querySelector('.tour-lead')?.textContent).toContain(
+      'a review suggestion is written from your picks and notes'
+    )
+    expect(document.querySelector('[data-act="confirm"]')?.textContent).toBe('confirm the review')
+    expect(document.querySelector('.tour-hint')?.textContent).toBe(
+      'writes the review suggestion, shares the record'
+    )
+    const finished = {
+      ...bundle,
+      reader: {
+        ...bundle.reader,
+        finished: {
+          at: 'x',
+          promptPath: '/data/review-suggestion.md',
+          prompt: '# R',
+          mode: /** @type {const} */ ('reviewer'),
+          sharing: /** @type {const} */ ({ status: 'off' }),
+          queued: 1,
+        },
+      },
+    }
+    document.body.innerHTML = planHtml(finished)
+    const headings = [...document.querySelectorAll('.tour-section-h')].map(h => h.textContent)
+    expect(headings).toContain('Review suggestion')
+    expect(headings).not.toContain('Re-implementation prompt')
+    expect(document.body.textContent).toContain('Paste it into your review, with your verdict.')
+    expect(document.body.textContent).not.toContain('/pr-tour-apply')
   })
 
   it('reports each way the record was shared once finished, with the prompt to copy', () => {

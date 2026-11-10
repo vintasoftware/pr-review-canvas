@@ -235,17 +235,32 @@ describe('GET /api/tours/:n', () => {
     expect(forced.stale).toEqual({ tourHeadSha: HEAD_SHA, currentHeadSha: rewritten, relation: 'unrelated' })
   })
 
-  it('serves a local review with no login, as its own author, and never shares', async () => {
+  it('serves a local review with no login, as its author when the clone commits as the last commit did, and never shares', async () => {
     t = await context({ git: gitForLocal({ snapshot: null, head: HEAD_SHA }) })
     await t.ctx.prs.writePr('branch', { ...syntheticTour().pr, number: null, baseRef: 'origin/main' })
     await t.ctx.tours.write(HEAD_SHA, syntheticTour({ pr: { ...syntheticTour().pr, number: null } }))
+    // The clone commits as "dev"; the branch's last commit is octocat's.
     const bundle = await json<TourBundle>(await get('/api/tours/branch'))
     expect(bundle).toMatchObject({
       status: 'ready',
       local: 'branch',
-      reviewer: { login: null, author: true },
+      reviewer: { login: null, author: false },
+      // Local work may be generated for whoever committed last: the reader checked it out.
+      generate: 'allowed',
       shares: false,
       skillCommand: '/pr-tour branch',
+    })
+    t.ctx.git = { ...t.ctx.git, configuredUser: async () => 'Octocat' }
+    expect((await json<TourBundle>(await get('/api/tours/branch'))).reviewer).toEqual({
+      login: null,
+      author: true,
+    })
+    // Uncommitted work is one's own whoever committed last.
+    t.ctx.git = { ...t.ctx.git, configuredUser: async () => 'dev' }
+    await t.ctx.prs.writePr('uncommitted', { ...syntheticTour().pr, number: null, baseRef: 'origin/main' })
+    expect((await json<TourBundle>(await get('/api/tours/uncommitted'))).reviewer).toEqual({
+      login: null,
+      author: true,
     })
   })
 
@@ -399,6 +414,7 @@ describe('POST /api/tours/:n/finish', () => {
       at: '2026-09-10T12:00:00.000Z',
       promptPath,
       prompt: expect.stringContaining('- sum-over-product: Sum'),
+      mode: 'author',
       sharing: { status: 'shared', url: 'https://github.com/acme/widgets/pull/42#issuecomment-6001' },
       basis: 'the picks',
     })
@@ -530,7 +546,63 @@ describe('POST /api/tours/:n/finish', () => {
     )
     expect(local.finished.sharing).toEqual({ status: 'local' })
     expect(local.record.touredBy).toEqual([])
-    expect(local.finished.prompt).toContain('# Keep the branch change')
+    // The clone does not commit as the branch's author, so this is a reviewer's finish.
+    expect(local.finished.mode).toBe('reviewer')
+    expect(local.finished.prompt).toContain('# Review of the branch change from its tour')
+  })
+
+  it('finishes in the mode the cover chose: the author as a reviewer writes a review, a reviewer as the author shares picks', async () => {
+    const sharing = ghSharing()
+    t = await context({ gh: sharing.gh })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    // The author ticks reviewer mode: a review suggestion against nobody's picks, their change
+    // request queued in their pending review, and no author picks in the record.
+    const asReviewer = settledReader({
+      mode: 'reviewer',
+      picks: { 'sum-over-product': { pick: 'change', approved: true } },
+    })
+    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: asReviewer })
+    const review = await json<TourFinishResponse>(
+      await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    )
+    expect(review.finished.mode).toBe('reviewer')
+    expect(review.finished.promptPath).toBe(path.join(t.ctx.tours.tourDir(HEAD_SHA), 'review-suggestion.md'))
+    expect(review.finished.prompt).toContain(
+      "- Sum over product? Change to the tour's alternative.\n  What: Product."
+    )
+    expect(review.finished.queued).toBe(1)
+    expect(review.record.author).toBeUndefined()
+    expect(review.record.touredBy).toEqual([{ login: 'octocat', at: '2026-09-10T12:00:00.000Z' }])
+    expect((await t.ctx.state.read(42)).pending[0]?.body).toContain(
+      '**Change requested in the tour:** Sum over product?'
+    )
+    // A reviewer who ticks author mode confirms the plan as the author would.
+    t.ctx.capabilities = { get: async () => ({ canComment: true, tokenKind: 'x', login: 'reviewer' }) }
+    await send('/api/tours/42/reader', 'PUT', {
+      headSha: HEAD_SHA,
+      reader: settledReader({ mode: 'author' }),
+    })
+    const plan = await json<TourFinishResponse>(
+      await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    )
+    expect(plan.finished.mode).toBe('author')
+    expect(plan.finished.queued).toBeUndefined()
+    expect(plan.record.author?.picks).toEqual({ 'sum-over-product': { pick: 'keep' } })
+    expect(plan.record.touredBy.map(who => who.login)).toEqual(['octocat', 'reviewer'])
+    // Finished as a reviewer, the tour has no plan for the apply skill.
+    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: asReviewer })
+    await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    const out: string[] = []
+    const { runTour } = await import('../tour/commands.js')
+    await runTour(t.ctx, ['plan', '--pr', '42'], {
+      stdout: l => out.push(l),
+      stderr: () => undefined,
+      json: true,
+    })
+    expect(JSON.parse(out.at(-1) ?? '{}')).toMatchObject({
+      status: 'unfinished',
+      hint: 'the tour was finished as a reviewer; the plan is confirmed as the author, on the cover',
+    })
   })
 
   it('refuses without a tour, while a decision is open, or while the quiz is required and unanswered', async () => {

@@ -62,7 +62,7 @@ async function requireTourGenerate(ctx: AppContext, loader: PrLoader, key: Revie
   const reviewer = isLocalKey(key)
     ? await tourReviewer(ctx, key, { author: '' })
     : await tourReviewer(ctx, key, await loader.currentTarget(key))
-  const permission = tourGeneratePermission(ctx, reviewer)
+  const permission = tourGeneratePermission(ctx, reviewer, isLocalKey(key))
   if (permission === 'off') {
     throw new AppError(
       'NOT_FOUND',

@@ -4,14 +4,27 @@
 import { writeFile } from 'node:fs/promises'
 import type { CommentsPayload } from '../contract/comments.js'
 import type { Pr } from '../contract/review-artifact.js'
-import type { TourFinished, TourFinishResponse, TourReaderState, TourSharing } from '../contract/tour-api.js'
+import {
+  readerMode,
+  type TourFinished,
+  type TourFinishResponse,
+  type TourReaderState,
+  type TourSharing,
+} from '../contract/tour-api.js'
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { AuthorPick, Decision, TourArtifact, TourRecord } from '../contract/tour.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { mergeSharedRecords } from './import.js'
-import { buildTourPrompt, type ChangeAsked, planOf, unansweredQuiz, unsettledDecisions } from './plan.js'
-import { planPromptFile, writeReaderState } from './reader.js'
+import {
+  buildReviewSuggestion,
+  buildTourPrompt,
+  type ChangeAsked,
+  planOf,
+  unansweredQuiz,
+  unsettledDecisions,
+} from './plan.js'
+import { planPromptFile, reviewSuggestionFile, writeReaderState } from './reader.js'
 import { shareTourOnPr } from './share.js'
 
 export interface FinishTourInput {
@@ -42,18 +55,18 @@ export function changeRequestFingerprint(key: string): string {
   return `tour:${key}`
 }
 
-/** The record after this reader finished: listed once, and the author's picks when it is the author. */
+/** The record after this reader finished: listed once, and the author's picks when finished as the author. */
 export function finishedRecord(
   previous: TourRecord,
   input: Pick<FinishTourInput, 'reader' | 'reviewer'>,
   prompt: string,
   at: string
 ): TourRecord {
-  const { login, author } = input.reviewer
+  const { login } = input.reviewer
   const touredBy =
     login === null ? previous.touredBy : [...previous.touredBy.filter(t => t.login !== login), { login, at }]
   const record: TourRecord = { ...previous, touredBy }
-  if (author) {
+  if (readerMode(input.reader, input.reviewer) === 'author') {
     const picks: Record<string, AuthorPick> = {}
     for (const [key, pick] of Object.entries(input.reader.picks)) {
       if (!pick.approved) continue
@@ -89,9 +102,14 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
     }
   }
   const at = ctx.now().toISOString()
-  const prompt = buildTourPrompt(artifact, reader, keyToString(key))
-  // prompt.md beside it is the generation prompt prepare wrote; this one is the reader's plan.
-  const promptPath = planPromptFile(ctx, headSha)
+  const mode = readerMode(reader, input.reviewer)
+  // prompt.md beside them is the generation prompt prepare wrote; the author's plan is the
+  // re-implementation prompt, a reviewer's the suggestion for their review.
+  const prompt =
+    mode === 'author'
+      ? buildTourPrompt(artifact, reader, keyToString(key))
+      : buildReviewSuggestion(artifact, reader, keyToString(key))
+  const promptPath = mode === 'author' ? planPromptFile(ctx, headSha) : reviewSuggestionFile(ctx, headSha)
   await writeFile(promptPath, `${prompt}\n`, 'utf8')
   const previous =
     input.shared === undefined
@@ -100,7 +118,7 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
   const record = finishedRecord(previous, input, prompt, at)
   // A reviewer's changes go into their pending review, only for the tour of the head: a line of an
   // older commit means something else on the head a comment would land on.
-  const queues = !isLocalKey(key) && input.current === true && !input.reviewer.author
+  const queues = !isLocalKey(key) && input.current === true && mode === 'reviewer'
   const queued = queues ? await queueChangeRequests(ctx, key as number, headSha, artifact, reader) : 0
   await ctx.tours.revise(headSha, { ...artifact, record, revisedAt: at })
   // The record of an outdated tour stays here: shared, it would replace the comment that carries
@@ -110,7 +128,7 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
     : input.current !== true
       ? { status: 'outdated' }
       : await shareTourOnPr(ctx, headSha, key)
-  const finished: TourFinished = { at, promptPath, prompt, sharing }
+  const finished: TourFinished = { at, promptPath, prompt, mode, sharing }
   if (queues) finished.queued = queued
   if (input.basis !== undefined) finished.basis = input.basis
   const next: TourReaderState = { ...reader, finished }

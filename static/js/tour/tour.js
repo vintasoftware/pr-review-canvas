@@ -44,6 +44,7 @@ import {
   buildSteps,
   planBasis,
   reachable,
+  readerMode,
   stepFromHash,
   stepHash,
   stepIndexOf,
@@ -646,8 +647,9 @@ export class PrTourElement extends HTMLElement {
     const bundle = /** @type {TourBundle & { tour: import('../contract-types.js').TourPageTour }} */ (
       this.bundle
     )
+    const written = readerMode(bundle) === 'reviewer' ? 'review written' : 'prompt written'
     button.setAttribute('disabled', '')
-    button.textContent = 'writing the prompt…'
+    button.textContent = `writing the ${readerMode(bundle) === 'reviewer' ? 'review' : 'prompt'}…`
     try {
       await this.saver?.settle()
       const result = await finishTour(this.key, bundle.tour.headSha, planBasis(bundle.tour, bundle.reader))
@@ -658,10 +660,10 @@ export class PrTourElement extends HTMLElement {
       toast(
         this,
         sharing.status === 'shared'
-          ? 'prompt written · record shared on the pull request'
+          ? `${written} · record shared on the pull request`
           : sharing.status === 'failed'
-            ? `prompt written · ${sharing.warning}`
-            : 'prompt written',
+            ? `${written} · ${sharing.warning}`
+            : written,
         { tone: sharing.status === 'failed' ? 'note' : 'done' }
       )
     } catch (err) {
@@ -768,13 +770,20 @@ export class PrTourElement extends HTMLElement {
     /** @param {Event} e */
     const onChange = e => {
       const target = e.target
+      const bundle = /** @type {TourBundle} */ (this.bundle)
+      // The cover's mode: the author settles the change, a reviewer judges it.
+      if (target instanceof HTMLInputElement && target.dataset['act'] === 'mode') {
+        bundle.reader.mode = target.checked ? 'author' : 'reviewer'
+        this.save()
+        this.renderStep()
+        return
+      }
       const decision = this.decisionStep()?.decision ?? null
       if (decision === null) {
         return
       }
       if (target instanceof HTMLInputElement && target.dataset['act'] === 'tried') {
         const tried = target.checked
-        const bundle = /** @type {TourBundle} */ (this.bundle)
         const pick = bundle.reader.picks[decision.key] ?? { pick: decision.recommended, approved: false }
         pick.tried = tried
         bundle.reader.picks[decision.key] = pick

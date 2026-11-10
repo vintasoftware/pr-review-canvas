@@ -1296,6 +1296,15 @@ URL (`#landmark-<id>`, `#decision-<key>`, `#quiz-<id>`, `#plan`) can be shared. 
 to keep, take the alternative, or ask for something else, `1` to `3` to answer, `/` to ask AI Chat, `?` for help, `esc` to close the help or the drawer. A landmark's scene and
 micro-world are drawn in sandboxed frames from `/tour-scene/<key>/<landmark>/scene|micro`.
 
+The cover asks who is taking the tour. **I am the author of this change** is ticked by itself
+for the pull request's author (on local work, for uncommitted changes, and for a branch when the
+clone commits as the author of its last commit), and the reader may tick it or not: in **author
+mode** the plan writes the re-implementation prompt and the author's picks are shared; in
+**reviewer mode** each decision shows what the author answered, the reader picks for themselves,
+and the plan writes a review suggestion from their picks and notes (`review-suggestion.md` beside
+the tour) to paste into their review, while their change requests go to their pending review. The
+choice is saved with the reader's state.
+
 Where the reader is and what they answered is saved to `tours/<headSha>/reader.json` as they go
 (`PUT /api/tours/<n>/reader`), so nothing is lost between visits; the bundle the page opens with
 is `GET /api/tours/<n>`. A decision offers three options and none is chosen at first: keep what
@@ -1321,15 +1330,16 @@ On the plan, **restate the plan with the agent** asks for one fenced `plan` bloc
 (`tour.audio`): the browser's Web Speech API turns it into text, the page says once where the
 audio goes, and the reader can turn audio off for themselves. Without chat, the reader writes the
 restatement in the same card. **confirm the plan** (`POST /api/tours/<n>/finish`) writes
-the re-implementation prompt to `tours/<headSha>/plan-prompt.md` (the generation prompt beside it,
+the re-implementation prompt to `tours/<headSha>/plan-prompt.md` in author mode, or the review
+suggestion to `review-suggestion.md` in reviewer mode (the generation prompt beside them,
 `prompt.md`, stays as prepare wrote it), records the reader in the tour's
-record (and the author's picks, so a regenerated tour carries them), and shares the record on the
-pull request once. Before it does, it reads the copies of the same commit other readers shared
+record (and, in author mode, their picks, so a regenerated tour carries them), and shares the
+record on the pull request once. Before it does, it reads the copies of the same commit other readers shared
 there and folds their records in, so the comment names everyone who finished on any machine. The
 tour of an earlier commit than the head is finished on this machine alone: shared, its record
-would replace the comment that carries the head's tour. On the tour of the pull request's head, a reviewer's approved
-changes go into their pending review as comments on their decisions' lines, once each, and leave
-with their verdict. The quiz result stays on the machine. With `?preview`, the
+would replace the comment that carries the head's tour. On the tour of the pull request's head, the approved changes of a reader in reviewer mode go
+into their pending review as comments on their decisions' lines, once each, and leave with their
+verdict; `tour plan` reports such a tour as unfinished, since the plan is the author's to confirm. The quiz result stays on the machine. With `?preview`, the
 page draws `tour-model.json` as the generator has written it and saves nothing; `?landmark=<id>`
 opens on that landmark, which is how `tour preview` takes its screenshots.
 

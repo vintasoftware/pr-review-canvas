@@ -32,13 +32,19 @@ export function pageTour(artifact: TourArtifact): TourPageTour {
   }
 }
 
-/** Who reads: the login the server runs as, and whether it wrote the change. Local work is one's own. */
+/**
+ * Who reads: the login the server runs as, and whether it wrote the change. Uncommitted work is
+ * one's own; a branch is, when the clone commits as the author of its last commit.
+ */
 export async function tourReviewer(
   ctx: AppContext,
   key: ReviewKey,
   pr: { author: string }
 ): Promise<TourBundle['reviewer']> {
-  if (isLocalKey(key)) return { login: null, author: true }
+  if (isLocalKey(key)) {
+    const author = key === 'uncommitted' || isAuthor(await ctx.git.configuredUser(), pr)
+    return { login: null, author }
+  }
   const { login } = await ctx.capabilities.get()
   return { login, author: isAuthor(login, pr) }
 }
@@ -50,11 +56,13 @@ export async function tourReviewer(
  */
 export function tourGeneratePermission(
   ctx: AppContext,
-  reviewer: TourBundle['reviewer']
+  reviewer: TourBundle['reviewer'],
+  /** Local work: the reader chose to check it out, whoever committed last. */
+  local: boolean
 ): TourGeneratePermission {
   const rule = ctx.projectConfig.config.tour.generate
   if (rule === 'off') return 'off'
-  return rule === 'on' || reviewer.author ? 'allowed' : 'not-author'
+  return rule === 'on' || local || reviewer.author ? 'allowed' : 'not-author'
 }
 
 /** Whether the grilling can run: chat is on for the project and acpx is on the PATH. */
@@ -140,7 +148,7 @@ export async function resolveTourBundle(
       audio: config.audio,
     },
     chat: await tourChatStatus(ctx),
-    generate: tourGeneratePermission(ctx, reviewer),
+    generate: tourGeneratePermission(ctx, reviewer, isLocalKey(key)),
     skillCommand: `/pr-tour ${keyToString(key)}`,
     warnings,
   }
